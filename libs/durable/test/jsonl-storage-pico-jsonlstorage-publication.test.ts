@@ -129,60 +129,62 @@ const expectTaskSidecarRemoval = Effect.fn("expectTaskSidecarRemoval")(function*
   ]);
 });
 
-describe("Pico JsonlStorage publication and recovery", () => {
-  for (const failure of [
-    { operation: "append", call: 1, mode: "before" },
-    { operation: "append", call: 1, mode: "after" },
-    { operation: "append", call: 1, mode: "short" },
-    { operation: "append", call: 2, mode: "before" },
-    { operation: "append", call: 2, mode: "after" },
-    { operation: "append", call: 3, mode: "before" },
-    { operation: "append", call: 3, mode: "short" },
-    { operation: "append", call: 3, mode: "after" },
-  ] as const satisfies readonly Failure[]) {
-    it(`poisons after ${failure.mode} failure at append ${failure.call} and recovers only confirmed state`, () =>
-      Effect.runPromise(
-        Effect.gen(function* () {
-          const directory = yield* tempDirectory();
-          const env = new InstrumentedEnv({ cwd: directory });
-          const storage = yield* openStorage(directory, env);
-          yield* createRoot(storage);
-          const firstId = yield* awaited(storage.mintId<DocumentId>());
-          const secondId = yield* awaited(storage.mintId<DocumentId>());
-          env.fail(failure);
-          yield* awaited(
-            expect(
-              storage.commit(
-                [
-                  {
-                    type: "document.create",
-                    record: sessionDocument(firstId, "first"),
-                    content: { kind: "base", version: 1, value: { text: "α" } },
-                  },
-                  {
-                    type: "document.create",
-                    record: sessionDocument(secondId, "second"),
-                    content: { kind: "base", version: 1, value: { text: "β" } },
-                  },
-                ],
-                context,
-              ),
-            ).rejects.toThrow("poisoned"),
-          );
-          yield* awaited(
-            expect(storage.document(firstId, "current", context)).rejects.toThrow("poisoned"),
-          );
+const poisonsFailureAppendCases = [
+  { operation: "append", call: 1, mode: "before" },
+  { operation: "append", call: 1, mode: "after" },
+  { operation: "append", call: 1, mode: "short" },
+  { operation: "append", call: 2, mode: "before" },
+  { operation: "append", call: 2, mode: "after" },
+  { operation: "append", call: 3, mode: "before" },
+  { operation: "append", call: 3, mode: "short" },
+  { operation: "append", call: 3, mode: "after" },
+] as const satisfies readonly Failure[];
 
-          const reopened = yield* openStorage(directory);
-          const markerSurvived = failure.call === 3 && failure.mode === "after";
-          expect(yield* awaited(reopened.document(firstId, "current", context))).toEqual(
-            markerSurvived ? expect.objectContaining({ value: { text: "α" } }) : undefined,
-          );
-          expect(yield* awaited(reopened.document(secondId, "current", context))).toEqual(
-            markerSurvived ? expect.objectContaining({ value: { text: "β" } }) : undefined,
-          );
-        }),
-      ));
+const poisonsFailureAppend = Effect.fn("poisonsFailureAppend")(function* (
+  failure: (typeof poisonsFailureAppendCases)[number],
+) {
+  const directory = yield* tempDirectory();
+  const env = new InstrumentedEnv({ cwd: directory });
+  const storage = yield* openStorage(directory, env);
+  yield* createRoot(storage);
+  const firstId = yield* awaited(storage.mintId<DocumentId>());
+  const secondId = yield* awaited(storage.mintId<DocumentId>());
+  env.fail(failure);
+  yield* awaited(
+    expect(
+      storage.commit(
+        [
+          {
+            type: "document.create",
+            record: sessionDocument(firstId, "first"),
+            content: { kind: "base", version: 1, value: { text: "α" } },
+          },
+          {
+            type: "document.create",
+            record: sessionDocument(secondId, "second"),
+            content: { kind: "base", version: 1, value: { text: "β" } },
+          },
+        ],
+        context,
+      ),
+    ).rejects.toThrow("poisoned"),
+  );
+  yield* awaited(expect(storage.document(firstId, "current", context)).rejects.toThrow("poisoned"));
+
+  const reopened = yield* openStorage(directory);
+  const markerSurvived = failure.call === 3 && failure.mode === "after";
+  expect(yield* awaited(reopened.document(firstId, "current", context))).toEqual(
+    markerSurvived ? expect.objectContaining({ value: { text: "α" } }) : undefined,
+  );
+  expect(yield* awaited(reopened.document(secondId, "current", context))).toEqual(
+    markerSurvived ? expect.objectContaining({ value: { text: "β" } }) : undefined,
+  );
+});
+
+describe("Pico JsonlStorage publication and recovery", () => {
+  for (const failure of poisonsFailureAppendCases) {
+    it(`poisons after ${failure.mode} failure at append ${failure.call} and recovers only confirmed state`, () =>
+      Effect.runPromise(poisonsFailureAppend(failure)));
   }
 });
 
@@ -194,47 +196,51 @@ const ordersPublicationFlushes = Effect.gen(function* () {
   }
 });
 
+const poisonsFailureFlushCases = [
+  { operation: "flush", call: 1, mode: "before" },
+  { operation: "flush", call: 1, mode: "after" },
+  { operation: "flush", call: 2, mode: "before" },
+  { operation: "flush", call: 2, mode: "after" },
+] as const satisfies readonly Failure[];
+
+const poisonsFailureFlush = Effect.fn("poisonsFailureFlush")(function* (
+  failure: (typeof poisonsFailureFlushCases)[number],
+) {
+  const directory = yield* tempDirectory();
+  const env = new InstrumentedEnv({ cwd: directory });
+  const storage = yield* openStorage(directory, env, { fsync: true });
+  yield* createRoot(storage);
+  const firstId = yield* awaited(storage.mintId<DocumentId>());
+  const secondId = yield* awaited(storage.mintId<DocumentId>());
+  env.fail(failure);
+  yield* awaited(
+    expect(
+      storage.commit(
+        [
+          {
+            type: "document.create",
+            record: sessionDocument(firstId, "flush.first"),
+            content: { kind: "base", version: 1, value: {} },
+          },
+          {
+            type: "document.create",
+            record: sessionDocument(secondId, "flush.second"),
+            content: { kind: "base", version: 1, value: {} },
+          },
+        ],
+        context,
+      ),
+    ).rejects.toThrow("poisoned"),
+  );
+  const reopened = yield* openStorage(directory);
+  expect(yield* awaited(reopened.document(firstId, "current", context))).toBeUndefined();
+  expect(yield* awaited(reopened.document(secondId, "current", context))).toBeUndefined();
+});
+
 describe("Pico JsonlStorage publication and recovery", () => {
-  for (const failure of [
-    { operation: "flush", call: 1, mode: "before" },
-    { operation: "flush", call: 1, mode: "after" },
-    { operation: "flush", call: 2, mode: "before" },
-    { operation: "flush", call: 2, mode: "after" },
-  ] as const satisfies readonly Failure[]) {
+  for (const failure of poisonsFailureFlushCases) {
     it(`poisons after ${failure.mode} failure at flush ${failure.call} and never writes a marker`, () =>
-      Effect.runPromise(
-        Effect.gen(function* () {
-          const directory = yield* tempDirectory();
-          const env = new InstrumentedEnv({ cwd: directory });
-          const storage = yield* openStorage(directory, env, { fsync: true });
-          yield* createRoot(storage);
-          const firstId = yield* awaited(storage.mintId<DocumentId>());
-          const secondId = yield* awaited(storage.mintId<DocumentId>());
-          env.fail(failure);
-          yield* awaited(
-            expect(
-              storage.commit(
-                [
-                  {
-                    type: "document.create",
-                    record: sessionDocument(firstId, "flush.first"),
-                    content: { kind: "base", version: 1, value: {} },
-                  },
-                  {
-                    type: "document.create",
-                    record: sessionDocument(secondId, "flush.second"),
-                    content: { kind: "base", version: 1, value: {} },
-                  },
-                ],
-                context,
-              ),
-            ).rejects.toThrow("poisoned"),
-          );
-          const reopened = yield* openStorage(directory);
-          expect(yield* awaited(reopened.document(firstId, "current", context))).toBeUndefined();
-          expect(yield* awaited(reopened.document(secondId, "current", context))).toBeUndefined();
-        }),
-      ));
+      Effect.runPromise(poisonsFailureFlush(failure)));
   }
 
   it("orders publication flushes exactly and flushes main only to authorize reclamation", () =>

@@ -139,53 +139,43 @@ describe("Harness close", () => {
     Effect.runPromise(joinsTaskHandler));
 });
 
-const joinsToolExecute = Effect.gen(function* () {
-  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
-  for (const where of ["tool", "hook"] as const) {
-    const setup = chatSetup();
-    const storage = new MemoryStorage();
-    const reached = deferred();
-    const gate = deferred();
-    let readAfterRelease: boolean | undefined;
-    const stubborn = (): Promise<void> =>
-      runPromise(
-        Effect.gen(function* () {
-          reached.resolve();
-          yield* awaited(gate.promise);
-          readAfterRelease = yield* awaited(storageOpen(storage));
-        }),
-      );
-    addTool(
-      setup.registry,
-      defineTool({
-        name: "wait",
-        description: "wait",
-        parameters: Type.Object({}),
-        execute: () =>
-          runPromise(
-            Effect.gen(function* () {
-              if (where === "tool") yield* awaited(stubborn());
-              return { output: [] };
-            }),
-          ),
+const stubbornSetup = (where: "tool" | "hook") => {
+  const setup = chatSetup();
+  const storage = new MemoryStorage();
+  const reached = deferred();
+  const gate = deferred();
+  const observed: { readAfterRelease?: boolean } = {};
+  const stubborn = (): Promise<void> =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        reached.resolve();
+        yield* awaited(gate.promise);
+        observed.readAfterRelease = yield* awaited(storageOpen(storage));
       }),
     );
-    addHooks(setup.registry, GenerationTask, {
-      beforeRequest: () =>
-        runPromise(
-          Effect.gen(function* () {
-            if (where === "hook") yield* awaited(stubborn());
-            return undefined;
-          }),
-        ),
-    });
-    setup.faux.setResponses([
-      fauxAssistantMessage([fauxToolCall("wait", {}, { id: "c1" })], {
-        stopReason: "toolUse",
-      }),
-      fauxAssistantMessage([fauxText("done")]),
-    ]);
+  addTool(
+    setup.registry,
+    defineTool({
+      name: "wait",
+      description: "wait",
+      parameters: Type.Object({}),
+      execute: () =>
+        (where === "tool" ? stubborn() : Promise.resolve()).then(() => ({ output: [] })),
+    }),
+  );
+  addHooks(setup.registry, GenerationTask, {
+    beforeRequest: () => (where === "hook" ? stubborn() : Promise.resolve()).then(() => undefined),
+  });
+  setup.faux.setResponses([
+    fauxAssistantMessage([fauxToolCall("wait", {}, { id: "c1" })], { stopReason: "toolUse" }),
+    fauxAssistantMessage([fauxText("done")]),
+  ]);
+  return { setup, storage, reached, gate, observed };
+};
+
+const joinsToolExecute = Effect.gen(function* () {
+  for (const where of ["tool", "hook"] as const) {
+    const { setup, storage, reached, gate, observed } = stubbornSetup(where);
     const { harness, root } = yield* openChat(storage, setup);
     yield* awaited(root.submit({ type: "input", content: "go" }, context));
     yield* awaited(reached.promise);
@@ -194,7 +184,7 @@ const joinsToolExecute = Effect.gen(function* () {
     expect(yield* awaited(storageOpen(storage))).toBe(true);
     gate.resolve();
     yield* awaited(closing);
-    expect(readAfterRelease).toBe(true);
+    expect(observed.readAfterRelease).toBe(true);
     expect(yield* awaited(storageOpen(storage))).toBe(false);
   }
 });

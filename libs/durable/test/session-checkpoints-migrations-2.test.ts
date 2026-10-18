@@ -34,8 +34,6 @@ function throwingCheckpointDocs() {
 }
 
 const skipsPredicateEmpty = Effect.gen(function* () {
-  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
   let calls = 0;
   const Doc = defineDoc<{ items: string[] }>({
     kind: "checkpoint.no-op",
@@ -54,13 +52,11 @@ const skipsPredicateEmpty = Effect.gen(function* () {
   yield* awaited(
     session.commit(
       (tx) =>
-        runPromise(
-          Effect.gen(function* () {
-            const value = yield* awaited(tx.doc(Doc));
-            value.items.push("x");
-            value.items.pop();
-          }),
-        ),
+        tx.doc(Doc).then((value) => {
+          value.items.push("x");
+          value.items.pop();
+          return undefined;
+        }),
       context,
     ),
   );
@@ -70,13 +66,11 @@ const skipsPredicateEmpty = Effect.gen(function* () {
   yield* awaited(
     session.commit(
       (tx) =>
-        runPromise(
-          Effect.gen(function* () {
-            const value = yield* awaited(tx.doc(Doc));
-            const first = value.items.shift()!;
-            value.items.unshift(first);
-          }),
-        ),
+        tx.doc(Doc).then((value) => {
+          const first = value.items.shift()!;
+          value.items.unshift(first);
+          return undefined;
+        }),
       context,
     ),
   );

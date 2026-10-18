@@ -1,11 +1,4 @@
-import {
-  configure,
-  defineDoc,
-  type HarnessSettings,
-  LiveDoc,
-  type TaskId,
-  type Tx,
-} from "@msa/durable";
+import { configure, defineDoc, type HarnessSettings, type TaskId, type Tx } from "@msa/durable";
 import { createRegistry, Harness } from "@msa/durable/harness";
 import { Effect } from "effect";
 import { dual } from "effect/Function";
@@ -15,7 +8,6 @@ import { awaited } from "./effect-support.ts";
 import type {
   bashExtensions,
   chatExtension,
-  followTask,
   planMode,
   promptExtensions,
   subagentExtension,
@@ -211,96 +203,3 @@ export const hostSequence: {
     extensions: SpecExtensions,
   ): ReturnType<typeof hostSequenceImpl>;
 } = dual(3, hostSequenceImpl);
-
-function taskSequencesImpl(
-  { Anchor, name, session, conversationId, message, context }: SpecNames,
-  SubagentTools: SpecExtensions["SubagentTools"],
-  Follow: ReturnType<typeof followTask>,
-) {
-  return {
-    spawn: (tx: Tx) =>
-      Effect.runPromise(
-        Effect.gen(function* () {
-          const anchor = yield* awaited(
-            tx.createTask(Anchor, null, {
-              ownership: { kind: "conversation" },
-              background: true,
-            }),
-          );
-          const child = yield* awaited(
-            tx.createConversation({ ownership: { kind: "task", taskId: anchor } }),
-          );
-          yield* awaited(
-            configure(tx, child.id, {
-              extensions: { remove: [SubagentTools] },
-              instructions: `You are the subagent "${name}". Answer the main agent's requests.`,
-            }),
-          );
-        }),
-      ),
-
-    tableRules: () =>
-      Effect.runPromise(
-        Effect.gen(function* () {
-          const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
-          yield* awaited(
-            session.commit(
-              (tx) =>
-                runPromise(
-                  Effect.gen(function* () {
-                    const conversation = yield* awaited(tx.conversation(conversationId));
-                    const live = yield* awaited(tx.doc(LiveDoc, conversationId));
-
-                    yield* awaited(tx.appendEntry(conversationId, message));
-                    delete live.generation;
-                    yield* awaited(
-                      tx.createTask(
-                        Follow,
-                        {},
-                        { ownership: { kind: "conversation" }, conversationId },
-                      ),
-                    );
-                    void conversation;
-                  }),
-                ),
-              context,
-            ),
-          );
-        }),
-      ),
-
-    revokedDraft: () =>
-      Effect.runPromise(
-        Effect.gen(function* () {
-          const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
-          const escaped = yield* awaited(
-            session.commit(
-              (tx) =>
-                runPromise(
-                  Effect.gen(function* () {
-                    const escaped = yield* awaited(tx.doc(LiveDoc, conversationId));
-                    return escaped;
-                  }),
-                ),
-              context,
-            ),
-          );
-          escaped!.generation = { attempt: 1 };
-        }),
-      ),
-  };
-}
-
-export const taskSequences: {
-  (
-    SubagentTools: SpecExtensions["SubagentTools"],
-    Follow: ReturnType<typeof followTask>,
-  ): (arg0: SpecNames) => ReturnType<typeof taskSequencesImpl>;
-  (
-    arg0: SpecNames,
-    SubagentTools: SpecExtensions["SubagentTools"],
-    Follow: ReturnType<typeof followTask>,
-  ): ReturnType<typeof taskSequencesImpl>;
-} = dual(3, taskSequencesImpl);

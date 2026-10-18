@@ -12,12 +12,8 @@ import {
   subagentTools,
 } from "./spec-usage-extensions.ts";
 import type { SpecNames } from "./spec-usage-names.ts";
-import {
-  containerSequence,
-  hostSequence,
-  setupSequences,
-  taskSequences,
-} from "./spec-usage-sequences.ts";
+import { containerSequence, hostSequence, setupSequences } from "./spec-usage-sequences.ts";
+import { taskSequences } from "./spec-usage-task-sequences.ts";
 
 function examples(names: SpecNames) {
   const tools = {

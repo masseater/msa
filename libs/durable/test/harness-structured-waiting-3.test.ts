@@ -180,55 +180,59 @@ describe("completing", () => {
     Effect.runPromise(keepsHoldingOrdinary));
 });
 
-describe("completing", () => {
-  for (const [label, ending] of [
-    ["a held failure", "failed"],
-    ["a held scheduler fault", "throw"],
-  ] as const) {
-    it(`aborts the work below ${label}, then finishes with the held outcome`, () =>
-      Effect.runPromise(
+const abortsWorkBelowCases = [
+  ["a held failure", "failed"],
+  ["a held scheduler fault", "throw"],
+] as const;
+
+const abortsWorkBelow = Effect.fn("abortsWorkBelow")(function* (
+  ending: (typeof abortsWorkBelowCases)[number][1],
+) {
+  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
+  const { harness, root } = yield* openNodes();
+  let child: TaskId | undefined;
+  script("parent", {
+    run: (runtime, ctx) =>
+      runPromise(
         Effect.gen(function* () {
           const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-          const { harness, root } = yield* openNodes();
-          let child: TaskId | undefined;
-          script("parent", {
-            run: (runtime, ctx) =>
-              runPromise(
-                Effect.gen(function* () {
-                  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
-                  yield* awaited(
-                    runtime.commit(
-                      (tx) =>
-                        runPromise(
-                          Effect.gen(function* () {
-                            child = yield* awaited(spawn(tx, runtime.taskId, "child"));
-                            return { status: "running", checkpoint: { phase: "resume", round: 1 } };
-                          }),
-                        ),
-                      ctx,
-                    ),
-                  );
-                }),
-              ),
-            resume: (runtime, ctx) =>
-              runPromise(
-                Effect.gen(function* () {
-                  if (ending === "throw") throw new Error("parent threw");
-                  yield* awaited(runtime.commit(() => end("failed", "parent"), ctx));
-                }),
-              ),
-          });
-          const parent = yield* awaited(start(root, "parent"));
-          yield* until(() => child !== undefined);
-          expect(yield* awaited(outcomeOf(harness, child!))).toBe("aborted");
-          expect(yield* awaited(outcomeOf(harness, parent))).toBe(
-            ending === "throw" ? "faulted" : "failed",
+          yield* awaited(
+            runtime.commit(
+              (tx) =>
+                runPromise(
+                  Effect.gen(function* () {
+                    child = yield* awaited(spawn(tx, runtime.taskId, "child"));
+                    return { status: "running", checkpoint: { phase: "resume", round: 1 } };
+                  }),
+                ),
+              ctx,
+            ),
           );
-          yield* awaited(harness.close(context));
         }),
-      ));
+      ),
+    resume: (runtime, ctx) =>
+      runPromise(
+        Effect.gen(function* () {
+          if (ending === "throw") throw new Error("parent threw");
+          yield* awaited(runtime.commit(() => end("failed", "parent"), ctx));
+        }),
+      ),
+  });
+  const parent = yield* awaited(start(root, "parent"));
+  yield* until(() => child !== undefined);
+  expect(yield* awaited(outcomeOf(harness, child!))).toBe("aborted");
+  expect(yield* awaited(outcomeOf(harness, parent))).toBe(
+    ending === "throw" ? "faulted" : "failed",
+  );
+  yield* awaited(harness.close(context));
+});
+
+describe("completing", () => {
+  for (const [label, ending] of abortsWorkBelowCases) {
+    it(`aborts the work below ${label}, then finishes with the held outcome`, () =>
+      Effect.runPromise(abortsWorkBelow(ending)));
   }
 });
 

@@ -41,23 +41,16 @@ describe("conversation context", () => {
 });
 
 const freezesKeptEntries = Effect.gen(function* () {
-  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
   const memory = new MemoryStorage();
   const storage = new Proxy<Storage>(memory, {
     get(target, key) {
       const value: unknown = Reflect.get(target, key, target);
       if (key === "scanEntries") {
         return (...args: Parameters<Storage["scanEntries"]>) =>
-          runPromise(
-            Effect.gen(function* () {
-              const page = yield* awaited(target.scanEntries(...args));
-              return {
-                ...page,
-                items: page.items.map((item) => Object.freeze(structuredClone(item))),
-              };
-            }),
-          );
+          target.scanEntries(...args).then((page) => ({
+            ...page,
+            items: page.items.map((item) => Object.freeze(structuredClone(item))),
+          }));
       }
       return typeof value === "function" ? value.bind(target) : value;
     },
@@ -74,14 +67,12 @@ const freezesKeptEntries = Effect.gen(function* () {
     ),
   );
   yield* runInRoot({ harness, registry, root }, "test.context-shallow", (runtime, ctx) =>
-    runPromise(
-      Effect.gen(function* () {
-        const view = yield* awaited(runtime.context(root.id, ctx));
-        expect(() => {
-          (view.messages[0] as { content: unknown }).content = "changed";
-        }).toThrow(TypeError);
-      }),
-    ),
+    runtime.context(root.id, ctx).then((view) => {
+      expect(() => {
+        (view.messages[0] as { content: unknown }).content = "changed";
+      }).toThrow(TypeError);
+      return undefined;
+    }),
   );
   yield* awaited(harness.close(context));
 });

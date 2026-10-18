@@ -1,4 +1,4 @@
-import { defineTask } from "@msa/durable";
+import { defineTask, type TaskId, type Tx } from "@msa/durable";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
@@ -61,61 +61,38 @@ afterEach(() =>
   ),
 );
 
-const ownedTasksBeforeReopen = Effect.fn("ownedTasksBeforeReopen")(function* () {
-  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+const seedProbeTree = (tx: Tx) =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const hold = (name: string, taskId: TaskId) =>
+        awaited(tx.createTask(Hold, { name }, { ownership: { kind: "task", taskId } }));
+      const probe = yield* awaited(
+        tx.createTask(Probe, { name: "probe" }, { ownership: { kind: "conversation" } }),
+      );
+      const first = yield* hold("first", probe);
+      const ends = yield* hold("ends", probe);
+      const second = yield* hold("second", probe);
+      yield* hold("grandchild", first);
+      const child = yield* awaited(
+        tx.createConversation({ ownership: { kind: "task", taskId: probe } }),
+      );
+      yield* awaited(
+        tx.createTask(
+          Hold,
+          { name: "inside" },
+          { ownership: { kind: "conversation" }, conversationId: child.id },
+        ),
+      );
+      return { probe, first, ends, second };
+    }),
+  );
 
+const ownedTasksBeforeReopen = Effect.fn("ownedTasksBeforeReopen")(function* () {
   const path = yield* sqlitePath();
   const opened = yield* openTasks(yield* awaited(openNodeSqliteStorage(path)), [Hold, Probe]);
   const root = yield* awaited(opened.harness.root(context));
   opened.harness.resume();
-  const ids = yield* awaited(
-    root.commit(
-      (tx) =>
-        runPromise(
-          Effect.gen(function* () {
-            const probe = yield* awaited(
-              tx.createTask(Probe, { name: "probe" }, { ownership: { kind: "conversation" } }),
-            );
-            const first = yield* awaited(
-              tx.createTask(
-                Hold,
-                { name: "first" },
-                { ownership: { kind: "task", taskId: probe } },
-              ),
-            );
-            const ends = yield* awaited(
-              tx.createTask(Hold, { name: "ends" }, { ownership: { kind: "task", taskId: probe } }),
-            );
-            const second = yield* awaited(
-              tx.createTask(
-                Hold,
-                { name: "second" },
-                { ownership: { kind: "task", taskId: probe } },
-              ),
-            );
-            yield* awaited(
-              tx.createTask(
-                Hold,
-                { name: "grandchild" },
-                { ownership: { kind: "task", taskId: first } },
-              ),
-            );
-            const child = yield* awaited(
-              tx.createConversation({ ownership: { kind: "task", taskId: probe } }),
-            );
-            yield* awaited(
-              tx.createTask(
-                Hold,
-                { name: "inside" },
-                { ownership: { kind: "conversation" }, conversationId: child.id },
-              ),
-            );
-            return { probe, first, ends, second };
-          }),
-        ),
-      context,
-    ),
-  );
+  const ids = yield* awaited(root.commit(seedProbeTree, context));
   gate("ends").resolve();
   yield* awaited(opened.harness.waitForTask(ids.ends, context));
   return { path, opened, ids };

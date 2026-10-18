@@ -5,14 +5,8 @@ import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
-import {
-  Hold,
-  directories,
-  gated,
-  gates,
-  runs,
-  spawnFauxChild,
-} from "./harness-ownership-support.ts";
+import { spawnFauxChild } from "./harness-ownership-children.ts";
+import { Hold, directories, gated, gates, runs } from "./harness-ownership-support.ts";
 import {
   chatSetup,
   openChat,
@@ -55,27 +49,18 @@ const spawningTool = Effect.fn("spawningTool")(function* () {
       execute: (args, api, callContext) =>
         runPromise(
           Effect.gen(function* () {
-            const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
             const child = yield* awaited(
               api.commit(
                 (tx) =>
-                  runPromise(
-                    Effect.gen(function* () {
-                      const created = yield* awaited(
-                        tx.createConversation({
-                          ownership: { kind: "task", taskId: api.taskId },
-                        }),
-                      );
-                      return yield* awaited(
-                        tx.createTask(
-                          Hold,
-                          { name: `child.${api.callId}` },
-                          { ownership: { kind: "conversation" }, conversationId: created.id },
-                        ),
-                      );
-                    }),
-                  ),
+                  tx
+                    .createConversation({ ownership: { kind: "task", taskId: api.taskId } })
+                    .then((created) =>
+                      tx.createTask(
+                        Hold,
+                        { name: `child.${api.callId}` },
+                        { ownership: { kind: "conversation" }, conversationId: created.id },
+                      ),
+                    ),
                 callContext,
               ),
             );

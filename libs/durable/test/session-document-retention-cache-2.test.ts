@@ -22,63 +22,54 @@ import {
   eventually,
 } from "./support.ts";
 
-const givesSameEvents = Effect.gen(function* () {
-  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
-  const run = (documentRetentionMs: number): Promise<string[]> =>
-    runPromise(
+const stepsTool = defineTool({
+  name: "steps",
+  description: "Streams three steps",
+  parameters: Type.Object({}),
+  execute: (_args, api) =>
+    Effect.runPromise(
       Effect.gen(function* () {
-        const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
-        const setup = chatSetup();
-        setup.settings.documentRetentionMs = documentRetentionMs;
-        setup.settings.progress = { outputIntervalMs: 0 };
-        addTool(
-          setup.registry,
-          defineTool({
-            name: "steps",
-            description: "Streams three steps",
-            parameters: Type.Object({}),
-            execute: (_args, api) =>
-              runPromise(
-                Effect.gen(function* () {
-                  for (const step of ["a\n", "b\n", "c\n"]) {
-                    api.output(step);
-                    yield* Effect.sleep(5);
-                  }
-                  return {};
-                }),
-              ),
-          }),
-        );
-        setup.faux.setResponses([
-          fauxAssistantMessage([fauxToolCall("steps", {}, { id: "s1" })], {
-            stopReason: "toolUse",
-          }),
-          fauxAssistantMessage([fauxText("done")]),
-        ]);
-        const { harness, root } = yield* openChat(new MemoryStorage(), setup);
-        const stream = yield* awaited(watchEvents(harness, root.id, context));
-        const events: AgentEvent[] = [];
-        stream.start((batch) => {
-          events.push(...batch);
-
-          return Promise.resolve();
-        });
-        yield* awaited(
-          (yield* awaited(root.submit({ type: "input", content: "go" }, context))).wait(context),
-        );
-        yield* awaited(harness.waitForIdle(context));
-        yield* awaited(stream.stop());
-        yield* awaited(harness.close(context));
-        return events.map((event) =>
-          event.type === "tool_execution_update"
-            ? `update:${JSON.stringify(event.output)}`
-            : event.type,
-        );
+        for (const step of ["a\n", "b\n", "c\n"]) {
+          api.output(step);
+          yield* Effect.sleep(5);
+        }
+        return {};
       }),
-    );
-  expect(yield* awaited(run(0))).toEqual(yield* awaited(run(600_000)));
+    ),
+});
+
+const eventsWithRetention = Effect.fn("eventsWithRetention")(function* (
+  documentRetentionMs: number,
+) {
+  const setup = chatSetup();
+  setup.settings.documentRetentionMs = documentRetentionMs;
+  setup.settings.progress = { outputIntervalMs: 0 };
+  addTool(setup.registry, stepsTool);
+  setup.faux.setResponses([
+    fauxAssistantMessage([fauxToolCall("steps", {}, { id: "s1" })], { stopReason: "toolUse" }),
+    fauxAssistantMessage([fauxText("done")]),
+  ]);
+  const { harness, root } = yield* openChat(new MemoryStorage(), setup);
+  const stream = yield* awaited(watchEvents(harness, root.id, context));
+  const events: AgentEvent[] = [];
+  stream.start((batch) => {
+    events.push(...batch);
+
+    return Promise.resolve();
+  });
+  yield* awaited(
+    (yield* awaited(root.submit({ type: "input", content: "go" }, context))).wait(context),
+  );
+  yield* awaited(harness.waitForIdle(context));
+  yield* awaited(stream.stop());
+  yield* awaited(harness.close(context));
+  return events.map((event) =>
+    event.type === "tool_execution_update" ? `update:${JSON.stringify(event.output)}` : event.type,
+  );
+});
+
+const givesSameEvents = Effect.gen(function* () {
+  expect(yield* eventsWithRetention(0)).toEqual(yield* eventsWithRetention(600_000));
 });
 
 describe("document cache retention", () => {

@@ -1,7 +1,5 @@
 import { type AssistantMessage, type FauxResponseStep } from "@msa/ai";
-import type { Context } from "@msa/chord";
 import {
-  configure,
   type Conversation,
   type ConversationId,
   defineTask,
@@ -9,7 +7,6 @@ import {
   LiveDoc,
   type Storage,
   type TaskId,
-  type ToolExecutionApi,
 } from "@msa/durable";
 import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
@@ -269,23 +266,4 @@ export const setEntriesDuring = Effect.fn("setEntriesDuring")(function* (
     .mockImplementation(counted as unknown as () => SetIterator<unknown>);
   yield* awaited(measured()).pipe(Effect.ensuring(Effect.sync(() => spy.mockRestore())));
   return entries;
-});
-
-export const spawnFauxChild = Effect.fn("spawnFauxChild")(function* (
-  api: ToolExecutionApi,
-  callContext: Context,
-) {
-  return yield* awaited(
-    api.commit(
-      (tx) =>
-        tx
-          .createConversation({ ownership: { kind: "task", taskId: api.taskId } })
-          .then((created) =>
-            configure(tx, created.id, { model: { provider: "faux", modelId: "faux-1" } }).then(
-              () => created.id,
-            ),
-          ),
-      callContext,
-    ),
-  );
 });

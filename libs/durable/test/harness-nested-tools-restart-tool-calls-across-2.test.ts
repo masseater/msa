@@ -255,12 +255,7 @@ const leavesBackgroundWork = Effect.gen(function* () {
   addTool(
     setup.registry,
     tool("batch", (_args, api, callContext) =>
-      runPromise(
-        Effect.gen(function* () {
-          yield* awaited(api.executeTool("spawn", {}, callContext));
-          return {};
-        }),
-      ),
+      api.executeTool("spawn", {}, callContext).then(() => ({})),
     ),
   );
   setup.faux.setResponses([call("batch"), DONE]);

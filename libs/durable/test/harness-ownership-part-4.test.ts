@@ -10,6 +10,7 @@ import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
+import { spawnFauxChild } from "./harness-ownership-children.ts";
 import {
   directories,
   gates,
@@ -17,7 +18,6 @@ import {
   openHarness,
   ownedChild,
   runs,
-  spawnFauxChild,
 } from "./harness-ownership-support.ts";
 import {
   chatSetup,

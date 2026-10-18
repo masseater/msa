@@ -81,74 +81,74 @@ const orphanBelowOwner = Effect.fn("orphanBelowOwner")(function* () {
   return { path, session, tree };
 });
 
-describe("ownership", () => {
-  for (const [label, abortRequested, state] of [
-    [
-      "a held failed owner",
-      false,
-      { status: "completing", outcome: { status: "failed", error: { message: "crash" } } },
-    ],
-    ["an abort-marked owner", true, { status: "pending", checkpoint: { phase: "hold" } }],
-  ] as const) {
-    it(`derives marks a crash left unapplied below ${label} at open`, () =>
-      Effect.runPromise(
-        Effect.gen(function* () {
-          const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+const crashCases = [
+  [
+    "a held failed owner",
+    false,
+    { status: "completing", outcome: { status: "failed", error: { message: "crash" } } },
+  ],
+  ["an abort-marked owner", true, { status: "pending", checkpoint: { phase: "hold" } }],
+] as const;
 
-          const { path, session, tree } = yield* orphanBelowOwner();
-          yield* awaited(
-            session.commit(
-              (tx) =>
-                runPromise(
-                  Effect.gen(function* () {
-                    const record = (yield* awaited(tx.task(tree.owner)))!;
-                    (tx as unknown as { setTask(value: unknown): void }).setTask({
-                      ...record,
-                      abortRequested,
-                      state,
-                    });
-                  }),
-                ),
-              context,
-            ),
-          );
-          yield* awaited(session.close(context));
-
-          const { harness } = yield* openHarness(yield* awaited(openNodeSqliteStorage(path)));
-          expect(
-            (yield* awaited(harness.waitForTask(tree.inner, context))).state.outcome.status,
-          ).toBe("aborted");
-          const outcome = (yield* awaited(harness.waitForTask(tree.owner, context))).state.outcome
-            .status;
-          expect(outcome).toBe(abortRequested ? "aborted" : "failed");
-          yield* awaited(harness.close(context));
+const derivesMarksCrash = Effect.fn("derivesMarksCrash")(function* (
+  abortRequested: boolean,
+  state: (typeof crashCases)[number][2],
+) {
+  const { path, session, tree } = yield* orphanBelowOwner();
+  yield* awaited(
+    session.commit(
+      (tx) =>
+        tx.task(tree.owner).then((record) => {
+          (tx as unknown as { setTask(value: unknown): void }).setTask({
+            ...record!,
+            abortRequested,
+            state,
+          });
+          return undefined;
         }),
-      ));
+      context,
+    ),
+  );
+  yield* awaited(session.close(context));
+
+  const { harness } = yield* openHarness(yield* awaited(openNodeSqliteStorage(path)));
+  expect((yield* awaited(harness.waitForTask(tree.inner, context))).state.outcome.status).toBe(
+    "aborted",
+  );
+  const outcome = (yield* awaited(harness.waitForTask(tree.owner, context))).state.outcome.status;
+  expect(outcome).toBe(abortRequested ? "aborted" : "failed");
+  yield* awaited(harness.close(context));
+});
+
+const withdrawsInputQueued = Effect.gen(function* () {
+  const { harness, root } = yield* openHarness();
+  const tree = yield* awaited(ownedChild(root, "owner", { slowInner: true }));
+  const child = (yield* awaited(harness.conversation(tree.child, context)))!;
+  yield* busy(child, tree.inner);
+  open("owner", "failed");
+  yield* waitUntil(
+    Effect.gen(function* () {
+      return (yield* awaited(harness.getTask(tree.inner, context)))!.abortRequested;
+    }),
+  );
+  const late = yield* awaited(child.submit({ type: "input", content: "late" }, context));
+  expect(yield* awaited(late.wait(context))).toMatchObject({
+    status: "unanswered",
+    reason: "aborted",
+  });
+  open("abort.owner.inner", "completed");
+  yield* awaited(harness.waitForTask(tree.owner, context));
+  yield* awaited(harness.close(context));
+});
+
+describe("ownership", () => {
+  for (const [label, abortRequested, state] of crashCases) {
+    it(`derives marks a crash left unapplied below ${label} at open`, () =>
+      Effect.runPromise(derivesMarksCrash(abortRequested, state)));
   }
 
   it("withdraws an input queued below a held failed owner after its cascade", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const { harness, root } = yield* openHarness();
-        const tree = yield* awaited(ownedChild(root, "owner", { slowInner: true }));
-        const child = (yield* awaited(harness.conversation(tree.child, context)))!;
-        yield* busy(child, tree.inner);
-        open("owner", "failed");
-        yield* waitUntil(
-          Effect.gen(function* () {
-            return (yield* awaited(harness.getTask(tree.inner, context)))!.abortRequested;
-          }),
-        );
-        const late = yield* awaited(child.submit({ type: "input", content: "late" }, context));
-        expect(yield* awaited(late.wait(context))).toMatchObject({
-          status: "unanswered",
-          reason: "aborted",
-        });
-        open("abort.owner.inner", "completed");
-        yield* awaited(harness.waitForTask(tree.owner, context));
-        yield* awaited(harness.close(context));
-      }),
-    ));
+    Effect.runPromise(withdrawsInputQueued));
 });
 
 const marksWorkAdmitted = Effect.gen(function* () {

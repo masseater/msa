@@ -1,4 +1,5 @@
 import { Type } from "@msa/ai";
+import type { Context } from "@msa/chord";
 import {
   configure,
   defineDoc,
@@ -7,6 +8,7 @@ import {
   defineTool,
   type EntryId,
   type Extension,
+  type ToolExecutionApi,
   hook,
   section,
   wrapTool,
@@ -125,6 +127,32 @@ export function planMode({ writes }: SpecNames) {
   return { PlanModeDoc, PlanMode };
 }
 
+const childWithout = Effect.fn("childWithout")(function* (
+  api: ToolExecutionApi,
+  context: Context,
+  removed: Extension,
+) {
+  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+  return yield* awaited(
+    api.commit(
+      (tx) =>
+        runPromise(
+          Effect.gen(function* () {
+            const existing = (yield* awaited(tx.scanConversations({ ownerTaskId: api.taskId }, 1)))
+              .items[0];
+            if (existing !== undefined) return existing.id;
+            const created = yield* awaited(
+              tx.createConversation({ ownership: { kind: "task", taskId: api.taskId } }),
+            );
+            yield* awaited(configure(tx, created.id, { extensions: { remove: [removed] } }));
+            return created.id;
+          }),
+        ),
+      context,
+    ),
+  );
+});
+
 export function subagentExtension({ answerText }: SpecNames) {
   const Subagent: Extension = defineExtension({
     name: "subagent",
@@ -137,32 +165,8 @@ export function subagentExtension({ answerText }: SpecNames) {
         execute: (args, api, context) =>
           Effect.runPromise(
             Effect.gen(function* () {
-              const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
               const { task } = args;
-              const child = yield* awaited(
-                api.commit(
-                  (tx) =>
-                    runPromise(
-                      Effect.gen(function* () {
-                        const existing = (yield* awaited(
-                          tx.scanConversations({ ownerTaskId: api.taskId }, 1),
-                        )).items[0];
-                        if (existing !== undefined) return existing.id;
-                        const created = yield* awaited(
-                          tx.createConversation({
-                            ownership: { kind: "task", taskId: api.taskId },
-                          }),
-                        );
-                        yield* awaited(
-                          configure(tx, created.id, { extensions: { remove: [Subagent] } }),
-                        );
-                        return created.id;
-                      }),
-                    ),
-                  context,
-                ),
-              );
+              const child = yield* childWithout(api, context, Subagent);
               yield* awaited(api.details({ conversationId: child }, context));
               const handle = (yield* awaited(api.conversation(child, context)))!;
               const request = {
@@ -227,23 +231,14 @@ export function paymentTask({ newKey, payments, receiptEntry }: SpecNames) {
       charge: (task, runtime, context) =>
         Effect.runPromise(
           Effect.gen(function* () {
-            const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
             const receipt = yield* awaited(payments.charge(task.state.checkpoint.key));
             yield* awaited(
               runtime.commit(
                 (tx, current) =>
-                  runPromise(
-                    Effect.gen(function* () {
-                      const entry = yield* awaited(
-                        tx.appendEntry(current.conversationId, receiptEntry(receipt)),
-                      );
-                      return {
-                        status: "terminal",
-                        outcome: { status: "completed", result: { entryId: entry.id } },
-                      };
-                    }),
-                  ),
+                  tx.appendEntry(current.conversationId, receiptEntry(receipt)).then((entry) => ({
+                    status: "terminal",
+                    outcome: { status: "completed", result: { entryId: entry.id } },
+                  })),
                 context,
               ),
             );

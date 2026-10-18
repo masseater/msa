@@ -28,16 +28,7 @@ function checkExtendedReads(
       const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
       const write = (draft: EntryDraft) =>
-        runtime.commit(
-          (tx) =>
-            runPromise(
-              Effect.gen(function* () {
-                yield* awaited(tx.appendEntry(root.id, draft));
-                return undefined;
-              }),
-            ),
-          taskContext,
-        );
+        runtime.commit((tx) => tx.appendEntry(root.id, draft).then(() => undefined), taskContext);
       const read = (at?: EntryId): Promise<{ view: ContextView; rows: number }> =>
         runPromise(
           Effect.gen(function* () {

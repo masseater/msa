@@ -1,9 +1,10 @@
 import { fauxAssistantMessage, fauxText, fauxToolCall, Type } from "@msa/ai";
-import { type ConversationId, configure, defineTool } from "@msa/durable";
+import { type ConversationId, defineTool } from "@msa/durable";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
+import { reuseFauxChild } from "./harness-ownership-children.ts";
 import { directories, gates, runs, gated } from "./harness-ownership-support.ts";
 import {
   chatSetup,
@@ -43,33 +44,7 @@ const replaySafeSubagent = Effect.fn("replaySafeSubagent")(function* () {
       execute: (_args, api, callContext) =>
         runPromise(
           Effect.gen(function* () {
-            const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
-            const child = yield* awaited(
-              api.commit(
-                (tx) =>
-                  runPromise(
-                    Effect.gen(function* () {
-                      const existing = (yield* awaited(
-                        tx.scanConversations({ ownerTaskId: api.taskId }, 1),
-                      )).items[0];
-                      if (existing !== undefined) return existing.id;
-                      const created = yield* awaited(
-                        tx.createConversation({
-                          ownership: { kind: "task", taskId: api.taskId },
-                        }),
-                      );
-                      yield* awaited(
-                        configure(tx, created.id, {
-                          model: { provider: "faux", modelId: "faux-1" },
-                        }),
-                      );
-                      return created.id;
-                    }),
-                  ),
-                callContext,
-              ),
-            );
+            const child = yield* reuseFauxChild(api, callContext);
             children.push(child);
             const request = {
               type: "input",

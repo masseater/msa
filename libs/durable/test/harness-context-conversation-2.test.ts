@@ -22,19 +22,12 @@ function childReadTask(root: Conversation, read: Read) {
       run: (_task, runtime, taskContext) =>
         Effect.runPromise(
           Effect.gen(function* () {
-            const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
             yield* awaited(
               runtime.commit(
                 (tx) =>
-                  runPromise(
-                    Effect.gen(function* () {
-                      yield* awaited(
-                        tx.appendEntry(root.id, { kind: "message", model: [user("from child")] }),
-                      );
-                      return undefined;
-                    }),
-                  ),
+                  tx
+                    .appendEntry(root.id, { kind: "message", model: [user("from child")] })
+                    .then(() => undefined),
                 taskContext,
               ),
             );
@@ -59,34 +52,27 @@ function parentReadTask(root: Conversation, read: Read, Child: ReturnType<typeof
       start: (_task, runtime, taskContext) =>
         Effect.runPromise(
           Effect.gen(function* () {
-            const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
             yield* awaited(
               read("parent", () => runtime.context(root.id, taskContext), taskContext),
             );
             yield* awaited(
               runtime.commit(
                 (tx) =>
-                  runPromise(
-                    Effect.gen(function* () {
-                      const child = yield* awaited(
-                        tx.createTask(
-                          Child,
-                          {},
-                          {
-                            ownership: { kind: "task", taskId: runtime.taskId },
-                            conversationId: root.id,
-                          },
-                        ),
-                      );
-                      return {
-                        status: "waiting",
-                        checkpoint: { phase: "after" },
-                        on: [child],
-                        policy: "allSettled",
-                      };
-                    }),
-                  ),
+                  tx
+                    .createTask(
+                      Child,
+                      {},
+                      {
+                        ownership: { kind: "task", taskId: runtime.taskId },
+                        conversationId: root.id,
+                      },
+                    )
+                    .then((child) => ({
+                      status: "waiting",
+                      checkpoint: { phase: "after" },
+                      on: [child],
+                      policy: "allSettled",
+                    })),
                 taskContext,
               ),
             );
