@@ -89,77 +89,96 @@ function hasStyle(style: TextStyle): boolean {
   );
 }
 
+const SGR_ACTIONS: Record<number, (style: TextStyle) => void> = {
+  0: (style) => {
+    style.fg = null;
+    style.bg = null;
+    style.bold = false;
+    style.dim = false;
+    style.italic = false;
+    style.underline = false;
+  },
+  1: (style) => {
+    style.bold = true;
+  },
+  2: (style) => {
+    style.dim = true;
+  },
+  3: (style) => {
+    style.italic = true;
+  },
+  4: (style) => {
+    style.underline = true;
+  },
+  22: (style) => {
+    style.bold = false;
+    style.dim = false;
+  },
+  23: (style) => {
+    style.italic = false;
+  },
+  24: (style) => {
+    style.underline = false;
+  },
+  39: (style) => {
+    style.fg = null;
+  },
+  49: (style) => {
+    style.bg = null;
+  },
+};
+
+function applyPaletteColor(code: number, style: TextStyle): void {
+  if (code >= 30 && code <= 37) style.fg = ANSI_COLORS[code - 30] ?? null;
+  else if (code >= 40 && code <= 47) style.bg = ANSI_COLORS[code - 40] ?? null;
+  else if (code >= 90 && code <= 97) style.fg = ANSI_COLORS[code - 90 + 8] ?? null;
+  else if (code >= 100 && code <= 107) style.bg = ANSI_COLORS[code - 100 + 8] ?? null;
+}
+
+function readExtendedColor(
+  params: number[],
+  index: number,
+): { color: string; consumed: number } | undefined {
+  const colorIndex = params[index + 2];
+  if (params[index + 1] === 5 && colorIndex !== undefined) {
+    return { color: color256ToHex(colorIndex), consumed: 2 };
+  }
+  if (params[index + 1] === 2 && params.length > index + 4) {
+    const [r, g, b] = [params[index + 2], params[index + 3], params[index + 4]];
+    return { color: `rgb(${r},${g},${b})`, consumed: 4 };
+  }
+  return undefined;
+}
+
+function applySingleCode(params: number[], index: number, style: TextStyle): number {
+  const code = params[index] ?? 0;
+  const action = SGR_ACTIONS[code];
+  if (action !== undefined) {
+    action(style);
+    return 0;
+  }
+  if (code !== 38 && code !== 48) {
+    applyPaletteColor(code, style);
+    return 0;
+  }
+  const extended = readExtendedColor(params, index);
+  if (extended === undefined) return 0;
+  if (code === 38) style.fg = extended.color;
+  else style.bg = extended.color;
+  return extended.consumed;
+}
+
 function applySgrCode(params: number[], style: TextStyle): void {
   let i = 0;
   while (i < params.length) {
     const code = params[i];
     if (code === undefined) break;
-
-    if (code === 0) {
-      style.fg = null;
-      style.bg = null;
-      style.bold = false;
-      style.dim = false;
-      style.italic = false;
-      style.underline = false;
-    } else if (code === 1) {
-      style.bold = true;
-    } else if (code === 2) {
-      style.dim = true;
-    } else if (code === 3) {
-      style.italic = true;
-    } else if (code === 4) {
-      style.underline = true;
-    } else if (code === 22) {
-      style.bold = false;
-      style.dim = false;
-    } else if (code === 23) {
-      style.italic = false;
-    } else if (code === 24) {
-      style.underline = false;
-    } else if (code >= 30 && code <= 37) {
-      style.fg = ANSI_COLORS[code - 30] ?? null;
-    } else if (code === 38) {
-      const colorIndex = params[i + 2];
-      if (params[i + 1] === 5 && colorIndex !== undefined) {
-        style.fg = color256ToHex(colorIndex);
-        i += 2;
-      } else if (params[i + 1] === 2 && params.length > i + 4) {
-        const r = params[i + 2];
-        const g = params[i + 3];
-        const b = params[i + 4];
-        style.fg = `rgb(${r},${g},${b})`;
-        i += 4;
-      }
-    } else if (code === 39) {
-      style.fg = null;
-    } else if (code >= 40 && code <= 47) {
-      style.bg = ANSI_COLORS[code - 40] ?? null;
-    } else if (code === 48) {
-      const colorIndex = params[i + 2];
-      if (params[i + 1] === 5 && colorIndex !== undefined) {
-        style.bg = color256ToHex(colorIndex);
-        i += 2;
-      } else if (params[i + 1] === 2 && params.length > i + 4) {
-        const r = params[i + 2];
-        const g = params[i + 3];
-        const b = params[i + 4];
-        style.bg = `rgb(${r},${g},${b})`;
-        i += 4;
-      }
-    } else if (code === 49) {
-      style.bg = null;
-    } else if (code >= 90 && code <= 97) {
-      style.fg = ANSI_COLORS[code - 90 + 8] ?? null;
-    } else if (code >= 100 && code <= 107) {
-      style.bg = ANSI_COLORS[code - 100 + 8] ?? null;
-    }
-
-    i++;
+    i += applySingleCode(params, i, style) + 1;
   }
 }
 
-const ANSI_REGEX = /\x1b\[([\d;]*)m/gu;
+const ESC = String.fromCodePoint(27);
+const ANSI_REGEX = new RegExp(`${ESC}\\[([\\d;]*)m`, "gu");
 
 export function ansiToHtml(text: string): string {
   const style = createEmptyStyle();

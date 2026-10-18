@@ -23,7 +23,8 @@ export interface ToolHtmlRenderer {
   ): { collapsed?: string; expanded?: string } | undefined;
 }
 
-const ANSI_ESCAPE_REGEX = /\x1b\[[\d;]*m/gu;
+const ESC = String.fromCodePoint(27);
+const ANSI_ESCAPE_REGEX = new RegExp(`${ESC}\\[[\\d;]*m`, "gu");
 
 function isBlankRenderedLine(line: string): boolean {
   return line.replace(ANSI_ESCAPE_REGEX, "").trim().length === 0;
@@ -36,134 +37,128 @@ function trimRenderedResultLines(lines: string[]): string[] {
   return lines.slice(start, end + 1);
 }
 
-export function createToolHtmlRenderer(deps: ToolHtmlRendererDeps): ToolHtmlRenderer {
-  const { getToolRenderers, theme, cwd, width = 100 } = deps;
+interface RenderContextInput {
+  toolCallId: string;
+  lastComponent: Component | undefined;
+  expanded: boolean;
+  isPartial: boolean;
+  isError: boolean;
+}
 
-  const renderedCallComponents = new Map<string, Component>();
-  const renderedResultComponents = new Map<string, Component>();
-  const renderedStates = new Map<string, any>();
-  const renderedArgs = new Map<string, unknown>();
+type ResultBlocks = Array<{ type: string; text?: string; data?: string; mimeType?: string }>;
 
-  const getState = (toolCallId: string): any => {
-    let state = renderedStates.get(toolCallId);
-    if (!state) {
+class HtmlToolRenderer implements ToolHtmlRenderer {
+  private readonly renderedCallComponents = new Map<string, Component>();
+  private readonly renderedResultComponents = new Map<string, Component>();
+  private readonly renderedStates = new Map<string, any>();
+  private readonly renderedArgs = new Map<string, unknown>();
+  private readonly deps: ToolHtmlRendererDeps;
+  private readonly width: number;
+
+  constructor(deps: ToolHtmlRendererDeps) {
+    this.deps = deps;
+    this.width = deps.width ?? 100;
+  }
+
+  renderCall(toolCallId: string, toolName: string, args: unknown): string | undefined {
+    try {
+      this.renderedArgs.set(toolCallId, args);
+      const toolDef = this.deps.getToolRenderers(toolName);
+      if (toolDef?.renderCall === undefined) {
+        return undefined;
+      }
+      const component = toolDef.renderCall(
+        args,
+        this.deps.theme,
+        this.createRenderContext({
+          toolCallId,
+          lastComponent: this.renderedCallComponents.get(toolCallId),
+          expanded: false,
+          isPartial: true,
+          isError: false,
+        }),
+      );
+      this.renderedCallComponents.set(toolCallId, component);
+      return ansiLinesToHtml(component.render(this.width));
+    } catch {
+      return undefined;
+    }
+  }
+
+  renderResult(
+    toolCallId: string,
+    toolName: string,
+    result: ResultBlocks,
+    details: unknown,
+    isError: boolean,
+  ): { collapsed?: string; expanded?: string } | undefined {
+    try {
+      const toolDef = this.deps.getToolRenderers(toolName);
+      if (toolDef?.renderResult === undefined) {
+        return undefined;
+      }
+      const renderResult = toolDef.renderResult;
+      const agentToolResult = {
+        content: result as (TextContent | ImageContent)[],
+        details,
+        isError,
+      };
+      const renderVariant = (expanded: boolean): string => {
+        const component = renderResult(
+          agentToolResult,
+          { expanded, isPartial: false },
+          this.deps.theme,
+          this.createRenderContext({
+            toolCallId,
+            lastComponent: this.renderedResultComponents.get(toolCallId),
+            expanded,
+            isPartial: false,
+            isError,
+          }),
+        );
+        this.renderedResultComponents.set(toolCallId, component);
+        return ansiLinesToHtml(trimRenderedResultLines(component.render(this.width)));
+      };
+      const collapsed = renderVariant(false);
+      const expanded = renderVariant(true);
+      return {
+        ...(collapsed !== "" && collapsed !== expanded ? { collapsed } : {}),
+        expanded,
+      };
+    } catch {
+      return undefined;
+    }
+  }
+
+  private getState(toolCallId: string): any {
+    let state = this.renderedStates.get(toolCallId);
+    if (state === undefined) {
       state = {};
-      renderedStates.set(toolCallId, state);
+      this.renderedStates.set(toolCallId, state);
     }
     return state;
-  };
+  }
 
-  const createRenderContext = (
-    toolCallId: string,
-    lastComponent: Component | undefined,
-    expanded: boolean,
-    isPartial: boolean,
-    isError: boolean,
-  ): ToolRenderContext => {
+  private createRenderContext(input: RenderContextInput): ToolRenderContext {
     return {
-      args: renderedArgs.get(toolCallId),
-      toolCallId,
+      args: this.renderedArgs.get(input.toolCallId),
+      toolCallId: input.toolCallId,
       invalidate: () => {},
-      lastComponent,
-      state: getState(toolCallId),
-      cwd,
+      lastComponent: input.lastComponent,
+      state: this.getState(input.toolCallId),
+      cwd: this.deps.cwd,
       executionStarted: true,
       argsComplete: true,
-      isPartial,
-      expanded,
+      isPartial: input.isPartial,
+      expanded: input.expanded,
       showImages: false,
-      isError,
+      isError: input.isError,
       durationMs: undefined,
       outputPad: 1,
     };
-  };
+  }
+}
 
-  return {
-    renderCall(toolCallId: string, toolName: string, args: unknown): string | undefined {
-      try {
-        renderedArgs.set(toolCallId, args);
-        const toolDef = getToolRenderers(toolName);
-        if (toolDef?.renderCall === undefined) {
-          return undefined;
-        }
-
-        const component = toolDef.renderCall(
-          args,
-          theme,
-          createRenderContext(
-            toolCallId,
-            renderedCallComponents.get(toolCallId),
-            false,
-            true,
-            false,
-          ),
-        );
-        renderedCallComponents.set(toolCallId, component);
-        const lines = component.render(width);
-        return ansiLinesToHtml(lines);
-      } catch {
-        return undefined;
-      }
-    },
-
-    renderResult(
-      toolCallId: string,
-      toolName: string,
-      result: Array<{ type: string; text?: string; data?: string; mimeType?: string }>,
-      details: unknown,
-      isError: boolean,
-    ): { collapsed?: string; expanded?: string } | undefined {
-      try {
-        const toolDef = getToolRenderers(toolName);
-        if (toolDef?.renderResult === undefined) {
-          return undefined;
-        }
-
-        const agentToolResult = {
-          content: result as (TextContent | ImageContent)[],
-          details,
-          isError,
-        };
-
-        const collapsedComponent = toolDef.renderResult(
-          agentToolResult,
-          { expanded: false, isPartial: false },
-          theme,
-          createRenderContext(
-            toolCallId,
-            renderedResultComponents.get(toolCallId),
-            false,
-            false,
-            isError,
-          ),
-        );
-        renderedResultComponents.set(toolCallId, collapsedComponent);
-        const collapsed = ansiLinesToHtml(
-          trimRenderedResultLines(collapsedComponent.render(width)),
-        );
-
-        const expandedComponent = toolDef.renderResult(
-          agentToolResult,
-          { expanded: true, isPartial: false },
-          theme,
-          createRenderContext(
-            toolCallId,
-            renderedResultComponents.get(toolCallId),
-            true,
-            false,
-            isError,
-          ),
-        );
-        renderedResultComponents.set(toolCallId, expandedComponent);
-        const expanded = ansiLinesToHtml(trimRenderedResultLines(expandedComponent.render(width)));
-
-        return {
-          ...(collapsed !== "" && collapsed !== expanded ? { collapsed } : {}),
-          expanded,
-        };
-      } catch {
-        return undefined;
-      }
-    },
-  };
+export function createToolHtmlRenderer(deps: ToolHtmlRendererDeps): ToolHtmlRenderer {
+  return new HtmlToolRenderer(deps);
 }
