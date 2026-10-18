@@ -1,6 +1,5 @@
 import { Effect, FileSystem } from "effect";
 
-import { runCommand } from "../platform/command.ts";
 import {
   currentTimeMillis,
   fromPromise,
@@ -11,6 +10,7 @@ import {
 } from "../platform/index.ts";
 import { EmbeddingClient } from "./embeddings.ts";
 import { formatMemoryStats, formatMemoryStatus, isMemoryKind } from "./memory-format.ts";
+import { projectNameOf } from "./memory-project.ts";
 import type {
   MemorySaveOutcome,
   MemoryServiceOptions,
@@ -27,6 +27,7 @@ import {
 
 export const MEMORY_RECALL_MESSAGE_TYPE = "msa.memory.recall";
 
+export { resolveProjectName } from "./memory-project.ts";
 export {
   formatAge,
   formatMemoryList,
@@ -48,22 +49,6 @@ const EMBEDDING_FAILURE_COOLDOWN_MS = 60_000;
 const REEMBED_BATCH_LIMIT = 25;
 
 const EXPLICIT_SEARCH_MIN_SCORE = 0.1;
-
-const projectNameOf = (dir: string) =>
-  fromPromise(() =>
-    runCommand({ file: "git", args: ["rev-parse", "--show-toplevel"], cwd: dir }),
-  ).pipe(
-    Effect.map(({ exitCode, lines }) => {
-      const top = (lines[0] ?? "").trim();
-      return exitCode === 0 && top !== "" ? pathOperations.basename(top) : undefined;
-    }),
-    Effect.orElseSucceed((): string | undefined => undefined),
-  );
-
-export const resolveProjectName = (dir: string): Promise<string> =>
-  platformRuntime.runPromise(
-    projectNameOf(dir).pipe(Effect.map((name) => name ?? (pathOperations.basename(dir) || dir))),
-  );
 
 export class MemoryService {
   readonly settings: ResolvedMemorySettings;
@@ -230,7 +215,6 @@ export class MemoryService {
   private recallEffect(query: string, signal: AbortSignal | undefined) {
     return Effect.gen({ self: this }, function* () {
       if (!this.recallEnabled || query.trim() === "") return [];
-      yield* fromPromise(() => this.ready);
       const embedding = yield* this.embedQuery(query, signal);
       const scores = this.ensureStore().search({
         text: query,

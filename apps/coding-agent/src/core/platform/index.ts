@@ -1,5 +1,5 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { Clock, Effect, ManagedRuntime, Path, Predicate } from "effect";
+import { Cause, Clock, Effect, ManagedRuntime, Path, Predicate } from "effect";
 import { dual } from "effect/Function";
 
 import { ForeignError } from "./foreign-error.ts";
@@ -105,3 +105,13 @@ export const randomHex = (byteCount: number): string =>
   Array.from(globalThis.crypto.getRandomValues(new Uint8Array(byteCount)), (byte) =>
     byte.toString(16).padStart(2, "0"),
   ).join("");
+
+export const errorFromCause = (cause: Cause.Cause<unknown>): unknown => {
+  const squashed = Cause.squash(cause);
+  return squashed instanceof ForeignError ? squashed.cause : squashed;
+};
+
+export const causeMessage = (cause: Cause.Cause<unknown>): string => {
+  const error = errorFromCause(cause);
+  return error instanceof Error ? error.message : String(error);
+};
