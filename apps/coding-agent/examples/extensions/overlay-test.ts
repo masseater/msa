@@ -6,26 +6,63 @@ import {
   renderFakeCursor,
   visibleWidth,
 } from "@msa/tui";
+import { Effect } from "effect";
 
 export default function (msa: ExtensionAPI) {
   msa.registerCommand("overlay-test", {
     description: "Test overlay rendering with edge cases",
-    handler: async (_args: string, ctx: ExtensionCommandContext) => {
-      const result = await ctx.ui.custom<{ action: string; query?: string } | undefined>(
-        (_tui, theme, _keybindings, done) => new OverlayTestComponent(theme, done),
-        { overlay: true },
-      );
+    handler: (_args: string, ctx: ExtensionCommandContext) =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          const result = yield* Effect.promise(() =>
+            ctx.ui.custom<{ action: string; query?: string } | undefined>(
+              (_tui, theme, _keybindings, done) => new OverlayTestComponent(theme, done),
+              { overlay: true },
+            ),
+          );
 
-      if (result !== undefined) {
-        const msg =
-          result.query !== undefined && result.query.length > 0
-            ? `${result.action}: "${result.query}"`
-            : result.action;
-        ctx.ui.notify(msg, "info");
-      }
-    },
+          if (result !== undefined) {
+            const msg =
+              result.query !== undefined && result.query.length > 0
+                ? `${result.action}: "${result.query}"`
+                : result.action;
+            ctx.ui.notify(msg, "info");
+          }
+        }),
+      ),
   });
 }
+
+interface OverlayItem {
+  label: string;
+  hasInput: boolean;
+  text: string;
+  cursor: number;
+}
+
+const renderItem = (
+  item: OverlayItem,
+  isSelected: boolean,
+  focused: boolean,
+  th: Theme,
+): string => {
+  const prefix = isSelected ? " ▶ " : "   ";
+
+  if (!item.hasInput) {
+    return prefix + (isSelected ? th.fg("accent", item.label) : th.fg("text", item.label));
+  }
+
+  const label = isSelected ? th.fg("accent", `${item.label}:`) : th.fg("text", `${item.label}:`);
+  let inputDisplay = item.text;
+  if (isSelected) {
+    const before = inputDisplay.slice(0, item.cursor);
+    const cursorChar = inputDisplay[item.cursor] ?? " ";
+    const after = inputDisplay.slice(item.cursor + 1);
+    const marker = focused ? CURSOR_MARKER : "";
+    inputDisplay = `${before}${marker}${renderFakeCursor(cursorChar)}${after}`;
+  }
+  return `${prefix + label} ${inputDisplay}`;
+};
 
 class OverlayTestComponent implements Focusable {
   readonly width = 70;
@@ -122,31 +159,7 @@ class OverlayTestComponent implements Focusable {
     lines.push(row(` ${th.fg("dim", "─── Actions ───")}`));
 
     for (let i = 0; i < this.items.length; i++) {
-      const item = this.items[i]!;
-      const isSelected = i === this.selected;
-      const prefix = isSelected ? " ▶ " : "   ";
-
-      let content: string;
-      if (item.hasInput) {
-        const label = isSelected
-          ? th.fg("accent", `${item.label}:`)
-          : th.fg("text", `${item.label}:`);
-
-        let inputDisplay = item.text;
-        if (isSelected) {
-          const before = inputDisplay.slice(0, item.cursor);
-          const cursorChar = inputDisplay[item.cursor] ?? " ";
-          const after = inputDisplay.slice(item.cursor + 1);
-
-          const marker = this.focused ? CURSOR_MARKER : "";
-          inputDisplay = `${before}${marker}${renderFakeCursor(cursorChar)}${after}`;
-        }
-        content = `${prefix + label} ${inputDisplay}`;
-      } else {
-        content = prefix + (isSelected ? th.fg("accent", item.label) : th.fg("text", item.label));
-      }
-
-      lines.push(row(content));
+      lines.push(row(renderItem(this.items[i]!, i === this.selected, this.focused, th)));
     }
 
     lines.push(row(""));

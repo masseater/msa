@@ -13,10 +13,9 @@ function normalizeToolName(input: string): string | undefined {
   return trimmed;
 }
 
-export default function dynamicToolsExtension(msa: ExtensionAPI) {
-  const registeredToolNames = new Set<string>();
-
-  const registerEchoTool = (name: string, label: string, prefix: string): boolean => {
+const makeRegisterEchoTool =
+  (msa: ExtensionAPI, registeredToolNames: Set<string>) =>
+  (name: string, label: string, prefix: string): boolean => {
     if (registeredToolNames.has(name)) {
       return false;
     }
@@ -40,6 +39,10 @@ export default function dynamicToolsExtension(msa: ExtensionAPI) {
 
     return true;
   };
+
+export default function dynamicToolsExtension(msa: ExtensionAPI) {
+  const registeredToolNames = new Set<string>();
+  const registerEchoTool = makeRegisterEchoTool(msa, registeredToolNames);
 
   msa.on("session_start", (_event, ctx) => {
     registerEchoTool("echo_session", "Echo Session", "[session] ");
