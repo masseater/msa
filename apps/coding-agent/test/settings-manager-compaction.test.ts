@@ -1,3 +1,5 @@
+import { awaited, runTest } from "@msa/testing";
+import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { InMemorySettingsStorage, SettingsManager } from "../src/core/settings-manager.ts";
@@ -68,62 +70,70 @@ describe("compaction model overrides", () => {
     }
   });
 
-  it("merges project model overrides per field before resolving fallbacks", async () => {
-    const storage = new InMemorySettingsStorage();
-    storage.withLock("global", () =>
-      JSON.stringify({
-        compaction: {
-          reserveTokens: 8192,
-          modelOverrides: {
-            [modelKey]: { reserveTokens: 400000, keepRecentTokens: 30000 },
-            "provider/other": { keepRecentTokens: 4096 },
-          },
-        },
-      }),
-    );
-    storage.withLock("project", () =>
-      JSON.stringify({
-        compaction: {
+  it("merges project model overrides per field before resolving fallbacks", () =>
+    runTest(
+      Effect.gen(function* () {
+        const storage = new InMemorySettingsStorage();
+        storage.withLock("global", () =>
+          JSON.stringify({
+            compaction: {
+              reserveTokens: 8192,
+              modelOverrides: {
+                [modelKey]: { reserveTokens: 400000, keepRecentTokens: 30000 },
+                "provider/other": { keepRecentTokens: 4096 },
+              },
+            },
+          }),
+        );
+        storage.withLock("project", () =>
+          JSON.stringify({
+            compaction: {
+              reserveTokens: 1024,
+              modelOverrides: { [modelKey]: { keepRecentTokens: 2000 } },
+            },
+          }),
+        );
+        const manager = SettingsManager.fromStorage(storage);
+        expect(manager.getCompactionSettings(model)).toEqual({
+          enabled: true,
+          reserveTokens: 400000,
+          keepRecentTokens: 2000,
+        });
+        expect(manager.getCompactionSettings({ provider: "provider", id: "other" })).toEqual({
+          enabled: true,
           reserveTokens: 1024,
-          modelOverrides: { [modelKey]: { keepRecentTokens: 2000 } },
-        },
+          keepRecentTokens: 4096,
+        });
+        yield* awaited(manager.reload());
+        expect(manager.getCompactionKeepRecentTokens(model)).toBe(2000);
+        manager.setProjectTrusted(false);
+        expect(manager.getCompactionKeepRecentTokens(model)).toBe(30000);
       }),
-    );
-    const manager = SettingsManager.fromStorage(storage);
-    expect(manager.getCompactionSettings(model)).toEqual({
-      enabled: true,
-      reserveTokens: 400000,
-      keepRecentTokens: 2000,
-    });
-    expect(manager.getCompactionSettings({ provider: "provider", id: "other" })).toEqual({
-      enabled: true,
-      reserveTokens: 1024,
-      keepRecentTokens: 4096,
-    });
-    await manager.reload();
-    expect(manager.getCompactionKeepRecentTokens(model)).toBe(2000);
-    manager.setProjectTrusted(false);
-    expect(manager.getCompactionKeepRecentTokens(model)).toBe(30000);
-  });
+    ));
 
-  it("keeps enabled global and preserves overrides when saving the toggle", async () => {
-    const storage = new InMemorySettingsStorage();
-    storage.withLock("global", () =>
-      JSON.stringify({
-        compaction: { modelOverrides: { [modelKey]: { enabled: false, reserveTokens: 400000 } } },
+  it("keeps enabled global and preserves overrides when saving the toggle", () =>
+    runTest(
+      Effect.gen(function* () {
+        const storage = new InMemorySettingsStorage();
+        storage.withLock("global", () =>
+          JSON.stringify({
+            compaction: {
+              modelOverrides: { [modelKey]: { enabled: false, reserveTokens: 400000 } },
+            },
+          }),
+        );
+        const manager = SettingsManager.fromStorage(storage);
+        expect(manager.getCompactionSettings(model).enabled).toBe(true);
+        manager.setCompactionEnabled(false);
+        yield* awaited(manager.flush());
+        yield* awaited(manager.reload());
+        expect(manager.getCompactionSettings(model)).toEqual({
+          ...defaults,
+          enabled: false,
+          reserveTokens: 400000,
+        });
       }),
-    );
-    const manager = SettingsManager.fromStorage(storage);
-    expect(manager.getCompactionSettings(model).enabled).toBe(true);
-    manager.setCompactionEnabled(false);
-    await manager.flush();
-    await manager.reload();
-    expect(manager.getCompactionSettings(model)).toEqual({
-      ...defaults,
-      enabled: false,
-      reserveTokens: 400000,
-    });
-  });
+    ));
 
   describe.each(["reserveTokens", "keepRecentTokens"] as const)("model override %s", (field) => {
     it.each([null, -1, 1.5, "400000", true, {}, [], Number.MAX_SAFE_INTEGER + 1])(
