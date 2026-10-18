@@ -14,59 +14,50 @@ export type GitSource = {
   pinned: boolean;
 };
 
-function splitRef(url: string): { repo: string; ref?: string } {
+function splitScpLikeRef(url: string): { repo: string; ref?: string } | undefined {
   const scpLikeMatch = url.match(/^git@([^:]+):(.+)$/u);
-  if (scpLikeMatch !== null) {
-    const pathWithMaybeRef = scpLikeMatch[2] ?? "";
+  if (scpLikeMatch === null) return undefined;
+  const pathWithMaybeRef = scpLikeMatch[2] ?? "";
+  const refSeparator = pathWithMaybeRef.indexOf("@");
+  if (refSeparator < 0) return { repo: url };
+  const repoPath = pathWithMaybeRef.slice(0, refSeparator);
+  const ref = pathWithMaybeRef.slice(refSeparator + 1);
+  if (repoPath === "" || ref === "") return { repo: url };
+  return { repo: `git@${scpLikeMatch[1] ?? ""}:${repoPath}`, ref };
+}
+
+function splitUrlRef(url: string): { repo: string; ref?: string } | undefined {
+  if (!url.includes("://")) return undefined;
+  try {
+    const parsed = new URL(url);
+    const pathWithMaybeRef = parsed.pathname.replace(/^\/+/u, "");
     const refSeparator = pathWithMaybeRef.indexOf("@");
     if (refSeparator < 0) return { repo: url };
     const repoPath = pathWithMaybeRef.slice(0, refSeparator);
     const ref = pathWithMaybeRef.slice(refSeparator + 1);
     if (repoPath === "" || ref === "") return { repo: url };
-    return {
-      repo: `git@${scpLikeMatch[1] ?? ""}:${repoPath}`,
-      ref,
-    };
-  }
-
-  if (url.includes("://")) {
-    try {
-      const parsed = new URL(url);
-      const pathWithMaybeRef = parsed.pathname.replace(/^\/+/u, "");
-      const refSeparator = pathWithMaybeRef.indexOf("@");
-      if (refSeparator < 0) return { repo: url };
-      const repoPath = pathWithMaybeRef.slice(0, refSeparator);
-      const ref = pathWithMaybeRef.slice(refSeparator + 1);
-      if (repoPath === "" || ref === "") return { repo: url };
-      parsed.pathname = `/${repoPath}`;
-      return {
-        repo: parsed.toString().replace(/\/$/u, ""),
-        ref,
-      };
-    } catch {
-      return { repo: url };
-    }
-  }
-
-  const slashIndex = url.indexOf("/");
-  if (slashIndex < 0) {
+    parsed.pathname = `/${repoPath}`;
+    return { repo: parsed.toString().replace(/\/$/u, ""), ref };
+  } catch {
     return { repo: url };
   }
+}
+
+function splitShorthandRef(url: string): { repo: string; ref?: string } {
+  const slashIndex = url.indexOf("/");
+  if (slashIndex < 0) return { repo: url };
   const host = url.slice(0, slashIndex);
   const pathWithMaybeRef = url.slice(slashIndex + 1);
   const refSeparator = pathWithMaybeRef.indexOf("@");
-  if (refSeparator < 0) {
-    return { repo: url };
-  }
+  if (refSeparator < 0) return { repo: url };
   const repoPath = pathWithMaybeRef.slice(0, refSeparator);
   const ref = pathWithMaybeRef.slice(refSeparator + 1);
-  if (repoPath === "" || ref === "") {
-    return { repo: url };
-  }
-  return {
-    repo: `${host}/${repoPath}`,
-    ref,
-  };
+  if (repoPath === "" || ref === "") return { repo: url };
+  return { repo: `${host}/${repoPath}`, ref };
+}
+
+function splitRef(url: string): { repo: string; ref?: string } {
+  return splitScpLikeRef(url) ?? splitUrlRef(url) ?? splitShorthandRef(url);
 }
 
 function decodeForValidation(value: string): string | null {

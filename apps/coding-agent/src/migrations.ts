@@ -24,6 +24,18 @@ const MIGRATION_GUIDE_URL =
 const EXTENSIONS_DOC_URL =
   "https://github.com/masseater/msa/blob/main/apps/coding-agent/docs/extensions.md";
 
+function migrateApiKeys(
+  apiKeys: Record<string, unknown>,
+  migrated: Record<string, unknown>,
+  providers: string[],
+): void {
+  for (const [provider, key] of Object.entries(apiKeys)) {
+    if (migrated[provider] !== undefined || typeof key !== "string") continue;
+    migrated[provider] = { type: "api_key", key };
+    providers.push(provider);
+  }
+}
+
 export function migrateAuthToAuthJson(): string[] {
   const agentDir = getAgentDir();
   const authPath = join(agentDir, "auth.json");
@@ -49,14 +61,12 @@ export function migrateAuthToAuthJson(): string[] {
   if (existsSync(settingsPath)) {
     try {
       const content = readFileSync(settingsPath, "utf-8");
-      const settings = JSON.parse(stripBom(content));
+      const settings = JSON.parse(stripBom(content)) as {
+        apiKeys?: unknown;
+        [key: string]: unknown;
+      };
       if (typeof settings.apiKeys === "object" && settings.apiKeys !== null) {
-        for (const [provider, key] of Object.entries(settings.apiKeys)) {
-          if (migrated[provider] === undefined && typeof key === "string") {
-            migrated[provider] = { type: "api_key", key };
-            providers.push(provider);
-          }
-        }
+        migrateApiKeys(settings.apiKeys as Record<string, unknown>, migrated, providers);
         delete settings.apiKeys;
         writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
       }

@@ -20,6 +20,51 @@ function dosDateTime(date: Date): { time: number; day: number } {
   };
 }
 
+interface ZipEntryParts {
+  readonly files: Buffer[];
+  readonly directory: Buffer[];
+  readonly size: number;
+}
+
+function buildZipEntry(entry: ZipEntry, offset: number, time: number, day: number): ZipEntryParts {
+  const name = Buffer.from(entry.name);
+  const data = typeof entry.data === "string" ? Buffer.from(entry.data) : Buffer.from(entry.data);
+  const compressed = deflateRawSync(data);
+  const checksum = crc32(data);
+
+  const local = Buffer.alloc(30);
+  local.writeUInt32LE(0x04034b50, 0);
+  local.writeUInt16LE(20, 4);
+  local.writeUInt16LE(0x0800, 6);
+  local.writeUInt16LE(8, 8);
+  local.writeUInt16LE(time, 10);
+  local.writeUInt16LE(day, 12);
+  local.writeUInt32LE(checksum, 14);
+  local.writeUInt32LE(compressed.length, 18);
+  local.writeUInt32LE(data.length, 22);
+  local.writeUInt16LE(name.length, 26);
+
+  const central = Buffer.alloc(46);
+  central.writeUInt32LE(0x02014b50, 0);
+  central.writeUInt16LE(20, 4);
+  central.writeUInt16LE(20, 6);
+  central.writeUInt16LE(0x0800, 8);
+  central.writeUInt16LE(8, 10);
+  central.writeUInt16LE(time, 12);
+  central.writeUInt16LE(day, 14);
+  central.writeUInt32LE(checksum, 16);
+  central.writeUInt32LE(compressed.length, 20);
+  central.writeUInt32LE(data.length, 24);
+  central.writeUInt16LE(name.length, 28);
+  central.writeUInt32LE(offset, 42);
+
+  return {
+    files: [local, name, compressed],
+    directory: [central, name],
+    size: local.length + name.length + compressed.length,
+  };
+}
+
 function createZipArchive(entries: readonly ZipEntry[]): Buffer {
   const files: Buffer[] = [];
   const directory: Buffer[] = [];
@@ -27,40 +72,10 @@ function createZipArchive(entries: readonly ZipEntry[]): Buffer {
   let offset = 0;
 
   for (const entry of entries) {
-    const name = Buffer.from(entry.name);
-    const data = typeof entry.data === "string" ? Buffer.from(entry.data) : Buffer.from(entry.data);
-    const compressed = deflateRawSync(data);
-    const checksum = crc32(data);
-
-    const local = Buffer.alloc(30);
-    local.writeUInt32LE(0x04034b50, 0);
-    local.writeUInt16LE(20, 4);
-    local.writeUInt16LE(0x0800, 6);
-    local.writeUInt16LE(8, 8);
-    local.writeUInt16LE(time, 10);
-    local.writeUInt16LE(day, 12);
-    local.writeUInt32LE(checksum, 14);
-    local.writeUInt32LE(compressed.length, 18);
-    local.writeUInt32LE(data.length, 22);
-    local.writeUInt16LE(name.length, 26);
-
-    const central = Buffer.alloc(46);
-    central.writeUInt32LE(0x02014b50, 0);
-    central.writeUInt16LE(20, 4);
-    central.writeUInt16LE(20, 6);
-    central.writeUInt16LE(0x0800, 8);
-    central.writeUInt16LE(8, 10);
-    central.writeUInt16LE(time, 12);
-    central.writeUInt16LE(day, 14);
-    central.writeUInt32LE(checksum, 16);
-    central.writeUInt32LE(compressed.length, 20);
-    central.writeUInt32LE(data.length, 24);
-    central.writeUInt16LE(name.length, 28);
-    central.writeUInt32LE(offset, 42);
-
-    files.push(local, name, compressed);
-    directory.push(central, name);
-    offset += local.length + name.length + compressed.length;
+    const parts = buildZipEntry(entry, offset, time, day);
+    files.push(...parts.files);
+    directory.push(...parts.directory);
+    offset += parts.size;
   }
 
   const centralDirectory = Buffer.concat(directory);

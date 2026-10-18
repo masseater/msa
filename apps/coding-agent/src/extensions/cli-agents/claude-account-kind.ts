@@ -32,28 +32,33 @@ const ACTIONS: Record<string, string> = {
   clear: "clear: forget usage-limit blocks",
 };
 
+function describeAccount(
+  entry: Awaited<ReturnType<typeof withAuthStatus>>[number],
+  index: number,
+): string {
+  const { account, status } = entry;
+  const auth =
+    account.configDir !== undefined && account.configDir !== ""
+      ? `configDir ${account.configDir}`
+      : account.tokenCommand !== undefined && account.tokenCommand !== ""
+        ? "tokenCommand"
+        : "msa environment";
+  const loginText =
+    describeLogin(status) ||
+    `not logged in${status.detail !== undefined && status.detail !== "" ? ` (${status.detail})` : ""}`;
+  const block = blockOf(account);
+  const state =
+    block === undefined
+      ? "available"
+      : `blocked until ${toDate(block.until).toLocaleString()} (${block.reason})`;
+  return `${index + 1}. ${account.name}  ${auth}  ${loginText}  ${state}${account.auto === false ? "  (not in rotation)" : ""}`;
+}
+
 function describeAccounts(): Promise<string> {
   return Effect.runPromise(
     awaiting(function* () {
-      return (yield* awaited(withAuthStatus(loadAccounts())))
-        .map(({ account, status }, index) => {
-          const auth =
-            account.configDir !== undefined && account.configDir !== ""
-              ? `configDir ${account.configDir}`
-              : account.tokenCommand !== undefined && account.tokenCommand !== ""
-                ? "tokenCommand"
-                : "msa environment";
-          const loginText =
-            describeLogin(status) ||
-            `not logged in${status.detail !== undefined && status.detail !== "" ? ` (${status.detail})` : ""}`;
-          const block = blockOf(account);
-          const state =
-            block === undefined
-              ? "available"
-              : `blocked until ${toDate(block.until).toLocaleString()} (${block.reason})`;
-          return `${index + 1}. ${account.name}  ${auth}  ${loginText}  ${state}${account.auto === false ? "  (not in rotation)" : ""}`;
-        })
-        .join("\n");
+      const entries = yield* awaited(withAuthStatus(loadAccounts()));
+      return entries.map(describeAccount).join("\n");
     }),
   );
 }
@@ -86,58 +91,76 @@ function named(name: string | undefined): Account {
   return account;
 }
 
-function run(args: string, ctx: ExtensionCommandContext): Promise<void> {
+function* runAddAccount(
+  name: string | undefined,
+  rest: string[],
+  ctx: ExtensionCommandContext,
+): Generator<Effect.Effect<unknown>, void, unknown> {
+  if (name === undefined || name === "")
+    throw new Error(`Usage: /accounts claude ${ACTIONS["add"]}`);
+  const account = addAccount(name, rest.join(" ") || undefined);
+  if (account.tokenCommand !== undefined && account.tokenCommand !== "") return;
+  yield* awaited(
+    login(account, ctx).catch((error: Error) => ctx.ui.notify(error.message, "warning")),
+  );
+}
+
+function* runRemoveAccount(
+  name: string | undefined,
+  ctx: ExtensionCommandContext,
+): Generator<Effect.Effect<unknown>, boolean, unknown> {
+  named(name);
+  if (
+    ctx.hasUI &&
+    !(yield* awaited(ctx.ui.confirm("Remove Claude account", `Forget "${name}" and its login?`)))
+  )
+    return false;
+  removeAccount(name!);
+  return true;
+}
+
+function* run(
+  args: string,
+  ctx: ExtensionCommandContext,
+): Generator<Effect.Effect<unknown>, void, unknown> {
+  const [action = "", name, ...rest] = args.trim().split(/\s+/u).filter(Boolean);
+  const before = loadAccounts().length;
+  switch (action) {
+    case "":
+      break;
+    case "add":
+      yield* runAddAccount(name, rest, ctx);
+      break;
+    case "login":
+      yield* awaited(login(named(name), ctx));
+      break;
+    case "logout":
+      yield* awaited(logoutAccount(named(name)));
+      break;
+    case "remove":
+      if (!(yield* runRemoveAccount(name, ctx))) return;
+      break;
+    case "use":
+      preferAccount(named(name).name);
+      break;
+    case "enable":
+    case "disable":
+      setAutoRotation(named(name).name, action === "enable");
+      break;
+    case "clear":
+      clearBlocks();
+      break;
+    default:
+      throw new Error(`Unknown action "${action}".\n${Object.values(ACTIONS).join("\n")}`);
+  }
+  ctx.ui.notify(yield* awaited(describeAccounts()), "info");
+  if (loadAccounts().length !== before) yield* awaited(ctx.reload());
+}
+
+function claudeAccountsRun(args: string, ctx: ExtensionCommandContext): Promise<void> {
   return Effect.runPromise(
     awaiting(function* () {
-      const [action = "", name, ...rest] = args.trim().split(/\s+/u).filter(Boolean);
-      const before = loadAccounts().length;
-      switch (action) {
-        case "":
-          break;
-        case "add": {
-          if (name === undefined || name === "")
-            throw new Error(`Usage: /accounts claude ${ACTIONS["add"]}`);
-          const account = addAccount(name, rest.join(" ") || undefined);
-
-          if (account.tokenCommand === undefined || account.tokenCommand === "")
-            yield* awaited(
-              login(account, ctx).catch((error: Error) => ctx.ui.notify(error.message, "warning")),
-            );
-          break;
-        }
-        case "login":
-          yield* awaited(login(named(name), ctx));
-          break;
-        case "logout":
-          yield* awaited(logoutAccount(named(name)));
-          break;
-        case "remove":
-          named(name);
-          if (
-            ctx.hasUI &&
-            !(yield* awaited(
-              ctx.ui.confirm("Remove Claude account", `Forget "${name}" and its login?`),
-            ))
-          )
-            return;
-          removeAccount(name!);
-          break;
-        case "use":
-          preferAccount(named(name).name);
-          break;
-        case "enable":
-        case "disable":
-          setAutoRotation(named(name).name, action === "enable");
-          break;
-        case "clear":
-          clearBlocks();
-          break;
-        default:
-          throw new Error(`Unknown action "${action}".\n${Object.values(ACTIONS).join("\n")}`);
-      }
-      ctx.ui.notify(yield* awaited(describeAccounts()), "info");
-
-      if (loadAccounts().length !== before) yield* awaited(ctx.reload());
+      yield* run(args, ctx);
     }),
   );
 }
@@ -160,6 +183,6 @@ export const claudeAccounts: AccountKind = {
   name: "claude",
   description: "Claude Code accounts the claude-code provider rotates through",
   describe: describeAccounts,
-  run,
+  run: claudeAccountsRun,
   complete: completions,
 };
