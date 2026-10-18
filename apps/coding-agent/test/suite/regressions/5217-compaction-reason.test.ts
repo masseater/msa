@@ -1,4 +1,5 @@
 import { fauxAssistantMessage } from "@msa/ai";
+import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import type { ExtensionFactory } from "../../../src/index.ts";
@@ -16,81 +17,100 @@ interface RecordedCompactionEvent {
 
 function recordingExtension(recorded: RecordedCompactionEvent[]): ExtensionFactory {
   return (msa) => {
-    msa.on("session_before_compact", async (event) => {
-      recorded.push({ type: event.type, reason: event.reason, willRetry: event.willRetry });
-      return {
-        compaction: {
-          summary: "summary from extension",
-          firstKeptEntryId: event.preparation.firstKeptEntryId,
-          tokensBefore: event.preparation.tokensBefore,
-          details: {},
-        },
-      };
-    });
-    msa.on("session_compact", async (event) => {
-      recorded.push({ type: event.type, reason: event.reason, willRetry: event.willRetry });
-    });
+    msa.on("session_before_compact", (event) =>
+      Effect.runPromise(
+        Effect.sync(() => {
+          recorded.push({ type: event.type, reason: event.reason, willRetry: event.willRetry });
+          return {
+            compaction: {
+              summary: "summary from extension",
+              firstKeptEntryId: event.preparation.firstKeptEntryId,
+              tokensBefore: event.preparation.tokensBefore,
+              details: {},
+            },
+          };
+        }),
+      ),
+    );
+    msa.on("session_compact", (event) =>
+      Effect.runPromise(
+        Effect.sync(() => {
+          recorded.push({ type: event.type, reason: event.reason, willRetry: event.willRetry });
+        }),
+      ),
+    );
   };
 }
 
-async function createCompactionHarness(recorded: RecordedCompactionEvent[]): Promise<Harness> {
-  const harness = await createHarness({
-    settings: { compaction: { keepRecentTokens: 1 } },
-    extensionFactories: [recordingExtension(recorded)],
-  });
-  harness.setResponses([fauxAssistantMessage("one"), fauxAssistantMessage("two")]);
-  await harness.session.prompt("first");
-  await harness.session.prompt("second");
-  return harness;
+function createCompactionHarness(recorded: RecordedCompactionEvent[]): Promise<Harness> {
+  return Effect.runPromise(
+    Effect.gen(function* () {
+      const harness = yield* Effect.promise(() =>
+        createHarness({
+          settings: { compaction: { keepRecentTokens: 1 } },
+          extensionFactories: [recordingExtension(recorded)],
+        }),
+      );
+      harness.setResponses([fauxAssistantMessage("one"), fauxAssistantMessage("two")]);
+      yield* Effect.promise(() => harness.session.prompt("first"));
+      yield* Effect.promise(() => harness.session.prompt("second"));
+      return harness;
+    }),
+  );
 }
 
-describe("issue #5217 compaction reason on extension events", () => {
-  const harnesses: Harness[] = [];
+const harnesses: Harness[] = [];
 
+const reportsManualReasonForCompact = Effect.gen(function* () {
+  const recorded: RecordedCompactionEvent[] = [];
+  const harness = yield* Effect.promise(() => createCompactionHarness(recorded));
+  harnesses.push(harness);
+
+  yield* Effect.promise(() => harness.session.compact());
+
+  expect(recorded).toEqual([
+    { type: "session_before_compact", reason: "manual", willRetry: false },
+    { type: "session_compact", reason: "manual", willRetry: false },
+  ]);
+});
+
+const reportsThresholdReasonForAutoCompaction = Effect.gen(function* () {
+  const recorded: RecordedCompactionEvent[] = [];
+  const harness = yield* Effect.promise(() => createCompactionHarness(recorded));
+  harnesses.push(harness);
+  const sessionInternals = harness.session as unknown as SessionWithCompactionInternals;
+
+  yield* Effect.promise(() => sessionInternals["_runAutoCompaction"]("threshold", false));
+
+  expect(recorded).toEqual([
+    { type: "session_before_compact", reason: "threshold", willRetry: false },
+    { type: "session_compact", reason: "threshold", willRetry: false },
+  ]);
+});
+
+const reportsOverflowReasonAndWillretryFor = Effect.gen(function* () {
+  const recorded: RecordedCompactionEvent[] = [];
+  const harness = yield* Effect.promise(() => createCompactionHarness(recorded));
+  harnesses.push(harness);
+  const sessionInternals = harness.session as unknown as SessionWithCompactionInternals;
+
+  yield* Effect.promise(() => sessionInternals["_runAutoCompaction"]("overflow", true));
+
+  expect(recorded).toEqual([
+    { type: "session_before_compact", reason: "overflow", willRetry: true },
+    { type: "session_compact", reason: "overflow", willRetry: true },
+  ]);
+});
+
+describe("issue #5217 compaction reason on extension events", () => {
   afterEach(() => {
     while (harnesses.length > 0) {
       harnesses.pop()?.cleanup();
     }
   });
-
-  it("reports manual reason for compact()", async () => {
-    const recorded: RecordedCompactionEvent[] = [];
-    const harness = await createCompactionHarness(recorded);
-    harnesses.push(harness);
-
-    await harness.session.compact();
-
-    expect(recorded).toEqual([
-      { type: "session_before_compact", reason: "manual", willRetry: false },
-      { type: "session_compact", reason: "manual", willRetry: false },
-    ]);
-  });
-
-  it("reports threshold reason for auto-compaction", async () => {
-    const recorded: RecordedCompactionEvent[] = [];
-    const harness = await createCompactionHarness(recorded);
-    harnesses.push(harness);
-    const sessionInternals = harness.session as unknown as SessionWithCompactionInternals;
-
-    await sessionInternals._runAutoCompaction("threshold", false);
-
-    expect(recorded).toEqual([
-      { type: "session_before_compact", reason: "threshold", willRetry: false },
-      { type: "session_compact", reason: "threshold", willRetry: false },
-    ]);
-  });
-
-  it("reports overflow reason and willRetry for overflow recovery", async () => {
-    const recorded: RecordedCompactionEvent[] = [];
-    const harness = await createCompactionHarness(recorded);
-    harnesses.push(harness);
-    const sessionInternals = harness.session as unknown as SessionWithCompactionInternals;
-
-    await sessionInternals._runAutoCompaction("overflow", true);
-
-    expect(recorded).toEqual([
-      { type: "session_before_compact", reason: "overflow", willRetry: true },
-      { type: "session_compact", reason: "overflow", willRetry: true },
-    ]);
-  });
+  it("reports manual reason for compact()", () => Effect.runPromise(reportsManualReasonForCompact));
+  it("reports threshold reason for auto-compaction", () =>
+    Effect.runPromise(reportsThresholdReasonForAutoCompaction));
+  it("reports overflow reason and willRetry for overflow recovery", () =>
+    Effect.runPromise(reportsOverflowReasonAndWillretryFor));
 });

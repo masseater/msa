@@ -1,5 +1,6 @@
 import type { AgentMessage, AgentTool } from "@msa/agent-core";
 import { fauxAssistantMessage, fauxToolCall } from "@msa/ai";
+import { Effect } from "effect";
 import { Type } from "typebox";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
@@ -10,83 +11,83 @@ function roles(messages: AgentMessage[]): string[] {
   return messages.map((message) => message.role);
 }
 
-describe("#8537 custom messages injected during tool execution", () => {
-  const harnesses: Harness[] = [];
+const harnesses: Harness[] = [];
 
-  afterEach(() => {
-    while (harnesses.length > 0) {
-      harnesses.pop()?.cleanup();
-    }
-  });
+const appendsTheMessageAfterTheTurn = Effect.gen(function* () {
+  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+  let notify: (() => Promise<void>) | undefined;
+  const slowTool: AgentTool = {
+    name: "wait",
+    label: "Wait",
+    description: "Wait for a background task",
+    parameters: Type.Object({}),
+    execute: () =>
+      runPromise(
+        Effect.gen(function* () {
+          yield* Effect.promise(() => Promise.resolve(notify?.()));
+          return { content: [{ type: "text", text: "tool done" }], details: {} };
+        }),
+      ),
+  };
 
-  it("appends the message after the turn's tool results instead of between call and result", async () => {
-    let notify: (() => Promise<void>) | undefined;
-    const slowTool: AgentTool = {
-      name: "wait",
-      label: "Wait",
-      description: "Wait for a background task",
-      parameters: Type.Object({}),
-      execute: async () => {
-        // A background task (e.g. a subagent reply) notifies the session while the
-        // tool is still running.
-        await notify?.();
-        return { content: [{ type: "text", text: "tool done" }], details: {} };
-      },
-    };
+  const harness = yield* Effect.promise(() => createHarness({ tools: [slowTool] }));
+  harnesses.push(harness);
+  notify = () =>
+    harness.session.sendCustomMessage(
+      { customType: "subagent-reply", content: "subagent replied", display: true },
+      { triggerTurn: false },
+    );
 
-    const harness = await createHarness({ tools: [slowTool] });
-    harnesses.push(harness);
-    notify = () =>
-      harness.session.sendCustomMessage(
-        { customType: "subagent-reply", content: "subagent replied", display: true },
-        { triggerTurn: false },
-      );
+  harness.setResponses([
+    fauxAssistantMessage([fauxToolCall("wait", {})], { stopReason: "toolUse" }),
+    fauxAssistantMessage("done"),
+  ]);
 
-    harness.setResponses([
-      fauxAssistantMessage([fauxToolCall("wait", {})], { stopReason: "toolUse" }),
-      fauxAssistantMessage("done"),
-    ]);
+  yield* Effect.promise(() => harness.session.prompt("hi"));
 
-    await harness.session.prompt("hi");
+  expect(roles(harness.session.messages)).toEqual([
+    "system",
+    "user",
+    "assistant",
+    "toolResult",
+    "custom",
+    "assistant",
+  ]);
+});
 
-    expect(roles(harness.session.messages)).toEqual([
-      "system",
-      "user",
-      "assistant",
-      "toolResult",
-      "custom",
-      "assistant",
-    ]);
-  });
+const keepsSessionEntriesAndMessageEvents = Effect.gen(function* () {
+  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+  let notify: (() => Promise<void>) | undefined;
+  const slowTool: AgentTool = {
+    name: "wait",
+    label: "Wait",
+    description: "Wait for a background task",
+    parameters: Type.Object({}),
+    execute: () =>
+      runPromise(
+        Effect.gen(function* () {
+          yield* Effect.promise(() => Promise.resolve(notify?.()));
+          return { content: [{ type: "text", text: "tool done" }], details: {} };
+        }),
+      ),
+  };
+  const harness = yield* Effect.promise(() => createHarness({ tools: [slowTool] }));
+  harnesses.push(harness);
+  notify = () =>
+    harness.session.sendCustomMessage(
+      { customType: "subagent-reply", content: "subagent replied", display: true },
+      { triggerTurn: false },
+    );
+  harness.setResponses([
+    fauxAssistantMessage([fauxToolCall("wait", {})], { stopReason: "toolUse" }),
+    fauxAssistantMessage("done"),
+  ]);
+  yield* Effect.promise(() => harness.session.prompt("hi"));
+  return yield* keepsSessionEntriesAndMessageEventsPart2(harness);
+});
 
-  it("keeps session entries and message events in the same order as agent state", async () => {
-    let notify: (() => Promise<void>) | undefined;
-    const slowTool: AgentTool = {
-      name: "wait",
-      label: "Wait",
-      description: "Wait for a background task",
-      parameters: Type.Object({}),
-      execute: async () => {
-        await notify?.();
-        return { content: [{ type: "text", text: "tool done" }], details: {} };
-      },
-    };
-
-    const harness = await createHarness({ tools: [slowTool] });
-    harnesses.push(harness);
-    notify = () =>
-      harness.session.sendCustomMessage(
-        { customType: "subagent-reply", content: "subagent replied", display: true },
-        { triggerTurn: false },
-      );
-
-    harness.setResponses([
-      fauxAssistantMessage([fauxToolCall("wait", {})], { stopReason: "toolUse" }),
-      fauxAssistantMessage("done"),
-    ]);
-
-    await harness.session.prompt("hi");
-
+const keepsSessionEntriesAndMessageEventsPart2 = (harness: Harness) =>
+  Effect.sync(() => {
     const entryKinds = harness.sessionManager
       .getBranch()
       .flatMap((entry) =>
@@ -104,8 +105,6 @@ describe("#8537 custom messages injected during tool execution", () => {
       "custom",
       "assistant",
     ]);
-
-    // message events must never describe a message the session tree does not contain yet
     const messageStarts = harness.events.flatMap((event) =>
       event.type === "message_start" ? [event.message.role] : [],
     );
@@ -119,36 +118,41 @@ describe("#8537 custom messages injected during tool execution", () => {
     ]);
   });
 
-  it("produces an llm history where every tool result follows its tool call", async () => {
-    let notify: (() => Promise<void>) | undefined;
-    const slowTool: AgentTool = {
-      name: "wait",
-      label: "Wait",
-      description: "Wait for a background task",
-      parameters: Type.Object({}),
-      execute: async () => {
-        await notify?.();
-        return { content: [{ type: "text", text: "tool done" }], details: {} };
-      },
-    };
+const producesAnLlmHistoryWhereEvery = Effect.gen(function* () {
+  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+  let notify: (() => Promise<void>) | undefined;
+  const slowTool: AgentTool = {
+    name: "wait",
+    label: "Wait",
+    description: "Wait for a background task",
+    parameters: Type.Object({}),
+    execute: () =>
+      runPromise(
+        Effect.gen(function* () {
+          yield* Effect.promise(() => Promise.resolve(notify?.()));
+          return { content: [{ type: "text", text: "tool done" }], details: {} };
+        }),
+      ),
+  };
+  const harness = yield* Effect.promise(() => createHarness({ tools: [slowTool] }));
+  harnesses.push(harness);
+  notify = () =>
+    harness.session.sendCustomMessage(
+      { customType: "subagent-reply", content: "subagent replied", display: true },
+      { triggerTurn: false },
+    );
+  harness.setResponses([
+    fauxAssistantMessage([fauxToolCall("wait", {})], { stopReason: "toolUse" }),
+    fauxAssistantMessage("done"),
+    fauxAssistantMessage("second turn"),
+  ]);
+  yield* Effect.promise(() => harness.session.prompt("hi"));
+  return yield* producesAnLlmHistoryWhereEveryPart2(harness);
+});
 
-    const harness = await createHarness({ tools: [slowTool] });
-    harnesses.push(harness);
-    notify = () =>
-      harness.session.sendCustomMessage(
-        { customType: "subagent-reply", content: "subagent replied", display: true },
-        { triggerTurn: false },
-      );
-
-    harness.setResponses([
-      fauxAssistantMessage([fauxToolCall("wait", {})], { stopReason: "toolUse" }),
-      fauxAssistantMessage("done"),
-      fauxAssistantMessage("second turn"),
-    ]);
-
-    await harness.session.prompt("hi");
-    await harness.session.prompt("and now?");
-
+const producesAnLlmHistoryWhereEveryPart2 = (harness: Harness) =>
+  Effect.gen(function* () {
+    yield* Effect.promise(() => harness.session.prompt("and now?"));
     const llmMessages = convertToLlm(harness.session.messages);
     const openToolCallIds = new Set<string>();
     for (const message of llmMessages) {
@@ -167,4 +171,17 @@ describe("#8537 custom messages injected during tool execution", () => {
       openToolCallIds.clear();
     }
   });
+
+describe("#8537 custom messages injected during tool execution", () => {
+  afterEach(() => {
+    while (harnesses.length > 0) {
+      harnesses.pop()?.cleanup();
+    }
+  });
+  it("appends the message after the turn's tool results instead of between call and result", () =>
+    Effect.runPromise(appendsTheMessageAfterTheTurn));
+  it("keeps session entries and message events in the same order as agent state", () =>
+    Effect.runPromise(keepsSessionEntriesAndMessageEvents));
+  it("produces an llm history where every tool result follows its tool call", () =>
+    Effect.runPromise(producesAnLlmHistoryWhereEvery));
 });

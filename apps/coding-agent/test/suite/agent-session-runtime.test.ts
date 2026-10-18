@@ -1,8 +1,6 @@
-import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join, parse } from "node:path";
-
+import * as NodeServices from "@effect/platform-node/NodeServices";
 import { fauxAssistantMessage, fauxToolCall, registerFauxProvider } from "@msa/ai/compat";
+import { Effect, FileSystem, ManagedRuntime } from "effect";
 import { Type } from "typebox";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
@@ -12,6 +10,8 @@ import {
   createAgentSessionRuntime,
   createAgentSessionServices,
 } from "../../src/core/agent-session-runtime.ts";
+import { AgentSessionRuntime } from "../../src/core/agent-session-runtime.ts";
+import { AgentSession } from "../../src/core/agent-session.ts";
 import { AuthStorage } from "../../src/core/auth-storage.ts";
 import { SessionManager } from "../../src/core/session-manager.ts";
 import type {
@@ -23,6 +23,12 @@ import type {
   SessionShutdownEvent,
   SessionStartEvent,
 } from "../../src/index.ts";
+import { stringifyJson } from "../test-json.ts";
+import { join, stem } from "../test-path.ts";
+import { nowIso, nowMillis } from "../test-time.ts";
+
+const runtime = ManagedRuntime.make(NodeServices.layer);
+const fs = runtime.runSync(FileSystem.FileSystem.useSync((service) => service));
 
 type RecordedSessionEvent =
   | SessionBeforeSwitchEvent
@@ -30,116 +36,131 @@ type RecordedSessionEvent =
   | SessionShutdownEvent
   | SessionStartEvent;
 
-describe("AgentSessionRuntime characterization", () => {
-  const cleanups: Array<() => Promise<void> | void> = [];
+const cleanups: Array<() => Promise<void> | void> = [];
 
-  afterEach(async () => {
-    while (cleanups.length > 0) {
-      await cleanups.pop()?.();
-    }
-  });
+function createRuntimeForTest(
+  extensionFactory: ExtensionFactory,
+  options?: { cwd?: string; bootstrapModel?: boolean; bootstrapThinkingLevel?: boolean },
+) {
+  return Effect.runPromise(
+    Effect.gen(function* () {
+      const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+      const tempDir =
+        options?.cwd ?? (yield* fs.makeTempDirectory({ prefix: `msa-runtime-suite-` }));
+      yield* fs.makeDirectory(tempDir, { recursive: true });
 
-  async function createRuntimeForTest(
-    extensionFactory: ExtensionFactory,
-    options?: { cwd?: string; bootstrapModel?: boolean; bootstrapThinkingLevel?: boolean },
-  ) {
-    const tempDir =
-      options?.cwd ??
-      join(tmpdir(), `msa-runtime-suite-${Date.now()}-${Math.random().toString(36).slice(2)}`);
-    mkdirSync(tempDir, { recursive: true });
-
-    const faux = registerFauxProvider({
-      models: [
-        { id: "faux-1", reasoning: true },
-        { id: "faux-2", reasoning: false },
-      ],
-    });
-    faux.setResponses([
-      fauxAssistantMessage("one"),
-      fauxAssistantMessage("two"),
-      fauxAssistantMessage("three"),
-    ]);
-
-    const authStorage = AuthStorage.inMemory();
-    await authStorage.modify(faux.getModel().provider, async () => ({
-      type: "api_key",
-      key: "faux-key",
-    }));
-
-    const runtimeOptions = {
-      agentDir: tempDir,
-      authStorage,
-      model: options?.bootstrapModel === false ? undefined : faux.getModel(),
-      thinkingLevel: options?.bootstrapThinkingLevel === false ? undefined : undefined,
-      resourceLoaderOptions: {
-        extensionFactories: [
-          (msa: ExtensionAPI) => {
-            msa.registerProvider(faux.getModel().provider, {
-              baseUrl: faux.getModel().baseUrl,
-              apiKey: "faux-key",
-              api: faux.api,
-              models: faux.models.map((registeredModel) => ({
-                id: registeredModel.id,
-                name: registeredModel.name,
-                api: registeredModel.api,
-                reasoning: registeredModel.reasoning,
-                input: registeredModel.input,
-                cost: registeredModel.cost,
-                contextWindow: registeredModel.contextWindow,
-                maxTokens: registeredModel.maxTokens,
-              })),
-            });
-            extensionFactory(msa);
-          },
+      const faux = registerFauxProvider({
+        models: [
+          { id: "faux-1", reasoning: true },
+          { id: "faux-2", reasoning: false },
         ],
-        noSkills: true,
-        noPromptTemplates: true,
-        noThemes: true,
-      },
-    };
-    const createRuntime: CreateAgentSessionRuntimeFactory = async ({
-      cwd,
-      sessionManager,
-      sessionStartEvent,
-    }) => {
-      const services = await createAgentSessionServices({
-        ...runtimeOptions,
-        cwd,
       });
-      return {
-        ...(await createAgentSessionFromServices({
-          services,
-          sessionManager,
-          ...(sessionStartEvent !== undefined ? { sessionStartEvent } : {}),
-          ...(runtimeOptions.model !== undefined ? { model: runtimeOptions.model } : {}),
-          ...(runtimeOptions.thinkingLevel !== undefined
-            ? { thinkingLevel: runtimeOptions.thinkingLevel }
-            : {}),
-        })),
-        services,
-        diagnostics: services.diagnostics,
+      faux.setResponses([
+        fauxAssistantMessage("one"),
+        fauxAssistantMessage("two"),
+        fauxAssistantMessage("three"),
+      ]);
+
+      const authStorage = AuthStorage.inMemory();
+      yield* Effect.promise(() =>
+        authStorage.modify(faux.getModel().provider, () =>
+          Promise.resolve({
+            type: "api_key",
+            key: "faux-key",
+          }),
+        ),
+      );
+
+      const runtimeOptions = {
+        agentDir: tempDir,
+        authStorage,
+        model: options?.bootstrapModel === false ? undefined : faux.getModel(),
+        thinkingLevel: options?.bootstrapThinkingLevel === false ? undefined : undefined,
+        resourceLoaderOptions: {
+          extensionFactories: [
+            (msa: ExtensionAPI) => {
+              msa.registerProvider(faux.getModel().provider, {
+                baseUrl: faux.getModel().baseUrl,
+                apiKey: "faux-key",
+                api: faux.api,
+                models: faux.models.map((registeredModel) => ({
+                  id: registeredModel.id,
+                  name: registeredModel.name,
+                  api: registeredModel.api,
+                  reasoning: registeredModel.reasoning,
+                  input: registeredModel.input,
+                  cost: registeredModel.cost,
+                  contextWindow: registeredModel.contextWindow,
+                  maxTokens: registeredModel.maxTokens,
+                })),
+              });
+              extensionFactory(msa);
+            },
+          ],
+          noSkills: true,
+          noPromptTemplates: true,
+          noThemes: true,
+        },
       };
-    };
-    const runtime = await createAgentSessionRuntime(createRuntime, {
-      cwd: tempDir,
-      agentDir: tempDir,
-      sessionManager: SessionManager.create(tempDir),
-    });
-    await runtime.session.bindExtensions({});
+      const createRuntime: CreateAgentSessionRuntimeFactory = ({
+        cwd,
+        sessionManager,
+        sessionStartEvent,
+      }) =>
+        runPromise(
+          Effect.gen(function* () {
+            const services = yield* Effect.promise(() =>
+              createAgentSessionServices({
+                ...runtimeOptions,
+                cwd,
+              }),
+            );
+            return {
+              ...(yield* Effect.promise(() =>
+                createAgentSessionFromServices({
+                  services,
+                  sessionManager,
+                  ...(sessionStartEvent === undefined ? {} : { sessionStartEvent }),
+                  ...(runtimeOptions.model === undefined ? {} : { model: runtimeOptions.model }),
+                  ...(runtimeOptions.thinkingLevel === undefined
+                    ? {}
+                    : { thinkingLevel: runtimeOptions.thinkingLevel }),
+                }),
+              )),
+              services,
+              diagnostics: services.diagnostics,
+            };
+          }),
+        );
+      const runtime = yield* Effect.promise(() =>
+        createAgentSessionRuntime(createRuntime, {
+          cwd: tempDir,
+          agentDir: tempDir,
+          sessionManager: SessionManager.create(tempDir),
+        }),
+      );
+      yield* Effect.promise(() => runtime.session.bindExtensions({}));
 
-    cleanups.push(async () => {
-      await runtime.dispose();
-      faux.unregister();
-      if (existsSync(tempDir)) {
-        rmSync(tempDir, { recursive: true, force: true });
-      }
-    });
+      cleanups.push(() =>
+        runPromise(
+          Effect.gen(function* () {
+            yield* Effect.promise(() => runtime.dispose());
+            faux.unregister();
+            if (yield* fs.exists(tempDir)) {
+              yield* fs.remove(tempDir, { recursive: true, force: true });
+            }
+          }),
+        ),
+      );
 
-    return { runtime, faux, tempDir };
-  }
+      return { runtime, faux, tempDir };
+    }),
+  );
+}
 
-  it("persists message_end assistant replacements to the session manager", async () => {
-    const { runtime } = await createRuntimeForTest((msa: ExtensionAPI) => {
+const persistsMessageEndAssistantReplacementsTo = Effect.gen(function* () {
+  const { runtime } = yield* Effect.promise(() =>
+    createRuntimeForTest((msa: ExtensionAPI) => {
       msa.on("message_end", (event) => {
         if (event.message.role !== "assistant") return;
 
@@ -156,37 +177,37 @@ describe("AgentSessionRuntime characterization", () => {
           },
         };
       });
-    });
+    }),
+  );
 
-    await runtime.session.prompt("hello");
+  yield* Effect.promise(() => runtime.session.prompt("hello"));
 
-    const sessionAssistant = runtime.session.messages.find(
-      (message) => message.role === "assistant",
-    );
-    expect(sessionAssistant?.role).toBe("assistant");
-    if (sessionAssistant?.role !== "assistant") {
-      throw new Error("missing assistant message");
-    }
-    expect(sessionAssistant.usage.cost.total).toBe(0.123);
+  const sessionAssistant = runtime.session.messages.find((message) => message.role === "assistant");
+  expect(sessionAssistant?.role).toBe("assistant");
+  if (sessionAssistant?.role !== "assistant") {
+    throw new Error("missing assistant message");
+  }
+  expect(sessionAssistant.usage.cost.total).toBe(0.123);
 
-    const persistedAssistant = runtime.session.sessionManager
-      .getEntries()
-      .filter((entry) => entry.type === "message")
-      .map((entry) => entry.message)
-      .find((message) => message.role === "assistant");
-    expect(persistedAssistant?.role).toBe("assistant");
-    if (persistedAssistant?.role !== "assistant") {
-      throw new Error("missing persisted assistant message");
-    }
-    expect(persistedAssistant.usage.cost.total).toBe(0.123);
+  const persistedAssistant = runtime.session.sessionManager
+    .getEntries()
+    .filter((entry) => entry.type === "message")
+    .map((entry) => entry.message)
+    .find((message) => message.role === "assistant");
+  expect(persistedAssistant?.role).toBe("assistant");
+  if (persistedAssistant?.role !== "assistant") {
+    throw new Error("missing persisted assistant message");
+  }
+  expect(persistedAssistant.usage.cost.total).toBe(0.123);
+});
+
+const settlesTheActiveResponseBeforeSession = Effect.gen(function* () {
+  let toolStarted!: () => void;
+  const toolStartedPromise = new Promise<void>((resolve) => {
+    toolStarted = resolve;
   });
-
-  it("settles the active response before session replacement", async () => {
-    let toolStarted!: () => void;
-    const toolStartedPromise = new Promise<void>((resolve) => {
-      toolStarted = resolve;
-    });
-    const { runtime, faux } = await createRuntimeForTest((msa: ExtensionAPI) => {
+  const { runtime, faux } = yield* Effect.promise(() =>
+    createRuntimeForTest((msa: ExtensionAPI) => {
       msa.registerTool({
         name: "block",
         label: "Block",
@@ -200,25 +221,37 @@ describe("AgentSessionRuntime characterization", () => {
             );
           }),
       });
-    });
+    }),
+  );
+  yield* Effect.promise(() => runtime.session.prompt("hello"));
+  const firstSessionFile = runtime.session.sessionFile!;
+  yield* Effect.promise(() => runtime.newSession());
+  yield* Effect.promise(() => runtime.session.bindExtensions({}));
+  faux.setResponses([fauxAssistantMessage(fauxToolCall("block", {}), { stopReason: "toolUse" })]);
+  const outgoingSession = runtime.session;
+  const promptPromise = outgoingSession.prompt("start blocking tool");
+  return yield* settlesTheActiveResponseBeforeSessionPart2(
+    toolStartedPromise,
+    runtime,
+    firstSessionFile,
+    outgoingSession,
+    promptPromise,
+  );
+});
 
-    await runtime.session.prompt("hello");
-    const firstSessionFile = runtime.session.sessionFile!;
-    await runtime.newSession();
-    await runtime.session.bindExtensions({});
-
-    faux.setResponses([fauxAssistantMessage(fauxToolCall("block", {}), { stopReason: "toolUse" })]);
-    const outgoingSession = runtime.session;
-    const promptPromise = outgoingSession.prompt("start blocking tool");
-    await toolStartedPromise;
-
-    const switchResult = await runtime.switchSession(firstSessionFile);
-    await promptPromise;
-
+const settlesTheActiveResponseBeforeSessionPart2 = (
+  toolStartedPromise: Promise<void>,
+  runtime: AgentSessionRuntime,
+  firstSessionFile: string,
+  outgoingSession: AgentSession,
+  promptPromise: Promise<void>,
+) =>
+  Effect.gen(function* () {
+    yield* Effect.promise(() => toolStartedPromise);
+    const switchResult = yield* Effect.promise(() => runtime.switchSession(firstSessionFile));
+    yield* Effect.promise(() => promptPromise);
     expect(switchResult.cancelled).toBe(false);
     expect(runtime.session.sessionFile).toBe(firstSessionFile);
-    // The outgoing session settled before replacement: the interrupted tool
-    // call has a persisted tool result instead of dangling forever.
     const outgoingEntries = SessionManager.open(outgoingSession.sessionFile!)
       .getEntries()
       .filter((entry) => entry.type === "message");
@@ -231,42 +264,43 @@ describe("AgentSessionRuntime characterization", () => {
     ]);
   });
 
-  it("preserves an existing session when importing a file with the same name", async () => {
-    const { runtime, tempDir } = await createRuntimeForTest(() => {});
-    const sessionDir = runtime.session.sessionManager.getSessionDir();
-    const importDir = join(tempDir, "import");
-    const filename = "collision.jsonl";
-    const storedPath = join(sessionDir, filename);
-    const importPath = join(importDir, filename);
-    const storedSession = `${JSON.stringify({
-      type: "session",
-      version: 3,
-      id: "stored",
-      timestamp: new Date().toISOString(),
-      cwd: tempDir,
-    })}\n`;
-    const importedSession = `${JSON.stringify({
-      type: "session",
-      version: 3,
-      id: "imported",
-      timestamp: new Date().toISOString(),
-      cwd: tempDir,
-    })}\n`;
-    mkdirSync(sessionDir, { recursive: true });
-    mkdirSync(importDir, { recursive: true });
-    writeFileSync(storedPath, storedSession);
-    writeFileSync(importPath, importedSession);
+const preservesAnExistingSessionWhenImporting = Effect.gen(function* () {
+  const { runtime, tempDir } = yield* Effect.promise(() => createRuntimeForTest(() => {}));
+  const sessionDir = runtime.session.sessionManager.getSessionDir();
+  const importDir = join(tempDir, "import");
+  const filename = "collision.jsonl";
+  const storedPath = join(sessionDir, filename);
+  const importPath = join(importDir, filename);
+  const storedSession = `${stringifyJson({
+    type: "session",
+    version: 3,
+    id: "stored",
+    timestamp: nowIso(),
+    cwd: tempDir,
+  })}\n`;
+  const importedSession = `${stringifyJson({
+    type: "session",
+    version: 3,
+    id: "imported",
+    timestamp: nowIso(),
+    cwd: tempDir,
+  })}\n`;
+  yield* fs.makeDirectory(sessionDir, { recursive: true });
+  yield* fs.makeDirectory(importDir, { recursive: true });
+  yield* fs.writeFileString(storedPath, storedSession);
+  yield* fs.writeFileString(importPath, importedSession);
 
-    await runtime.importFromJsonl(importPath);
+  yield* Effect.promise(() => runtime.importFromJsonl(importPath));
 
-    expect(readFileSync(storedPath, "utf8")).toBe(storedSession);
-    expect(runtime.session.sessionFile).not.toBe(storedPath);
-    expect(readFileSync(runtime.session.sessionFile!, "utf8")).toContain('"id":"imported"');
-  });
+  expect(yield* fs.readFileString(storedPath)).toBe(storedSession);
+  expect(runtime.session.sessionFile).not.toBe(storedPath);
+  expect(yield* fs.readFileString(runtime.session.sessionFile!)).toContain('"id":"imported"');
+});
 
-  it("emits session_before_switch and session_start for new and resume flows", async () => {
-    const events: RecordedSessionEvent[] = [];
-    const { runtime } = await createRuntimeForTest((msa: ExtensionAPI) => {
+const emitsSessionBeforeSwitchAndSession = Effect.gen(function* () {
+  const events: RecordedSessionEvent[] = [];
+  const { runtime } = yield* Effect.promise(() =>
+    createRuntimeForTest((msa: ExtensionAPI) => {
       msa.on("session_before_switch", (event) => {
         events.push(event);
       });
@@ -276,43 +310,59 @@ describe("AgentSessionRuntime characterization", () => {
       msa.on("session_start", (event) => {
         events.push(event);
       });
-    });
+    }),
+  );
+  expect(events).toEqual([{ type: "session_start", reason: "startup" }]);
+  events.length = 0;
+  yield* Effect.promise(() => runtime.session.prompt("hello"));
+  const originalSessionFile = runtime.session.sessionFile;
+  const originalSession = runtime.session;
+  const newSessionResult = yield* Effect.promise(() => runtime.newSession());
+  expect(newSessionResult.cancelled).toBe(false);
+  yield* Effect.promise(() => runtime.session.bindExtensions({}));
+  expect(runtime.session).not.toBe(originalSession);
+  expect(runtime.session.messages).toEqual([]);
+  const secondSessionFile = runtime.session.sessionFile;
+  return yield* emitsSessionBeforeSwitchAndSessionPart2(
+    events,
+    runtime,
+    originalSessionFile,
+    secondSessionFile,
+  );
+});
 
-    expect(events).toEqual([{ type: "session_start", reason: "startup" }]);
-    events.length = 0;
-
-    await runtime.session.prompt("hello");
-    const originalSessionFile = runtime.session.sessionFile;
-    const originalSession = runtime.session;
-
-    const newSessionResult = await runtime.newSession();
-    expect(newSessionResult.cancelled).toBe(false);
-    await runtime.session.bindExtensions({});
-    expect(runtime.session).not.toBe(originalSession);
-    expect(runtime.session.messages).toEqual([]);
-    const secondSessionFile = runtime.session.sessionFile;
+const emitsSessionBeforeSwitchAndSessionPart2 = (
+  events: RecordedSessionEvent[],
+  runtime: AgentSessionRuntime,
+  originalSessionFile: string | undefined,
+  secondSessionFile: string | undefined,
+) =>
+  Effect.gen(function* () {
     expect(events).toEqual([
       { type: "session_before_switch", reason: "new", targetSessionFile: undefined },
       { type: "session_shutdown", reason: "new", targetSessionFile: secondSessionFile },
       { type: "session_start", reason: "new", previousSessionFile: originalSessionFile },
     ]);
-
     events.length = 0;
-
-    const switchResult = await runtime.switchSession(originalSessionFile!);
+    const switchResult = yield* Effect.promise(() => runtime.switchSession(originalSessionFile!));
     expect(switchResult.cancelled).toBe(false);
-    await runtime.session.bindExtensions({});
+    yield* Effect.promise(() => runtime.session.bindExtensions({}));
     expect(events).toEqual([
-      { type: "session_before_switch", reason: "resume", targetSessionFile: originalSessionFile },
+      {
+        type: "session_before_switch",
+        reason: "resume",
+        targetSessionFile: originalSessionFile,
+      },
       { type: "session_shutdown", reason: "resume", targetSessionFile: originalSessionFile },
       { type: "session_start", reason: "resume", previousSessionFile: secondSessionFile },
     ]);
   });
 
-  it("honors session_before_switch cancellation for new and resume", async () => {
-    const events: RecordedSessionEvent[] = [];
-    let cancelReason: "new" | "resume" | undefined;
-    const { runtime } = await createRuntimeForTest((msa: ExtensionAPI) => {
+const honorsSessionBeforeSwitchCancellationFor = Effect.gen(function* () {
+  const events: RecordedSessionEvent[] = [];
+  let cancelReason: "new" | "resume" | undefined;
+  const { runtime } = yield* Effect.promise(() =>
+    createRuntimeForTest((msa: ExtensionAPI) => {
       msa.on("session_before_switch", (event) => {
         events.push(event);
         if (event.reason === cancelReason) {
@@ -323,39 +373,38 @@ describe("AgentSessionRuntime characterization", () => {
       msa.on("session_start", (event) => {
         events.push(event);
       });
-    });
+    }),
+  );
 
-    await runtime.session.prompt("hello");
-    const originalSessionFile = runtime.session.sessionFile;
+  yield* Effect.promise(() => runtime.session.prompt("hello"));
+  const originalSessionFile = runtime.session.sessionFile;
 
-    cancelReason = "new";
-    const newResult = await runtime.newSession();
-    expect(newResult.cancelled).toBe(true);
-    expect(runtime.session.sessionFile).toBe(originalSessionFile);
+  cancelReason = "new";
+  const newResult = yield* Effect.promise(() => runtime.newSession());
+  expect(newResult.cancelled).toBe(true);
+  expect(runtime.session.sessionFile).toBe(originalSessionFile);
 
-    events.length = 0;
-    const otherDir = join(
-      tmpdir(),
-      `msa-runtime-other-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-    );
-    mkdirSync(otherDir, { recursive: true });
-    const otherSession = SessionManager.create(otherDir);
-    otherSession.appendMessage({
-      role: "user",
-      content: [{ type: "text", text: "other" }],
-      timestamp: Date.now(),
-    });
-    const otherSessionFile = otherSession.getSessionFile();
-    cancelReason = "resume";
-    const resumeResult = await runtime.switchSession(otherSessionFile!);
-    expect(resumeResult.cancelled).toBe(true);
-    expect(runtime.session.sessionFile).toBe(originalSessionFile);
+  events.length = 0;
+  const otherDir = yield* fs.makeTempDirectory({ prefix: `msa-runtime-other-` });
+  yield* fs.makeDirectory(otherDir, { recursive: true });
+  const otherSession = SessionManager.create(otherDir);
+  otherSession.appendMessage({
+    role: "user",
+    content: [{ type: "text", text: "other" }],
+    timestamp: nowMillis(),
   });
+  const otherSessionFile = otherSession.getSessionFile();
+  cancelReason = "resume";
+  const resumeResult = yield* Effect.promise(() => runtime.switchSession(otherSessionFile!));
+  expect(resumeResult.cancelled).toBe(true);
+  expect(runtime.session.sessionFile).toBe(originalSessionFile);
+});
 
-  it("emits session_before_fork and session_start and honors cancellation", async () => {
-    const events: RecordedSessionEvent[] = [];
-    let cancelNextFork = false;
-    const { runtime } = await createRuntimeForTest((msa: ExtensionAPI) => {
+const emitsSessionBeforeForkAndSession = Effect.gen(function* () {
+  const events: RecordedSessionEvent[] = [];
+  let cancelNextFork = false;
+  const { runtime } = yield* Effect.promise(() =>
+    createRuntimeForTest((msa: ExtensionAPI) => {
       msa.on("session_before_fork", (event) => {
         events.push(event);
         if (cancelNextFork) {
@@ -370,61 +419,90 @@ describe("AgentSessionRuntime characterization", () => {
       msa.on("session_start", (event) => {
         events.push(event);
       });
-    });
+    }),
+  );
 
-    events.length = 0;
-    await runtime.session.prompt("hello");
-    const userMessage = runtime.session.getUserMessagesForForking()[0]!;
-    const previousSessionFile = runtime.session.sessionFile;
+  events.length = 0;
+  yield* Effect.promise(() => runtime.session.prompt("hello"));
+  const userMessage = runtime.session.getUserMessagesForForking()[0]!;
+  const previousSessionFile = runtime.session.sessionFile;
 
-    const successResult = await runtime.fork(userMessage.entryId);
-    expect(successResult.cancelled).toBe(false);
-    expect(successResult.selectedText).toBe("hello");
-    await runtime.session.bindExtensions({});
-    expect(events).toEqual([
-      { type: "session_before_fork", entryId: userMessage.entryId, position: "before" },
-      { type: "session_shutdown", reason: "fork", targetSessionFile: runtime.session.sessionFile },
-      { type: "session_start", reason: "fork", previousSessionFile },
-    ]);
-    const sessionFileName = parse(runtime.session.sessionFile!).name;
-    expect(sessionFileName.endsWith(`_${runtime.session.sessionId}`)).toBe(true);
+  const successResult = yield* Effect.promise(() => runtime.fork(userMessage.entryId));
+  expect(successResult.cancelled).toBe(false);
+  expect(successResult.selectedText).toBe("hello");
+  yield* Effect.promise(() => runtime.session.bindExtensions({}));
+  expect(events).toEqual([
+    { type: "session_before_fork", entryId: userMessage.entryId, position: "before" },
+    {
+      type: "session_shutdown",
+      reason: "fork",
+      targetSessionFile: runtime.session.sessionFile,
+    },
+    { type: "session_start", reason: "fork", previousSessionFile },
+  ]);
+  const sessionFileName = stem(runtime.session.sessionFile!);
+  expect(sessionFileName.endsWith(`_${runtime.session.sessionId}`)).toBe(true);
 
-    events.length = 0;
-    cancelNextFork = true;
-    const cancelResult = await runtime.fork(userMessage.entryId);
-    expect(cancelResult).toEqual({ cancelled: true });
-    expect(events).toEqual([
-      { type: "session_before_fork", entryId: userMessage.entryId, position: "before" },
-    ]);
+  events.length = 0;
+  cancelNextFork = true;
+  const cancelResult = yield* Effect.promise(() => runtime.fork(userMessage.entryId));
+  expect(cancelResult).toEqual({ cancelled: true });
+  expect(events).toEqual([
+    { type: "session_before_fork", entryId: userMessage.entryId, position: "before" },
+  ]);
 
-    events.length = 0;
-    cancelNextFork = true;
-    const cancelAtResult = await runtime.fork("missing-entry", { position: "at" });
-    expect(cancelAtResult).toEqual({ cancelled: true });
-    expect(events).toEqual([
-      { type: "session_before_fork", entryId: "missing-entry", position: "at" },
-    ]);
-  });
+  events.length = 0;
+  cancelNextFork = true;
+  const cancelAtResult = yield* Effect.promise(() =>
+    runtime.fork("missing-entry", { position: "at" }),
+  );
+  expect(cancelAtResult).toEqual({ cancelled: true });
+  expect(events).toEqual([
+    { type: "session_before_fork", entryId: "missing-entry", position: "at" },
+  ]);
+});
 
-  it("reports why an unflushed session cannot be forked", async () => {
-    const { runtime } = await createRuntimeForTest(() => {});
-    const sessionFile = runtime.session.sessionFile;
-    const leafId = runtime.session.sessionManager.getLeafId();
-    expect(sessionFile).toBeDefined();
-    expect(existsSync(sessionFile!)).toBe(false);
-    expect(leafId).toBeTruthy();
+const reportsWhyAnUnflushedSessionCannot = Effect.gen(function* () {
+  const { runtime } = yield* Effect.promise(() => createRuntimeForTest(() => {}));
+  const sessionFile = runtime.session.sessionFile;
+  const leafId = runtime.session.sessionManager.getLeafId();
+  expect(sessionFile).toBeDefined();
+  expect(yield* fs.exists(sessionFile!)).toBe(false);
+  expect(leafId).toBeTruthy();
 
-    await expect(runtime.fork(leafId!, { position: "at" })).rejects.toThrow(
+  yield* Effect.promise(() =>
+    expect(runtime.fork(leafId!, { position: "at" })).rejects.toThrow(
       "This session has not been saved yet. Send a message before cloning or forking it.",
-    );
-  });
+    ),
+  );
+});
 
-  it("duplicates the current active branch when forking at the current position", async () => {
-    const { runtime } = await createRuntimeForTest(() => {});
-    await runtime.session.prompt("hello");
-    await runtime.session.prompt("again");
+const duplicatesTheCurrentActiveBranchWhen = Effect.gen(function* () {
+  const { runtime } = yield* Effect.promise(() => createRuntimeForTest(() => {}));
+  yield* Effect.promise(() => runtime.session.prompt("hello"));
+  yield* Effect.promise(() => runtime.session.prompt("again"));
 
-    const beforeMessages = runtime.session.messages.map((message) => ({
+  const beforeMessages = runtime.session.messages.map((message) => ({
+    role: message.role,
+    text:
+      message.role === "user"
+        ? typeof message.content === "string"
+          ? message.content
+          : message.content
+              .filter((part): part is { type: "text"; text: string } => part.type === "text")
+              .map((part) => part.text)
+              .join("")
+        : undefined,
+  }));
+  const previousSessionFile = runtime.session.sessionFile;
+  const leafId = runtime.session.sessionManager.getLeafId();
+  expect(leafId).toBeTruthy();
+
+  const result = yield* Effect.promise(() => runtime.fork(leafId!, { position: "at" }));
+  expect(result).toEqual({ cancelled: false, selectedText: undefined });
+  expect(runtime.session.sessionFile).not.toBe(previousSessionFile);
+  expect(
+    runtime.session.messages.map((message) => ({
       role: message.role,
       text:
         message.role === "user"
@@ -435,122 +513,137 @@ describe("AgentSessionRuntime characterization", () => {
                 .map((part) => part.text)
                 .join("")
           : undefined,
-    }));
-    const previousSessionFile = runtime.session.sessionFile;
-    const leafId = runtime.session.sessionManager.getLeafId();
-    expect(leafId).toBeTruthy();
+    })),
+  ).toEqual(beforeMessages);
+});
 
-    const result = await runtime.fork(leafId!, { position: "at" });
-    expect(result).toEqual({ cancelled: false, selectedText: undefined });
-    expect(runtime.session.sessionFile).not.toBe(previousSessionFile);
-    expect(
-      runtime.session.messages.map((message) => ({
-        role: message.role,
-        text:
-          message.role === "user"
-            ? typeof message.content === "string"
-              ? message.content
-              : message.content
-                  .filter((part): part is { type: "text"; text: string } => part.type === "text")
-                  .map((part) => part.text)
-                  .join("")
-            : undefined,
-      })),
-    ).toEqual(beforeMessages);
+const duplicatesTheCurrentActiveBranchIn = Effect.gen(function* () {
+  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+  const tempDir = yield* fs.makeTempDirectory({ prefix: `msa-runtime-suite-in-memory-` });
+  yield* fs.makeDirectory(tempDir, { recursive: true });
+
+  const faux = registerFauxProvider({
+    models: [
+      { id: "faux-1", reasoning: true },
+      { id: "faux-2", reasoning: false },
+    ],
   });
+  faux.setResponses([
+    fauxAssistantMessage("one"),
+    fauxAssistantMessage("two"),
+    fauxAssistantMessage("three"),
+  ]);
 
-  it("duplicates the current active branch in-memory when forking at the current position", async () => {
-    const tempDir = join(
-      tmpdir(),
-      `msa-runtime-suite-in-memory-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-    );
-    mkdirSync(tempDir, { recursive: true });
+  const authStorage = AuthStorage.inMemory();
+  yield* Effect.promise(() =>
+    authStorage.modify(faux.getModel().provider, () =>
+      Promise.resolve({
+        type: "api_key",
+        key: "faux-key",
+      }),
+    ),
+  );
 
-    const faux = registerFauxProvider({
-      models: [
-        { id: "faux-1", reasoning: true },
-        { id: "faux-2", reasoning: false },
+  const runtimeOptions = {
+    agentDir: tempDir,
+    authStorage,
+    model: faux.getModel(),
+    resourceLoaderOptions: {
+      extensionFactories: [
+        (msa: ExtensionAPI) => {
+          msa.registerProvider(faux.getModel().provider, {
+            baseUrl: faux.getModel().baseUrl,
+            apiKey: "faux-key",
+            api: faux.api,
+            models: faux.models.map((registeredModel) => ({
+              id: registeredModel.id,
+              name: registeredModel.name,
+              api: registeredModel.api,
+              reasoning: registeredModel.reasoning,
+              input: registeredModel.input,
+              cost: registeredModel.cost,
+              contextWindow: registeredModel.contextWindow,
+              maxTokens: registeredModel.maxTokens,
+            })),
+          });
+        },
       ],
-    });
-    faux.setResponses([
-      fauxAssistantMessage("one"),
-      fauxAssistantMessage("two"),
-      fauxAssistantMessage("three"),
-    ]);
-
-    const authStorage = AuthStorage.inMemory();
-    await authStorage.modify(faux.getModel().provider, async () => ({
-      type: "api_key",
-      key: "faux-key",
-    }));
-
-    const runtimeOptions = {
-      agentDir: tempDir,
-      authStorage,
-      model: faux.getModel(),
-      resourceLoaderOptions: {
-        extensionFactories: [
-          (msa: ExtensionAPI) => {
-            msa.registerProvider(faux.getModel().provider, {
-              baseUrl: faux.getModel().baseUrl,
-              apiKey: "faux-key",
-              api: faux.api,
-              models: faux.models.map((registeredModel) => ({
-                id: registeredModel.id,
-                name: registeredModel.name,
-                api: registeredModel.api,
-                reasoning: registeredModel.reasoning,
-                input: registeredModel.input,
-                cost: registeredModel.cost,
-                contextWindow: registeredModel.contextWindow,
-                maxTokens: registeredModel.maxTokens,
-              })),
-            });
-          },
-        ],
-        noSkills: true,
-        noPromptTemplates: true,
-        noThemes: true,
-      },
-    };
-    const createRuntime: CreateAgentSessionRuntimeFactory = async ({
-      cwd,
-      sessionManager,
-      sessionStartEvent,
-    }) => {
-      const services = await createAgentSessionServices({
-        ...runtimeOptions,
-        cwd,
-      });
-      return {
-        ...(await createAgentSessionFromServices({
+      noSkills: true,
+      noPromptTemplates: true,
+      noThemes: true,
+    },
+  };
+  const createRuntime: CreateAgentSessionRuntimeFactory = ({
+    cwd,
+    sessionManager,
+    sessionStartEvent,
+  }) =>
+    runPromise(
+      Effect.gen(function* () {
+        const services = yield* Effect.promise(() =>
+          createAgentSessionServices({
+            ...runtimeOptions,
+            cwd,
+          }),
+        );
+        return {
+          ...(yield* Effect.promise(() =>
+            createAgentSessionFromServices({
+              services,
+              sessionManager,
+              ...(sessionStartEvent === undefined ? {} : { sessionStartEvent }),
+              model: runtimeOptions.model,
+            }),
+          )),
           services,
-          sessionManager,
-          ...(sessionStartEvent !== undefined ? { sessionStartEvent } : {}),
-          model: runtimeOptions.model,
-        })),
-        services,
-        diagnostics: services.diagnostics,
-      };
-    };
-    const runtime = await createAgentSessionRuntime(createRuntime, {
+          diagnostics: services.diagnostics,
+        };
+      }),
+    );
+  const runtime = yield* Effect.promise(() =>
+    createAgentSessionRuntime(createRuntime, {
       cwd: tempDir,
       agentDir: tempDir,
       sessionManager: SessionManager.inMemory(tempDir),
-    });
-    await runtime.session.bindExtensions({});
-    cleanups.push(async () => {
-      await runtime.dispose();
-      faux.unregister();
-      if (existsSync(tempDir)) {
-        rmSync(tempDir, { recursive: true, force: true });
-      }
-    });
+    }),
+  );
+  yield* Effect.promise(() => runtime.session.bindExtensions({}));
+  cleanups.push(() =>
+    runPromise(
+      Effect.gen(function* () {
+        yield* Effect.promise(() => runtime.dispose());
+        faux.unregister();
+        if (yield* fs.exists(tempDir)) {
+          yield* fs.remove(tempDir, { recursive: true, force: true });
+        }
+      }),
+    ),
+  );
 
-    await runtime.session.prompt("hello");
-    await runtime.session.prompt("again");
+  yield* Effect.promise(() => runtime.session.prompt("hello"));
+  yield* Effect.promise(() => runtime.session.prompt("again"));
 
-    const beforeMessages = runtime.session.messages.map((message) => ({
+  const beforeMessages = runtime.session.messages.map((message) => ({
+    role: message.role,
+    text:
+      message.role === "user"
+        ? typeof message.content === "string"
+          ? message.content
+          : message.content
+              .filter((part): part is { type: "text"; text: string } => part.type === "text")
+              .map((part) => part.text)
+              .join("")
+        : undefined,
+  }));
+  const leafId = runtime.session.sessionManager.getLeafId();
+  expect(leafId).toBeTruthy();
+  expect(runtime.session.sessionFile).toBeUndefined();
+
+  const result = yield* Effect.promise(() => runtime.fork(leafId!, { position: "at" }));
+  expect(result).toEqual({ cancelled: false, selectedText: undefined });
+  expect(runtime.session.sessionFile).toBeUndefined();
+  expect(
+    runtime.session.messages.map((message) => ({
       role: message.role,
       text:
         message.role === "user"
@@ -561,191 +654,232 @@ describe("AgentSessionRuntime characterization", () => {
                 .map((part) => part.text)
                 .join("")
           : undefined,
-    }));
-    const leafId = runtime.session.sessionManager.getLeafId();
-    expect(leafId).toBeTruthy();
-    expect(runtime.session.sessionFile).toBeUndefined();
+    })),
+  ).toEqual(beforeMessages);
+});
 
-    const result = await runtime.fork(leafId!, { position: "at" });
-    expect(result).toEqual({ cancelled: false, selectedText: undefined });
-    expect(runtime.session.sessionFile).toBeUndefined();
-    expect(
-      runtime.session.messages.map((message) => ({
-        role: message.role,
-        text:
-          message.role === "user"
-            ? typeof message.content === "string"
-              ? message.content
-              : message.content
-                  .filter((part): part is { type: "text"; text: string } => part.type === "text")
-                  .map((part) => part.text)
-                  .join("")
-            : undefined,
-      })),
-    ).toEqual(beforeMessages);
-  });
+const throwsWhenForkingWithAnInvalid = Effect.gen(function* () {
+  const { runtime } = yield* Effect.promise(() => createRuntimeForTest(() => {}));
+  yield* Effect.promise(() =>
+    expect(runtime.fork("missing-entry")).rejects.toThrow("Invalid entry ID for forking"),
+  );
+});
 
-  it("throws when forking with an invalid entry id", async () => {
-    const { runtime } = await createRuntimeForTest(() => {});
-    await expect(runtime.fork("missing-entry")).rejects.toThrow("Invalid entry ID for forking");
-  });
-
-  it("updates the runtime session cwd on cross-cwd session replacement", async () => {
-    const firstDir = join(
-      tmpdir(),
-      `msa-runtime-cwd-a-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-    );
-    const secondDir = join(
-      tmpdir(),
-      `msa-runtime-cwd-b-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-    );
-    mkdirSync(firstDir, { recursive: true });
-    mkdirSync(secondDir, { recursive: true });
-    const { runtime, faux, tempDir } = await createRuntimeForTest(() => {}, { cwd: firstDir });
-    const otherAuthStorage = AuthStorage.inMemory();
-    await otherAuthStorage.modify(faux.getModel().provider, async () => ({
-      type: "api_key",
-      key: "faux-key",
-    }));
-    const otherRuntimeOptions = {
-      agentDir: tempDir,
-      authStorage: otherAuthStorage,
-      resourceLoaderOptions: {
-        extensionFactories: [
-          (msa: ExtensionAPI) => {
-            msa.registerProvider(faux.getModel().provider, {
-              baseUrl: faux.getModel().baseUrl,
-              apiKey: "faux-key",
-              api: faux.api,
-              models: faux.models.map((registeredModel) => ({
-                id: registeredModel.id,
-                name: registeredModel.name,
-                api: registeredModel.api,
-                reasoning: registeredModel.reasoning,
-                input: registeredModel.input,
-                cost: registeredModel.cost,
-                contextWindow: registeredModel.contextWindow,
-                maxTokens: registeredModel.maxTokens,
-              })),
-            });
-          },
-        ],
-        noSkills: true,
-        noPromptTemplates: true,
-        noThemes: true,
-      },
-    };
-    const createOtherRuntime: CreateAgentSessionRuntimeFactory = async ({
-      cwd,
-      sessionManager,
-      sessionStartEvent,
-    }) => {
-      const services = await createAgentSessionServices({
-        ...otherRuntimeOptions,
-        cwd,
-      });
-      return {
-        ...(await createAgentSessionFromServices({
+const updatesTheRuntimeSessionCwdOn = Effect.gen(function* () {
+  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+  const firstDir = yield* fs.makeTempDirectory({ prefix: `msa-runtime-cwd-a-` });
+  const secondDir = yield* fs.makeTempDirectory({ prefix: `msa-runtime-cwd-b-` });
+  yield* fs.makeDirectory(firstDir, { recursive: true });
+  yield* fs.makeDirectory(secondDir, { recursive: true });
+  const { runtime, faux, tempDir } = yield* Effect.promise(() =>
+    createRuntimeForTest(() => {}, { cwd: firstDir }),
+  );
+  const otherAuthStorage = AuthStorage.inMemory();
+  yield* Effect.promise(() =>
+    otherAuthStorage.modify(faux.getModel().provider, () =>
+      Promise.resolve({
+        type: "api_key",
+        key: "faux-key",
+      }),
+    ),
+  );
+  const otherRuntimeOptions = {
+    agentDir: tempDir,
+    authStorage: otherAuthStorage,
+    resourceLoaderOptions: {
+      extensionFactories: [
+        (msa: ExtensionAPI) => {
+          msa.registerProvider(faux.getModel().provider, {
+            baseUrl: faux.getModel().baseUrl,
+            apiKey: "faux-key",
+            api: faux.api,
+            models: faux.models.map((registeredModel) => ({
+              id: registeredModel.id,
+              name: registeredModel.name,
+              api: registeredModel.api,
+              reasoning: registeredModel.reasoning,
+              input: registeredModel.input,
+              cost: registeredModel.cost,
+              contextWindow: registeredModel.contextWindow,
+              maxTokens: registeredModel.maxTokens,
+            })),
+          });
+        },
+      ],
+      noSkills: true,
+      noPromptTemplates: true,
+      noThemes: true,
+    },
+  };
+  const createOtherRuntime: CreateAgentSessionRuntimeFactory = ({
+    cwd,
+    sessionManager,
+    sessionStartEvent,
+  }) =>
+    runPromise(
+      Effect.gen(function* () {
+        const services = yield* Effect.promise(() =>
+          createAgentSessionServices({
+            ...otherRuntimeOptions,
+            cwd,
+          }),
+        );
+        return {
+          ...(yield* Effect.promise(() =>
+            createAgentSessionFromServices({
+              services,
+              sessionManager,
+              ...(sessionStartEvent === undefined ? {} : { sessionStartEvent }),
+            }),
+          )),
           services,
-          sessionManager,
-          ...(sessionStartEvent !== undefined ? { sessionStartEvent } : {}),
-        })),
-        services,
-        diagnostics: services.diagnostics,
-      };
-    };
-    const otherRuntime = await createAgentSessionRuntime(createOtherRuntime, {
+          diagnostics: services.diagnostics,
+        };
+      }),
+    );
+  const otherRuntime = yield* Effect.promise(() =>
+    createAgentSessionRuntime(createOtherRuntime, {
       cwd: secondDir,
       agentDir: tempDir,
       sessionManager: SessionManager.create(secondDir),
-    });
-    cleanups.push(async () => {
-      await otherRuntime.dispose();
-    });
-    await otherRuntime.session.prompt("other");
-    const otherSessionFile = otherRuntime.session.sessionFile!;
+    }),
+  );
+  cleanups.push(() => otherRuntime.dispose());
+  yield* Effect.promise(() => otherRuntime.session.prompt("other"));
+  const otherSessionFile = otherRuntime.session.sessionFile!;
 
-    await runtime.switchSession(otherSessionFile);
+  yield* Effect.promise(() => runtime.switchSession(otherSessionFile));
 
-    expect(realpathSync(runtime.session.sessionManager.getCwd())).toBe(realpathSync(secondDir));
-    expect(realpathSync(runtime.cwd)).toBe(realpathSync(secondDir));
-  });
+  expect(yield* fs.realPath(runtime.session.sessionManager.getCwd())).toBe(
+    yield* fs.realPath(secondDir),
+  );
+  expect(yield* fs.realPath(runtime.cwd)).toBe(yield* fs.realPath(secondDir));
+});
 
-  it("restores model and thinking state from the destination session", async () => {
-    const { runtime, faux, tempDir } = await createRuntimeForTest(() => {}, {
+const restoresModelAndThinkingStateFrom = Effect.gen(function* () {
+  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+  const { runtime, faux, tempDir } = yield* Effect.promise(() =>
+    createRuntimeForTest(() => {}, {
       bootstrapModel: false,
       bootstrapThinkingLevel: false,
-    });
-    const otherDir = join(tempDir, "other");
-    mkdirSync(otherDir, { recursive: true });
-    const otherAuthStorage = AuthStorage.inMemory();
-    await otherAuthStorage.modify(faux.getModel().provider, async () => ({
-      type: "api_key",
-      key: "faux-key",
-    }));
-    const otherRuntimeOptions = {
-      agentDir: tempDir,
-      authStorage: otherAuthStorage,
-      resourceLoaderOptions: {
-        extensionFactories: [
-          (msa: ExtensionAPI) => {
-            msa.registerProvider(faux.getModel().provider, {
-              baseUrl: faux.getModel().baseUrl,
-              apiKey: "faux-key",
-              api: faux.api,
-              models: faux.models.map((registeredModel) => ({
-                id: registeredModel.id,
-                name: registeredModel.name,
-                api: registeredModel.api,
-                reasoning: registeredModel.reasoning,
-                input: registeredModel.input,
-                cost: registeredModel.cost,
-                contextWindow: registeredModel.contextWindow,
-                maxTokens: registeredModel.maxTokens,
-              })),
-            });
-          },
-        ],
-        noSkills: true,
-        noPromptTemplates: true,
-        noThemes: true,
-      },
-    };
-    const createOtherRuntime: CreateAgentSessionRuntimeFactory = async ({
-      cwd,
-      sessionManager,
-      sessionStartEvent,
-    }) => {
-      const services = await createAgentSessionServices({
-        ...otherRuntimeOptions,
-        cwd,
-      });
-      return {
-        ...(await createAgentSessionFromServices({
+    }),
+  );
+  const otherDir = join(tempDir, "other");
+  yield* fs.makeDirectory(otherDir, { recursive: true });
+  const otherAuthStorage = AuthStorage.inMemory();
+  yield* Effect.promise(() =>
+    otherAuthStorage.modify(faux.getModel().provider, () =>
+      Promise.resolve({
+        type: "api_key",
+        key: "faux-key",
+      }),
+    ),
+  );
+  const otherRuntimeOptions = {
+    agentDir: tempDir,
+    authStorage: otherAuthStorage,
+    resourceLoaderOptions: {
+      extensionFactories: [
+        (msa: ExtensionAPI) => {
+          msa.registerProvider(faux.getModel().provider, {
+            baseUrl: faux.getModel().baseUrl,
+            apiKey: "faux-key",
+            api: faux.api,
+            models: faux.models.map((registeredModel) => ({
+              id: registeredModel.id,
+              name: registeredModel.name,
+              api: registeredModel.api,
+              reasoning: registeredModel.reasoning,
+              input: registeredModel.input,
+              cost: registeredModel.cost,
+              contextWindow: registeredModel.contextWindow,
+              maxTokens: registeredModel.maxTokens,
+            })),
+          });
+        },
+      ],
+      noSkills: true,
+      noPromptTemplates: true,
+      noThemes: true,
+    },
+  };
+  const createOtherRuntime: CreateAgentSessionRuntimeFactory = ({
+    cwd,
+    sessionManager,
+    sessionStartEvent,
+  }) =>
+    runPromise(
+      Effect.gen(function* () {
+        const services = yield* Effect.promise(() =>
+          createAgentSessionServices({
+            ...otherRuntimeOptions,
+            cwd,
+          }),
+        );
+        return {
+          ...(yield* Effect.promise(() =>
+            createAgentSessionFromServices({
+              services,
+              sessionManager,
+              ...(sessionStartEvent === undefined ? {} : { sessionStartEvent }),
+            }),
+          )),
           services,
-          sessionManager,
-          ...(sessionStartEvent !== undefined ? { sessionStartEvent } : {}),
-        })),
-        services,
-        diagnostics: services.diagnostics,
-      };
-    };
-    const otherRuntime = await createAgentSessionRuntime(createOtherRuntime, {
+          diagnostics: services.diagnostics,
+        };
+      }),
+    );
+  const otherRuntime = yield* Effect.promise(() =>
+    createAgentSessionRuntime(createOtherRuntime, {
       cwd: otherDir,
       agentDir: tempDir,
       sessionManager: SessionManager.create(otherDir),
-    });
-    cleanups.push(async () => {
-      await otherRuntime.dispose();
-    });
-    await otherRuntime.session.setModel(faux.getModel("faux-2")!);
-    otherRuntime.session.setThinkingLevel("off");
-    await otherRuntime.session.prompt("hello");
-    const targetSessionFile = otherRuntime.session.sessionFile!;
+    }),
+  );
+  cleanups.push(() => otherRuntime.dispose());
+  yield* Effect.promise(() => otherRuntime.session.setModel(faux.getModel("faux-2")!));
+  otherRuntime.session.setThinkingLevel("off");
+  yield* Effect.promise(() => otherRuntime.session.prompt("hello"));
+  const targetSessionFile = otherRuntime.session.sessionFile!;
 
-    await runtime.switchSession(targetSessionFile);
+  yield* Effect.promise(() => runtime.switchSession(targetSessionFile));
 
-    expect(runtime.session.model?.id).toBe("faux-2");
-    expect(runtime.session.thinkingLevel).toBe("off");
-  });
+  expect(runtime.session.model?.id).toBe("faux-2");
+  expect(runtime.session.thinkingLevel).toBe("off");
+});
+
+describe("AgentSessionRuntime characterization", () => {
+  afterEach(() =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        while (cleanups.length > 0) {
+          yield* Effect.promise(() => Promise.resolve(cleanups.pop()?.()));
+        }
+      }),
+    ),
+  );
+  it("persists message_end assistant replacements to the session manager", () =>
+    Effect.runPromise(persistsMessageEndAssistantReplacementsTo));
+  it("settles the active response before session replacement", () =>
+    Effect.runPromise(settlesTheActiveResponseBeforeSession));
+  it("preserves an existing session when importing a file with the same name", () =>
+    Effect.runPromise(preservesAnExistingSessionWhenImporting));
+  it("emits session_before_switch and session_start for new and resume flows", () =>
+    Effect.runPromise(emitsSessionBeforeSwitchAndSession));
+  it("honors session_before_switch cancellation for new and resume", () =>
+    Effect.runPromise(honorsSessionBeforeSwitchCancellationFor));
+  it("emits session_before_fork and session_start and honors cancellation", () =>
+    Effect.runPromise(emitsSessionBeforeForkAndSession));
+  it("reports why an unflushed session cannot be forked", () =>
+    Effect.runPromise(reportsWhyAnUnflushedSessionCannot));
+  it("duplicates the current active branch when forking at the current position", () =>
+    Effect.runPromise(duplicatesTheCurrentActiveBranchWhen));
+  it("duplicates the current active branch in-memory when forking at the current position", () =>
+    Effect.runPromise(duplicatesTheCurrentActiveBranchIn));
+  it("throws when forking with an invalid entry id", () =>
+    Effect.runPromise(throwsWhenForkingWithAnInvalid));
+  it("updates the runtime session cwd on cross-cwd session replacement", () =>
+    Effect.runPromise(updatesTheRuntimeSessionCwdOn));
+  it("restores model and thinking state from the destination session", () =>
+    Effect.runPromise(restoresModelAndThinkingStateFrom));
 });

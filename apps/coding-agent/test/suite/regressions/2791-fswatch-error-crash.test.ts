@@ -1,60 +1,31 @@
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 
+import * as NodeServices from "@effect/platform-node/NodeServices";
+import { Effect, FileSystem, ManagedRuntime } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
-/**
- * Regression test for https://github.com/earendil-works/pi/issues/2791
- *
- * fs.watch() returns an FSWatcher (EventEmitter). If the watcher emits an
- * 'error' event after creation and no error handler is attached, Node.js
- * treats it as an uncaught exception and terminates the process.
- *
- * We test this by spawning a child process that:
- * 1. Sets up a custom theme with the watcher enabled
- * 2. Finds the FSWatcher via process._getActiveHandles()
- * 3. Emits a synthetic 'error' event on it
- * 4. If the watcher has no error handler -> crash (exit != 0) -> bug present
- * 5. If the watcher has an error handler -> clean exit (exit 0) -> bug fixed
- */
-describe("issue #2791 fs.watch error event crashes process", () => {
-  let tempRoot: string;
+import { parseJson, stringifyJsonPretty } from "../../test-json.ts";
+import { join } from "../../test-path.ts";
 
-  beforeEach(() => {
-    tempRoot = mkdtempSync(join(tmpdir(), "msa-2791-"));
-    const agentDir = join(tempRoot, "agent");
-    const themesDir = join(agentDir, "themes");
-    mkdirSync(themesDir, { recursive: true });
+const runtime = ManagedRuntime.make(NodeServices.layer);
+const fs = runtime.runSync(FileSystem.FileSystem.useSync((service) => service));
 
-    // Copy dark.json as "custom-test" theme
-    const darkThemePath = join(__dirname, "../../../src/modes/interactive/theme/dark.json");
-    const darkTheme = JSON.parse(readFileSync(darkThemePath, "utf-8"));
-    darkTheme.name = "custom-test";
-    writeFileSync(join(themesDir, "custom-test.json"), JSON.stringify(darkTheme, null, 2));
-  });
+let tempRoot: string;
 
-  afterEach(() => {
-    rmSync(tempRoot, { recursive: true, force: true });
-  });
+const processShouldSurviveAnErrorEvent = () =>
+  runtime.runPromise(
+    Effect.gen(function* () {
+      const themeModulePath = join(
+        __dirname,
+        "../../../src/modes/interactive/theme/theme.ts",
+      ).replace(/\\/gu, "/");
+      const agentDir = join(tempRoot, "agent").replace(/\\/gu, "/");
 
-  it("process should survive an error event on the theme FSWatcher", () => {
-    const themeModulePath = join(
-      __dirname,
-      "../../../src/modes/interactive/theme/theme.ts",
-    ).replace(/\\/g, "/");
-    const agentDir = join(tempRoot, "agent").replace(/\\/g, "/");
-
-    // Script that sets up the watcher and emits a synthetic error on it.
-    // If no .on('error') handler is attached, EventEmitter.emit('error')
-    // throws, which either crashes the process or gets caught by our try/catch.
-    const scriptPath = join(tempRoot, "test-watcher-error.mts");
-    writeFileSync(
-      scriptPath,
-      `
+      const scriptPath = join(tempRoot, "test-watcher-error.mts");
+      yield* fs.writeFileString(
+        scriptPath,
+        `
 import { setTheme, stopThemeWatcher } from "${themeModulePath}";
-
 process.env.MSA_CODING_AGENT_DIR = "${agentDir}";
 
 setTheme("custom-test", true);
@@ -85,24 +56,50 @@ try {
 stopThemeWatcher();
 process.exit(0);
 `,
-    );
+      );
 
-    let stderr = "";
-    let exitCode: number;
-    try {
-      execFileSync(process.execPath, [scriptPath], {
-        timeout: 10000,
-        encoding: "utf-8",
-        env: { ...process.env, MSA_CODING_AGENT_DIR: agentDir },
-        stdio: ["pipe", "pipe", "pipe"],
-      });
-      exitCode = 0;
-    } catch (err: unknown) {
-      const e = err as { status: number; stderr: string };
-      stderr = e.stderr ?? "";
-      exitCode = e.status ?? 1;
-    }
+      let stderr = "";
+      let exitCode: number;
+      try {
+        execFileSync(process.execPath, [scriptPath], {
+          timeout: 10000,
+          encoding: "utf-8",
+          env: { ...process.env, MSA_CODING_AGENT_DIR: agentDir },
+          stdio: ["pipe", "pipe", "pipe"],
+        });
+        exitCode = 0;
+      } catch (err: unknown) {
+        const e = err as { status: number; stderr: string };
+        stderr = e.stderr ?? "";
+        exitCode = e.status ?? 1;
+      }
 
-    expect(exitCode, `Child crashed (exit ${exitCode}). stderr: ${stderr.trim()}`).toBe(0);
-  });
+      expect(exitCode, `Child crashed (exit ${exitCode}). stderr: ${stderr.trim()}`).toBe(0);
+    }),
+  );
+
+describe("issue #2791 fs.watch error event crashes process", () => {
+  beforeEach(() =>
+    runtime.runPromise(
+      Effect.gen(function* () {
+        tempRoot = yield* fs.makeTempDirectory({ prefix: "msa-2791-" });
+        const agentDir = join(tempRoot, "agent");
+        const themesDir = join(agentDir, "themes");
+        yield* fs.makeDirectory(themesDir, { recursive: true });
+
+        const darkThemePath = join(__dirname, "../../../src/modes/interactive/theme/dark.json");
+        const darkTheme = parseJson(yield* fs.readFileString(darkThemePath)) as { name: string };
+        darkTheme.name = "custom-test";
+        yield* fs.writeFileString(
+          join(themesDir, "custom-test.json"),
+          stringifyJsonPretty(darkTheme),
+        );
+      }),
+    ),
+  );
+  afterEach(() => runtime.runPromise(fs.remove(tempRoot, { recursive: true, force: true })));
+  it(
+    "process should survive an error event on the theme FSWatcher",
+    processShouldSurviveAnErrorEvent,
+  );
 });

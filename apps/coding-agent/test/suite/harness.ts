@@ -1,10 +1,4 @@
-import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
-/**
- * Local test harness for the new coding-agent test suite.
- */
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-
+import * as NodeServices from "@effect/platform-node/NodeServices";
 import type { AgentMessage, AgentTool } from "@msa/agent-core";
 import { Agent } from "@msa/agent-core";
 import type {
@@ -15,6 +9,7 @@ import type {
   ToolResultMessage,
 } from "@msa/ai/compat";
 import { registerFauxProvider, streamSimple } from "@msa/ai/compat";
+import { Effect, FileSystem, ManagedRuntime } from "effect";
 
 import { AgentSession, type AgentSessionEvent } from "../../src/core/agent-session.ts";
 import { AuthStorage } from "../../src/core/auth-storage.ts";
@@ -30,11 +25,16 @@ import {
   createModelRegistry,
   getModelRuntime,
 } from "../model-runtime-test-utils.ts";
+import { stringifyJson } from "../test-json.ts";
+import { join } from "../test-path.ts";
 import {
   type CreateTestExtensionsResultInput,
   createTestExtensionsResult,
   createTestResourceLoader,
 } from "../utilities.ts";
+
+const runtime = ManagedRuntime.make(NodeServices.layer);
+const fs = runtime.runSync(FileSystem.FileSystem.useSync((service) => service));
 
 type MessageTextPart = { type: "text"; text: string };
 
@@ -68,24 +68,22 @@ export function getAssistantTexts(harness: Harness): string[] {
     .map((message) => getMessageText(message));
 }
 
-/** The latest result of `toolName` in the session transcript. */
 export function getToolResult(harness: Harness, toolName: string): ToolResultMessage {
   const result = harness.session.messages.findLast(
     (message): message is ToolResultMessage =>
       message.role === "toolResult" && message.toolName === toolName,
   );
-  if (!result) throw new Error(`No ${toolName} tool result`);
+  if (result === undefined) throw new Error(`No ${toolName} tool result`);
   return result;
 }
 
-/** An extension UI context that does nothing, with `overrides` applied. */
 export function createTestUiContext(
   overrides: Partial<ExtensionUIContext> = {},
 ): ExtensionUIContext {
   return {
-    select: async () => undefined,
-    confirm: async () => false,
-    input: async () => undefined,
+    select: () => Promise.resolve(undefined),
+    confirm: () => Promise.resolve(false),
+    input: () => Promise.resolve(undefined),
     notify: () => {},
     onTerminalInput: () => () => {},
     setStatus: () => {},
@@ -97,11 +95,11 @@ export function createTestUiContext(
     setFooter: () => {},
     setHeader: () => {},
     setTitle: () => {},
-    custom: async <T>() => undefined as T,
+    custom: <T>() => Promise.resolve(undefined as T),
     pasteToEditor: () => {},
     setEditorText: () => {},
     getEditorText: () => "",
-    editor: async () => undefined,
+    editor: () => Promise.resolve(undefined),
     addAutocompleteProvider: () => {},
     setEditorComponent: () => {},
     getEditorComponent: () => undefined,
@@ -128,7 +126,7 @@ export interface HarnessOptions {
   extensionFactories?: Array<InlineExtension | CreateTestExtensionsResultInput> | undefined;
   withConfiguredAuth?: boolean;
   modelsJson?: Record<string, unknown>;
-  /** Session to continue, for example to test a resume. Default: a new in-memory session. */
+
   sessionManager?: SessionManager | undefined;
 }
 
@@ -152,150 +150,187 @@ export interface Harness {
   cleanup: () => void;
 }
 
-function createTempDir(): string {
-  const tempDir = join(tmpdir(), `msa-suite-${Date.now()}-${Math.random().toString(36).slice(2)}`);
-  mkdirSync(tempDir, { recursive: true });
-  return tempDir;
+function createTempDir() {
+  return runtime.runPromise(
+    Effect.gen(function* () {
+      const tempDir = yield* fs.makeTempDirectory({ prefix: `msa-suite-` });
+      yield* fs.makeDirectory(tempDir, { recursive: true });
+      return tempDir;
+    }),
+  );
 }
 
-export async function createHarness(options: HarnessOptions = {}): Promise<Harness> {
-  const tempDir = createTempDir();
-  const fauxProvider: FauxProviderRegistration = registerFauxProvider(
-    options.models !== undefined ? { models: options.models } : {},
-  );
-  fauxProvider.setResponses([]);
-  const model = fauxProvider.getModel();
-  const toolMap = options.tools
-    ? Object.fromEntries(options.tools.map((tool) => [tool.name, tool]))
-    : undefined;
-  const withConfiguredAuth = options.withConfiguredAuth ?? true;
-  const extensionRunnerRef: { current?: ExtensionRunner } = {};
-
-  const sessionManager = options.sessionManager ?? SessionManager.inMemory();
-  const settingsManager = SettingsManager.inMemory({
-    memory: { database: join(tempDir, "memory.db"), embedding: { enabled: false } },
-    ...options.settings,
-  });
-
-  const authStorage = AuthStorage.inMemory();
-  if (withConfiguredAuth) {
-    await authStorage.modify(model.provider, async () => ({ type: "api_key", key: "faux-key" }));
-  }
-  const modelsPath = options.modelsJson === undefined ? undefined : join(tempDir, "models.json");
-  if (modelsPath) writeFileSync(modelsPath, JSON.stringify(options.modelsJson));
-  const modelRegistry = modelsPath
-    ? await createModelRegistry(authStorage, modelsPath)
-    : await createInMemoryModelRegistry(authStorage);
-  if (withConfiguredAuth) {
-    modelRegistry.registerProvider(model.provider, {
-      baseUrl: model.baseUrl,
-      apiKey: "faux-key",
-      api: fauxProvider.api,
-      models: fauxProvider.models.map((registeredModel) => ({
-        id: registeredModel.id,
-        name: registeredModel.name,
-        api: registeredModel.api,
-        reasoning: registeredModel.reasoning,
-        input: registeredModel.input,
-        ...(registeredModel.inputLimits ? { inputLimits: registeredModel.inputLimits } : {}),
-        cost: registeredModel.cost,
-        contextWindow: registeredModel.contextWindow,
-        maxTokens: registeredModel.maxTokens,
-        baseUrl: registeredModel.baseUrl,
-      })),
-    });
-  }
-
-  const agent = new Agent({
-    getApiKey: () => (withConfiguredAuth ? "faux-key" : undefined),
-    streamFn: streamSimple,
-    initialState: {
-      model,
-      systemPrompt: "",
-      tools: [],
-    },
-    convertToLlm,
-    onPayload: async (payload) => {
-      const runner = extensionRunnerRef.current;
-      if (!runner?.hasHandlers("before_provider_request")) {
-        return payload;
-      }
-      return runner.emitBeforeProviderRequest(payload);
-    },
-    onResponse: async (response) => {
-      const runner = extensionRunnerRef.current;
-      if (!runner?.hasHandlers("after_provider_response")) {
-        return;
-      }
-      await runner.emit({
-        type: "after_provider_response",
-        status: response.status,
-        headers: response.headers,
-      });
-    },
-    transformContext: async (messages: AgentMessage[]) => {
-      const runner = extensionRunnerRef.current;
-      if (!runner) return messages;
-      return runner.emitContext(messages);
-    },
-  });
-  const extensionsResult = options.extensionFactories
-    ? await createTestExtensionsResult(options.extensionFactories, tempDir)
-    : undefined;
-  const resourceLoader =
-    options.resourceLoader ??
-    createTestResourceLoader(extensionsResult ? { extensionsResult } : undefined);
-
-  const session = new AgentSession({
-    agent,
-    sessionManager,
-    settingsManager,
-    cwd: tempDir,
-    modelRuntime: getModelRuntime(modelRegistry),
-    resourceLoader,
-    ...(toolMap !== undefined ? { baseToolsOverride: toolMap } : {}),
-    ...(options.initialActiveToolNames !== undefined
-      ? { initialActiveToolNames: options.initialActiveToolNames }
-      : {}),
-    usesDefaultTools: options.initialActiveToolNames === undefined,
-    ...(options.allowedToolNames !== undefined
-      ? { allowedToolNames: options.allowedToolNames }
-      : {}),
-    ...(options.excludedToolNames !== undefined
-      ? { excludedToolNames: options.excludedToolNames }
-      : {}),
-    extensionRunnerRef,
-  });
-
-  const events: AgentSessionEvent[] = [];
-  session.subscribe((event) => {
-    events.push(event);
-  });
-
-  return {
-    session,
-    sessionManager,
-    settingsManager,
-    authStorage,
-    faux: fauxProvider,
-    models: fauxProvider.models,
-    getModel: fauxProvider.getModel,
-    setResponses: fauxProvider.setResponses,
-    appendResponses: fauxProvider.appendResponses,
-    getPendingResponseCount: fauxProvider.getPendingResponseCount,
-    events,
-    eventsOfType<T extends AgentSessionEvent["type"]>(type: T) {
-      return events.filter(
-        (event): event is Extract<AgentSessionEvent, { type: T }> => event.type === type,
+export function createHarness(options: HarnessOptions = {}): Promise<Harness> {
+  return Effect.runPromise(
+    Effect.gen(function* () {
+      const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+      const tempDir = yield* Effect.promise(() => createTempDir());
+      const fauxProvider: FauxProviderRegistration = registerFauxProvider(
+        options.models === undefined ? {} : { models: options.models },
       );
-    },
-    tempDir,
-    cleanup() {
-      session.dispose();
-      fauxProvider.unregister();
-      if (existsSync(tempDir)) {
-        rmSync(tempDir, { recursive: true });
+      fauxProvider.setResponses([]);
+      const model = fauxProvider.getModel();
+      const toolMap =
+        options.tools === undefined
+          ? undefined
+          : Object.fromEntries(options.tools.map((tool) => [tool.name, tool]));
+      const withConfiguredAuth = options.withConfiguredAuth ?? true;
+      const extensionRunnerRef: { current?: ExtensionRunner } = {};
+
+      const sessionManager = options.sessionManager ?? SessionManager.inMemory();
+      const settingsManager = SettingsManager.inMemory({
+        memory: { database: join(tempDir, "memory.db"), embedding: { enabled: false } },
+        ...options.settings,
+      });
+
+      const authStorage = AuthStorage.inMemory();
+      if (withConfiguredAuth) {
+        yield* Effect.promise(() =>
+          authStorage.modify(model.provider, () =>
+            Promise.resolve({ type: "api_key", key: "faux-key" }),
+          ),
+        );
       }
-    },
-  };
+      const modelsPath =
+        options.modelsJson === undefined ? undefined : join(tempDir, "models.json");
+      if (modelsPath !== undefined && modelsPath !== "")
+        yield* fs.writeFileString(modelsPath, stringifyJson(options.modelsJson));
+      const modelRegistry =
+        modelsPath !== undefined && modelsPath !== ""
+          ? yield* Effect.promise(() => createModelRegistry(authStorage, modelsPath))
+          : yield* Effect.promise(() => createInMemoryModelRegistry(authStorage));
+      if (withConfiguredAuth) {
+        modelRegistry.registerProvider(model.provider, {
+          baseUrl: model.baseUrl,
+          apiKey: "faux-key",
+          api: fauxProvider.api,
+          models: fauxProvider.models.map((registeredModel) => ({
+            id: registeredModel.id,
+            name: registeredModel.name,
+            api: registeredModel.api,
+            reasoning: registeredModel.reasoning,
+            input: registeredModel.input,
+            ...(registeredModel.inputLimits === undefined
+              ? {}
+              : { inputLimits: registeredModel.inputLimits }),
+            cost: registeredModel.cost,
+            contextWindow: registeredModel.contextWindow,
+            maxTokens: registeredModel.maxTokens,
+            baseUrl: registeredModel.baseUrl,
+          })),
+        });
+      }
+
+      const agent = new Agent({
+        getApiKey: () => (withConfiguredAuth ? "faux-key" : undefined),
+        streamFn: streamSimple,
+        initialState: {
+          model,
+          systemPrompt: "",
+          tools: [],
+        },
+        convertToLlm,
+        onPayload: (payload) =>
+          runPromise(
+            Effect.sync(() => {
+              const runner = extensionRunnerRef.current;
+              if (runner?.hasHandlers("before_provider_request") !== true) {
+                return payload;
+              }
+              return runner.emitBeforeProviderRequest(payload);
+            }),
+          ),
+        onResponse: (response) =>
+          runPromise(
+            Effect.gen(function* () {
+              const runner = extensionRunnerRef.current;
+              if (runner?.hasHandlers("after_provider_response") !== true) {
+                return;
+              }
+              yield* Effect.promise(() =>
+                runner.emit({
+                  type: "after_provider_response",
+                  status: response.status,
+                  headers: response.headers,
+                }),
+              );
+            }),
+          ),
+        transformContext: (messages: AgentMessage[]) =>
+          runPromise(
+            Effect.promise(() => {
+              const runner = extensionRunnerRef.current;
+              if (runner === undefined) return Promise.resolve(messages);
+              return runner.emitContext(messages);
+            }),
+          ),
+      });
+      const extensionsResult =
+        options.extensionFactories === undefined
+          ? undefined
+          : yield* Effect.promise(() =>
+              createTestExtensionsResult(options.extensionFactories ?? [], tempDir),
+            );
+      const resourceLoader =
+        options.resourceLoader ??
+        createTestResourceLoader(extensionsResult === undefined ? undefined : { extensionsResult });
+
+      const session = new AgentSession({
+        agent,
+        sessionManager,
+        settingsManager,
+        cwd: tempDir,
+        modelRuntime: getModelRuntime(modelRegistry),
+        resourceLoader,
+        ...(toolMap === undefined ? {} : { baseToolsOverride: toolMap }),
+        ...(options.initialActiveToolNames === undefined
+          ? {}
+          : { initialActiveToolNames: options.initialActiveToolNames }),
+        usesDefaultTools: options.initialActiveToolNames === undefined,
+        ...(options.allowedToolNames === undefined
+          ? {}
+          : { allowedToolNames: options.allowedToolNames }),
+        ...(options.excludedToolNames === undefined
+          ? {}
+          : { excludedToolNames: options.excludedToolNames }),
+        extensionRunnerRef,
+      });
+
+      const events: AgentSessionEvent[] = [];
+      session.subscribe((event) => {
+        events.push(event);
+      });
+
+      return {
+        session,
+        sessionManager,
+        settingsManager,
+        authStorage,
+        faux: fauxProvider,
+        models: fauxProvider.models,
+        getModel: fauxProvider.getModel,
+        setResponses: fauxProvider.setResponses,
+        appendResponses: fauxProvider.appendResponses,
+        getPendingResponseCount: fauxProvider.getPendingResponseCount,
+        events,
+        eventsOfType<T extends AgentSessionEvent["type"]>(type: T) {
+          return events.filter(
+            (event): event is Extract<AgentSessionEvent, { type: T }> => event.type === type,
+          );
+        },
+        tempDir,
+        cleanup() {
+          return runtime.runPromise(
+            Effect.gen(function* () {
+              session.dispose();
+              fauxProvider.unregister();
+              if (yield* fs.exists(tempDir)) {
+                yield* fs.remove(tempDir, { recursive: true });
+              }
+            }),
+          );
+        },
+      };
+    }),
+  );
 }

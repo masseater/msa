@@ -1,4 +1,5 @@
 import type { CredentialStore } from "@msa/ai";
+import { Effect } from "effect";
 
 import { ModelRegistry } from "../src/core/model-registry.ts";
 import { ModelRuntime } from "../src/core/model-runtime.ts";
@@ -12,31 +13,40 @@ function wrap(runtime: ModelRuntime): ModelRegistry {
   return registry;
 }
 
-/** Load optional models.json configuration without introducing file-backed catalog locks into unit tests. */
-export async function createModelRegistry(
+export function createModelRegistry(
   credentials: CredentialStore,
   modelsPath?: string,
 ): Promise<ModelRegistry> {
-  return wrap(
-    await ModelRuntime.create({
-      credentials,
-      ...(modelsPath !== undefined ? { modelsPath } : {}),
-      modelsStore: new InMemoryCodingAgentModelsStore(),
-      allowModelNetwork: false,
+  return Effect.runPromise(
+    Effect.gen(function* () {
+      return wrap(
+        yield* Effect.promise(() =>
+          ModelRuntime.create({
+            credentials,
+            ...(modelsPath === undefined ? {} : { modelsPath }),
+            modelsStore: new InMemoryCodingAgentModelsStore(),
+            allowModelNetwork: false,
+          }),
+        ),
+      );
     }),
   );
 }
 
-export async function createInMemoryModelRegistry(
-  credentials: CredentialStore,
-): Promise<ModelRegistry> {
-  return wrap(
-    await ModelRuntime.create({ credentials, modelsPath: null, allowModelNetwork: false }),
+export function createInMemoryModelRegistry(credentials: CredentialStore): Promise<ModelRegistry> {
+  return Effect.runPromise(
+    Effect.gen(function* () {
+      return wrap(
+        yield* Effect.promise(() =>
+          ModelRuntime.create({ credentials, modelsPath: null, allowModelNetwork: false }),
+        ),
+      );
+    }),
   );
 }
 
 export function getModelRuntime(modelRegistry: ModelRegistry): ModelRuntime {
   const runtime = runtimes.get(modelRegistry);
-  if (!runtime) throw new Error("ModelRegistry was not created by the test helper");
+  if (runtime === undefined) throw new Error("ModelRegistry was not created by the test helper");
   return runtime;
 }

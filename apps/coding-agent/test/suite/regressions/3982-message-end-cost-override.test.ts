@@ -1,19 +1,15 @@
 import { fauxAssistantMessage } from "@msa/ai";
+import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
+import type { AssistantMessage } from "../../../../../libs/ai/src/message-types.ts";
 import { createHarness, type Harness } from "../harness.ts";
 
-describe("regression #3982: message_end cost override", () => {
-  const harnesses: Harness[] = [];
+const harnesses: Harness[] = [];
 
-  afterEach(() => {
-    while (harnesses.length > 0) {
-      harnesses.pop()?.cleanup();
-    }
-  });
-
-  it("allows extensions to replace finalized assistant usage cost", async () => {
-    const harness = await createHarness({
+const allowsExtensionsToReplaceFinalizedAssistant = Effect.gen(function* () {
+  const harness = yield* Effect.promise(() =>
+    createHarness({
       extensionFactories: [
         (msa) => {
           msa.on("message_end", (event) => {
@@ -34,21 +30,25 @@ describe("regression #3982: message_end cost override", () => {
           });
         },
       ],
-    });
-    harnesses.push(harness);
-    harness.setResponses([fauxAssistantMessage("hello")]);
+    }),
+  );
+  harnesses.push(harness);
+  harness.setResponses([fauxAssistantMessage("hello")]);
+  yield* Effect.promise(() => harness.session.prompt("hi"));
+  const assistantMessage = harness.session.messages.find((message) => message.role === "assistant");
+  return yield* allowsExtensionsToReplaceFinalizedAssistantPart2(harness, assistantMessage);
+});
 
-    await harness.session.prompt("hi");
-
-    const assistantMessage = harness.session.messages.find(
-      (message) => message.role === "assistant",
-    );
+const allowsExtensionsToReplaceFinalizedAssistantPart2 = (
+  harness: Harness,
+  assistantMessage: AssistantMessage | undefined,
+) =>
+  Effect.sync(() => {
     expect(assistantMessage?.role).toBe("assistant");
     if (assistantMessage?.role !== "assistant") {
       throw new Error("missing assistant message");
     }
     expect(assistantMessage.usage.cost.total).toBe(0.123);
-
     const messageEnd = harness
       .eventsOfType("message_end")
       .find((event) => event.message.role === "assistant");
@@ -58,4 +58,13 @@ describe("regression #3982: message_end cost override", () => {
     }
     expect(messageEnd.message.usage.cost.total).toBe(0.123);
   });
+
+describe("regression #3982: message_end cost override", () => {
+  afterEach(() => {
+    while (harnesses.length > 0) {
+      harnesses.pop()?.cleanup();
+    }
+  });
+  it("allows extensions to replace finalized assistant usage cost", () =>
+    Effect.runPromise(allowsExtensionsToReplaceFinalizedAssistant));
 });

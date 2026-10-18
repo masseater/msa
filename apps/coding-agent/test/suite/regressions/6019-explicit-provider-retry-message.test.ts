@@ -1,4 +1,5 @@
 import { fauxAssistantMessage } from "@msa/ai";
+import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { createHarness } from "../harness.ts";
@@ -12,25 +13,33 @@ describe("regression: issue 6019 explicit provider retry messages", () => {
   it.each([
     ["openai", openAIExplicitRetryMessage],
     ["bedrock", bedrockExplicitRetryMessage],
-  ])("retries %s explicit retry guidance", async (_provider, errorMessage) => {
-    const harness = await createHarness({
-      settings: { retry: { enabled: true, maxRetries: 3, baseDelayMs: 1 } },
-    });
-    try {
-      harness.setResponses([
-        fauxAssistantMessage("", { stopReason: "error", errorMessage }),
-        fauxAssistantMessage("recovered"),
-      ]);
+  ])("retries %s explicit retry guidance", (_provider, errorMessage) =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const harness = yield* Effect.promise(() =>
+          createHarness({
+            settings: { retry: { enabled: true, maxRetries: 3, baseDelayMs: 1 } },
+          }),
+        );
+        try {
+          harness.setResponses([
+            fauxAssistantMessage("", { stopReason: "error", errorMessage }),
+            fauxAssistantMessage("recovered"),
+          ]);
 
-      await harness.session.prompt("test");
+          yield* Effect.promise(() => harness.session.prompt("test"));
 
-      expect(harness.faux.state.callCount).toBe(2);
-      expect(harness.eventsOfType("auto_retry_start").map((event) => event.errorMessage)).toEqual([
-        errorMessage,
-      ]);
-      expect(harness.eventsOfType("auto_retry_end").map((event) => event.success)).toEqual([true]);
-    } finally {
-      harness.cleanup();
-    }
-  });
+          expect(harness.faux.state.callCount).toBe(2);
+          expect(
+            harness.eventsOfType("auto_retry_start").map((event) => event.errorMessage),
+          ).toEqual([errorMessage]);
+          expect(harness.eventsOfType("auto_retry_end").map((event) => event.success)).toEqual([
+            true,
+          ]);
+        } finally {
+          harness.cleanup();
+        }
+      }),
+    ),
+  );
 });

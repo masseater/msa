@@ -1,11 +1,13 @@
 import { type AssistantMessage, fauxAssistantMessage } from "@msa/ai";
+import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
+import { nowMillis } from "../../test-time.ts";
 import { createHarness, type Harness } from "../harness.ts";
 
 function seedCompactableSession(harness: Harness): void {
   harness.settingsManager.applyOverrides({ compaction: { keepRecentTokens: 1 } });
-  const now = Date.now();
+  const now = nowMillis();
   harness.sessionManager.appendMessage({
     role: "user",
     content: [{ type: "text", text: "message to compact" }],
@@ -30,22 +32,25 @@ function seedCompactableSession(harness: Harness): void {
   harness.session.agent.state.messages = harness.sessionManager.buildSessionContext().messages;
 }
 
-describe("#7048 truncated compaction summaries", () => {
-  let harness: Harness | undefined;
+let harness!: Harness;
 
+const doesNotPersistALengthLimited = Effect.gen(function* () {
+  harness = yield* Effect.promise(() => createHarness());
+  seedCompactableSession(harness);
+  harness.setResponses([fauxAssistantMessage("partial summar", { stopReason: "length" })]);
+
+  yield* Effect.promise(() =>
+    expect(harness.session.compact()).rejects.toThrow("generation hit the token cap"),
+  );
+  expect(
+    harness.sessionManager.getEntries().filter((entry) => entry.type === "compaction"),
+  ).toHaveLength(0);
+});
+
+describe("#7048 truncated compaction summaries", () => {
   afterEach(() => {
     harness?.cleanup();
-    harness = undefined;
   });
-
-  it("does not persist a length-limited summary", async () => {
-    harness = await createHarness();
-    seedCompactableSession(harness);
-    harness.setResponses([fauxAssistantMessage("partial summar", { stopReason: "length" })]);
-
-    await expect(harness.session.compact()).rejects.toThrow("generation hit the token cap");
-    expect(
-      harness.sessionManager.getEntries().filter((entry) => entry.type === "compaction"),
-    ).toHaveLength(0);
-  });
+  it("does not persist a length-limited summary", () =>
+    Effect.runPromise(doesNotPersistALengthLimited));
 });

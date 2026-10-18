@@ -1,3 +1,4 @@
+import { Cause, Effect, Exit } from "effect";
 import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 
 import type { AgentSessionRuntime } from "../../../src/core/agent-session-runtime.ts";
@@ -10,17 +11,15 @@ import { InteractiveMode } from "../../../src/modes/interactive/interactive-mode
 import { runRpcMode } from "../../../src/modes/rpc/rpc-mode.ts";
 import { createHarness, type Harness } from "../harness.ts";
 
-// Regression for https://github.com/earendil-works/pi/issues/9068
-
 const rpcIo = vi.hoisted(() => ({
   outputLines: [] as string[],
   lineHandler: undefined as ((line: string) => void) | undefined,
 }));
 
 vi.mock("../../../src/core/output-guard.js", () => ({
-  flushRawStdout: vi.fn(async () => {}),
+  flushRawStdout: vi.fn(() => Effect.runPromise(Effect.sync(() => {}))),
   takeOverStdout: vi.fn(),
-  waitForRawStdoutBackpressure: vi.fn(async () => {}),
+  waitForRawStdoutBackpressure: vi.fn(() => Effect.runPromise(Effect.sync(() => {}))),
   writeRawStdout: (line: string) => {
     rpcIo.outputLines.push(line);
   },
@@ -84,42 +83,54 @@ function parseOutputLines(): Array<Record<string, unknown>> {
 function createRuntimeHost(harness: Harness): AgentSessionRuntime {
   return {
     session: harness.session,
-    newSession: vi.fn(async () => ({ cancelled: true })),
-    switchSession: vi.fn(async () => ({ cancelled: true })),
-    fork: vi.fn(async () => ({ cancelled: true, selectedText: "" })),
-    dispose: vi.fn(async () => {}),
+    newSession: vi.fn(() => Promise.resolve({ cancelled: true })),
+    switchSession: vi.fn(() => Promise.resolve({ cancelled: true })),
+    fork: vi.fn(() => Promise.resolve({ cancelled: true, selectedText: "" })),
+    dispose: vi.fn(() => Effect.runPromise(Effect.sync(() => {}))),
     setRebindSession: vi.fn(),
   } as unknown as AgentSessionRuntime;
 }
 
-async function startRpcHarness(extension: (msa: ExtensionAPI) => void): Promise<{
+function startRpcHarness(extension: (msa: ExtensionAPI) => void): Promise<{
   harness: Harness;
   send(command: Record<string, unknown>): void;
   cleanup(): void;
 }> {
-  const listenerSnapshot = takeListenerSnapshot();
-  const harness = await createHarness({ extensionFactories: [extension] });
-  const cleanup = () => {
-    harness.cleanup();
-    restoreListeners(listenerSnapshot);
-  };
+  return Effect.runPromise(
+    Effect.gen(function* () {
+      const listenerSnapshot = takeListenerSnapshot();
+      const harness = yield* Effect.promise(() =>
+        createHarness({ extensionFactories: [extension] }),
+      );
+      const cleanup = () => {
+        harness.cleanup();
+        restoreListeners(listenerSnapshot);
+      };
 
-  try {
-    void runRpcMode(createRuntimeHost(harness));
-    await vi.waitFor(() => expect(rpcIo.lineHandler).toBeDefined());
-  } catch (error) {
-    cleanup();
-    throw error;
-  }
+      {
+        const tryExit7 = yield* Effect.exit(
+          Effect.gen(function* () {
+            void runRpcMode(createRuntimeHost(harness));
+            yield* Effect.promise(() => vi.waitFor(() => expect(rpcIo.lineHandler).toBeDefined()));
+          }),
+        );
+        if (Exit.isFailure(tryExit7)) {
+          const error = Cause.squash(tryExit7.cause);
+          cleanup();
+          throw error;
+        }
+      }
 
-  return {
-    harness,
-    send(command) {
-      if (!rpcIo.lineHandler) throw new Error("RPC line handler is not attached");
-      rpcIo.lineHandler(JSON.stringify(command));
-    },
-    cleanup,
-  };
+      return {
+        harness,
+        send(command) {
+          if (rpcIo.lineHandler === undefined) throw new Error("RPC line handler is not attached");
+          rpcIo.lineHandler(JSON.stringify(command));
+        },
+        cleanup,
+      };
+    }),
+  );
 }
 
 type InteractiveBashContext = {
@@ -162,9 +173,13 @@ const rpcCases: Array<{
   {
     name: "fails the request without executing bash when a handler throws",
     extension: (msa) => {
-      msa.on("user_bash", async () => {
-        throw new Error("Routing failed");
-      });
+      msa.on("user_bash", () =>
+        Effect.runPromise(
+          Effect.sync(() => {
+            throw new Error("Routing failed");
+          }),
+        ),
+      );
     },
     error: "Routing failed",
     executeCount: 0,
@@ -172,7 +187,7 @@ const rpcCases: Array<{
   {
     name: "fails the request without executing bash when a handler returns an empty result",
     extension: (msa) => {
-      msa.on("user_bash", async () => ({}) as unknown as UserBashEventResult);
+      msa.on("user_bash", () => Promise.resolve({} as unknown as UserBashEventResult));
     },
     error: "Invalid user_bash handler result",
     executeCount: 0,
@@ -180,7 +195,7 @@ const rpcCases: Array<{
   {
     name: "executes bash normally when a handler returns undefined",
     extension: (msa) => {
-      msa.on("user_bash", async () => undefined);
+      msa.on("user_bash", () => Promise.resolve(undefined));
     },
     executeCount: 1,
   },
@@ -192,96 +207,114 @@ afterEach(() => {
 });
 
 describe("RPC user_bash failure handling (#9068)", () => {
-  test.each(rpcCases)("$name", async ({ extension, error, executeCount }) => {
-    const rpc = await startRpcHarness(extension);
-    const executeBash = vi.spyOn(rpc.harness.session, "executeBash").mockResolvedValue(localResult);
+  test.each(rpcCases)("$name", ({ extension, error, executeCount }) =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const rpc = yield* Effect.promise(() => startRpcHarness(extension));
+        const executeBash = vi
+          .spyOn(rpc.harness.session, "executeBash")
+          .mockResolvedValue(localResult);
 
-    try {
-      rpc.send({ id: "bash-request", type: "bash", command: "pwd" });
+        try {
+          rpc.send({ id: "bash-request", type: "bash", command: "pwd" });
 
-      await vi.waitFor(() => {
-        const response = parseOutputLines().find(
-          (output) => output["type"] === "response" && output["id"] === "bash-request",
-        );
-        expect(response).toMatchObject({
-          id: "bash-request",
-          type: "response",
-          command: "bash",
-          success: error === undefined,
-          ...(error ? { error: expect.stringContaining(error) } : { data: localResult }),
-        });
-      });
-
-      if (error) {
-        expect(parseOutputLines()).toEqual(
-          expect.arrayContaining([
-            expect.objectContaining({
-              type: "extension_error",
-              event: "user_bash",
-              error: expect.stringContaining(error),
+          yield* Effect.promise(() =>
+            vi.waitFor(() => {
+              const response = parseOutputLines().find(
+                (output) => output["type"] === "response" && output["id"] === "bash-request",
+              );
+              expect(response).toMatchObject({
+                id: "bash-request",
+                type: "response",
+                command: "bash",
+                success: error === undefined,
+                ...(error !== undefined && error !== ""
+                  ? { error: expect.stringContaining(error) }
+                  : { data: localResult }),
+              });
             }),
-          ]),
-        );
-      }
-      expect(executeBash).toHaveBeenCalledTimes(executeCount);
-    } finally {
-      executeBash.mockRestore();
-      rpc.cleanup();
-    }
-  });
+          );
+
+          if (error !== undefined && error !== "") {
+            expect(parseOutputLines()).toEqual(
+              expect.arrayContaining([
+                expect.objectContaining({
+                  type: "extension_error",
+                  event: "user_bash",
+                  error: expect.stringContaining(error),
+                }),
+              ]),
+            );
+          }
+          expect(executeBash).toHaveBeenCalledTimes(executeCount);
+        } finally {
+          executeBash.mockRestore();
+          rpc.cleanup();
+        }
+      }),
+    ),
+  );
 });
 
 describe("Interactive user_bash failure handling (#9068)", () => {
   test.each([
     ["!pwd", false],
     ["!!pwd", true],
-  ])(
-    "fails closed for %s when a handler returns an empty result",
-    async (input, excludeFromContext) => {
-      const events: UserBashEvent[] = [];
-      const harness = await createHarness({
-        extensionFactories: [
-          (msa) => {
-            msa.on("user_bash", async (event) => {
-              events.push(event);
-              return {} as unknown as UserBashEventResult;
-            });
-          },
-        ],
-      });
-      const executeBash = vi.spyOn(harness.session, "executeBash").mockResolvedValue(localResult);
-      const context: InteractiveBashContext = {
-        defaultEditor: {},
-        editor: { addToHistory: vi.fn() },
-        session: harness.session,
-        sessionManager: harness.sessionManager,
-        ui: { requestRender: vi.fn() },
-        chatContainer: { addChild: vi.fn() },
-        pendingMessagesContainer: { addChild: vi.fn() },
-        pendingBashComponents: [],
-        isBashMode: true,
-        handleBashCommand: interactiveModePrototype.handleBashCommand,
-        showError: vi.fn(),
-        updateEditorBorderColor: vi.fn(),
-      };
-      interactiveModePrototype.setupEditorSubmitHandler.call(context);
+  ])("fails closed for %s when a handler returns an empty result", (input, excludeFromContext) =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+        const events: UserBashEvent[] = [];
+        const harness = yield* Effect.promise(() =>
+          createHarness({
+            extensionFactories: [
+              (msa) => {
+                msa.on("user_bash", (event) =>
+                  runPromise(
+                    Effect.sync(() => {
+                      events.push(event);
+                      return {} as unknown as UserBashEventResult;
+                    }),
+                  ),
+                );
+              },
+            ],
+          }),
+        );
+        const executeBash = vi.spyOn(harness.session, "executeBash").mockResolvedValue(localResult);
+        const context: InteractiveBashContext = {
+          defaultEditor: {},
+          editor: { addToHistory: vi.fn() },
+          session: harness.session,
+          sessionManager: harness.sessionManager,
+          ui: { requestRender: vi.fn() },
+          chatContainer: { addChild: vi.fn() },
+          pendingMessagesContainer: { addChild: vi.fn() },
+          pendingBashComponents: [],
+          isBashMode: true,
+          handleBashCommand: interactiveModePrototype.handleBashCommand,
+          showError: vi.fn(),
+          updateEditorBorderColor: vi.fn(),
+        };
+        interactiveModePrototype.setupEditorSubmitHandler.call(context);
 
-      try {
-        await context.defaultEditor.onSubmit?.(input);
+        try {
+          yield* Effect.promise(() => Promise.resolve(context.defaultEditor.onSubmit?.(input)));
 
-        expect(events).toEqual([
-          {
-            type: "user_bash",
-            command: "pwd",
-            excludeFromContext,
-            cwd: harness.sessionManager.getCwd(),
-          },
-        ]);
-        expect(executeBash).not.toHaveBeenCalled();
-      } finally {
-        executeBash.mockRestore();
-        harness.cleanup();
-      }
-    },
+          expect(events).toEqual([
+            {
+              type: "user_bash",
+              command: "pwd",
+              excludeFromContext,
+              cwd: harness.sessionManager.getCwd(),
+            },
+          ]);
+          expect(executeBash).not.toHaveBeenCalled();
+        } finally {
+          executeBash.mockRestore();
+          harness.cleanup();
+        }
+      }),
+    ),
   );
 });

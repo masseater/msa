@@ -1,5 +1,6 @@
 import type { AgentTool } from "@msa/agent-core";
 import { fauxAssistantMessage, fauxToolCall } from "@msa/ai";
+import { Effect } from "effect";
 import { Type } from "typebox";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
@@ -11,39 +12,47 @@ function createEchoTool(): AgentTool {
     label: "Echo",
     description: "Echo text back",
     parameters: Type.Object({ text: Type.String() }),
-    execute: async (_toolCallId, params) => {
-      const text =
-        typeof params === "object" && params !== null && "text" in params
-          ? String(params.text)
-          : "";
-      return { content: [{ type: "text", text }], details: { text } };
-    },
+    execute: (_toolCallId, params) =>
+      Effect.runPromise(
+        Effect.sync(() => {
+          const text =
+            typeof params === "object" && params !== null && "text" in params
+              ? String(params.text)
+              : "";
+          return { content: [{ type: "text", text }], details: { text } };
+        }),
+      ),
   };
 }
 
-describe("regressions #1717/#2113: agent session event settlement", () => {
-  const harnesses: Harness[] = [];
+const harnesses: Harness[] = [];
 
-  afterEach(() => {
-    while (harnesses.length > 0) {
-      harnesses.pop()?.cleanup();
-    }
-  });
-
-  it("keeps persisted assistant/toolResult message order when extension message_end handlers yield", async () => {
-    const harness = await createHarness({
+const keepsPersistedAssistantToolresultMessageOrder = Effect.gen(function* () {
+  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+  const harness = yield* Effect.promise(() =>
+    createHarness({
       tools: [createEchoTool()],
       extensionFactories: [
         (msa) => {
-          msa.on("message_end", async (event) => {
-            if (event.message.role === "assistant") {
-              await new Promise((resolve) => setTimeout(resolve, 20));
-            }
-          });
+          msa.on("message_end", (event) =>
+            runPromise(
+              Effect.gen(function* () {
+                if (event.message.role === "assistant") {
+                  yield* Effect.sleep(20);
+                }
+              }),
+            ),
+          );
         },
       ],
-    });
-    harnesses.push(harness);
+    }),
+  );
+  harnesses.push(harness);
+  return yield* keepsPersistedAssistantToolresultMessageOrderPart2(harness);
+});
+
+const keepsPersistedAssistantToolresultMessageOrderPart2 = (harness: Harness) =>
+  Effect.gen(function* () {
     harness.setResponses([
       fauxAssistantMessage(
         [fauxToolCall("echo", { text: "one" }), fauxToolCall("echo", { text: "two" })],
@@ -53,8 +62,7 @@ describe("regressions #1717/#2113: agent session event settlement", () => {
       ),
       fauxAssistantMessage("done"),
     ]);
-    await harness.session.prompt("run tools");
-
+    yield* Effect.promise(() => harness.session.prompt("run tools"));
     const branchMessages = harness.sessionManager
       .getBranch()
       .filter((entry) => entry.type === "message")
@@ -74,10 +82,11 @@ describe("regressions #1717/#2113: agent session event settlement", () => {
     expect(branchMessages[firstToolResultIndex - 1]?.role).toBe("assistant");
   });
 
-  it("runs tool_call handlers after the assistant tool-use message is settled in the session", async () => {
-    let harness: Harness;
-    const branchRolesAtToolCall: string[][] = [];
-    harness = await createHarness({
+const runsToolCallHandlersAfterThe = Effect.gen(function* () {
+  let harness: Harness;
+  const branchRolesAtToolCall: string[][] = [];
+  harness = yield* Effect.promise(() =>
+    createHarness({
       tools: [createEchoTool()],
       extensionFactories: [
         (msa) => {
@@ -91,15 +100,29 @@ describe("regressions #1717/#2113: agent session event settlement", () => {
           });
         },
       ],
-    });
-    harnesses.push(harness);
-    harness.setResponses([
-      fauxAssistantMessage([fauxToolCall("echo", { text: "hello" })], { stopReason: "toolUse" }),
-      fauxAssistantMessage("done"),
-    ]);
+    }),
+  );
+  harnesses.push(harness);
+  harness.setResponses([
+    fauxAssistantMessage([fauxToolCall("echo", { text: "hello" })], {
+      stopReason: "toolUse",
+    }),
+    fauxAssistantMessage("done"),
+  ]);
 
-    await harness.session.prompt("run tool");
+  yield* Effect.promise(() => harness.session.prompt("run tool"));
 
-    expect(branchRolesAtToolCall).toEqual([["system", "user", "assistant"]]);
+  expect(branchRolesAtToolCall).toEqual([["system", "user", "assistant"]]);
+});
+
+describe("regressions #1717/#2113: agent session event settlement", () => {
+  afterEach(() => {
+    while (harnesses.length > 0) {
+      harnesses.pop()?.cleanup();
+    }
   });
+  it("keeps persisted assistant/toolResult message order when extension message_end handlers yield", () =>
+    Effect.runPromise(keepsPersistedAssistantToolresultMessageOrder));
+  it("runs tool_call handlers after the assistant tool-use message is settled in the session", () =>
+    Effect.runPromise(runsToolCallHandlersAfterThe));
 });

@@ -1,15 +1,4 @@
-import { existsSync, mkdirSync, rmSync } from "node:fs";
-/**
- * Test harness for AgentSession runtime testing.
- *
- * Provides:
- * - A faux stream function with declarative response sequencing
- * - A one-call factory for a fully wired AgentSession with real in-memory dependencies
- * - Event capture for assertions
- */
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-
+import * as NodeServices from "@effect/platform-node/NodeServices";
 import type { AgentTool } from "@msa/agent-core";
 import { Agent } from "@msa/agent-core";
 import type {
@@ -27,6 +16,7 @@ import type {
   Usage,
 } from "@msa/ai";
 import { createAssistantMessageEventStream } from "@msa/ai";
+import { Effect, FileSystem, ManagedRuntime } from "effect";
 
 import { AgentSession, type AgentSessionEvent } from "../src/core/agent-session.ts";
 import { AuthStorage } from "../src/core/auth-storage.ts";
@@ -35,15 +25,15 @@ import type { Settings } from "../src/core/settings-manager.ts";
 import { SettingsManager } from "../src/core/settings-manager.ts";
 import type { InlineExtension, ResourceLoader } from "../src/index.ts";
 import { createInMemoryModelRegistry, getModelRuntime } from "./model-runtime-test-utils.ts";
+import { nowMillis } from "./test-time.ts";
 import {
   type CreateTestExtensionsResultInput,
   createTestExtensionsResult,
   createTestResourceLoader,
 } from "./utilities.ts";
 
-// ============================================================================
-// Faux model
-// ============================================================================
+const runtime = ManagedRuntime.make(NodeServices.layer);
+const fs = runtime.runSync(FileSystem.FileSystem.useSync((service) => service));
 
 const FAUX_PROVIDER = "faux";
 const FAUX_MODEL_ID = "faux-1";
@@ -62,35 +52,25 @@ export const fauxModel: Model<typeof FAUX_API> = {
   maxTokens: 16384,
 };
 
-// ============================================================================
-// Response description
-// ============================================================================
-
 export interface FauxResponse {
-  /** Text content blocks. String shorthand becomes a single text block. */
   text?: string;
-  /** Tool calls to include in the response. */
+
   toolCalls?: Array<{ id?: string; name: string; args: JsonObject }>;
-  /** Thinking content. */
+
   thinking?: string;
-  /** Stop reason. Defaults to "stop", or "toolUse" if toolCalls are present, or "error" if error is set. */
+
   stopReason?: StopReason;
-  /** Error message. Sets stopReason to "error" if not explicitly set. */
+
   error?: string;
-  /** Usage numbers. Merged with defaults (input: 100, output: 50). */
+
   usage?: Partial<Usage>;
-  /** Delay in ms before the response starts. */
+
   delayMs?: number;
-  /** Model overrides (provider, model id) for responses that should look like they came from a different model. */
+
   model?: { provider?: string; id?: string };
 }
 
-/** Shorthand: a string becomes a simple text response. */
 export type FauxResponseInput = FauxResponse | string;
-
-// ============================================================================
-// Faux stream function
-// ============================================================================
 
 function normalizeResponse(input: FauxResponseInput): FauxResponse {
   if (typeof input === "string") {
@@ -119,13 +99,13 @@ let toolCallIdCounter = 0;
 function buildAssistantMessage(resp: FauxResponse): AssistantMessage {
   const content: (TextContent | ThinkingContent | ToolCall)[] = [];
 
-  if (resp.thinking) {
+  if (resp.thinking !== undefined && resp.thinking !== "") {
     content.push({ type: "thinking", thinking: resp.thinking });
   }
   if (resp.text !== undefined) {
     content.push({ type: "text", text: resp.text });
   }
-  if (resp.toolCalls) {
+  if (resp.toolCalls !== undefined) {
     for (const tc of resp.toolCalls) {
       content.push({
         type: "toolCall",
@@ -136,17 +116,16 @@ function buildAssistantMessage(resp: FauxResponse): AssistantMessage {
     }
   }
 
-  // If no content was added at all, add empty text
-  if (content.length === 0 && !resp.error) {
+  if (content.length === 0 && (resp.error === undefined || resp.error === "")) {
     content.push({ type: "text", text: "" });
   }
 
   let stopReason: StopReason;
-  if (resp.stopReason) {
+  if (resp.stopReason !== undefined) {
     stopReason = resp.stopReason;
-  } else if (resp.error) {
+  } else if (resp.error !== undefined && resp.error !== "") {
     stopReason = "error";
-  } else if (resp.toolCalls && resp.toolCalls.length > 0) {
+  } else if (resp.toolCalls !== undefined && resp.toolCalls.length > 0) {
     stopReason = "toolUse";
   } else {
     stopReason = "stop";
@@ -160,33 +139,23 @@ function buildAssistantMessage(resp: FauxResponse): AssistantMessage {
     model: resp.model?.id ?? FAUX_MODEL_ID,
     usage: buildUsage(resp.usage),
     stopReason,
-    ...(resp.error !== undefined ? { errorMessage: resp.error } : {}),
-    timestamp: Date.now(),
+    ...(resp.error === undefined ? {} : { errorMessage: resp.error }),
+    timestamp: nowMillis(),
   };
 }
 
-// ============================================================================
-// Token-level streaming
-// ============================================================================
-
-/** Split a string into chunks of varying size (3-5 chars) for simulating token-by-token streaming. */
 function chunkString(text: string): string[] {
   const chunks: string[] = [];
   let i = 0;
   while (i < text.length) {
-    const size = 3 + Math.floor(Math.random() * 3); // 3, 4, or 5
+    const size = 3 + Math.floor(Math.random() * 3);
     chunks.push(text.slice(i, i + size));
     i += size;
   }
   return chunks.length > 0 ? chunks : [""];
 }
 
-/**
- * Stream a complete AssistantMessage through an EventStream with realistic
- * intermediate delta events for each content block.
- */
 function streamWithDeltas(stream: AssistantMessageEventStream, message: AssistantMessage): void {
-  // Build partial progressively as we stream content blocks
   const partial: AssistantMessage = { ...message, content: [], stopReason: "pending" };
   stream.push({ type: "start", partial: { ...partial } });
 
@@ -233,7 +202,6 @@ function streamWithDeltas(stream: AssistantMessageEventStream, message: Assistan
         stream.push(makeEvent("toolcall_delta", i, chunk, partial));
       }
 
-      // Final toolcall has the real parsed arguments
       (partial.content[i] as ToolCall).arguments = block.arguments;
       stream.push({
         type: "toolcall_end",
@@ -269,25 +237,12 @@ function makeEvent(
   return { type, contentIndex, delta, partial: { ...partial } };
 }
 
-// ============================================================================
-// Stream function factory
-// ============================================================================
-
 export interface FauxStreamFnState {
-  /** Number of times the stream function has been called. */
   callCount: number;
-  /** The context passed to each call, in order. */
+
   contexts: TranscriptContext[];
 }
 
-/**
- * Create a faux stream function from a sequence of response descriptions.
- *
- * The function cycles through responses in order. If more calls are made than
- * responses provided, it wraps around.
- *
- * Returns the stream function and a state object for inspection.
- */
 export function createFauxStreamFn(responses: FauxResponseInput[]): {
   streamFn: (
     model: Model<any>,
@@ -323,7 +278,7 @@ export function createFauxStreamFn(responses: FauxResponseInput[]): {
       streamWithDeltas(stream, message);
     };
 
-    if (resp.delayMs && resp.delayMs > 0) {
+    if (resp.delayMs !== undefined && resp.delayMs !== 0 && resp.delayMs > 0) {
       setTimeout(emit, resp.delayMs);
     } else {
       queueMicrotask(emit);
@@ -335,28 +290,23 @@ export function createFauxStreamFn(responses: FauxResponseInput[]): {
   return { streamFn, state };
 }
 
-// ============================================================================
-// Session harness
-// ============================================================================
-
 export interface HarnessOptions {
-  /** Response sequence for the faux provider. Default: single "ok" response. */
   responses?: FauxResponseInput[];
-  /** Model to use. Default: fauxModel. */
+
   model?: Model<any>;
-  /** Context window override (applied to the model). */
+
   contextWindow?: number;
-  /** Settings overrides (retry, compaction, etc.). */
+
   settings?: Partial<Settings>;
-  /** System prompt. Default: "You are a test assistant." */
+
   systemPrompt?: string;
-  /** Custom tools to register on the agent. */
+
   tools?: AgentTool[];
-  /** Base tools override (replaces built-in read/bash/edit/write). */
+
   baseToolsOverride?: Record<string, AgentTool>;
-  /** Optional resource loader override. */
+
   resourceLoader?: ResourceLoader;
-  /** Inline extensions to load into the session resource loader. */
+
   extensionFactories?: Array<InlineExtension | CreateTestExtensionsResultInput>;
 }
 
@@ -365,140 +315,166 @@ export interface Harness {
   agent: Agent;
   sessionManager: SessionManager;
   settingsManager: SettingsManager;
-  /** Faux stream function state (call count, captured contexts). */
+
   faux: FauxStreamFnState;
-  /** All events emitted by the session, in order. */
+
   events: AgentSessionEvent[];
-  /** Filter captured events by type. */
+
   eventsOfType<T extends AgentSessionEvent["type"]>(
     type: T,
   ): Extract<AgentSessionEvent, { type: T }>[];
-  /** Temp directory (cleaned up by cleanup()). */
+
   tempDir: string;
-  /** Dispose session and remove temp directory. */
+
   cleanup: () => void;
 }
 
-function createTempDir(): string {
-  const tempDir = join(
-    tmpdir(),
-    `msa-harness-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+function createTempDir() {
+  return runtime.runPromise(
+    Effect.gen(function* () {
+      const tempDir = yield* fs.makeTempDirectory({ prefix: `msa-harness-` });
+      yield* fs.makeDirectory(tempDir, { recursive: true });
+      return tempDir;
+    }),
   );
-  mkdirSync(tempDir, { recursive: true });
-  return tempDir;
 }
 
-async function createHarnessWithResourceLoader(
+function createHarnessWithResourceLoader(
   options: HarnessOptions,
   resourceLoader: ResourceLoader,
   tempDir: string,
 ): Promise<Harness> {
-  const baseModel = options.model ?? fauxModel;
-  const model: Model<any> = options.contextWindow
-    ? { ...baseModel, contextWindow: options.contextWindow }
-    : baseModel;
+  return Effect.runPromise(
+    Effect.gen(function* () {
+      const baseModel = options.model ?? fauxModel;
+      const model: Model<any> =
+        options.contextWindow !== undefined && options.contextWindow !== 0
+          ? { ...baseModel, contextWindow: options.contextWindow }
+          : baseModel;
 
-  const { streamFn, state: fauxState } = createFauxStreamFn(options.responses ?? ["ok"]);
+      const { streamFn, state: fauxState } = createFauxStreamFn(options.responses ?? ["ok"]);
 
-  const agent = new Agent({
-    getApiKey: () => "faux-key",
-    initialState: {
-      model,
-      systemPrompt: options.systemPrompt ?? "You are a test assistant.",
-      tools: options.tools ?? [],
-    },
-    streamFn: streamFn,
-  });
+      const agent = new Agent({
+        getApiKey: () => "faux-key",
+        initialState: {
+          model,
+          systemPrompt: options.systemPrompt ?? "You are a test assistant.",
+          tools: options.tools ?? [],
+        },
+        streamFn: streamFn,
+      });
 
-  const sessionManager = SessionManager.inMemory();
-  const settingsManager = SettingsManager.create(tempDir, tempDir);
+      const sessionManager = SessionManager.inMemory();
+      const settingsManager = SettingsManager.create(tempDir, tempDir);
 
-  if (options.settings) {
-    settingsManager.applyOverrides(options.settings);
-  }
+      if (options.settings !== undefined) {
+        settingsManager.applyOverrides(options.settings);
+      }
 
-  const authStorage = AuthStorage.inMemory({
-    [model.provider]: { type: "api_key", key: "faux-key" },
-  });
-  const modelRegistry = await createInMemoryModelRegistry(authStorage);
-  modelRegistry.registerProvider(model.provider, {
-    baseUrl: model.baseUrl,
-    api: model.api,
-    models: [
-      {
-        id: model.id,
-        name: model.name,
-        api: model.api,
-        reasoning: model.reasoning,
-        input: model.input,
-        cost: model.cost,
-        contextWindow: model.contextWindow,
-        maxTokens: model.maxTokens,
+      const authStorage = AuthStorage.inMemory({
+        [model.provider]: { type: "api_key", key: "faux-key" },
+      });
+      const modelRegistry = yield* Effect.promise(() => createInMemoryModelRegistry(authStorage));
+      modelRegistry.registerProvider(model.provider, {
         baseUrl: model.baseUrl,
-      },
-    ],
-  });
+        api: model.api,
+        models: [
+          {
+            id: model.id,
+            name: model.name,
+            api: model.api,
+            reasoning: model.reasoning,
+            input: model.input,
+            cost: model.cost,
+            contextWindow: model.contextWindow,
+            maxTokens: model.maxTokens,
+            baseUrl: model.baseUrl,
+          },
+        ],
+      });
 
-  const session = new AgentSession({
-    agent,
-    sessionManager,
-    settingsManager,
-    cwd: tempDir,
-    modelRuntime: getModelRuntime(modelRegistry),
-    resourceLoader,
-    ...(options.baseToolsOverride !== undefined
-      ? { baseToolsOverride: options.baseToolsOverride }
-      : {}),
-  });
+      const session = new AgentSession({
+        agent,
+        sessionManager,
+        settingsManager,
+        cwd: tempDir,
+        modelRuntime: getModelRuntime(modelRegistry),
+        resourceLoader,
+        ...(options.baseToolsOverride === undefined
+          ? {}
+          : { baseToolsOverride: options.baseToolsOverride }),
+      });
 
-  const events: AgentSessionEvent[] = [];
-  session.subscribe((event) => {
-    events.push(event);
-  });
+      const events: AgentSessionEvent[] = [];
+      session.subscribe((event) => {
+        events.push(event);
+      });
 
-  const cleanup = () => {
-    session.dispose();
-    if (existsSync(tempDir)) {
-      rmSync(tempDir, { recursive: true });
-    }
-  };
+      const cleanup = () =>
+        runtime.runPromise(
+          Effect.gen(function* () {
+            session.dispose();
+            if (yield* fs.exists(tempDir)) {
+              yield* fs.remove(tempDir, { recursive: true });
+            }
+          }),
+        );
 
-  return {
-    session,
-    agent,
-    sessionManager,
-    settingsManager,
-    faux: fauxState,
-    events,
-    eventsOfType<T extends AgentSessionEvent["type"]>(type: T) {
-      return events.filter((e): e is Extract<AgentSessionEvent, { type: T }> => e.type === type);
-    },
-    tempDir,
-    cleanup,
-  };
-}
-
-export async function createHarness(options: HarnessOptions = {}): Promise<Harness> {
-  if (options.extensionFactories?.length) {
-    throw new Error(
-      "createHarness does not support extensionFactories. Use createHarnessWithExtensions().",
-    );
-  }
-
-  const tempDir = createTempDir();
-  return await createHarnessWithResourceLoader(
-    options,
-    options.resourceLoader ?? createTestResourceLoader(),
-    tempDir,
+      return {
+        session,
+        agent,
+        sessionManager,
+        settingsManager,
+        faux: fauxState,
+        events,
+        eventsOfType<T extends AgentSessionEvent["type"]>(type: T) {
+          return events.filter(
+            (e): e is Extract<AgentSessionEvent, { type: T }> => e.type === type,
+          );
+        },
+        tempDir,
+        cleanup,
+      };
+    }),
   );
 }
 
-export async function createHarnessWithExtensions(options: HarnessOptions = {}): Promise<Harness> {
-  const tempDir = createTempDir();
-  const extensionsResult = await createTestExtensionsResult(
-    options.extensionFactories ?? [],
-    tempDir,
+export function createHarness(options: HarnessOptions = {}): Promise<Harness> {
+  return Effect.runPromise(
+    Effect.gen(function* () {
+      if (
+        options.extensionFactories?.length !== undefined &&
+        options.extensionFactories?.length !== 0
+      ) {
+        throw new Error(
+          "createHarness does not support extensionFactories. Use createHarnessWithExtensions().",
+        );
+      }
+
+      const tempDir = yield* Effect.promise(() => createTempDir());
+      return yield* Effect.promise(() =>
+        createHarnessWithResourceLoader(
+          options,
+          options.resourceLoader ?? createTestResourceLoader(),
+          tempDir,
+        ),
+      );
+    }),
   );
-  const resourceLoader = options.resourceLoader ?? createTestResourceLoader({ extensionsResult });
-  return await createHarnessWithResourceLoader(options, resourceLoader, tempDir);
+}
+
+export function createHarnessWithExtensions(options: HarnessOptions = {}): Promise<Harness> {
+  return Effect.runPromise(
+    Effect.gen(function* () {
+      const tempDir = yield* Effect.promise(() => createTempDir());
+      const extensionsResult = yield* Effect.promise(() =>
+        createTestExtensionsResult(options.extensionFactories ?? [], tempDir),
+      );
+      const resourceLoader =
+        options.resourceLoader ?? createTestResourceLoader({ extensionsResult });
+      return yield* Effect.promise(() =>
+        createHarnessWithResourceLoader(options, resourceLoader, tempDir),
+      );
+    }),
+  );
 }

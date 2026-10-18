@@ -1,5 +1,6 @@
 import type { Api, Model, ModelsRefreshResult } from "@msa/ai";
 import { setKeybindings, type TUI } from "@msa/tui";
+import { Effect } from "effect";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { KeybindingsManager } from "../../../src/core/keybindings.ts";
@@ -52,7 +53,7 @@ function openSelector(harness: Harness, initialModels: readonly Model<Api>[]) {
   };
 
   showModelsSelector.call(context);
-  if (!selector) throw new Error("Expected scoped-model selector to open");
+  if (selector === undefined) throw new Error("Expected scoped-model selector to open");
   return {
     done,
     get refreshSignal() {
@@ -61,52 +62,61 @@ function openSelector(harness: Harness, initialModels: readonly Model<Api>[]) {
     selector,
     complete(models: readonly Model<Api>[], result: ModelsRefreshResult) {
       snapshot = models;
-      if (!finishRefresh) throw new Error("Expected model refresh to start");
+      if (finishRefresh === undefined) throw new Error("Expected model refresh to start");
       finishRefresh(result);
     },
   };
 }
 
-describe("issue #7153 scoped models refresh", () => {
-  let harness: Harness | undefined;
+let harness: Harness | undefined;
 
-  beforeAll(() => initTheme("dark"));
-  beforeEach(() => setKeybindings(new KeybindingsManager()));
-  afterEach(() => {
-    harness?.cleanup();
-    harness = undefined;
-    vi.restoreAllMocks();
-  });
-
-  it("renders cached models immediately and updates after background refresh", async () => {
-    harness = await createHarness({
+const rendersCachedModelsImmediatelyAndUpdates = Effect.gen(function* () {
+  harness = yield* Effect.promise(() =>
+    createHarness({
       models: [
         { id: "cached", name: "Cached" },
         { id: "refreshed", name: "Refreshed" },
       ],
-    });
-    const refresh = openSelector(harness, [harness.models[0]]);
+    }),
+  );
+  const refresh = openSelector(harness, [harness.models[0]]);
 
-    const initial = stripAnsi(refresh.selector.render(100).join("\n"));
-    expect(initial).toContain("cached");
-    expect(initial).toContain("Refreshing model catalogs…");
-    expect(initial).not.toContain("refreshed");
+  const initial = stripAnsi(refresh.selector.render(100).join("\n"));
+  expect(initial).toContain("cached");
+  expect(initial).toContain("Refreshing model catalogs…");
+  expect(initial).not.toContain("refreshed");
 
-    refresh.complete(harness.models, { aborted: false, errors: new Map() });
-    await vi.waitFor(() => {
+  refresh.complete(harness.models, { aborted: false, errors: new Map() });
+  yield* Effect.promise(() =>
+    vi.waitFor(() => {
       const rendered = stripAnsi(refresh.selector.render(100).join("\n"));
       expect(rendered).toContain("refreshed");
       expect(rendered).toContain("Model catalogs refreshed.");
-    });
-  });
+    }),
+  );
+});
 
-  it("cancels the background refresh when the selector closes", async () => {
-    harness = await createHarness({ models: [{ id: "cached", name: "Cached" }] });
-    const refresh = openSelector(harness, harness.models);
+const cancelsTheBackgroundRefreshWhenThe = Effect.gen(function* () {
+  harness = yield* Effect.promise(() =>
+    createHarness({ models: [{ id: "cached", name: "Cached" }] }),
+  );
+  const refresh = openSelector(harness, harness.models);
 
-    expect(refresh.refreshSignal).toBeDefined();
-    refresh.selector.handleInput("\x1b");
-    await vi.waitFor(() => expect(refresh.refreshSignal?.aborted).toBe(true));
-    expect(refresh.done).toHaveBeenCalledOnce();
+  expect(refresh.refreshSignal).toBeDefined();
+  refresh.selector.handleInput("\x1b");
+  yield* Effect.promise(() => vi.waitFor(() => expect(refresh.refreshSignal?.aborted).toBe(true)));
+  expect(refresh.done).toHaveBeenCalledOnce();
+});
+
+describe("issue #7153 scoped models refresh", () => {
+  beforeAll(() => initTheme("dark"));
+  beforeEach(() => setKeybindings(new KeybindingsManager()));
+  afterEach(() => {
+    harness?.cleanup();
+    vi.restoreAllMocks();
   });
+  it("renders cached models immediately and updates after background refresh", () =>
+    Effect.runPromise(rendersCachedModelsImmediatelyAndUpdates));
+  it("cancels the background refresh when the selector closes", () =>
+    Effect.runPromise(cancelsTheBackgroundRefreshWhenThe));
 });

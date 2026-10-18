@@ -1,5 +1,6 @@
 import { fauxAssistantMessage } from "@msa/ai";
 import { Container, Text } from "@msa/tui";
+import { Effect } from "effect";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import type { AgentSessionEvent } from "../../../src/core/agent-session.ts";
@@ -150,9 +151,7 @@ function createReloadCommandContext(
     session: {
       isStreaming: false,
       isCompacting: false,
-      reload: async (options) => {
-        await options?.beforeSessionStart?.();
-      },
+      reload: (options) => Promise.resolve(options?.beforeSessionStart?.()).then(() => undefined),
       resourceLoader: { getThemes: () => ({ themes: [] }) },
       extensionRunner: {},
       modelRegistry: { getError: () => undefined },
@@ -177,7 +176,10 @@ function createReloadCommandContext(
       setAutocompleteMaxVisible: () => {},
       ...overrides.defaultEditor,
     },
-    themeController: { applyFromSettings: async () => {}, ...overrides.themeController },
+    themeController: {
+      applyFromSettings: () => Effect.runPromise(Effect.sync(() => {})),
+      ...overrides.themeController,
+    },
     customHeader: overrides.customHeader,
     builtInHeader: overrides.builtInHeader,
     resetExtensionUI: overrides.resetExtensionUI ?? (() => {}),
@@ -240,30 +242,31 @@ function createLoadedResourcesContext(): LoadedResourcesContext {
   };
 }
 
-describe("regression #5943: session_start transient UI", () => {
-  it("renders loaded resources before restored messages without stale entries", () => {
-    initTheme("dark", false);
-    const context = createLoadedResourcesContext();
-    const root = new Container();
-    root.addChild(context.loadedResourcesContainer);
-    root.addChild(context.chatContainer);
-    context.loadedResourcesContainer.addChild(new Text("stale resources", 0, 0));
-    context.chatContainer.addChild(new Text("restored message", 0, 0));
+const rendersLoadedResourcesBeforeRestoredMessages = () => {
+  initTheme("dark", false);
+  const context = createLoadedResourcesContext();
+  const root = new Container();
+  root.addChild(context.loadedResourcesContainer);
+  root.addChild(context.chatContainer);
+  context.loadedResourcesContainer.addChild(new Text("stale resources", 0, 0));
+  context.chatContainer.addChild(new Text("restored message", 0, 0));
 
-    interactiveModePrototype.showLoadedResources.call(context);
+  interactiveModePrototype.showLoadedResources.call(context);
 
-    const chatRendered = context.chatContainer.render(80).join("\n");
-    expect(chatRendered).toContain("restored message");
-    expect(chatRendered).not.toContain("[Context]");
+  const chatRendered = context.chatContainer.render(80).join("\n");
+  expect(chatRendered).toContain("restored message");
+  expect(chatRendered).not.toContain("[Context]");
 
-    const rendered = root.render(80).join("\n");
-    expect(rendered).not.toContain("stale resources");
-    expect(rendered.indexOf("[Context]")).toBeLessThan(rendered.indexOf("restored message"));
-  });
+  const rendered = root.render(80).join("\n");
+  expect(rendered).not.toContain("stale resources");
+  expect(rendered.indexOf("[Context]")).toBeLessThan(rendered.indexOf("restored message"));
+};
 
-  it("renders replacement session state before session_start handlers can notify", async () => {
-    const events: string[] = [];
-    const harness = await createHarness({
+const rendersReplacementSessionStateBeforeSession = Effect.gen(function* () {
+  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+  const events: string[] = [];
+  const harness = yield* Effect.promise(() =>
+    createHarness({
       extensionFactories: [
         (msa) => {
           msa.on("session_start", (_event, ctx) => {
@@ -271,39 +274,49 @@ describe("regression #5943: session_start transient UI", () => {
           });
         },
       ],
-    });
+    }),
+  );
 
-    try {
-      const context: RebindContext = {
-        applyRuntimeSettings: () => events.push("apply"),
-        programStatus: { reset: () => {} },
-        renderCurrentSessionState: () => events.push("render"),
-        bindCurrentSessionExtensions: async () => {
-          events.push("bind");
-          await harness.session.bindExtensions({
-            uiContext: createTestUiContext({
-              notify: (message) => events.push(`notify:${message}`),
-            }),
-            mode: "tui",
-          });
-        },
-        subscribeToAgent: () => events.push("subscribe"),
-        updateAvailableProviderCount: async () => {},
-        updateEditorBorderColor: () => {},
-        updateTerminalTitle: () => {},
-      };
+  try {
+    const context: RebindContext = {
+      applyRuntimeSettings: () => events.push("apply"),
+      programStatus: { reset: () => {} },
+      renderCurrentSessionState: () => events.push("render"),
+      bindCurrentSessionExtensions: () =>
+        runPromise(
+          Effect.gen(function* () {
+            events.push("bind");
+            yield* Effect.promise(() =>
+              harness.session.bindExtensions({
+                uiContext: createTestUiContext({
+                  notify: (message) => events.push(`notify:${message}`),
+                }),
+                mode: "tui",
+              }),
+            );
+          }),
+        ),
+      subscribeToAgent: () => events.push("subscribe"),
+      updateAvailableProviderCount: () => runPromise(Effect.sync(() => {})),
+      updateEditorBorderColor: () => {},
+      updateTerminalTitle: () => {},
+    };
 
-      await interactiveModePrototype.rebindCurrentSession.call(context, { renderBeforeBind: true });
+    yield* Effect.promise(() =>
+      interactiveModePrototype.rebindCurrentSession.call(context, { renderBeforeBind: true }),
+    );
 
-      expect(events).toEqual(["apply", "render", "subscribe", "bind", "notify:Hello Error"]);
-    } finally {
-      harness.cleanup();
-    }
-  });
+    expect(events).toEqual(["apply", "render", "subscribe", "bind", "notify:Hello Error"]);
+  } finally {
+    harness.cleanup();
+  }
+});
 
-  it("subscribes before replacement session_start handlers send messages", async () => {
-    const events: string[] = [];
-    const harness = await createHarness({
+const subscribesBeforeReplacementSessionStartHandlers = Effect.gen(function* () {
+  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+  const events: string[] = [];
+  const harness = yield* Effect.promise(() =>
+    createHarness({
       extensionFactories: [
         (msa) => {
           msa.on("session_start", () => {
@@ -315,51 +328,61 @@ describe("regression #5943: session_start transient UI", () => {
           });
         },
       ],
-    });
+    }),
+  );
 
-    try {
-      const context: RebindContext = {
-        applyRuntimeSettings: () => {},
-        programStatus: { reset: () => {} },
-        renderCurrentSessionState: () => events.push("render"),
-        bindCurrentSessionExtensions: async () => {
-          events.push("bind");
-          await harness.session.bindExtensions({
-            uiContext: createTestUiContext(),
-            mode: "tui",
-          });
-        },
-        subscribeToAgent: () => {
-          events.push("subscribe");
-          harness.session.subscribe((event) => {
-            if (event.type !== "message_start" && event.type !== "message_end") {
-              return;
-            }
-            events.push(`${event.type}:${event.message.role}:${getMessageText(event)}`);
-          });
-        },
-        updateAvailableProviderCount: async () => {},
-        updateEditorBorderColor: () => {},
-        updateTerminalTitle: () => {},
-      };
+  try {
+    const context: RebindContext = {
+      applyRuntimeSettings: () => {},
+      programStatus: { reset: () => {} },
+      renderCurrentSessionState: () => events.push("render"),
+      bindCurrentSessionExtensions: () =>
+        runPromise(
+          Effect.gen(function* () {
+            events.push("bind");
+            yield* Effect.promise(() =>
+              harness.session.bindExtensions({
+                uiContext: createTestUiContext(),
+                mode: "tui",
+              }),
+            );
+          }),
+        ),
+      subscribeToAgent: () => {
+        events.push("subscribe");
+        harness.session.subscribe((event) => {
+          if (event.type !== "message_start" && event.type !== "message_end") {
+            return;
+          }
+          events.push(`${event.type}:${event.message.role}:${getMessageText(event)}`);
+        });
+      },
+      updateAvailableProviderCount: () => runPromise(Effect.sync(() => {})),
+      updateEditorBorderColor: () => {},
+      updateTerminalTitle: () => {},
+    };
 
-      await interactiveModePrototype.rebindCurrentSession.call(context, { renderBeforeBind: true });
+    yield* Effect.promise(() =>
+      interactiveModePrototype.rebindCurrentSession.call(context, { renderBeforeBind: true }),
+    );
 
-      expect(events).toEqual([
-        "render",
-        "subscribe",
-        "bind",
-        "message_start:custom:custom from start",
-        "message_end:custom:custom from start",
-      ]);
-    } finally {
-      harness.cleanup();
-    }
-  });
+    expect(events).toEqual([
+      "render",
+      "subscribe",
+      "bind",
+      "message_start:custom:custom from start",
+      "message_end:custom:custom from start",
+    ]);
+  } finally {
+    harness.cleanup();
+  }
+});
 
-  it("subscribes before replacement session_start handlers send user messages", async () => {
-    const events: string[] = [];
-    const harness = await createHarness({
+const subscribesBeforeReplacementSessionStartHandlers2 = Effect.gen(function* () {
+  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+  const events: string[] = [];
+  const harness = yield* Effect.promise(() =>
+    createHarness({
       extensionFactories: [
         (msa) => {
           msa.on("session_start", () => {
@@ -367,53 +390,62 @@ describe("regression #5943: session_start transient UI", () => {
           });
         },
       ],
-    });
-    harness.setResponses([fauxAssistantMessage("assistant from start")]);
+    }),
+  );
+  harness.setResponses([fauxAssistantMessage("assistant from start")]);
 
-    try {
-      const context: RebindContext = {
-        applyRuntimeSettings: () => {},
-        programStatus: { reset: () => {} },
-        renderCurrentSessionState: () => events.push("render"),
-        bindCurrentSessionExtensions: async () => {
-          events.push("bind");
-          await harness.session.bindExtensions({
-            uiContext: createTestUiContext(),
-            mode: "tui",
-          });
-        },
-        subscribeToAgent: () => {
-          events.push("subscribe");
-          harness.session.subscribe((event) => {
-            if (event.type !== "message_start" && event.type !== "message_end") {
-              return;
-            }
-            events.push(`${event.type}:${event.message.role}:${getMessageText(event)}`);
-          });
-        },
-        updateAvailableProviderCount: async () => {},
-        updateEditorBorderColor: () => {},
-        updateTerminalTitle: () => {},
-      };
+  try {
+    const context: RebindContext = {
+      applyRuntimeSettings: () => {},
+      programStatus: { reset: () => {} },
+      renderCurrentSessionState: () => events.push("render"),
+      bindCurrentSessionExtensions: () =>
+        runPromise(
+          Effect.gen(function* () {
+            events.push("bind");
+            yield* Effect.promise(() =>
+              harness.session.bindExtensions({
+                uiContext: createTestUiContext(),
+                mode: "tui",
+              }),
+            );
+          }),
+        ),
+      subscribeToAgent: () => {
+        events.push("subscribe");
+        harness.session.subscribe((event) => {
+          if (event.type !== "message_start" && event.type !== "message_end") {
+            return;
+          }
+          events.push(`${event.type}:${event.message.role}:${getMessageText(event)}`);
+        });
+      },
+      updateAvailableProviderCount: () => runPromise(Effect.sync(() => {})),
+      updateEditorBorderColor: () => {},
+      updateTerminalTitle: () => {},
+    };
 
-      await interactiveModePrototype.rebindCurrentSession.call(context, { renderBeforeBind: true });
-      await harness.session.agent.waitForIdle();
+    yield* Effect.promise(() =>
+      interactiveModePrototype.rebindCurrentSession.call(context, { renderBeforeBind: true }),
+    );
+    yield* Effect.promise(() => harness.session.agent.waitForIdle());
 
-      expect(events.slice(0, 3)).toEqual(["render", "subscribe", "bind"]);
-      expect(events).toContain("message_start:user:user from start");
-      expect(events).toContain("message_end:user:user from start");
-      expect(events).toContain("message_end:assistant:assistant from start");
-    } finally {
-      harness.cleanup();
-    }
+    expect(events.slice(0, 3)).toEqual(["render", "subscribe", "bind"]);
+    expect(events).toContain("message_start:user:user from start");
+    expect(events).toContain("message_end:user:user from start");
+    expect(events).toContain("message_end:assistant:assistant from start");
+  } finally {
+    harness.cleanup();
+  }
+});
+
+const runsTheReloadRenderHookBefore = Effect.gen(function* () {
+  const events: string[] = [];
+  const beforeSessionStart = vi.fn(() => {
+    events.push("render");
   });
-
-  it("runs the reload render hook before reload session_start handlers can notify", async () => {
-    const events: string[] = [];
-    const beforeSessionStart = vi.fn(() => {
-      events.push("render");
-    });
-    const harness = await createHarness({
+  const harness = yield* Effect.promise(() =>
+    createHarness({
       extensionFactories: [
         (msa) => {
           msa.on("session_start", (event, ctx) => {
@@ -422,91 +454,120 @@ describe("regression #5943: session_start transient UI", () => {
           });
         },
       ],
-    });
+    }),
+  );
 
-    try {
-      await harness.session.bindExtensions({
+  try {
+    yield* Effect.promise(() =>
+      harness.session.bindExtensions({
         uiContext: createTestUiContext({ notify: (message) => events.push(message) }),
         mode: "tui",
-      });
-      expect(events).toEqual(["start:startup", "notify:startup"]);
+      }),
+    );
+    expect(events).toEqual(["start:startup", "notify:startup"]);
 
-      events.length = 0;
-      await harness.session.reload({ beforeSessionStart });
+    events.length = 0;
+    yield* Effect.promise(() => harness.session.reload({ beforeSessionStart }));
 
-      expect(beforeSessionStart).toHaveBeenCalledTimes(1);
-      expect(events).toEqual(["render", "start:reload", "notify:reload"]);
-    } finally {
-      harness.cleanup();
-    }
+    expect(beforeSessionStart).toHaveBeenCalledTimes(1);
+    expect(events).toEqual(["render", "start:reload", "notify:reload"]);
+  } finally {
+    harness.cleanup();
+  }
+});
+
+const refreshesHidethinkingblockBeforeRebuildingChatDuring = Effect.gen(function* () {
+  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+  initTheme("dark", false);
+  const events: string[] = [];
+  let context: ReloadCommandContext;
+  context = createReloadCommandContext({
+    settingsManager: { getHideThinkingBlock: () => true },
+    session: {
+      reload: (options) =>
+        runPromise(
+          Effect.gen(function* () {
+            events.push("reload");
+            yield* Effect.promise(() => Promise.resolve(options?.beforeSessionStart?.()));
+            events.push(`start:${context.hideThinkingBlock}`);
+          }),
+        ),
+    },
+    rebuildChatFromMessages: () => {
+      events.push(`rebuild:${context.hideThinkingBlock}`);
+    },
   });
 
-  it("refreshes hideThinkingBlock before rebuilding chat during reload", async () => {
-    initTheme("dark", false);
-    const events: string[] = [];
-    let context: ReloadCommandContext;
-    context = createReloadCommandContext({
-      settingsManager: { getHideThinkingBlock: () => true },
-      session: {
-        reload: async (options) => {
-          events.push("reload");
-          await options?.beforeSessionStart?.();
-          events.push(`start:${context.hideThinkingBlock}`);
-        },
-      },
-      rebuildChatFromMessages: () => {
-        events.push(`rebuild:${context.hideThinkingBlock}`);
-      },
-    });
+  yield* Effect.promise(() => interactiveModePrototype.handleReloadCommand.call(context));
 
-    await interactiveModePrototype.handleReloadCommand.call(context);
+  expect(context.hideThinkingBlock).toBe(true);
+  expect(events).toEqual(["reload", "rebuild:true", "start:true"]);
+});
 
-    expect(context.hideThinkingBlock).toBe(true);
-    expect(events).toEqual(["reload", "rebuild:true", "start:true"]);
+const keepsTheReloadBlockerFocusedUntil = Effect.gen(function* () {
+  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+  initTheme("dark", false);
+  const editor = {};
+  let focused: unknown;
+  let chatRestored = false;
+  let markReloadWaiting!: () => void;
+  let finishReload!: () => void;
+  const reloadWaiting = new Promise<void>((resolve) => {
+    markReloadWaiting = resolve;
+  });
+  const reloadFinished = new Promise<void>((resolve) => {
+    finishReload = resolve;
   });
 
-  it("keeps the reload blocker focused until async reload completes", async () => {
-    initTheme("dark", false);
-    const editor = {};
-    let focused: unknown;
-    let chatRestored = false;
-    let markReloadWaiting!: () => void;
-    let finishReload!: () => void;
-    const reloadWaiting = new Promise<void>((resolve) => {
-      markReloadWaiting = resolve;
-    });
-    const reloadFinished = new Promise<void>((resolve) => {
-      finishReload = resolve;
-    });
-
-    const context = createReloadCommandContext({
-      editor,
-      session: {
-        reload: async (options) => {
-          await options?.beforeSessionStart?.();
-          markReloadWaiting();
-          await reloadFinished;
-        },
+  const context = createReloadCommandContext({
+    editor,
+    session: {
+      reload: (options) =>
+        runPromise(
+          Effect.gen(function* () {
+            yield* Effect.promise(() => Promise.resolve(options?.beforeSessionStart?.()));
+            markReloadWaiting();
+            yield* Effect.promise(() => reloadFinished);
+          }),
+        ),
+    },
+    ui: {
+      setFocus: (component) => {
+        focused = component;
       },
-      ui: {
-        setFocus: (component) => {
-          focused = component;
-        },
-      },
-      rebuildChatFromMessages: () => {
-        chatRestored = true;
-      },
-    });
-
-    const reloadPromise = interactiveModePrototype.handleReloadCommand.call(context);
-    await reloadWaiting;
-
-    expect(chatRestored).toBe(true);
-    expect(focused).not.toBe(editor);
-
-    finishReload();
-    await reloadPromise;
-
-    expect(focused).toBe(editor);
+    },
+    rebuildChatFromMessages: () => {
+      chatRestored = true;
+    },
   });
+
+  const reloadPromise = interactiveModePrototype.handleReloadCommand.call(context);
+  yield* Effect.promise(() => reloadWaiting);
+
+  expect(chatRestored).toBe(true);
+  expect(focused).not.toBe(editor);
+
+  finishReload();
+  yield* Effect.promise(() => reloadPromise);
+
+  expect(focused).toBe(editor);
+});
+
+describe("regression #5943: session_start transient UI", () => {
+  it(
+    "renders loaded resources before restored messages without stale entries",
+    rendersLoadedResourcesBeforeRestoredMessages,
+  );
+  it("renders replacement session state before session_start handlers can notify", () =>
+    Effect.runPromise(rendersReplacementSessionStateBeforeSession));
+  it("subscribes before replacement session_start handlers send messages", () =>
+    Effect.runPromise(subscribesBeforeReplacementSessionStartHandlers));
+  it("subscribes before replacement session_start handlers send user messages", () =>
+    Effect.runPromise(subscribesBeforeReplacementSessionStartHandlers2));
+  it("runs the reload render hook before reload session_start handlers can notify", () =>
+    Effect.runPromise(runsTheReloadRenderHookBefore));
+  it("refreshes hideThinkingBlock before rebuilding chat during reload", () =>
+    Effect.runPromise(refreshesHidethinkingblockBeforeRebuildingChatDuring));
+  it("keeps the reload blocker focused until async reload completes", () =>
+    Effect.runPromise(keepsTheReloadBlockerFocusedUntil));
 });

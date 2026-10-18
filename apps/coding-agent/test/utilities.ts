@@ -1,14 +1,7 @@
-import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-/**
- * Shared test utilities for coding-agent tests.
- */
-import { homedir, tmpdir } from "node:os";
-import { dirname, join } from "node:path";
-
+import * as NodeServices from "@effect/platform-node/NodeServices";
 import { Agent } from "@msa/agent-core";
-import type { OAuthCredentials } from "@msa/ai";
 import { getModel, streamSimple } from "@msa/ai/compat";
-import { builtinProviders } from "@msa/ai/providers/all";
+import { Config, Effect, FileSystem, ManagedRuntime, Option } from "effect";
 
 import { AgentSession } from "../src/core/agent-session.ts";
 import { AuthStorage } from "../src/core/auth-storage.ts";
@@ -25,114 +18,21 @@ import { SessionManager } from "../src/core/session-manager.ts";
 import { SettingsManager } from "../src/core/settings-manager.ts";
 import { createCodingTools } from "../src/index.ts";
 import { createModelRegistry, getModelRuntime } from "./model-runtime-test-utils.ts";
+import { join } from "./test-path.ts";
+import { nowMillis } from "./test-time.ts";
 
-/**
- * API key for authenticated tests. Tests using this should be wrapped in
- * describe.skipIf(!API_KEY)
- */
-export const API_KEY = process.env["ANTHROPIC_OAUTH_TOKEN"] || process.env["ANTHROPIC_API_KEY"];
+const runtime = ManagedRuntime.make(NodeServices.layer);
+const fs = runtime.runSync(FileSystem.FileSystem.useSync((service) => service));
 
-// ============================================================================
-// OAuth API key resolution from ~/.msa/agent/auth.json
-// ============================================================================
+const readEnv = (name: string): string | undefined =>
+  Option.getOrUndefined(Effect.runSync(Config.option(Config.String(name))));
 
-const AUTH_PATH = join(homedir(), ".msa", "agent", "auth.json");
+export const API_KEY = readEnv("ANTHROPIC_OAUTH_TOKEN") ?? readEnv("ANTHROPIC_API_KEY");
 
-type ApiKeyCredential = {
-  type: "api_key";
-  key: string;
-};
-
-type OAuthCredentialEntry = {
-  type: "oauth";
-} & OAuthCredentials;
-
-type AuthCredential = ApiKeyCredential | OAuthCredentialEntry;
-
-type AuthStorageData = Record<string, AuthCredential>;
-
-function loadAuthStorage(): AuthStorageData {
-  if (!existsSync(AUTH_PATH)) {
-    return {};
-  }
-  try {
-    const content = readFileSync(AUTH_PATH, "utf-8");
-    return JSON.parse(content);
-  } catch {
-    return {};
-  }
-}
-
-function saveAuthStorage(storage: AuthStorageData): void {
-  const configDir = dirname(AUTH_PATH);
-  if (!existsSync(configDir)) {
-    mkdirSync(configDir, { recursive: true, mode: 0o700 });
-  }
-  writeFileSync(AUTH_PATH, JSON.stringify(storage, null, 2), "utf-8");
-  chmodSync(AUTH_PATH, 0o600);
-}
-
-/**
- * Resolve API key for a provider from ~/.msa/agent/auth.json
- *
- * For API key credentials, returns the key directly.
- * For OAuth credentials, returns the access token (refreshing if expired and saving back).
- *
- */
-export async function resolveApiKey(provider: string): Promise<string | undefined> {
-  const storage = loadAuthStorage();
-  const entry = storage[provider];
-
-  if (!entry) return undefined;
-
-  if (entry.type === "api_key") {
-    return entry.key;
-  }
-
-  if (entry.type === "oauth") {
-    const oauth = builtinProviders().find((candidate) => candidate.id === provider)?.auth.oauth;
-    if (!oauth) return undefined;
-    let credential = entry;
-    if (Date.now() >= credential.expires) {
-      credential = await oauth.refresh(credential, new AbortController().signal);
-      storage[provider] = credential;
-      saveAuthStorage(storage);
-    }
-    return (await oauth.toAuth(credential)).apiKey;
-  }
-
-  return undefined;
-}
-
-/**
- * Check if a provider has credentials in ~/.msa/agent/auth.json
- */
-export function hasAuthForProvider(provider: string): boolean {
-  const storage = loadAuthStorage();
-  return provider in storage;
-}
-
-/** Path to the real msa agent config directory */
-export const MSA_AGENT_DIR = join(homedir(), ".msa", "agent");
-
-/**
- * Get an AuthStorage instance backed by ~/.msa/agent/auth.json
- * Use this for tests that need real OAuth credentials.
- */
-export function getRealAuthStorage(): AuthStorage {
-  return AuthStorage.create(AUTH_PATH);
-}
-
-/**
- * Create a minimal user message for testing.
- */
 export function userMsg(text: string) {
-  return { role: "user" as const, content: text, timestamp: Date.now() };
+  return { role: "user" as const, content: text, timestamp: nowMillis() };
 }
 
-/**
- * Create a minimal assistant message for testing.
- */
 export function assistantMsg(text: string) {
   return {
     role: "assistant" as const,
@@ -149,39 +49,34 @@ export function assistantMsg(text: string) {
       cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
     },
     stopReason: "stop" as const,
-    timestamp: Date.now(),
+    timestamp: nowMillis(),
   };
 }
 
-/**
- * Read a session JSONL file and return one label per record: the message role for
- * message entries, otherwise the entry type (e.g. "session", "model_change").
- */
-export function readSessionFileRoles(file: string): string[] {
-  return readFileSync(file, "utf-8")
-    .trim()
-    .split("\n")
-    .map((line) => {
-      const record = JSON.parse(line);
-      return record.message?.role ?? record.type;
-    });
+export function readSessionFileRoles(file: string): Promise<string[]> {
+  return runtime.runPromise(
+    fs.readFileString(file).pipe(
+      Effect.map((content) =>
+        content
+          .trim()
+          .split("\n")
+          .map((line) => {
+            const record = JSON.parse(line) as { message?: { role?: string }; type?: string };
+            return record.message?.role ?? record.type ?? "";
+          }),
+      ),
+    ),
+  );
 }
 
-/**
- * Options for creating a test session.
- */
 export interface TestSessionOptions {
-  /** Use in-memory session (no file persistence) */
   inMemory?: boolean;
-  /** Custom system prompt */
+
   systemPrompt?: string;
-  /** Custom settings overrides */
+
   settingsOverrides?: Record<string, unknown>;
 }
 
-/**
- * Resources returned by createTestSession that need cleanup.
- */
 export interface TestSessionContext {
   session: AgentSession;
   sessionManager: SessionManager;
@@ -196,34 +91,42 @@ export interface CreateTestExtensionsResultInput {
 
 type TestExtensionInput = InlineExtension | CreateTestExtensionsResultInput;
 
-export async function createTestExtensionsResult(
+export function createTestExtensionsResult(
   inputs: TestExtensionInput[],
   cwd = process.cwd(),
 ): Promise<LoadExtensionsResult> {
-  const runtime = createExtensionRuntime();
-  const eventBus = createEventBus();
-  const extensions: Extension[] = [];
+  return Effect.runPromise(
+    Effect.gen(function* () {
+      const runtime = createExtensionRuntime();
+      const eventBus = createEventBus();
+      const extensions: Extension[] = [];
 
-  for (const [index, input] of inputs.entries()) {
-    const isObject = typeof input !== "function";
-    const hasName = isObject && "name" in input;
-    const hasPath =
-      isObject && "path" in input && typeof input.path === "string" && input.path !== "";
-    const factory = isObject ? input.factory : input;
-    const extensionPath = hasName
-      ? `<inline:${input.name}>`
-      : hasPath
-        ? input.path
-        : `<inline:${index + 1}>`;
+      for (const [index, input] of inputs.entries()) {
+        const isObject = typeof input !== "function";
+        const hasName = isObject && "name" in input;
+        const hasPath =
+          isObject && "path" in input && typeof input.path === "string" && input.path !== "";
+        const factory = isObject ? input.factory : input;
+        const extensionPath = hasName
+          ? `<inline:${input.name}>`
+          : hasPath
+            ? input.path
+            : `<inline:${index + 1}>`;
 
-    extensions.push(await loadExtensionFromFactory(factory, cwd, eventBus, runtime, extensionPath));
-  }
+        extensions.push(
+          yield* Effect.promise(() =>
+            loadExtensionFromFactory(factory, cwd, eventBus, runtime, extensionPath),
+          ),
+        );
+      }
 
-  return {
-    extensions,
-    errors: [],
-    runtime,
-  };
+      return {
+        extensions,
+        errors: [],
+        runtime,
+      };
+    }),
+  );
 }
 
 export interface CreateTestResourceLoaderOptions {
@@ -250,76 +153,65 @@ export function createTestResourceLoader(
     getAppendSystemPrompt: () => [],
     getAppendSystemPromptSources: () => [],
     extendResources: () => {},
-    reload: async () => {},
+    reload: () => Effect.runPromise(Effect.sync(() => {})),
   };
 }
 
-/**
- * Create an AgentSession for testing with proper setup and cleanup.
- * Use this for e2e tests that need real LLM calls.
- */
-export async function createTestSession(
-  options: TestSessionOptions = {},
-): Promise<TestSessionContext> {
-  const tempDir = join(tmpdir(), `msa-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
-  mkdirSync(tempDir, { recursive: true });
+export function createTestSession(options: TestSessionOptions = {}): Promise<TestSessionContext> {
+  return Effect.runPromise(
+    Effect.gen(function* () {
+      const tempDir = yield* fs.makeTempDirectory({ prefix: `msa-test-` });
+      yield* fs.makeDirectory(tempDir, { recursive: true });
 
-  const model = getModel("anthropic", "claude-sonnet-4-5")!;
-  const agent = new Agent({
-    getApiKey: () => API_KEY,
-    initialState: {
-      model,
-      systemPrompt: options.systemPrompt ?? "You are a helpful assistant. Be extremely concise.",
-      tools: createCodingTools(process.cwd()),
-    },
-    streamFn: streamSimple,
-  });
+      const model = getModel("anthropic", "claude-sonnet-4-5")!;
+      const agent = new Agent({
+        getApiKey: () => API_KEY,
+        initialState: {
+          model,
+          systemPrompt:
+            options.systemPrompt ?? "You are a helpful assistant. Be extremely concise.",
+          tools: createCodingTools(process.cwd()),
+        },
+        streamFn: streamSimple,
+      });
 
-  const sessionManager = options.inMemory
-    ? SessionManager.inMemory()
-    : SessionManager.create(tempDir);
-  const settingsManager = SettingsManager.create(tempDir, tempDir);
+      const sessionManager =
+        options.inMemory === true ? SessionManager.inMemory() : SessionManager.create(tempDir);
+      const settingsManager = SettingsManager.create(tempDir, tempDir);
 
-  if (options.settingsOverrides) {
-    settingsManager.applyOverrides(options.settingsOverrides);
-  }
+      if (options.settingsOverrides !== undefined) {
+        settingsManager.applyOverrides(options.settingsOverrides);
+      }
 
-  const authStorage = AuthStorage.create(join(tempDir, "auth.json"));
-  const modelRegistry = await createModelRegistry(authStorage, tempDir);
+      const authStorage = AuthStorage.create(join(tempDir, "auth.json"));
+      const modelRegistry = yield* Effect.promise(() => createModelRegistry(authStorage, tempDir));
 
-  const session = new AgentSession({
-    agent,
-    sessionManager,
-    settingsManager,
-    cwd: tempDir,
-    modelRuntime: getModelRuntime(modelRegistry),
-    resourceLoader: createTestResourceLoader(),
-  });
+      const session = new AgentSession({
+        agent,
+        sessionManager,
+        settingsManager,
+        cwd: tempDir,
+        modelRuntime: getModelRuntime(modelRegistry),
+        resourceLoader: createTestResourceLoader(),
+      });
 
-  // Must subscribe to enable session persistence
-  session.subscribe(() => {});
+      session.subscribe(() => {});
 
-  const cleanup = () => {
-    session.dispose();
-    if (tempDir && existsSync(tempDir)) {
-      rmSync(tempDir, { recursive: true });
-    }
-  };
+      const cleanup = () =>
+        runtime.runPromise(
+          Effect.gen(function* () {
+            session.dispose();
+            if (tempDir !== "" && (yield* fs.exists(tempDir))) {
+              yield* fs.remove(tempDir, { recursive: true });
+            }
+          }),
+        );
 
-  return { session, sessionManager, tempDir, cleanup };
+      return { session, sessionManager, tempDir, cleanup };
+    }),
+  );
 }
 
-/**
- * Build a session tree for testing using SessionManager.
- * Returns the IDs of all created entries.
- *
- * Example tree structure:
- * ```
- * u1 -> a1 -> u2 -> a2
- *          -> u3 -> a3  (branch from a1)
- * u4 -> a4              (another root)
- * ```
- */
 export function buildTestTree(
   session: SessionManager,
   structure: {
@@ -329,9 +221,9 @@ export function buildTestTree(
   const ids = new Map<string, string>();
 
   for (const msg of structure.messages) {
-    if (msg.branchFrom) {
+    if (msg.branchFrom !== undefined && msg.branchFrom !== "") {
       const branchFromId = ids.get(msg.branchFrom);
-      if (!branchFromId) {
+      if (branchFromId === undefined || branchFromId === "") {
         throw new Error(`Cannot branch from unknown entry: ${msg.branchFrom}`);
       }
       session.branch(branchFromId);

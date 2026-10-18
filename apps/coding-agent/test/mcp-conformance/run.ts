@@ -1,10 +1,3 @@
-/**
- * Runs the official MCP client conformance suite against msa (client.ts) and compares every check with
- * the committed baseline (baseline.json). Fails when a check that passed in the baseline no longer
- * passes, or when a check fails that the baseline does not list. Known failures stay visible in the
- * output. See README.md.
- */
-
 import { spawn } from "node:child_process";
 import {
   chmodSync,
@@ -21,12 +14,11 @@ import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 
-/** The pinned upstream suite. Bumping it requires reviewing and regenerating the baseline. */
 const CONFORMANCE_PACKAGE = "@modelcontextprotocol/conformance@0.2.0-alpha.11";
-/** Protocol versions msa negotiates. 2026-07-28 is a different (stateless) protocol msa does not speak. */
+
 const MODES = ["2025-03-26", "2025-06-18", "2025-11-25"] as const;
 const SCENARIO_TIMEOUT_MS = 30_000;
-/** Checks that are part of the suite's HTTP trace, not assertions. */
+
 const IGNORED_STATUSES = new Set(["INFO", "SKIPPED"]);
 
 const here = fileURLToPath(new URL(".", import.meta.url));
@@ -39,9 +31,9 @@ type CheckStatus = "pass" | "fail";
 interface ScenarioResult {
   mode: string;
   scenario: string;
-  /** Check id to status. Repeated ids pass only when every instance passes. */
+
   checks: Map<string, CheckStatus>;
-  /** Failure messages by check id, for the report. */
+
   messages: Map<string, string>;
 }
 
@@ -86,7 +78,6 @@ function runCommand(
       options.timeoutMs === undefined
         ? undefined
         : setTimeout(() => {
-            // The runner spawns the client and scenario servers; end the whole group.
             if (child.pid !== undefined) {
               try {
                 process.kill(-child.pid, "SIGKILL");
@@ -95,14 +86,13 @@ function runCommand(
           }, options.timeoutMs);
     child.on("error", reject);
     child.on("close", (code, signal) => {
-      if (timer) clearTimeout(timer);
-      resolve({ code: code ?? (signal ? 128 : 1), stdout, stderr });
+      if (timer !== undefined) clearTimeout(timer);
+      resolve({ code: code ?? (signal === null ? 1 : 128), stdout, stderr });
     });
   });
 }
 
 function conformanceEnv(): NodeJS.ProcessEnv {
-  // The suite comes from npm with prebuilt files; nothing needs install scripts.
   return { ...process.env, npm_config_ignore_scripts: "true", npm_config_yes: "true" };
 }
 
@@ -117,7 +107,7 @@ async function listScenarios(mode: string, workDir: string): Promise<string[]> {
   );
   if (result.code !== 0)
     throw new Error(`Listing ${mode} scenarios failed:\n${result.stderr || result.stdout}`);
-  return [...result.stdout.matchAll(/^\s+- (\S+)/gm)].flatMap((match) => match[1] ?? []);
+  return [...result.stdout.matchAll(/^\s+- (\S+)/gmu)].flatMap((match) => match[1] ?? []);
 }
 
 function findFile(dir: string, name: string): string | undefined {
@@ -127,7 +117,7 @@ function findFile(dir: string, name: string): string | undefined {
     if (entry.isFile() && entry.name === name) return path;
     if (entry.isDirectory()) {
       const found = findFile(path, name);
-      if (found) return found;
+      if (found !== undefined && found !== "") return found;
     }
   }
   return undefined;
@@ -135,7 +125,8 @@ function findFile(dir: string, name: string): string | undefined {
 
 function record(result: ScenarioResult, id: string, status: CheckStatus, message?: string): void {
   if (result.checks.get(id) !== "fail") result.checks.set(id, status);
-  if (status === "fail" && message && !result.messages.has(id)) result.messages.set(id, message);
+  if (status === "fail" && message !== undefined && message !== "" && !result.messages.has(id))
+    result.messages.set(id, message);
 }
 
 async function runScenario(
@@ -145,7 +136,7 @@ async function runScenario(
   workDir: string,
   verbose: boolean,
 ): Promise<ScenarioResult> {
-  const scenarioDir = join(workDir, mode, scenario.replace(/[^A-Za-z0-9_.-]+/g, "-"));
+  const scenarioDir = join(workDir, mode, scenario.replace(/[^A-Za-z0-9_.-]+/gu, "-"));
   mkdirSync(scenarioDir, { recursive: true });
   const reportPath = join(scenarioDir, "msa-client.json");
   const result: ScenarioResult = { mode, scenario, checks: new Map(), messages: new Map() };
@@ -175,7 +166,7 @@ async function runScenario(
   if (verbose) process.stderr.write(run.stderr);
 
   const checksPath = findFile(scenarioDir, "checks.json");
-  if (!checksPath) {
+  if (checksPath === undefined || checksPath === "") {
     record(
       result,
       "runner",
@@ -192,8 +183,7 @@ async function runScenario(
     const message = String(check.errorMessage ?? check.description ?? "");
     record(result, id, status === "SUCCESS" ? "pass" : "fail", message);
   }
-  // Whether msa completed the scenario. Some scenarios expect the client to give up, so this is
-  // baselined like any other check.
+
   let client: { success?: unknown; error?: unknown } = { error: "client.ts wrote no report" };
   if (existsSync(reportPath))
     client = JSON.parse(readFileSync(reportPath, "utf8")) as typeof client;
@@ -224,7 +214,6 @@ function toBaseline(results: ScenarioResult[]): Baseline {
   return baseline;
 }
 
-/** Compare with the baseline. Returns whether there is no regression. */
 function evaluate(results: ScenarioResult[], baseline: Baseline): boolean {
   const regressions: string[] = [];
   const fixed: string[] = [];
@@ -233,10 +222,13 @@ function evaluate(results: ScenarioResult[], baseline: Baseline): boolean {
     const label = `${result.mode} ${result.scenario}`;
     for (const [id, status] of result.checks) {
       const message = result.messages.get(id);
-      if (status === "fail" && !expected?.failing.includes(id)) {
-        regressions.push(`${label}: ${id} fails${message ? `: ${message}` : ""}`);
+      if (status === "fail" && expected?.failing.includes(id) !== true) {
+        regressions.push(
+          `${label}: ${id} fails${message !== undefined && message !== "" ? `: ${message}` : ""}`,
+        );
       }
-      if (status === "pass" && expected?.failing.includes(id)) fixed.push(`${label}: ${id}`);
+      if (status === "pass" && expected?.failing.includes(id) === true)
+        fixed.push(`${label}: ${id}`);
     }
     for (const id of expected?.passing ?? []) {
       if (!result.checks.has(id)) regressions.push(`${label}: ${id} was not reported`);
@@ -276,8 +268,10 @@ function printResults(results: ScenarioResult[]): void {
       );
       for (const [id, status] of result.checks) {
         if (status !== "fail") continue;
-        const message = result.messages.get(id)?.replace(/\s+/g, " ").slice(0, 300);
-        console.log(`         ${id}${message ? `: ${message}` : ""}`);
+        const message = result.messages.get(id)?.replace(/\s+/gu, " ").slice(0, 300);
+        console.log(
+          `         ${id}${message !== undefined && message !== "" ? `: ${message}` : ""}`,
+        );
       }
     }
   }
@@ -324,7 +318,6 @@ Options:
 
   const workDir = mkdtempSync(join(tmpdir(), "msa-mcp-conformance-"));
   try {
-    // The upstream runner splits --command on spaces, so use a launcher path without any.
     const launcher = join(workDir, "msa-client");
     writeFileSync(
       launcher,
@@ -335,7 +328,7 @@ Options:
     const results: ScenarioResult[] = [];
     for (const mode of modes) {
       const scenarios = (await listScenarios(mode, workDir)).filter(
-        (scenario) => !values.scenario || values.scenario.includes(scenario),
+        (scenario) => values.scenario === undefined || values.scenario.includes(scenario),
       );
       for (const scenario of scenarios) {
         process.stderr.write(`${mode} ${scenario}\n`);
@@ -354,7 +347,7 @@ Options:
       return 0;
     }
     const baseline = loadBaseline();
-    if (!baseline) {
+    if (baseline === undefined) {
       console.error("\nNo baseline.json. Run with --update-baseline and review it.");
       return 1;
     }
@@ -372,7 +365,8 @@ Options:
               mode,
               Object.fromEntries(
                 Object.entries(baseline.modes[mode] ?? {}).filter(
-                  ([scenario]) => !values.scenario || values.scenario.includes(scenario),
+                  ([scenario]) =>
+                    values.scenario === undefined || values.scenario.includes(scenario),
                 ),
               ),
             ]),

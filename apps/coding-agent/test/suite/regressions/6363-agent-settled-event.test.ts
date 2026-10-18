@@ -1,5 +1,6 @@
 import type { AgentTool } from "@msa/agent-core";
 import { fauxAssistantMessage, fauxToolCall } from "@msa/ai";
+import { Effect } from "effect";
 import { Type } from "typebox";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
@@ -11,26 +12,23 @@ function createWaitTool(released: Promise<void>): AgentTool {
     label: "Wait",
     description: "Wait until released",
     parameters: Type.Object({}),
-    execute: async () => {
-      await released;
-      return { content: [{ type: "text", text: "released" }], details: {} };
-    },
+    execute: () =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          yield* Effect.promise(() => released);
+          return { content: [{ type: "text", text: "released" }], details: {} };
+        }),
+      ),
   };
 }
 
-describe("regression #6363: agent settled event and idle waiting", () => {
-  const harnesses: Harness[] = [];
+const harnesses: Harness[] = [];
 
-  afterEach(() => {
-    while (harnesses.length > 0) {
-      harnesses.pop()?.cleanup();
-    }
-  });
-
-  it("emits one agent_settled event after automatic retry finishes", async () => {
-    const extensionEvents: string[] = [];
-    const publicEvents: string[] = [];
-    const harness = await createHarness({
+const emitsOneAgentSettledEventAfter = Effect.gen(function* () {
+  const extensionEvents: string[] = [];
+  const publicEvents: string[] = [];
+  const harness = yield* Effect.promise(() =>
+    createHarness({
       settings: { retry: { enabled: true, maxRetries: 3, baseDelayMs: 1 } },
       extensionFactories: [
         (msa) => {
@@ -42,35 +40,34 @@ describe("regression #6363: agent settled event and idle waiting", () => {
           });
         },
       ],
-    });
-    harnesses.push(harness);
-    harness.session.subscribe((event) => {
-      if (event.type === "agent_settled") {
-        publicEvents.push("agent_settled");
-      }
-    });
-    harness.setResponses([
-      fauxAssistantMessage("", { stopReason: "error", errorMessage: "overloaded_error" }),
-      fauxAssistantMessage("recovered"),
-    ]);
-
-    await harness.session.prompt("test");
-
-    expect(harness.eventsOfType("agent_end").map((event) => event.willRetry)).toEqual([
-      true,
-      false,
-    ]);
-    expect(harness.eventsOfType("agent_settled")).toEqual([
-      { type: "agent_settled", aborted: false },
-    ]);
-    expect(extensionEvents).toEqual(["agent_end", "agent_end", "agent_settled:true"]);
-    expect(publicEvents).toEqual(["agent_settled"]);
+    }),
+  );
+  harnesses.push(harness);
+  harness.session.subscribe((event) => {
+    if (event.type === "agent_settled") {
+      publicEvents.push("agent_settled");
+    }
   });
+  harness.setResponses([
+    fauxAssistantMessage("", { stopReason: "error", errorMessage: "overloaded_error" }),
+    fauxAssistantMessage("recovered"),
+  ]);
 
-  it("settles only after follow-ups queued by agent_end handlers run", async () => {
-    let queuedFollowUp = false;
-    const settledIdleStates: boolean[] = [];
-    const harness = await createHarness({
+  yield* Effect.promise(() => harness.session.prompt("test"));
+
+  expect(harness.eventsOfType("agent_end").map((event) => event.willRetry)).toEqual([true, false]);
+  expect(harness.eventsOfType("agent_settled")).toEqual([
+    { type: "agent_settled", aborted: false },
+  ]);
+  expect(extensionEvents).toEqual(["agent_end", "agent_end", "agent_settled:true"]);
+  expect(publicEvents).toEqual(["agent_settled"]);
+});
+
+const settlesOnlyAfterFollowUpsQueued = Effect.gen(function* () {
+  let queuedFollowUp = false;
+  const settledIdleStates: boolean[] = [];
+  const harness = yield* Effect.promise(() =>
+    createHarness({
       extensionFactories: [
         (msa) => {
           msa.on("agent_end", () => {
@@ -83,82 +80,104 @@ describe("regression #6363: agent settled event and idle waiting", () => {
           });
         },
       ],
-    });
-    harnesses.push(harness);
-    harness.setResponses([fauxAssistantMessage("first"), fauxAssistantMessage("second")]);
+    }),
+  );
+  harnesses.push(harness);
+  harness.setResponses([fauxAssistantMessage("first"), fauxAssistantMessage("second")]);
 
-    await harness.session.prompt("hello");
+  yield* Effect.promise(() => harness.session.prompt("hello"));
 
-    expect(getUserTexts(harness)).toEqual(["hello", "status follow-up"]);
-    expect(harness.eventsOfType("agent_end")).toHaveLength(2);
-    expect(harness.eventsOfType("agent_settled")).toHaveLength(1);
-    expect(settledIdleStates).toEqual([true]);
+  expect(getUserTexts(harness)).toEqual(["hello", "status follow-up"]);
+  expect(harness.eventsOfType("agent_end")).toHaveLength(2);
+  expect(harness.eventsOfType("agent_settled")).toHaveLength(1);
+  expect(settledIdleStates).toEqual([true]);
+});
+
+const extensionCommandWaitforidleWaitsForSession = Effect.gen(function* () {
+  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+  let releaseTool = () => {};
+  const released = new Promise<void>((resolve) => {
+    releaseTool = resolve;
   });
-
-  it("extension command waitForIdle waits for session-level settlement", async () => {
-    let releaseTool = () => {};
-    const released = new Promise<void>((resolve) => {
-      releaseTool = resolve;
-    });
-    let markCommandStarted = () => {};
-    const commandStarted = new Promise<void>((resolve) => {
-      markCommandStarted = resolve;
-    });
-    const commandResults: boolean[] = [];
-    const harness = await createHarness({
+  let markCommandStarted = () => {};
+  const commandStarted = new Promise<void>((resolve) => {
+    markCommandStarted = resolve;
+  });
+  const commandResults: boolean[] = [];
+  const harness = yield* Effect.promise(() =>
+    createHarness({
       tools: [createWaitTool(released)],
       extensionFactories: [
         (msa) => {
           msa.registerCommand("after-idle", {
             description: "Wait for idle",
-            handler: async (_args, ctx) => {
-              markCommandStarted();
-              await ctx.waitForIdle();
-              commandResults.push(ctx.isIdle());
-            },
+            handler: (_args, ctx) =>
+              runPromise(
+                Effect.gen(function* () {
+                  markCommandStarted();
+                  yield* Effect.promise(() => ctx.waitForIdle());
+                  commandResults.push(ctx.isIdle());
+                }),
+              ),
           });
         },
       ],
-    });
-    harnesses.push(harness);
-    await harness.session.bindExtensions({
+    }),
+  );
+  harnesses.push(harness);
+  yield* Effect.promise(() =>
+    harness.session.bindExtensions({
       commandContextActions: {
         waitForIdle: () => harness.session.waitForIdle(),
-        newSession: async () => ({ cancelled: false }),
-        fork: async () => ({ cancelled: false }),
-        navigateTree: async () => ({ cancelled: false }),
-        switchSession: async () => ({ cancelled: false }),
-        reload: async () => {},
+        newSession: () => Promise.resolve({ cancelled: false }),
+        fork: () => Promise.resolve({ cancelled: false }),
+        navigateTree: () => Promise.resolve({ cancelled: false }),
+        switchSession: () => Promise.resolve({ cancelled: false }),
+        reload: () => runPromise(Effect.sync(() => {})),
       },
+    }),
+  );
+  const toolStarted = new Promise<void>((resolve) => {
+    const unsubscribe = harness.session.subscribe((event) => {
+      if (event.type === "tool_execution_start" && event.toolName === "wait") {
+        unsubscribe();
+        resolve();
+      }
     });
-    const toolStarted = new Promise<void>((resolve) => {
-      const unsubscribe = harness.session.subscribe((event) => {
-        if (event.type === "tool_execution_start" && event.toolName === "wait") {
-          unsubscribe();
-          resolve();
-        }
-      });
-    });
-    harness.setResponses([
-      fauxAssistantMessage(fauxToolCall("wait", {}), { stopReason: "toolUse" }),
-      fauxAssistantMessage("done"),
-    ]);
-
-    const promptPromise = harness.session.prompt("start");
-    await toolStarted;
-    const commandPromise = harness.session.prompt("/after-idle");
-    await commandStarted;
-    let commandFinished = false;
-    void commandPromise.then(() => {
-      commandFinished = true;
-    });
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(commandFinished).toBe(false);
-
-    releaseTool();
-    await Promise.all([promptPromise, commandPromise]);
-
-    expect(commandResults).toEqual([true]);
-    expect(harness.eventsOfType("agent_settled")).toHaveLength(1);
   });
+  harness.setResponses([
+    fauxAssistantMessage(fauxToolCall("wait", {}), { stopReason: "toolUse" }),
+    fauxAssistantMessage("done"),
+  ]);
+
+  const promptPromise = harness.session.prompt("start");
+  yield* Effect.promise(() => toolStarted);
+  const commandPromise = harness.session.prompt("/after-idle");
+  yield* Effect.promise(() => commandStarted);
+  let commandFinished = false;
+  void commandPromise.then(() => {
+    commandFinished = true;
+  });
+  yield* Effect.sleep(0);
+  expect(commandFinished).toBe(false);
+
+  releaseTool();
+  yield* Effect.promise(() => Promise.all([promptPromise, commandPromise]));
+
+  expect(commandResults).toEqual([true]);
+  expect(harness.eventsOfType("agent_settled")).toHaveLength(1);
+});
+
+describe("regression #6363: agent settled event and idle waiting", () => {
+  afterEach(() => {
+    while (harnesses.length > 0) {
+      harnesses.pop()?.cleanup();
+    }
+  });
+  it("emits one agent_settled event after automatic retry finishes", () =>
+    Effect.runPromise(emitsOneAgentSettledEventAfter));
+  it("settles only after follow-ups queued by agent_end handlers run", () =>
+    Effect.runPromise(settlesOnlyAfterFollowUpsQueued));
+  it("extension command waitForIdle waits for session-level settlement", () =>
+    Effect.runPromise(extensionCommandWaitforidleWaitsForSession));
 });

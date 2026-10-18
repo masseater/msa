@@ -81,6 +81,7 @@
     "yaml": "catalog:"
   },
   "devDependencies": {
+    "@effect/platform-node": "catalog:",
     "@effect/vitest": "catalog:stack",
     "@types/cross-spawn": "catalog:",
     "@types/hosted-git-info": "catalog:",
