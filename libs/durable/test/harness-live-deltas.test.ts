@@ -5,11 +5,8 @@ import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { chatSetup, openChat } from "./chat-support.ts";
-import { awaited } from "./effect-support.ts";
 import { OUTPUT, live, drive } from "./harness-live-deltas-support.ts";
-import { addTool } from "./harness-support.ts";
-import { context, documentChanges } from "./session-support.ts";
+import { chatSetup, openChat, awaited, addTool, context, documentChanges } from "./support.ts";
 
 function isOutput(op: Op): boolean {
   return JSON.stringify(op[1]) === JSON.stringify(OUTPUT);

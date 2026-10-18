@@ -21,11 +21,16 @@ import { Effect } from "effect";
 import { dual } from "effect/Function";
 
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
-import { allEntries, type ChatSetup, openChat } from "./chat-support.ts";
-import { awaited } from "./effect-support.ts";
-import { addTool } from "./harness-support.ts";
-import { joinPath, makeTempDir } from "./platform-support.ts";
-import { context } from "./session-support.ts";
+import {
+  allEntries,
+  type ChatSetup,
+  openChat,
+  awaited,
+  addTool,
+  joinPath,
+  makeTempDir,
+  context,
+} from "./support.ts";
 
 export const Parameters = Type.Object({ text: Type.Optional(Type.String()) });
 

@@ -16,10 +16,15 @@ import { dual } from "effect/Function";
 
 import { createCodemodeExtension } from "../src/codemode/codemode.ts";
 import type { ExecutionEnv } from "../src/env/index.ts";
-import { allEntries, chatSetup, openChat } from "./chat-support.ts";
-import { awaited } from "./effect-support.ts";
-import { context } from "./session-support.ts";
-import { type Deferred, deferred } from "./task-support.ts";
+import {
+  allEntries,
+  chatSetup,
+  openChat,
+  awaited,
+  context,
+  type Deferred,
+  deferred,
+} from "./support.ts";
 
 export const COST = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
 

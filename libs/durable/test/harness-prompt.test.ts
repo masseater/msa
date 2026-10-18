@@ -15,10 +15,8 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { resolveAgent, resolveSettings } from "../src/harness/agent.ts";
 import { planSystemEntries, renderSections, replaySections } from "../src/harness/prompt.ts";
-import { abortController, awaited, failure } from "./effect-support.ts";
 import { marker, root } from "./harness-prompt-support.ts";
-import { addSection, user } from "./harness-support.ts";
-import { context } from "./session-support.ts";
+import { abortController, awaited, failure, addSection, user, context } from "./support.ts";
 
 type Planned = {
   readonly sections: Record<string, string | null>;

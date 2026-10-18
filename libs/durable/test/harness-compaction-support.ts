@@ -21,12 +21,21 @@ import { dual } from "effect/Function";
 import { expect } from "vite-plus/test";
 
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
-import { allEntries, type ChatSetup, chatSetup, openChat, textOf } from "./chat-support.ts";
-import { awaited } from "./effect-support.ts";
-import { addSection } from "./harness-support.ts";
-import { joinPath, makeTempDir } from "./platform-support.ts";
-import { context } from "./session-support.ts";
-import { aborted, type Deferred, deferred } from "./task-support.ts";
+import {
+  allEntries,
+  type ChatSetup,
+  chatSetup,
+  openChat,
+  textOf,
+  awaited,
+  addSection,
+  joinPath,
+  makeTempDir,
+  context,
+  aborted,
+  type Deferred,
+  deferred,
+} from "./support.ts";
 
 export const directories = new Set<string>();
 

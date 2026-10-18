@@ -1,14 +1,16 @@
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
-import { type AssistantMessage, type FauxResponseStep, Type } from "@msa/ai";
-import { createModels } from "@msa/ai/models";
-import { fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall } from "@msa/ai/providers/faux";
+import {
+  type AssistantMessage,
+  type FauxResponseStep,
+  Type,
+  createModels,
+  fauxAssistantMessage,
+  fauxProvider,
+  fauxText,
+  fauxToolCall,
+} from "@msa/ai";
 import { openaiProvider } from "@msa/ai/providers/openai";
 import type { Context } from "@msa/chord";
-import { BACKGROUND_CONTEXT } from "@msa/chord/context";
-import { Console, Effect } from "effect";
-
-import { environmentVariable } from "../../src/env/node-process.ts";
-import { createRegistry, Harness, watchEvents } from "../../src/harness/index.ts";
 import {
   type AgentEvent,
   AssistantEntry,
@@ -19,9 +21,12 @@ import {
   type EntryId,
   type Extension,
   type ToolExecutionApi,
-} from "../../src/index.ts";
-import { MemoryStorage } from "../../src/storage/memory.ts";
-import { awaited } from "../effect-support.ts";
+} from "@msa/durable";
+import { createRegistry, Harness, watchEvents } from "@msa/durable/harness";
+import { MemoryStorage } from "@msa/durable/storage/memory";
+import { Console, Effect } from "effect";
+
+import { BACKGROUND_CONTEXT, environmentVariable, awaited } from "../support.ts";
 
 const context = BACKGROUND_CONTEXT;
 

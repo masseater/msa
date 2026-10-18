@@ -7,7 +7,6 @@ import { NodeExecutionEnv } from "../src/env/node.ts";
 import { idFromNumber } from "../src/ids.ts";
 import { JsonlStorage } from "../src/storage/jsonl/index.ts";
 import type { ConversationId, EntryId, Id, Seq, Storage, StorageWrite } from "../src/types.ts";
-import { awaited } from "./effect-support.ts";
 import {
   context,
   openStorage,
@@ -15,7 +14,7 @@ import {
   tempDirectories,
   tempDirectory,
 } from "./jsonl-storage-support.ts";
-import { removeDir } from "./platform-support.ts";
+import { awaited, removeDir } from "./support.ts";
 
 afterEach(() =>
   Effect.runPromise(

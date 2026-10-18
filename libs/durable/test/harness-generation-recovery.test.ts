@@ -1,15 +1,22 @@
 import { type AssistantMessage, fauxAssistantMessage, type Message } from "@msa/ai";
-import { AssistantEntry, type Harness, LiveDoc, type TaskId } from "@msa/durable";
+import { LiveDoc } from "@msa/durable";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { allEntries, chatSetup, textOf, waitFor } from "./chat-support.ts";
-import { awaited } from "./effect-support.ts";
+import { runTaskId, checkpoint } from "./harness-generation-recovery-cases.ts";
 import { open, directories, sqlitePath } from "./harness-generation-recovery-support.ts";
-import { addSection } from "./harness-support.ts";
-import { removeDir } from "./platform-support.ts";
-import { context } from "./session-support.ts";
-import { aborted, deferred } from "./task-support.ts";
+import {
+  allEntries,
+  chatSetup,
+  textOf,
+  waitFor,
+  awaited,
+  addSection,
+  removeDir,
+  context,
+  aborted,
+  deferred,
+} from "./support.ts";
 
 afterEach(() =>
   Effect.runPromise(
@@ -19,16 +26,6 @@ afterEach(() =>
     }),
   ),
 );
-
-const runTaskId = Effect.fn("runTaskId")(function* (harness: Harness) {
-  const live = yield* awaited(harness.snapshot(LiveDoc, 1 as never, context));
-  return live!.run!.taskId;
-});
-
-const checkpoint = Effect.fn("checkpoint")(function* (harness: Harness, id: TaskId) {
-  const record = yield* awaited(harness.getTask(id, context));
-  return record?.state.status === "terminal" ? undefined : record?.state.checkpoint;
-});
 
 const interruptedBeforePartial = Effect.fn("interruptedBeforePartial")(function* () {
   const path = yield* sqlitePath();
@@ -249,53 +246,4 @@ const resumesRetryBackoff = Effect.gen(function* () {
 
 describe("generation recovery", () => {
   it("resumes a retry backoff after reopen", () => Effect.runPromise(resumesRetryBackoff));
-});
-
-const resumesPollingDeferred = Effect.gen(function* () {
-  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
-  const path = yield* sqlitePath();
-  const setup = chatSetup({ deferred: { pollAfterMs: 60_000 } });
-  let now = 1_000;
-  setup.now = () => now;
-  setup.faux.setResponses([fauxAssistantMessage("deferred answer")]);
-  let opened = yield* open(path, setup);
-  opened.harness.resume();
-  setup.settings.stream = { deferred: true };
-  const id = (yield* awaited(opened.root.submit({ type: "input", content: "hi" }, context))).id;
-  yield* waitFor(() =>
-    runPromise(
-      Effect.gen(function* () {
-        const live = yield* awaited(opened.harness.snapshot(LiveDoc, opened.root.id, context));
-        return live?.generation?.deferred !== undefined;
-      }),
-    ),
-  );
-  const taskId = yield* runTaskId(opened.harness);
-  yield* awaited(opened.harness.close(context));
-
-  opened = yield* open(path, setup);
-  expect(yield* checkpoint(opened.harness, taskId)).toMatchObject({
-    phase: "poll",
-    attempt: 1,
-    pollAt: 61_000,
-  });
-  now = 61_000;
-  opened.harness.resume();
-  const settled = yield* awaited(
-    (yield* awaited(opened.harness.submission(id, context)))!.wait(context),
-  );
-  if (settled.status !== "done" || settled.type !== "input")
-    throw new Error(`Unexpected ${settled.status}`);
-  const answer = yield* awaited(
-    opened.root.commit((tx) => tx.entry(AssistantEntry, settled.answer), context),
-  );
-  expect(textOf(answer?.model?.[0])).toBe("deferred answer");
-  expect(setup.faux.state.deferredFetchCount).toBe(1);
-  yield* awaited(opened.harness.close(context));
-});
-
-describe("generation recovery", () => {
-  it("resumes polling a deferred response after reopen", () =>
-    Effect.runPromise(resumesPollingDeferred));
 });

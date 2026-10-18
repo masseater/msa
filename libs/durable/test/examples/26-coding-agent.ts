@@ -1,22 +1,20 @@
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
-import type { ToolResultMessage } from "@msa/ai";
-import { createModels } from "@msa/ai/models";
-import { fauxAssistantMessage, fauxProvider, fauxToolCall } from "@msa/ai/providers/faux";
+import {
+  type ToolResultMessage,
+  createModels,
+  fauxAssistantMessage,
+  fauxProvider,
+  fauxToolCall,
+} from "@msa/ai";
 import { BACKGROUND_CONTEXT } from "@msa/chord/context";
+import { defineExtension, type HarnessSettings, section, ToolResultEntry } from "@msa/durable";
+import { createRegistry, Harness } from "@msa/durable/harness";
+import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Console, Effect } from "effect";
 
 import { NodeExecutionEnv } from "../../src/env/node.ts";
-import { createRegistry, Harness } from "../../src/harness/index.ts";
-import {
-  defineExtension,
-  type HarnessSettings,
-  section,
-  ToolResultEntry,
-} from "../../src/index.ts";
-import { MemoryStorage } from "../../src/storage/memory.ts";
 import { CodingTools } from "../../src/tools/index.ts";
-import { awaited } from "../effect-support.ts";
-import { joinPath, makeDirectory, makeTempDir, removeDir } from "../platform-support.ts";
+import { awaited, joinPath, makeDirectory, makeTempDir, removeDir } from "../support.ts";
 
 const context = BACKGROUND_CONTEXT;
 

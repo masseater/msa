@@ -1,21 +1,14 @@
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
-import { createModels } from "@msa/ai/models";
-import { fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall } from "@msa/ai/providers/faux";
+import { createModels, fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall } from "@msa/ai";
 import { openaiProvider } from "@msa/ai/providers/openai";
-import { BACKGROUND_CONTEXT } from "@msa/chord/context";
+import { defineExtension, section } from "@msa/durable";
+import { createRegistry, Harness, watchEvents } from "@msa/durable/harness";
 import { Console, Effect } from "effect";
 
-import { currentTimeMillis } from "../../src/clock.ts";
-import { environmentVariable } from "../../src/env/node-process.ts";
 import { NodeExecutionEnv } from "../../src/env/node.ts";
-import { createRegistry, Harness, watchEvents } from "../../src/harness/index.ts";
-import { defineExtension, type Storage, section } from "../../src/index.ts";
-import { openNodeJsonlStorage } from "../../src/storage/jsonl/node.ts";
-import { MemoryStorage } from "../../src/storage/memory.ts";
-import { openNodeSqliteStorage } from "../../src/storage/sqlite/node.ts";
 import { createBashTool, createReadTool } from "../../src/tools/index.ts";
-import { awaited } from "../effect-support.ts";
-import { makeTempDir, tempPath } from "../platform-support.ts";
+import { awaited, BACKGROUND_CONTEXT, environmentVariable } from "../support.ts";
+import { openJsonExampleStorage } from "./json-storage.ts";
 
 const context = BACKGROUND_CONTEXT;
 const args = process.argv.slice(2);
@@ -27,21 +20,8 @@ const prompt =
     (arg, index) => !arg.startsWith("--") && (storageIndex < 0 || index !== storageIndex + 1),
   ) ?? "What is in this directory?";
 
-let storage: Storage;
-let location: string | undefined;
-
 const main = Effect.gen(function* () {
-  if (storageKind === "sqlite") {
-    location = tempPath(`msa-durable-json-${currentTimeMillis()}.sqlite`);
-    storage = yield* awaited(openNodeSqliteStorage(location));
-  } else if (storageKind === "jsonl") {
-    location = yield* makeTempDir("msa-durable-json-");
-    storage = yield* awaited(openNodeJsonlStorage(location, context));
-  } else if (storageKind === "memory") {
-    storage = new MemoryStorage();
-  } else {
-    throw new Error(`Unknown --storage ${storageKind}; use sqlite, jsonl, or memory`);
-  }
+  const { storage, location } = yield* openJsonExampleStorage(storageKind);
   const print = (value: unknown): void => void process.stdout.write(`${JSON.stringify(value)}\n`);
 
   const models = createModels();

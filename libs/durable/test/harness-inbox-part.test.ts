@@ -6,8 +6,6 @@ import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { allEntries, chatSetup, openChat } from "./chat-support.ts";
-import { toJsonText, awaited } from "./effect-support.ts";
 import {
   HOLD,
   holdTool,
@@ -18,9 +16,17 @@ import {
   answer,
   gated,
 } from "./harness-inbox-support.ts";
-import { addHooks } from "./harness-support.ts";
-import { context, documentChanges } from "./session-support.ts";
-import { deferred } from "./task-support.ts";
+import {
+  allEntries,
+  chatSetup,
+  openChat,
+  toJsonText,
+  awaited,
+  addHooks,
+  context,
+  documentChanges,
+  deferred,
+} from "./support.ts";
 
 const makesHeadWrite = Effect.gen(function* () {
   const setup = chatSetup();

@@ -6,8 +6,6 @@ import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { chatSetup, openChat } from "./chat-support.ts";
-import { awaited } from "./effect-support.ts";
 import {
   direct,
   DONE,
@@ -17,8 +15,7 @@ import {
   codes,
   nested,
 } from "./harness-structured-output-support.ts";
-import { addHooks, addTool } from "./harness-support.ts";
-import { context } from "./session-support.ts";
+import { chatSetup, openChat, awaited, addHooks, addTool, context } from "./support.ts";
 
 const expectErrorTextAsDiagnostic = Effect.fn("expectErrorTextAsDiagnostic")(function* () {
   const setup = chatSetup();

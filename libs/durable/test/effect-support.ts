@@ -1,5 +1,7 @@
 import { Cause, type Duration, Effect, Exit, Schema } from "effect";
 
+export { currentTimeMillis } from "../src/clock.ts";
+
 export const awaited = <A>(value: A | PromiseLike<A>): Effect.Effect<A> =>
   Effect.promise(() => Promise.resolve(value));
 

@@ -5,8 +5,6 @@ import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
-import { allEntries, chatSetup, openChat } from "./chat-support.ts";
-import { awaited } from "./effect-support.ts";
 import {
   inboxItems,
   mention,
@@ -15,10 +13,17 @@ import {
   transcript,
   requestLog,
 } from "./harness-input-entries-support.ts";
-import { addSection } from "./harness-support.ts";
-import { makeTempFile, removeDir } from "./platform-support.ts";
-import { context } from "./session-support.ts";
-import { deferred } from "./task-support.ts";
+import {
+  allEntries,
+  chatSetup,
+  openChat,
+  awaited,
+  addSection,
+  makeTempFile,
+  removeDir,
+  context,
+  deferred,
+} from "./support.ts";
 
 const queuesDataOnly = Effect.gen(function* () {
   const setup = chatSetup();

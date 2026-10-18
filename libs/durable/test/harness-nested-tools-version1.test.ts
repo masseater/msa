@@ -5,12 +5,18 @@ import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
-import { allEntries, type ChatSetup, chatSetup, openChat } from "./chat-support.ts";
-import { awaited } from "./effect-support.ts";
 import { directories, results, text, call, echoTool } from "./harness-nested-tools-support.ts";
-import { addTool } from "./harness-support.ts";
-import { makeTempFile, removeDir } from "./platform-support.ts";
-import { context } from "./session-support.ts";
+import {
+  allEntries,
+  type ChatSetup,
+  chatSetup,
+  openChat,
+  awaited,
+  addTool,
+  makeTempFile,
+  removeDir,
+  context,
+} from "./support.ts";
 
 afterEach(() =>
   Effect.runPromise(

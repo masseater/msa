@@ -1,5 +1,4 @@
 import type { Context } from "@msa/chord";
-import { BACKGROUND_CONTEXT, withAbortSignal } from "@msa/chord/context";
 import type { ToolExecutionApi } from "@msa/durable";
 import { Effect } from "effect";
 import { afterAll, describe, expect, it } from "vite-plus/test";
@@ -17,7 +16,7 @@ import {
 import { NodeExecutionEnv } from "../src/env/node.ts";
 import { createBashTool, createPowerShellTool } from "../src/tools/index.ts";
 import { DEFAULT_MAX_LINES } from "../src/truncate.ts";
-import { abortController, awaited } from "./effect-support.ts";
+import { BACKGROUND_CONTEXT, withAbortSignal, abortController, awaited } from "./support.ts";
 import {
   createEnv,
   createTempDir,

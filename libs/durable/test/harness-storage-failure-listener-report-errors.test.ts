@@ -9,10 +9,8 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { safeNow } from "../src/harness/harness.ts";
 import { contained } from "../src/session/session.ts";
-import { awaited } from "./effect-support.ts";
 import { running, Waiting, started } from "./harness-storage-failure-support.ts";
-import { context } from "./session-support.ts";
-import { openTasks } from "./task-support.ts";
+import { awaited, context, openTasks } from "./support.ts";
 
 const containsFulfilledThenable = Effect.gen(function* () {
   const unhandled: unknown[] = [];

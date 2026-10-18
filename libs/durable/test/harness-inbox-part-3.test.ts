@@ -12,12 +12,18 @@ import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { recordUsage } from "../src/harness/usage.ts";
-import { allEntries, chatSetup, openChat, waitFor } from "./chat-support.ts";
-import { awaited } from "./effect-support.ts";
 import { HOLD, holdTool, answer, gated } from "./harness-inbox-support.ts";
-import { addHooks } from "./harness-support.ts";
-import { context, documentChanges } from "./session-support.ts";
-import { deferred } from "./task-support.ts";
+import {
+  allEntries,
+  chatSetup,
+  openChat,
+  waitFor,
+  awaited,
+  addHooks,
+  context,
+  documentChanges,
+  deferred,
+} from "./support.ts";
 
 const storesInboxBase = Effect.gen(function* () {
   const written: { kind: "base" | "delta"; empty: boolean }[] = [];

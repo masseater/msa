@@ -7,11 +7,10 @@ import {
   wrapTool,
 } from "@msa/durable";
 import { CompactionTask, createRegistry, GenerationTask, ToolTask } from "@msa/durable/harness";
-import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { resolveSettings } from "../src/harness/agent.ts";
-import { awaited } from "./effect-support.ts";
+import { names, snapshot } from "./harness-registry-cases.ts";
 import {
   Skills,
   type AppTool,
@@ -22,7 +21,6 @@ import {
   Coding,
   resolve,
 } from "./harness-registry-support.ts";
-import { context } from "./session-support.ts";
 
 function task(name: string, version = 1) {
   return defineTask<undefined, { phase: "run" }, null>({
@@ -32,37 +30,6 @@ function task(name: string, version = 1) {
     phases: { run: () => Promise.resolve() },
     abort: () => Promise.resolve(),
   });
-}
-
-function names(items: readonly { readonly name: string }[]): string[] {
-  return items.map((item) => item.name);
-}
-
-function rendered(agent: ReturnType<typeof resolve>): Promise<[string, string | undefined][]> {
-  const input = {
-    conversationId: 1 as never,
-    agent,
-    env: undefined,
-    shown: {},
-    read: {
-      snapshot: () => Promise.resolve(undefined),
-      snapshotAsOf: () => Promise.resolve(undefined),
-    },
-  };
-  return Promise.resolve(
-    Promise.all(
-      agent.sections.map((item) =>
-        Effect.runPromise(
-          Effect.gen(function* () {
-            return [item.key, yield* awaited(item.render(input, context))] as [
-              string,
-              string | undefined,
-            ];
-          }),
-        ),
-      ),
-    ),
-  );
 }
 
 describe("registry", () => {
@@ -153,21 +120,6 @@ describe("settings", () => {
     });
   });
 });
-
-const Reviewer = defineExtension<AppTool>({
-  name: "reviewer",
-  sections: [section("role", () => "Review.")],
-});
-
-function codingRegistry() {
-  const installed = createRegistry<AppTool>();
-  for (const extension of [Coding, Skills, Reviewer]) installed.install(extension);
-  return installed;
-}
-
-const registry = codingRegistry();
-
-const snapshot = registry.snapshot();
 
 describe("agent resolution", () => {
   it("selects the default, an array, or the default edited by add and remove", () => {
@@ -261,44 +213,4 @@ describe("agent resolution", () => {
       "section wrapper failed",
     ]);
   });
-});
-
-const ordersSectionsExtension = Effect.gen(function* () {
-  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
-  const local = createRegistry<AppTool>();
-  const Override = defineExtension<AppTool>({
-    name: "override",
-    sections: [section("preamble", () => "You review.", { tag: false })],
-    wraps: [
-      wrapSection("cwd", (inner) => ({
-        ...inner,
-        render: (input, ctx) =>
-          runPromise(
-            Effect.gen(function* () {
-              return `${yield* awaited(inner.render(input, ctx))}!`;
-            }),
-          ),
-      })),
-      wrapSection("instructions", () => {
-        throw new Error("never");
-      }),
-    ],
-  });
-  for (const extension of [Coding, Skills, Override]) local.install(extension);
-  const reports: unknown[] = [];
-  const agent = resolve({ instructions: "Be terse." }, local.snapshot(), {}, reports);
-  expect(yield* awaited(rendered(agent))).toEqual([
-    ["preamble", "You review."],
-    ["cwd", "/repo!"],
-    ["skills", "S"],
-    ["instructions", "Be terse."],
-  ]);
-  expect(agent.sections.at(-1)!.tag).toBeUndefined();
-  expect(reports).toEqual([]);
-});
-
-describe("agent resolution", () => {
-  it("orders sections by extension, replaces same keys in place, and renders instructions last and unwrapped", () =>
-    Effect.runPromise(ordersSectionsExtension));
 });

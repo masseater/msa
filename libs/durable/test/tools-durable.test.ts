@@ -5,8 +5,7 @@ import { afterAll, describe, expect, it } from "vite-plus/test";
 import { getOrThrow } from "../src/env/index.ts";
 import { withFileMutationQueue } from "../src/tools/env.ts";
 import { createEditTool, createWriteTool } from "../src/tools/index.ts";
-import { abortController, awaited } from "./effect-support.ts";
-import { makeDirectory, makeSymlink } from "./platform-support.ts";
+import { abortController, awaited, makeDirectory, makeSymlink } from "./support.ts";
 import { BlockingEditExecutionEnv } from "./tools-blocking-edit-env-support.ts";
 import { SlowReadExecutionEnv } from "./tools-slow-read-env-support.ts";
 import {
@@ -236,67 +235,5 @@ describe("durable tools", () => {
           }),
         ),
     );
-  });
-});
-
-describe("durable tools", () => {
-  describe("edit", () => {
-    it("does not serialize the same path on different file systems", () =>
-      Effect.runPromise(
-        Effect.gen(function* () {
-          class OtherFileSystem extends BlockingWriteExecutionEnv {
-            override readonly id = "other";
-          }
-          const dir = yield* createTempDir;
-          const local = new BlockingWriteExecutionEnv({ cwd: dir });
-          const other = new OtherFileSystem({ cwd: dir });
-          const tool = createWriteTool();
-          const blocked = run(tool, { path: "file.txt", content: "first\n" }, local);
-          yield* awaited(local.firstWriteStarted.promise);
-          yield* awaited(run(tool, { path: "file.txt", content: "second\n" }, other));
-          expect(other.secondWriteStarted).toBe(true);
-          local.finishFirstWrite.resolve();
-          yield* awaited(blocked);
-        }),
-      ));
-
-    it("edits regular files through symlinks", () =>
-      Effect.runPromise(
-        Effect.gen(function* () {
-          const env = yield* createEnv;
-          getOrThrow(yield* awaited(env.writeFile("target.txt", "before\n", BACKGROUND_CONTEXT)));
-          yield* makeSymlink("target.txt", `${env.cwd}/link.txt`);
-          yield* awaited(
-            run(
-              createEditTool(),
-              { path: "link.txt", edits: [{ oldText: "before", newText: "after" }] },
-              env,
-            ),
-          );
-          expect(
-            getOrThrow(yield* awaited(env.readTextFile("target.txt", BACKGROUND_CONTEXT))),
-          ).toBe("after\n");
-        }),
-      ));
-
-    it("preserves BOM and CRLF line endings", () =>
-      Effect.runPromise(
-        Effect.gen(function* () {
-          const env = yield* createEnv;
-          getOrThrow(
-            yield* awaited(env.writeFile("edit.txt", "\uFEFFone\r\ntwo\r\n", BACKGROUND_CONTEXT)),
-          );
-          yield* awaited(
-            run(
-              createEditTool(),
-              { path: "edit.txt", edits: [{ oldText: "two", newText: "TWO" }] },
-              env,
-            ),
-          );
-          expect(getOrThrow(yield* awaited(env.readTextFile("edit.txt", BACKGROUND_CONTEXT)))).toBe(
-            "\uFEFFone\r\nTWO\r\n",
-          );
-        }),
-      ));
   });
 });

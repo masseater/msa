@@ -1,16 +1,13 @@
-import { createModels } from "@msa/ai/models";
-import { fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall } from "@msa/ai/providers/faux";
+import { createModels, fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall } from "@msa/ai";
 import { BACKGROUND_CONTEXT as context } from "@msa/chord/context";
+import { defineTool, LiveDoc, type Conversation } from "@msa/durable";
+import { createRegistry, Harness } from "@msa/durable/harness";
 import { Effect } from "effect";
 import { Type } from "typebox";
 
 import { NodeExecutionEnv } from "../src/env/node.ts";
-import { createRegistry, Harness } from "../src/harness/index.ts";
-import { defineTool, LiveDoc, type Conversation } from "../src/index.ts";
 import { createBashTool } from "../src/tools/index.ts";
-import { awaited } from "./effect-support.ts";
-import { addTool } from "./harness-support.ts";
-import { makeTempFile, removeDir, tempPath, type TempFile } from "./platform-support.ts";
+import { awaited, addTool, makeTempFile, removeDir, tempPath, type TempFile } from "./support.ts";
 import { type Backend, footprint, openStorage, timed } from "./tool-output-storage.ts";
 
 type Rate = "low" | "normal" | "high";

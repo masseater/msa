@@ -16,8 +16,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { streamSimple as streamSimpleAnthropic } from "../../ai/src/api/anthropic-messages.ts";
 import { resolveApiKey } from "../../ai/test/oauth.ts";
-import { awaited } from "./effect-support.ts";
-import { context } from "./session-support.ts";
+import { awaited, context } from "./support.ts";
 
 const anthropicToken = await resolveApiKey("anthropic");
 

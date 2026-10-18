@@ -8,8 +8,6 @@ import { ToolTask } from "@msa/durable/harness";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { chatSetup } from "./chat-support.ts";
-import { awaited } from "./effect-support.ts";
 import {
   DONE,
   call,
@@ -21,10 +19,7 @@ import {
   restartDuring,
   open,
 } from "./harness-nested-tools-restart-support.ts";
-import { addTool } from "./harness-support.ts";
-import { removeDir } from "./platform-support.ts";
-import { context } from "./session-support.ts";
-import { aborted, deferred } from "./task-support.ts";
+import { chatSetup, awaited, addTool, removeDir, context, aborted, deferred } from "./support.ts";
 
 afterEach(() =>
   Effect.runPromise(

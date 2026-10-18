@@ -1,17 +1,20 @@
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
-import { createModels } from "@msa/ai/models";
-import { fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall } from "@msa/ai/providers/faux";
-import { BACKGROUND_CONTEXT as context } from "@msa/chord/context";
+import { createModels, fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall } from "@msa/ai";
 import { CodemodeSandbox } from "@msa/codemode";
+import { defineExtension, defineTool } from "@msa/durable";
+import { createRegistry, Harness } from "@msa/durable/harness";
 import { Console, Effect } from "effect";
 import { Type } from "typebox";
 
 import { createCodemodeTool } from "../src/codemode/codemode.ts";
-import { createRegistry, Harness } from "../src/harness/index.ts";
-import { defineExtension, defineTool } from "../src/index.ts";
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
-import { awaited } from "./effect-support.ts";
-import { joinPath, makeTempDir, removeDir } from "./platform-support.ts";
+import {
+  removeDir,
+  makeTempDir,
+  joinPath,
+  awaited,
+  BACKGROUND_CONTEXT as context,
+} from "./support.ts";
 
 type Shape = "sequential" | "parallel";
 

@@ -12,9 +12,7 @@ import {
   codemodeDescription,
   codemodeSection,
 } from "../src/codemode/describe.ts";
-import { allEntries, chatSetup, openChat } from "./chat-support.ts";
-import { awaited } from "./effect-support.ts";
-import { context } from "./session-support.ts";
+import { allEntries, chatSetup, openChat, awaited, context } from "./support.ts";
 
 function tool(
   name: string,

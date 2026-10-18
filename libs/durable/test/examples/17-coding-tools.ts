@@ -1,18 +1,28 @@
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
-import type { ToolResultMessage } from "@msa/ai";
-import { createModels } from "@msa/ai/models";
-import { fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall } from "@msa/ai/providers/faux";
-import { BACKGROUND_CONTEXT } from "@msa/chord/context";
+import {
+  type ToolResultMessage,
+  createModels,
+  fauxAssistantMessage,
+  fauxProvider,
+  fauxText,
+  fauxToolCall,
+} from "@msa/ai";
+import { AssistantEntry, defineExtension, hook, ToolResultEntry } from "@msa/durable";
+import { createRegistry, Harness, ToolTask } from "@msa/durable/harness";
 import { Console, Effect } from "effect";
 
-import { currentTimeMillis } from "../../src/clock.ts";
 import { NodeExecutionEnv } from "../../src/env/node.ts";
-import { createRegistry, Harness, ToolTask } from "../../src/harness/index.ts";
-import { AssistantEntry, defineExtension, hook, ToolResultEntry } from "../../src/index.ts";
 import { openNodeJsonlStorage } from "../../src/storage/jsonl/node.ts";
 import { type BashToolInput, CodingTools } from "../../src/tools/index.ts";
-import { toJsonText, awaited } from "../effect-support.ts";
-import { makeTempDir, writeTempFile, readTempFile } from "../platform-support.ts";
+import {
+  readTempFile,
+  writeTempFile,
+  makeTempDir,
+  awaited,
+  toJsonText,
+  BACKGROUND_CONTEXT,
+  currentTimeMillis,
+} from "../support.ts";
 
 const context = BACKGROUND_CONTEXT;
 

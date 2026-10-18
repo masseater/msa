@@ -19,6 +19,8 @@ import { currentTimeMillis } from "../src/clock.ts";
 import { SessionImpl } from "../src/session/session.ts";
 import { awaited } from "./effect-support.ts";
 
+export { BACKGROUND_CONTEXT, withAbortSignal } from "@msa/chord/context";
+
 export const context: Context = BACKGROUND_CONTEXT;
 
 type Deferred = PromiseWithResolvers<void>;

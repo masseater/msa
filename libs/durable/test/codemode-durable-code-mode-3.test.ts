@@ -4,7 +4,6 @@ import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { CodemodeRunDoc } from "../src/codemode/codemode.ts";
-import { allEntries } from "./chat-support.ts";
 import { codemodeChat } from "./codemode-chat-support.ts";
 import {
   resultText,
@@ -15,10 +14,7 @@ import {
   removeDirectories,
   openStoredChat,
 } from "./codemode-support.ts";
-import { awaited } from "./effect-support.ts";
-import { addHooks } from "./harness-support.ts";
-import { context } from "./session-support.ts";
-import { aborted, deferred } from "./task-support.ts";
+import { allEntries, awaited, addHooks, context, aborted, deferred } from "./support.ts";
 
 afterEach(removeDirectories);
 

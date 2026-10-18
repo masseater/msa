@@ -13,9 +13,8 @@ import {
   type TaskId,
 } from "../src/index.ts";
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
-import { toJsonText, awaited } from "./effect-support.ts";
 import { retainedBytes } from "./heap-retained.ts";
-import { joinPath, makeTempDir, removeDir } from "./platform-support.ts";
+import { toJsonText, awaited, joinPath, makeTempDir, removeDir } from "./support.ts";
 
 const waiting = new Map<string, () => void>();
 const Hold = defineTask<{ name: string }, { phase: "hold" }, null>({

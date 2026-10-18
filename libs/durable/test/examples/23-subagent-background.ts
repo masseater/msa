@@ -1,17 +1,26 @@
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
-import { type FauxResponseStep } from "@msa/ai";
-import { createModels } from "@msa/ai/models";
-import { fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall } from "@msa/ai/providers/faux";
+import {
+  type FauxResponseStep,
+  createModels,
+  fauxAssistantMessage,
+  fauxProvider,
+  fauxText,
+  fauxToolCall,
+} from "@msa/ai";
 import { openaiProvider } from "@msa/ai/providers/openai";
-import { BACKGROUND_CONTEXT } from "@msa/chord/context";
+import { type AgentEvent, type ConversationId, LiveDoc } from "@msa/durable";
+import { createRegistry, Harness, watchEvents } from "@msa/durable/harness";
 import { Console, Effect } from "effect";
 
-import { environmentVariable } from "../../src/env/node-process.ts";
-import { createRegistry, Harness, watchEvents } from "../../src/harness/index.ts";
-import { type AgentEvent, type ConversationId, LiveDoc } from "../../src/index.ts";
 import { openNodeSqliteStorage } from "../../src/storage/sqlite/node.ts";
-import { awaited } from "../effect-support.ts";
-import { joinPath, makeTempDir, removeDir } from "../platform-support.ts";
+import {
+  removeDir,
+  makeTempDir,
+  joinPath,
+  awaited,
+  BACKGROUND_CONTEXT,
+  environmentVariable,
+} from "../support.ts";
 import { Subagents, textOf, SubagentTools } from "./subagent-background-tools.ts";
 
 const context = BACKGROUND_CONTEXT;

@@ -6,10 +6,7 @@ import { dual } from "effect/Function";
 
 import { type CodemodeGlobal, createCodemodeTool } from "../src/codemode/codemode.ts";
 import type { CodemodeNamespace } from "../src/codemode/describe.ts";
-import { chatSetup } from "./chat-support.ts";
-import { awaited } from "./effect-support.ts";
-import { addTool } from "./harness-support.ts";
-import { aborted, type Deferred, deferred } from "./task-support.ts";
+import { chatSetup, awaited, addTool, aborted, type Deferred, deferred } from "./support.ts";
 
 export const Parameters = Type.Object({
   text: Type.Optional(Type.String()),

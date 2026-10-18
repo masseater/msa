@@ -8,8 +8,7 @@ import type { ToolDiagnostic, ToolExecutionApi } from "../src/harness/types.ts";
 import { detectSupportedImageMimeType } from "../src/tools/image.ts";
 import { createReadTool } from "../src/tools/read.ts";
 import { DEFAULT_MAX_BYTES, formatSize, truncateHead } from "../src/truncate.ts";
-import { awaited } from "./effect-support.ts";
-import { makeTempDir, removeDirs, writeTempFile } from "./platform-support.ts";
+import { awaited, makeTempDir, removeDirs, writeTempFile } from "./support.ts";
 
 function selectLines(allLines: readonly string[], startLine: number, limit: number | undefined) {
   let selectedContent: string;

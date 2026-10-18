@@ -1,18 +1,28 @@
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
-import type { ToolResultMessage } from "@msa/ai";
-import { createModels } from "@msa/ai/models";
-import { fauxAssistantMessage, fauxProvider, fauxToolCall } from "@msa/ai/providers/faux";
-import { BACKGROUND_CONTEXT } from "@msa/chord/context";
+import {
+  type ToolResultMessage,
+  createModels,
+  fauxAssistantMessage,
+  fauxProvider,
+  fauxToolCall,
+} from "@msa/ai";
+import { type Conversation, defineExtension, ToolResultEntry, wrapTool } from "@msa/durable";
+import { createRegistry, Harness } from "@msa/durable/harness";
+import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Console, Effect } from "effect";
 
-import { currentTimeMillis } from "../../src/clock.ts";
 import { NodeExecutionEnv } from "../../src/env/node.ts";
-import { createRegistry, Harness } from "../../src/harness/index.ts";
-import { type Conversation, defineExtension, ToolResultEntry, wrapTool } from "../../src/index.ts";
-import { MemoryStorage } from "../../src/storage/memory.ts";
 import { CodingTools, createBashTool } from "../../src/tools/index.ts";
-import { awaited } from "../effect-support.ts";
-import { joinPath, makeDirectory, makeTempDir, removeDir, writeText } from "../platform-support.ts";
+import {
+  writeText,
+  removeDir,
+  makeTempDir,
+  makeDirectory,
+  joinPath,
+  awaited,
+  BACKGROUND_CONTEXT,
+  currentTimeMillis,
+} from "../support.ts";
 
 const context = BACKGROUND_CONTEXT;
 

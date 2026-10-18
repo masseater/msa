@@ -6,8 +6,7 @@ import { getOrThrow } from "../src/env/index.ts";
 import { NodeExecutionEnv } from "../src/env/node.ts";
 import { DEFAULT_IMAGE_LIMITS, type ImageProcessor, toBase64 } from "../src/tools/image.ts";
 import { createReadTool } from "../src/tools/read.ts";
-import { awaited, failure } from "./effect-support.ts";
-import { appendBytes, joinPath } from "./platform-support.ts";
+import { awaited, failure, appendBytes, joinPath } from "./support.ts";
 import {
   bmp,
   decodedImage,

@@ -1,0 +1,234 @@
+import { type TaskId } from "@msa/durable";
+import { Effect } from "effect";
+import { afterEach, describe, expect, it } from "vite-plus/test";
+
+import { awaited } from "./effect-support.ts";
+import {
+  directories,
+  status,
+  waitUntil,
+  open,
+  gates,
+  Hold,
+  runs,
+  openHarness,
+  Spawner,
+  setEntriesDuring,
+} from "./harness-ownership-support.ts";
+import { removeDir } from "./platform-support.ts";
+import { context } from "./session-support.ts";
+
+afterEach(() =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      gates.clear();
+      runs.clear();
+      for (const directory of directories) yield* removeDir(directory);
+      directories.clear();
+    }),
+  ),
+);
+
+const openOwnedTree = Effect.fn("openOwnedTree")(function* () {
+  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
+  const { harness, root } = yield* openHarness();
+  const tree = yield* awaited(
+    root.commit(
+      (tx) =>
+        runPromise(
+          Effect.gen(function* () {
+            const p = yield* awaited(
+              tx.createTask(Hold, { name: "p" }, { ownership: { kind: "conversation" } }),
+            );
+            const b = yield* awaited(
+              tx.createTask(Hold, { name: "b" }, { ownership: { kind: "task", taskId: p } }),
+            );
+            const a = yield* awaited(
+              tx.createTask(Hold, { name: "a" }, { ownership: { kind: "task", taskId: b } }),
+            );
+            const c = yield* awaited(
+              tx.createConversation({ ownership: { kind: "task", taskId: a } }),
+            );
+            const z = yield* awaited(
+              tx.createTask(
+                Hold,
+                { name: "z" },
+                { ownership: { kind: "conversation" }, conversationId: c.id, background: true },
+              ),
+            );
+            return { p, a, b, c: c.id, z };
+          }),
+        ),
+      context,
+    ),
+  );
+  return { harness, tree };
+});
+
+const openHeldSiblings = Effect.fn("openHeldSiblings")(function* () {
+  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
+  const { harness, root } = yield* openHarness();
+  const count = 1000;
+  const { top, leaves } = yield* awaited(
+    root.commit(
+      (tx) =>
+        runPromise(
+          Effect.gen(function* () {
+            const top = yield* awaited(
+              tx.createTask(Hold, { name: "top" }, { ownership: { kind: "conversation" } }),
+            );
+            const siblings: TaskId[] = [];
+            for (const n of Array.from({ length: count }, (_, i) => i)) {
+              siblings.push(
+                yield* awaited(
+                  tx.createTask(
+                    Hold,
+                    { name: `s${n}` },
+                    { ownership: { kind: "task", taskId: top } },
+                  ),
+                ),
+              );
+            }
+            const leaves: TaskId[] = [];
+            for (const n of Array.from({ length: count }, (_, i) => count - 1 - i)) {
+              const owner = siblings[n]!;
+              leaves.push(
+                yield* awaited(
+                  tx.createTask(
+                    Hold,
+                    { name: `l${n}` },
+                    { ownership: { kind: "task", taskId: owner } },
+                  ),
+                ),
+              );
+            }
+            return { top, leaves };
+          }),
+        ),
+      context,
+    ),
+  );
+  return { harness, root, count, top, leaves };
+});
+
+describe("ownership", () => {
+  for (const ending of ["completes", "is aborted"] as const) {
+    it(`frees an owner that ${ending} once the last work below ended tasks ends after a background task there`, () =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          const { harness, tree } = yield* openOwnedTree();
+          open("a", "completed");
+          open("b", "completed");
+          yield* awaited(harness.waitForTask(tree.b, context));
+          const c = (yield* awaited(harness.conversation(tree.c, context)))!;
+          const d = yield* awaited(
+            c.commit(
+              (tx) =>
+                tx.createTask(
+                  Hold,
+                  { name: "d", slowAbort: true },
+                  { ownership: { kind: "conversation" } },
+                ),
+              context,
+            ),
+          );
+          if (ending === "completes") {
+            open("p", "completed");
+            yield* waitUntil(
+              Effect.gen(function* () {
+                return (yield* status(harness, tree.p)).status === "completing";
+              }),
+            );
+          } else {
+            yield* awaited(harness.abortTask(tree.p, context));
+            yield* waitUntil(
+              Effect.gen(function* () {
+                return (yield* awaited(harness.getTask(d, context)))!.abortRequested;
+              }),
+            );
+          }
+          open("z", "completed");
+          yield* awaited(harness.waitForTask(tree.z, context));
+          if (ending === "completes") open("d", "completed");
+          else open("abort.d", "completed");
+          yield* awaited(harness.waitForTask(d, context));
+          const expected = ending === "completes" ? "completed" : "aborted";
+          expect((yield* awaited(harness.waitForTask(tree.p, context))).state.outcome.status).toBe(
+            expected,
+          );
+          yield* awaited(harness.close(context));
+        }),
+      ));
+  }
+});
+
+const finalizesManyHeld = Effect.gen(function* () {
+  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
+  const { harness, root, count, top, leaves } = yield* openHeldSiblings();
+  for (let n = 0; n < count; n++) open(`s${n}`, "completed");
+  open("top", "completed");
+  yield* waitUntil(
+    Effect.gen(function* () {
+      return (yield* status(harness, top)).status === "completing";
+    }),
+  );
+  yield* awaited(
+    root.commit(
+      (tx) =>
+        runPromise(
+          Effect.gen(function* () {
+            const records = [];
+            for (const id of leaves) records.push((yield* awaited(tx.task(id)))!);
+            for (const record of records) {
+              (tx as unknown as { setTask(value: unknown): void }).setTask({
+                ...record,
+                state: { status: "terminal", outcome: { status: "completed", result: null } },
+              });
+            }
+          }),
+        ),
+      context,
+    ),
+  );
+  const entries = yield* setEntriesDuring(() =>
+    runPromise(
+      Effect.gen(function* () {
+        expect((yield* awaited(harness.waitForTask(top, context))).state.outcome.status).toBe(
+          "completed",
+        );
+      }),
+    ),
+  );
+  expect(entries).toBeLessThan(count * 20);
+  yield* awaited(harness.close(context));
+});
+
+const rejectsConversationCreated = Effect.gen(function* () {
+  const { harness, root } = yield* openHarness();
+  const spawner = yield* awaited(
+    root.commit(
+      (tx) => tx.createTask(Spawner, { name: "spawned" }, { ownership: { kind: "conversation" } }),
+      context,
+    ),
+  );
+  expect((yield* awaited(harness.waitForTask(spawner, context))).state.outcome).toEqual({
+    status: "faulted",
+    error: {
+      message: expect.stringMatching(
+        new RegExp(`^Conversation owner task ${spawner} is (completing|terminal)$`, "u"),
+      ),
+    },
+  });
+  yield* awaited(harness.close(context));
+});
+
+describe("ownership", () => {
+  it("finalizes many held siblings that end together in one pass", () =>
+    Effect.runPromise(finalizesManyHeld));
+
+  it("rejects a conversation created in the commit that ends its owner task", () =>
+    Effect.runPromise(rejectsConversationCreated));
+});

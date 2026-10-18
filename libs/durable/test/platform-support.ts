@@ -6,6 +6,8 @@ import { ChildProcess } from "effect/process";
 
 import { nodeRuntime } from "../src/node-runtime.ts";
 
+export { environmentVariable } from "../src/env/node-process.ts";
+
 const fileSystem = nodeRuntime.runSync(FileSystem.FileSystem);
 const paths = nodeRuntime.runSync(Path.Path);
 

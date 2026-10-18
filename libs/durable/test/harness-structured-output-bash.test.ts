@@ -6,12 +6,8 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { NodeExecutionEnv } from "../src/env/node.ts";
 import { createBashTool } from "../src/tools/index.ts";
-import { chatSetup, openChat } from "./chat-support.ts";
-import { awaited } from "./effect-support.ts";
 import { DONE, call, codes } from "./harness-structured-output-support.ts";
-import { addTool } from "./harness-support.ts";
-import { withTempDir } from "./platform-support.ts";
-import { context } from "./session-support.ts";
+import { chatSetup, openChat, awaited, addTool, withTempDir, context } from "./support.ts";
 
 const givesCallersBash = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());

@@ -5,12 +5,18 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { NodeExecutionEnv } from "../src/env/node.ts";
 import { createBashTool, createEditTool, createReadTool } from "../src/tools/index.ts";
-import { allEntries, chatSetup, openChat } from "./chat-support.ts";
-import { awaited } from "./effect-support.ts";
-import { addTool } from "./harness-support.ts";
 import { resultText, results, DONE, calls } from "./harness-tools-support.ts";
-import { withTempDir, writeTempFile, readTempFile } from "./platform-support.ts";
-import { context } from "./session-support.ts";
+import {
+  allEntries,
+  chatSetup,
+  openChat,
+  awaited,
+  addTool,
+  withTempDir,
+  writeTempFile,
+  readTempFile,
+  context,
+} from "./support.ts";
 
 const answersFailingCommand = Effect.asVoid(
   Effect.suspend(() =>

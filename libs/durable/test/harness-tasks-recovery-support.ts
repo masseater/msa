@@ -5,11 +5,18 @@ import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
-import { awaited } from "./effect-support.ts";
-import { addTask } from "./harness-support.ts";
-import { joinPath, makeTempDir } from "./platform-support.ts";
-import { context, flush } from "./session-support.ts";
-import { abortedWith, completed, eventually, openTasks } from "./task-support.ts";
+import {
+  awaited,
+  addTask,
+  joinPath,
+  makeTempDir,
+  context,
+  flush,
+  abortedWith,
+  completed,
+  eventually,
+  openTasks,
+} from "./support.ts";
 
 export const directories = new Set<string>();
 

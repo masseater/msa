@@ -1,17 +1,20 @@
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
-import type { AssistantMessage } from "@msa/ai";
-import { createModels } from "@msa/ai/models";
-import { fauxAssistantMessage, fauxProvider, fauxToolCall } from "@msa/ai/providers/faux";
+import {
+  type AssistantMessage,
+  createModels,
+  fauxAssistantMessage,
+  fauxProvider,
+  fauxToolCall,
+} from "@msa/ai";
 import { BACKGROUND_CONTEXT } from "@msa/chord/context";
+import { AssistantEntry, defineExtension, hook, section } from "@msa/durable";
+import { createRegistry, GenerationTask, Harness } from "@msa/durable/harness";
+import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Console, Effect } from "effect";
 
 import { NodeExecutionEnv } from "../../src/env/node.ts";
-import { createRegistry, GenerationTask, Harness } from "../../src/harness/index.ts";
-import { AssistantEntry, defineExtension, hook, section } from "../../src/index.ts";
-import { MemoryStorage } from "../../src/storage/memory.ts";
 import { CodingTools, createReadTool } from "../../src/tools/index.ts";
-import { awaited } from "../effect-support.ts";
-import { joinPath, makeTempDir, removeDir, writeText } from "../platform-support.ts";
+import { awaited, joinPath, makeTempDir, removeDir, writeText } from "../support.ts";
 
 const context = BACKGROUND_CONTEXT;
 const textOf = (message: AssistantMessage) =>

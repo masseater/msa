@@ -8,8 +8,7 @@ import { Console, Effect } from "effect";
 import { createRegistry, Harness } from "../../src/harness/index.ts";
 import { defineExtension, defineTool, ToolResultEntry } from "../../src/index.ts";
 import { openNodeSqliteStorage } from "../../src/storage/sqlite/node.ts";
-import { awaited } from "../effect-support.ts";
-import { joinPath, makeTempDir, removeDir } from "../platform-support.ts";
+import { awaited, joinPath, makeTempDir, removeDir } from "../support.ts";
 
 const context = BACKGROUND_CONTEXT;
 

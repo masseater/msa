@@ -1,29 +1,33 @@
 import { fauxAssistantMessage, fauxToolCall, Type } from "@msa/ai";
-import type { Op } from "@msa/chord/delta";
 import { defineTool, LiveDoc } from "@msa/durable";
 import { GenerationTask } from "@msa/durable/harness";
 import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { allEntries, chatSetup, openChat, waitFor } from "./chat-support.ts";
-import { awaited } from "./effect-support.ts";
 import {
   directories,
   toolRunning,
   HOLD,
   holdTool,
   transcript,
-  inbox,
   status,
   queuedNote,
   answer,
   gated,
 } from "./harness-inbox-support.ts";
-import { addHooks, addTool } from "./harness-support.ts";
-import { removeDir } from "./platform-support.ts";
-import { context, documentChanges } from "./session-support.ts";
-import { deferred } from "./task-support.ts";
+import {
+  allEntries,
+  chatSetup,
+  openChat,
+  waitFor,
+  awaited,
+  addHooks,
+  addTool,
+  removeDir,
+  context,
+  deferred,
+} from "./support.ts";
 
 afterEach(() =>
   Effect.runPromise(
@@ -257,80 +261,4 @@ const writesLastHandoff = Effect.gen(function* () {
 describe("inbox", () => {
   it("writes the last handoff in call order and then runs queued follow-ups in the new context", () =>
     Effect.runPromise(writesLastHandoff));
-});
-
-const leavesInboxAlone = Effect.gen(function* () {
-  const setup = chatSetup();
-  const first = gated(answer("never"));
-  setup.faux.setResponses([first.step]);
-  const { harness, root } = yield* openChat(new MemoryStorage(), setup);
-  const input = yield* awaited(root.submit({ type: "input", content: "a" }, context));
-  yield* awaited(first.reached);
-  const f = yield* awaited(root.submit({ type: "input", content: "f" }, context));
-  const taskId = (yield* awaited(harness.snapshot(LiveDoc, root.id, context)))!.run!.taskId;
-  yield* awaited(harness.abortTask(taskId, context));
-  expect(yield* awaited(input.wait(context))).toMatchObject({
-    status: "unanswered",
-    reason: "aborted",
-  });
-  yield* awaited(harness.waitForIdle(context));
-  expect((yield* awaited(status(f))).status).toBe("queued");
-  expect(yield* inbox(harness, root)).toEqual([[f.id, "followUp"]]);
-  yield* awaited(harness.close(context));
-});
-
-const returnsQueuedSubmission = Effect.gen(function* () {
-  const setup = chatSetup();
-  const first = gated(answer("first"));
-  setup.faux.setResponses([first.step]);
-  const { harness, root } = yield* openChat(new MemoryStorage(), setup);
-  yield* awaited(root.submit({ type: "input", content: "a" }, context));
-  yield* awaited(first.reached);
-  const queued = yield* awaited(
-    root.submit({ type: "input", content: "f", requestId: "r" }, context),
-  );
-  const again = yield* awaited(
-    root.submit({ type: "input", content: "f", requestId: "r" }, context),
-  );
-  expect(again.id).toBe(queued.id);
-  expect(yield* inbox(harness, root)).toEqual([[queued.id, "followUp"]]);
-  yield* awaited(harness.close(context));
-});
-
-describe("inbox", () => {
-  it("leaves the inbox alone when the run's task is aborted", () =>
-    Effect.runPromise(leavesInboxAlone));
-
-  it("returns a queued submission for its repeated request ID without a second item", () =>
-    Effect.runPromise(returnsQueuedSubmission));
-});
-
-const withdrawsMiddleItem = Effect.gen(function* () {
-  const setup = chatSetup();
-  const first = gated(answer("first"));
-  setup.faux.setResponses([first.step]);
-  const { harness, root } = yield* openChat(new MemoryStorage(), setup);
-  yield* awaited(root.submit({ type: "input", content: "a" }, context));
-  yield* awaited(first.reached);
-  const items = [];
-  for (const text of ["x", "y", "z"])
-    items.push(yield* awaited(root.submit({ type: "input", content: text }, context)));
-  const ops: Op[][] = [];
-  harness.subscribeCommits((publication) => {
-    for (const change of documentChanges(publication)) {
-      if (change.record.kind === "msa.inbox" && change.ops.length > 0) ops.push([...change.ops]);
-    }
-  });
-  yield* awaited(items[1]!.abort(context));
-  expect(ops).toEqual([[["p", ["items"], 1, 1, []]]]);
-  expect(yield* inbox(harness, root)).toEqual([
-    [items[0]!.id, "followUp"],
-    [items[2]!.id, "followUp"],
-  ]);
-  yield* awaited(harness.close(context));
-});
-
-describe("inbox", () => {
-  it("withdraws a middle item with one positional removal", () =>
-    Effect.runPromise(withdrawsMiddleItem));
 });

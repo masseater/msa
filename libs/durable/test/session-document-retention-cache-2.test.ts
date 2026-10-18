@@ -5,9 +5,6 @@ import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { chatSetup, openChat } from "./chat-support.ts";
-import { awaited } from "./effect-support.ts";
-import { addTool } from "./harness-support.ts";
 import {
   settleLine,
   type Counter,
@@ -15,8 +12,15 @@ import {
   bump,
   open,
 } from "./session-document-retention-support.ts";
-import { context, createConversation } from "./session-support.ts";
-import { eventually } from "./task-support.ts";
+import {
+  chatSetup,
+  openChat,
+  awaited,
+  addTool,
+  context,
+  createConversation,
+  eventually,
+} from "./support.ts";
 
 const givesSameEvents = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());

@@ -23,8 +23,7 @@ import {
   requireGc,
   type Written,
 } from "./bench-support.ts";
-import { awaited, sampleEvery } from "./effect-support.ts";
-import { makeTempDir, removeDir } from "./platform-support.ts";
+import { awaited, sampleEvery, makeTempDir, removeDir } from "./support.ts";
 
 type Scenario = {
   backend: Backend;

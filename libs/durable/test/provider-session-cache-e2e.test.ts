@@ -14,8 +14,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { streamSimple as streamSimpleOpenAICodexResponses } from "../../ai/src/api/openai-codex-responses.ts";
 import { resolveApiKey } from "../../ai/test/oauth.ts";
-import { awaited } from "./effect-support.ts";
-import { context } from "./session-support.ts";
+import { awaited, context } from "./support.ts";
 
 const codexToken = await resolveApiKey("openai-codex");
 

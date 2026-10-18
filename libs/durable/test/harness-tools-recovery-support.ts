@@ -20,11 +20,17 @@ import { dual } from "effect/Function";
 
 import type { ExecutionEnv } from "../src/env/index.ts";
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
-import { type ChatSetup, openChat, waitFor } from "./chat-support.ts";
-import { awaited } from "./effect-support.ts";
-import { makeTempFile, removeDir } from "./platform-support.ts";
-import { context } from "./session-support.ts";
-import { aborted, deferred } from "./task-support.ts";
+import {
+  type ChatSetup,
+  openChat,
+  waitFor,
+  awaited,
+  makeTempFile,
+  removeDir,
+  context,
+  aborted,
+  deferred,
+} from "./support.ts";
 
 export const directories = new Set<string>();
 

@@ -5,11 +5,17 @@ import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { awaited } from "./effect-support.ts";
-import { addTask } from "./harness-support.ts";
 import { start, oneStep, openRoot } from "./harness-tasks-support.ts";
-import { ControlledStorage, context, flush } from "./session-support.ts";
-import { completed, deferred, eventually } from "./task-support.ts";
+import {
+  awaited,
+  addTask,
+  ControlledStorage,
+  context,
+  flush,
+  completed,
+  deferred,
+  eventually,
+} from "./support.ts";
 
 function sealingTask() {
   const phases: string[] = [];

@@ -15,14 +15,20 @@ import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { chatSetup, openChat, waitFor } from "./chat-support.ts";
-import { abortController, awaited, fromJsonText, toJsonText } from "./effect-support.ts";
+import { type LiveMessage } from "./harness-events-agent-2-cases.ts";
 import { listen, drained, applyChanges } from "./harness-events-support.ts";
-import { addTool } from "./harness-support.ts";
-import { context } from "./session-support.ts";
-import { deferred } from "./task-support.ts";
-
-type LiveMessage = NonNullable<NonNullable<LiveState["generation"]>["message"]>;
+import {
+  chatSetup,
+  openChat,
+  waitFor,
+  abortController,
+  awaited,
+  fromJsonText,
+  toJsonText,
+  addTool,
+  context,
+  deferred,
+} from "./support.ts";
 
 const liveChangeSequence = Effect.fn("liveChangeSequence")(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
@@ -263,35 +269,4 @@ describe("agent events", () => {
     Effect.runPromise(reportsUsageOnly));
 
   it("ends the stream with the Harness", () => Effect.runPromise(endsStreamHarness));
-});
-
-const startsMessageFirst = Effect.gen(function* () {
-  const setup = chatSetup({ tokensPerSecond: 100, tokenSize: { min: 1, max: 1 } });
-  setup.faux.setResponses([fauxAssistantMessage([fauxText("x".repeat(400))])]);
-  const { harness, root } = yield* openChat(new MemoryStorage(), setup);
-  const { stream, events } = yield* listen(harness, root);
-  const submission = yield* awaited(root.submit({ type: "input", content: "hi" }, context));
-  yield* waitFor(() =>
-    events().some((event) => event.type === "message_start" && event.message.role === "assistant"),
-  );
-  const live = yield* awaited(harness.snapshot(LiveDoc, root.id, context));
-  yield* awaited(harness.abortTask(live!.run!.taskId, context));
-  yield* awaited(submission.wait(context));
-  yield* drained();
-  const assistantEnds = events().filter(
-    (event) => event.type === "message_end" && event.entry?.kind === "msa.assistant",
-  );
-  expect(assistantEnds).toHaveLength(1);
-  expect(
-    events().filter(
-      (event) => event.type === "message_start" && event.message.role === "assistant",
-    ),
-  ).toHaveLength(1);
-  yield* awaited(stream.stop());
-  yield* awaited(harness.close(context));
-});
-
-describe("agent events", () => {
-  it("starts a message at the first committed partial and ends it with the converted entry on abort", () =>
-    Effect.runPromise(startsMessageFirst));
 });

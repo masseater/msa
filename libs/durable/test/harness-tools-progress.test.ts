@@ -4,12 +4,8 @@ import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { allEntries, chatSetup, openChat } from "./chat-support.ts";
-import { awaited } from "./effect-support.ts";
-import { addTool } from "./harness-support.ts";
 import { resultText, results, DONE, calls, run, tool } from "./harness-tools-support.ts";
-import { context } from "./session-support.ts";
-import { deferred } from "./task-support.ts";
+import { allEntries, chatSetup, openChat, awaited, addTool, context, deferred } from "./support.ts";
 
 const appliesDefaultOutput = Effect.gen(function* () {
   const setup = chatSetup();

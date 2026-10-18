@@ -20,9 +20,8 @@ import {
   requireGc,
   type Written,
 } from "./bench-support.ts";
-import { awaited, sampleEvery, toJsonText } from "./effect-support.ts";
 import { registryFor, type Scenario } from "./nested-images-bench-tools.ts";
-import { makeTempDir, removeDir } from "./platform-support.ts";
+import { awaited, sampleEvery, toJsonText, makeTempDir, removeDir } from "./support.ts";
 
 type Result = {
   commits: number;

@@ -1,18 +1,21 @@
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
-import type { AssistantMessage } from "@msa/ai";
-import { createModels } from "@msa/ai/models";
-import { fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall } from "@msa/ai/providers/faux";
+import {
+  type AssistantMessage,
+  createModels,
+  fauxAssistantMessage,
+  fauxProvider,
+  fauxText,
+  fauxToolCall,
+} from "@msa/ai";
 import { openaiProvider } from "@msa/ai/providers/openai";
-import { BACKGROUND_CONTEXT } from "@msa/chord/context";
+import { AssistantEntry, defineExtension, section } from "@msa/durable";
+import { createRegistry, Harness } from "@msa/durable/harness";
+import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Console, Effect } from "effect";
 
-import { environmentVariable } from "../../src/env/node-process.ts";
 import { NodeExecutionEnv } from "../../src/env/node.ts";
-import { createRegistry, Harness } from "../../src/harness/index.ts";
-import { AssistantEntry, defineExtension, section } from "../../src/index.ts";
-import { MemoryStorage } from "../../src/storage/memory.ts";
 import { createBashTool, createReadTool } from "../../src/tools/index.ts";
-import { awaited } from "../effect-support.ts";
+import { BACKGROUND_CONTEXT, environmentVariable, awaited } from "../support.ts";
 
 const context = BACKGROUND_CONTEXT;
 const prompt = process.argv[2] ?? "What is in this directory?";

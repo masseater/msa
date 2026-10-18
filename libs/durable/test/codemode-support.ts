@@ -7,11 +7,17 @@ import { expect } from "vite-plus/test";
 import { type CodemodeToolDetails } from "../src/codemode/codemode.ts";
 import { NodeExecutionEnv } from "../src/env/node.ts";
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
-import { allEntries, type ChatSetup, openChat } from "./chat-support.ts";
 import { codemodeChat } from "./codemode-chat-support.ts";
-import { awaited } from "./effect-support.ts";
-import { makeTempDir, makeTempFile, removeDir } from "./platform-support.ts";
-import { context } from "./session-support.ts";
+import {
+  allEntries,
+  type ChatSetup,
+  openChat,
+  awaited,
+  makeTempDir,
+  makeTempFile,
+  removeDir,
+  context,
+} from "./support.ts";
 
 export const DONE = fauxAssistantMessage([fauxText("done")]);
 

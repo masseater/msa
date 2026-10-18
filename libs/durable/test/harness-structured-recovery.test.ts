@@ -1,13 +1,11 @@
-import { fauxAssistantMessage, fauxText, type ToolResultMessage, Type } from "@msa/ai";
-import { defineTool, LiveDoc, type TaskId, ToolResultEntry } from "@msa/durable";
-import { createSession } from "@msa/durable/session";
+import { fauxAssistantMessage, fauxText, Type } from "@msa/ai";
+import { defineTool, type TaskId } from "@msa/durable";
 import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
-import { allEntries, chatSetup, openChat } from "./chat-support.ts";
-import { awaited } from "./effect-support.ts";
+import { seed, COMPLETED } from "./harness-structured-recovery-cases.ts";
 import {
   state,
   outcomeOf,
@@ -15,21 +13,23 @@ import {
   gates,
   until,
   start,
-  Node,
   behaviors,
   log,
-  OWN_CONVERSATION,
   openNodes,
   parentOf,
-  spawn,
   directories,
   sqlitePath,
   toolCalls,
-  blockingTool,
 } from "./harness-structured-support.ts";
-import { addTool } from "./harness-support.ts";
-import { removeDir } from "./platform-support.ts";
-import { context } from "./session-support.ts";
+import {
+  allEntries,
+  chatSetup,
+  openChat,
+  awaited,
+  addTool,
+  removeDir,
+  context,
+} from "./support.ts";
 
 afterEach(() =>
   Effect.runPromise(
@@ -42,72 +42,6 @@ afterEach(() =>
     }),
   ),
 );
-
-type Seeded = { parent: TaskId; children: TaskId[] };
-
-const seed = Effect.fn("seed")(function* (
-  path: string,
-  children: readonly string[],
-  edit: (set: (id: TaskId, patch: object) => Promise<void>, seeded: Seeded) => Promise<void>,
-) {
-  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
-  const session = createSession(yield* awaited(openNodeSqliteStorage(path)));
-  const seeded = yield* awaited(
-    session.commit(
-      (tx) =>
-        runPromise(
-          Effect.gen(function* () {
-            const root = yield* awaited(
-              tx.createConversation({ ownership: { kind: "ownerless" } }),
-            );
-            const parent = yield* awaited(
-              tx.createTask(
-                Node,
-                { name: "parent" },
-                { ...OWN_CONVERSATION, conversationId: root.id },
-              ),
-            );
-            const ids: TaskId[] = [];
-            for (const name of children) ids.push(yield* awaited(spawn(tx, parent, name)));
-            return { parent, children: ids };
-          }),
-        ),
-      context,
-    ),
-  );
-  yield* awaited(
-    edit(
-      (id, patch) =>
-        runPromise(
-          Effect.gen(function* () {
-            const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
-            yield* awaited(
-              session.commit(
-                (tx) =>
-                  runPromise(
-                    Effect.gen(function* () {
-                      const record = (yield* awaited(tx.task(id)))!;
-                      (tx as unknown as { setTask(value: unknown): void }).setTask({
-                        ...record,
-                        ...patch,
-                      });
-                    }),
-                  ),
-                context,
-              ),
-            );
-          }),
-        ),
-      seeded,
-    ),
-  );
-  yield* awaited(session.close(context));
-  return seeded;
-});
-
-const COMPLETED = { status: "terminal", outcome: { status: "completed", result: "done" } };
 
 const FAILED = {
   status: "terminal",
@@ -326,37 +260,4 @@ const ownsToolTasks = Effect.gen(function* () {
 describe("tool rounds", () => {
   it("owns its tool tasks, waits for them, and hands the run to a conversation-owned generation", () =>
     Effect.runPromise(ownsToolTasks));
-});
-
-const abortsParallelRound = Effect.gen(function* () {
-  const setup = chatSetup();
-  const one = blockingTool("one");
-  const two = blockingTool("two");
-  addTool(setup.registry, defineTool({ ...one.registration, executionMode: "parallel" }));
-  addTool(setup.registry, defineTool({ ...two.registration, executionMode: "parallel" }));
-  setup.faux.setResponses([toolCalls(["one", "c1"], ["two", "c2"])]);
-  const { harness, root } = yield* openChat(new MemoryStorage(), setup);
-  const submission = yield* awaited(root.submit({ type: "input", content: "go" }, context));
-  yield* awaited(Promise.all([one.started, two.started]));
-  const generation = (yield* awaited(harness.snapshot(LiveDoc, root.id, context)))!.run!.taskId;
-  yield* awaited(harness.abortTask(generation, context));
-  expect(yield* awaited(submission.wait(context))).toMatchObject({
-    status: "unanswered",
-    reason: "aborted",
-  });
-  const results = (yield* allEntries(root)).filter((entry) => ToolResultEntry.is(entry));
-  expect(results.map((entry) => (entry.model![0] as ToolResultMessage).toolCallId)).toEqual([
-    "c1",
-    "c2",
-  ]);
-  expect(yield* awaited(harness.snapshot(LiveDoc, root.id, context))).toEqual({});
-  expect((yield* awaited(harness.waitForTask(generation, context))).state.outcome.status).toBe(
-    "aborted",
-  );
-  yield* awaited(harness.close(context));
-});
-
-describe("tool rounds", () => {
-  it("aborts a parallel round with its generation: tools first, then the generation, with every result written", () =>
-    Effect.runPromise(abortsParallelRound));
 });

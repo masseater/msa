@@ -4,8 +4,6 @@ import { createRegistry, Harness } from "@msa/durable/harness";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { awaited } from "./effect-support.ts";
-import { addTask } from "./harness-support.ts";
 import {
   startHandover,
   createIn,
@@ -16,9 +14,19 @@ import {
   directories,
   type Step,
 } from "./harness-tasks-recovery-support.ts";
-import { removeDir } from "./platform-support.ts";
-import { ControlledStorage, context, flush } from "./session-support.ts";
-import { completed, countingReader, deferred, eventually, openTasks } from "./task-support.ts";
+import {
+  awaited,
+  addTask,
+  removeDir,
+  ControlledStorage,
+  context,
+  flush,
+  completed,
+  countingReader,
+  deferred,
+  eventually,
+  openTasks,
+} from "./support.ts";
 
 afterEach(() =>
   Effect.runPromise(

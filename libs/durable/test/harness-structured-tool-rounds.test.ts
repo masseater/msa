@@ -12,8 +12,6 @@ import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { allEntries, chatSetup, openChat, waitFor } from "./chat-support.ts";
-import { awaited } from "./effect-support.ts";
 import { invalidFinalStream } from "./harness-generation-support.ts";
 import {
   state,
@@ -30,10 +28,20 @@ import {
   toolCalls,
   blockingTool,
 } from "./harness-structured-support.ts";
-import { addHooks, addTask, addTool } from "./harness-support.ts";
-import { removeDir } from "./platform-support.ts";
-import { ControlledStorage, context } from "./session-support.ts";
-import { settled } from "./task-support.ts";
+import {
+  allEntries,
+  chatSetup,
+  openChat,
+  waitFor,
+  awaited,
+  addHooks,
+  addTask,
+  addTool,
+  removeDir,
+  ControlledStorage,
+  context,
+  settled,
+} from "./support.ts";
 
 afterEach(() =>
   Effect.runPromise(

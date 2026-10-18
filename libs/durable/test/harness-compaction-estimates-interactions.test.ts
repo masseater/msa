@@ -1,21 +1,13 @@
-import { type AgentEvent, defineTask, UsageDoc } from "@msa/durable";
+import { type AgentEvent, defineTask } from "@msa/durable";
 import { CompactionTask, watchEvents } from "@msa/durable/harness";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { allEntries, waitFor } from "./chat-support.ts";
-import { awaited } from "./effect-support.ts";
 import {
-  text,
   summary,
   gated,
   history,
-  sqlitePath,
   directories,
-  first,
-  MANUAL,
-  reopen,
-  OVERFLOW,
   live,
   failure,
   firstUserText,
@@ -23,10 +15,17 @@ import {
   result,
   kinds,
 } from "./harness-compaction-support.ts";
-import { addHooks, addTask } from "./harness-support.ts";
-import { removeDir } from "./platform-support.ts";
-import { context } from "./session-support.ts";
-import { aborted, type Deferred, deferred } from "./task-support.ts";
+import {
+  allEntries,
+  waitFor,
+  awaited,
+  addHooks,
+  addTask,
+  removeDir,
+  context,
+  type Deferred,
+  deferred,
+} from "./support.ts";
 
 afterEach(() =>
   Effect.runPromise(
@@ -264,118 +263,4 @@ const reportsStartEnd = Effect.gen(function* () {
 describe("compaction events and live status", () => {
   it("reports start and end, and the retry backoff in a late joiner's snapshot", () =>
     Effect.runPromise(reportsStartEnd));
-});
-
-const listsConcurrentCompactions = Effect.gen(function* () {
-  const chat = yield* open();
-  yield* history(chat);
-  const first = deferred();
-  const second = deferred();
-  chat.faux.summaries.push(
-    gated(deferred(), summary(), first),
-    gated(deferred(), summary(), second),
-  );
-  const a = yield* awaited(chat.root.compact(undefined, context));
-  const b = yield* awaited(chat.root.compact(undefined, context));
-  yield* awaited(Promise.all([first.promise, second.promise]));
-  expect((yield* awaited(live(chat))).compactions?.map((status) => status.taskId)).toEqual([a, b]);
-  yield* awaited(chat.root.abort(context));
-  expect((yield* awaited(live(chat))).compactions).toBeUndefined();
-  yield* awaited(chat.harness.close(context));
-});
-
-describe("compaction events and live status", () => {
-  it("lists concurrent compactions in task ID order", () =>
-    Effect.runPromise(listsConcurrentCompactions));
-});
-
-const repeatsNothingReopen = Effect.gen(function* () {
-  const path = yield* sqlitePath();
-  let chat = yield* awaited(first(path));
-  chat.faux.summaries.push(summary());
-  yield* awaited(result(chat, yield* awaited(chat.root.compact(undefined, context))));
-  const entries = yield* allEntries(chat.root);
-  const usage = yield* awaited(chat.harness.snapshot(UsageDoc, chat.root.id, context));
-  yield* awaited(chat.harness.close(context));
-  chat = yield* reopen(path, chat.setup, chat.faux);
-  yield* awaited(chat.harness.waitForIdle(context));
-  expect(chat.faux.summaryRequests).toHaveLength(1);
-  expect(yield* allEntries(chat.root)).toEqual(entries);
-  expect(yield* awaited(chat.harness.snapshot(UsageDoc, chat.root.id, context))).toEqual(usage);
-  const inspection = yield* awaited(chat.harness.inspect(context));
-  expect([inspection.tasks, inspection.submissions]).toEqual([[], []]);
-  yield* awaited(chat.harness.close(context));
-});
-
-const failsOverflowRun = Effect.gen(function* () {
-  const path = yield* sqlitePath();
-  let chat = yield* awaited(first(path));
-  chat.setup.settings.compaction = { ...MANUAL, enabled: true };
-  const reached = deferred();
-  chat.faux.summaries.push(gated(deferred(), summary(), reached));
-  chat.faux.agent.push(failure(OVERFLOW));
-  const input = yield* awaited(
-    chat.root.submit({ type: "input", content: text("u4", 100) }, context),
-  );
-  yield* awaited(reached.promise);
-  const generation = (yield* awaited(live(chat))).run!.taskId;
-  expect((yield* awaited(chat.harness.getTask(generation, context)))?.state).toMatchObject({
-    status: "waiting",
-    checkpoint: { phase: "prepare", overflow: OVERFLOW },
-  });
-  yield* awaited(chat.harness.close(context));
-  chat = yield* reopen(path, chat.setup, chat.faux);
-  chat.faux.summaries.push(failure("bad request"));
-  const settled = yield* awaited(
-    (yield* awaited(chat.harness.submission(input.id, context)))!.wait(context),
-  );
-  expect(settled).toMatchObject({
-    status: "unanswered",
-    reason: "model_error",
-    detail: OVERFLOW,
-  });
-  yield* awaited(chat.harness.close(context));
-});
-
-describe("compaction recovery", () => {
-  it("repeats nothing after reopen once the summary is placed", () =>
-    Effect.runPromise(repeatsNothingReopen));
-
-  it("fails an overflow run with its text when its compaction fails after reopen", () =>
-    Effect.runPromise(failsOverflowRun));
-});
-
-const rerunsSelectHook = Effect.gen(function* () {
-  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
-  const path = yield* sqlitePath();
-  let chat = yield* awaited(first(path));
-  let calls = 0;
-  const reached = deferred();
-  addHooks(chat.setup.registry, CompactionTask, {
-    beforeCompact: (_compaction, _api, hookContext) =>
-      runPromise(
-        Effect.gen(function* () {
-          calls++;
-          if (calls === 1) {
-            reached.resolve();
-            return yield* awaited(aborted(hookContext.abortSignal!));
-          }
-          return undefined;
-        }),
-      ),
-  });
-  const id = yield* awaited(chat.root.compact(undefined, context));
-  yield* awaited(reached.promise);
-  yield* awaited(chat.harness.close(context));
-  chat = yield* reopen(path, chat.setup, chat.faux);
-  chat.faux.summaries.push(summary());
-  expect((yield* awaited(result(chat, id))).status).toBe("completed");
-  expect(calls).toBe(2);
-  yield* awaited(chat.harness.close(context));
-});
-
-describe("compaction recovery", () => {
-  it("reruns select and its hook after a crash in select", () =>
-    Effect.runPromise(rerunsSelectHook));
 });

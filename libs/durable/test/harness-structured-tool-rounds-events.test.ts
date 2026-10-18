@@ -5,8 +5,6 @@ import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { chatSetup, openChat, waitFor } from "./chat-support.ts";
-import { awaited } from "./effect-support.ts";
 import {
   state,
   outcomeOf,
@@ -24,10 +22,17 @@ import {
   labels,
   listen,
 } from "./harness-structured-support.ts";
-import { addTask, addTool } from "./harness-support.ts";
-import { removeDir } from "./platform-support.ts";
-import { context } from "./session-support.ts";
-import { settled } from "./task-support.ts";
+import {
+  chatSetup,
+  openChat,
+  waitFor,
+  awaited,
+  addTask,
+  addTool,
+  removeDir,
+  context,
+  settled,
+} from "./support.ts";
 
 afterEach(() =>
   Effect.runPromise(

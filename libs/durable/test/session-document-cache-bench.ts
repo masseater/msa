@@ -13,9 +13,8 @@ import {
 } from "../src/index.ts";
 import type { SessionImpl } from "../src/session/session.ts";
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
-import { awaited } from "./effect-support.ts";
 import { retainedBytes } from "./heap-retained.ts";
-import { joinPath, makeTempDir, removeDir } from "./platform-support.ts";
+import { awaited, joinPath, makeTempDir, removeDir } from "./support.ts";
 
 const Work = defineTask<null, { phase: "work" }, null>({
   name: "bench.work",

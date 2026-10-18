@@ -5,9 +5,6 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { NodeExecutionEnv } from "../src/env/node.ts";
 import { createBashTool } from "../src/tools/index.ts";
-import { allEntries, chatSetup, waitFor } from "./chat-support.ts";
-import { awaited } from "./effect-support.ts";
-import { addTool } from "./harness-support.ts";
 import {
   DONE,
   text,
@@ -16,8 +13,7 @@ import {
   sqlitePath,
   removeDirectories,
 } from "./harness-tools-recovery-support.ts";
-import { dirnameOf } from "./platform-support.ts";
-import { context } from "./session-support.ts";
+import { allEntries, chatSetup, waitFor, awaited, addTool, dirnameOf, context } from "./support.ts";
 
 afterEach(removeDirectories);
 

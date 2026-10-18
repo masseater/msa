@@ -12,12 +12,20 @@ import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { type ChatSetup, chatSetup, openChat, textOf, waitFor } from "./chat-support.ts";
-import { awaited } from "./effect-support.ts";
 import { listen, drained } from "./harness-events-support.ts";
-import { addTool } from "./harness-support.ts";
-import { context, documentChanges } from "./session-support.ts";
-import { aborted, deferred } from "./task-support.ts";
+import {
+  type ChatSetup,
+  chatSetup,
+  openChat,
+  textOf,
+  waitFor,
+  awaited,
+  addTool,
+  context,
+  documentChanges,
+  aborted,
+  deferred,
+} from "./support.ts";
 
 function slow(): ChatSetup {
   return chatSetup({ tokensPerSecond: 400, tokenSize: { min: 1, max: 1 } });

@@ -4,12 +4,18 @@ import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { allEntries, chatSetup, openChat } from "./chat-support.ts";
-import { awaited } from "./effect-support.ts";
-import { addHooks, addTool } from "./harness-support.ts";
 import { resultText, results, DONE, calls, run, tool } from "./harness-tools-support.ts";
-import { context } from "./session-support.ts";
-import { aborted, deferred } from "./task-support.ts";
+import {
+  allEntries,
+  chatSetup,
+  openChat,
+  awaited,
+  addHooks,
+  addTool,
+  context,
+  aborted,
+  deferred,
+} from "./support.ts";
 
 const rejectsInvocationBound = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
