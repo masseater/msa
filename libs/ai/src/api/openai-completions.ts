@@ -1008,8 +1008,8 @@ function buildParams(
   }
 
   // OpenRouter provider routing preferences
-  if (model.compat?.openRouterRouting) {
-    (params as any).provider = model.compat.openRouterRouting;
+  if (Object.keys(compat.openRouterRouting).length > 0) {
+    (params as any).provider = compat.openRouterRouting;
   }
 
   // Last so model and request sampling parameters override named request fields.
@@ -1672,7 +1672,7 @@ function detectCompat(model: Model<"openai-completions">): ResolvedOpenAIComplet
     requiresThinkingAsText: false,
     requiresReasoningContentOnAssistantMessages: false,
     thinkingFormat: isOpenRouter ? "openrouter" : "openai",
-    openRouterRouting: {},
+    openRouterRouting: isOpenRouter ? { data_collection: "deny" } : {},
     chatTemplateKwargs: {},
     supportsThinkingTokenBudget: false,
     thinkingTokenBudgetField: undefined,
@@ -1716,7 +1716,7 @@ function getCompat(model: Model<"openai-completions">): ResolvedOpenAICompletion
       model.compat.requiresReasoningContentOnAssistantMessages ??
       detected.requiresReasoningContentOnAssistantMessages,
     thinkingFormat: model.compat.thinkingFormat ?? detected.thinkingFormat,
-    openRouterRouting: model.compat.openRouterRouting ?? {},
+    openRouterRouting: { ...detected.openRouterRouting, ...model.compat.openRouterRouting },
     chatTemplateKwargs: model.compat.chatTemplateKwargs ?? detected.chatTemplateKwargs,
     supportsThinkingTokenBudget:
       model.compat.supportsThinkingTokenBudget ?? detected.supportsThinkingTokenBudget,

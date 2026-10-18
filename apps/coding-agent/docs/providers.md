@@ -80,6 +80,8 @@ With a key, msa lists only the OpenRouter chat models that key may use, with the
 
 msa refreshes the list in the background at startup in interactive mode, when `/model` opens, after `/login`, and on `msa update --models`. The last list is saved and used offline and in `msa -p` and RPC mode. After switching keys outside `/login`, the previous key's list stays until the next refresh.
 
+msa sends `provider.data_collection: "deny"` on every OpenRouter request, so only providers that do not store or train on your data serve it. To allow collection for a model, set `compat.openRouterRouting.data_collection` to `"allow"` in `modelOverrides` in [`models.json`](models.md#configure-a-compatible-endpoint). Other `openRouterRouting` fields, such as `only` and `order`, are merged with the default.
+
 Regional endpoints filter models to their region. To use one, set the base URL in [`models.json`](models.md#configure-a-compatible-endpoint):
 
 ```json
