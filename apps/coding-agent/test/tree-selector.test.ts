@@ -334,7 +334,7 @@ describe("TreeSelectorComponent", () => {
         assistantMessage("asst-1", "user-1", "hi"),
       ];
       const tree = buildTree(entries);
-      const labelDate = dateFromMillis(2026);
+      const labelDate = dateFromMillis(Date.parse("2026-03-28T14:32:00"));
       tree[0]!.label = "checkpoint";
       tree[0]!.labelTimestamp = labelDate.toISOString();
 
