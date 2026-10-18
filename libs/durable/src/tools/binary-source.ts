@@ -2,7 +2,8 @@ import type { Context } from "@msa/chord";
 import { Effect, Function } from "effect";
 
 import type { Dual2 } from "../dual.ts";
-import { type BinaryReader, type FileInfo, getOrThrow, type LineScan } from "../env/index.ts";
+import type { BinaryReader, FileInfo, LineScan } from "../env/index.ts";
+import { getOrThrow } from "../env/result.ts";
 
 export type BinarySource = {
   readonly info: Effect.Effect<FileInfo>;

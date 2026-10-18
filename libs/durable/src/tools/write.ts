@@ -1,7 +1,7 @@
 import { Effect } from "effect";
 import { type Static, Type } from "typebox";
 
-import { getOrThrow } from "../env/index.ts";
+import { getOrThrow } from "../env/result.ts";
 import { defineTool } from "../harness/define.ts";
 import type { ToolRegistration } from "../harness/types.ts";
 import { requireEnv } from "./env.ts";

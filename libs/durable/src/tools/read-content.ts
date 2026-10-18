@@ -1,7 +1,8 @@
 import type { Context } from "@msa/chord";
 import { Effect } from "effect";
 
-import { type ExecutionEnv, getOrThrow } from "../env/index.ts";
+import type { ExecutionEnv } from "../env/index.ts";
+import { getOrThrow } from "../env/result.ts";
 import type { ToolExecutionApi } from "../harness/types.ts";
 import { type BinarySource, binarySource } from "./binary-source.ts";
 import type { ImageProcessor } from "./image-processor.ts";

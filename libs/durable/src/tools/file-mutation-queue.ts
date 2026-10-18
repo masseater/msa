@@ -1,7 +1,8 @@
 import type { Context } from "@msa/chord";
 import { Deferred, Effect, Function } from "effect";
 
-import { type ExecutionEnv, getOrThrow } from "../env/index.ts";
+import type { ExecutionEnv } from "../env/index.ts";
+import { getOrThrow } from "../env/result.ts";
 
 const queues = new Map<string, Deferred.Deferred<void>>();
 

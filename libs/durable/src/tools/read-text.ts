@@ -1,7 +1,8 @@
 import { characterEnd } from "@msa/chord/output";
 import { Effect } from "effect";
 
-import { type LineScan, rangeDecoder, startsWithBom } from "../env/index.ts";
+import { rangeDecoder, startsWithBom } from "../env/decode.ts";
+import type { LineScan } from "../env/index.ts";
 import type { ToolDiagnostic, ToolExecutionResult } from "../harness/types.ts";
 import {
   DEFAULT_MAX_BYTES,
