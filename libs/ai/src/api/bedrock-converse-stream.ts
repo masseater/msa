@@ -1,5 +1,3 @@
-import type { Agent as HttpsAgent } from "node:https";
-
 import {
   BedrockRuntimeClient,
   type BedrockRuntimeClientConfig,
@@ -204,7 +202,7 @@ export const stream = modelCall<
           if (proxyUrl !== undefined) {
             config.requestHandler = new NodeHttpHandler({
               httpAgent: new HttpProxyAgent(proxyUrl),
-              httpsAgent: new HttpsProxyAgent(proxyUrl) as unknown as HttpsAgent,
+              httpsAgent: new HttpsProxyAgent(proxyUrl),
             });
           } else if (getProviderEnvValue("AWS_BEDROCK_FORCE_HTTP1", options.env) === "1") {
             config.requestHandler = new NodeHttpHandler();

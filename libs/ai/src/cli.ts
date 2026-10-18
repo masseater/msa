@@ -1,9 +1,9 @@
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { createInterface } from "node:readline";
 
-import { Console, Effect } from "effect";
+import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
+import { Console, Effect, FileSystem, ManagedRuntime, Schema } from "effect";
 
-import type { AuthEvent, AuthPrompt, OAuthCredential, Provider } from "./index.ts";
+import type { AuthEvent, AuthPrompt, Provider } from "./index.ts";
 import { builtinProviders } from "./providers/all.ts";
 import { randomUuid } from "./utils/crypto.ts";
 import { toErrorMessage } from "./utils/errors.ts";
@@ -26,18 +26,20 @@ const prompt = (rl: Readline, question: string): Effect.Effect<string> =>
     rl.question(question, (answer) => resume(Effect.succeed(answer)));
   });
 
-function loadAuth(): Record<string, OAuthCredential> {
-  if (!existsSync(AUTH_FILE)) return {};
-  try {
-    return JSON.parse(readFileSync(AUTH_FILE, "utf-8")) as Record<string, OAuthCredential>;
-  } catch {
-    return {};
-  }
-}
+const AuthFile = Schema.fromJsonString(Schema.Record(Schema.String, Schema.Unknown));
+const decodeAuthFile = Schema.decodeEffect(AuthFile);
+const encodeAuthFile = Schema.encodeEffect(Schema.fromJsonString(AuthFile.to, { space: 2 }));
 
-function saveAuth(auth: Record<string, OAuthCredential>): void {
-  writeFileSync(AUTH_FILE, JSON.stringify(auth, null, 2), "utf-8");
-}
+const loadAuth = Effect.gen(function* () {
+  const fs = yield* FileSystem.FileSystem;
+  if (!(yield* fs.exists(AUTH_FILE))) return {};
+  return yield* fs.readFileString(AUTH_FILE).pipe(Effect.flatMap(decodeAuthFile));
+}).pipe(Effect.orElseSucceed((): Readonly<Record<string, unknown>> => ({})));
+
+const saveAuth = Effect.fn("saveAuth")(function* (auth: Readonly<Record<string, unknown>>) {
+  const fs = yield* FileSystem.FileSystem;
+  yield* fs.writeFileString(AUTH_FILE, yield* encodeAuthFile(auth));
+}, Effect.orDie);
 
 const answerPrompt = Effect.fn("answerPrompt")(function* (rl: Readline, authPrompt: AuthPrompt) {
   if (authPrompt.type === "select") {
@@ -95,9 +97,8 @@ const login = Effect.fn("login")(function* (providerId: string) {
       { getDeviceId: randomUuid },
     ),
   );
-  const auth = loadAuth();
-  auth[providerId] = credential;
-  saveAuth(auth);
+  const auth = yield* loadAuth;
+  yield* saveAuth({ ...auth, [providerId]: credential });
   yield* Console.log(`\nCredentials saved to ${AUTH_FILE}`);
 }, Effect.scoped);
 
@@ -145,7 +146,7 @@ const main = Effect.fn("main")(function* (args: readonly string[]) {
   yield* login(providerId);
 });
 
-Effect.runFork(
+ManagedRuntime.make(NodeFileSystem.layer).runFork(
   main(process.argv.slice(2)).pipe(
     Effect.catchDefect((error) =>
       Console.error("Error:", toErrorMessage(error)).pipe(
