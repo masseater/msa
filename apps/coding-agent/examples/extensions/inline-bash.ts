@@ -1,7 +1,7 @@
 import type { ExtensionAPI } from "@msa/coding-agent";
 
 export default function (msa: ExtensionAPI) {
-  const PATTERN = /!\{([^}]+)\}/g;
+  const PATTERN = /!\{([^}]+)\}/gu;
   const TIMEOUT_MS = 30000;
 
   msa.on("input", async (event, ctx) => {

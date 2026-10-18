@@ -24,7 +24,7 @@ export default function (msa: ExtensionAPI) {
   msa.registerCommand("status", {
     description: "Send a status message (usage: /status [warn|error] message)",
     handler: async (args, _ctx) => {
-      const parts = args.trim().split(/\s+/);
+      const parts = args.trim().split(/\s+/u);
       let level = "info";
       let content = args.trim();
 

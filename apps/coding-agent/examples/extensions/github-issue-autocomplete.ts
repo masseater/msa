@@ -18,17 +18,17 @@ const MAX_ISSUES = 100;
 const MAX_SUGGESTIONS = 20;
 
 function extractIssueToken(textBeforeCursor: string): string | undefined {
-  const match = textBeforeCursor.match(/(?:^|[ \t])#([^\s#]*)$/);
+  const match = textBeforeCursor.match(/(?:^|[ \t])#([^\s#]*)$/u);
   return match?.[1];
 }
 
 function parseGitHubRepo(remoteUrl: string): string | undefined {
-  const sshMatch = remoteUrl.match(/^git@github\.com:([^/]+\/[^/]+?)(?:\.git)?$/);
+  const sshMatch = remoteUrl.match(/^git@github\.com:([^/]+\/[^/]+?)(?:\.git)?$/u);
   if (sshMatch !== null) {
     return sshMatch[1];
   }
 
-  const httpsMatch = remoteUrl.match(/^https?:\/\/github\.com\/([^/]+\/[^/]+?)(?:\.git)?$/);
+  const httpsMatch = remoteUrl.match(/^https?:\/\/github\.com\/([^/]+\/[^/]+?)(?:\.git)?$/u);
   if (httpsMatch !== null) {
     return httpsMatch[1];
   }
@@ -43,7 +43,7 @@ async function resolveGitHubRepo(msa: ExtensionAPI, cwd: string): Promise<RepoRe
   }
 
   for (const line of result.stdout.split("\n")) {
-    const columns = line.trim().split(/\s+/);
+    const columns = line.trim().split(/\s+/u);
     const remoteUrl = columns[1];
     if (remoteUrl === undefined || remoteUrl.length === 0) {
       continue;
@@ -70,7 +70,7 @@ function filterIssues(issues: GitHubIssue[], query: string): AutocompleteItem[] 
     return issues.slice(0, MAX_SUGGESTIONS).map(formatIssueItem);
   }
 
-  if (/^\d+$/.test(query)) {
+  if (/^\d+$/u.test(query)) {
     const numericMatches = issues
       .filter((issue) => String(issue.number).startsWith(query))
       .slice(0, MAX_SUGGESTIONS)

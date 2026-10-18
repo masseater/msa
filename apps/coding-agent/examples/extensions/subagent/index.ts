@@ -234,7 +234,7 @@ async function writePromptToTempFile(
   prompt: string,
 ): Promise<{ dir: string; filePath: string }> {
   const tmpDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "msa-subagent-"));
-  const safeName = agentName.replace(/[^\w.-]+/g, "_");
+  const safeName = agentName.replace(/[^\w.-]+/gu, "_");
   const filePath = path.join(tmpDir, `prompt-${safeName}.md`);
   await withFileMutationQueue(filePath, async () => {
     await fs.promises.writeFile(filePath, prompt, { encoding: "utf-8", mode: 0o600 });
@@ -255,7 +255,7 @@ function getMsaInvocation(args: string[]): { command: string; args: string[] } {
   }
 
   const execName = path.basename(process.execPath).toLowerCase();
-  const isGenericRuntime = /^(node|bun)(\.exe)?$/.test(execName);
+  const isGenericRuntime = /^(node|bun)(\.exe)?$/u.test(execName);
   if (!isGenericRuntime) {
     return { command: process.execPath, args };
   }
@@ -584,7 +584,7 @@ export default function (msa: ExtensionAPI) {
         let previousOutput = "";
 
         for (const [i, step] of params.chain.entries()) {
-          const taskWithContext = step.task.replace(/\{previous\}/g, previousOutput);
+          const taskWithContext = step.task.replace(/\{previous\}/gu, previousOutput);
 
           const chainUpdate: OnUpdateCallback | undefined =
             onUpdate !== undefined
@@ -788,7 +788,7 @@ export default function (msa: ExtensionAPI) {
           theme.fg("accent", `chain (${args.chain.length} steps)`) +
           theme.fg("muted", ` [${scope}]`);
         for (const [i, step] of args.chain.slice(0, 3).entries()) {
-          const cleanTask = step.task.replace(/\{previous\}/g, "").trim();
+          const cleanTask = step.task.replace(/\{previous\}/gu, "").trim();
           const preview = cleanTask.length > 40 ? `${cleanTask.slice(0, 40)}...` : cleanTask;
           text +=
             "\n  " +

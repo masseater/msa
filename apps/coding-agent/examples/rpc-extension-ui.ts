@@ -380,7 +380,7 @@ async function main() {
       }
 
       case "editor": {
-        const prefill = req.prefill?.replace(/\n/g, " ");
+        const prefill = req.prefill?.replace(/\n/gu, " ");
         showInputDialog(req.title ?? "Editor", prefill, (value) => {
           if (value === undefined) {
             send({ type: "extension_ui_response", id, cancelled: true });

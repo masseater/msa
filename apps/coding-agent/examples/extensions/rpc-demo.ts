@@ -22,7 +22,7 @@ export default function (msa: ExtensionAPI) {
     if (event.toolName !== "bash") return undefined;
 
     const command = event.input.command as string;
-    const isDangerous = /\brm\s+(-rf?|--recursive)/i.test(command) || /\bsudo\b/i.test(command);
+    const isDangerous = /\brm\s+(-rf?|--recursive)/iu.test(command) || /\bsudo\b/iu.test(command);
 
     if (isDangerous) {
       if (!ctx.hasUI) {

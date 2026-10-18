@@ -87,7 +87,7 @@ export default function (msa: ExtensionAPI) {
       const content = result.content[0];
       const output = content?.type === "text" ? content.text : "";
 
-      const exitCodeText = output.match(/exit code: (\d+)/)?.[1];
+      const exitCodeText = output.match(/exit code: (\d+)/u)?.[1];
       const exitCode = exitCodeText === undefined ? null : parseInt(exitCodeText, 10);
       const lineCount = output.split("\n").filter((l) => l.trim()).length;
 

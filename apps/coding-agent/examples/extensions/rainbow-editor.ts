@@ -39,7 +39,7 @@ class RainbowEditor extends CustomEditor {
   private frame = 0;
 
   private hasUltrathink(): boolean {
-    return /ultrathink/i.test(this.getText());
+    return /ultrathink/iu.test(this.getText());
   }
 
   private startAnimation(): void {
@@ -71,7 +71,7 @@ class RainbowEditor extends CustomEditor {
     const shinePos = cycle < 10 ? cycle : -1;
     return super
       .render(width)
-      .map((line) => line.replace(/ultrathink/gi, (m) => colorize(m, shinePos)));
+      .map((line) => line.replace(/ultrathink/giu, (m) => colorize(m, shinePos)));
   }
 }
 

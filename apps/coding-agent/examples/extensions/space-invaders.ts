@@ -476,7 +476,7 @@ class SpaceInvadersComponent {
   }
 
   private padLine(line: string, width: number): string {
-    const visibleLen = line.replace(/\x1b\[[0-9;]*m/g, "").length;
+    const visibleLen = line.replace(/\x1b\[[0-9;]*m/gu, "").length;
     const padding = Math.max(0, width - visibleLen);
     return line + " ".repeat(padding);
   }

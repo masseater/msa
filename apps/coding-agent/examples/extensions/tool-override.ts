@@ -9,13 +9,13 @@ import { Type } from "typebox";
 const LOG_FILE = join(getAgentDir(), "read-access.log");
 
 const BLOCKED_PATTERNS = [
-  /\.env$/,
-  /\.env\..+$/,
-  /secrets?\.(json|yaml|yml|toml)$/i,
-  /credentials?\.(json|yaml|yml|toml)$/i,
-  /\/\.ssh\//,
-  /\/\.aws\//,
-  /\/\.gnupg\//,
+  /\.env$/u,
+  /\.env\..+$/u,
+  /secrets?\.(json|yaml|yml|toml)$/iu,
+  /credentials?\.(json|yaml|yml|toml)$/iu,
+  /\/\.ssh\//u,
+  /\/\.aws\//u,
+  /\/\.gnupg\//u,
 ];
 
 function isBlockedPath(path: string): boolean {

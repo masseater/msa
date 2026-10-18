@@ -8,7 +8,7 @@ const ECHO_PARAMS = Type.Object({
 function normalizeToolName(input: string): string | undefined {
   const trimmed = input.trim().toLowerCase();
   if (trimmed.length === 0) return undefined;
-  if (!/^[a-z0-9_]+$/.test(trimmed)) return undefined;
+  if (!/^[a-z0-9_]+$/u.test(trimmed)) return undefined;
   return trimmed;
 }
 
