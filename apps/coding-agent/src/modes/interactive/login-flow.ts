@@ -4,7 +4,7 @@ import type { AuthEvent, AuthPrompt } from "@msa/ai";
 import type { Model } from "@msa/ai/compat";
 import type { TUI } from "@msa/tui";
 
-import { APP_NAME, getAgentDir, getAuthPath, getDocsPath } from "../../config.ts";
+import { APP_NAME, getAgentDir, getAuthPath } from "../../config.ts";
 import type { AgentSession } from "../../core/agent-session.ts";
 import { type ExternalService, findExternalService } from "../../core/external-services.ts";
 import type { McpHttpServerConfig } from "../../core/mcp-servers.ts";
@@ -705,13 +705,6 @@ export class LoginFlow {
     const { host } = this;
     const previousModel = host.session.model;
     const dialog = new LoginDialogComponent(host.ui, providerId, () => {}, providerName);
-    if (method === "api_key" && providerId === "amazon-bedrock") {
-      dialog.showDetails([
-        theme.fg("text", "You can also use an AWS profile, IAM keys, or role-based credentials."),
-        theme.fg("muted", "See:"),
-        theme.fg("accent", `  ${path.join(getDocsPath(), "providers.md")}`),
-      ]);
-    }
     host.editorSlot.show(dialog);
 
     const actionLabel =

@@ -9,7 +9,7 @@ A new provider touches multiple files. Work through these steps in order.
 
 ## 1. Core Types (`libs/ai/src/types.ts`)
 
-- Add API identifier to `Api` type union (e.g. `"bedrock-converse-stream"`).
+- Add API identifier to `Api` type union (e.g. `"anthropic-messages"`).
 - Create options interface extending `StreamOptions`.
 - Add mapping to `ApiOptionsMap`.
 - Add provider name to `KnownProvider` type union.
@@ -41,7 +41,7 @@ Create a provider file exporting:
 - Always add the provider to `stream.test.ts` with at least one representative model, even if it reuses an existing API impl such as `openai-completions`.
 - Add the provider to the broader matrix where applicable: `tokens.test.ts`, `abort.test.ts`, `empty.test.ts`, `context-overflow.test.ts`, `unicode-surrogate.test.ts`, `tool-call-without-result.test.ts`, `image-tool-result.test.ts`, `total-tokens.test.ts`, `cross-provider-handoff.test.ts`.
 - For `cross-provider-handoff.test.ts`, add at least one provider/model pair. If the provider exposes multiple model families (e.g. GPT and Claude), add at least one pair per family.
-- For non-standard auth, create a utility (e.g. `bedrock-utils.ts`) with credential detection.
+- For non-standard auth, create a test utility with credential detection.
 
 ## 6. Coding Agent (`apps/coding-agent/`)
 

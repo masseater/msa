@@ -123,12 +123,9 @@ const checkTreeshakeInputs = (inputs: Metafile["inputs"]) =>
         );
       }
     }
-    const includedAiSdkPackages = [
-      "@anthropic-ai/sdk",
-      "@aws-sdk/client-bedrock-runtime",
-      "@google/genai",
-      "openai",
-    ].filter((packageName) => includesNodePackage(inputs, packageName));
+    const includedAiSdkPackages = ["@anthropic-ai/sdk", "@google/genai", "openai"].filter(
+      (packageName) => includesNodePackage(inputs, packageName),
+    );
     if (includedAiSdkPackages.length !== 1 || includedAiSdkPackages[0] !== "@anthropic-ai/sdk") {
       return yield* fail(
         `Agent selective-provider bundle SDKs: expected only @anthropic-ai/sdk, found ${describeFound(includedAiSdkPackages)}`,

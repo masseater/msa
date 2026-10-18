@@ -1,7 +1,6 @@
 import type { TelemetryContext } from "@msa/telemetry";
 
 import type { AnthropicOptions } from "./api/anthropic-messages.ts";
-import type { BedrockOptions } from "./api/bedrock-converse-stream.ts";
 import type { GoogleOptions } from "./api/google-generative-ai.ts";
 import type { MsaMessagesOptions } from "./api/msa-messages.ts";
 import type { OpenAICodexResponsesOptions } from "./api/openai-codex-responses.ts";
@@ -9,7 +8,6 @@ import type { OpenAICompletionsOptions } from "./api/openai-completions.ts";
 import type { OpenAIResponsesOptions } from "./api/openai-responses.ts";
 import type {
   AnthropicMessagesCompat,
-  BedrockCompat,
   OpenAICompletionsCompat,
   OpenAIResponsesCompat,
 } from "./providers/compat-schema.ts";
@@ -29,7 +27,6 @@ import type { AssistantMessageEventStream } from "./utils/event-stream.ts";
 export type {
   AnthropicAllowedFallbackModel,
   AnthropicMessagesCompat,
-  BedrockCompat,
   ChatTemplateKwargValue,
   OpenAICompletionsCompat,
   OpenAIResponsesCompat,
@@ -58,7 +55,6 @@ export type KnownApi =
   | "openai-responses"
   | "openai-codex-responses"
   | "anthropic-messages"
-  | "bedrock-converse-stream"
   | "google-generative-ai"
   | "msa-messages";
 
@@ -73,7 +69,6 @@ export type KnownClassifierApi = "typesafe-system-one" | "llama-cpp-classify" | 
 export type ClassifierApi = KnownClassifierApi | (string & {});
 
 export type KnownProvider =
-  | "amazon-bedrock"
   | "anthropic"
   | "openai"
   | "openai-codex"
@@ -139,9 +134,6 @@ export interface ProviderRequestOptions<TModel = Model<Api>> {
   /**
    * Optional custom HTTP headers to include in API requests.
    * Merged with provider defaults; caller values override default headers.
-   * On AWS Bedrock these are injected via a Smithy `build`-step middleware so
-   * they are covered by SigV4 signing; reserved headers (`x-amz-*`,
-   * `authorization`, `host`) are silently ignored to preserve SigV4 / bearer auth.
    * A null value suppresses a provider/API default header with the same name.
    */
   headers?: ProviderHeaders | undefined;
@@ -243,7 +235,6 @@ export interface ApiOptionsMap {
   "openai-responses": OpenAIResponsesOptions;
   "openai-codex-responses": OpenAICodexResponsesOptions;
   "google-generative-ai": GoogleOptions;
-  "bedrock-converse-stream": BedrockOptions;
   "msa-messages": MsaMessagesOptions;
 }
 
@@ -869,9 +860,7 @@ export interface Model<TApi extends Api> extends BaseModel<TApi> {
           ? OpenAIResponsesCompat
           : TApi extends "anthropic-messages"
             ? AnthropicMessagesCompat
-            : TApi extends "bedrock-converse-stream"
-              ? BedrockCompat
-              : never)
+            : never)
     | undefined;
 }
 

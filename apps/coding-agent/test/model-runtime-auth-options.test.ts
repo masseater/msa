@@ -86,8 +86,8 @@ describe("ModelRuntime auth options", () => {
       expect.arrayContaining([
         expect.objectContaining({
           type: "api_key",
-          provider: expect.objectContaining({ id: "amazon-bedrock", name: "Amazon Bedrock" }),
-          method: expect.objectContaining({ name: "AWS credentials or bearer token" }),
+          provider: expect.objectContaining({ id: "openrouter", name: "OpenRouter" }),
+          method: expect.objectContaining({ name: "OpenRouter API key" }),
         }),
         expect.objectContaining({
           type: "oauth",

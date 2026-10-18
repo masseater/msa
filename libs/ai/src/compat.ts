@@ -11,7 +11,6 @@
  */
 
 export * from "./api/anthropic-messages.lazy.ts";
-export * from "./api/bedrock-converse-stream.lazy.ts";
 export * from "./api/google-generative-ai.lazy.ts";
 export * from "./api/openai-codex-responses.lazy.ts";
 export * from "./api/openai-completions.lazy.ts";
@@ -26,7 +25,6 @@ export * from "./legacy-api-aliases.ts";
 export * from "./providers/images/register-builtins.ts";
 
 import { anthropicMessagesApi } from "./api/anthropic-messages.lazy.ts";
-import { bedrockConverseStreamApi } from "./api/bedrock-converse-stream.lazy.ts";
 import { googleGenerativeAIApi } from "./api/google-generative-ai.lazy.ts";
 import { msaMessagesApi } from "./api/msa-messages.lazy.ts";
 import { openAICodexResponsesApi } from "./api/openai-codex-responses.lazy.ts";
@@ -193,7 +191,6 @@ const BUILTIN_APIS: [Api, ProviderStreams][] = [
   ["openai-responses", openAIResponsesApi()],
   ["openai-codex-responses", openAICodexResponsesApi()],
   ["google-generative-ai", googleGenerativeAIApi()],
-  ["bedrock-converse-stream", bedrockConverseStreamApi()],
   ["msa-messages", msaMessagesApi()],
 ];
 

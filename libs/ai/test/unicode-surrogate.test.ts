@@ -6,7 +6,6 @@ import type { Api, Context, Model, StreamOptions, ToolResultMessage } from "../s
 
 type StreamOptionsWithExtras = StreamOptions & Record<string, unknown>;
 
-import { hasBedrockCredentials } from "./bedrock-utils.ts";
 import { resolveApiKey } from "./oauth.ts";
 
 // Empty schema for test tools - must be proper OBJECT type for Cloud Code Assist
@@ -402,30 +401,6 @@ describe("AI Providers Unicode Surrogate Pair Tests", () => {
       { retry: 3, timeout: 30000 },
       async () => {
         await testUnpairedHighSurrogate(llm, { apiKey: anthropicOAuthToken });
-      },
-    );
-  });
-
-  describe.skipIf(!hasBedrockCredentials())("Amazon Bedrock Provider Unicode Handling", () => {
-    const llm = getModel("amazon-bedrock", "global.anthropic.claude-sonnet-4-5-20250929-v1:0");
-
-    it("should handle emoji in tool results", { retry: 3, timeout: 30000 }, async () => {
-      await testEmojiInToolResults(llm);
-    });
-
-    it(
-      "should handle real-world LinkedIn comment data with emoji",
-      { retry: 3, timeout: 30000 },
-      async () => {
-        await testRealWorldLinkedInData(llm);
-      },
-    );
-
-    it(
-      "should handle unpaired high surrogate (0xD83D) in tool results",
-      { retry: 3, timeout: 30000 },
-      async () => {
-        await testUnpairedHighSurrogate(llm);
       },
     );
   });

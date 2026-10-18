@@ -175,7 +175,6 @@ const DEEPSEEK_V4_FLASH_THINKING_LEVEL_MAP = {
 const KIMI_K3_MAX_TOKENS = 131072;
 const OPENROUTER_KIMI_K3_MODEL_IDS = new Set(["moonshotai/kimi-k3", "~moonshotai/kimi-latest"]);
 
-const BEDROCK_INFERENCE_PROFILE_ONLY_MODEL_IDS = new Set(["anthropic.claude-opus-5"]);
 const MODELS_DEV_OPENAI_UNSUPPORTED_MODEL_IDS = new Set(["gpt-5.6"]);
 const OPENAI_TOOL_SEARCH_MODEL_IDS = new Set([
   "gpt-5.4",
@@ -746,11 +745,9 @@ function applyImageInputMetadata(model: AnyModel): void {
             maxPerRequest: model.type !== "image" && model.contextWindow === 200000 ? 100 : 600,
           },
         }
-      : model.provider === "amazon-bedrock"
-        ? { images: { maxPerMessage: 20 } }
-        : model.provider === "openai"
-          ? { maxRequestBytes: 512 * 1024 * 1024, images: { maxPerRequest: 1500 } }
-          : undefined;
+      : model.provider === "openai"
+        ? { maxRequestBytes: 512 * 1024 * 1024, images: { maxPerRequest: 1500 } }
+        : undefined;
   const configuredImages = model.inputLimits?.images;
   model.inputLimits = {
     ...providerLimits,
@@ -923,12 +920,6 @@ function getAnthropicMessagesCompat(
   return Object.keys(compat).length > 0 ? compat : undefined;
 }
 
-function getBedrockBaseUrl(modelId: string): string {
-  return modelId.startsWith("eu.")
-    ? "https://bedrock-runtime.eu-central-1.amazonaws.com"
-    : "https://bedrock-runtime.us-east-1.amazonaws.com";
-}
-
 function roundCost(value: number): number {
   return Number(value.toFixed(6));
 }
@@ -1011,46 +1002,6 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
     const data = (await response.json()) as ModelsDevCatalog;
 
     const models: Model<any>[] = [];
-
-    // Process Amazon Bedrock models
-    if (data["amazon-bedrock"]?.models) {
-      for (const [modelId, model] of Object.entries(data["amazon-bedrock"].models)) {
-        const m = model as ModelsDevModel;
-        if (m.tool_call !== true) continue;
-        if (BEDROCK_INFERENCE_PROFILE_ONLY_MODEL_IDS.has(modelId)) continue;
-
-        let id = modelId;
-
-        if (id.startsWith("ai21.jamba")) {
-          // These models doesn't support tool use in streaming mode
-          continue;
-        }
-
-        if (id.startsWith("mistral.mistral-7b-instruct-v0")) {
-          // These models doesn't support system messages
-          continue;
-        }
-
-        models.push({
-          id,
-          name: m.name || id,
-          api: "bedrock-converse-stream" as const,
-          provider: "amazon-bedrock" as const,
-          baseUrl: getBedrockBaseUrl(id),
-          reasoning: m.reasoning === true,
-          input: (m.modalities?.input?.includes("image") ? ["text", "image"] : ["text"]) as (
-            | "text"
-            | "image"
-          )[],
-          // Includes models.dev pricing tiers, e.g. the long-context tier for OpenAI models (#10326).
-          cost: getModelsDevCost(m.cost),
-          contextWindow: m.limit?.context || 4096,
-          maxTokens: m.limit?.output || 4096,
-          ...(m.structured_output === true && { compat: { supportsStrictMode: true } }),
-        });
-        recordModelsDevReasoningOptions("amazon-bedrock" as const, id, m);
-      }
-    }
 
     // Process Anthropic models
     if (data["anthropic"]?.models) {

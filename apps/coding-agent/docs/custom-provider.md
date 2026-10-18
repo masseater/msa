@@ -111,7 +111,7 @@ Publish persisted catalog data only when it should survive across runs. A live s
 
 Use one of msa AI’s API implementations whenever the provider protocol matches it.
 
-Supported implementations cover Anthropic Messages, OpenAI Chat Completions and Responses, Google Generative AI, and Bedrock Converse.
+Supported implementations cover Anthropic Messages, OpenAI Chat Completions and Responses, and Google Generative AI.
 
 The provider can still customize authentication, base URLs, headers, model filtering, and discovery while delegating request conversion and streaming to an existing API implementation.
 

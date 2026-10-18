@@ -502,16 +502,6 @@ export const AnthropicMessagesCompatSchema = Type.Object(
   },
 );
 
-export const BedrockCompatSchema = Type.Object(
-  {
-    supportsStrictMode: optionalCompatBoolean({
-      description: "Whether the model supports Bedrock strict tool schemas.",
-      default: false,
-    }),
-  },
-  { description: "Compatibility settings for Amazon Bedrock models.", additionalProperties: true },
-);
-
 const ProviderCompatPropertyOverrides = {
   supportsDeveloperRole: optionalCompatBoolean({
     description:
@@ -605,7 +595,6 @@ const CompatSchemasByApi = {
   "openai-completions": OpenAICompletionsCompatSchema,
   "openai-responses": OpenAIResponsesCompatSchema,
   "anthropic-messages": AnthropicMessagesCompatSchema,
-  "bedrock-converse-stream": BedrockCompatSchema,
 } as const;
 
 const ProviderCompatProperties = mergeCompatProperties(
@@ -635,5 +624,3 @@ export interface OpenAICompletionsCompat extends Static<typeof OpenAICompletions
 export interface OpenAIResponsesCompat extends Static<typeof OpenAIResponsesCompatSchema> {}
 /** Compatibility settings for Anthropic Messages-compatible APIs. */
 export interface AnthropicMessagesCompat extends Static<typeof AnthropicMessagesCompatSchema> {}
-/** Compatibility settings for Amazon Bedrock models. */
-export interface BedrockCompat extends Static<typeof BedrockCompatSchema> {}

@@ -456,11 +456,6 @@ ${chalk.bold("Environment Variables:")}
   OPENAI_API_KEY                   - OpenAI GPT API key
   OPENROUTER_API_KEY               - OpenRouter API key
   OPENCODE_API_KEY                 - OpenCode Zen/OpenCode Go API key
-  AWS_PROFILE                      - AWS profile for Amazon Bedrock
-  AWS_ACCESS_KEY_ID                - AWS access key for Amazon Bedrock
-  AWS_SECRET_ACCESS_KEY            - AWS secret key for Amazon Bedrock
-  AWS_BEARER_TOKEN_BEDROCK         - Bedrock API key (bearer token)
-  AWS_REGION                       - AWS region for Amazon Bedrock (e.g., us-east-1)
   ${ENV_AGENT_DIR.padEnd(32)} - Config directory (default: ~/${CONFIG_DIR_NAME}/agent)
   ${ENV_SESSION_DIR.padEnd(32)} - Session storage directory (overridden by --session-dir)
   MSA_PACKAGE_DIR                   - Override package directory (for Nix/Guix store paths)

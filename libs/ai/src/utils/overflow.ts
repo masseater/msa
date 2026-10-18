@@ -87,14 +87,8 @@ const OVERFLOW_PATTERNS = [
  * Patterns that indicate non-overflow errors (e.g. rate limiting, server errors).
  * Error messages matching any of these are excluded from overflow detection
  * even if they also match an OVERFLOW_PATTERN.
- *
- * Example: Bedrock formats throttling errors as "ThrottlingException: Too many tokens,
- * please wait before trying again." which would match the /too many tokens/i overflow
- * pattern without this exclusion.
  */
 const NON_OVERFLOW_PATTERNS = [
-  // AWS Bedrock non-overflow errors (human-readable prefixes from formatBedrockError)
-  /^(Throttling error|Service unavailable):/iu,
   // Generic rate limiting
   /rate limit/iu,
   // Generic HTTP 429 style

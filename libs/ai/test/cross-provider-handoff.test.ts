@@ -70,12 +70,6 @@ const PROVIDER_MODEL_PAIRS: ProviderModelPair[] = [
   { provider: "openai", model: "gpt-5-mini", label: "openai-responses-gpt-5-mini" },
   // OpenAI Codex
   { provider: "openai-codex", model: "gpt-5.5", label: "openai-codex-gpt-5.5" },
-  // Amazon Bedrock
-  {
-    provider: "amazon-bedrock",
-    model: "global.anthropic.claude-sonnet-4-5-20250929-v1:0",
-    label: "bedrock-claude-sonnet-4-5",
-  },
   // OpenCode Zen
   { provider: "opencode", model: "big-pickle", label: "zen-big-pickle" },
   { provider: "opencode", model: "claude-sonnet-4-5", label: "zen-claude-sonnet-4-5" },

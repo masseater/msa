@@ -11,7 +11,6 @@ export type {
   AnthropicOptions,
   AnthropicThinkingDisplay,
 } from "./api/anthropic-messages.ts";
-export type { BedrockOptions, BedrockThinkingDisplay } from "./api/bedrock-converse-stream.ts";
 export type { GoogleOptions } from "./api/google-generative-ai.ts";
 export type { GoogleApiThinkingLevel, ResolvedGoogleThinkingLevel } from "./api/google-shared.ts";
 export * from "./api/lazy.ts";
