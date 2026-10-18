@@ -14,7 +14,6 @@ import {
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
 
-import { deleteEnv, writeEnv } from "../src/core/process-env.ts";
 import {
   clearConfigValueCache,
   resolveConfigValue,
@@ -49,8 +48,8 @@ describe("resolveConfigValue", () => {
   );
 
   test("resolves literals, environment templates, and escapes", () => {
-    writeEnv("TEST_CONFIG_LEFT", "left");
-    writeEnv("TEST_CONFIG_RIGHT", "right");
+    vi.stubEnv("TEST_CONFIG_LEFT", "left");
+    vi.stubEnv("TEST_CONFIG_RIGHT", "right");
     try {
       expect(resolveConfigValue("literal-key")).toBe("literal-key");
       expect(resolveConfigValue("$TEST_CONFIG_LEFT")).toBe("left");
@@ -58,19 +57,19 @@ describe("resolveConfigValue", () => {
       expect(resolveConfigValue("$$TEST_CONFIG_LEFT")).toBe("$TEST_CONFIG_LEFT");
       expect(resolveConfigValue("$!literal-$TEST_CONFIG_RIGHT")).toBe("!literal-right");
     } finally {
-      deleteEnv("TEST_CONFIG_LEFT");
-      deleteEnv("TEST_CONFIG_RIGHT");
+      vi.stubEnv("TEST_CONFIG_LEFT", undefined);
+      vi.stubEnv("TEST_CONFIG_RIGHT", undefined);
     }
   });
 
   test("uses credential-scoped environment before process.env", () => {
-    writeEnv("TEST_CONFIG_SCOPED", "process");
+    vi.stubEnv("TEST_CONFIG_SCOPED", "process");
     try {
       expect(resolveConfigValue("$TEST_CONFIG_SCOPED", { TEST_CONFIG_SCOPED: "credential" })).toBe(
         "credential",
       );
     } finally {
-      deleteEnv("TEST_CONFIG_SCOPED");
+      vi.stubEnv("TEST_CONFIG_SCOPED", undefined);
     }
   });
 
@@ -111,13 +110,13 @@ describe("resolveConfigValue", () => {
     ));
 
   test("does not cache environment values", () => {
-    writeEnv("TEST_CONFIG_DYNAMIC", "first");
+    vi.stubEnv("TEST_CONFIG_DYNAMIC", "first");
     try {
       expect(resolveConfigValue("$TEST_CONFIG_DYNAMIC")).toBe("first");
-      writeEnv("TEST_CONFIG_DYNAMIC", "second");
+      vi.stubEnv("TEST_CONFIG_DYNAMIC", "second");
       expect(resolveConfigValue("$TEST_CONFIG_DYNAMIC")).toBe("second");
     } finally {
-      deleteEnv("TEST_CONFIG_DYNAMIC");
+      vi.stubEnv("TEST_CONFIG_DYNAMIC", undefined);
     }
   });
 

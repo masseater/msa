@@ -19,10 +19,9 @@ import {
   tempPath,
 } from "@msa/testing";
 import { Effect } from "effect";
-import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { AuthStorage } from "../src/core/auth-storage.ts";
-import { deleteEnv } from "../src/core/process-env.ts";
 import { createAgentSession } from "../src/core/sdk.ts";
 import { SessionManager } from "../src/core/session-manager.ts";
 import { SettingsManager } from "../src/core/settings-manager.ts";
@@ -40,7 +39,7 @@ describe("createAgentSession provider attribution headers", () => {
         agentDir = joinPath(tempDir, "agent");
         yield* makeDirectory(cwd);
         yield* makeDirectory(agentDir);
-        deleteEnv("MSA_TELEMETRY");
+        vi.stubEnv("MSA_TELEMETRY", undefined);
       }),
     ),
   );
@@ -48,7 +47,7 @@ describe("createAgentSession provider attribution headers", () => {
   afterEach(() =>
     runTest(
       Effect.gen(function* () {
-        deleteEnv("MSA_TELEMETRY");
+        vi.stubEnv("MSA_TELEMETRY", undefined);
         if (tempDir.length > 0 && (yield* pathExists(tempDir))) {
           yield* removePath(tempDir);
         }

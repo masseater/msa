@@ -10,9 +10,9 @@ import {
   writeTextFile,
 } from "@msa/testing";
 import { Effect } from "effect";
-import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { deleteEnv, readEnv, writeEnv } from "../src/core/process-env.ts";
+import { readEnv } from "../src/core/process-env.ts";
 import { hasTrustRequiringProjectResources, ProjectTrustStore } from "../src/core/trust-manager.ts";
 
 describe("ProjectTrustStore", () => {
@@ -56,7 +56,7 @@ describe("ProjectTrustStore", () => {
     runTest(
       Effect.gen(function* () {
         const originalHome = readEnv("HOME");
-        writeEnv("HOME", tempDir);
+        vi.stubEnv("HOME", tempDir);
         try {
           yield* makeDirectory(joinPath(tempDir, ".msa", "agent"));
           yield* makeDirectory(joinPath(tempDir, ".agents", "skills"));
@@ -76,9 +76,9 @@ describe("ProjectTrustStore", () => {
           expect(hasTrustRequiringProjectResources(cwd)).toBe(true);
         } finally {
           if (originalHome === undefined) {
-            deleteEnv("HOME");
+            vi.stubEnv("HOME", undefined);
           } else {
-            writeEnv("HOME", originalHome);
+            vi.stubEnv("HOME", originalHome);
           }
         }
       }),

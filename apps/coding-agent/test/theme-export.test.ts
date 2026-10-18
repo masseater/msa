@@ -12,9 +12,9 @@ import {
 } from "@msa/testing";
 import { colorToHex, okhslColor } from "@msa/tui";
 import { Effect } from "effect";
-import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { deleteEnv, readEnv, writeEnv } from "../src/core/process-env.ts";
+import { readEnv } from "../src/core/process-env.ts";
 import { getThemeExportColors } from "../src/modes/interactive/theme/theme.ts";
 
 type ThemeFile = {
@@ -39,7 +39,7 @@ describe("getThemeExportColors", () => {
     runTest(
       Effect.gen(function* () {
         tempRoot = yield* makeTempDir("msa-theme-export-");
-        writeEnv("MSA_CODING_AGENT_DIR", joinPath(tempRoot, "agent"));
+        vi.stubEnv("MSA_CODING_AGENT_DIR", joinPath(tempRoot, "agent"));
         yield* makeDirectory(joinPath(readEnv("MSA_CODING_AGENT_DIR")!, "themes"));
       }),
     ),
@@ -49,7 +49,7 @@ describe("getThemeExportColors", () => {
     runTest(
       Effect.gen(function* () {
         yield* removePath(tempRoot);
-        deleteEnv("MSA_CODING_AGENT_DIR");
+        vi.stubEnv("MSA_CODING_AGENT_DIR", undefined);
       }),
     ),
   );
