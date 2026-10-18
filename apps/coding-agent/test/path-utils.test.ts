@@ -1,7 +1,13 @@
-import { mkdtempSync, readdirSync, rmdirSync, unlinkSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
-
+import {
+  joinPath,
+  makeTempDir,
+  removePath,
+  resolvePath,
+  runTest,
+  tempRoot,
+  writeTextFile,
+} from "@msa/testing";
+import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
 import { expandPath, resolveReadPath, resolveToCwd } from "../src/core/tools/path-utils.ts";
@@ -32,108 +38,122 @@ describe("path-utils", () => {
 
   describe("resolveToCwd", () => {
     it("should resolve absolute paths as-is", () => {
-      const absolutePath = resolve(tmpdir(), "absolute", "path", "file.txt");
-      const result = resolveToCwd(absolutePath, resolve(tmpdir(), "some", "cwd"));
+      const absolutePath = resolvePath(tempRoot(), "absolute", "path", "file.txt");
+      const result = resolveToCwd(absolutePath, resolvePath(tempRoot(), "some", "cwd"));
       expect(result).toBe(absolutePath);
     });
 
     it("should resolve relative paths against cwd", () => {
       const result = resolveToCwd("relative/file.txt", "/some/cwd");
-      expect(result).toBe(resolve("/some/cwd", "relative/file.txt"));
+      expect(result).toBe(resolvePath("/some/cwd", "relative/file.txt"));
     });
 
     it("should resolve tilde-prefixed filenames against cwd", () => {
-      const cwd = join(tmpdir(), "msa-path-utils-cwd");
-      expect(resolveToCwd("~draft.md", cwd)).toBe(resolve(cwd, "~draft.md"));
-      expect(resolveToCwd("@~draft.md", cwd)).toBe(resolve(cwd, "~draft.md"));
+      const cwd = joinPath(tempRoot(), "msa-path-utils-cwd");
+      expect(resolveToCwd("~draft.md", cwd)).toBe(resolvePath(cwd, "~draft.md"));
+      expect(resolveToCwd("@~draft.md", cwd)).toBe(resolvePath(cwd, "~draft.md"));
     });
   });
 
   describe("resolveReadPath", () => {
     let tempDir: string;
 
-    beforeEach(() => {
-      tempDir = mkdtempSync(join(tmpdir(), "path-utils-test-"));
-    });
+    beforeEach(() =>
+      runTest(
+        Effect.gen(function* () {
+          tempDir = yield* makeTempDir("path-utils-test-");
+        }),
+      ),
+    );
 
-    afterEach(() => {
-      try {
-        const files = readdirSync(tempDir);
-        for (const file of files) {
-          unlinkSync(join(tempDir, file));
-        }
-        rmdirSync(tempDir);
-      } catch {}
-    });
+    afterEach(() => runTest(removePath(tempDir)));
 
-    it("should resolve existing file path", () => {
-      const fileName = "test-file.txt";
-      writeFileSync(join(tempDir, fileName), "content");
+    it("should resolve existing file path", () =>
+      runTest(
+        Effect.gen(function* () {
+          const fileName = "test-file.txt";
+          yield* writeTextFile(joinPath(tempDir, fileName), "content");
 
-      const result = resolveReadPath(fileName, tempDir);
-      expect(result).toBe(join(tempDir, fileName));
-    });
+          const result = resolveReadPath(fileName, tempDir);
+          expect(result).toBe(joinPath(tempDir, fileName));
+        }),
+      ));
 
-    it("should handle NFC vs NFD Unicode normalization (macOS filenames with accents)", () => {
-      const nfdFileName = "file\u0065\u0301.txt";
+    it("should handle NFC vs NFD Unicode normalization (macOS filenames with accents)", () =>
+      runTest(
+        Effect.gen(function* () {
+          const nfdFileName = "file\u0065\u0301.txt";
 
-      const nfcFileName = "file\u00e9.txt";
+          const nfcFileName = "file\u00e9.txt";
 
-      expect(nfdFileName).not.toBe(nfcFileName);
-      expect(Buffer.from(nfdFileName)).not.toEqual(Buffer.from(nfcFileName));
+          expect(nfdFileName).not.toBe(nfcFileName);
+          expect(Buffer.from(nfdFileName)).not.toEqual(Buffer.from(nfcFileName));
 
-      writeFileSync(join(tempDir, nfdFileName), "content");
+          yield* writeTextFile(joinPath(tempDir, nfdFileName), "content");
 
-      const result = resolveReadPath(nfcFileName, tempDir);
+          const result = resolveReadPath(nfcFileName, tempDir);
 
-      expect(result).toContain(tempDir);
-      expect(result).toMatch(/file.+\.txt$/);
-    });
+          expect(result).toContain(tempDir);
+          expect(result).toMatch(/file.+\.txt$/u);
+        }),
+      ));
 
-    it("should handle curly quotes vs straight quotes (macOS filenames)", () => {
-      const curlyQuoteName = "Capture d\u2019cran.txt";
-      const straightQuoteName = "Capture d'cran.txt";
+    it("should handle curly quotes vs straight quotes (macOS filenames)", () =>
+      runTest(
+        Effect.gen(function* () {
+          const curlyQuoteName = "Capture d\u2019cran.txt";
+          const straightQuoteName = "Capture d'cran.txt";
 
-      expect(curlyQuoteName).not.toBe(straightQuoteName);
+          expect(curlyQuoteName).not.toBe(straightQuoteName);
 
-      writeFileSync(join(tempDir, curlyQuoteName), "content");
+          yield* writeTextFile(joinPath(tempDir, curlyQuoteName), "content");
 
-      const result = resolveReadPath(straightQuoteName, tempDir);
-      expect(result).toBe(join(tempDir, curlyQuoteName));
-    });
+          const result = resolveReadPath(straightQuoteName, tempDir);
+          expect(result).toBe(joinPath(tempDir, curlyQuoteName));
+        }),
+      ));
 
-    it("should handle combined NFC + curly quote (French macOS screenshots)", () => {
-      const nfcCurlyName = "Capture d\u2019\u00e9cran.txt";
-      const nfcStraightName = "Capture d'\u00e9cran.txt";
+    it("should handle combined NFC + curly quote (French macOS screenshots)", () =>
+      runTest(
+        Effect.gen(function* () {
+          const nfcCurlyName = "Capture d\u2019\u00e9cran.txt";
+          const nfcStraightName = "Capture d'\u00e9cran.txt";
 
-      expect(nfcCurlyName).not.toBe(nfcStraightName);
+          expect(nfcCurlyName).not.toBe(nfcStraightName);
 
-      writeFileSync(join(tempDir, nfcCurlyName), "content");
+          yield* writeTextFile(joinPath(tempDir, nfcCurlyName), "content");
 
-      const result = resolveReadPath(nfcStraightName, tempDir);
-      expect(result).toBe(join(tempDir, nfcCurlyName));
-    });
+          const result = resolveReadPath(nfcStraightName, tempDir);
+          expect(result).toBe(joinPath(tempDir, nfcCurlyName));
+        }),
+      ));
 
-    it("should handle macOS screenshot AM/PM variant with narrow no-break space", () => {
-      const macosName = "Screenshot 2024-01-01 at 10.00.00\u202FAM.png";
-      const userName = "Screenshot 2024-01-01 at 10.00.00 AM.png";
+    it("should handle macOS screenshot AM/PM variant with narrow no-break space", () =>
+      runTest(
+        Effect.gen(function* () {
+          const macosName = "Screenshot 2024-01-01 at 10.00.00\u202FAM.png";
+          const userName = "Screenshot 2024-01-01 at 10.00.00 AM.png";
 
-      writeFileSync(join(tempDir, macosName), "content");
+          yield* writeTextFile(joinPath(tempDir, macosName), "content");
 
-      const result = resolveReadPath(userName, tempDir);
+          const result = resolveReadPath(userName, tempDir);
 
-      expect(result).toBe(join(tempDir, macosName));
-    });
+          expect(result).toBe(joinPath(tempDir, macosName));
+        }),
+      ));
 
-    it("should handle macOS screenshot lowercase am/pm variant (en_AU locale)", () => {
-      const macosName = "Screenshot 2024-01-01 at 10.00.00\u202Fam.png";
-      const userName = "Screenshot 2024-01-01 at 10.00.00 am.png";
+    it("should handle macOS screenshot lowercase am/pm variant (en_AU locale)", () =>
+      runTest(
+        Effect.gen(function* () {
+          const macosName = "Screenshot 2024-01-01 at 10.00.00\u202Fam.png";
+          const userName = "Screenshot 2024-01-01 at 10.00.00 am.png";
 
-      writeFileSync(join(tempDir, macosName), "content");
+          yield* writeTextFile(joinPath(tempDir, macosName), "content");
 
-      const result = resolveReadPath(userName, tempDir);
+          const result = resolveReadPath(userName, tempDir);
 
-      expect(result).toBe(join(tempDir, macosName));
-    });
+          expect(result).toBe(joinPath(tempDir, macosName));
+        }),
+      ));
   });
 });
