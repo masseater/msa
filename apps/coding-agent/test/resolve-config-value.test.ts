@@ -1,4 +1,3 @@
-import { readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 
 import {
@@ -8,7 +7,9 @@ import {
   runTest,
   pathExists,
   makeDirectory,
+  readTextFile,
   removePath,
+  writeTextFile,
 } from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
@@ -86,25 +87,28 @@ describe("resolveConfigValue", () => {
     },
   );
 
-  test("caches successful and failed commands until explicitly cleared", () => {
-    const counterFile = joinPath(tempDir, "counter");
-    writeFileSync(counterFile, "0");
-    const escapedPath = counterFile.replace(/\\/gu, "/").replace(/"/gu, '\\"');
-    const success = `!sh -c 'count=$(cat "${escapedPath}"); echo $((count + 1)) > "${escapedPath}"; echo value'`;
+  test("caches successful and failed commands until explicitly cleared", () =>
+    runTest(
+      Effect.gen(function* () {
+        const counterFile = joinPath(tempDir, "counter");
+        yield* writeTextFile(counterFile, "0");
+        const escapedPath = counterFile.replace(/\\/gu, "/").replace(/"/gu, '\\"');
+        const success = `!sh -c 'count=$(cat "${escapedPath}"); echo $((count + 1)) > "${escapedPath}"; echo value'`;
 
-    expect(resolveConfigValue(success)).toBe("value");
-    expect(resolveConfigValue(success)).toBe("value");
-    expect(readFileSync(counterFile, "utf-8").trim()).toBe("1");
+        expect(resolveConfigValue(success)).toBe("value");
+        expect(resolveConfigValue(success)).toBe("value");
+        expect((yield* readTextFile(counterFile)).trim()).toBe("1");
 
-    clearConfigValueCache();
-    expect(resolveConfigValue(success)).toBe("value");
-    expect(readFileSync(counterFile, "utf-8").trim()).toBe("2");
+        clearConfigValueCache();
+        expect(resolveConfigValue(success)).toBe("value");
+        expect((yield* readTextFile(counterFile)).trim()).toBe("2");
 
-    const failure = `!sh -c 'count=$(cat "${escapedPath}"); echo $((count + 1)) > "${escapedPath}"; exit 1'`;
-    expect(resolveConfigValue(failure)).toBeUndefined();
-    expect(resolveConfigValue(failure)).toBeUndefined();
-    expect(readFileSync(counterFile, "utf-8").trim()).toBe("3");
-  });
+        const failure = `!sh -c 'count=$(cat "${escapedPath}"); echo $((count + 1)) > "${escapedPath}"; exit 1'`;
+        expect(resolveConfigValue(failure)).toBeUndefined();
+        expect(resolveConfigValue(failure)).toBeUndefined();
+        expect((yield* readTextFile(counterFile)).trim()).toBe("3");
+      }),
+    ));
 
   test("does not cache environment values", () => {
     writeEnv("TEST_CONFIG_DYNAMIC", "first");
@@ -117,15 +121,18 @@ describe("resolveConfigValue", () => {
     }
   });
 
-  test("uncached resolution executes a command on every call", () => {
-    const counterFile = joinPath(tempDir, "uncached-counter");
-    writeFileSync(counterFile, "0");
-    const escapedPath = counterFile.replace(/\\/gu, "/").replace(/"/gu, '\\"');
-    const command = `!sh -c 'count=$(cat "${escapedPath}"); echo $((count + 1)) > "${escapedPath}"; echo value'`;
-    expect(resolveConfigValueUncached(command)).toBe("value");
-    expect(resolveConfigValueUncached(command)).toBe("value");
-    expect(readFileSync(counterFile, "utf-8").trim()).toBe("2");
-  });
+  test("uncached resolution executes a command on every call", () =>
+    runTest(
+      Effect.gen(function* () {
+        const counterFile = joinPath(tempDir, "uncached-counter");
+        yield* writeTextFile(counterFile, "0");
+        const escapedPath = counterFile.replace(/\\/gu, "/").replace(/"/gu, '\\"');
+        const command = `!sh -c 'count=$(cat "${escapedPath}"); echo $((count + 1)) > "${escapedPath}"; echo value'`;
+        expect(resolveConfigValueUncached(command)).toBe("value");
+        expect(resolveConfigValueUncached(command)).toBe("value");
+        expect((yield* readTextFile(counterFile)).trim()).toBe("2");
+      }),
+    ));
 
   test("uses stdin when the configured Windows shell requires it", () => {
     if (process.platform === "win32") return;

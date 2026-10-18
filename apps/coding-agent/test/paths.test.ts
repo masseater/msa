@@ -1,9 +1,17 @@
-import { mkdirSync, mkdtempSync, realpathSync, symlinkSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { pathToFileURL } from "node:url";
 
-import { joinPath, resolvePath, runTest, removePath } from "@msa/testing";
-import { Effect } from "effect";
+import {
+  joinPath,
+  makeDirectory,
+  makeTempDir,
+  removePath,
+  resolvePath,
+  runTest,
+  testRuntime,
+  writeTextFile,
+} from "@msa/testing";
+import { Effect, FileSystem } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import {
@@ -15,7 +23,14 @@ import {
   resolvePath as resolvePathTo,
 } from "../src/utils/paths.ts";
 
-let tempDir: string;
+const fileSystem = testRuntime.runSync(FileSystem.FileSystem);
+
+const realPath = (file: string): Effect.Effect<string> => Effect.orDie(fileSystem.realPath(file));
+
+const symlink = (from: string, to: string): Effect.Effect<void> =>
+  Effect.orDie(fileSystem.symlink(from, to));
+
+let tempDir = "";
 
 afterEach(() =>
   runTest(
@@ -28,52 +43,67 @@ afterEach(() =>
   ),
 );
 
-function createTempDir(): string {
-  tempDir = mkdtempSync(joinPath(tmpdir(), "msa-paths-"));
+const createTempDir: Effect.Effect<string> = Effect.gen(function* () {
+  tempDir = yield* makeTempDir("msa-paths-");
   return tempDir;
-}
+});
 
 describe("canonicalizePath", () => {
-  it("returns the real path for a regular file", () => {
-    const dir = createTempDir();
-    const file = joinPath(dir, "file.txt");
-    writeFileSync(file, "hello");
-    expect(canonicalizePath(file)).toBe(realpathSync(file));
-  });
+  it("returns the real path for a regular file", () =>
+    runTest(
+      Effect.gen(function* () {
+        const dir = yield* createTempDir;
+        const file = joinPath(dir, "file.txt");
+        yield* writeTextFile(file, "hello");
+        expect(canonicalizePath(file)).toBe(yield* realPath(file));
+      }),
+    ));
 
-  it("resolves symlinks to their targets", () => {
-    const dir = createTempDir();
-    const target = joinPath(dir, "target.txt");
-    const link = joinPath(dir, "link.txt");
-    writeFileSync(target, "hello");
-    symlinkSync(target, link);
-    expect(canonicalizePath(link)).toBe(realpathSync(target));
-  });
+  it("resolves symlinks to their targets", () =>
+    runTest(
+      Effect.gen(function* () {
+        const dir = yield* createTempDir;
+        const target = joinPath(dir, "target.txt");
+        const link = joinPath(dir, "link.txt");
+        yield* writeTextFile(target, "hello");
+        yield* symlink(target, link);
+        expect(canonicalizePath(link)).toBe(yield* realPath(target));
+      }),
+    ));
 
-  it("resolves directory symlinks", () => {
-    const dir = createTempDir();
-    const targetDir = joinPath(dir, "target-dir");
-    const linkDir = joinPath(dir, "link-dir");
-    mkdirSync(targetDir);
-    symlinkSync(targetDir, linkDir, "dir");
-    expect(canonicalizePath(linkDir)).toBe(realpathSync(targetDir));
-  });
+  it("resolves directory symlinks", () =>
+    runTest(
+      Effect.gen(function* () {
+        const dir = yield* createTempDir;
+        const targetDir = joinPath(dir, "target-dir");
+        const linkDir = joinPath(dir, "link-dir");
+        yield* makeDirectory(targetDir);
+        yield* symlink(targetDir, linkDir);
+        expect(canonicalizePath(linkDir)).toBe(yield* realPath(targetDir));
+      }),
+    ));
 
-  it("falls back to the raw path when the target does not exist", () => {
-    const dir = createTempDir();
-    const nonexistent = joinPath(dir, "no-such-file");
-    expect(canonicalizePath(nonexistent)).toBe(nonexistent);
-  });
+  it("falls back to the raw path when the target does not exist", () =>
+    runTest(
+      Effect.gen(function* () {
+        const dir = yield* createTempDir;
+        const nonexistent = joinPath(dir, "no-such-file");
+        expect(canonicalizePath(nonexistent)).toBe(nonexistent);
+      }),
+    ));
 
-  it("falls back to the raw path for a dangling symlink", () => {
-    const dir = createTempDir();
-    const target = joinPath(dir, "target.txt");
-    const link = joinPath(dir, "link.txt");
+  it("falls back to the raw path for a dangling symlink", () =>
+    runTest(
+      Effect.gen(function* () {
+        const dir = yield* createTempDir;
+        const target = joinPath(dir, "target.txt");
+        const link = joinPath(dir, "link.txt");
 
-    symlinkSync(target, link);
+        yield* symlink(target, link);
 
-    expect(canonicalizePath(link)).toBe(link);
-  });
+        expect(canonicalizePath(link)).toBe(link);
+      }),
+    ));
 });
 
 describe("getCwdRelativePath", () => {
@@ -107,44 +137,53 @@ describe("resolvePath", () => {
     );
   });
 
-  it("accepts file URLs", () => {
-    const dir = createTempDir();
-    const filePath = joinPath(dir, "file with spaces.txt");
-    expect(resolvePathTo(pathToFileURL(filePath).href, joinPath(dir, "base"))).toBe(
-      resolvePath(filePath),
-    );
-  });
+  it("accepts file URLs", () =>
+    runTest(
+      Effect.gen(function* () {
+        const dir = yield* createTempDir;
+        const filePath = joinPath(dir, "file with spaces.txt");
+        expect(resolvePathTo(pathToFileURL(filePath).href, joinPath(dir, "base"))).toBe(
+          resolvePath(filePath),
+        );
+      }),
+    ));
 
   it("throws for invalid file URLs", () => {
     expect(() => resolvePathTo("file:///%E0%A4%A")).toThrow();
   });
 
-  it("preserves POSIX absolute paths with literal percent sequences", () => {
-    if (process.platform === "win32") {
-      return;
-    }
+  it("preserves POSIX absolute paths with literal percent sequences", () =>
+    runTest(
+      Effect.gen(function* () {
+        if (process.platform === "win32") {
+          return;
+        }
 
-    const dir = createTempDir();
-    for (const filePath of [
-      joinPath(dir, "report%2026.md"),
-      joinPath(dir, "foo%2Fbar"),
-      joinPath(dir, "malformed%A.md"),
-    ]) {
-      expect(resolvePathTo(filePath, joinPath(dir, "base"))).toBe(resolvePath(filePath));
-    }
-  });
+        const dir = yield* createTempDir;
+        for (const filePath of [
+          joinPath(dir, "report%2026.md"),
+          joinPath(dir, "foo%2Fbar"),
+          joinPath(dir, "malformed%A.md"),
+        ]) {
+          expect(resolvePathTo(filePath, joinPath(dir, "base"))).toBe(resolvePath(filePath));
+        }
+      }),
+    ));
 
-  it("does not treat Windows file URL pathname strings as native paths", () => {
-    if (process.platform !== "win32") {
-      return;
-    }
+  it("does not treat Windows file URL pathname strings as native paths", () =>
+    runTest(
+      Effect.gen(function* () {
+        if (process.platform !== "win32") {
+          return;
+        }
 
-    const dir = createTempDir();
-    const filePath = joinPath(dir, "dir", "SKILL.md");
-    const pathname = pathToFileURL(filePath).pathname;
-    expect(pathname).toMatch(/^\/[A-Za-z]:/u);
-    expect(resolvePathTo(pathname, "E:\\project")).toBe(resolvePath(pathname));
-  });
+        const dir = yield* createTempDir;
+        const filePath = joinPath(dir, "dir", "SKILL.md");
+        const pathname = pathToFileURL(filePath).pathname;
+        expect(pathname).toMatch(/^\/[A-Za-z]:/u);
+        expect(resolvePathTo(pathname, "E:\\project")).toBe(resolvePath(pathname));
+      }),
+    ));
 });
 
 describe("normalizeWindowsShellPath", () => {

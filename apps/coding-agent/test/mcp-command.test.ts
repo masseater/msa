@@ -1,6 +1,3 @@
-import { mkdtempSync, readFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-
 import {
   awaited,
   runTest,
@@ -9,6 +6,8 @@ import {
   writeTextFile,
   pathExists,
   joinPath,
+  makeTempDir,
+  readTextFile,
   resolvePath,
   removePath,
 } from "@msa/testing";
@@ -36,7 +35,7 @@ describe("msa mcp", () => {
   function run(args: string[], servers: Record<string, unknown> | undefined, dir?: string) {
     return runTest(
       Effect.gen(function* () {
-        const agentDir = dir ?? mkdtempSync(joinPath(tmpdir(), "msa-mcp-command-"));
+        const agentDir = dir ?? (yield* makeTempDir("msa-mcp-command-"));
         if (!(dir !== undefined && dir.length > 0)) dirs.push(agentDir);
         if (servers !== undefined)
           yield* writeTextFile(
@@ -57,8 +56,11 @@ describe("msa mcp", () => {
     );
   }
 
-  const readConfig = (path: string) =>
-    JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
+  const readConfig = (path: string): Effect.Effect<Record<string, unknown>> =>
+    Effect.map(
+      Effect.flatMap(readTextFile(path), fromJsonText),
+      (value) => value as Record<string, unknown>,
+    );
 
   const servers = {
     fixture: { command: process.execPath, args: [FIXTURE] },
@@ -146,7 +148,7 @@ describe("msa mcp", () => {
         );
         expect(added.exitCode).toBe(0);
         expect(added.output).toContain('Added global MCP server "files"');
-        expect(readConfig(joinPath(added.agentDir, "mcp.json"))).toEqual({
+        expect(yield* readConfig(joinPath(added.agentDir, "mcp.json"))).toEqual({
           mcpServers: {
             files: {
               command: "npx",
@@ -160,7 +162,7 @@ describe("msa mcp", () => {
           run(["add", "files", "node", "server.js", "--port", "1"], undefined, added.agentDir),
         );
         expect(replaced.output).toContain('Replaced global MCP server "files"');
-        expect(readConfig(joinPath(added.agentDir, "mcp.json"))).toEqual({
+        expect(yield* readConfig(joinPath(added.agentDir, "mcp.json"))).toEqual({
           mcpServers: { files: { command: "node", args: ["server.js", "--port", "1"] } },
         });
       }),
@@ -190,7 +192,7 @@ describe("msa mcp", () => {
         );
         expect(exitCode).toBe(0);
         expect(output).not.toContain("mcp login");
-        expect(readConfig(joinPath(agentDir, "mcp.json"))).toEqual({
+        expect(yield* readConfig(joinPath(agentDir, "mcp.json"))).toEqual({
           mcpServers: {
             fixture: servers.fixture,
             docs: {
@@ -220,7 +222,7 @@ describe("msa mcp", () => {
           ),
         );
         expect(oauth.output).toContain("If it requires sign-in: msa mcp login sentry");
-        expect(readConfig(joinPath(agentDir, "mcp.json"))["mcpServers"]).toMatchObject({
+        expect((yield* readConfig(joinPath(agentDir, "mcp.json")))["mcpServers"]).toMatchObject({
           sentry: {
             url: "https://mcp.sentry.dev/mcp",
             oauth: { clientId: "msa", clientName: "Claude Code" },
@@ -258,7 +260,7 @@ describe("msa mcp", () => {
         );
         expect(added.output).toContain("The project is not trusted");
         const projectConfig = joinPath(added.agentDir, ".msa", "mcp.json");
-        expect(readConfig(projectConfig)).toEqual({
+        expect(yield* readConfig(projectConfig)).toEqual({
           mcpServers: { local: { command: "node", args: ["server.js"] } },
         });
 
@@ -271,7 +273,7 @@ describe("msa mcp", () => {
         );
         expect(removed.exitCode).toBe(0);
         expect(removed.output).toContain('Removed project MCP server "local"');
-        expect(readConfig(projectConfig)).toEqual({ mcpServers: {} });
+        expect(yield* readConfig(projectConfig)).toEqual({ mcpServers: {} });
       }),
     ));
 
@@ -281,7 +283,7 @@ describe("msa mcp", () => {
         const { exitCode, agentDir } = yield* awaited(run(["remove", "broken"], servers));
         expect(exitCode).toBe(0);
         expect(
-          Object.keys(readConfig(joinPath(agentDir, "mcp.json"))["mcpServers"] as object),
+          Object.keys((yield* readConfig(joinPath(agentDir, "mcp.json")))["mcpServers"] as object),
         ).toEqual(["fixture", "parked", "bad"]);
         const missing = yield* awaited(run(["remove", "broken"], undefined, agentDir));
         expect(missing).toMatchObject({ exitCode: 1 });

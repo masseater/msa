@@ -1,6 +1,4 @@
-import { randomUUID } from "node:crypto";
-
-import { awaited, runTest } from "@msa/testing";
+import { awaited, randomSuffixSync, runTest } from "@msa/testing";
 import { Effect } from "effect";
 import neo4j from "neo4j-driver";
 import { afterAll, describe, expect, it } from "vite-plus/test";
@@ -10,7 +8,7 @@ import { Neo4jSessionGraph } from "../src/core/orchestrator/neo4j-graph.ts";
 import { readEnv } from "../src/core/process-env.ts";
 import { MemorySessionGraph } from "./orchestrator-memory-graph.ts";
 
-const runPrefix = `test-${randomUUID()}`;
+const runPrefix = `test-${randomSuffixSync()}`;
 
 const graphs: Array<[string, () => Promise<SessionGraph>]> = [
   ["memory", () => runTest(awaited(new MemorySessionGraph()))],
@@ -53,7 +51,7 @@ describe.each(graphs)("%s session graph", (_name, connect) => {
       Effect.gen(function* () {
         const graph = yield* awaited(connect());
         opened.push(graph);
-        const project = `${runPrefix}-${randomUUID()}`;
+        const project = `${runPrefix}-${randomSuffixSync()}`;
         let order = 0;
         const node = (id: string, patch: Partial<SessionNode> = {}): SessionNode => ({
           id: `${project}-${id}`,

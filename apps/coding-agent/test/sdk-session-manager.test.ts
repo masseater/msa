@@ -1,4 +1,3 @@
-import { realpathSync } from "node:fs";
 import { tmpdir } from "node:os";
 
 import { getModel } from "@msa/ai/compat";
@@ -11,12 +10,17 @@ import {
   joinPath,
   pathExists,
   removePath,
+  testRuntime,
 } from "@msa/testing";
-import { Effect } from "effect";
+import { Effect, FileSystem } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
 import { createAgentSession } from "../src/core/sdk.ts";
 import { SessionManager } from "../src/core/session-manager.ts";
+
+const fileSystem = testRuntime.runSync(FileSystem.FileSystem);
+
+const realPath = (file: string): Effect.Effect<string> => Effect.orDie(fileSystem.realPath(file));
 
 describe("createAgentSession session manager defaults", () => {
   let tempDir: string;
@@ -125,7 +129,7 @@ describe("createAgentSession session manager defaults", () => {
           .map((item) => item.text)
           .join("");
 
-        expect(realpathSync(output.trim())).toBe(realpathSync(sessionCwd));
+        expect(yield* realPath(output.trim())).toBe(yield* realPath(sessionCwd));
 
         session.dispose();
       }),

@@ -1,7 +1,4 @@
-import { mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
-
-import { awaited, runTest, joinPath, removePath } from "@msa/testing";
+import { awaited, runTest, joinPath, makeTempDir, removePath } from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vite-plus/test";
 
@@ -22,8 +19,8 @@ const DOWN = "\x1b[B";
 const tempDirs: string[] = [];
 const services: MemoryService[] = [];
 
-function settingsForView(): ResolvedMemorySettings {
-  const dir = mkdtempSync(joinPath(tmpdir(), "msa-memory-view-"));
+const settingsForView: Effect.Effect<ResolvedMemorySettings> = Effect.gen(function* () {
+  const dir = yield* makeTempDir("msa-memory-view-");
   tempDirs.push(dir);
   return {
     enabled: true,
@@ -38,7 +35,7 @@ function settingsForView(): ResolvedMemorySettings {
     },
     recall: { enabled: true, limit: 5, minScore: 0.35 },
   };
-}
+});
 
 beforeAll(() => {
   initTheme(undefined, false);
@@ -58,7 +55,7 @@ function setup() {
     Effect.gen(function* () {
       const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-      const settings = settingsForView();
+      const settings = yield* settingsForView;
       const dir = tempDirs[tempDirs.length - 1] ?? "";
       const store = new MemoryStore(settings.database);
       const base = 1_700_000_000_000;
