@@ -57,6 +57,7 @@
           "effect/http/HttpClient#HttpClient",
           "effect/http/HttpClient#execute",
           "effect/http/HttpClientRequest#fromWeb",
+          "effect/http/HttpClientResponse#HttpClientResponse",
           "effect/http/HttpClientRequest#get",
           "effect/http/HttpClientRequest#post",
           "effect/http/HttpClientRequest#setBody",

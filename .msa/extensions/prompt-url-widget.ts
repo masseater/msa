@@ -1,10 +1,13 @@
-import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { resolve } from "node:path";
 
+import * as NodePath from "@effect/platform-node/NodePath";
+import * as NodeServices from "@effect/platform-node/NodeServices";
 import { DynamicBorder, type ExtensionAPI, type ExtensionContext } from "@msa/coding-agent";
 import { Container, hyperlink, Text } from "@msa/tui";
-import { Effect, Option } from "effect";
+import { Effect, FileSystem, ManagedRuntime, Option, Path } from "effect";
+
+const runtime = ManagedRuntime.make(NodeServices.layer);
+const nodePath = ManagedRuntime.make(NodePath.layer).runSync(Path.Path);
 
 const PR_PROMPT_PATTERN = /^\s*You are given one or more GitHub PR URLs:\s*(\S+)/imu;
 const ISSUE_PROMPT_PATTERN = /^\s*Analyze GitHub issue\(s\):\s*(\S+)/imu;
@@ -91,15 +94,15 @@ function unquoteYamlValue(value: string): string {
 
 function resolveDraftPath(cwd: string, target: string): string {
   if (target === "~") return homedir();
-  if (target.startsWith("~/")) return resolve(homedir(), target.slice(2));
-  return resolve(cwd, target);
+  if (target.startsWith("~/")) return nodePath.resolve(homedir(), target.slice(2));
+  return nodePath.resolve(cwd, target);
 }
 
 const readAdvisoryRefFromDraft = (
   cwd: string,
   target: string,
-): Effect.Effect<Option.Option<AdvisoryRef>> =>
-  Effect.promise(() => readFile(resolveDraftPath(cwd, target), "utf8")).pipe(
+): Effect.Effect<Option.Option<AdvisoryRef>, never, FileSystem.FileSystem> =>
+  FileSystem.FileSystem.use((fs) => fs.readFileString(resolveDraftPath(cwd, target))).pipe(
     Effect.map((content) => {
       const frontmatter = /^---\r?\n([\s\S]*?)\r?\n---/u.exec(content);
       const body = frontmatter?.[1] ?? content;
@@ -107,7 +110,7 @@ const readAdvisoryRefFromDraft = (
       if (!isNonEmpty(advisoryUrl)) return Option.none();
       return Option.fromUndefinedOr(parseAdvisoryUrl(unquoteYamlValue(advisoryUrl)));
     }),
-    Effect.catchDefect(() => Effect.succeedNone),
+    Effect.catch(() => Effect.succeedNone),
   );
 
 function formatAdvisoryDetail(advisory: GitHubAdvisoryMetadata): string | undefined {
@@ -121,7 +124,7 @@ const fetchAdvisoryMetadata = (
   msa: ExtensionAPI,
   cwd: string,
   target: string,
-): Effect.Effect<GhMetadata | undefined> =>
+): Effect.Effect<GhMetadata | undefined, never, FileSystem.FileSystem> =>
   Effect.gen(function* () {
     const advisoryRef =
       parseAdvisoryUrl(target) ??
@@ -151,7 +154,7 @@ const fetchGhMetadata = (
   msa: ExtensionAPI,
   match: PromptMatch,
   cwd: string,
-): Effect.Effect<GhMetadata | undefined> => {
+): Effect.Effect<GhMetadata | undefined, never, FileSystem.FileSystem> => {
   if (match.kind === "advisory") return fetchAdvisoryMetadata(msa, cwd, match.target);
   return fetchIssueMetadata(msa, match).pipe(Effect.map(Option.getOrUndefined));
 };
@@ -231,7 +234,7 @@ function applySessionName(msa: ExtensionAPI, match: PromptMatch, metadata?: GhMe
 function updatePromptContext(msa: ExtensionAPI, ctx: ExtensionContext, match: PromptMatch): void {
   setWidget(ctx, match);
   applySessionName(msa, match);
-  Effect.runFork(
+  runtime.runFork(
     fetchGhMetadata(msa, match, ctx.cwd).pipe(
       Effect.tap((meta) =>
         Effect.sync(() => {

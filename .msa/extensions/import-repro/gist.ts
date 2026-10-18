@@ -1,4 +1,10 @@
-import { Effect } from "effect";
+import { Effect, ManagedRuntime } from "effect";
+import {
+  FetchHttpClient,
+  HttpClient,
+  HttpClientRequest,
+  type HttpClientResponse,
+} from "effect/http";
 
 import {
   decodeExportedHtml,
@@ -32,39 +38,38 @@ interface IssueComment {
   user?: { login?: string } | null;
 }
 
-const toImportReproError = (error: unknown): ImportReproError =>
-  new ImportReproError({ message: error instanceof Error ? error.message : String(error) });
-
-const requestGitHub = (url: string, headers: Record<string, string>): Promise<Response> =>
-  fetch(url, { headers });
+const toImportReproError = (error: { readonly message: string }): ImportReproError =>
+  new ImportReproError({ message: error.message });
 
 const fetchResponse = (
   url: string,
   headers: Record<string, string>,
-): Effect.Effect<Response, ImportReproError> =>
-  Effect.tryPromise({
-    try: () => requestGitHub(url, headers),
-    catch: toImportReproError,
-  });
+): Effect.Effect<HttpClientResponse.HttpClientResponse, ImportReproError, HttpClient.HttpClient> =>
+  HttpClient.HttpClient.use((client) =>
+    client.execute(HttpClientRequest.get(url).pipe(HttpClientRequest.setHeaders(headers))),
+  ).pipe(Effect.mapError(toImportReproError));
 
-const readBody = <A>(read: () => Promise<A>): Effect.Effect<A, ImportReproError> =>
-  Effect.tryPromise({
-    try: read,
-    catch: toImportReproError,
-  });
+const isOk = (response: HttpClientResponse.HttpClientResponse): boolean =>
+  response.status >= 200 && response.status < 300;
 
-const fetchText = (url: string): Effect.Effect<string, ImportReproError> =>
+const readBody = <A, E extends { readonly message: string }>(
+  read: Effect.Effect<A, E>,
+): Effect.Effect<A, ImportReproError> => Effect.mapError(read, toImportReproError);
+
+const fetchText = (url: string): Effect.Effect<string, ImportReproError, HttpClient.HttpClient> =>
   Effect.gen(function* () {
     const response = yield* fetchResponse(url, { Accept: "application/vnd.github+json" });
-    if (!response.ok) {
+    if (!isOk(response)) {
       return yield* new ImportReproError({
         message: `failed to fetch ${url}: HTTP ${response.status}`,
       });
     }
-    return yield* readBody(() => response.text());
+    return yield* readBody(response.text);
   });
 
-const readGistFile = (file: GistFile): Effect.Effect<string, ImportReproError> => {
+const readGistFile = (
+  file: GistFile,
+): Effect.Effect<string, ImportReproError, HttpClient.HttpClient> => {
   if (file.content !== undefined && file.content !== "" && file.truncated !== true) {
     return Effect.succeed(file.content);
   }
@@ -94,29 +99,29 @@ const collectIssueGistIds = (
   repo: string,
   issue: string,
   page: number,
-): Effect.Effect<string[], ImportReproError> =>
+): Effect.Effect<string[], ImportReproError, HttpClient.HttpClient> =>
   Effect.gen(function* () {
     const response = yield* fetchResponse(
       issueCommentsUrl(owner, repo, issue, page),
       GITHUB_API_HEADERS,
     );
-    if (!response.ok) {
+    if (!isOk(response)) {
       return yield* new ImportReproError({
         message: `failed to fetch issue comments: HTTP ${response.status}`,
       });
     }
 
-    const comments = (yield* readBody(() => response.json())) as IssueComment[];
+    const comments = (yield* readBody(response.json)) as unknown as IssueComment[];
     const gistIds = botGistIds(comments);
     if (comments.length < COMMENTS_PER_PAGE) return gistIds;
     return [...gistIds, ...(yield* collectIssueGistIds(owner, repo, issue, page + 1))];
   });
 
-export const findIssueGistId = ({
+const findIssueGistIdWithClient = ({
   owner,
   repo,
   issue,
-}: IssueRef): Effect.Effect<string, ImportReproError> =>
+}: IssueRef): Effect.Effect<string, ImportReproError, HttpClient.HttpClient> =>
   Effect.gen(function* () {
     const gistId = (yield* collectIssueGistIds(owner, repo, issue, 1)).at(-1);
     if (gistId === undefined) {
@@ -127,19 +132,21 @@ export const findIssueGistId = ({
     return gistId;
   });
 
-export const fetchGistSession = (gistId: string): Effect.Effect<DecodedSession, ImportReproError> =>
+const fetchGistSessionWithClient = (
+  gistId: string,
+): Effect.Effect<DecodedSession, ImportReproError, HttpClient.HttpClient> =>
   Effect.gen(function* () {
     const response = yield* fetchResponse(
       `https://api.github.com/gists/${gistId}`,
       GITHUB_API_HEADERS,
     );
-    if (!response.ok) {
+    if (!isOk(response)) {
       return yield* new ImportReproError({
         message: `failed to fetch gist ${gistId}: HTTP ${response.status}`,
       });
     }
 
-    const gist = (yield* readBody(() => response.json())) as GistResponse;
+    const gist = (yield* readBody(response.json)) as unknown as GistResponse;
     const files = Object.values(gist.files ?? {});
     const jsonlFile = files.find((file) => file.filename?.endsWith(".jsonl") === true);
     if (jsonlFile !== undefined) return parseSessionJsonl(yield* readGistFile(jsonlFile));
@@ -151,3 +158,16 @@ export const fetchGistSession = (gistId: string): Effect.Effect<DecodedSession, 
       message: `gist ${gistId} has no .jsonl or .html session file`,
     });
   });
+
+const httpRuntime = ManagedRuntime.make(FetchHttpClient.layer);
+
+const withHttpClient = <A, E>(
+  effect: Effect.Effect<A, E, HttpClient.HttpClient>,
+): Effect.Effect<A, E> =>
+  Effect.flatMap(httpRuntime.contextEffect, (context) => Effect.provideContext(effect, context));
+
+export const findIssueGistId = (issue: IssueRef): Effect.Effect<string, ImportReproError> =>
+  withHttpClient(findIssueGistIdWithClient(issue));
+
+export const fetchGistSession = (gistId: string): Effect.Effect<DecodedSession, ImportReproError> =>
+  withHttpClient(fetchGistSessionWithClient(gistId));

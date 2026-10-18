@@ -1,8 +1,6 @@
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { basename, join } from "node:path";
-
+import * as NodeServices from "@effect/platform-node/NodeServices";
 import type { ExtensionAPI, ExtensionCommandContext } from "@msa/coding-agent";
-import { Cause, Effect } from "effect";
+import { Cause, Effect, FileSystem, ManagedRuntime, Path } from "effect";
 
 import { getPlatformContinuationNotice, rewriteSessionCwd } from "./cwd-rewrite.ts";
 import { fetchGistSession, findIssueGistId } from "./gist.ts";
@@ -15,12 +13,19 @@ import {
   type SessionRef,
 } from "./session.ts";
 
+const runtime = ManagedRuntime.make(NodeServices.layer);
+
 interface LoadedSession {
   readonly decoded: DecodedSession;
   readonly sourceName: string;
 }
 
-const loadSession = (parsedRef: SessionRef): Effect.Effect<LoadedSession, ImportReproError> =>
+const toImportReproError = (error: { readonly message: string }): ImportReproError =>
+  new ImportReproError({ message: error.message });
+
+const loadSession = (
+  parsedRef: SessionRef,
+): Effect.Effect<LoadedSession, ImportReproError, FileSystem.FileSystem | Path.Path> =>
   Effect.gen(function* () {
     if (parsedRef.type === "gist") {
       const decoded = yield* fetchGistSession(parsedRef.id);
@@ -31,28 +36,32 @@ const loadSession = (parsedRef: SessionRef): Effect.Effect<LoadedSession, Import
       const decoded = yield* fetchGistSession(gistId);
       return { decoded, sourceName: `${gistId}.jsonl` };
     }
-    if (!existsSync(parsedRef.path)) {
+    const fs = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    if (!(yield* fs.exists(parsedRef.path).pipe(Effect.orDie))) {
       return yield* new ImportReproError({ message: `session file not found: ${parsedRef.path}` });
     }
-    const raw = readFileSync(parsedRef.path, "utf8");
+    const raw = yield* fs.readFileString(parsedRef.path).pipe(Effect.mapError(toImportReproError));
     const decoded = parsedRef.path.endsWith(".html")
       ? decodeExportedHtml(raw)
       : parseSessionJsonl(raw);
-    return { decoded, sourceName: basename(parsedRef.path).replace(/\.html$/u, ".jsonl") };
+    return { decoded, sourceName: path.basename(parsedRef.path).replace(/\.html$/u, ".jsonl") };
   });
 
 const confirmOverwrite = (
   ctx: ExtensionCommandContext,
   destination: string,
-): Effect.Effect<boolean> => {
-  if (!existsSync(destination)) return Effect.succeed(true);
-  return Effect.promise(() =>
-    ctx.ui.confirm(
-      "Session already imported",
-      `Overwrite ${destination}? Local changes to that session will be lost.`,
-    ),
-  );
-};
+): Effect.Effect<boolean, never, FileSystem.FileSystem> =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    if (!(yield* fs.exists(destination).pipe(Effect.orDie))) return true;
+    return yield* Effect.promise(() =>
+      ctx.ui.confirm(
+        "Session already imported",
+        `Overwrite ${destination}? Local changes to that session will be lost.`,
+      ),
+    );
+  });
 
 const switchToImported = (
   ctx: ExtensionCommandContext,
@@ -82,8 +91,10 @@ const switchToImported = (
 const importRepro = (
   ref: string,
   ctx: ExtensionCommandContext,
-): Effect.Effect<void, ImportReproError> =>
+): Effect.Effect<void, ImportReproError, FileSystem.FileSystem | Path.Path> =>
   Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
     const targetCwd = ctx.sessionManager.getCwd();
     const sessionDir = ctx.sessionManager.getSessionDir();
     const parsedRef = parseRef(ref, targetCwd);
@@ -92,12 +103,12 @@ const importRepro = (
 
     const { decoded, sourceName } = yield* loadSession(parsedRef);
     const rewritten = rewriteSessionCwd(decoded.jsonl, decoded.header.cwd, targetCwd);
-    const destination = join(sessionDir, sourceName);
+    const destination = path.join(sessionDir, sourceName);
     if (!(yield* confirmOverwrite(ctx, destination))) {
       ctx.ui.notify("Import cancelled", "warning");
       return;
     }
-    writeFileSync(destination, rewritten);
+    yield* fs.writeFileString(destination, rewritten).pipe(Effect.mapError(toImportReproError));
 
     ctx.ui.notify(
       `Imported session ${decoded.header.id} (cwd ${decoded.header.cwd} -> ${targetCwd})`,
@@ -120,7 +131,7 @@ export default function (msa: ExtensionAPI) {
         return Promise.resolve();
       }
 
-      return Effect.runPromise(
+      return runtime.runPromise(
         importRepro(ref, ctx).pipe(
           Effect.catchCause((cause) =>
             Effect.sync(() => {
