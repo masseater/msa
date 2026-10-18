@@ -1,5 +1,7 @@
 import type { Component, TUI } from "@msa/tui";
+import { Effect } from "effect";
 
+import { awaited, awaitingWith } from "../../core/awaiting.ts";
 import type { ExtensionUIDialogOptions } from "../../core/extensions/index.ts";
 import type { KeybindingsManager } from "../../core/keybindings.ts";
 import { ExtensionEditorComponent } from "./components/extension-editor.ts";
@@ -19,10 +21,6 @@ export interface ExtensionDialogsHost {
   toggleToolsExpanded(): void;
 }
 
-/**
- * The select, confirm, input, and editor dialogs extensions open in the editor slot. One dialog is
- * shown at a time; it reports the program as blocked on the user until it closes.
- */
 export class ExtensionDialogs {
   private readonly host: ExtensionDialogsHost;
   private active: Dialog | undefined;
@@ -55,12 +53,18 @@ export class ExtensionDialogs {
     );
   }
 
-  async confirm(title: string, message: string, opts?: ExtensionUIDialogOptions): Promise<boolean> {
-    const result = await this.select(`${title}\n${message}`, ["Yes", "No"], opts, {
-      kind: "permission",
-      message: title,
-    });
-    return result === "Yes";
+  confirm(title: string, message: string, opts?: ExtensionUIDialogOptions): Promise<boolean> {
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        const result = yield* awaited(
+          this.select(`${title}\n${message}`, ["Yes", "No"], opts, {
+            kind: "permission",
+            message: title,
+          }),
+        );
+        return result === "Yes";
+      }, this),
+    );
   }
 
   input(
@@ -82,7 +86,6 @@ export class ExtensionDialogs {
     );
   }
 
-  /** A multi-line editor that can hand its text to the external editor. */
   editor(title: string, prefill?: string): Promise<string | undefined> {
     return this.open<string>(
       (finish) =>
@@ -100,7 +103,6 @@ export class ExtensionDialogs {
     );
   }
 
-  /** Closes the open dialog without answering it. */
   close(): void {
     this.closeDialog(this.active);
   }
@@ -110,30 +112,33 @@ export class ExtensionDialogs {
     blocked: BlockedStatus,
     signal?: AbortSignal,
   ): Promise<T | undefined> {
-    return new Promise((resolve) => {
-      if (signal?.aborted) {
-        resolve(undefined);
-        return;
-      }
-      let dialog: Dialog | undefined;
-      const finish = (value: T | undefined) => {
-        signal?.removeEventListener("abort", onAbort);
-        this.closeDialog(dialog);
-        resolve(value);
-      };
-      const onAbort = () => finish(undefined);
-      signal?.addEventListener("abort", onAbort, { once: true });
+    return Effect.runPromise(
+      Effect.callback<T | undefined>((resume) => {
+        const resolve = (value: T | undefined) => resume(Effect.succeed(value));
+        if (signal?.aborted === true) {
+          resolve(undefined);
+          return;
+        }
+        let dialog: Dialog | undefined;
+        const finish = (value: T | undefined) => {
+          signal?.removeEventListener("abort", onAbort);
+          this.closeDialog(dialog);
+          resolve(value);
+        };
+        const onAbort = () => finish(undefined);
+        signal?.addEventListener("abort", onAbort, { once: true });
 
-      dialog = create(finish);
-      this.active = dialog;
-      this.host.editorSlot.disposeActiveSelector();
-      this.host.editorSlot.show(dialog);
-      this.host.programStatus.setBlocked("extension-dialog", blocked);
-    });
+        dialog = create(finish);
+        this.active = dialog;
+        this.host.editorSlot.disposeActiveSelector();
+        this.host.editorSlot.show(dialog);
+        this.host.programStatus.setBlocked("extension-dialog", blocked);
+      }),
+    );
   }
 
   private closeDialog(dialog: Dialog | undefined): void {
-    if (!dialog || dialog !== this.active) return;
+    if (dialog === undefined || dialog !== this.active) return;
     dialog.dispose?.();
     this.active = undefined;
     this.host.programStatus.setBlocked("extension-dialog", undefined);

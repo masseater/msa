@@ -18,7 +18,6 @@ export interface ChatViewport {
   readonly transcript: ScrollView;
 }
 
-/** Shared fullscreen transcript and fixed input-dock layout. */
 export function createChatViewport(options: ChatViewportOptions): ChatViewport {
   const transcript = new ScrollView(options.document, {
     follow: "end",

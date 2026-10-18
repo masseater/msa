@@ -1,16 +1,11 @@
 import type { Component, Container, TUI } from "@msa/tui";
 
-/** Builds a selector that replaces the editor. `done` puts the editor back. */
 export type SelectorFactory = (done: () => void) => {
   component: Component;
   focus: Component;
   dispose?: () => void;
 };
 
-/**
- * The area below the transcript that holds the editor, or a dialog or selector shown in its place.
- * At most one selector is active; opening another disposes the previous one.
- */
 export class EditorSlot {
   private readonly container: Container;
   private readonly ui: TUI;
@@ -24,7 +19,6 @@ export class EditorSlot {
     this.getEditor = getEditor;
   }
 
-  /** Shows `component` in place of the editor and focuses `focus`. */
   show(component: Component, focus: Component = component): void {
     this.container.clear();
     this.container.addChild(component);

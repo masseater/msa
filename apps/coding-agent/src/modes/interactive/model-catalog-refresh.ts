@@ -1,4 +1,5 @@
 import type { ModelsRefreshResult } from "@msa/ai";
+import { dual } from "effect/Function";
 
 import type { ModelRuntime } from "../../core/model-runtime.ts";
 import { raceWithAbortSignal } from "../../utils/abort.ts";
@@ -17,7 +18,7 @@ class ModelCatalogRefreshCoordinator {
   refresh(modelRuntime: ModelCatalogRuntime, signal: AbortSignal): Promise<ModelsRefreshResult> {
     signal.throwIfAborted();
     let active = this.activeByRuntime.get(modelRuntime);
-    if (!active) {
+    if (active === undefined) {
       const controller = new AbortController();
       let created!: ActiveModelCatalogRefresh;
       const operation = modelRuntime.refresh({ signal: controller.signal });
@@ -43,10 +44,11 @@ class ModelCatalogRefreshCoordinator {
 
 const modelCatalogRefreshCoordinator = new ModelCatalogRefreshCoordinator();
 
-/** Share concurrent interactive all-catalog refreshes while keeping each caller's cancellation independent. */
-export function refreshModelCatalogs(
-  modelRuntime: ModelCatalogRuntime,
-  signal: AbortSignal,
-): Promise<ModelsRefreshResult> {
-  return modelCatalogRefreshCoordinator.refresh(modelRuntime, signal);
-}
+export const refreshModelCatalogs: {
+  (signal: AbortSignal): (modelRuntime: ModelCatalogRuntime) => Promise<ModelsRefreshResult>;
+  (modelRuntime: ModelCatalogRuntime, signal: AbortSignal): Promise<ModelsRefreshResult>;
+} = dual(
+  2,
+  (modelRuntime: ModelCatalogRuntime, signal: AbortSignal): Promise<ModelsRefreshResult> =>
+    modelCatalogRefreshCoordinator.refresh(modelRuntime, signal),
+);
