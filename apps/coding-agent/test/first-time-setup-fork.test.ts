@@ -1,38 +1,50 @@
-import { mkdtempSync, rmSync } from "fs";
-import { tmpdir } from "os";
-import { join } from "path";
-
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-vi.mock("../src/config.ts", async (importOriginal) => {
-  const actual = await importOriginal();
-  return {
-    ...(actual as Record<string, unknown>),
-    PACKAGE_NAME: "@example/msa-coding-agent",
-  };
-});
+vi.mock("../src/config.ts", (importOriginal) =>
+  runTest(
+    Effect.gen(function* () {
+      const actual = yield* awaited(importOriginal());
+      return yield* awaited({
+        ...(actual as Record<string, unknown>),
+        PACKAGE_NAME: "@example/msa-coding-agent",
+      });
+    }),
+  ),
+);
+
+import { awaited, joinPath, makeTempDir, removePath, runTest } from "@msa/testing";
+import { Effect } from "effect";
 
 import { shouldRunFirstTimeSetup } from "../src/cli/startup-ui.ts";
+import { deleteEnv, readEnv, writeEnv } from "../src/core/process-env.ts";
 
 describe("shouldRunFirstTimeSetup in forked distributions", () => {
-  const originalMsaExperimental = process.env["MSA_EXPERIMENTAL"];
+  const originalMsaExperimental = readEnv("MSA_EXPERIMENTAL");
   let tempDir: string;
   let settingsPath: string;
 
-  beforeEach(() => {
-    tempDir = mkdtempSync(join(tmpdir(), "msa-first-time-setup-fork-"));
-    settingsPath = join(tempDir, "settings.json");
-    process.env["MSA_EXPERIMENTAL"] = "1";
-  });
+  beforeEach(() =>
+    runTest(
+      Effect.gen(function* () {
+        tempDir = yield* makeTempDir("msa-first-time-setup-fork-");
+        settingsPath = joinPath(tempDir, "settings.json");
+        writeEnv("MSA_EXPERIMENTAL", "1");
+      }),
+    ),
+  );
 
-  afterEach(() => {
-    rmSync(tempDir, { recursive: true, force: true });
-    if (originalMsaExperimental === undefined) {
-      delete process.env["MSA_EXPERIMENTAL"];
-    } else {
-      process.env["MSA_EXPERIMENTAL"] = originalMsaExperimental;
-    }
-  });
+  afterEach(() =>
+    runTest(
+      Effect.gen(function* () {
+        yield* removePath(tempDir);
+        if (originalMsaExperimental === undefined) {
+          deleteEnv("MSA_EXPERIMENTAL");
+        } else {
+          writeEnv("MSA_EXPERIMENTAL", originalMsaExperimental);
+        }
+      }),
+    ),
+  );
 
   it("returns false for a forked package", () => {
     expect(shouldRunFirstTimeSetup(settingsPath)).toBe(false);

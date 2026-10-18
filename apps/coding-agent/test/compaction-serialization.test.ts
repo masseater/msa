@@ -1,4 +1,5 @@
 import type { Message } from "@msa/ai";
+import { currentTimeMillis } from "@msa/testing";
 import { describe, expect, it } from "vite-plus/test";
 
 import { serializeConversation } from "../src/core/compaction/utils.ts";
@@ -13,7 +14,7 @@ describe("serializeConversation", () => {
         toolName: "read",
         content: [{ type: "text", text: longContent }],
         isError: false,
-        timestamp: Date.now(),
+        timestamp: currentTimeMillis(),
       },
     ];
 
@@ -35,7 +36,7 @@ describe("serializeConversation", () => {
         toolName: "read",
         content: [{ type: "text", text: shortContent }],
         isError: false,
-        timestamp: Date.now(),
+        timestamp: currentTimeMillis(),
       },
     ];
 
@@ -51,7 +52,7 @@ describe("serializeConversation", () => {
       {
         role: "user",
         content: [{ type: "text", text: longText }],
-        timestamp: Date.now(),
+        timestamp: currentTimeMillis(),
       },
       {
         role: "assistant",
@@ -68,7 +69,7 @@ describe("serializeConversation", () => {
           cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
         },
         stopReason: "stop",
-        timestamp: Date.now(),
+        timestamp: currentTimeMillis(),
       },
     ];
 
@@ -99,7 +100,7 @@ describe("serializeConversation", () => {
           cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
         },
         stopReason: "toolUse",
-        timestamp: Date.now(),
+        timestamp: currentTimeMillis(),
       },
     ];
 
