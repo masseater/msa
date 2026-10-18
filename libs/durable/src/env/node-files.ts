@@ -167,7 +167,7 @@ export const createDir = (request: CreateDirRequest): Promise<Result<void, FileE
     request,
     fileResult(
       FileSystem.FileSystem.use((fs) =>
-        fs.makeDirectory(request.path, { recursive: request.recursive }),
+        Effect.asVoid(fs.makeDirectory(request.path, { recursive: request.recursive })),
       ),
       request.path,
     ),
