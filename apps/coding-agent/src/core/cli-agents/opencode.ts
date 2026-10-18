@@ -17,6 +17,10 @@ import { flattenTranscript } from "./transcript.ts";
 
 const PROVIDER_ID = "opencode-free";
 
+function openCodeExecutable(): string {
+  return process.env["OPENCODE_BIN"]?.trim() || join(homedir(), ".opencode", "bin", "opencode");
+}
+
 /** OpenCode Zen's zero-cost chat models from the bundled models.dev catalog. */
 function freeModels() {
   return getBuiltinModels("opencode").filter(
@@ -69,7 +73,7 @@ const backend: CliBackend<OpenCodeEvent> = {
   providerId: PROVIDER_ID,
   command(model, context, cwd) {
     return {
-      bin: process.env["OPENCODE_BIN"]?.trim() || join(homedir(), ".opencode", "bin", "opencode"),
+      bin: openCodeExecutable(),
       args: [
         "run",
         "--standalone",
@@ -120,6 +124,7 @@ export function openCodeProvider(): Provider {
       contextWindow: free.contextWindow,
       maxTokens: free.maxTokens,
     })),
+    executable: openCodeExecutable,
     streamSimple: (model, context, options) => streamViaCli(backend, model, context, options),
   });
 }

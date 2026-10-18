@@ -1944,7 +1944,7 @@ export interface ExtensionAPI {
    *
    * @example
    * // Override baseUrl for an existing provider
-   * msa.registerProvider("anthropic", {
+   * msa.registerProvider("anthropic-api", {
    *   baseUrl: "https://proxy.example.com"
    * });
    *

@@ -14,7 +14,7 @@ import {
 } from "../env-api-keys.ts";
 import { createProvider, type Provider } from "../models.ts";
 import type { ProviderEnv } from "../types.ts";
-import { ANTHROPIC_MODELS } from "./anthropic.models.ts";
+import { ANTHROPIC_API_MODELS } from "./anthropic-api.models.ts";
 
 function anthropicApiKeyAuth(): ApiKeyAuth {
   return {
@@ -77,8 +77,8 @@ function anthropicApiKeyAuth(): ApiKeyAuth {
 
 export function anthropicProvider(): Provider<"anthropic-messages"> {
   return createProvider({
-    id: "anthropic",
-    name: "Anthropic",
+    id: "anthropic-api",
+    name: "Anthropic API",
     baseUrl: "https://api.anthropic.com",
     auth: {
       apiKey: anthropicApiKeyAuth(),
@@ -88,7 +88,7 @@ export function anthropicProvider(): Provider<"anthropic-messages"> {
         load: loadAnthropicOAuth,
       }),
     },
-    models: Object.values(ANTHROPIC_MODELS),
+    models: Object.values(ANTHROPIC_API_MODELS),
     api: anthropicMessagesApi(),
   });
 }

@@ -7,7 +7,7 @@ import type { Provider } from "@msa/ai";
 import { claudeCodeProviders } from "./claude-code.ts";
 import { openCodeProvider } from "./opencode.ts";
 
-/** Read on every model refresh, so `claude-code-<account>` follows the account list. */
+/** Read on every model refresh, so `claude-subs-<account>` follows the account list. */
 export function cliAgentProviders(): Provider[] {
   return [openCodeProvider(), ...claudeCodeProviders()];
 }

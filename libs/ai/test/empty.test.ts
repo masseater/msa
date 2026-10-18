@@ -15,7 +15,10 @@ type StreamOptionsWithExtras = StreamOptions & Record<string, unknown>;
 import { resolveApiKey } from "./oauth.ts";
 
 // Resolve OAuth tokens at module level (async, runs before tests)
-const oauthTokens = await Promise.all([resolveApiKey("anthropic"), resolveApiKey("openai-codex")]);
+const oauthTokens = await Promise.all([
+  resolveApiKey("anthropic-api"),
+  resolveApiKey("openai-codex"),
+]);
 const [anthropicOAuthToken, openaiCodexToken] = oauthTokens;
 
 async function testEmptyMessage<TApi extends Api>(
@@ -212,7 +215,7 @@ describe("AI Providers Empty Message Tests", () => {
   );
 
   describe.skipIf(!process.env["ANTHROPIC_API_KEY"])("Anthropic Provider Empty Messages", () => {
-    const llm = getModel("anthropic", "claude-haiku-4-5");
+    const llm = getModel("anthropic-api", "claude-haiku-4-5");
 
     it("should handle empty content array", { retry: 3, timeout: 30000 }, async () => {
       await testEmptyMessage(llm);
@@ -240,7 +243,7 @@ describe("AI Providers Empty Message Tests", () => {
   // =========================================================================
 
   describe("Anthropic OAuth Provider Empty Messages", () => {
-    const llm = getModel("anthropic", "claude-haiku-4-5");
+    const llm = getModel("anthropic-api", "claude-haiku-4-5");
 
     it.skipIf(!anthropicOAuthToken)(
       "should handle empty content array",

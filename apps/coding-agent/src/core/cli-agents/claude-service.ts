@@ -51,7 +51,7 @@ async function chooseAccount(
 export const claudeCodeService: ExternalService = {
   id: "claude-code",
   name: "Claude Code",
-  purpose: "Claude models through the claude-code provider",
+  purpose: "Claude models through the claude-subs provider",
   async status() {
     if (!claudeExecutable()) return { installed: false, install: INSTALL_COMMAND };
     const accounts = await withLabels(loginAccounts());

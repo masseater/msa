@@ -30,7 +30,7 @@ This table covers providers with a single primary API-key variable. Providers th
 
 | Provider            | Environment variable |
 | ------------------- | -------------------- |
-| Anthropic           | `ANTHROPIC_API_KEY`  |
+| Anthropic API       | `ANTHROPIC_API_KEY`  |
 | OpenAI              | `OPENAI_API_KEY`     |
 | OpenRouter          | `OPENROUTER_API_KEY` |
 | OpenCode Zen and Go | `OPENCODE_API_KEY`   |
@@ -45,7 +45,7 @@ To use a secret manager without writing the resolved key to disk, set a provider
 
 ```json
 {
-  "anthropic": {
+  "anthropic-api": {
     "type": "api_key",
     "key": "!security find-generic-password -ws 'anthropic'"
   }

@@ -13,7 +13,7 @@ export const ANTHROPIC_WORKSPACE_ID_ENV = "ANTHROPIC_WORKSPACE_ID";
 function getApiKeyEnvVars(provider: string): readonly string[] | undefined {
   // ANTHROPIC_AUTH_TOKEN participates in env discovery/status, but
   // getEnvApiKey() skips it because requests must pass it as Authorization: Bearer.
-  if (provider === "anthropic") {
+  if (provider === "anthropic-api") {
     return [ANTHROPIC_AUTH_TOKEN_ENV, ANTHROPIC_OAUTH_TOKEN_ENV, ANTHROPIC_API_KEY_ENV];
   }
 
@@ -55,7 +55,7 @@ export function getEnvApiKey(provider: string, env?: ProviderEnv): string | unde
   const envKeys = findEnvKeys(provider, env);
   if (envKeys?.[0]) {
     const apiKeyEnv =
-      provider === "anthropic"
+      provider === "anthropic-api"
         ? envKeys.find((key) => key !== ANTHROPIC_AUTH_TOKEN_ENV)
         : envKeys[0];
     if (apiKeyEnv) return getProviderEnvValue(apiKeyEnv, env);

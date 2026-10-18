@@ -250,11 +250,11 @@ Reads are synchronous and return the last-known lists:
 
 ```typescript
 const providers = models.getProviders(); // registered Provider objects
-const provider = models.getProvider("anthropic"); // one provider
+const provider = models.getProvider("anthropic-api"); // one provider
 
 const all = models.getModels(); // every chat model across providers
-const anthropicModels = models.getModels("anthropic");
-const model = models.getModel("anthropic", "claude-sonnet-4-5");
+const anthropicModels = models.getModels("anthropic-api");
+const model = models.getModel("anthropic-api", "claude-sonnet-4-5");
 
 for (const m of anthropicModels) {
   console.log(`${m.id}: ${m.name}`);
@@ -294,7 +294,7 @@ Dynamically listed chat models are typed `Model<Api>`. Narrow with the `hasApi()
 ```typescript
 import { hasApi } from "@msa/ai";
 
-const m = models.getModel("anthropic", "claude-sonnet-4-5");
+const m = models.getModel("anthropic-api", "claude-sonnet-4-5");
 if (m && hasApi(m, "anthropic-messages")) {
   // m: Model<'anthropic-messages'> — stream options fully typed
   models.stream(m, context, { thinkingEnabled: true, thinkingBudgetTokens: 2048 });
@@ -921,7 +921,7 @@ Many models support thinking/reasoning capabilities where they can show their in
 
 ```typescript
 // Many models across providers support thinking/reasoning
-const model = models.getModel("anthropic", "claude-sonnet-4-5")!;
+const model = models.getModel("anthropic-api", "claude-sonnet-4-5")!;
 // or models.getModel('openai', 'gpt-5-mini');
 // or models.getModel('opencode', 'gemini-3-flash');
 
@@ -970,7 +970,7 @@ if (hasApi(openaiModel, "openai-responses")) {
 }
 
 // Anthropic Thinking
-const anthropicModel = models.getModel("anthropic", "claude-sonnet-4-5")!;
+const anthropicModel = models.getModel("anthropic-api", "claude-sonnet-4-5")!;
 if (hasApi(anthropicModel, "anthropic-messages")) {
   await models.complete(anthropicModel, context, {
     thinkingEnabled: true,
@@ -1498,7 +1498,7 @@ models.setProvider(opencodeProvider());
 const context: Context = { messages: [] };
 
 // Start with Claude
-const claude = models.getModel("anthropic", "claude-sonnet-4-5")!;
+const claude = models.getModel("anthropic-api", "claude-sonnet-4-5")!;
 context.messages.push({ role: "user", content: "What is 25 * 18?", timestamp: Date.now() });
 context.messages.push(await models.completeSimple(claude, context, { reasoning: "medium" }));
 
@@ -1597,7 +1597,7 @@ restored.messages.push({
 });
 
 // Continue with any model
-const newModel = models.getModel("anthropic", "claude-3-5-haiku-20241022")!;
+const newModel = models.getModel("anthropic-api", "claude-haiku-4-5")!;
 const continuation = await models.complete(newModel, restored);
 ```
 
@@ -1616,7 +1616,7 @@ import { anthropicProvider } from "@msa/ai/providers/anthropic";
 const models = createModels();
 models.setProvider(anthropicProvider());
 
-const model = models.getModel("anthropic", "claude-3-5-haiku-20241022")!;
+const model = models.getModel("anthropic-api", "claude-haiku-4-5")!;
 const response = await models.complete(
   model,
   {
@@ -1675,7 +1675,7 @@ Pass `env` in stream options to scope provider configuration to a request. Value
 
 ```typescript
 const models = builtinModels();
-const model = models.getModel("anthropic", "claude-opus-4-8")!;
+const model = models.getModel("anthropic-api", "claude-opus-4-8")!;
 
 const response = await models.complete(model, context, {
   env: {
@@ -1705,7 +1705,7 @@ const models = createModels({ credentials: myStore }); // persistent CredentialS
 models.setProvider(anthropicProvider());
 
 // Login: Models drives the flow and persists the credential
-await models.login("anthropic", "oauth", {
+await models.login("anthropic-api", "oauth", {
   prompt: async (p) => {
     // p.type: 'text' | 'secret' | 'select' | 'manual_code'
     // manual_code prompts race a local callback server; p.signal aborts them when the server wins
@@ -1726,11 +1726,11 @@ await models.login("anthropic", "oauth", {
 });
 
 // From here on, requests resolve and refresh the token automatically
-const model = models.getModel("anthropic", "claude-sonnet-4-5")!;
+const model = models.getModel("anthropic-api", "claude-sonnet-4-5")!;
 await models.complete(model, context);
 
 // Logout
-await models.logout("anthropic");
+await models.logout("anthropic-api");
 ```
 
 ### CLI Login
@@ -1739,7 +1739,7 @@ The quickest way to authenticate:
 
 ```bash
 npx @msa/ai login              # interactive provider selection
-npx @msa/ai login anthropic    # login to specific provider
+npx @msa/ai login anthropic-api    # login to specific provider
 npx @msa/ai list               # list available providers
 ```
 
@@ -1769,7 +1769,7 @@ Compat is a strict superset of the root entrypoint, so a file can switch its imp
 | Old                                                                          | New                                                                                      |
 | ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
 | `getModel('openai', 'gpt-4o-mini')`                                          | `models.getModel('openai', 'gpt-4o-mini')` or `getBuiltinModel()` from `providers/all`   |
-| `getModels('anthropic')` / `getProviders()`                                  | `models.getModels('anthropic')` / `models.getProviders()` or `getBuiltin*`               |
+| `getModels('anthropic-api')` / `getProviders()`                              | `models.getModels('anthropic-api')` / `models.getProviders()` or `getBuiltin*`           |
 | `stream(model, ctx, opts)` (env-key injection)                               | `models.stream(model, ctx, opts)` (provider auth resolution)                             |
 | `registerApiProvider({ api, stream, streamSimple })`                         | `createProvider({ id, auth, models, api })` + `models.setProvider()`                     |
 | `getEnvApiKey('openai')`                                                     | `await models.getAuth(model.provider)`                                                   |

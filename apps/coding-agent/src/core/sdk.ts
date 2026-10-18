@@ -179,7 +179,7 @@ function getDefaultAgentDir(): string {
  * // With explicit model
  * import { getModel } from '@msa/ai';
  * const { session } = await createAgentSession({
- *   model: getModel('anthropic', 'claude-opus-4-5'),
+ *   model: getModel('anthropic-api', 'claude-opus-4-5'),
  *   thinkingLevel: 'high',
  * });
  *

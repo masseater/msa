@@ -19,7 +19,7 @@ import type { ModelRuntime } from "./model-runtime.ts";
 
 /** Default chat model IDs for providers with built-in chat models. */
 export const defaultModelPerProvider: Partial<Record<KnownProvider, string>> = {
-  anthropic: "claude-opus-4-8",
+  "anthropic-api": "claude-opus-4-8",
   openai: "gpt-5.5",
   "openai-codex": "gpt-6.1-sol",
   openrouter: "moonshotai/kimi-k2.6",

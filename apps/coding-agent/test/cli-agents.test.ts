@@ -116,8 +116,9 @@ describe("Claude Code accounts", () => {
   });
 });
 
-describe("Claude Code providers", () => {
+describe("Claude subscription providers", () => {
   it("are available without extensions and follow the account list on refresh", async () => {
+    process.env["CLAUDE_BIN"] = process.execPath;
     const runtime = await ModelRuntime.create({
       credentials: AuthStorage.inMemory(),
       modelsPath: null,
@@ -126,14 +127,18 @@ describe("Claude Code providers", () => {
     });
     const providers = () =>
       [...new Set(runtime.getAvailableSnapshot().map((model) => model.provider))]
-        .filter((id) => id.startsWith("claude-code"))
+        .filter((id) => id.startsWith("claude-subs"))
         .sort();
-    expect(providers()).toEqual(["claude-code"]);
-    expect(runtime.getModel("claude-code", "opus")?.api).toBe("claude-code");
+    expect(providers()).toEqual(["claude-subs"]);
+    expect(runtime.getModel("claude-subs", "opus")?.api).toBe("claude-subs");
 
     writeAccounts([{ name: "main" }, { name: "sub" }]);
     await runtime.refresh({ allowNetwork: false });
-    expect(providers()).toEqual(["claude-code", "claude-code-main", "claude-code-sub"]);
+    expect(providers()).toEqual(["claude-subs", "claude-subs-main", "claude-subs-sub"]);
+
+    process.env["CLAUDE_BIN"] = join(dir, "missing-claude");
+    await runtime.refresh({ allowNetwork: false });
+    expect(providers()).toEqual([]);
   });
 });
 

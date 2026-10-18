@@ -45,7 +45,7 @@ describe("config value env var syntax migration", () => {
       path.join(agentDir, "auth.json"),
       `${JSON.stringify(
         {
-          anthropic: { type: "api_key", key: "ANTHROPIC_API_KEY" },
+          "anthropic-api": { type: "api_key", key: "ANTHROPIC_API_KEY" },
           openai: { type: "api_key", key: "$OPENAI_API_KEY" },
           opencode: { type: "api_key", key: "public" },
           github: { type: "oauth", access: "ACCESS_TOKEN", refresh: "REFRESH_TOKEN", expires: 1 },
@@ -62,7 +62,7 @@ describe("config value env var syntax migration", () => {
     const migrated = JSON.parse(
       fs.readFileSync(path.join(agentDir, "auth.json"), "utf-8"),
     ) as Record<string, Record<string, unknown>>;
-    expect(migrated["anthropic"]?.["key"]).toBe("ANTHROPIC_API_KEY");
+    expect(migrated["anthropic-api"]?.["key"]).toBe("ANTHROPIC_API_KEY");
     expect(migrated["openai"]?.["key"]).toBe("$OPENAI_API_KEY");
     expect(migrated["opencode"]?.["key"]).toBe("public");
     expect(migrated["github"]?.["access"]).toBe("ACCESS_TOKEN");

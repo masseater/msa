@@ -1,7 +1,7 @@
 /**
- * `/accounts claude`: list the Claude accounts the claude-code provider rotates
+ * `/accounts claude`: list the Claude accounts the claude-subs provider rotates
  * through, add and remove them, sign them in and out, and pick their order.
- * Changes that add or drop a `claude-code-<account>` provider rebuild the providers.
+ * Changes that add or drop a `claude-subs-<account>` provider rebuild the providers.
  */
 import type { AutocompleteItem } from "@msa/tui";
 
@@ -28,8 +28,8 @@ const ACTIONS: Record<string, string> = {
   logout: "logout <name>: sign an account out",
   remove: "remove <name>: forget an account",
   use: "use <name>: try this account first",
-  enable: "enable <name>: include in the claude-code rotation",
-  disable: "disable <name>: keep out of the claude-code rotation",
+  enable: "enable <name>: include in the claude-subs rotation",
+  disable: "disable <name>: keep out of the claude-subs rotation",
   clear: "clear: forget usage-limit blocks",
 };
 
@@ -113,7 +113,7 @@ async function run(args: string, ctx: AccountsContext): Promise<void> {
       throw new Error(`Unknown action "${action}".\n${Object.values(ACTIONS).join("\n")}`);
   }
   ctx.ui.notify(await describeAccounts(), "info");
-  // Adding or removing an account adds or drops claude-code-<account> providers.
+  // Adding or removing an account adds or drops claude-subs-<account> providers.
   if (loadAccounts().length !== before) await ctx.refreshProviders();
 }
 
@@ -133,7 +133,7 @@ function completions(prefix: string): AutocompleteItem[] | null {
 
 export const claudeAccounts: AccountKind = {
   name: "claude",
-  description: "Claude Code accounts the claude-code provider rotates through",
+  description: "Claude Code accounts the claude-subs provider rotates through",
   describe: describeAccounts,
   run,
   complete: completions,

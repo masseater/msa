@@ -105,7 +105,7 @@ describe("OAuthAuth adapters", () => {
 describe("OAuth through Models.getAuth (lazy load chain)", () => {
   it("resolves stored anthropic oauth credentials via the lazy flow import", async () => {
     const credentials = new InMemoryCredentialStore();
-    await credentials.modify("anthropic", () =>
+    await credentials.modify("anthropic-api", () =>
       Promise.resolve({
         type: "oauth",
         access: "oauth-access-token",
@@ -117,7 +117,7 @@ describe("OAuth through Models.getAuth (lazy load chain)", () => {
     const models = createModels({ credentials });
     models.setProvider(anthropicProvider());
 
-    const model = models.getModels("anthropic")[0];
+    const model = models.getModels("anthropic-api")[0];
 
     if (!model) throw new Error("Expected a model");
     const result = await models.getAuth(model.provider);

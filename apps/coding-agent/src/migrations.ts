@@ -312,6 +312,81 @@ export async function showDeprecationWarnings(warnings: string[]): Promise<void>
   console.log();
 }
 
+/** The new id of a renamed built-in provider, or undefined when `id` was not renamed. */
+function renamedProviderId(id: string): string | undefined {
+  if (id === "anthropic") return "anthropic-api";
+  if (id === "claude-code" || id.startsWith("claude-code-")) return `claude-subs${id.slice(11)}`;
+  return undefined;
+}
+
+/** Rewrite `provider` and `provider/model` strings naming a renamed provider. */
+function renameProviderRef(value: string): string {
+  const slash = value.indexOf("/");
+  const provider = slash < 0 ? value : value.slice(0, slash);
+  const renamed = renamedProviderId(provider);
+  return renamed ? renamed + value.slice(provider.length) : value;
+}
+
+function renameProviderRefsIn(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(renameProviderRefsIn);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, entry]) => [
+        key.includes("/") ? renameProviderRef(key) : key,
+        renameProviderRefsIn(entry),
+      ]),
+    );
+  }
+  return typeof value === "string" && value.includes("/") ? renameProviderRef(value) : value;
+}
+
+function renameKeys(record: Record<string, unknown>): boolean {
+  let changed = false;
+  for (const [key, value] of Object.entries(record)) {
+    const renamed = renamedProviderId(key);
+    if (!renamed) continue;
+    if (!(renamed in record)) record[renamed] = value;
+    delete record[key];
+    changed = true;
+  }
+  return changed;
+}
+
+function rewriteJson(path: string, update: (data: Record<string, unknown>) => boolean): void {
+  if (!existsSync(path)) return;
+  try {
+    const data = JSON.parse(stripBom(readFileSync(path, "utf-8"))) as Record<string, unknown>;
+    if (update(data)) writeFileSync(path, `${JSON.stringify(data, null, 2)}\n`);
+  } catch {
+    // Leave a file that does not parse to the loader, which reports it.
+  }
+}
+
+/**
+ * Move credentials, models.json entries, and settings from `anthropic` to `anthropic-api` and from
+ * `claude-code[-<account>]` to `claude-subs[-<account>]`.
+ */
+function migrateRenamedProviders(): void {
+  const agentDir = getAgentDir();
+  rewriteJson(join(agentDir, "auth.json"), renameKeys);
+  rewriteJson(join(agentDir, "models.json"), (data) =>
+    data["providers"] && typeof data["providers"] === "object"
+      ? renameKeys(data["providers"] as Record<string, unknown>)
+      : false,
+  );
+  rewriteJson(join(agentDir, "settings.json"), (data) => {
+    const before = JSON.stringify(data);
+    const renamed = renameProviderRefsIn(data) as Record<string, unknown>;
+    const provider = renamed["defaultProvider"];
+    if (typeof provider === "string")
+      renamed["defaultProvider"] = renamedProviderId(provider) ?? provider;
+    if (JSON.stringify(renamed) === before) return false;
+    for (const key of Object.keys(data)) delete data[key];
+    Object.assign(data, renamed);
+    return true;
+  });
+}
+
 /**
  * Run all migrations. Called once on startup.
  *
@@ -325,6 +400,7 @@ export function runMigrations(cwd: string): {
   migrateSessionsFromAgentRoot();
   migrateToolsToBin();
   migrateKeybindingsConfigFile();
+  migrateRenamedProviders();
   const deprecationWarnings = migrateExtensionSystem(cwd);
   return { migratedAuthProviders, deprecationWarnings };
 }

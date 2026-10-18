@@ -373,7 +373,7 @@ function getAnthropicFederation(
   headers: ProviderHeaders | undefined,
   env: ProviderEnv | undefined,
 ): AnthropicFederationConfig | undefined {
-  if (model.provider !== "anthropic" || hasRequestAuth(apiKey, headers)) return undefined;
+  if (model.provider !== "anthropic-api" || hasRequestAuth(apiKey, headers)) return undefined;
   const federationRuleId = getProviderEnvValue(ANTHROPIC_FEDERATION_RULE_ID_ENV, env);
   const organizationId = getProviderEnvValue(ANTHROPIC_ORGANIZATION_ID_ENV, env);
   const identityTokenFile = getProviderEnvValue(ANTHROPIC_IDENTITY_TOKEN_FILE_ENV, env);

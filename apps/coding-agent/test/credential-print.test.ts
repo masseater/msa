@@ -36,7 +36,7 @@ describe("credential print commands", () => {
     const runtime = await createRuntime(
       AuthStorage.inMemory({
         openai: { type: "api_key", key: "openai-test-key" },
-        anthropic: { type: "api_key", key: "anthropic-test-key" },
+        "anthropic-api": { type: "api_key", key: "anthropic-test-key" },
       }),
     );
 

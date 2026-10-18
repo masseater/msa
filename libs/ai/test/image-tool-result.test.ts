@@ -13,7 +13,10 @@ type StreamOptionsWithExtras = StreamOptions & Record<string, unknown>;
 import { resolveApiKey } from "./oauth.ts";
 
 // Resolve OAuth tokens at module level (async, runs before tests)
-const oauthTokens = await Promise.all([resolveApiKey("anthropic"), resolveApiKey("openai-codex")]);
+const oauthTokens = await Promise.all([
+  resolveApiKey("anthropic-api"),
+  resolveApiKey("openai-codex"),
+]);
 const [anthropicOAuthToken, openaiCodexToken] = oauthTokens;
 
 /**
@@ -252,7 +255,7 @@ describe("Tool Results with Images", () => {
   describe.skipIf(!process.env["ANTHROPIC_API_KEY"])(
     "Anthropic Provider (claude-haiku-4-5)",
     () => {
-      const model = getModel("anthropic", "claude-haiku-4-5");
+      const model = getModel("anthropic-api", "claude-haiku-4-5");
 
       it("should handle tool result with only image", { retry: 3, timeout: 30000 }, async () => {
         await handleToolWithImageResult(model);
@@ -285,7 +288,7 @@ describe("Tool Results with Images", () => {
   // =========================================================================
 
   describe("Anthropic OAuth Provider (claude-sonnet-4-5)", () => {
-    const model = getModel("anthropic", "claude-sonnet-4-5");
+    const model = getModel("anthropic-api", "claude-sonnet-4-5");
 
     it.skipIf(!anthropicOAuthToken)(
       "should handle tool result with only image",

@@ -11,7 +11,7 @@ import type { ExtensionUIContext } from "./extensions/types.ts";
 /** What an `/accounts` action can show, ask, and change. */
 export interface AccountsContext {
   ui: Pick<ExtensionUIContext, "notify" | "input" | "confirm">;
-  /** Rebuild the providers that follow the account list, such as `claude-code-<account>`. */
+  /** Rebuild the providers that follow the account list, such as `claude-subs-<account>`. */
   refreshProviders(): Promise<void>;
 }
 

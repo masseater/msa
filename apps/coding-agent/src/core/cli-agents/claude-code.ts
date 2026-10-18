@@ -44,7 +44,7 @@ import { cliAgentProvider } from "./provider.ts";
 import { createReply, type ReplyBuilder } from "./reply.ts";
 import { flattenTranscript, textFromContent } from "./transcript.ts";
 
-const PROVIDER_ID = "claude-code";
+const PROVIDER_ID = "claude-subs";
 const SERVER = "msa";
 const TOOL_PREFIX = `mcp__${SERVER}__`;
 const IDLE_CLOSE_MS = 30 * 60_000;
@@ -52,10 +52,10 @@ const IDLE_CLOSE_MS = 30 * 60_000;
 const MAX_IDLE_SESSIONS = 2;
 
 const MODELS = [
-  { id: "fable", name: "Claude Code Fable" },
-  { id: "opus", name: "Claude Code Opus" },
-  { id: "sonnet", name: "Claude Code Sonnet" },
-  { id: "haiku", name: "Claude Code Haiku" },
+  { id: "fable", name: "Claude Fable" },
+  { id: "opus", name: "Claude Opus" },
+  { id: "sonnet", name: "Claude Sonnet" },
+  { id: "haiku", name: "Claude Haiku" },
 ] as const;
 
 type Effort = "low" | "medium" | "high" | "xhigh" | "max";
@@ -638,21 +638,26 @@ function provider(id: string, name: string, account?: Account): Provider {
       contextWindow: 1_000_000,
       maxTokens: 128_000,
     })),
+    executable: claudeExecutable,
     streamSimple: streamFor(account),
   });
 }
 
 /**
- * `claude-code` runs under the first available account and moves on when one is
- * blocked; `claude-code-<account>` stays on that account.
+ * `claude-subs` runs under the first available account and moves on when one is
+ * blocked; `claude-subs-<account>` stays on that account.
  */
 export function claudeCodeProviders(): Provider[] {
   const accounts = loadAccounts();
   return [
-    provider(PROVIDER_ID, "Claude Code"),
+    provider(PROVIDER_ID, "Claude subscription"),
     ...(accounts.length > 1
       ? accounts.map((account) =>
-          provider(`${PROVIDER_ID}-${account.name}`, `Claude Code (${account.name})`, account),
+          provider(
+            `${PROVIDER_ID}-${account.name}`,
+            `Claude subscription (${account.name})`,
+            account,
+          ),
         )
       : []),
   ];

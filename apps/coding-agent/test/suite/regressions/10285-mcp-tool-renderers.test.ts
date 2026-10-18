@@ -57,7 +57,7 @@ describe("MCP tool renderers", () => {
           },
         ],
         api: "anthropic-messages",
-        provider: "anthropic",
+        provider: "anthropic-api",
         model: "test",
         usage: {
           input: 0,

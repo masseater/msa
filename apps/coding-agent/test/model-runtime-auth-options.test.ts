@@ -36,10 +36,10 @@ function testModel(id: string) {
 describe("ModelRuntime auth options", () => {
   it("accepts a msa-ai CredentialStore", async () => {
     const credentials = new InMemoryCredentialStore();
-    await credentials.modify("anthropic", async () => ({ type: "api_key", key: "stored-key" }));
+    await credentials.modify("anthropic-api", async () => ({ type: "api_key", key: "stored-key" }));
     const runtime = await ModelRuntime.create({ credentials, modelsPath: null });
 
-    expect((await runtime.getAuth("anthropic"))?.auth.apiKey).toBe("stored-key");
+    expect((await runtime.getAuth("anthropic-api"))?.auth.apiKey).toBe("stored-key");
   });
 
   it("scopes provider availability reads and records refresh failures", async () => {
@@ -59,15 +59,15 @@ describe("ModelRuntime auth options", () => {
     const runtime = await ModelRuntime.create({ credentials, modelsPath: null });
 
     reads.length = 0;
-    await runtime.getAvailable("anthropic");
-    expect(new Set(reads)).toEqual(new Set(["anthropic"]));
+    await runtime.getAvailable("anthropic-api");
+    expect(new Set(reads)).toEqual(new Set(["anthropic-api"]));
 
     failReads = true;
-    await expect(runtime.getAvailable("anthropic")).rejects.toThrow(
-      "Credential store read failed for anthropic",
+    await expect(runtime.getAvailable("anthropic-api")).rejects.toThrow(
+      "Credential store read failed for anthropic-api",
     );
     expect(runtime.getError()).toContain(
-      "Availability refresh: Credential store read failed for anthropic",
+      "Availability refresh: Credential store read failed for anthropic-api",
     );
 
     failReads = false;
@@ -91,7 +91,7 @@ describe("ModelRuntime auth options", () => {
         }),
         expect.objectContaining({
           type: "oauth",
-          provider: expect.objectContaining({ id: "anthropic", name: "Anthropic" }),
+          provider: expect.objectContaining({ id: "anthropic-api", name: "Anthropic API" }),
         }),
       ]),
     );
@@ -105,7 +105,7 @@ describe("ModelRuntime auth options", () => {
   it("attaches the provider's active auth status to every method option", async () => {
     const runtime = await ModelRuntime.create({
       credentials: AuthStorage.inMemory({
-        anthropic: {
+        "anthropic-api": {
           type: "oauth",
           access: "access",
           refresh: "refresh",
@@ -115,15 +115,15 @@ describe("ModelRuntime auth options", () => {
       modelsPath: null,
     });
 
-    const options = authOptions(runtime).filter((option) => option.provider.id === "anthropic");
+    const options = authOptions(runtime).filter((option) => option.provider.id === "anthropic-api");
     expect(options).toHaveLength(2);
-    expect(await runtime.checkAuth("anthropic")).toMatchObject({ type: "oauth" });
+    expect(await runtime.checkAuth("anthropic-api")).toMatchObject({ type: "oauth" });
   });
 
   it("distinguishes subscription OAuth from generic OAuth sign-in", async () => {
     const runtime = await ModelRuntime.create({
       credentials: AuthStorage.inMemory({
-        anthropic: {
+        "anthropic-api": {
           type: "oauth",
           access: "anthropic-access",
           refresh: "anthropic-refresh",
@@ -139,8 +139,8 @@ describe("ModelRuntime auth options", () => {
       modelsPath: null,
     });
 
-    expect(runtime.isUsingOAuth("anthropic")).toBe(true);
-    expect(runtime.isUsingSubscription("anthropic")).toBe(true);
+    expect(runtime.isUsingOAuth("anthropic-api")).toBe(true);
+    expect(runtime.isUsingSubscription("anthropic-api")).toBe(true);
     expect(runtime.isUsingOAuth("openrouter")).toBe(true);
     expect(runtime.isUsingSubscription("openrouter")).toBe(false);
   });

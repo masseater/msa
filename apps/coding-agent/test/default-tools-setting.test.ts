@@ -61,7 +61,7 @@ describe("defaultTools setting", () => {
       await createAgentSession({
         cwd: tempDir,
         agentDir,
-        model: getModel("anthropic", "claude-sonnet-4-5")!,
+        model: getModel("anthropic-api", "claude-sonnet-4-5")!,
         settingsManager,
         sessionManager: SessionManager.inMemory(tempDir),
         resourceLoader,
@@ -259,7 +259,7 @@ describe("defaultTools setting", () => {
         await createAgentSession({
           cwd: tempDir,
           agentDir,
-          model: getModel("anthropic", "claude-sonnet-4-5")!,
+          model: getModel("anthropic-api", "claude-sonnet-4-5")!,
           settingsManager,
           sessionManager: SessionManager.inMemory(tempDir),
           resourceLoader,
@@ -388,7 +388,7 @@ describe("defaultTools setting", () => {
         await createAgentSession({
           cwd: tempDir,
           agentDir,
-          model: getModel("anthropic", "claude-sonnet-4-5")!,
+          model: getModel("anthropic-api", "claude-sonnet-4-5")!,
           settingsManager,
           sessionManager,
           resourceLoader,
@@ -456,7 +456,7 @@ describe("defaultTools setting", () => {
     const { session } = await createAgentSessionFromServices({
       services,
       sessionManager: SessionManager.inMemory(tempDir),
-      model: getModel("anthropic", "claude-sonnet-4-5")!,
+      model: getModel("anthropic-api", "claude-sonnet-4-5")!,
     });
 
     expect(

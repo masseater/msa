@@ -147,7 +147,7 @@ Records model-attributed usage that is not an assistant message and does not par
   "parentId": "e5f6g7h8",
   "timestamp": "2024-12-03T14:08:00.000Z",
   "kind": "cache_warm",
-  "provider": "anthropic",
+  "provider": "anthropic-api",
   "model": "claude-sonnet-4-5",
   "usage": {
     "input": 0,

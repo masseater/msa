@@ -57,7 +57,7 @@ describe("serializeConversation", () => {
         role: "assistant",
         content: [{ type: "text", text: longText }],
         api: "anthropic",
-        provider: "anthropic",
+        provider: "anthropic-api",
         model: "test",
         usage: {
           input: 0,
@@ -88,7 +88,7 @@ describe("serializeConversation", () => {
           { type: "toolCall", id: "tc1", name: "read", arguments: { path: "a.ts" } },
         ],
         api: "anthropic",
-        provider: "anthropic",
+        provider: "anthropic-api",
         model: "test",
         usage: {
           input: 0,

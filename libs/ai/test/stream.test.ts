@@ -26,7 +26,10 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 // Resolve OAuth tokens at module level (async, runs before tests)
-const oauthTokens = await Promise.all([resolveApiKey("anthropic"), resolveApiKey("openai-codex")]);
+const oauthTokens = await Promise.all([
+  resolveApiKey("anthropic-api"),
+  resolveApiKey("openai-codex"),
+]);
 const [anthropicOAuthToken, openaiCodexToken] = oauthTokens;
 
 // Calculator tool definition (same as examples)
@@ -445,7 +448,7 @@ describe("Generate E2E Tests", () => {
   describe.skipIf(!process.env["ANTHROPIC_API_KEY"])(
     "Anthropic Provider (claude-haiku-4-5)",
     () => {
-      const model = getModel("anthropic", "claude-haiku-4-5");
+      const model = getModel("anthropic-api", "claude-haiku-4-5");
 
       it("should complete basic text generation", { retry: 3 }, async () => {
         await basicTextGeneration(model, { thinkingEnabled: true });
@@ -502,7 +505,7 @@ describe("Generate E2E Tests", () => {
   // =========================================================================
 
   describe("Anthropic OAuth Provider (claude-sonnet-4-6)", () => {
-    const model = getModel("anthropic", "claude-sonnet-4-6");
+    const model = getModel("anthropic-api", "claude-sonnet-4-6");
 
     it.skipIf(!anthropicOAuthToken)(
       "should complete basic text generation",
@@ -538,7 +541,7 @@ describe("Generate E2E Tests", () => {
   });
 
   describe("Anthropic OAuth Provider (claude-opus-4-6 with adaptive thinking)", () => {
-    const model = getModel("anthropic", "claude-opus-4-6");
+    const model = getModel("anthropic-api", "claude-opus-4-6");
 
     it.skipIf(!anthropicOAuthToken)(
       "should complete basic text generation",

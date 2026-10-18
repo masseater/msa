@@ -132,16 +132,16 @@ async function assertSecondToolCallWithInterleavedThinking<TApi extends Api>(
   expect(secondResponse.content.some((block) => block.type === "text")).toBe(true);
 }
 
-const hasAnthropicCredentials = !!getEnvApiKey("anthropic");
+const hasAnthropicCredentials = !!getEnvApiKey("anthropic-api");
 
 describe.skipIf(!hasAnthropicCredentials)("Anthropic interleaved thinking", () => {
   it("should do interleaved thinking on Claude Opus 4.5", { retry: 3 }, async () => {
-    const llm = getModel("anthropic", "claude-opus-4-5");
+    const llm = getModel("anthropic-api", "claude-opus-4-5");
     await assertSecondToolCallWithInterleavedThinking(llm, "high");
   });
 
   it("should do interleaved thinking on Claude Opus 4.6", { retry: 3 }, async () => {
-    const llm = getModel("anthropic", "claude-opus-4-6");
+    const llm = getModel("anthropic-api", "claude-opus-4-6");
     await assertSecondToolCallWithInterleavedThinking(llm, "high");
   });
 });

@@ -74,7 +74,7 @@ const context = normalizeContext({
 
 describe("Anthropic 1h cache write cost", () => {
   it("prices the 1h portion at 2x input and the rest at the 5m rate", async () => {
-    const model = getModel("anthropic", "claude-opus-4-8");
+    const model = getModel("anthropic-api", "claude-opus-4-8");
     const response = createSseResponse(
       eventsWithCacheCreation({
         ephemeral_5m_input_tokens: 600_000,
@@ -93,7 +93,7 @@ describe("Anthropic 1h cache write cost", () => {
 
   // Regression for #9210: some gateways send cache usage in message_delta, not message_start.
   it("prices 1h cache writes reported only in message_delta", async () => {
-    const model = getModel("anthropic", "claude-haiku-4-5");
+    const model = getModel("anthropic-api", "claude-haiku-4-5");
     const response = createSseResponse([
       {
         event: "message_start",
@@ -127,7 +127,7 @@ describe("Anthropic 1h cache write cost", () => {
   });
 
   it("falls back to the 5m rate when no breakdown is reported", async () => {
-    const model = getModel("anthropic", "claude-opus-4-8");
+    const model = getModel("anthropic-api", "claude-opus-4-8");
     const response = createSseResponse(eventsWithCacheCreation(undefined));
     const result = await streamAnthropic(model, context, {
       client: createFakeAnthropicClient(response),
