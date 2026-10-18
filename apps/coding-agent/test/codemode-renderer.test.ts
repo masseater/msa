@@ -126,7 +126,7 @@ describe("codemode renderer", () => {
     expect(lines[0]).toContain("grep");
     expect(lines[0]).toContain("+1 earlier calls");
     expect(lines[0]).not.toContain("read");
-    expect(lines[1]).toMatch(/^2 lines \(.* to expand\) {2}x+/);
+    expect(lines[1]).toMatch(/^2 lines \(.* to expand\) {2}x+/u);
     expect(lines[1]!.length).toBeLessThanOrEqual(80);
     expect(text).not.toContain("second line");
   });

@@ -185,7 +185,7 @@ describe("buildSystemPrompt", () => {
         cwd: process.cwd(),
       });
 
-      expect(prompt.match(/- Use dynamic_tool for summaries\./g)).toHaveLength(1);
+      expect(prompt.match(/- Use dynamic_tool for summaries\./gu)).toHaveLength(1);
     });
   });
 

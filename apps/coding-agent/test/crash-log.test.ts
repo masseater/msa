@@ -9,7 +9,7 @@ function packageExtension(
   baseDir: string,
   entry = "extensions/index.ts",
 ): StackExtension {
-  const normalizedBaseDir = baseDir.replace(/\\/g, "/");
+  const normalizedBaseDir = baseDir.replace(/\\/gu, "/");
   const resolvedPath = `${normalizedBaseDir}/${entry}`;
   return {
     path: resolvedPath,
