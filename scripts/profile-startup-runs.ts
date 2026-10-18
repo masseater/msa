@@ -1,10 +1,12 @@
-import { Clock, Console, Effect, Ref, Result, Schema, Stream } from "effect";
+import { Console, Effect, Ref, Stream } from "effect";
 
 import type { HostShape } from "./host.ts";
-import { ProfileError } from "./profile-startup-args.ts";
+import { fail } from "./profile-startup-args.ts";
 import type { Mode, ProfileOptions, Runtime } from "./profile-startup-args.ts";
-import { formatMs, parseStartupTimings } from "./profile-startup-report.ts";
+import { formatMs, nowMs, parseStartupTimings } from "./profile-startup-report.ts";
 import type { RunResult } from "./profile-startup-report.ts";
+import { getStateRequest, handleLine, rpcElapsed } from "./profile-startup-rpc.ts";
+import type { LineContext, RpcState } from "./profile-startup-rpc.ts";
 
 interface Paths {
   readonly bundledDistCli: string;
@@ -23,16 +25,6 @@ interface RunParams {
   readonly runIndex: number;
   readonly runtime: Runtime;
 }
-
-const RpcResponse = Schema.fromJsonString(Schema.Unknown);
-const decodeRpcResponse = Schema.decodeUnknownEffect(RpcResponse);
-const encodeRequest = Schema.encodeEffect(
-  Schema.fromJsonString(Schema.Struct({ id: Schema.String, type: Schema.String })),
-);
-
-const fail = (message: string) => new ProfileError({ message });
-
-const nowMs = Effect.map(Clock.currentTimeNanos, (nanos) => Number(nanos) / 1_000_000);
 
 const isWindows = process.platform === "win32";
 
@@ -91,11 +83,17 @@ const runBuild = (options: {
     yield* Console.log(`Build completed in ${formatMs((yield* nowMs) - startedAt)}`);
   });
 
-const runtimeCommand = (params: RunParams, mode: Mode, profileName: string) => {
-  const benchmarkArgs = mode === "rpc" ? ["--no-session", "--mode", "rpc"] : ["--no-session"];
-  const profileArgs = params.options.cpuProfile
+const benchmarkArgsOf = (mode: Mode): ReadonlyArray<string> =>
+  mode === "rpc" ? ["--no-session", "--mode", "rpc"] : ["--no-session"];
+
+const profileArgsOf = (params: RunParams, profileName: string): ReadonlyArray<string> =>
+  params.options.cpuProfile
     ? ["--cpu-prof", `--cpu-prof-dir=${params.profileDir}`, `--cpu-prof-name=${profileName}`]
     : [];
+
+const runtimeCommand = (params: RunParams, mode: Mode, profileName: string) => {
+  const benchmarkArgs = benchmarkArgsOf(mode);
+  const profileArgs = profileArgsOf(params, profileName);
   if (params.runtime === "bun") {
     return { command: "bun", args: [...profileArgs, params.paths.srcCli, ...benchmarkArgs] };
   }
@@ -103,17 +101,40 @@ const runtimeCommand = (params: RunParams, mode: Mode, profileName: string) => {
   return { command: process.execPath, args: [...profileArgs, entry, ...benchmarkArgs] };
 };
 
-const benchmarkEnv = (params: RunParams, isolatedAgentDir: string | undefined) => {
+const OFFLINE_ENV: Readonly<Record<string, string>> = {
+  MSA_OFFLINE: "1",
+  MSA_SKIP_VERSION_CHECK: "1",
+};
+
+const agentDirEnv = (agentDir: string | undefined): Readonly<Record<string, string>> =>
+  agentDir === undefined ? {} : { MSA_CODING_AGENT_DIR: agentDir };
+
+const benchmarkEnv = (
+  params: RunParams,
+  isolatedAgentDir: string | undefined,
+): Readonly<Record<string, string>> => {
   const { options } = params;
-  const env: Record<string, string> = { MSA_TIMING: "1" };
-  const agentDir = options.agentDir ?? isolatedAgentDir;
-  if (agentDir !== undefined) env["MSA_CODING_AGENT_DIR"] = agentDir;
-  if (options.mode === "tui") env["MSA_STARTUP_BENCHMARK"] = "1";
-  if (options.offline) {
-    env["MSA_OFFLINE"] = "1";
-    env["MSA_SKIP_VERSION_CHECK"] = "1";
-  }
-  return env;
+  return {
+    MSA_TIMING: "1",
+    ...agentDirEnv(options.agentDir ?? isolatedAgentDir),
+    ...(options.mode === "tui" ? { MSA_STARTUP_BENCHMARK: "1" } : {}),
+    ...(options.offline ? OFFLINE_ENV : {}),
+  };
+};
+
+const spawnOptions = (options: {
+  readonly isolatedAgentDir: string | undefined;
+  readonly mode: Mode;
+  readonly params: RunParams;
+  readonly profileName: string;
+}) => {
+  const { params } = options;
+  return {
+    ...runtimeCommand(params, options.mode, options.profileName),
+    cwd: params.paths.packageDir,
+    env: benchmarkEnv(params, options.isolatedAgentDir),
+    shell: isWindows && params.runtime === "bun",
+  };
 };
 
 const withAgentDir = <A, E, R>(
@@ -164,12 +185,8 @@ const runTui = (params: RunParams) =>
     Effect.scoped(
       Effect.gen(function* () {
         const profileName = profileNameOf(params);
-        const command = runtimeCommand(params, "tui", profileName);
         const child = yield* params.host.spawn({
-          ...command,
-          cwd: params.paths.packageDir,
-          env: benchmarkEnv(params, isolatedAgentDir),
-          shell: isWindows && params.runtime === "bun",
+          ...spawnOptions({ isolatedAgentDir, mode: "tui", params, profileName }),
           stderr: "pipe",
           stdin: "inherit",
           stdout: "inherit",
@@ -185,60 +202,13 @@ const runTui = (params: RunParams) =>
     ),
   );
 
-interface RpcState {
-  readonly readyElapsedMs: number | undefined;
-  readonly responseError: string | undefined;
-}
-
-const GetStateResponse = Schema.Struct({
-  command: Schema.Literal("get_state"),
-  error: Schema.optional(Schema.Unknown),
-  id: Schema.String,
-  success: Schema.optional(Schema.Unknown),
-  type: Schema.Literal("response"),
-});
-const isGetStateResponse = Schema.is(GetStateResponse);
-
-const handleLine = (options: {
-  readonly line: string;
-  readonly onReady: Effect.Effect<void>;
-  readonly requestId: string;
-  readonly startedAt: number;
-  readonly state: Ref.Ref<RpcState>;
-}) =>
-  Effect.gen(function* () {
-    const { line, requestId, state } = options;
-    if (line.trim() === "") return;
-    const decoded = yield* decodeRpcResponse(line).pipe(Effect.result);
-    if (Result.isFailure(decoded)) {
-      const responseError = decoded.failure.message;
-      yield* Ref.update(state, (current) => ({ ...current, responseError }));
-      return;
-    }
-    const parsed = decoded.success;
-    if (!isGetStateResponse(parsed) || parsed.id !== requestId) return;
-    if (parsed.success !== true) {
-      const responseError = typeof parsed.error === "string" ? parsed.error : "get_state failed";
-      yield* Ref.update(state, (current) => ({ ...current, responseError }));
-      return;
-    }
-    if ((yield* Ref.get(state)).readyElapsedMs !== undefined) return;
-    const readyElapsedMs = (yield* nowMs) - options.startedAt;
-    yield* Ref.update(state, (current) => ({ ...current, readyElapsedMs }));
-    yield* options.onReady;
-  });
-
 const runRpc = (params: RunParams) =>
   withAgentDir(params, (isolatedAgentDir) =>
     Effect.scoped(
       Effect.gen(function* () {
         const profileName = profileNameOf(params);
-        const command = runtimeCommand(params, "rpc", profileName);
         const child = yield* params.host.spawn({
-          ...command,
-          cwd: params.paths.packageDir,
-          env: benchmarkEnv(params, isolatedAgentDir),
-          shell: isWindows && params.runtime === "bun",
+          ...spawnOptions({ isolatedAgentDir, mode: "rpc", params, profileName }),
           stderr: "pipe",
           stdin: "pipe",
           stdout: "pipe",
@@ -249,28 +219,19 @@ const runRpc = (params: RunParams) =>
           responseError: undefined,
         });
         const startedAt = yield* nowMs;
-        const consumeStdout = Stream.runForEach(child.stdoutLines, (line) =>
-          handleLine({ line, onReady: child.endInput, requestId, startedAt, state }),
-        );
-        yield* child.write(`${yield* encodeRequest({ id: requestId, type: "get_state" })}\n`);
+        const context: LineContext = { onReady: child.endInput, requestId, startedAt, state };
+        const consumeStdout = Stream.runForEach(child.stdoutLines, handleLine(context));
+        yield* child.write(yield* getStateRequest(requestId));
         const [, stderr, exitCode] = yield* Effect.all(
           [consumeStdout, child.stderrText, child.exitCode],
           { concurrency: "unbounded" },
         );
-        const { readyElapsedMs, responseError } = yield* Ref.get(state);
-        if (responseError !== undefined) return yield* fail(responseError);
-        if (readyElapsedMs === undefined) {
-          return yield* fail(
-            stderr.trim() === ""
-              ? "RPC benchmark did not receive get_state response"
-              : stderr.trim(),
-          );
-        }
+        const elapsedMs = yield* rpcElapsed({ state: yield* Ref.get(state), stderr });
         if (exitCode !== 0) return yield* exitFailure(stderr, exitCode);
-        return yield* finishRun(params, profileName, { elapsedMs: readyElapsedMs, stderr });
+        return yield* finishRun(params, profileName, { elapsedMs, stderr });
       }),
     ),
   );
 
 export type { Paths, RunParams };
-export { fail, runBuild, runRpc, runTui };
+export { runBuild, runRpc, runTui };

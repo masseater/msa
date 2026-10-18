@@ -1,4 +1,4 @@
-import { Function } from "effect";
+import { Clock, Effect, Function } from "effect";
 
 interface RunResult {
   readonly elapsedMs: number;
@@ -29,6 +29,8 @@ const EDGE_UNDERSCORES = /^_+|_+$/gu;
 
 const formatMs = (value: number): string => `${value.toFixed(1)}ms`;
 
+const nowMs = Effect.map(Clock.currentTimeNanos, (nanos) => Number(nanos) / 1_000_000);
+
 const summarize = (values: ReadonlyArray<number>): Summary => {
   const sorted = [...values].sort((left, right) => left - right);
   const total = sorted.reduce((sum, value) => sum + value, 0);
@@ -42,23 +44,23 @@ const summarize = (values: ReadonlyArray<number>): Summary => {
   };
 };
 
-const parseStartupTimings = (stderr: string): ReadonlyMap<string, number> => {
-  const timings = new Map<string, number>();
-  let inBlock = false;
-  for (const line of stderr.split(LINE_BREAK)) {
-    if (TIMINGS_HEADER.test(line.trim())) {
-      inBlock = true;
-      continue;
-    }
-    if (!inBlock) continue;
-    if (line.includes("------------------------")) break;
-    const match = TIMING_LINE.exec(line);
-    const label = match?.[1];
-    const value = match?.[2];
-    if (label !== undefined && value !== undefined) timings.set(label, Number.parseInt(value, 10));
-  }
-  return timings;
+const timingBlock = (lines: ReadonlyArray<string>): ReadonlyArray<string> => {
+  const start = lines.findIndex((line) => TIMINGS_HEADER.test(line.trim()));
+  if (start === -1) return [];
+  const block = lines.slice(start + 1);
+  const end = block.findIndex((line) => line.includes("------------------------"));
+  return end === -1 ? block : block.slice(0, end);
 };
+
+const timingEntry = (line: string): ReadonlyArray<readonly [string, number]> => {
+  const match = TIMING_LINE.exec(line);
+  if (match === null) return [];
+  const [, label, value] = match;
+  return label === undefined || value === undefined ? [] : [[label, Number.parseInt(value, 10)]];
+};
+
+const parseStartupTimings = (stderr: string): ReadonlyMap<string, number> =>
+  new Map(timingBlock(stderr.split(LINE_BREAK)).flatMap(timingEntry));
 
 const summarizeTimingMaps = (runs: ReadonlyArray<RunResult>): ReadonlyMap<string, Summary> => {
   const valuesByLabel = new Map<string, Array<number>>();
@@ -81,9 +83,17 @@ const slowestRun = (runs: ReadonlyArray<RunResult>): RunResult | undefined =>
     undefined,
   );
 
-const profileLines = (context: ReportContext, runs: ReadonlyArray<RunResult>) => {
+const selectedProfilePath = (
+  context: ReportContext,
+  runs: ReadonlyArray<RunResult>,
+): string | undefined => {
   const profilePath = slowestRun(runs)?.profilePath;
-  if (!context.cpuProfile || profilePath === undefined || profilePath === "") return [];
+  return context.cpuProfile && profilePath !== "" ? profilePath : undefined;
+};
+
+const profileLines = (context: ReportContext, runs: ReadonlyArray<RunResult>) => {
+  const profilePath = selectedProfilePath(context, runs);
+  if (profilePath === undefined) return [];
   return [
     `  selected profile: ${context.displayPath(profilePath)}`,
     `  profiles dir:     ${context.displayPath(context.profileDir)}`,
@@ -142,4 +152,4 @@ const buildReport: {
 });
 
 export type { ReportContext, RunResult };
-export { buildReport, formatMs, parseStartupTimings };
+export { buildReport, formatMs, nowMs, parseStartupTimings };

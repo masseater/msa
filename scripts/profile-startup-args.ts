@@ -190,4 +190,4 @@ const parseArgs: {
 );
 
 export type { Mode, ProfileOptions, Runtime };
-export { HELP, ProfileError, parseArgs };
+export { fail, HELP, ProfileError, parseArgs };
