@@ -141,12 +141,13 @@ export function createGrepToolDefinition(
               return;
             }
 
-            const contextValue = context && context > 0 ? context : 0;
+            const contextValue =
+              context !== undefined && context !== 0 && context > 0 ? context : 0;
             const effectiveLimit = Math.max(1, limit ?? DEFAULT_LIMIT);
             const formatPath = (filePath: string): string => {
               if (isDirectory) {
                 const relative = path.relative(searchPath, filePath);
-                if (relative && !relative.startsWith("..")) {
+                if (relative !== "" && !relative.startsWith("..")) {
                   return relative.replace(/\\/g, "/");
                 }
               }

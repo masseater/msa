@@ -182,10 +182,10 @@ function preRenderCustomTools(
       }
     }
 
-    if (msg.role === "toolResult" && msg.toolCallId) {
+    if (msg.role === "toolResult" && msg.toolCallId !== "") {
       const toolName = msg.toolName || "";
       const existing = renderedTools[msg.toolCallId];
-      if (existing || !TEMPLATE_RENDERED_TOOLS.has(toolName)) {
+      if (existing !== undefined || !TEMPLATE_RENDERED_TOOLS.has(toolName)) {
         const rendered = toolRenderer.renderResult(
           msg.toolCallId,
           toolName,

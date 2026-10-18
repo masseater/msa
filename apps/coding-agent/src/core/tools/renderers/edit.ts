@@ -110,8 +110,8 @@ function formatEditResult(
   expanded: boolean,
 ): string | undefined {
   const rawPath = str(args?.file_path ?? args?.path);
-  const previewDiff = preview && !("error" in preview) ? preview.diff : undefined;
-  const previewError = preview && "error" in preview ? preview.error : undefined;
+  const previewDiff = preview !== undefined && !("error" in preview) ? preview.diff : undefined;
+  const previewError = preview !== undefined && "error" in preview ? preview.error : undefined;
   if (isError) {
     const errorText = result.content
       .filter((c) => c.type === "text")
@@ -124,7 +124,7 @@ function formatEditResult(
   }
 
   const resultDiff = result.details?.diff;
-  if (resultDiff && resultDiff !== previewDiff) {
+  if (resultDiff !== undefined && resultDiff !== "" && resultDiff !== previewDiff) {
     return expanded
       ? renderDiff(resultDiff, { filePath: rawPath ?? undefined })
       : expandHint(summarizeDiff(resultDiff));
@@ -211,7 +211,12 @@ export const editRenderers: Pick<ToolDefinition<any, any>, "renderCall" | "rende
       component.settledError = false;
     }
 
-    if (context.argsComplete && previewInput && !component.preview && !component.previewPending) {
+    if (
+      context.argsComplete &&
+      previewInput !== null &&
+      component.preview === undefined &&
+      component.previewPending !== true
+    ) {
       component.previewPending = true;
       const requestKey = argsKey;
       void computeEditsDiff(previewInput.path, previewInput.edits, context.cwd).then((preview) => {

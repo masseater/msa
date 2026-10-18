@@ -34,6 +34,24 @@ const wrapToolDefinitionImpl = <TDetails = unknown>(
     ),
 });
 
+export interface CwdFactory<TOptions, TResult> {
+  (options?: TOptions): (cwd: string) => TResult;
+  (cwd: string, options?: TOptions): TResult;
+}
+
+export const cwdFactory = <TOptions, TResult>(
+  make: (cwd: string, options?: TOptions) => TResult,
+): CwdFactory<TOptions, TResult> => dual((args) => typeof args[0] === "string", make);
+
+export interface NamedFactory<TName extends string, TOptions, TResult> {
+  (cwd: string, options?: TOptions): (name: TName) => TResult;
+  (name: TName, cwd: string, options?: TOptions): TResult;
+}
+
+export const namedFactory = <TName extends string, TOptions, TResult>(
+  make: (name: TName, cwd: string, options?: TOptions) => TResult,
+): NamedFactory<TName, TOptions, TResult> => dual((args) => typeof args[1] === "string", make);
+
 const isDefinitionFirst = (args: IArguments): boolean => typeof args[0] !== "function";
 
 export const wrapToolDefinition: {

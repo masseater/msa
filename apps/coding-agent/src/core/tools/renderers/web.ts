@@ -11,7 +11,9 @@ type Renderers = Pick<ToolDefinition<any, any>, "renderCall" | "renderResult">;
 type Result = Parameters<NonNullable<Renderers["renderResult"]>>[0];
 
 function link(text: string, url: string | undefined): string {
-  return url && getCapabilities().hyperlinks ? hyperlink(text, url) : text;
+  return url !== undefined && url !== "" && getCapabilities().hyperlinks
+    ? hyperlink(text, url)
+    : text;
 }
 
 function provenance(details: { servedBy?: string; costMicro?: number } | undefined): string {

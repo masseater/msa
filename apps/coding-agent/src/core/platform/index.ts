@@ -1,8 +1,12 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { Clock, Effect, ManagedRuntime, Path, Predicate } from "effect";
+import { dual } from "effect/Function";
+
+import { ToolFailure } from "./tool-failure.ts";
+
+export { ToolFailure } from "./tool-failure.ts";
 
 export const platformRuntime = ManagedRuntime.make(NodeServices.layer);
-
 export interface PathOperations {
   readonly join: (...segments: ReadonlyArray<string>) => string;
   readonly resolve: (...segments: ReadonlyArray<string>) => string;
@@ -33,13 +37,14 @@ export const currentTimeMillis = (): number => platformRuntime.runSync(Clock.cur
 
 export const abortedBy =
   (signal: AbortSignal | undefined) =>
-  <A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, E, R> =>
+  <A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, E | ToolFailure, R> =>
     signal === undefined
       ? effect
       : Effect.raceFirst(
           effect,
-          Effect.callback<never>((resume, abortSignal) => {
-            const fail = (): void => resume(Effect.die(new Error("Operation aborted")));
+          Effect.callback<never, ToolFailure>((resume, abortSignal) => {
+            const fail = (): void =>
+              resume(Effect.fail(new ToolFailure({ message: "Operation aborted" })));
             if (signal.aborted) fail();
             else signal.addEventListener("abort", fail, { once: true, signal: abortSignal });
           }),
@@ -63,3 +68,13 @@ export const rethrowCause = <A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Ef
       ),
     ),
   );
+
+export const fromMaybePromise = <A>(evaluate: () => Promise<A> | A): Effect.Effect<A> =>
+  Effect.promise(() => Promise.resolve(evaluate()));
+
+export const nonEmptyOr: {
+  (fallback: string): (value: string | undefined) => string;
+  (value: string | undefined, fallback: string): string;
+} = dual(2, (value: string | undefined, fallback: string): string =>
+  value === undefined || value === "" ? fallback : value,
+);

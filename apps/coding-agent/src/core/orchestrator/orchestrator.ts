@@ -238,7 +238,7 @@ export class Orchestrator {
       const nodes = await graph.list(this.options.project);
       const reviews = nodes.filter((node) => node.kind === "review");
       let review = reviews.find((node) => node.status === "queued");
-      if (review && input.dependsOn.includes(review.id)) {
+      if (review !== undefined && input.dependsOn.includes(review.id)) {
         throw new Error(
           `${review.id} is the review that closes the current round; it already depends on this session.`,
         );
@@ -293,7 +293,7 @@ export class Orchestrator {
       const graph = await this.connect();
       const node = await this.node(graph, id);
       const worker = this.workers.get(id);
-      if (this.runs.has(id) && worker?.isStreaming) {
+      if (this.runs.has(id) && worker?.isStreaming === true) {
         await worker.steer(message);
         return node;
       }
@@ -308,7 +308,7 @@ export class Orchestrator {
         node.kind === "task"
           ? nodes.find((other) => other.kind === "review" && other.round === node.round)
           : undefined;
-      if (review && review.status !== "queued" && review.status !== "stopped") {
+      if (review !== undefined && review.status !== "queued" && review.status !== "stopped") {
         throw new Error(
           `Round ${node.round} has been reviewed. Start a new session (it joins the next round) instead of reopening ${id}.`,
         );

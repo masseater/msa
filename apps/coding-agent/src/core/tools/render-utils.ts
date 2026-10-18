@@ -71,7 +71,10 @@ export function getTextOutput(
       .map((img) => {
         const mimeType = img.mimeType ?? "image/unknown";
         const dims =
-          img.data && img.mimeType
+          img.data !== undefined &&
+          img.data !== "" &&
+          img.mimeType !== undefined &&
+          img.mimeType !== ""
             ? (getImageDimensions(img.data, img.mimeType) ?? undefined)
             : undefined;
         return imageFallback(mimeType, dims);

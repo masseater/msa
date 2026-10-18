@@ -131,7 +131,8 @@ function formatReadResult(
 
   const rawPath = str(args?.file_path ?? args?.path);
   const output = getTextOutput(result, showImages);
-  const lang = !isError && rawPath ? getLanguageFromPath(rawPath) : undefined;
+  const lang =
+    !isError && rawPath !== null && rawPath !== "" ? getLanguageFromPath(rawPath) : undefined;
   const renderedLines =
     lang !== undefined && lang !== ""
       ? highlightCode(replaceTabs(output), lang)

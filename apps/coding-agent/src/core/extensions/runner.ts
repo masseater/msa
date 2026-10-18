@@ -126,7 +126,7 @@ const buildBuiltinKeybindings = (resolvedKeybindings: KeybindingsConfig): BuiltI
     for (const key of keyList) {
       const normalizedKey = key.toLowerCase() as KeyId;
       const existing = builtinKeybindings[normalizedKey];
-      if (existing?.restrictOverride && !restrictOverride) continue;
+      if (existing?.restrictOverride === true && !restrictOverride) continue;
       builtinKeybindings[normalizedKey] = {
         keybinding,
         restrictOverride,
@@ -773,7 +773,7 @@ export class ExtensionRunner {
   hasHandlers(eventType: string): boolean {
     for (const ext of this.extensions) {
       const handlers = ext.handlers.get(eventType);
-      if (handlers && handlers.length > 0) {
+      if (handlers !== undefined && handlers.length > 0) {
         return true;
       }
     }

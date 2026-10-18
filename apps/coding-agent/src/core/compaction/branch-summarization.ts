@@ -86,7 +86,7 @@ export function collectEntriesForBranchSummary(
   const entries: SessionEntry[] = [];
   let current: string | null = oldLeafId;
 
-  while (current && current !== commonAncestorId) {
+  while (current !== null && current !== "" && current !== commonAncestorId) {
     const entry = session.getEntry(current);
     if (entry === undefined) break;
     entries.push(entry);
@@ -139,7 +139,7 @@ export function prepareBranchEntries(
   let totalTokens = 0;
 
   for (const entry of entries) {
-    if (entry.type === "branch_summary" && !entry.fromHook && entry.details) {
+    if (entry.type === "branch_summary" && entry.fromHook !== true && entry.details) {
       const details = entry.details as BranchSummaryDetails;
       if (Array.isArray(details.readFiles)) {
         for (const f of details.readFiles) fileOps.read.add(f);
@@ -244,7 +244,11 @@ export async function generateBranchSummary(
   const conversationText = serializeConversation(llmMessages);
 
   let instructions: string;
-  if (replaceInstructions && customInstructions) {
+  if (
+    replaceInstructions === true &&
+    customInstructions !== undefined &&
+    customInstructions !== ""
+  ) {
     instructions = customInstructions;
   } else if (customInstructions !== undefined && customInstructions !== "") {
     instructions = `${BRANCH_SUMMARY_PROMPT}\n\nAdditional focus: ${customInstructions}`;

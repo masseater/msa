@@ -269,7 +269,9 @@ export class MemoryService {
     return {
       ...result,
       embedded: embedding !== undefined,
-      ...(embedding === undefined && this.lastEmbeddingError
+      ...(embedding === undefined &&
+      this.lastEmbeddingError !== undefined &&
+      this.lastEmbeddingError !== ""
         ? { embeddingError: this.lastEmbeddingError }
         : {}),
     };

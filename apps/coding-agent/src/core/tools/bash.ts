@@ -190,7 +190,7 @@ function resolveSpawnContext(
   delete env["MSA_PROVIDER"];
   delete env["MSA_MODEL"];
   delete env["MSA_REASONING_LEVEL"];
-  if (exposeSessionEnvironment && ctx) {
+  if (exposeSessionEnvironment && ctx !== undefined) {
     const model = ctx.model;
     env["MSA_SESSION_ID"] = ctx.sessionManager.getSessionId();
     const sessionFile = ctx.sessionManager.getSessionFile();
@@ -244,7 +244,7 @@ export function createShellToolDefinition(
     description: `Execute a ${config.shellName} command in the current working directory. Returns stdout and stderr. Output is truncated to last ${DEFAULT_MAX_LINES} lines or ${DEFAULT_MAX_BYTES / 1024}KB (whichever is hit first). If truncated, full output is saved to a temp file. Optionally provide a timeout in seconds.`,
     promptSnippet: config.promptSnippet,
     promptGuidelines:
-      exposeSessionEnvironment && config.promptGuidelines
+      exposeSessionEnvironment && config.promptGuidelines !== undefined
         ? [...config.promptGuidelines]
         : undefined,
     parameters: bashSchema,
@@ -392,7 +392,9 @@ export function createShellToolDefinition(
         const structuredContent: BashToolOutput = {
           output: fullOutput.content,
           truncated: fullOutput.truncated,
-          ...(fullOutput.truncated && snapshot.fullOutputPath
+          ...(fullOutput.truncated &&
+          snapshot.fullOutputPath !== undefined &&
+          snapshot.fullOutputPath !== ""
             ? { full_output_path: snapshot.fullOutputPath }
             : {}),
           exit_code: exitCode,

@@ -158,7 +158,7 @@ export function createToolHtmlRenderer(deps: ToolHtmlRendererDeps): ToolHtmlRend
         const expanded = ansiLinesToHtml(trimRenderedResultLines(expandedComponent.render(width)));
 
         return {
-          ...(collapsed && collapsed !== expanded ? { collapsed } : {}),
+          ...(collapsed !== "" && collapsed !== expanded ? { collapsed } : {}),
           expanded,
         };
       } catch {

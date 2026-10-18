@@ -52,7 +52,7 @@ function extractFileOperations(
 
   if (prevCompactionIndex >= 0) {
     const prevCompaction = entries[prevCompactionIndex] as CompactionEntry;
-    if (!prevCompaction.fromHook && prevCompaction.details) {
+    if (prevCompaction.fromHook !== true && prevCompaction.details) {
       const details = prevCompaction.details as CompactionDetails;
       if (Array.isArray(details.readFiles)) {
         for (const f of details.readFiles) fileOps.read.add(f);
@@ -235,7 +235,7 @@ function estimateTextAndImageContentChars(
 
   let chars = 0;
   for (const block of content) {
-    if (block.type === "text" && block.text) {
+    if (block.type === "text" && block.text !== undefined && block.text !== "") {
       chars += block.text.length;
     } else if (block.type === "image") {
       chars += ESTIMATED_IMAGE_CHARS;
@@ -524,7 +524,7 @@ function createSummarizationOptions(
   sessionId: string | undefined,
 ): SimpleStreamOptions {
   const options: SimpleStreamOptions = { maxTokens, signal, apiKey, headers, env, sessionId };
-  if (model.reasoning && thinkingLevel && thinkingLevel !== "off") {
+  if (model.reasoning && thinkingLevel !== undefined && thinkingLevel !== "off") {
     options.reasoning = thinkingLevel;
   }
   return options;

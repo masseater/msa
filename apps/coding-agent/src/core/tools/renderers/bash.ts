@@ -51,7 +51,13 @@ function rebuildBashResultRenderComponent(
   let output = getTextOutput(result as any, showImages).trim();
   const truncation = result.details?.truncation;
   const fullOutputPath = result.details?.fullOutputPath;
-  if (!options.isPartial && truncation?.truncated && fullOutputPath && output.endsWith("]")) {
+  if (
+    !options.isPartial &&
+    truncation?.truncated === true &&
+    fullOutputPath !== undefined &&
+    fullOutputPath !== "" &&
+    output.endsWith("]")
+  ) {
     const footerStart = output.lastIndexOf("\n\n[");
     if (footerStart !== -1 && output.slice(footerStart).includes(fullOutputPath)) {
       output = output.slice(0, footerStart).trimEnd();
@@ -72,7 +78,7 @@ function rebuildBashResultRenderComponent(
     component.addChild(new Text(`\n${styledOutput}`, 0, 0));
   }
 
-  if (truncation?.truncated || fullOutputPath) {
+  if (truncation?.truncated === true || (fullOutputPath !== undefined && fullOutputPath !== "")) {
     const warnings: string[] = [];
     if (fullOutputPath !== undefined && fullOutputPath !== "") {
       warnings.push(`Full output: ${fullOutputPath}`);
