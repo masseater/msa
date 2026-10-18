@@ -1,6 +1,6 @@
 import { tmpdir } from "node:os";
 
-import { Effect, FileSystem, Path, type PlatformError, Schedule, Stream } from "effect";
+import { Effect, FileSystem, Path, type PlatformError, Predicate, Schedule, Stream } from "effect";
 import { dual } from "effect/Function";
 import { ChildProcess } from "effect/process";
 
@@ -38,9 +38,9 @@ export const removeDir = (directory: string): Effect.Effect<void> =>
   Effect.orDie(fileSystem.remove(directory, { recursive: true, force: true }));
 
 const retriable = (error: PlatformError.PlatformError): boolean =>
-  error.reason._tag === "Busy" ||
-  error.reason._tag === "PermissionDenied" ||
-  error.reason._tag === "Unknown";
+  Predicate.isTagged(error.reason, "Busy") ||
+  Predicate.isTagged(error.reason, "PermissionDenied") ||
+  Predicate.isTagged(error.reason, "Unknown");
 
 export const removeDirRetrying = (directory: string): Effect.Effect<void> =>
   fileSystem
@@ -96,6 +96,10 @@ export const writeBytes = Effect.fn("writeBytes")(function* (path: string, conte
 
 export const appendBytes = Effect.fn("appendBytes")(function* (path: string, content: Uint8Array) {
   yield* Effect.orDie(fileSystem.writeFile(path, content, { flag: "a" }));
+});
+
+export const appendText = Effect.fn("appendText")(function* (path: string, content: string) {
+  yield* Effect.orDie(fileSystem.writeFileString(path, content, { flag: "a" }));
 });
 
 export const fileSize = (path: string): Effect.Effect<number> =>

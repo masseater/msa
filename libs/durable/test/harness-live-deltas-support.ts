@@ -34,13 +34,11 @@ export function drivenTool(
           Effect.gen(function* () {
             const action = actions.shift();
             if (action === undefined) {
-              yield* awaited(
-                new Promise<void>((resolve, reject) => {
-                  waker.wake = resolve;
-                  const signal = callContext.abortSignal!;
-                  signal.addEventListener("abort", () => reject(signal.reason), { once: true });
-                }),
-              );
+              const { promise, resolve, reject } = Promise.withResolvers<void>();
+              waker.wake = resolve;
+              const signal = callContext.abortSignal!;
+              signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+              yield* awaited(promise);
             } else if (!(yield* awaited(action(api)))) {
               return {};
             }

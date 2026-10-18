@@ -43,13 +43,12 @@ const main = Effect.gen(function* () {
   const notesWatch = yield* awaited(session.watchDoc(Notes, chat.id, context));
   if (notesWatch === undefined) throw new Error("notes are absent");
   yield* Console.log("watch baseline:", notesWatch.value);
-  const delivered = new Promise<void>((resolve) => {
-    notesWatch.start((value, _ops, _deliveryContext) => {
-      runSync(Console.log("watch update:", value));
-      resolve();
+  const { promise: delivered, resolve } = Promise.withResolvers<void>();
+  notesWatch.start((value, _ops, _deliveryContext) => {
+    runSync(Console.log("watch update:", value));
+    resolve();
 
-      return Promise.resolve();
-    });
+    return Promise.resolve();
   });
   yield* awaited(
     session.commit(

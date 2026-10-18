@@ -235,16 +235,13 @@ const recordsHowLong = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const setup = chatSetup();
-  const sleep = (ms: number) =>
-    new Promise((resolve) => {
-      setTimeout(resolve, ms);
-    });
+  const sleep = (ms: number) => Effect.sleep(ms);
   addTool(
     setup.registry,
     tool("slow", () =>
       runPromise(
         Effect.gen(function* () {
-          yield* awaited(sleep(30));
+          yield* sleep(30);
           return { output: [] };
         }),
       ),
@@ -255,7 +252,7 @@ const recordsHowLong = Effect.gen(function* () {
     tool("thrower", () =>
       runPromise(
         Effect.gen(function* () {
-          yield* awaited(sleep(30));
+          yield* sleep(30);
           throw new Error("boom");
         }),
       ),
@@ -265,7 +262,7 @@ const recordsHowLong = Effect.gen(function* () {
     beforeTool: (call) =>
       runPromise(
         Effect.gen(function* () {
-          yield* awaited(sleep(100));
+          yield* sleep(100);
           return call.id === "blocked" ? { block: "no" } : undefined;
         }),
       ),

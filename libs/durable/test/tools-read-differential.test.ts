@@ -80,7 +80,7 @@ function referenceRead(
   limit: number | undefined,
 ) {
   const mimeType = detectSupportedImageMimeType(bytes);
-  if (mimeType) {
+  if (mimeType !== undefined && mimeType !== "") {
     return {
       output: [{ type: "image", data: Buffer.from(bytes).toString("base64"), mimeType }],
       diagnostics: [{ severity: "info", code: "image", message: `Read image file [${mimeType}].` }],
@@ -88,7 +88,7 @@ function referenceRead(
   }
   const textContent = new TextDecoder().decode(bytes);
   const allLines = textContent.split("\n");
-  const startLine = offset ? Math.max(0, offset - 1) : 0;
+  const startLine = offset !== undefined && offset > 0 ? Math.max(0, offset - 1) : 0;
   if (startLine >= allLines.length) {
     throw new Error(`Offset ${offset} is beyond end of file (${allLines.length} lines total)`);
   }

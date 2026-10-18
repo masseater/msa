@@ -11,10 +11,7 @@ import { MemoryStorage } from "../../src/storage/memory.ts";
 import { toJsonText, awaited } from "../effect-support.ts";
 
 const context = BACKGROUND_CONTEXT;
-const pause = (ms: number) =>
-  new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
+const pause = (ms: number) => Effect.sleep(ms);
 
 const registry = createRegistry();
 registry.install(
@@ -30,7 +27,7 @@ registry.install(
             Effect.gen(function* () {
               for (const n of Array.from({ length: 10 }, (_, i) => 1 + i)) {
                 api.output(`${n}\n`);
-                yield* awaited(pause(100));
+                yield* pause(100);
               }
               return {};
             }),
@@ -60,7 +57,7 @@ const main = Effect.gen(function* () {
   const submission = yield* awaited(
     root.submit({ type: "input", content: "Count to ten, then tell me." }, context),
   );
-  yield* awaited(pause(500));
+  yield* pause(500);
 
   const view = yield* awaited(root.viewState(context));
   const live = view.value.docs["msa.live"] as LiveState;
@@ -108,7 +105,7 @@ const main = Effect.gen(function* () {
 
   yield* awaited(submission.wait(context));
   yield* awaited(harness.waitForIdle(context));
-  yield* awaited(pause(0));
+  yield* pause(1);
   yield* awaited(stream.stop());
   view.dispose();
   yield* awaited(harness.close(context));

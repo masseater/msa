@@ -155,11 +155,7 @@ const finishRate = Effect.fn("finishRate")(function* (
   },
   metrics: Partial<Metrics>,
 ) {
-  yield* awaited(
-    new Promise((resolve) => {
-      setTimeout(resolve, (scenario.seconds ?? RATE_SECONDS) * 1000);
-    }),
-  );
+  yield* Effect.sleep((scenario.seconds ?? RATE_SECONDS) * 1000);
   flags.stop = true;
   if (scenario.backend === "memory") {
     yield* awaited(submission.wait(context));

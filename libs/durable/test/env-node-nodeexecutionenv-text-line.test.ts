@@ -231,7 +231,7 @@ const usesStdinCommand = Effect.gen(function* () {
       Effect.sync(() => {
         process.chdir(originalCwd);
         vi.unstubAllEnvs();
-        if (platformDescriptor) {
+        if (platformDescriptor !== undefined) {
           Object.defineProperty(process, "platform", platformDescriptor);
         }
       }),

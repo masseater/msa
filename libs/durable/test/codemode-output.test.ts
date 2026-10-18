@@ -1,5 +1,3 @@
-import { readFile } from "node:fs/promises";
-
 import { Type } from "@msa/ai";
 import { defineTool } from "@msa/durable";
 import { Effect } from "effect";
@@ -7,8 +5,8 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { codemodeChat } from "./codemode-chat-support.ts";
 import { runScript, removeDirectories } from "./codemode-support.ts";
-import { awaited } from "./effect-support.ts";
 import { addTool } from "./harness-support.ts";
+import { readText, readBytes } from "./platform-support.ts";
 
 afterEach(removeDirectories);
 
@@ -33,7 +31,7 @@ const cutsTextPast = Effect.gen(function* () {
   expect(text).toContain("END");
   const path = message.details?.fullOutputPath;
   expect(text).toContain(`[Full output: ${path}`);
-  expect(yield* awaited(readFile(path!, "utf8"))).toBe(`BEGIN${"x".repeat(1000)}END`);
+  expect(yield* readText(path!)).toBe(`BEGIN${"x".repeat(1000)}END`);
 });
 
 const keepsResultInside = Effect.gen(function* () {
@@ -43,9 +41,7 @@ const keepsResultInside = Effect.gen(function* () {
   );
   expect(big.text).toContain("Warning: truncated output");
   expect(big.text.length).toBeLessThanOrEqual(1024 * 1024 + 1000);
-  expect((yield* awaited(readFile(big.message.details!.fullOutputPath!, "utf8"))).length).toBe(
-    6 * 1024 * 1024,
-  );
+  expect((yield* readText(big.message.details!.fullOutputPath!)).length).toBe(6 * 1024 * 1024);
   const long = yield* runScript(
     `// @options: {"max_output_tokens": 2000000}
 			return Array.from({ length: 200000 }, () => "a").join("\\n");`,
@@ -72,7 +68,7 @@ const savesImagesFiles = Effect.gen(function* () {
   const { text, message } = yield* runScript(`image("data:image/png;base64,${png}");`);
   const saved = /\[Image saved to (\S+) \(image\/png, \d+ bytes\)\]/u.exec(text);
   expect(saved).not.toBeNull();
-  expect((yield* awaited(readFile(saved![1]!))).toString("base64")).toBe(png);
+  expect(Buffer.from(yield* readBytes(saved![1]!)).toString("base64")).toBe(png);
   expect(message.content.some((item) => item.type === "image")).toBe(true);
 });
 

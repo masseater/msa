@@ -12,10 +12,7 @@ import { awaited } from "../effect-support.ts";
 
 const context = BACKGROUND_CONTEXT;
 
-let release!: () => void;
-const held = new Promise<void>((resolve) => {
-  release = resolve;
-});
+const { promise: held, resolve: release } = Promise.withResolvers<void>();
 const slow: FauxResponseStep = () =>
   Effect.runPromise(
     Effect.gen(function* () {

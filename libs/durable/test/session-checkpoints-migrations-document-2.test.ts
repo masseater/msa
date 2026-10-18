@@ -1,5 +1,5 @@
 import { defineDoc, type JsonObject } from "@msa/durable";
-import { Effect } from "effect";
+import { DateTime, Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { awaited } from "./effect-support.ts";
@@ -105,7 +105,7 @@ const strictChecksMigration = Effect.gen(function* () {
     version: 2,
     scope: "session",
     initial: () => ({}),
-    migrate: () => ({ invalid: new Date() }) as unknown as JsonObject,
+    migrate: () => ({ invalid: DateTime.toDateUtc(DateTime.nowUnsafe()) }) as unknown as JsonObject,
   });
   const Other = defineDoc<{ ok: boolean }>({
     kind: "migration.invalid.other",

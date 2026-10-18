@@ -304,9 +304,9 @@ const abortsWaitingWork = Effect.gen(function* () {
       }),
     );
   const Lazy = oneStep("test.lazy-abort", wait, () => Promise.resolve());
-  const Throwing = oneStep("test.throwing-abort", wait, () => {
-    return Promise.reject(new Error("abort failed"));
-  });
+  const Throwing = oneStep("test.throwing-abort", wait, () =>
+    Promise.reject(new Error("abort failed")),
+  );
   const { harness, root } = yield* openRoot([First, Lazy, Throwing]);
   first = yield* awaited(start(root, First));
   const lazy = yield* awaited(start(root, Lazy));

@@ -115,14 +115,8 @@ const serializesConcurrentTransactions = Effect.gen(function* () {
 
   const database = yield* awaited(openNodeSqliteDatabase(":memory:"));
   yield* awaited(database.exec("CREATE TABLE transaction_queue (value INTEGER)"));
-  let markFirstStarted!: () => void;
-  const firstStarted = new Promise<void>((resolve) => {
-    markFirstStarted = resolve;
-  });
-  let releaseFirst!: () => void;
-  const firstGate = new Promise<void>((resolve) => {
-    releaseFirst = resolve;
-  });
+  const { promise: firstStarted, resolve: markFirstStarted } = Promise.withResolvers<void>();
+  const { promise: firstGate, resolve: releaseFirst } = Promise.withResolvers<void>();
   const first = database.transaction((transaction) =>
     runPromise(
       Effect.gen(function* () {
@@ -205,14 +199,9 @@ const queuesOrdinaryOperations = Effect.gen(function* () {
 
   const database = yield* awaited(openNodeSqliteDatabase(":memory:"));
   yield* awaited(database.exec("CREATE TABLE operation_queue (value INTEGER)"));
-  let markTransactionStarted!: () => void;
-  const transactionStarted = new Promise<void>((resolve) => {
-    markTransactionStarted = resolve;
-  });
-  let releaseTransaction!: () => void;
-  const transactionGate = new Promise<void>((resolve) => {
-    releaseTransaction = resolve;
-  });
+  const { promise: transactionStarted, resolve: markTransactionStarted } =
+    Promise.withResolvers<void>();
+  const { promise: transactionGate, resolve: releaseTransaction } = Promise.withResolvers<void>();
   const pending = database.transaction((transaction) =>
     runPromise(
       Effect.gen(function* () {

@@ -1,9 +1,11 @@
-import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
+import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { formatSize, truncateHead } from "../src/truncate.ts";
+import { fromJsonText, toJsonText } from "./effect-support.ts";
+import { runCommandOrFail } from "./platform-support.ts";
 
 const encoder = new TextEncoder();
 
@@ -22,38 +24,37 @@ describe("truncate utilities", () => {
     expect(result.totalBytes).toBe(9);
   });
 
-  it("counts UTF-8 bytes and truncates correctly in a runtime without Buffer", () => {
-    const inputs = [
-      "",
-      "ascii",
-      "é",
-      "中",
-      "🙂",
-      "\ud83d",
-      "\ude42",
-      "a\ud83d\ude42b",
-      "\u07ff\u0800\uffff",
-    ];
-    const output = execFileSync(
-      process.execPath,
-      [
-        "--conditions=source",
-        "--import",
-        new URL("./fixtures/delete-buffer.ts", import.meta.url).href,
-        fileURLToPath(new URL("./fixtures/utf8-byte-length-without-buffer.ts", import.meta.url)),
-        JSON.stringify(inputs),
-      ],
-      { encoding: "utf8" },
-    );
-    const result = JSON.parse(output) as {
-      bufferAvailable: boolean;
-      lengths: number[];
-      head: { content: string; outputBytes: number; truncatedBy: string | null };
-    };
-    expect(result.bufferAvailable).toBe(false);
-    expect(result.lengths).toEqual(inputs.map(byteLength));
-    expect(result.head).toMatchObject({ content: "aé🙂", outputBytes: 7, truncatedBy: "bytes" });
-  });
+  it("counts UTF-8 bytes and truncates correctly in a runtime without Buffer", () =>
+    Effect.runPromise(countsWithoutBuffer));
+});
+
+const countsWithoutBuffer = Effect.gen(function* () {
+  const inputs = [
+    "",
+    "ascii",
+    "é",
+    "中",
+    "🙂",
+    "\ud83d",
+    "\ude42",
+    "a\ud83d\ude42b",
+    "\u07ff\u0800\uffff",
+  ];
+  const output = yield* runCommandOrFail(process.execPath, [
+    "--conditions=source",
+    "--import",
+    new URL("./fixtures/delete-buffer.ts", import.meta.url).href,
+    fileURLToPath(new URL("./fixtures/utf8-byte-length-without-buffer.ts", import.meta.url)),
+    yield* toJsonText(inputs),
+  ]);
+  const result = (yield* fromJsonText(output)) as {
+    bufferAvailable: boolean;
+    lengths: number[];
+    head: { content: string; outputBytes: number; truncatedBy: string | null };
+  };
+  expect(result.bufferAvailable).toBe(false);
+  expect(result.lengths).toEqual(inputs.map(byteLength));
+  expect(result.head).toMatchObject({ content: "aé🙂", outputBytes: 7, truncatedBy: "bytes" });
 });
 
 describe("truncate utilities", () => {

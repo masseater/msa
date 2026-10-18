@@ -166,11 +166,7 @@ const main = Effect.gen(function* () {
   );
   yield* awaited(submission.wait(context));
   yield* awaited(harness.waitForIdle(context));
-  yield* awaited(
-    new Promise((resolve) => {
-      setTimeout(resolve, 0);
-    }),
-  );
+  yield* Effect.sleep(1);
   yield* awaited(harness.close(context));
 });
 

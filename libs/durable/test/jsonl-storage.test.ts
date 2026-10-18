@@ -1,5 +1,3 @@
-import { readFile, stat } from "node:fs/promises";
-
 import type { JsonValue } from "@msa/chord";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
@@ -22,7 +20,7 @@ import {
   tempDirectory,
   InstrumentedEnv,
 } from "./jsonl-storage-support.ts";
-import { joinPath, removeDir } from "./platform-support.ts";
+import { fileSize, joinPath, readBytes, removeDir } from "./platform-support.ts";
 
 afterEach(() =>
   Effect.runPromise(
@@ -160,13 +158,13 @@ const removesCompletePlus = Effect.gen(function* () {
       ),
     ).rejects.toThrow("poisoned"),
   );
-  const partial = yield* awaited(readFile(joinPath(directory, `task-${taskId}.jsonl`)));
+  const partial = yield* readBytes(joinPath(directory, `task-${taskId}.jsonl`));
   expect(partial.at(-1)).not.toBe(0x0a);
   expect([...partial].filter((byte) => byte === 0x0a)).toHaveLength(1);
 
   const reopened = yield* openStorage(directory);
   expect(yield* awaited(reopened.task(taskId, context))).toBeUndefined();
-  expect((yield* awaited(stat(joinPath(directory, `task-${taskId}.jsonl`)))).size).toBe(0);
+  expect(yield* fileSize(joinPath(directory, `task-${taskId}.jsonl`))).toBe(0);
 });
 
 describe("Pico JsonlStorage publication and recovery", () => {

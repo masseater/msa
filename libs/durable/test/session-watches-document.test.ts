@@ -264,9 +264,7 @@ const settlesListenerFailure = Effect.gen(function* () {
   const { session } = yield* createState();
   const failed = (yield* awaited(session.watchDoc(StateDoc, context)))!;
   const healthy = (yield* awaited(session.watchDoc(StateDoc, context)))!;
-  failed.start(() => {
-    return Promise.reject(new Error("listener failed"));
-  });
+  failed.start(() => Promise.reject(new Error("listener failed")));
   let healthyCalls = 0;
   healthy.start(() => {
     healthyCalls++;

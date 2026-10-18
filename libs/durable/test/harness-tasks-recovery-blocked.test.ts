@@ -171,9 +171,7 @@ const orphansMarkedTask = Effect.gen(function* () {
           }),
         ),
     },
-    abort: () => {
-      return Promise.reject(new Error("must not run"));
-    },
+    abort: () => Promise.reject(new Error("must not run")),
   });
   const registry = createRegistry();
   const registration = addTask(registry, Running);

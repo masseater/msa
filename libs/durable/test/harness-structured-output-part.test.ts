@@ -61,9 +61,7 @@ const expectThrownErrorDiagnostic = Effect.fn("expectThrownErrorDiagnostic")(fun
       description: "throws",
       parameters: Type.Object({}),
       structuredOutputSchema: Count,
-      execute: () => {
-        return Promise.reject(new Error("permission denied"));
-      },
+      execute: () => Promise.reject(new Error("permission denied")),
     }),
   );
   const thrownResult = yield* nested(thrown, "throws");

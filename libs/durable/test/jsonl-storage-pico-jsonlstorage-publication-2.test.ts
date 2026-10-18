@@ -1,5 +1,3 @@
-import { readdir } from "node:fs/promises";
-
 import type { JsonValue } from "@msa/chord";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
@@ -21,7 +19,7 @@ import {
   tempDirectory,
   InstrumentedEnv,
 } from "./jsonl-storage-support.ts";
-import { joinPath, removeDir } from "./platform-support.ts";
+import { listDirectory, joinPath, removeDir } from "./platform-support.ts";
 
 afterEach(() =>
   Effect.runPromise(
@@ -112,7 +110,7 @@ describe("Pico JsonlStorage publication and recovery", () => {
           expect(yield* awaited(reopened.task(taskId, context))).toEqual(pendingTask(taskId));
           expect(yield* fileExists(joinPath(directory, `doc-${id}.jsonl`))).toBe(false);
           expect(
-            (yield* awaited(readdir(directory))).filter((name) => name.endsWith(".reclaim")),
+            (yield* listDirectory(directory)).filter((name) => name.endsWith(".reclaim")),
           ).toEqual([]);
         }),
       ));
@@ -250,7 +248,7 @@ describe("Pico JsonlStorage publication and recovery", () => {
           expect(yield* awaited(reopened.task(id, context))).toEqual(terminalTask(id));
           expect(yield* fileExists(joinPath(directory, `task-${id}.jsonl`))).toBe(false);
           expect(
-            (yield* awaited(readdir(directory))).filter((name) => name.endsWith(".reclaim")),
+            (yield* listDirectory(directory)).filter((name) => name.endsWith(".reclaim")),
           ).toEqual([]);
         }),
       ));

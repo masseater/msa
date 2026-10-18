@@ -30,9 +30,15 @@ const ordersRuntimeCommits = Effect.gen(function* () {
       context,
     );
     before = runtime.commit(() => completed("before"), context);
-    setTimeout(() => {
-      after = runtime.commit(() => completed("after"), context);
-    }, 0);
+    void runPromise(
+      Effect.sleep(1).pipe(
+        Effect.andThen(
+          Effect.sync(() => {
+            after = runtime.commit(() => completed("after"), context);
+          }),
+        ),
+      ),
+    );
 
     return Promise.resolve();
   });
@@ -84,9 +90,15 @@ const stopsWatchAcquisition = Effect.gen(function* () {
         ),
       context,
     );
-    setTimeout(() => {
-      watching = runtime.watchDoc(Notes, context).catch((error: unknown) => error);
-    }, 0);
+    void runPromise(
+      Effect.sleep(1).pipe(
+        Effect.andThen(
+          Effect.sync(() => {
+            watching = runtime.watchDoc(Notes, context).catch((error: unknown) => error);
+          }),
+        ),
+      ),
+    );
 
     return Promise.resolve();
   });
@@ -292,11 +304,9 @@ const waitsHarnessConversation = Effect.gen(function* () {
   const Gated = oneStep("test.gated", (task, runtime, ctx) =>
     runPromise(
       Effect.gen(function* () {
-        yield* awaited(
-          new Promise<void>((resolve) => {
-            gates.set(task.id, resolve);
-          }),
-        );
+        const { promise, resolve } = Promise.withResolvers<void>();
+        gates.set(task.id, resolve);
+        yield* awaited(promise);
         yield* awaited(runtime.commit(() => completed(null), ctx));
       }),
     ),

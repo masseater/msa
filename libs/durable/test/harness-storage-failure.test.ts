@@ -89,6 +89,7 @@ const endsStorageCalls = Effect.gen(function* () {
   let closed = false;
   void harness.closed.then(() => {
     closed = true;
+    return undefined;
   });
   for (const _ of Array.from({ length: 5 })) yield* Effect.sleep(1);
   expect(closed).toBe(false);

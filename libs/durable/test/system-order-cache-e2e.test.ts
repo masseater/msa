@@ -152,7 +152,7 @@ const cacheReadAfterToolChange = Effect.fn("cacheReadAfterToolChange")(function*
 });
 
 describe("Durable system message order e2e", () => {
-  it.skipIf(!anthropicToken)(
+  it.skipIf(anthropicToken === undefined || anthropicToken === "")(
     "keeps the prompt cache across a tool change only when the system message leads",
     { retry: 1, timeout: 180_000 },
     () =>

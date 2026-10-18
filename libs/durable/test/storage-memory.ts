@@ -1,20 +1,17 @@
-import { execFile } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { promisify } from "node:util";
 
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import { STORAGE_MEMORY_SCALES } from "@msa/durable/testing";
 import { Console, Effect } from "effect";
 
-import { fromJsonText, awaited } from "./effect-support.ts";
+import { fromJsonText } from "./effect-support.ts";
+import { runCommandOrFail } from "./platform-support.ts";
 import {
   type MemorySnapshot,
   runWorker,
   STORAGE_BENCHMARK_BACKENDS,
   type StorageMemoryResult,
 } from "./storage-memory-worker.ts";
-
-const execFileAsync = promisify(execFile);
 
 function delta(after: MemorySnapshot, before: MemorySnapshot, field: keyof MemorySnapshot): number {
   return after[field] - before[field];
@@ -28,20 +25,20 @@ const runWorkers = Effect.fn("runWorkers")(function* (workerPath: string) {
   const results: StorageMemoryResult[] = [];
   for (const backend of STORAGE_BENCHMARK_BACKENDS) {
     for (const scale of STORAGE_MEMORY_SCALES) {
-      const { stdout } = yield* awaited(
-        execFileAsync(
-          process.execPath,
-          [
-            "--conditions=source",
-            "--expose-gc",
-            "--experimental-strip-types",
-            workerPath,
-            "--worker",
-            backend,
-            scale.name,
-          ],
-          { cwd: fileURLToPath(new URL("..", import.meta.url)), maxBuffer: 1024 * 1024 },
-        ),
+      const stdout = yield* runCommandOrFail(
+        process.execPath,
+        [
+          "--conditions=source",
+          "--expose-gc",
+          "--experimental-strip-types",
+          workerPath,
+          "--worker",
+          backend,
+          scale.name,
+        ],
+        {
+          cwd: fileURLToPath(new URL("..", import.meta.url)),
+        },
       );
       results.push((yield* fromJsonText(stdout)) as StorageMemoryResult);
     }

@@ -1,5 +1,3 @@
-import { spawnSync } from "node:child_process";
-
 import { createNodePhotonImages } from "@msa/durable/images/node";
 import { Effect, Fiber } from "effect";
 import { afterAll, beforeAll, describe, expect, it } from "vite-plus/test";
@@ -11,7 +9,8 @@ import {
   type ImageProcessor,
   toBase64,
 } from "../src/tools/image.ts";
-import { awaited, sampleEvery } from "./effect-support.ts";
+import { awaited, sampleEvery, toJsonText } from "./effect-support.ts";
+import { runCommand } from "./platform-support.ts";
 import {
   decodedImage,
   encode,
@@ -30,7 +29,7 @@ let processor: ImageProcessor;
 beforeAll(() =>
   Effect.runPromise(
     Effect.gen(function* () {
-      processor = yield* awaited(setUpImages());
+      processor = yield* setUpImages();
     }),
   ),
 );
@@ -217,24 +216,31 @@ describe("toBase64", () => {
     }
   });
 
-  it("encodes a 3 MiB image within a 128 MB heap", () => {
-    const source = new URL("../src/tools/image.ts", import.meta.url).href;
-    const script = `
-			const { toBase64 } = await import(${JSON.stringify(source)});
+  it(
+    "encodes a 3 MiB image within a 128 MB heap",
+    () =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          const source = new URL("../src/tools/image.ts", import.meta.url).href;
+          const script = `
+			const { toBase64 } = await import(${yield* toJsonText(source)});
 			const bytes = Uint8Array.from({ length: 3147295 }, (_, index) => (index * 37) % 256);
 			if (toBase64(bytes) !== Buffer.from(bytes).toString("base64")) throw new Error("mismatch");
 		`;
-    const args = [
-      "--experimental-strip-types",
-      "--max-heap-size=128",
-      "--input-type=module",
-      "-e",
-      script,
-    ];
-    const result = spawnSync(process.execPath, args, { encoding: "utf8" });
-    expect(result.stderr).not.toMatch(/heap out of memory|mismatch/u);
-    expect(result.status).toBe(0);
-  }, 20_000);
+          const args = [
+            "--experimental-strip-types",
+            "--max-heap-size=128",
+            "--input-type=module",
+            "-e",
+            script,
+          ];
+          const result = yield* runCommand(process.execPath, args);
+          expect(result.stderr).not.toMatch(/heap out of memory|mismatch/u);
+          expect(result.status).toBe(0);
+        }),
+      ),
+    20_000,
+  );
 });
 
 const preparesWorkerThread = Effect.gen(function* () {

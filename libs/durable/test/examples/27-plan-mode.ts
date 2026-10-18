@@ -1,6 +1,3 @@
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import { Type } from "@msa/ai";
 import { createModels } from "@msa/ai/models";
@@ -14,7 +11,7 @@ import { defineDoc, defineExtension, defineTool, section } from "../../src/index
 import { MemoryStorage } from "../../src/storage/memory.ts";
 import { CodingTools, createReadTool } from "../../src/tools/index.ts";
 import { awaited } from "../effect-support.ts";
-import { joinPath } from "../platform-support.ts";
+import { joinPath, makeTempDir, removeDir, writeText } from "../platform-support.ts";
 
 const context = BACKGROUND_CONTEXT;
 
@@ -71,8 +68,8 @@ const enterPlanMode = { extensions: { add: [Plan] }, tools: [read, submitPlan] }
 const leavePlanMode = { extensions: null, tools: null };
 
 const main = Effect.gen(function* () {
-  const directory = yield* awaited(mkdtemp(joinPath(tmpdir(), "msa-durable-plan-")));
-  yield* awaited(writeFile(joinPath(directory, "server.ts"), "app.listen(3000);\n"));
+  const directory = yield* makeTempDir("msa-durable-plan-");
+  yield* writeText(joinPath(directory, "server.ts"), "app.listen(3000);\n");
 
   const faux = fauxProvider();
   const models = createModels();
@@ -143,7 +140,7 @@ const main = Effect.gen(function* () {
   }
 
   yield* awaited(harness.close(context));
-  yield* awaited(rm(directory, { recursive: true, force: true }));
+  yield* removeDir(directory);
 });
 
 NodeRuntime.runMain(main);

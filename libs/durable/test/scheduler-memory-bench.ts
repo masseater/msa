@@ -1,6 +1,3 @@
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import { createModels } from "@msa/ai/models";
 import { BACKGROUND_CONTEXT as context } from "@msa/chord/context";
@@ -18,7 +15,7 @@ import {
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
 import { toJsonText, awaited } from "./effect-support.ts";
 import { retainedBytes } from "./heap-retained.ts";
-import { joinPath } from "./platform-support.ts";
+import { joinPath, makeTempDir, removeDir } from "./platform-support.ts";
 
 const waiting = new Map<string, () => void>();
 const Hold = defineTask<{ name: string }, { phase: "hold" }, null>({
@@ -29,11 +26,9 @@ const Hold = defineTask<{ name: string }, { phase: "hold" }, null>({
     hold: (task, runtime, ctx) =>
       Effect.runPromise(
         Effect.gen(function* () {
-          yield* awaited(
-            new Promise<void>((resolve) => {
-              waiting.set(task.input.name, resolve);
-            }),
-          );
+          const { promise, resolve } = Promise.withResolvers<void>();
+          waiting.set(task.input.name, resolve);
+          yield* awaited(promise);
           yield* awaited(
             runtime.commit(
               () => ({ status: "terminal", outcome: { status: "completed", result: null } }),
@@ -124,7 +119,7 @@ const subagentCycle = Effect.fn("subagentCycle")(function* (
 });
 
 const run = Effect.fn("run")(function* (cycles: number) {
-  const directory = mkdtempSync(joinPath(tmpdir(), "msa-durable-memory-bench-"));
+  const directory = yield* makeTempDir("msa-durable-memory-bench-");
   return yield* Effect.gen(function* () {
     const { storage, reads } = yield* countingStorage(directory);
     const registry = createRegistry();
@@ -165,13 +160,7 @@ const run = Effect.fn("run")(function* (cycles: number) {
     yield* awaited(harness.waitForTask(parent, context));
     yield* awaited(harness.close(context));
     return { ms, sizes, heap: heapAfter - heapBefore, lateReads };
-  }).pipe(
-    Effect.ensuring(
-      Effect.sync(() => {
-        rmSync(directory, { recursive: true, force: true });
-      }),
-    ),
-  );
+  }).pipe(Effect.ensuring(removeDir(directory)));
 });
 
 const cycles = process.argv.slice(2).map(Number);

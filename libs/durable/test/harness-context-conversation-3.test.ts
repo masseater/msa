@@ -50,7 +50,12 @@ function randomMessageDraft(t: RandomTranscript, pick: number): EntryDraft | und
     count(t, stopReason ?? "assistant");
     return {
       kind: "message",
-      model: [assistant(`a${t.next++}`, { calls: ids, ...(stopReason ? { stopReason } : {}) })],
+      model: [
+        assistant(`a${t.next++}`, {
+          calls: ids,
+          ...(stopReason === undefined ? {} : { stopReason }),
+        }),
+      ],
     };
   }
   if (pick < 8) {

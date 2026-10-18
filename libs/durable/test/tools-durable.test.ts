@@ -1,6 +1,3 @@
-import { mkdirSync } from "node:fs";
-import { symlink } from "node:fs/promises";
-
 import { BACKGROUND_CONTEXT, withAbortSignal } from "@msa/chord/context";
 import { Effect } from "effect";
 import { afterAll, describe, expect, it } from "vite-plus/test";
@@ -9,6 +6,7 @@ import { getOrThrow } from "../src/env/index.ts";
 import { withFileMutationQueue } from "../src/tools/env.ts";
 import { createEditTool, createWriteTool } from "../src/tools/index.ts";
 import { abortController, awaited } from "./effect-support.ts";
+import { makeDirectory, makeSymlink } from "./platform-support.ts";
 import { BlockingEditExecutionEnv } from "./tools-blocking-edit-env-support.ts";
 import { SlowReadExecutionEnv } from "./tools-slow-read-env-support.ts";
 import {
@@ -117,7 +115,7 @@ describe("durable tools", () => {
           getOrThrow(
             yield* awaited(env.writeFile("target.txt", "alpha\nbeta\ngamma\n", BACKGROUND_CONTEXT)),
           );
-          yield* awaited(symlink("target.txt", `${env.cwd}/link.txt`));
+          yield* makeSymlink("target.txt", `${env.cwd}/link.txt`);
           const tool = createEditTool();
           yield* awaited(
             Promise.all([
@@ -173,8 +171,8 @@ describe("durable tools", () => {
       Effect.runPromise(
         Effect.gen(function* () {
           const env = new BlockingWriteExecutionEnv({ cwd: yield* createTempDir });
-          mkdirSync(`${env.cwd}/real`);
-          yield* awaited(symlink(`${env.cwd}/real`, `${env.cwd}/link`));
+          yield* makeDirectory(`${env.cwd}/real`);
+          yield* makeSymlink(`${env.cwd}/real`, `${env.cwd}/link`);
           const tool = createWriteTool();
           const first = run(tool, { path: "link/new.txt", content: "first\n" }, env);
           yield* awaited(env.firstWriteStarted.promise);
@@ -267,7 +265,7 @@ describe("durable tools", () => {
         Effect.gen(function* () {
           const env = yield* createEnv;
           getOrThrow(yield* awaited(env.writeFile("target.txt", "before\n", BACKGROUND_CONTEXT)));
-          yield* awaited(symlink("target.txt", `${env.cwd}/link.txt`));
+          yield* makeSymlink("target.txt", `${env.cwd}/link.txt`);
           yield* awaited(
             run(
               createEditTool(),

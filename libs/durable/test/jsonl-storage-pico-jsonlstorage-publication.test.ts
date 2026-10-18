@@ -1,5 +1,3 @@
-import { readdir } from "node:fs/promises";
-
 import type { JsonValue } from "@msa/chord";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
@@ -21,7 +19,7 @@ import {
   InstrumentedEnv,
   type Failure,
 } from "./jsonl-storage-support.ts";
-import { joinPath, removeDir } from "./platform-support.ts";
+import { listDirectory, joinPath, removeDir } from "./platform-support.ts";
 
 afterEach(() =>
   Effect.runPromise(
@@ -316,7 +314,7 @@ describe("Pico JsonlStorage publication and recovery", () => {
           });
           expect(yield* readLines(joinPath(directory, `doc-${id}.jsonl`))).toHaveLength(1);
           expect(
-            (yield* awaited(readdir(directory))).filter((name) => name.endsWith(".reclaim")),
+            (yield* listDirectory(directory)).filter((name) => name.endsWith(".reclaim")),
           ).toEqual([]);
         }),
       ));

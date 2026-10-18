@@ -240,6 +240,7 @@ const ordinaryWorkIdle = Effect.gen(function* () {
   let idle = false;
   const wait = chat.root.waitForIdle(context).then(() => {
     idle = true;
+    return undefined;
   });
   yield* Effect.sleep(20);
   expect(idle).toBe(false);

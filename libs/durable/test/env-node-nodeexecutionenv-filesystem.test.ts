@@ -280,14 +280,8 @@ const rejectsReadCancelled = Effect.gen(function* () {
   getOrThrow(yield* awaited(env.writeFile("lines.txt", "one\ntwo\n", BACKGROUND_CONTEXT)));
   const prototype = yield* fileHandlePrototype(joinPath(root, "lines.txt"));
   const read = prototype.read;
-  let markStarted: () => void = () => {};
-  const started = new Promise<void>((resolve) => {
-    markStarted = resolve;
-  });
-  let release: () => void = () => {};
-  const gate = new Promise<void>((resolve) => {
-    release = resolve;
-  });
+  const { promise: started, resolve: markStarted } = Promise.withResolvers<void>();
+  const { promise: gate, resolve: release } = Promise.withResolvers<void>();
   vi.spyOn(prototype, "read").mockImplementationOnce(function (
     this: FileHandle,
     ...args: unknown[]

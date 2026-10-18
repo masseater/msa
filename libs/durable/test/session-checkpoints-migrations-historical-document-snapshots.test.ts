@@ -331,13 +331,12 @@ const sendsObserversOlder = Effect.gen(function* () {
   const state = (yield* awaited(session.documentState(V1Doc, context)))!;
   const watch = (yield* awaited(session.watchDoc(V1Doc, context)))!;
   const frames: (readonly unknown[])[] = [];
-  const delivered = new Promise<void>((resolve) => {
-    watch.start((_value, ops) => {
-      frames.push(ops);
-      resolve();
+  const { promise: delivered, resolve } = Promise.withResolvers<void>();
+  watch.start((_value, ops) => {
+    frames.push(ops);
+    resolve();
 
-      return Promise.resolve();
-    });
+    return Promise.resolve();
   });
   yield* awaited(
     session.commit(

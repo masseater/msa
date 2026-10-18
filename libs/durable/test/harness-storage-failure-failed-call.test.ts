@@ -90,6 +90,7 @@ const failsOnlyCall = Effect.gen(function* () {
   let ended = false;
   void harness.closed.then(() => {
     ended = true;
+    return undefined;
   });
   yield* Effect.sleep(1);
   expect(ended).toBe(false);
@@ -214,9 +215,7 @@ const reportsListenerOnReport = Effect.gen(function* () {
   process.on("unhandledRejection", onUnhandled);
   yield* Effect.gen(function* () {
     const { harness, root, reports } = yield* started(new MemoryStorage());
-    const asyncThrow = () => {
-      return Promise.reject(new Error("async listener"));
-    };
+    const asyncThrow = () => Promise.reject(new Error("async listener"));
     harness.subscribeCommits(asyncThrow);
     harness.subscribeClose(asyncThrow);
     yield* awaited(root.commit((tx) => tx.appendEntry(root.id, { kind: "note" }), context));

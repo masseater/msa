@@ -1,5 +1,3 @@
-import { readdir, stat } from "node:fs/promises";
-
 import { BACKGROUND_CONTEXT as context } from "@msa/chord/context";
 import { Effect } from "effect";
 
@@ -8,7 +6,7 @@ import { openNodeJsonlStorage } from "../src/storage/jsonl/node.ts";
 import { MemoryStorage } from "../src/storage/memory.ts";
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
 import { awaited } from "./effect-support.ts";
-import { joinPath } from "./platform-support.ts";
+import { fileSize, joinPath, listDirectory, pathExists } from "./platform-support.ts";
 
 export type Backend = "memory" | "sqlite" | "jsonl";
 
@@ -46,11 +44,10 @@ export const footprint = Effect.fn("footprint")(function* (backend: Backend, pat
   if (backend === "sqlite") {
     let bytes = 0;
     for (const suffix of ["", "-wal", "-shm"])
-      bytes += (yield* awaited(stat(path + suffix).catch(() => undefined)))?.size ?? 0;
+      if (yield* pathExists(path + suffix)) bytes += yield* fileSize(path + suffix);
     return Math.round(bytes / 1024);
   }
   let bytes = 0;
-  for (const file of yield* awaited(readdir(path)))
-    bytes += (yield* awaited(stat(joinPath(path, file)))).size;
+  for (const file of yield* listDirectory(path)) bytes += yield* fileSize(joinPath(path, file));
   return Math.round(bytes / 1024);
 });

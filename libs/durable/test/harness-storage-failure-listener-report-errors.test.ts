@@ -76,9 +76,7 @@ const reportsThrowingWatch = Effect.gen(function* () {
   const { harness, root, reports } = yield* started(new MemoryStorage());
   const watch = (yield* awaited(harness.watchDoc(LiveDoc, root.id, context)))!;
   const failure = new Error("listener broke");
-  watch.start(() => {
-    return Promise.reject(failure);
-  });
+  watch.start(() => Promise.reject(failure));
   yield* awaited(
     root.commit(
       (tx) =>
@@ -109,18 +107,14 @@ const faultsOnlyTask = Effect.gen(function* () {
     version: 1,
     initial: () => ({ phase: "work" }),
     phases: {
-      work: () => {
-        return Promise.reject(unformattable);
-      },
+      work: () => Promise.reject(unformattable),
     },
     abort: () => Promise.resolve(),
   });
   const opened = yield* openTasks(new MemoryStorage(), [Throws]);
   const root = yield* awaited(opened.harness.root(context));
   const watch = (yield* awaited(opened.harness.watchDoc(LiveDoc, root.id, context)))!;
-  watch.start(() => {
-    return Promise.reject(unformattable);
-  });
+  watch.start(() => Promise.reject(unformattable));
   const id = yield* awaited(
     root.commit(
       (tx) => tx.createTask(Throws, null, { ownership: { kind: "conversation" } }),

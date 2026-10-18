@@ -1,5 +1,3 @@
-import { readFile, writeFile } from "node:fs/promises";
-
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
@@ -17,7 +15,15 @@ import {
   tempDirectories,
   tempDirectory,
 } from "./jsonl-storage-support.ts";
-import { joinPath, removeDir } from "./platform-support.ts";
+import {
+  appendBytes,
+  appendText,
+  joinPath,
+  readBytes,
+  readText,
+  removeDir,
+  writeText,
+} from "./platform-support.ts";
 
 afterEach(() =>
   Effect.runPromise(
@@ -72,7 +78,7 @@ const rejectsConfirmedRecord = Effect.gen(function* () {
       content: { kind: "delta", version: 1, ops: [] },
     },
   });
-  yield* awaited(writeFile(path, `${first}\n${unconfirmed}\n${second}\n`));
+  yield* writeText(path, `${first}\n${unconfirmed}\n${second}\n`);
   yield* awaited(
     expect(
       JsonlStorage.open(directory, new NodeExecutionEnv({ cwd: directory }), context),
@@ -90,7 +96,7 @@ const rejectsNonIncreasing = Effect.gen(function* () {
   const storage = yield* openStorage(directory);
   yield* createRoot(storage);
   const path = joinPath(directory, "main.jsonl");
-  yield* awaited(writeFile(path, yield* awaited(readFile(path)), { flag: "a" }));
+  yield* appendBytes(path, yield* readBytes(path));
 
   yield* awaited(
     expect(
@@ -117,11 +123,11 @@ const rejectsStructurallyInvalid = Effect.gen(function* () {
     ),
   );
   const path = joinPath(directory, `doc-${documentId}.jsonl`);
-  const record = (yield* fromJsonText((yield* awaited(readFile(path, "utf8"))).trim())) as {
+  const record = (yield* fromJsonText((yield* readText(path)).trim())) as {
     payload: { content: Record<string, unknown> };
   };
   delete record.payload.content["value"];
-  yield* awaited(writeFile(path, `${yield* toJsonText(record)}\n`));
+  yield* writeText(path, `${yield* toJsonText(record)}\n`);
 
   yield* awaited(
     expect(
@@ -141,7 +147,7 @@ const rejectsMalformedComplete = Effect.gen(function* () {
   const mainDirectory = yield* tempDirectory();
   const mainStorage = yield* openStorage(mainDirectory);
   yield* createRoot(mainStorage);
-  yield* awaited(writeFile(joinPath(mainDirectory, "main.jsonl"), "{bad}\n", { flag: "a" }));
+  yield* appendText(joinPath(mainDirectory, "main.jsonl"), "{bad}\n");
   yield* awaited(
     expect(
       JsonlStorage.open(mainDirectory, new NodeExecutionEnv({ cwd: mainDirectory }), context),
@@ -151,7 +157,7 @@ const rejectsMalformedComplete = Effect.gen(function* () {
   const sidecarDirectory = yield* tempDirectory();
   const sidecarStorage = yield* openStorage(sidecarDirectory);
   yield* createRoot(sidecarStorage);
-  yield* awaited(writeFile(joinPath(sidecarDirectory, "doc-99.jsonl"), "{bad}\n"));
+  yield* writeText(joinPath(sidecarDirectory, "doc-99.jsonl"), "{bad}\n");
   yield* awaited(
     expect(
       JsonlStorage.open(sidecarDirectory, new NodeExecutionEnv({ cwd: sidecarDirectory }), context),

@@ -7,7 +7,7 @@ import { awaited } from "./effect-support.ts";
 import { bmp, encode, setUpImages } from "./tools-images-fixtures-support.ts";
 import { removeImageDirectory } from "./tools-images-support.ts";
 
-beforeAll(() => Effect.runPromise(Effect.asVoid(Effect.suspend(() => awaited(setUpImages())))));
+beforeAll(() => Effect.runPromise(Effect.asVoid(Effect.suspend(() => setUpImages()))));
 
 afterAll(removeImageDirectory);
 

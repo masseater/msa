@@ -1,7 +1,7 @@
 import { defineDoc, type HarnessSettings } from "@msa/durable";
 import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
-import { describe, expect, it, onTestFinished } from "vite-plus/test";
+import { describe, expect, it, onTestFinished, vi } from "vite-plus/test";
 
 import { currentTimeMillis } from "../src/clock.ts";
 import { SessionImpl, setDefaultDocumentRetention } from "../src/session/session.ts";
@@ -248,11 +248,13 @@ describe("document cache retention", () => {
 const keepsNoTimer = Effect.gen(function* () {
   const setTimer = globalThis.setTimeout;
   let timers = 0;
-  globalThis.setTimeout = ((callback: () => void, ms?: number) => {
+  const timerSpy = vi.spyOn(globalThis, "setTimeout").mockImplementation(((
+    callback: () => void,
+    ms?: number,
+  ) => {
     timers++;
-    const timer = setTimer(callback, ms);
-    return Number(timer as unknown as number) as unknown as ReturnType<typeof setTimeout>;
-  }) as typeof setTimeout;
+    return Number(Reflect.apply(setTimer, globalThis, [callback, ms]));
+  }) as unknown as typeof setTimeout);
   yield* Effect.gen(function* () {
     const { session, clock, sizes } = open(1_000);
     const conversationId = yield* awaited(createConversation(session));
@@ -264,13 +266,7 @@ const keepsNoTimer = Effect.gen(function* () {
     yield* settleLine(session);
     expect(sizes().cached).toBe(0);
     yield* awaited(session.close(context));
-  }).pipe(
-    Effect.ensuring(
-      Effect.sync(() => {
-        globalThis.setTimeout = setTimer;
-      }),
-    ),
-  );
+  }).pipe(Effect.ensuring(Effect.sync(() => timerSpy.mockRestore())));
 });
 
 const followsHarnessSettings = Effect.gen(function* () {

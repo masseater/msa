@@ -1,6 +1,3 @@
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import { type ToolResultMessage, Type } from "@msa/ai";
 import { createModels } from "@msa/ai/models";
@@ -12,7 +9,7 @@ import { createRegistry, Harness } from "../../src/harness/index.ts";
 import { defineExtension, defineTool, ToolResultEntry } from "../../src/index.ts";
 import { openNodeSqliteStorage } from "../../src/storage/sqlite/node.ts";
 import { awaited } from "../effect-support.ts";
-import { joinPath } from "../platform-support.ts";
+import { joinPath, makeTempDir, removeDir } from "../platform-support.ts";
 
 const context = BACKGROUND_CONTEXT;
 
@@ -52,7 +49,7 @@ faux.setResponses([
 ]);
 
 const main = Effect.gen(function* () {
-  const directory = yield* awaited(mkdtemp(joinPath(tmpdir(), "msa-durable-reload-")));
+  const directory = yield* makeTempDir("msa-durable-reload-");
   const open = Effect.fn("open")(function* (registry: ReturnType<typeof createRegistry>) {
     return yield* awaited(
       Harness.open(
@@ -81,13 +78,11 @@ const main = Effect.gen(function* () {
     return result.content.map((part) => (part.type === "text" ? part.text : "")).join("");
   });
 
-  let release = (): void => {};
-  gate = new Promise((resolve) => {
-    release = resolve;
-  });
-  const running = new Promise<void>((resolve) => {
-    started = resolve;
-  });
+  const opened = Promise.withResolvers<void>();
+  const release = (): void => opened.resolve();
+  gate = opened.promise;
+  const { promise: running, resolve: start } = Promise.withResolvers<void>();
+  started = start;
   const submission = yield* awaited(
     root.submit({ type: "input", content: "Which version?" }, context),
   );
@@ -113,7 +108,7 @@ const main = Effect.gen(function* () {
   yield* Console.log("after install:", yield* tools());
 
   yield* awaited(harness.close(context));
-  yield* awaited(rm(directory, { recursive: true, force: true }));
+  yield* removeDir(directory);
 });
 
 NodeRuntime.runMain(main);

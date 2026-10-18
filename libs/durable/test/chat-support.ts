@@ -115,16 +115,14 @@ export const waitFor = Effect.fn("waitFor")(function* (
 });
 
 export function unanswered(): { readonly step: FauxResponseStep; readonly reached: Promise<void> } {
-  let reach!: () => void;
-  const reached = new Promise<void>((resolve) => {
-    reach = resolve;
-  });
-  const step: FauxResponseStep = (_context, options) =>
-    new Promise((_, reject) => {
-      reach();
-      const signal = options!.signal!;
-      signal.addEventListener("abort", () => reject(signal.reason), { once: true });
-    });
+  const { promise: reached, resolve: reach } = Promise.withResolvers<void>();
+  const step: FauxResponseStep = (_context, options) => {
+    reach();
+    const signal = options!.signal!;
+    const { promise, reject } = Promise.withResolvers<never>();
+    signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+    return promise;
+  };
   return { step, reached };
 }
 

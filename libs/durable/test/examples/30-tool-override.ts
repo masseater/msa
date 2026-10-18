@@ -1,6 +1,3 @@
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import type { ToolResultMessage } from "@msa/ai";
 import { createModels } from "@msa/ai/models";
@@ -15,7 +12,7 @@ import { type Conversation, defineExtension, ToolResultEntry, wrapTool } from ".
 import { MemoryStorage } from "../../src/storage/memory.ts";
 import { CodingTools, createBashTool } from "../../src/tools/index.ts";
 import { awaited } from "../effect-support.ts";
-import { joinPath } from "../platform-support.ts";
+import { joinPath, makeDirectory, makeTempDir, removeDir, writeText } from "../platform-support.ts";
 
 const context = BACKGROUND_CONTEXT;
 
@@ -48,10 +45,11 @@ const Timing = defineExtension({
 });
 
 const main = Effect.gen(function* () {
-  const project = yield* awaited(mkdtemp(joinPath(tmpdir(), "msa-durable-venv-")));
-  yield* awaited(mkdir(joinPath(project, ".venv/bin"), { recursive: true }));
-  yield* awaited(
-    writeFile(joinPath(project, ".venv/bin/activate"), `export VIRTUAL_ENV="${project}/.venv"\n`),
+  const project = yield* makeTempDir("msa-durable-venv-");
+  yield* makeDirectory(joinPath(project, ".venv/bin"));
+  yield* writeText(
+    joinPath(project, ".venv/bin/activate"),
+    `export VIRTUAL_ENV="${project}/.venv"\n`,
   );
 
   const faux = fauxProvider();
@@ -113,7 +111,7 @@ const main = Effect.gen(function* () {
   yield* Console.log("timed bash calls:", timings.length);
 
   yield* awaited(harness.close(context));
-  yield* awaited(rm(project, { recursive: true, force: true }));
+  yield* removeDir(project);
 });
 
 NodeRuntime.runMain(main);

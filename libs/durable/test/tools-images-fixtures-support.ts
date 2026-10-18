@@ -1,19 +1,19 @@
-import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 
 import { createNodePhotonImages } from "@msa/durable/images/node";
 import { initSync, PhotonImage } from "@silvia-odwyer/photon/photon_rs.js";
+import { Effect } from "effect";
 
-import type { ImageProcessor } from "../src/tools/image.ts";
+import { awaited } from "./effect-support.ts";
+import { readBytes } from "./platform-support.ts";
 
-export function setUpImages(): Promise<ImageProcessor> {
-  initSync({
-    module: readFileSync(
-      createRequire(import.meta.url).resolve("@silvia-odwyer/photon/photon_rs_bg.wasm"),
-    ),
-  });
-  return createNodePhotonImages();
-}
+export const setUpImages = Effect.fn("setUpImages")(function* () {
+  const module = yield* readBytes(
+    createRequire(import.meta.url).resolve("@silvia-odwyer/photon/photon_rs_bg.wasm"),
+  );
+  initSync({ module });
+  return yield* awaited(createNodePhotonImages());
+});
 
 export function pixels(width: number, height: number): Uint8Array {
   const rgba = new Uint8Array(width * height * 4);
@@ -100,9 +100,10 @@ export function withOrientation(
 ) {
   const exif = [...EXIF_HEADER, ...tiff(orientation, options.little ?? false)];
   const app1 = [0xff, 0xe1, (exif.length + 2) >> 8, (exif.length + 2) & 0xff, ...exif];
-  const app0 = options.app0
-    ? [0xff, 0xe0, 0, 16, 0x4a, 0x46, 0x49, 0x46, 0, 1, 1, 0, 0, 1, 0, 1, 0, 0]
-    : [];
+  const app0 =
+    options.app0 === true
+      ? [0xff, 0xe0, 0, 16, 0x4a, 0x46, 0x49, 0x46, 0, 1, 1, 0, 0, 1, 0, 1, 0, 0]
+      : [];
   return new Uint8Array([...jpeg.subarray(0, 2), ...app0, ...app1, ...jpeg.subarray(2)]);
 }
 

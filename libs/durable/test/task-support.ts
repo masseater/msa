@@ -46,9 +46,11 @@ export const settled = Effect.fn("settled")(function* (promise: Promise<unknown>
   promise.then(
     () => {
       done = true;
+      return undefined;
     },
     () => {
       done = true;
+      return undefined;
     },
   );
   yield* flush;

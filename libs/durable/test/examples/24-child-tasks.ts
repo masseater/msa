@@ -1,6 +1,3 @@
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import { createModels } from "@msa/ai/models";
 import { BACKGROUND_CONTEXT } from "@msa/chord/context";
@@ -18,7 +15,7 @@ import {
 } from "../../src/index.ts";
 import { openNodeSqliteStorage } from "../../src/storage/sqlite/node.ts";
 import { awaited } from "../effect-support.ts";
-import { joinPath } from "../platform-support.ts";
+import { joinPath, makeTempDir, removeDir } from "../platform-support.ts";
 
 const context = BACKGROUND_CONTEXT;
 
@@ -155,7 +152,7 @@ registry.install(defineExtension({ name: "checkout", tasks: [Payment, Checkout] 
 const main = Effect.gen(function* () {
   const runSync = Effect.runSyncWith(yield* Effect.context<never>());
 
-  const directory = yield* awaited(mkdtemp(joinPath(tmpdir(), "msa-durable-example-")));
+  const directory = yield* makeTempDir("msa-durable-example-");
   const databasePath = joinPath(directory, "session.sqlite");
   const open = Effect.fn("open")(function* () {
     return yield* awaited(
@@ -196,11 +193,7 @@ const main = Effect.gen(function* () {
   yield* Console.log("The customer cancels:");
   id = yield* awaited(checkout(root, ["visa-5", "visa-6", "visa-7", "visa-8"]));
   harness.resume();
-  yield* awaited(
-    new Promise((resolve) => {
-      setTimeout(resolve, 20);
-    }),
-  );
+  yield* Effect.sleep(20);
   const graph = yield* awaited(harness.taskGraph(context));
   printGraph(graph.value);
   graph.dispose();
@@ -211,11 +204,7 @@ const main = Effect.gen(function* () {
 
   yield* Console.log("The process stops while the payments run, and a new one continues:");
   id = yield* awaited(checkout(root, ["visa-9", "visa-10", "visa-11", "visa-12"]));
-  yield* awaited(
-    new Promise((resolve) => {
-      setTimeout(resolve, 20);
-    }),
-  );
+  yield* Effect.sleep(20);
   yield* awaited(harness.close(context));
   harness = yield* open();
   yield* awaited(harness.root(context));
@@ -224,7 +213,7 @@ const main = Effect.gen(function* () {
   );
 
   yield* awaited(harness.close(context));
-  yield* awaited(rm(directory, { recursive: true, force: true }));
+  yield* removeDir(directory);
 });
 
 NodeRuntime.runMain(main);

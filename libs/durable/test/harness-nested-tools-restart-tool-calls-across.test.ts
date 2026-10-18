@@ -143,7 +143,7 @@ const letsReplaySafe = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const { path, setup, runs, running } = yield* replaySafeBatch();
-  let results_: NestedToolExecutionResult[] = [];
+  let toolResults: NestedToolExecutionResult[] = [];
   addTool(
     setup.registry,
     tool(
@@ -152,7 +152,7 @@ const letsReplaySafe = Effect.gen(function* () {
         runPromise(
           Effect.gen(function* () {
             runs.caller++;
-            results_ = yield* awaited(
+            toolResults = yield* awaited(
               Promise.all([
                 api.executeTool("safe", {}, callContext),
                 api.executeTool("unsafe", {}, callContext),
@@ -181,8 +181,8 @@ const letsReplaySafe = Effect.gen(function* () {
     expect(task.abandonOnRestart).toBeUndefined();
     expect(task.abortReason).toBeUndefined();
   }
-  expect(results_[0]?.structuredOutput).toBe("safe run 2");
-  expect(codes(results_[1])).toEqual(["interrupted"]);
+  expect(toolResults[0]?.structuredOutput).toBe("safe run 2");
+  expect(codes(toolResults[1])).toEqual(["interrupted"]);
   yield* awaited(opened.harness.close(context));
 });
 

@@ -186,7 +186,7 @@ const releasesRegistrySubscription = Effect.gen(function* () {
         runPromise(
           Effect.gen(function* () {
             log.push("run");
-            yield* awaited(new Promise(() => {}));
+            return yield* Effect.never;
           }),
         ),
     },

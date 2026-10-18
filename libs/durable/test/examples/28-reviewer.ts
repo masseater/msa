@@ -1,6 +1,3 @@
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import type { AssistantMessage } from "@msa/ai";
 import { createModels } from "@msa/ai/models";
@@ -14,7 +11,7 @@ import { AssistantEntry, defineExtension, hook, section } from "../../src/index.
 import { MemoryStorage } from "../../src/storage/memory.ts";
 import { CodingTools, createReadTool } from "../../src/tools/index.ts";
 import { awaited } from "../effect-support.ts";
-import { joinPath } from "../platform-support.ts";
+import { joinPath, makeTempDir, removeDir, writeText } from "../platform-support.ts";
 
 const context = BACKGROUND_CONTEXT;
 const textOf = (message: AssistantMessage) =>
@@ -39,10 +36,8 @@ const Reviewer = defineExtension({
 });
 
 const main = Effect.gen(function* () {
-  const worktree = yield* awaited(mkdtemp(joinPath(tmpdir(), "msa-durable-review-")));
-  yield* awaited(
-    writeFile(joinPath(worktree, "user.ts"), "export const name = (user) => user.name;\n"),
-  );
+  const worktree = yield* makeTempDir("msa-durable-review-");
+  yield* writeText(joinPath(worktree, "user.ts"), "export const name = (user) => user.name;\n");
 
   const faux = fauxProvider({ models: [{ id: "big" }, { id: "small" }] });
   const models = createModels();
@@ -108,7 +103,7 @@ const main = Effect.gen(function* () {
   }
 
   yield* awaited(harness.close(context));
-  yield* awaited(rm(worktree, { recursive: true, force: true }));
+  yield* removeDir(worktree);
 });
 
 NodeRuntime.runMain(main);

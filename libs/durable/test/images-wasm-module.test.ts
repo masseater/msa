@@ -1,4 +1,3 @@
-import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 
 import { createPhotonImages } from "@msa/durable/images";
@@ -7,6 +6,7 @@ import { Effect } from "effect";
 import { expect, it } from "vite-plus/test";
 
 import { awaited } from "./effect-support.ts";
+import { readBytes } from "./platform-support.ts";
 
 it("createPhotonImages takes a compiled WebAssembly module, as Cloudflare Workers pass it", () =>
   Effect.runPromise(
@@ -17,9 +17,9 @@ it("createPhotonImages takes a compiled WebAssembly module, as Cloudflare Worker
       const { WebAssembly } = globalThis as unknown as {
         WebAssembly: { compile(bytes: Uint8Array): Promise<object> };
       };
-      const module = (yield* awaited(
-        WebAssembly.compile(yield* awaited(readFile(path))),
-      )) as Parameters<typeof createPhotonImages>[0];
+      const module = (yield* awaited(WebAssembly.compile(yield* readBytes(path)))) as Parameters<
+        typeof createPhotonImages
+      >[0];
       const images = createPhotonImages(module);
       const data = "R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
       const prepared = yield* awaited(

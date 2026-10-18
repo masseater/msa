@@ -30,7 +30,7 @@ let processor: ImageProcessor;
 beforeAll(() =>
   Effect.runPromise(
     Effect.gen(function* () {
-      processor = yield* awaited(setUpImages());
+      processor = yield* setUpImages();
     }),
   ),
 );

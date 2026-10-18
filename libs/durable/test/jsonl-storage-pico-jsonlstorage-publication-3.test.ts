@@ -1,5 +1,3 @@
-import { stat, writeFile } from "node:fs/promises";
-
 import type { JsonValue } from "@msa/chord";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
@@ -22,7 +20,14 @@ import {
   tempDirectories,
   tempDirectory,
 } from "./jsonl-storage-support.ts";
-import { joinPath, removeDir } from "./platform-support.ts";
+import {
+  appendBytes,
+  appendText,
+  fileSize,
+  joinPath,
+  removeDir,
+  writeText,
+} from "./platform-support.ts";
 
 afterEach(() =>
   Effect.runPromise(
@@ -209,15 +214,15 @@ const truncatesTornUtf = Effect.gen(function* () {
   );
   const sidecarPath = joinPath(directory, `doc-${documentId}.jsonl`);
   const mainPath = joinPath(directory, "main.jsonl");
-  const sidecarSize = (yield* awaited(stat(sidecarPath))).size;
-  const mainSize = (yield* awaited(stat(mainPath))).size;
+  const sidecarSize = yield* fileSize(sidecarPath);
+  const mainSize = yield* fileSize(mainPath);
   const torn = new TextEncoder().encode('{"text":"€');
-  yield* awaited(writeFile(sidecarPath, torn.subarray(0, torn.length - 1), { flag: "a" }));
-  yield* awaited(writeFile(mainPath, torn.subarray(0, torn.length - 1), { flag: "a" }));
+  yield* appendBytes(sidecarPath, torn.subarray(0, torn.length - 1));
+  yield* appendBytes(mainPath, torn.subarray(0, torn.length - 1));
 
   const reopened = yield* openStorage(directory);
-  expect((yield* awaited(stat(sidecarPath))).size).toBe(sidecarSize);
-  expect((yield* awaited(stat(mainPath))).size).toBe(mainSize);
+  expect(yield* fileSize(sidecarPath)).toBe(sidecarSize);
+  expect(yield* fileSize(mainPath)).toBe(mainSize);
   expect(
     yield* awaited(
       reopened.commit(
@@ -248,18 +253,15 @@ const removesCompleteUnconfirmed = Effect.gen(function* () {
   yield* awaited(storage.commit([{ type: "task", value: terminalTask(taskId) }], context));
   const sidecarPath = joinPath(directory, `task-${taskId}.jsonl`);
   expect(yield* fileExists(sidecarPath)).toBe(false);
-  yield* awaited(
-    writeFile(
-      sidecarPath,
-      `${yield* toJsonText({
-        format: 1,
-        type: "record",
-        seq: 4,
-        ordinal: 0,
-        payload: { type: "task", value: pendingTask(taskId, "stale") },
-      })}\n`,
-      { flag: "a" },
-    ),
+  yield* appendText(
+    sidecarPath,
+    `${yield* toJsonText({
+      format: 1,
+      type: "record",
+      seq: 4,
+      ordinal: 0,
+      payload: { type: "task", value: pendingTask(taskId, "stale") },
+    })}\n`,
   );
 
   const reopened = yield* openStorage(directory);
@@ -285,7 +287,7 @@ const failsOpenConfirmed = Effect.gen(function* () {
       context,
     ),
   );
-  yield* awaited(writeFile(joinPath(directory, `doc-${documentId}.jsonl`), ""));
+  yield* writeText(joinPath(directory, `doc-${documentId}.jsonl`), "");
   yield* awaited(
     expect(
       JsonlStorage.open(directory, new NodeExecutionEnv({ cwd: directory }), context),

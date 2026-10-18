@@ -110,10 +110,9 @@ const main = Effect.gen(function* () {
     yield* ask(question);
   }
 
-  let finishAnswer!: () => void;
-  hold = new Promise((resolve) => {
-    finishAnswer = resolve;
-  });
+  const answer = Promise.withResolvers<void>();
+  const finishAnswer = () => answer.resolve();
+  hold = answer.promise;
   const busy = yield* awaited(
     root.submit({ type: "input", content: "How do we get around?" }, context),
   );

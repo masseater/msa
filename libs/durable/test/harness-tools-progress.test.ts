@@ -160,14 +160,8 @@ const finishesCallUnder = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const setup = chatSetup();
-  let release!: () => void;
-  const started = new Promise<void>((resolve) => {
-    release = resolve;
-  });
-  let finish!: () => void;
-  const finished = new Promise<void>((resolve) => {
-    finish = resolve;
-  });
+  const { promise: started, resolve: release } = Promise.withResolvers<void>();
+  const { promise: finished, resolve: finish } = Promise.withResolvers<void>();
   const v1 = tool("work", () =>
     runPromise(
       Effect.gen(function* () {

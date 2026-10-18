@@ -106,7 +106,7 @@ export function planMode({ writes }: SpecNames) {
           Effect.runPromise(
             Effect.gen(function* () {
               return (yield* awaited(api.snapshot(PlanModeDoc, api.conversationId, context)))
-                ?.enabled && writes(call)
+                ?.enabled === true && writes(call)
                 ? { block: "Plan mode: read-only" }
                 : undefined;
             }),

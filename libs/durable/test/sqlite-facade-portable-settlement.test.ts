@@ -49,9 +49,9 @@ class ControlledSettlementDatabase implements SqliteDatabase {
         }),
       ),
     );
-    return new Promise<T>((resolve, reject) => {
-      this.pendingSettlement = () => void settlement.then(resolve, reject);
-    });
+    const { promise, resolve, reject } = Promise.withResolvers<T>();
+    this.pendingSettlement = () => void settlement.then(resolve, reject);
+    return promise;
   }
 
   close(): Promise<void> {
@@ -92,6 +92,7 @@ const expectDelayedCommit = Effect.fn("expectDelayedCommit")(function* (
   let committed = false;
   void committing.then(() => {
     committed = true;
+    return undefined;
   });
   yield* awaited(Promise.resolve());
   expect(committed).toBe(false);
@@ -189,6 +190,7 @@ const awaitsAsyncTransaction = Effect.gen(function* () {
   let opened = false;
   void opening.then(() => {
     opened = true;
+    return undefined;
   });
   yield* awaited(Promise.resolve());
   expect(opened).toBe(false);

@@ -45,9 +45,7 @@ const sharesOneMount = Effect.gen(function* () {
   const shared = yield* awaited(root.viewState(context));
   expect(failing.value).toBe(shared.value);
   shared.dispose();
-  failing.start(() => {
-    return Promise.reject(new Error("listener failed"));
-  });
+  failing.start(() => Promise.reject(new Error("listener failed")));
   yield* awaited(root.commit((tx) => tx.appendEntry(root.id, { kind: "one" }), context));
   yield* awaited(root.commit((tx) => tx.appendEntry(root.id, { kind: "two" }), context));
   yield* drained();

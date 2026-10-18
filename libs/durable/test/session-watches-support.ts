@@ -16,10 +16,7 @@ export const StateDoc = defineDoc<State>({
 export type Deferred = { readonly promise: Promise<void>; readonly resolve: () => void };
 
 export function deferred(): Deferred {
-  let resolve!: () => void;
-  const promise = new Promise<void>((done) => {
-    resolve = done;
-  });
+  const { promise, resolve } = Promise.withResolvers<void>();
   return { promise, resolve };
 }
 

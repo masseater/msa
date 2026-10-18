@@ -1,5 +1,3 @@
-import { readdir } from "node:fs/promises";
-
 import type { Context } from "@msa/chord";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
@@ -17,7 +15,7 @@ import {
   resultDetails,
 } from "./codemode-support.ts";
 import { awaited } from "./effect-support.ts";
-import { dirnameOf } from "./platform-support.ts";
+import { listDirectory, dirnameOf } from "./platform-support.ts";
 import { context } from "./session-support.ts";
 import { aborted, deferred } from "./task-support.ts";
 
@@ -64,7 +62,7 @@ const writesResultFiles = Effect.gen(function* () {
   const details = yield* resultDetails(opened.root);
   expect(details?.fullOutputPath).toBe(first);
   directories.add(dirnameOf(first));
-  expect(yield* awaited(readdir(dirnameOf(first)))).toEqual(["output.txt"]);
+  expect(yield* listDirectory(dirnameOf(first))).toEqual(["output.txt"]);
   yield* awaited(opened.harness.close(context));
 });
 

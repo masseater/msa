@@ -103,7 +103,7 @@ function forwardingCodexModels() {
 }
 
 describe("Durable provider session cache e2e", () => {
-  it.skipIf(!codexToken)(
+  it.skipIf(codexToken === undefined || codexToken === "")(
     "reuses the Codex prompt cache across Durable turns",
     { retry: 2, timeout: 120_000 },
     () =>

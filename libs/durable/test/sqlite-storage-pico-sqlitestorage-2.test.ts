@@ -1,4 +1,3 @@
-import { stat } from "node:fs/promises";
 import { DatabaseSync } from "node:sqlite";
 
 import { Effect } from "effect";
@@ -7,7 +6,7 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 import type { DocumentId, EntryId } from "../src/types.ts";
 import { ROOT_CONVERSATION_ID } from "../src/types.ts";
 import { awaited } from "./effect-support.ts";
-import { removeDir } from "./platform-support.ts";
+import { fileSize, removeDir } from "./platform-support.ts";
 import {
   entry,
   createRoot,
@@ -103,13 +102,13 @@ const autoCheckpointsWal = Effect.gen(function* () {
     );
   }
   const walPath = `${path}-wal`;
-  expect((yield* awaited(stat(walPath))).size).toBeLessThan(512 * 1024);
+  expect(yield* fileSize(walPath)).toBeLessThan(512 * 1024);
   const observer = new DatabaseSync(path, { readOnly: true });
   yield* Effect.gen(function* () {
     expect(scalar(observer, "SELECT count(*) AS value FROM entries")).toBe(20);
     yield* awaited(storage.close(context));
     openStorages.delete(storage);
-    expect((yield* awaited(stat(walPath))).size).toBe(0);
+    expect(yield* fileSize(walPath)).toBe(0);
   }).pipe(
     Effect.ensuring(
       Effect.sync(() => {
@@ -207,7 +206,7 @@ const keepsRepresentativeRow = Effect.gen(function* () {
   }
   yield* awaited(storage.close(context));
   openStorages.delete(storage);
-  expect((yield* awaited(stat(path))).size).toBeLessThan(1024 * 1024);
+  expect(yield* fileSize(path)).toBeLessThan(1024 * 1024);
 });
 
 describe("Pico SqliteStorage", () => {

@@ -32,7 +32,7 @@ function crashTask(log: Log, options: { blockAbort: boolean }) {
         Effect.runPromise(
           Effect.gen(function* () {
             log.push("run");
-            yield* awaited(new Promise(() => {}));
+            return yield* Effect.never;
           }),
         ),
     },
@@ -40,7 +40,7 @@ function crashTask(log: Log, options: { blockAbort: boolean }) {
       Effect.runPromise(
         Effect.gen(function* () {
           log.push("abort");
-          if (options.blockAbort) yield* awaited(new Promise(() => {}));
+          if (options.blockAbort) return yield* Effect.never;
           yield* awaited(runtime.commit(() => abortedWith("recovered"), ctx));
         }),
       ),
@@ -87,6 +87,7 @@ const crashMarkRun = Effect.gen(function* () {
   let joined = false;
   void harness.abortTask(id, context).then(() => {
     joined = true;
+    return undefined;
   });
   yield* abortMarked(harness, id);
   yield* flush;

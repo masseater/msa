@@ -243,7 +243,7 @@ describe("NodeExecutionEnv shell", () => {
                 if (target !== undefined && Number.isFinite(target))
                   yield* Effect.ignore(Effect.try(() => process.kill(target, "SIGKILL")));
                 vi.unstubAllEnvs();
-                if (platformDescriptor)
+                if (platformDescriptor !== undefined)
                   Object.defineProperty(process, "platform", platformDescriptor);
               }),
             ),

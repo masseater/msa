@@ -96,10 +96,7 @@ const answersAbortedTool = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const setup = chatSetup();
-  let reached!: () => void;
-  const buffered = new Promise<void>((resolve) => {
-    reached = resolve;
-  });
+  const { promise: buffered, resolve: reached } = Promise.withResolvers<void>();
   addTool(
     setup.registry,
     tool("slow", (_args, api, callContext) =>
@@ -109,14 +106,7 @@ const answersAbortedTool = Effect.gen(function* () {
           yield* Effect.sleep(20);
           api.output("buffered\n");
           reached();
-          yield* awaited(
-            new Promise((_, reject) => {
-              callContext.abortSignal!.addEventListener("abort", () =>
-                reject(callContext.abortSignal!.reason),
-              );
-            }),
-          );
-          return {};
+          return yield* awaited(aborted(callContext.abortSignal!));
         }),
       ),
     ),

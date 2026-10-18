@@ -9,7 +9,7 @@ import { ControlledStorage, context, flush } from "./session-support.ts";
 import { completed, deferred, openTasks } from "./task-support.ts";
 
 function gatesNever() {
-  const never = new Promise<void>(() => {});
+  const never = Effect.runPromise(Effect.never);
   return { child: never, late: never };
 }
 
@@ -53,7 +53,7 @@ const registersNothingAcquisition = Effect.gen(function* () {
   );
   const held = storage.holdCommits();
   const blocking = harness.commit(
-    (tx) => tx.appendEntry(root.id, { kind: "blocker" }).then(() => {}),
+    (tx) => tx.appendEntry(root.id, { kind: "blocker" }).then(() => undefined),
     context,
   );
   yield* awaited(held.entered);

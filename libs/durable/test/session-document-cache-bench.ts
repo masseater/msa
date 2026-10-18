@@ -1,6 +1,3 @@
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import { createModels } from "@msa/ai/models";
 import { BACKGROUND_CONTEXT as context } from "@msa/chord/context";
@@ -18,7 +15,7 @@ import type { SessionImpl } from "../src/session/session.ts";
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
 import { awaited } from "./effect-support.ts";
 import { retainedBytes } from "./heap-retained.ts";
-import { joinPath } from "./platform-support.ts";
+import { joinPath, makeTempDir, removeDir } from "./platform-support.ts";
 
 const Work = defineTask<null, { phase: "work" }, null>({
   name: "bench.work",
@@ -89,7 +86,7 @@ function cycler(harness: Harness) {
 }
 
 const run = Effect.fn("run")(function* (conversations: number, documentRetentionMs: number) {
-  const directory = mkdtempSync(joinPath(tmpdir(), "msa-durable-doc-cache-bench-"));
+  const directory = yield* makeTempDir("msa-durable-doc-cache-bench-");
   return yield* Effect.gen(function* () {
     const harness = yield* openBenchHarness(directory, documentRetentionMs);
     const { seen, cycle } = cycler(harness);
@@ -111,13 +108,7 @@ const run = Effect.fn("run")(function* (conversations: number, documentRetention
     const readUs = Math.round(((performance.now() - readStarted) / 100) * 1000);
     yield* awaited(harness.close(context));
     return { ms, heap, cached, readUs };
-  }).pipe(
-    Effect.ensuring(
-      Effect.sync(() => {
-        rmSync(directory, { recursive: true, force: true });
-      }),
-    ),
-  );
+  }).pipe(Effect.ensuring(removeDir(directory)));
 });
 
 const sizes = process.argv.slice(2).map(Number);

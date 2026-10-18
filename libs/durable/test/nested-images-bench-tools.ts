@@ -1,5 +1,3 @@
-import { randomBytes } from "node:crypto";
-
 import type { ImageContent } from "@msa/ai";
 import { Effect } from "effect";
 import { Type } from "typebox";
@@ -15,6 +13,13 @@ import {
 } from "../src/index.ts";
 import { type Backend } from "./bench-support.ts";
 import { toJsonText, awaited } from "./effect-support.ts";
+
+const randomBytes = (length: number): Uint8Array => {
+  const bytes = new Uint8Array(length);
+  for (let offset = 0; offset < length; offset += 65_536)
+    crypto.getRandomValues(bytes.subarray(offset, offset + 65_536));
+  return bytes;
+};
 
 type Variant = "inline" | "reference";
 
@@ -39,7 +44,7 @@ function readImageTool(scenario: Scenario) {
         output: [
           {
             type: "image",
-            data: randomBytes((scenario.bytes / 4) * 3).toString("base64"),
+            data: Buffer.from(randomBytes((scenario.bytes / 4) * 3)).toString("base64"),
             mimeType: "image/png",
           },
         ],

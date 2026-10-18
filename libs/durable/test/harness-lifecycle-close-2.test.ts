@@ -22,7 +22,7 @@ const closingWithQueuedWork = Effect.fn("closingWithQueuedWork")(function* () {
 
   const held = storage.holdCommits();
   const blocking = harness.commit(
-    (tx) => tx.appendEntry(root.id, { kind: "blocker" }).then(() => {}),
+    (tx) => tx.appendEntry(root.id, { kind: "blocker" }).then(() => undefined),
     context,
   );
   yield* awaited(held.entered);
@@ -79,14 +79,14 @@ const queuedAtSeal = Effect.fn("queuedAtSeal")(function* () {
   const storage = new ControlledStorage();
   const { harness } = yield* openTasks(storage, []);
   const root = yield* awaited(harness.root(context));
-  yield* awaited(harness.commit((tx) => tx.doc(Notes).then(() => {}), context));
+  yield* awaited(harness.commit((tx) => tx.doc(Notes).then(() => undefined), context));
   const taskId = yield* awaited(start(root, Pending));
   const write = yield* awaited(root.submit({ type: "write", entry: { kind: "note" } }, context));
   yield* awaited(write.wait(context));
 
   const held = storage.holdCommits();
   const blocking = harness.commit(
-    (tx) => tx.appendEntry(root.id, { kind: "blocker" }).then(() => {}),
+    (tx) => tx.appendEntry(root.id, { kind: "blocker" }).then(() => undefined),
     context,
   );
   yield* awaited(held.entered);
@@ -200,7 +200,7 @@ const neverSchedulesRead = Effect.gen(function* () {
     scope: "session",
     initial: () => ({ text: "" }),
   });
-  yield* awaited(harness.commit((tx) => tx.doc(Notes).then(() => {}), context));
+  yield* awaited(harness.commit((tx) => tx.doc(Notes).then(() => undefined), context));
   yield* awaited(harness.inspect(context));
   yield* awaited(harness.getTask(id, context));
   yield* awaited(harness.usage(context));

@@ -1,6 +1,3 @@
-import { mkdir, mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import type { ToolResultMessage } from "@msa/ai";
 import { createModels } from "@msa/ai/models";
@@ -19,13 +16,13 @@ import {
 import { MemoryStorage } from "../../src/storage/memory.ts";
 import { CodingTools } from "../../src/tools/index.ts";
 import { awaited } from "../effect-support.ts";
-import { joinPath } from "../platform-support.ts";
+import { joinPath, makeDirectory, makeTempDir, removeDir } from "../platform-support.ts";
 
 const context = BACKGROUND_CONTEXT;
 
 const main = Effect.gen(function* () {
-  const workspace = yield* awaited(mkdtemp(joinPath(tmpdir(), "msa-durable-agent-")));
-  yield* awaited(mkdir(joinPath(workspace, "app")));
+  const workspace = yield* makeTempDir("msa-durable-agent-");
+  yield* makeDirectory(joinPath(workspace, "app"));
 
   const Coding = defineExtension({
     name: "coding",
@@ -90,7 +87,7 @@ const main = Effect.gen(function* () {
   yield* Console.log("bash ran in:", yield* lastBashOutput());
 
   yield* awaited(harness.close(context));
-  yield* awaited(rm(workspace, { recursive: true, force: true }));
+  yield* removeDir(workspace);
 });
 
 NodeRuntime.runMain(main);

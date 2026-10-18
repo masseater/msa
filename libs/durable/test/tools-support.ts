@@ -86,18 +86,11 @@ export function textOutput(result: ToolExecutionResult): string {
 }
 
 export function deferred(): { promise: Promise<void>; resolve: () => void } {
-  let resolve = () => {};
-  const promise = new Promise<void>((resolvePromise) => {
-    resolve = resolvePromise;
-  });
+  const { promise, resolve } = Promise.withResolvers<void>();
   return { promise, resolve };
 }
 
-export function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
-}
+export const delay = (ms: number): Promise<void> => Effect.runPromise(Effect.sleep(ms));
 
 export class BlockingWriteExecutionEnv extends NodeExecutionEnv {
   readonly firstWriteStarted = deferred();

@@ -1,6 +1,6 @@
 import type { Draft, JsonValue } from "@msa/chord";
 import { defineDoc, type JsonObject, type TaskId } from "@msa/durable";
-import { Effect } from "effect";
+import { DateTime, Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { idFromNumber } from "../src/ids.ts";
@@ -153,7 +153,7 @@ const rejectsNonJson = Effect.gen(function* () {
     kind: "test.date",
     version: 1,
     scope: "session",
-    initial: () => ({ at: new Date() }) as unknown as JsonObject,
+    initial: () => ({ at: DateTime.toDateUtc(DateTime.nowUnsafe()) }) as unknown as JsonObject,
   });
   yield* awaited(
     expect(

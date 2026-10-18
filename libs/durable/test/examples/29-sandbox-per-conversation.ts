@@ -1,5 +1,3 @@
-import { readFile, rm } from "node:fs/promises";
-
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import { createModels } from "@msa/ai/models";
 import { fauxAssistantMessage, fauxProvider, fauxToolCall } from "@msa/ai/providers/faux";
@@ -12,7 +10,7 @@ import { defineDoc } from "../../src/index.ts";
 import { MemoryStorage } from "../../src/storage/memory.ts";
 import { CodingTools } from "../../src/tools/index.ts";
 import { awaited } from "../effect-support.ts";
-import { joinPath, makeTempDir } from "../platform-support.ts";
+import { joinPath, makeTempDir, readText, removeDir } from "../platform-support.ts";
 
 const context = BACKGROUND_CONTEXT;
 
@@ -100,18 +98,12 @@ const main = Effect.gen(function* () {
       bob.conversation.submit({ type: "input", content: "Leave a note." }, context),
     )).wait(context),
   );
-  yield* Console.log(
-    "alice's sandbox:",
-    yield* awaited(readFile(joinPath(alice.path, "note.txt"), "utf8")),
-  );
-  yield* Console.log(
-    "bob's sandbox:",
-    yield* awaited(readFile(joinPath(bob.path, "note.txt"), "utf8")),
-  );
+  yield* Console.log("alice's sandbox:", yield* readText(joinPath(alice.path, "note.txt")));
+  yield* Console.log("bob's sandbox:", yield* readText(joinPath(bob.path, "note.txt")));
 
   yield* awaited(harness.close(context));
-  yield* awaited(rm(alice.path, { recursive: true, force: true }));
-  yield* awaited(rm(bob.path, { recursive: true, force: true }));
+  yield* removeDir(alice.path);
+  yield* removeDir(bob.path);
 });
 
 NodeRuntime.runMain(main);
