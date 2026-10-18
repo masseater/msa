@@ -1,4 +1,5 @@
 import type { AssistantMessage } from "@msa/ai";
+import { currentTimeMillis } from "@msa/testing";
 import type { TuiMouseEvent } from "@msa/tui";
 import { describe, expect, test } from "vite-plus/test";
 
@@ -18,7 +19,7 @@ function createAssistantMessage(
   return {
     role: "assistant",
     content,
-    api: "openai-responses",
+    api: "openai-responses" as const,
     provider: "openai",
     model: "gpt-4o-mini",
     usage: {
@@ -30,7 +31,7 @@ function createAssistantMessage(
       cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
     },
     stopReason: overrides.stopReason ?? "stop",
-    timestamp: Date.now(),
+    timestamp: currentTimeMillis(),
   };
 }
 
@@ -45,8 +46,8 @@ describe("AssistantMessageComponent", () => {
     };
     const message = createAssistantMessage(
       [
-        { type: "thinking", thinking: "first idea" },
-        { type: "text", text: "reading it" },
+        { type: "thinking" as const, thinking: "first idea" },
+        { type: "text" as const, text: "reading it" },
         toolCall,
       ],
       { stopReason: "toolUse" },
@@ -66,8 +67,8 @@ describe("AssistantMessageComponent", () => {
     component.updateContent(
       createAssistantMessage(
         [
-          { type: "thinking", thinking: "second idea" },
-          { type: "text", text: "reading it" },
+          { type: "thinking" as const, thinking: "second idea" },
+          { type: "text" as const, text: "reading it" },
           toolCall,
         ],
         { stopReason: "length" },
@@ -81,7 +82,7 @@ describe("AssistantMessageComponent", () => {
   test("keeps thinking that has no text beside it", () => {
     initTheme("dark");
     const component = new AssistantMessageComponent(
-      createAssistantMessage([{ type: "thinking", thinking: "idea" }]),
+      createAssistantMessage([{ type: "thinking" as const, thinking: "idea" }]),
     );
     expect(component.takeThinking()).toBeUndefined();
   });
@@ -90,7 +91,7 @@ describe("AssistantMessageComponent", () => {
     initTheme("dark");
 
     const component = new AssistantMessageComponent(
-      createAssistantMessage([{ type: "text", text: "hello" }]),
+      createAssistantMessage([{ type: "text" as const, text: "hello" }]),
     );
     const lines = component.render(40);
 
@@ -104,8 +105,8 @@ describe("AssistantMessageComponent", () => {
 
     const component = new AssistantMessageComponent(
       createAssistantMessage([
-        { type: "text", text: "calling tool" },
-        { type: "toolCall", id: "tool-1", name: "read", arguments: { path: "file.txt" } },
+        { type: "text" as const, text: "calling tool" },
+        { type: "toolCall" as const, id: "tool-1", name: "read", arguments: { path: "file.txt" } },
       ]),
     );
     const rendered = component.render(60).join("\n");
@@ -119,7 +120,7 @@ describe("AssistantMessageComponent", () => {
     initTheme("dark");
 
     const component = new AssistantMessageComponent(
-      createAssistantMessage([{ type: "thinking", thinking: "private reasoning" }], {
+      createAssistantMessage([{ type: "thinking" as const, thinking: "private reasoning" }], {
         stopReason: "length",
       }),
       true,
@@ -135,16 +136,16 @@ describe("AssistantMessageComponent", () => {
 
     const component = new AssistantMessageComponent(
       createAssistantMessage([
-        { type: "thinking", thinking: "first thought" },
-        { type: "thinking", thinking: "" },
-        { type: "thinking", thinking: "second thought" },
-        { type: "text", text: "answer" },
+        { type: "thinking" as const, thinking: "first thought" },
+        { type: "thinking" as const, thinking: "" },
+        { type: "thinking" as const, thinking: "second thought" },
+        { type: "text" as const, text: "answer" },
       ]),
       true,
     );
     const rendered = stripAnsi(component.render(80).join("\n"));
 
-    expect(rendered.match(/Thinking\.\.\./g)).toHaveLength(1);
+    expect(rendered.match(/Thinking\.\.\./gu)).toHaveLength(1);
     expect(rendered).toContain("answer");
   });
 
@@ -152,9 +153,9 @@ describe("AssistantMessageComponent", () => {
     initTheme("dark");
     const component = new AssistantMessageComponent(
       createAssistantMessage([
-        { type: "thinking", thinking: "first reasoning" },
-        { type: "text", text: "answer" },
-        { type: "thinking", thinking: "second reasoning" },
+        { type: "thinking" as const, thinking: "first reasoning" },
+        { type: "text" as const, text: "answer" },
+        { type: "thinking" as const, thinking: "second reasoning" },
       ]),
     );
     const width = 80;
@@ -162,7 +163,7 @@ describe("AssistantMessageComponent", () => {
     const firstThinkingRow = lines.findIndex((line) => stripAnsi(line).includes("first reasoning"));
     expect(firstThinkingRow).toBeGreaterThanOrEqual(0);
     const event: TuiMouseEvent = {
-      type: "click",
+      type: "click" as const,
       button: "left",
       x: 1,
       y: firstThinkingRow,
@@ -188,8 +189,8 @@ describe("AssistantMessageComponent", () => {
 
     const component = new AssistantMessageComponent(
       createAssistantMessage([
-        { type: "text", text: "hello" },
-        { type: "thinking", thinking: "reasoning" },
+        { type: "text" as const, text: "hello" },
+        { type: "thinking" as const, thinking: "reasoning" },
       ]),
       false,
       undefined,
@@ -210,7 +211,9 @@ describe("AssistantMessageComponent", () => {
   test("chains Markdown transformers in registration order", () => {
     initTheme("dark");
     const calls: string[] = [];
-    const message = createAssistantMessage([{ type: "text", text: "The result is $x^2$." }]);
+    const message = createAssistantMessage([
+      { type: "text" as const, text: "The result is $x^2$." },
+    ]);
     const component = new AssistantMessageComponent(message, false, undefined, "Thinking...", 1, [
       (markdown, context) => {
         calls.push("formula");
@@ -234,7 +237,7 @@ describe("AssistantMessageComponent", () => {
   test("identifies partial assistant Markdown as streaming", () => {
     initTheme("dark");
     const streamingStates: boolean[] = [];
-    const message = createAssistantMessage([{ type: "text", text: "partial" }]);
+    const message = createAssistantMessage([{ type: "text" as const, text: "partial" }]);
     const component = new AssistantMessageComponent(undefined, false, undefined, "Thinking...", 1, [
       (markdown, context) => {
         streamingStates.push(context.isStreaming);
@@ -254,7 +257,7 @@ describe("AssistantMessageComponent", () => {
     initTheme("dark");
     const availableWidths: number[] = [];
     const component = new AssistantMessageComponent(
-      createAssistantMessage([{ type: "text", text: "answer" }]),
+      createAssistantMessage([{ type: "text" as const, text: "answer" }]),
       false,
       undefined,
       "Thinking...",
@@ -277,7 +280,7 @@ describe("AssistantMessageComponent", () => {
     initTheme("dark");
     const calls: string[] = [];
     const component = new AssistantMessageComponent(
-      createAssistantMessage([{ type: "text", text: "still visible" }]),
+      createAssistantMessage([{ type: "text" as const, text: "still visible" }]),
       false,
       undefined,
       "Thinking...",
@@ -305,8 +308,8 @@ describe("AssistantMessageComponent", () => {
   test("transforms text and thinking Markdown without mutating the original message", () => {
     initTheme("dark");
     const message = createAssistantMessage([
-      { type: "text", text: "answer" },
-      { type: "thinking", thinking: "reasoning" },
+      { type: "text" as const, text: "answer" },
+      { type: "thinking" as const, thinking: "reasoning" },
     ]);
     const component = new AssistantMessageComponent(message, false, undefined, "Thinking...", 1, [
       (markdown, { messageType }) => {
@@ -318,8 +321,8 @@ describe("AssistantMessageComponent", () => {
     expect(rendered).toContain("assistant:answer");
     expect(rendered).toContain("assistant-thinking:reasoning");
     expect(message.content).toEqual([
-      { type: "text", text: "answer" },
-      { type: "thinking", thinking: "reasoning" },
+      { type: "text" as const, text: "answer" },
+      { type: "thinking" as const, thinking: "reasoning" },
     ]);
   });
 

@@ -1,8 +1,9 @@
 import { writeFileSync } from "node:fs";
 import { stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
 
+import { awaited, runTest, currentTimeMillis, joinPath, dirnameOf } from "@msa/testing";
+import { Effect } from "effect";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vite-plus/test";
 
 import type { SessionHeader } from "../src/core/session-manager.ts";
@@ -11,7 +12,7 @@ import { initTheme } from "../src/modes/interactive/theme/theme.ts";
 
 function createSessionFile(path: string): void {
   const header: SessionHeader = {
-    type: "session",
+    type: "session" as const,
     id: "test-session",
     version: 3,
     timestamp: new Date(0).toISOString(),
@@ -22,8 +23,8 @@ function createSessionFile(path: string): void {
   const mgr = SessionManager.open(path);
   mgr.appendMessage({
     role: "assistant",
-    content: [{ type: "text", text: "hi" }],
-    api: "openai-completions",
+    content: [{ type: "text" as const, text: "hi" }],
+    api: "openai-completions" as const,
     provider: "openai",
     model: "test",
     usage: {
@@ -35,7 +36,7 @@ function createSessionFile(path: string): void {
       cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
     },
     stopReason: "stop",
-    timestamp: Date.now(),
+    timestamp: currentTimeMillis(),
   });
 }
 
@@ -46,38 +47,41 @@ describe("SessionInfo.modified", () => {
     vi.restoreAllMocks();
   });
 
-  it("uses last user/assistant message timestamp instead of file mtime", async () => {
-    const filePath = join(tmpdir(), `msa-session-${Date.now()}-modified.jsonl`);
-    createSessionFile(filePath);
+  it("uses last user/assistant message timestamp instead of file mtime", () =>
+    runTest(
+      Effect.gen(function* () {
+        const filePath = joinPath(tmpdir(), `msa-session-${currentTimeMillis()}-modified.jsonl`);
+        createSessionFile(filePath);
 
-    const before = await stat(filePath);
+        const before = yield* awaited(stat(filePath));
 
-    await new Promise((r) => setTimeout(r, 10));
+        yield* Effect.sleep(10);
 
-    const mgr = SessionManager.open(filePath);
-    const msgTime = Date.now();
-    mgr.appendMessage({
-      role: "assistant",
-      content: [{ type: "text", text: "later" }],
-      api: "openai-completions",
-      provider: "openai",
-      model: "test",
-      usage: {
-        input: 1,
-        output: 1,
-        cacheRead: 0,
-        cacheWrite: 0,
-        totalTokens: 2,
-        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-      },
-      stopReason: "stop",
-      timestamp: msgTime,
-    });
+        const mgr = SessionManager.open(filePath);
+        const msgTime = currentTimeMillis();
+        mgr.appendMessage({
+          role: "assistant",
+          content: [{ type: "text" as const, text: "later" }],
+          api: "openai-completions" as const,
+          provider: "openai",
+          model: "test",
+          usage: {
+            input: 1,
+            output: 1,
+            cacheRead: 0,
+            cacheWrite: 0,
+            totalTokens: 2,
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+          },
+          stopReason: "stop",
+          timestamp: msgTime,
+        });
 
-    const sessions = await SessionManager.list("/tmp", dirname(filePath));
-    const s = sessions.find((x) => x.path === filePath);
-    expect(s).toBeDefined();
-    expect(s!.modified.getTime()).toBe(msgTime);
-    expect(s!.modified.getTime()).not.toBe(before.mtime.getTime());
-  });
+        const sessions = yield* awaited(SessionManager.list("/tmp", dirnameOf(filePath)));
+        const s = sessions.find((x) => x.path === filePath);
+        expect(s).toBeDefined();
+        expect(s!.modified.getTime()).toBe(msgTime);
+        expect(s!.modified.getTime()).not.toBe(before.mtime.getTime());
+      }),
+    ));
 });

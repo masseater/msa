@@ -1,7 +1,7 @@
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
 
+import { awaited, runTest, toJsonText, writeTextFile, joinPath } from "@msa/testing";
 import { Effect } from "effect";
 import { Compile } from "typebox/compile";
 import { afterEach, describe, expect, it } from "vite-plus/test";
@@ -25,7 +25,7 @@ afterEach(() => {
 });
 
 function createTemporaryDirectory(): string {
-  const directory = mkdtempSync(join(tmpdir(), "msa-config-schema-test-"));
+  const directory = mkdtempSync(joinPath(tmpdir(), "msa-config-schema-test-"));
   temporaryDirectories.push(directory);
   return directory;
 }
@@ -245,59 +245,74 @@ describe("generated configuration schemas", () => {
     );
   });
 
-  it("accepts custom compatibility settings and rejects malformed known fields", async () => {
-    const directory = createTemporaryDirectory();
-    const path = join(directory, "models.json");
-    const compat = {
-      customOption: "value",
-      supportsStore: true,
-      supportsAdditionalTools: true,
-    };
-    writeFileSync(path, JSON.stringify({ providers: { demo: { api: "custom-api", compat } } }));
+  it("accepts custom compatibility settings and rejects malformed known fields", () =>
+    runTest(
+      Effect.gen(function* () {
+        const directory = createTemporaryDirectory();
+        const path = joinPath(directory, "models.json");
+        const compat = {
+          customOption: "value",
+          supportsStore: true,
+          supportsAdditionalTools: true,
+        };
+        yield* writeTextFile(
+          path,
+          yield* toJsonText({ providers: { demo: { api: "custom-api" as const, compat } } }),
+        );
 
-    const config = await ModelConfig.load(path);
-    expect(config.getError()).toBeUndefined();
-    expect(config.getProvider("demo")?.compat).toEqual(compat);
+        const config = yield* awaited(ModelConfig.load(path));
+        expect(config.getError()).toBeUndefined();
+        expect(config.getProvider("demo")?.compat).toEqual(compat);
 
-    writeFileSync(
-      path,
-      JSON.stringify({ providers: { demo: { compat: { supportsLongCacheRetention: "yes" } } } }),
-    );
-    expect((await ModelConfig.load(path)).getError()).toContain("Invalid models.json schema");
-  });
-
-  it("validates $schema in models.json at runtime", async () => {
-    const directory = createTemporaryDirectory();
-    const path = join(directory, "models.json");
-    writeFileSync(
-      path,
-      JSON.stringify({
-        $schema: schemaUrl("models"),
-        providers: { demo: { baseUrl: "http://localhost:8080/v1", models: [{ id: "demo" }] } },
+        yield* writeTextFile(
+          path,
+          yield* toJsonText({
+            providers: { demo: { compat: { supportsLongCacheRetention: "yes" } } },
+          }),
+        );
+        expect((yield* awaited(ModelConfig.load(path))).getError()).toContain(
+          "Invalid models.json schema",
+        );
       }),
-    );
+    ));
 
-    const config = await ModelConfig.load(path);
-    expect(config.getError()).toBeUndefined();
-    expect(config.getProvider("demo")?.models?.[0]?.id).toBe("demo");
+  it("validates $schema in models.json at runtime", () =>
+    runTest(
+      Effect.gen(function* () {
+        const directory = createTemporaryDirectory();
+        const path = joinPath(directory, "models.json");
+        yield* writeTextFile(
+          path,
+          yield* toJsonText({
+            $schema: schemaUrl("models"),
+            providers: { demo: { baseUrl: "http://localhost:8080/v1", models: [{ id: "demo" }] } },
+          }),
+        );
 
-    writeFileSync(
-      path,
-      JSON.stringify({
-        $schema: schemaUrl("models"),
-        providers: { demo: { models: [{ id: "" }] } },
+        const config = yield* awaited(ModelConfig.load(path));
+        expect(config.getError()).toBeUndefined();
+        expect(config.getProvider("demo")?.models?.[0]?.id).toBe("demo");
+
+        yield* writeTextFile(
+          path,
+          yield* toJsonText({
+            $schema: schemaUrl("models"),
+            providers: { demo: { models: [{ id: "" }] } },
+          }),
+        );
+        expect((yield* awaited(ModelConfig.load(path))).getError()).toContain(
+          "Invalid models.json schema",
+        );
+
+        yield* writeTextFile(path, yield* toJsonText({ $schema: 42, providers: {} }));
+        expect((yield* awaited(ModelConfig.load(path))).getError()).toContain("$schema");
       }),
-    );
-    expect((await ModelConfig.load(path)).getError()).toContain("Invalid models.json schema");
-
-    writeFileSync(path, JSON.stringify({ $schema: 42, providers: {} }));
-    expect((await ModelConfig.load(path)).getError()).toContain("$schema");
-  });
+    ));
 
   it("accepts $schema in settings.json and preserves unknown settings", () => {
     const directory = createTemporaryDirectory();
     writeFileSync(
-      join(directory, "settings.json"),
+      joinPath(directory, "settings.json"),
       JSON.stringify({
         $schema: schemaUrl("settings"),
         theme: "light",
@@ -316,7 +331,7 @@ describe("generated configuration schemas", () => {
   it("accepts $schema in keybindings.json without treating it as an action", () => {
     const directory = createTemporaryDirectory();
     writeFileSync(
-      join(directory, "keybindings.json"),
+      joinPath(directory, "keybindings.json"),
       JSON.stringify({
         $schema: schemaUrl("keybindings"),
         "app.session.new": "ctrl+n",
@@ -350,7 +365,7 @@ describe("generated configuration schemas", () => {
       },
       { ...builtIn, export: { unexpected: "" } },
     ]) {
-      expect(() => validateThemeJson("invalid", invalid)).toThrow(/additional properties/i);
+      expect(() => validateThemeJson("invalid", invalid)).toThrow(/additional properties/iu);
     }
   });
 });

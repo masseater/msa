@@ -2,6 +2,8 @@ import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 
 import { InMemoryCredentialStore } from "@msa/ai";
+import { awaited, runTest } from "@msa/testing";
+import { Effect } from "effect";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vite-plus/test";
 
 import {
@@ -33,12 +35,12 @@ const commonModel = {
 };
 const legacyModel = {
   ...commonModel,
-  api: "openai-completions",
+  api: "openai-completions" as const,
   baseUrl: "https://openrouter.ai/api/v1",
 };
 const mixedApiModel = {
   ...commonModel,
-  api: "anthropic-messages",
+  api: "anthropic-messages" as const,
   baseUrl: "https://openrouter.ai/api",
 };
 
@@ -60,7 +62,7 @@ const objects = new Map<string, unknown>([
   ],
   [
     getModelCatalogProviderKey(mixedApiRevision, "openrouter", "typed"),
-    [{ type: "chat", ...mixedApiModel }],
+    [{ type: "chat" as const, ...mixedApiModel }],
   ],
 ]);
 
@@ -68,7 +70,7 @@ function startCatalogServer(requests: string[]): Promise<Server> {
   const server = createServer((request, response) => {
     const url = new URL(request.url ?? "/", `http://${request.headers.host}`);
     requests.push(`${url.pathname}${url.search}`);
-    const provider = /^\/api\/models\/providers\/([^/]+)$/.exec(url.pathname)?.[1];
+    const provider = /^\/api\/models\/providers\/([^/]+)$/u.exec(url.pathname)?.[1];
     const catalogRequest = parseModelCatalogRequest(url, request.headers["user-agent"]);
     if (!provider) {
       response.writeHead(404).end();
@@ -112,61 +114,91 @@ describe("model catalog protocol with the current client", () => {
   let server: Server;
   let catalogBaseUrl: string;
 
-  beforeAll(async () => {
-    server = await startCatalogServer(requests);
-    catalogBaseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
-  });
+  beforeAll(() =>
+    runTest(
+      Effect.gen(function* () {
+        server = yield* awaited(startCatalogServer(requests));
+        catalogBaseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+      }),
+    ),
+  );
 
-  afterAll(async () => {
-    await new Promise<void>((resolve, reject) =>
-      server.close((error) => (error ? reject(error) : resolve())),
-    );
-  });
+  afterAll(() =>
+    runTest(
+      Effect.gen(function* () {
+        yield* awaited(
+          new Promise<void>((resolve, reject) =>
+            server.close((error) => (error ? reject(error) : resolve())),
+          ),
+        );
+      }),
+    ),
+  );
 
-  it("negotiates the catalog for its version and reaches the OpenRouter API", async () => {
-    allowNetwork();
-    const runtime = await ModelRuntime.create({
-      credentials: new InMemoryCredentialStore(),
-      modelsPath: null,
-      catalogBaseUrl,
-      refreshOnCreate: false,
-    });
-    await runtime.setRuntimeApiKey("openrouter", "test-key");
-    const refresh = await runtime.refresh({
-      allowNetwork: true,
-      force: true,
-      providers: ["openrouter"],
-    });
-    expect([...refresh.errors]).toEqual([]);
+  it("negotiates the catalog for its version and reaches the OpenRouter API", () =>
+    runTest(
+      Effect.gen(function* () {
+        const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-    const catalogUrl = "/api/models/providers/openrouter?types=chat%2Cimage%2Cclassifier";
-    expect(requests).toEqual([catalogUrl, `${catalogUrl}&pi-version=${VERSION}`]);
+        allowNetwork();
+        const runtime = yield* awaited(
+          ModelRuntime.create({
+            credentials: new InMemoryCredentialStore(),
+            modelsPath: null,
+            catalogBaseUrl,
+            refreshOnCreate: false,
+          }),
+        );
+        yield* awaited(runtime.setRuntimeApiKey("openrouter", "test-key"));
+        const refresh = yield* awaited(
+          runtime.refresh({
+            allowNetwork: true,
+            force: true,
+            providers: ["openrouter"],
+          }),
+        );
+        expect([...refresh.errors]).toEqual([]);
 
-    const expectedModel =
-      selectModelCatalog(index, VERSION)?.revision === legacyRevision ? legacyModel : mixedApiModel;
-    const model = runtime.getModel("openrouter", modelId);
-    expect(model).toMatchObject({ api: expectedModel.api, baseUrl: expectedModel.baseUrl });
-    if (!model) throw new Error(`Missing model: openrouter/${modelId}`);
+        const catalogUrl = "/api/models/providers/openrouter?types=chat%2Cimage%2Cclassifier";
+        expect(requests).toEqual([catalogUrl, `${catalogUrl}&pi-version=${VERSION}`]);
 
-    let providerUrl: URL | undefined;
-    const nativeFetch = globalThis.fetch;
-    vi.stubGlobal("fetch", async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
-      const request = new Request(input, init);
-      if (new URL(request.url).origin !== "https://openrouter.ai") return nativeFetch(request);
-      providerUrl = new URL(request.url);
-      throw new Error("Provider request captured");
-    });
-    try {
-      await runtime.completeSimple(
-        model,
-        { messages: [{ role: "user", content: "Hello", timestamp: 0 }] },
-        { apiKey: "test-key", maxRetries: 0 },
-      );
-    } finally {
-      vi.unstubAllGlobals();
-    }
-    expect(providerUrl?.pathname).toBe(
-      expectedModel.api === "anthropic-messages" ? "/api/v1/messages" : "/api/v1/chat/completions",
-    );
-  });
+        const expectedModel =
+          selectModelCatalog(index, VERSION)?.revision === legacyRevision
+            ? legacyModel
+            : mixedApiModel;
+        const model = runtime.getModel("openrouter", modelId);
+        expect(model).toMatchObject({ api: expectedModel.api, baseUrl: expectedModel.baseUrl });
+        if (!model) throw new Error(`Missing model: openrouter/${modelId}`);
+
+        let providerUrl: URL | undefined;
+        const nativeFetch = globalThis.fetch;
+        vi.stubGlobal("fetch", (input: Parameters<typeof fetch>[0], init?: RequestInit) =>
+          effectRunPromise(
+            Effect.gen(function* () {
+              const request = new Request(input, init);
+              if (new URL(request.url).origin !== "https://openrouter.ai")
+                return yield* awaited(nativeFetch(request));
+              providerUrl = new URL(request.url);
+              throw new Error("Provider request captured");
+            }),
+          ),
+        );
+        try {
+          yield* awaited(
+            runtime.completeSimple(
+              model,
+              { messages: [{ role: "user", content: "Hello", timestamp: 0 }] },
+              { apiKey: "test-key", maxRetries: 0 },
+            ),
+          );
+        } finally {
+          vi.unstubAllGlobals();
+        }
+        expect(providerUrl?.pathname).toBe(
+          expectedModel.api === "anthropic-messages"
+            ? "/api/v1/messages"
+            : "/api/v1/chat/completions",
+        );
+      }),
+    ));
 });

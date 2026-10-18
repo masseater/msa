@@ -1,11 +1,13 @@
 export {
   abortController,
   awaited,
+  currentDate,
   currentTimeMillis,
   failure,
   nowIso,
   pollUntil,
   randomSuffix,
+  randomSuffixSync,
 } from "./effect-support.ts";
 export {
   appendTextFile,

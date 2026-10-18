@@ -1,12 +1,14 @@
 import { Cause, Clock, Context, Crypto, DateTime, type Duration, Effect, Exit } from "effect";
 
-import { provideNode } from "./runtime.ts";
+import { provideNode, testRuntime } from "./runtime.ts";
 
 const clock = Context.get(Context.empty(), Clock.Clock);
 
 export const currentTimeMillis = (): number => clock.currentTimeMillisUnsafe();
 
 export const nowIso = (): string => DateTime.formatIso(DateTime.makeUnsafe(currentTimeMillis()));
+
+export const currentDate = (): Date => DateTime.toDate(DateTime.makeUnsafe(currentTimeMillis()));
 
 export const awaited = <A>(value: A | PromiseLike<A>): Effect.Effect<A> =>
   Effect.promise(() => Promise.resolve(value));
@@ -39,3 +41,5 @@ export const randomSuffix: Effect.Effect<string> = provideNode(
   Effect.orDie,
   Effect.map((uuid) => uuid.replaceAll("-", "").slice(0, 12)),
 );
+
+export const randomSuffixSync = (): string => testRuntime.runSync(randomSuffix);

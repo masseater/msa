@@ -1,5 +1,6 @@
 import { stripVTControlCharacters } from "node:util";
 
+import { currentTimeMillis, currentDate } from "@msa/testing";
 import { setKeybindings, visibleWidth } from "@msa/tui";
 import { beforeAll, beforeEach, describe, expect, test } from "vite-plus/test";
 
@@ -23,24 +24,24 @@ beforeEach(() => {
 
 function userMessage(id: string, parentId: string | null, content: string): SessionMessageEntry {
   return {
-    type: "message",
+    type: "message" as const,
     id,
     parentId,
-    timestamp: new Date().toISOString(),
-    message: { role: "user", content, timestamp: Date.now() },
+    timestamp: currentDate().toISOString(),
+    message: { role: "user", content, timestamp: currentTimeMillis() },
   };
 }
 
 function assistantMessage(id: string, parentId: string | null, text: string): SessionMessageEntry {
   return {
-    type: "message",
+    type: "message" as const,
     id,
     parentId,
-    timestamp: new Date().toISOString(),
+    timestamp: currentDate().toISOString(),
     message: {
       role: "assistant",
-      content: [{ type: "text", text }],
-      api: "anthropic-messages",
+      content: [{ type: "text" as const, text }],
+      api: "anthropic-messages" as const,
       provider: "anthropic",
       model: "claude-sonnet-4",
       usage: {
@@ -52,21 +53,23 @@ function assistantMessage(id: string, parentId: string | null, text: string): Se
         cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
       },
       stopReason: "stop",
-      timestamp: Date.now(),
+      timestamp: currentTimeMillis(),
     },
   };
 }
 
 function toolCallOnlyAssistant(id: string, parentId: string | null): SessionMessageEntry {
   return {
-    type: "message",
+    type: "message" as const,
     id,
     parentId,
-    timestamp: new Date().toISOString(),
+    timestamp: currentDate().toISOString(),
     message: {
       role: "assistant",
-      content: [{ type: "toolCall", id: `tc-${id}`, name: "read", arguments: { path: "test.ts" } }],
-      api: "anthropic-messages",
+      content: [
+        { type: "toolCall" as const, id: `tc-${id}`, name: "read", arguments: { path: "test.ts" } },
+      ],
+      api: "anthropic-messages" as const,
       provider: "anthropic",
       model: "claude-sonnet-4",
       usage: {
@@ -78,17 +81,17 @@ function toolCallOnlyAssistant(id: string, parentId: string | null): SessionMess
         cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
       },
       stopReason: "toolUse",
-      timestamp: Date.now(),
+      timestamp: currentTimeMillis(),
     },
   };
 }
 
 function modelChange(id: string, parentId: string | null): ModelChangeEntry {
   return {
-    type: "model_change",
+    type: "model_change" as const,
     id,
     parentId,
-    timestamp: new Date().toISOString(),
+    timestamp: currentDate().toISOString(),
     provider: "anthropic",
     modelId: "claude-sonnet-4",
   };
@@ -151,10 +154,10 @@ describe("TreeSelectorComponent", () => {
         userMessage("user-1", null, "hello"),
         assistantMessage("asst-1", "user-1", "hi"),
         {
-          type: "context_edit",
+          type: "context_edit" as const,
           id: "edit-1",
           parentId: "asst-1",
-          timestamp: new Date().toISOString(),
+          timestamp: currentDate().toISOString(),
           targetId: "asst-1",
           replacement: null,
         },
@@ -196,7 +199,7 @@ describe("TreeSelectorComponent", () => {
           type: "thinking_level_change" as const,
           id: "thinking-1",
           parentId: "user-2",
-          timestamp: new Date().toISOString(),
+          timestamp: currentDate().toISOString(),
           thinkingLevel: "high",
         },
         userMessage("user-3", "asst-1", "sibling branch"),

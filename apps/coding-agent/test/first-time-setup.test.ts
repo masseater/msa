@@ -1,22 +1,23 @@
 import { mkdtempSync, rmSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
-import { join } from "path";
 
+import { joinPath } from "@msa/testing";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
 import { shouldRunFirstTimeSetup } from "../src/cli/startup-ui.ts";
 import { ENV_AGENT_DIR } from "../src/config.ts";
+import { readEnv } from "../src/core/process-env.ts";
 import { SettingsManager } from "../src/core/settings-manager.ts";
 
 describe("shouldRunFirstTimeSetup", () => {
-  const originalMsaExperimental = process.env["MSA_EXPERIMENTAL"];
+  const originalMsaExperimental = readEnv("MSA_EXPERIMENTAL");
   const originalAgentDir = process.env[ENV_AGENT_DIR];
   let tempDir: string;
   let settingsPath: string;
 
   beforeEach(() => {
-    tempDir = mkdtempSync(join(tmpdir(), "msa-first-time-setup-"));
-    settingsPath = join(tempDir, "settings.json");
+    tempDir = mkdtempSync(joinPath(tmpdir(), "msa-first-time-setup-"));
+    settingsPath = joinPath(tempDir, "settings.json");
     process.env["MSA_EXPERIMENTAL"] = "1";
     delete process.env[ENV_AGENT_DIR];
   });
@@ -72,7 +73,7 @@ describe("analytics settings", () => {
     manager.setEnableAnalytics(true);
 
     expect(manager.getEnableAnalytics()).toBe(true);
-    expect(manager.getTrackingId()).toMatch(/^[0-9a-f-]{36}$/);
+    expect(manager.getTrackingId()).toMatch(/^[0-9a-f-]{36}$/u);
   });
 
   it("does not generate a tracking identifier on opt-out", () => {

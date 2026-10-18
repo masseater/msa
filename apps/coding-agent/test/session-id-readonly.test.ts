@@ -10,21 +10,30 @@ import {
   rmSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
+import {
+  awaited,
+  runTest,
+  currentTimeMillis,
+  makeDirectory,
+  joinPath,
+  resolvePath,
+} from "@msa/testing";
+import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import type { Args } from "../src/cli/args.ts";
 import { ENV_AGENT_DIR } from "../src/config.ts";
+import { envSnapshot } from "../src/core/process-env.ts";
 import { SessionManager } from "../src/core/session-manager.ts";
 import { SettingsManager } from "../src/core/settings-manager.ts";
 import { createSessionManager } from "../src/main.ts";
 
-const cliPath = resolve(__dirname, "../src/cli.ts");
+const cliPath = resolvePath(__dirname, "../src/cli.ts");
 
 const sourceResolverUrl = pathToFileURL(
-  resolve(__dirname, "../src/experimental/source-resolver.ts"),
+  resolvePath(__dirname, "../src/experimental/source-resolver.ts"),
 ).href;
 const tempDirs: string[] = [];
 
@@ -36,7 +45,7 @@ afterEach(() => {
 });
 
 function createTempDir(): string {
-  const dir = realpathSync(mkdtempSync(join(tmpdir(), "msa-session-id-readonly-")));
+  const dir = realpathSync(mkdtempSync(joinPath(tmpdir(), "msa-session-id-readonly-")));
   tempDirs.push(dir);
   return dir;
 }
@@ -44,7 +53,7 @@ function createTempDir(): string {
 function hasSessionWithId(root: string, sessionId: string): boolean {
   if (!existsSync(root)) return false;
   for (const entry of readdirSync(root, { withFileTypes: true })) {
-    const path = join(root, entry.name);
+    const path = joinPath(root, entry.name);
     if (entry.isDirectory() && hasSessionWithId(path, sessionId)) return true;
     if (!entry.isFile() || !entry.name.endsWith(".jsonl")) continue;
 
@@ -57,28 +66,34 @@ function hasSessionWithId(root: string, sessionId: string): boolean {
   return false;
 }
 
-async function runCli(args: string[]): Promise<{ code: number | null; agentDir: string }> {
-  const tempRoot = createTempDir();
-  const agentDir = join(tempRoot, "agent");
-  const projectDir = join(tempRoot, "project");
-  mkdirSync(agentDir, { recursive: true });
-  mkdirSync(projectDir, { recursive: true });
+function runCli(args: string[]): Promise<{ code: number | null; agentDir: string }> {
+  return runTest(
+    Effect.gen(function* () {
+      const tempRoot = createTempDir();
+      const agentDir = joinPath(tempRoot, "agent");
+      const projectDir = joinPath(tempRoot, "project");
+      yield* makeDirectory(agentDir);
+      yield* makeDirectory(projectDir);
 
-  const code = await new Promise<number | null>((resolvePromise, reject) => {
-    const child = spawn(process.execPath, ["--import", sourceResolverUrl, cliPath, ...args], {
-      cwd: projectDir,
-      env: {
-        ...process.env,
-        [ENV_AGENT_DIR]: agentDir,
-        MSA_OFFLINE: "1",
-      },
-      stdio: ["ignore", "ignore", "ignore"],
-    });
-    child.on("error", reject);
-    child.on("close", resolvePromise);
-  });
+      const code = yield* awaited(
+        new Promise<number | null>((resolvePromise, reject) => {
+          const child = spawn(process.execPath, ["--import", sourceResolverUrl, cliPath, ...args], {
+            cwd: projectDir,
+            env: {
+              ...envSnapshot(),
+              [ENV_AGENT_DIR]: agentDir,
+              MSA_OFFLINE: "1",
+            },
+            stdio: ["ignore", "ignore", "ignore"],
+          });
+          child.on("error", reject);
+          child.on("close", resolvePromise);
+        }),
+      );
 
-  return { code, agentDir };
+      return yield* awaited({ code, agentDir });
+    }),
+  );
 }
 
 function args(overrides: Partial<Args>): Args {
@@ -92,11 +107,11 @@ function args(overrides: Partial<Args>): Args {
 }
 
 function persistSession(session: SessionManager, content: string): void {
-  session.appendMessage({ role: "user", content, timestamp: Date.now() });
+  session.appendMessage({ role: "user", content, timestamp: currentTimeMillis() });
   session.appendMessage({
     role: "assistant",
-    content: [{ type: "text", text: "persisted" }],
-    api: "anthropic-messages",
+    content: [{ type: "text" as const, text: "persisted" }],
+    api: "anthropic-messages" as const,
     provider: "anthropic",
     model: "test",
     usage: {
@@ -108,103 +123,129 @@ function persistSession(session: SessionManager, content: string): void {
       cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
     },
     stopReason: "stop",
-    timestamp: Date.now(),
+    timestamp: currentTimeMillis(),
   });
 }
 
 describe("--session-id", () => {
-  it("does not persist a custom ID for metadata commands", async () => {
-    const result = await runCli(["--session-id", "read-only-help", "--help"]);
+  it("does not persist a custom ID for metadata commands", () =>
+    runTest(
+      Effect.gen(function* () {
+        const result = yield* awaited(runCli(["--session-id", "read-only-help", "--help"]));
 
-    expect(result.code).toBe(0);
-    expect(hasSessionWithId(join(result.agentDir, "sessions"), "read-only-help")).toBe(false);
-  });
+        expect(result.code).toBe(0);
+        expect(hasSessionWithId(joinPath(result.agentDir, "sessions"), "read-only-help")).toBe(
+          false,
+        );
+      }),
+    ));
 
-  it("creates missing IDs and reopens existing IDs in process", async () => {
-    const tempRoot = createTempDir();
-    const projectDir = join(tempRoot, "project");
-    const sessionDir = join(tempRoot, "sessions");
-    mkdirSync(projectDir, { recursive: true });
-    const settingsManager = SettingsManager.inMemory();
-    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+  it("creates missing IDs and reopens existing IDs in process", () =>
+    runTest(
+      Effect.gen(function* () {
+        const tempRoot = createTempDir();
+        const projectDir = joinPath(tempRoot, "project");
+        const sessionDir = joinPath(tempRoot, "sessions");
+        yield* makeDirectory(projectDir);
+        const settingsManager = SettingsManager.inMemory();
+        const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
 
-    const readOnly = await createSessionManager(
-      args({ sessionId: "read-only", help: true }),
-      projectDir,
-      sessionDir,
-      settingsManager,
-    );
-    expect(readOnly.getSessionId()).toBe("read-only");
-    expect(readOnly.getSessionFile()).toBeUndefined();
+        const readOnly = yield* awaited(
+          createSessionManager(
+            args({ sessionId: "read-only", help: true }),
+            projectDir,
+            sessionDir,
+            settingsManager,
+          ),
+        );
+        expect(readOnly.getSessionId()).toBe("read-only");
+        expect(readOnly.getSessionFile()).toBeUndefined();
 
-    const created = await createSessionManager(
-      args({ sessionId: "persisted-id" }),
-      projectDir,
-      sessionDir,
-      settingsManager,
-    );
-    persistSession(created, "persist me");
-    expect(consoleError).toHaveBeenCalledWith(expect.stringContaining("creating a new session"));
+        const created = yield* awaited(
+          createSessionManager(
+            args({ sessionId: "persisted-id" }),
+            projectDir,
+            sessionDir,
+            settingsManager,
+          ),
+        );
+        persistSession(created, "persist me");
+        expect(consoleError).toHaveBeenCalledWith(
+          expect.stringContaining("creating a new session"),
+        );
 
-    consoleError.mockClear();
-    const reopened = await createSessionManager(
-      args({ sessionId: "persisted-id" }),
-      projectDir,
-      sessionDir,
-      settingsManager,
-    );
-    expect(reopened.getSessionFile()).toBe(created.getSessionFile());
-    expect(consoleError).not.toHaveBeenCalled();
-  });
+        consoleError.mockClear();
+        const reopened = yield* awaited(
+          createSessionManager(
+            args({ sessionId: "persisted-id" }),
+            projectDir,
+            sessionDir,
+            settingsManager,
+          ),
+        );
+        expect(reopened.getSessionFile()).toBe(created.getSessionFile());
+        expect(consoleError).not.toHaveBeenCalled();
+      }),
+    ));
 
-  it("looks up exact IDs without building full session listings", async () => {
-    const tempRoot = createTempDir();
-    const projectDir = join(tempRoot, "project");
-    const sessionDir = join(tempRoot, "sessions");
-    mkdirSync(projectDir, { recursive: true });
-    const unrelated = SessionManager.create(projectDir, sessionDir, { id: "unrelated-id" });
-    persistSession(unrelated, "large transcript contents must not be loaded");
-    const list = vi
-      .spyOn(SessionManager, "list")
-      .mockRejectedValue(new Error("unexpected full listing"));
-    vi.spyOn(console, "error").mockImplementation(() => {});
+  it("looks up exact IDs without building full session listings", () =>
+    runTest(
+      Effect.gen(function* () {
+        const tempRoot = createTempDir();
+        const projectDir = joinPath(tempRoot, "project");
+        const sessionDir = joinPath(tempRoot, "sessions");
+        yield* makeDirectory(projectDir);
+        const unrelated = SessionManager.create(projectDir, sessionDir, { id: "unrelated-id" });
+        persistSession(unrelated, "large transcript contents must not be loaded");
+        const list = vi
+          .spyOn(SessionManager, "list")
+          .mockRejectedValue(new Error("unexpected full listing"));
+        vi.spyOn(console, "error").mockImplementation(() => {});
 
-    const created = await createSessionManager(
-      args({ sessionId: "fresh-id" }),
-      projectDir,
-      sessionDir,
-      SettingsManager.inMemory(),
-    );
+        const created = yield* awaited(
+          createSessionManager(
+            args({ sessionId: "fresh-id" }),
+            projectDir,
+            sessionDir,
+            SettingsManager.inMemory(),
+          ),
+        );
 
-    expect(created.getSessionId()).toBe("fresh-id");
-    expect(list).not.toHaveBeenCalled();
-  });
+        expect(created.getSessionId()).toBe("fresh-id");
+        expect(list).not.toHaveBeenCalled();
+      }),
+    ));
 
-  it("reopens an exact ID from a renamed session file", async () => {
-    const tempRoot = createTempDir();
-    const projectDir = join(tempRoot, "project");
-    const sessionDir = join(tempRoot, "sessions");
-    mkdirSync(projectDir, { recursive: true });
-    const original = SessionManager.create(projectDir, sessionDir, { id: "renamed-id" });
-    persistSession(original, "persist me");
-    const renamedPath = join(sessionDir, "imported-session.jsonl");
-    renameSync(original.getSessionFile()!, renamedPath);
+  it("reopens an exact ID from a renamed session file", () =>
+    runTest(
+      Effect.gen(function* () {
+        const tempRoot = createTempDir();
+        const projectDir = joinPath(tempRoot, "project");
+        const sessionDir = joinPath(tempRoot, "sessions");
+        yield* makeDirectory(projectDir);
+        const original = SessionManager.create(projectDir, sessionDir, { id: "renamed-id" });
+        persistSession(original, "persist me");
+        const renamedPath = joinPath(sessionDir, "imported-session.jsonl");
+        renameSync(original.getSessionFile()!, renamedPath);
 
-    const reopened = await createSessionManager(
-      args({ sessionId: "renamed-id" }),
-      projectDir,
-      sessionDir,
-      SettingsManager.inMemory(),
-    );
+        const reopened = yield* awaited(
+          createSessionManager(
+            args({ sessionId: "renamed-id" }),
+            projectDir,
+            sessionDir,
+            SettingsManager.inMemory(),
+          ),
+        );
 
-    expect(reopened.getSessionFile()).toBe(renamedPath);
-  });
+        expect(reopened.getSessionFile()).toBe(renamedPath);
+      }),
+    ));
 
   it("filters exact IDs by cwd in a custom session directory", () => {
     const tempRoot = createTempDir();
-    const projectA = join(tempRoot, "project-a");
-    const projectB = join(tempRoot, "project-b");
-    const sessionDir = join(tempRoot, "sessions");
+    const projectA = joinPath(tempRoot, "project-a");
+    const projectB = joinPath(tempRoot, "project-b");
+    const sessionDir = joinPath(tempRoot, "sessions");
     mkdirSync(projectA, { recursive: true });
     mkdirSync(projectB, { recursive: true });
     const foreign = SessionManager.create(projectB, sessionDir, { id: "foreign-id" });
@@ -216,27 +257,32 @@ describe("--session-id", () => {
     );
   });
 
-  it("rejects an existing fork target in process", async () => {
-    const tempRoot = createTempDir();
-    const projectDir = join(tempRoot, "project");
-    const sessionDir = join(tempRoot, "sessions");
-    mkdirSync(projectDir, { recursive: true });
-    const source = SessionManager.create(projectDir, sessionDir, { id: "source-id" });
-    persistSession(source, "source");
-    const target = SessionManager.create(projectDir, sessionDir, { id: "existing-id" });
-    persistSession(target, "target");
-    vi.spyOn(console, "error").mockImplementation(() => {});
-    vi.spyOn(process, "exit").mockImplementation((code) => {
-      throw new Error(`exit:${code}`);
-    });
+  it("rejects an existing fork target in process", () =>
+    runTest(
+      Effect.gen(function* () {
+        const tempRoot = createTempDir();
+        const projectDir = joinPath(tempRoot, "project");
+        const sessionDir = joinPath(tempRoot, "sessions");
+        yield* makeDirectory(projectDir);
+        const source = SessionManager.create(projectDir, sessionDir, { id: "source-id" });
+        persistSession(source, "source");
+        const target = SessionManager.create(projectDir, sessionDir, { id: "existing-id" });
+        persistSession(target, "target");
+        vi.spyOn(console, "error").mockImplementation(() => {});
+        vi.spyOn(process, "exit").mockImplementation((code) => {
+          throw new Error(`exit:${code}`);
+        });
 
-    await expect(
-      createSessionManager(
-        args({ fork: "source-id", sessionId: "existing-id" }),
-        projectDir,
-        sessionDir,
-        SettingsManager.inMemory(),
-      ),
-    ).rejects.toThrow("exit:1");
-  });
+        yield* awaited(
+          expect(
+            createSessionManager(
+              args({ fork: "source-id", sessionId: "existing-id" }),
+              projectDir,
+              sessionDir,
+              SettingsManager.inMemory(),
+            ),
+          ).rejects.toThrow("exit:1"),
+        );
+      }),
+    ));
 });

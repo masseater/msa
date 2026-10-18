@@ -1,11 +1,19 @@
-import { mkdirSync, rmSync } from "node:fs";
+import { rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
 
 import { Agent } from "@msa/agent-core";
 import type { Api, Model } from "@msa/ai";
 import { getModel, streamSimple } from "@msa/ai/compat";
 import { getBuiltinModels, getBuiltinProviders } from "@msa/ai/providers/all";
+import {
+  awaited,
+  runTest,
+  currentTimeMillis,
+  randomSuffix,
+  makeDirectory,
+  joinPath,
+} from "@msa/testing";
+import { Effect } from "effect";
 import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 
 import { AgentSession } from "../src/core/agent-session.ts";
@@ -28,7 +36,7 @@ const mockModels: Model<"anthropic-messages">[] = [
   {
     id: "claude-sonnet-4-5",
     name: "Claude Sonnet 4.5",
-    api: "anthropic-messages",
+    api: "anthropic-messages" as const,
     provider: "anthropic",
     baseUrl: "https://api.anthropic.com",
     reasoning: true,
@@ -40,7 +48,7 @@ const mockModels: Model<"anthropic-messages">[] = [
   {
     id: "gpt-4o",
     name: "GPT-4o",
-    api: "anthropic-messages",
+    api: "anthropic-messages" as const,
     provider: "openai",
     baseUrl: "https://api.openai.com",
     reasoning: false,
@@ -55,7 +63,7 @@ const mockOpenRouterModels: Model<"anthropic-messages">[] = [
   {
     id: "qwen/qwen3-coder:exacto",
     name: "Qwen3 Coder Exacto",
-    api: "anthropic-messages",
+    api: "anthropic-messages" as const,
     provider: "openrouter",
     baseUrl: "https://openrouter.ai/api/v1",
     reasoning: true,
@@ -67,7 +75,7 @@ const mockOpenRouterModels: Model<"anthropic-messages">[] = [
   {
     id: "openai/gpt-4o:extended",
     name: "GPT-4o Extended",
-    api: "anthropic-messages",
+    api: "anthropic-messages" as const,
     provider: "openrouter",
     baseUrl: "https://openrouter.ai/api/v1",
     reasoning: false,
@@ -84,7 +92,7 @@ function referenceModel(provider: string, id: string): Model<Api> {
   return {
     id,
     name: id,
-    api: "openai-completions",
+    api: "openai-completions" as const,
     provider,
     baseUrl: "https://example.invalid",
     reasoning: true,
@@ -357,149 +365,171 @@ describe("resolveModelReference", () => {
 });
 
 describe("resolveModelScopeWithDiagnostics", () => {
-  test("returns scoped models and structured diagnostics without writing console warnings", async () => {
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    try {
-      const registry = {
-        getAvailable: () => allModels,
-      } as unknown as Parameters<typeof resolveModelScopeWithDiagnostics>[1];
+  test("returns scoped models and structured diagnostics without writing console warnings", () =>
+    runTest(
+      Effect.gen(function* () {
+        const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+        try {
+          const registry = {
+            getAvailable: () => allModels,
+          } as unknown as Parameters<typeof resolveModelScopeWithDiagnostics>[1];
 
-      const result = await resolveModelScopeWithDiagnostics(
-        ["sonnet:high", "gpt-4o:invalid", "missing"],
-        registry,
-      );
+          const result = yield* awaited(
+            resolveModelScopeWithDiagnostics(
+              ["sonnet:high", "gpt-4o:invalid", "missing"],
+              registry,
+            ),
+          );
 
-      expect(result.scopedModels.map((scoped) => scoped.model.id)).toEqual([
-        "claude-sonnet-4-5",
-        "gpt-4o",
-      ]);
-      expect(result.scopedModels[0]?.thinkingLevel).toBe("high");
-      expect(result.scopedModels[1]?.thinkingLevel).toBeUndefined();
-      expect(result.diagnostics).toEqual([
-        {
-          type: "warning",
-          message:
-            'Invalid thinking level "invalid" in pattern "gpt-4o:invalid". Using default instead.',
-          code: "invalid-thinking-level",
-          pattern: "gpt-4o:invalid",
-        },
-        {
-          type: "warning",
-          message: 'No models match pattern "missing"',
-          code: "no-match",
-          pattern: "missing",
-        },
-      ]);
-      expect(warn).not.toHaveBeenCalled();
-    } finally {
-      warn.mockRestore();
-    }
-  });
+          expect(result.scopedModels.map((scoped) => scoped.model.id)).toEqual([
+            "claude-sonnet-4-5",
+            "gpt-4o",
+          ]);
+          expect(result.scopedModels[0]?.thinkingLevel).toBe("high");
+          expect(result.scopedModels[1]?.thinkingLevel).toBeUndefined();
+          expect(result.diagnostics).toEqual([
+            {
+              type: "warning" as const,
+              message:
+                'Invalid thinking level "invalid" in pattern "gpt-4o:invalid". Using default instead.',
+              code: "invalid-thinking-level",
+              pattern: "gpt-4o:invalid",
+            },
+            {
+              type: "warning" as const,
+              message: 'No models match pattern "missing"',
+              code: "no-match",
+              pattern: "missing",
+            },
+          ]);
+          expect(warn).not.toHaveBeenCalled();
+        } finally {
+          warn.mockRestore();
+        }
+      }),
+    ));
 
-  test("resolveModelScope preserves CLI warning output", async () => {
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    try {
-      const registry = {
-        getAvailable: () => allModels,
-      } as unknown as Parameters<typeof resolveModelScope>[1];
+  test("resolveModelScope preserves CLI warning output", () =>
+    runTest(
+      Effect.gen(function* () {
+        const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+        try {
+          const registry = {
+            getAvailable: () => allModels,
+          } as unknown as Parameters<typeof resolveModelScope>[1];
 
-      const scopedModels = await resolveModelScope(["missing"], registry);
+          const scopedModels = yield* awaited(resolveModelScope(["missing"], registry));
 
-      expect(scopedModels).toEqual([]);
-      expect(warn).toHaveBeenCalledOnce();
-      expect(warn.mock.calls[0]?.[0]).toContain('Warning: No models match pattern "missing"');
-    } finally {
-      warn.mockRestore();
-    }
-  });
+          expect(scopedModels).toEqual([]);
+          expect(warn).toHaveBeenCalledOnce();
+          expect(warn.mock.calls[0]?.[0]).toContain('Warning: No models match pattern "missing"');
+        } finally {
+          warn.mockRestore();
+        }
+      }),
+    ));
 
-  test("adds every provider for a pattern matching the same id on several providers, with a warning", async () => {
-    const registry = {
-      getAvailable: () => [
-        ...allModels,
-        { ...mockModels[1], provider: "opencode" },
-        { ...mockModels[1], provider: "openai-codex", id: "gpt-4o-mini" },
-      ],
-    } as unknown as Parameters<typeof resolveModelScopeWithDiagnostics>[1];
+  test("adds every provider for a pattern matching the same id on several providers, with a warning", () =>
+    runTest(
+      Effect.gen(function* () {
+        const registry = {
+          getAvailable: () => [
+            ...allModels,
+            { ...mockModels[1], provider: "opencode" },
+            { ...mockModels[1], provider: "openai-codex", id: "gpt-4o-mini" },
+          ],
+        } as unknown as Parameters<typeof resolveModelScopeWithDiagnostics>[1];
 
-    for (const [pattern, thinkingLevel] of [
-      ["gpt-4o:high", "high"],
-      ["GPT-4o", undefined],
-    ] as const) {
-      const result = await resolveModelScopeWithDiagnostics([pattern], registry);
+        for (const [pattern, thinkingLevel] of [
+          ["gpt-4o:high", "high"],
+          ["GPT-4o", undefined],
+        ] as const) {
+          const result = yield* awaited(resolveModelScopeWithDiagnostics([pattern], registry));
 
-      expect(
-        result.scopedModels.map((scoped) => [
-          `${scoped.model.provider}/${scoped.model.id}`,
-          scoped.thinkingLevel,
-        ]),
-      ).toEqual(
-        expect.arrayContaining([
-          ["opencode/gpt-4o", thinkingLevel],
-          ["openai/gpt-4o", thinkingLevel],
-        ]),
-      );
-      expect(result.scopedModels).toHaveLength(2);
-      expect(result.diagnostics).toEqual([
-        {
-          type: "warning",
-          code: "ambiguous",
-          message: `Pattern "${pattern}" matches several providers: openai, opencode. Use provider/id to choose one.`,
-          pattern,
-        },
-      ]);
-    }
-  });
+          expect(
+            result.scopedModels.map((scoped) => [
+              `${scoped.model.provider}/${scoped.model.id}`,
+              scoped.thinkingLevel,
+            ]),
+          ).toEqual(
+            expect.arrayContaining([
+              ["opencode/gpt-4o", thinkingLevel],
+              ["openai/gpt-4o", thinkingLevel],
+            ]),
+          );
+          expect(result.scopedModels).toHaveLength(2);
+          expect(result.diagnostics).toEqual([
+            {
+              type: "warning" as const,
+              code: "ambiguous",
+              message: `Pattern "${pattern}" matches several providers: openai, opencode. Use provider/id to choose one.`,
+              pattern,
+            },
+          ]);
+        }
+      }),
+    ));
 
-  test("resolves bracketed model ids as exact references before glob matching", async () => {
-    const bracketedModel: Model<"anthropic-messages"> = {
-      id: "bracketed-model[1m]",
-      name: "Bracketed Model",
-      api: "anthropic-messages",
-      provider: "custom",
-      baseUrl: "https://example.invalid",
-      reasoning: true,
-      input: ["text"],
-      cost: { input: 1, output: 2, cacheRead: 0.1, cacheWrite: 1 },
-      contextWindow: 128000,
-      maxTokens: 8192,
-    };
-    const registry = {
-      getAvailable: () => [...allModels, bracketedModel],
-    } as unknown as Parameters<typeof resolveModelScopeWithDiagnostics>[1];
+  test("resolves bracketed model ids as exact references before glob matching", () =>
+    runTest(
+      Effect.gen(function* () {
+        const bracketedModel: Model<"anthropic-messages"> = {
+          id: "bracketed-model[1m]",
+          name: "Bracketed Model",
+          api: "anthropic-messages" as const,
+          provider: "custom",
+          baseUrl: "https://example.invalid",
+          reasoning: true,
+          input: ["text"],
+          cost: { input: 1, output: 2, cacheRead: 0.1, cacheWrite: 1 },
+          contextWindow: 128000,
+          maxTokens: 8192,
+        };
+        const registry = {
+          getAvailable: () => [...allModels, bracketedModel],
+        } as unknown as Parameters<typeof resolveModelScopeWithDiagnostics>[1];
 
-    const result = await resolveModelScopeWithDiagnostics(["custom/bracketed-model[1m]"], registry);
+        const result = yield* awaited(
+          resolveModelScopeWithDiagnostics(["custom/bracketed-model[1m]"], registry),
+        );
 
-    expect(result.scopedModels.map((scoped) => scoped.model.id)).toEqual(["bracketed-model[1m]"]);
-    expect(result.diagnostics).toEqual([]);
-  });
+        expect(result.scopedModels.map((scoped) => scoped.model.id)).toEqual([
+          "bracketed-model[1m]",
+        ]);
+        expect(result.diagnostics).toEqual([]);
+      }),
+    ));
 
-  test("resolves bracketed model ids with thinking levels as exact references before glob matching", async () => {
-    const bracketedModel: Model<"anthropic-messages"> = {
-      id: "bracketed-model[1m]",
-      name: "Bracketed Model",
-      api: "anthropic-messages",
-      provider: "custom",
-      baseUrl: "https://example.invalid",
-      reasoning: true,
-      input: ["text"],
-      cost: { input: 1, output: 2, cacheRead: 0.1, cacheWrite: 1 },
-      contextWindow: 128000,
-      maxTokens: 8192,
-    };
-    const registry = {
-      getAvailable: () => [...allModels, bracketedModel],
-    } as unknown as Parameters<typeof resolveModelScopeWithDiagnostics>[1];
+  test("resolves bracketed model ids with thinking levels as exact references before glob matching", () =>
+    runTest(
+      Effect.gen(function* () {
+        const bracketedModel: Model<"anthropic-messages"> = {
+          id: "bracketed-model[1m]",
+          name: "Bracketed Model",
+          api: "anthropic-messages" as const,
+          provider: "custom",
+          baseUrl: "https://example.invalid",
+          reasoning: true,
+          input: ["text"],
+          cost: { input: 1, output: 2, cacheRead: 0.1, cacheWrite: 1 },
+          contextWindow: 128000,
+          maxTokens: 8192,
+        };
+        const registry = {
+          getAvailable: () => [...allModels, bracketedModel],
+        } as unknown as Parameters<typeof resolveModelScopeWithDiagnostics>[1];
 
-    const result = await resolveModelScopeWithDiagnostics(
-      ["custom/bracketed-model[1m]:high"],
-      registry,
-    );
+        const result = yield* awaited(
+          resolveModelScopeWithDiagnostics(["custom/bracketed-model[1m]:high"], registry),
+        );
 
-    expect(result.scopedModels.map((scoped) => scoped.model.id)).toEqual(["bracketed-model[1m]"]);
-    expect(result.scopedModels[0]?.thinkingLevel).toBe("high");
-    expect(result.diagnostics).toEqual([]);
-  });
+        expect(result.scopedModels.map((scoped) => scoped.model.id)).toEqual([
+          "bracketed-model[1m]",
+        ]);
+        expect(result.scopedModels[0]?.thinkingLevel).toBe("high");
+        expect(result.diagnostics).toEqual([]);
+      }),
+    ));
 });
 
 describe("resolveCliModel", () => {
@@ -612,7 +642,7 @@ describe("resolveCliModel", () => {
     const neuralwattModel: Model<"anthropic-messages"> = {
       id: "some-base-model",
       name: "Some Base Model",
-      api: "anthropic-messages",
+      api: "anthropic-messages" as const,
       provider: "neuralwatt",
       baseUrl: "https://api.neuralwatt.com",
       reasoning: false,
@@ -753,72 +783,82 @@ describe("default model selection", () => {
     }
   });
 
-  test("findInitialModel selects an available gateway model", async () => {
-    const gatewayModel: Model<"anthropic-messages"> = {
-      id: "anthropic/claude-opus-4-6",
-      name: "Claude Opus 4.6",
-      api: "anthropic-messages",
-      provider: "custom-gateway",
-      baseUrl: "https://gateway.example.test",
-      reasoning: true,
-      input: ["text", "image"],
-      cost: { input: 5, output: 15, cacheRead: 0.5, cacheWrite: 5 },
-      contextWindow: 200000,
-      maxTokens: 8192,
-    };
+  test("findInitialModel selects an available gateway model", () =>
+    runTest(
+      Effect.gen(function* () {
+        const gatewayModel: Model<"anthropic-messages"> = {
+          id: "anthropic/claude-opus-4-6",
+          name: "Claude Opus 4.6",
+          api: "anthropic-messages" as const,
+          provider: "custom-gateway",
+          baseUrl: "https://gateway.example.test",
+          reasoning: true,
+          input: ["text", "image"],
+          cost: { input: 5, output: 15, cacheRead: 0.5, cacheWrite: 5 },
+          contextWindow: 200000,
+          maxTokens: 8192,
+        };
 
-    const registry = {
-      getAvailableSnapshot: () => [gatewayModel],
-    } as unknown as Parameters<typeof findInitialModel>[0]["modelRuntime"];
+        const registry = {
+          getAvailableSnapshot: () => [gatewayModel],
+        } as unknown as Parameters<typeof findInitialModel>[0]["modelRuntime"];
 
-    const result = await findInitialModel({
-      scopedModels: [],
-      isContinuing: false,
-      modelRuntime: registry,
-    });
+        const result = yield* awaited(
+          findInitialModel({
+            scopedModels: [],
+            isContinuing: false,
+            modelRuntime: registry,
+          }),
+        );
 
-    expect(result.model?.provider).toBe("custom-gateway");
-    expect(result.model?.id).toBe("anthropic/claude-opus-4-6");
-  });
+        expect(result.model?.provider).toBe("custom-gateway");
+        expect(result.model?.id).toBe("anthropic/claude-opus-4-6");
+      }),
+    ));
 
-  test("findInitialModel ignores an unauthenticated saved default", async () => {
-    const savedDeepSeekModel: Model<"anthropic-messages"> = {
-      id: "deepseek-v4-flash",
-      name: "DeepSeek V4 Flash",
-      api: "anthropic-messages",
-      provider: "deepseek",
-      baseUrl: "https://api.deepseek.com",
-      reasoning: true,
-      input: ["text"],
-      cost: { input: 1, output: 2, cacheRead: 0.1, cacheWrite: 1 },
-      contextWindow: 128000,
-      maxTokens: 8192,
-    };
-    const localDeepSeekModel: Model<"anthropic-messages"> = {
-      ...savedDeepSeekModel,
-      provider: "spark-two",
-      baseUrl: "http://spark-two:8000/v1",
-    };
-    const registry = {
-      getModel: (provider: string, modelId: string) =>
-        provider === savedDeepSeekModel.provider && modelId === savedDeepSeekModel.id
-          ? savedDeepSeekModel
-          : undefined,
-      hasConfiguredAuth: (provider: string) => provider === "spark-two",
-      getAvailableSnapshot: () => [localDeepSeekModel],
-    } as unknown as Parameters<typeof findInitialModel>[0]["modelRuntime"];
+  test("findInitialModel ignores an unauthenticated saved default", () =>
+    runTest(
+      Effect.gen(function* () {
+        const savedDeepSeekModel: Model<"anthropic-messages"> = {
+          id: "deepseek-v4-flash",
+          name: "DeepSeek V4 Flash",
+          api: "anthropic-messages" as const,
+          provider: "deepseek",
+          baseUrl: "https://api.deepseek.com",
+          reasoning: true,
+          input: ["text"],
+          cost: { input: 1, output: 2, cacheRead: 0.1, cacheWrite: 1 },
+          contextWindow: 128000,
+          maxTokens: 8192,
+        };
+        const localDeepSeekModel: Model<"anthropic-messages"> = {
+          ...savedDeepSeekModel,
+          provider: "spark-two",
+          baseUrl: "http://spark-two:8000/v1",
+        };
+        const registry = {
+          getModel: (provider: string, modelId: string) =>
+            provider === savedDeepSeekModel.provider && modelId === savedDeepSeekModel.id
+              ? savedDeepSeekModel
+              : undefined,
+          hasConfiguredAuth: (provider: string) => provider === "spark-two",
+          getAvailableSnapshot: () => [localDeepSeekModel],
+        } as unknown as Parameters<typeof findInitialModel>[0]["modelRuntime"];
 
-    const result = await findInitialModel({
-      scopedModels: [],
-      isContinuing: false,
-      defaultProvider: "deepseek",
-      defaultModelId: "deepseek-v4-flash",
-      modelRuntime: registry,
-    });
+        const result = yield* awaited(
+          findInitialModel({
+            scopedModels: [],
+            isContinuing: false,
+            defaultProvider: "deepseek",
+            defaultModelId: "deepseek-v4-flash",
+            modelRuntime: registry,
+          }),
+        );
 
-    expect(result.model?.provider).toBe("spark-two");
-    expect(result.model?.id).toBe("deepseek-v4-flash");
-  });
+        expect(result.model?.provider).toBe("spark-two");
+        expect(result.model?.id).toBe("deepseek-v4-flash");
+      }),
+    ));
 
   describe("persisted default model scoping", () => {
     const tempDirs: string[] = [];
@@ -831,84 +871,103 @@ describe("default model selection", () => {
       }
     });
 
-    async function createSession(options: { scoped: boolean; persistedScope?: string[] }) {
-      const tempDir = join(
-        tmpdir(),
-        `msa-default-scope-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    function createSession(options: { scoped: boolean; persistedScope?: string[] }) {
+      return runTest(
+        Effect.gen(function* () {
+          const tempDir = joinPath(
+            tmpdir(),
+            `msa-default-scope-${currentTimeMillis()}-${yield* randomSuffix}`,
+          );
+          yield* makeDirectory(tempDir);
+          tempDirs.push(tempDir);
+
+          const settingsManager = SettingsManager.create(tempDir, tempDir);
+          if (options.persistedScope) {
+            settingsManager.setEnabledModels(options.persistedScope);
+          }
+
+          const authStorage = AuthStorage.inMemory({
+            anthropic: { type: "api_key" as const, key: "test-key" },
+          });
+          const modelRuntime = getModelRuntime(
+            yield* awaited(createModelRegistry(authStorage, joinPath(tempDir, "models.json"))),
+          );
+          const agent = new Agent({
+            initialState: {
+              model: sonnet,
+              systemPrompt: "test",
+              tools: [],
+            },
+            streamFn: streamSimple,
+          });
+          const session = new AgentSession({
+            agent,
+            sessionManager: SessionManager.inMemory(tempDir),
+            settingsManager,
+            cwd: tempDir,
+            modelRuntime,
+            resourceLoader: createTestResourceLoader(),
+            scopedModels: options.scoped ? [{ model: sonnet }] : [],
+          });
+
+          return yield* awaited({ session, settingsManager });
+        }),
       );
-      mkdirSync(tempDir, { recursive: true });
-      tempDirs.push(tempDir);
-
-      const settingsManager = SettingsManager.create(tempDir, tempDir);
-      if (options.persistedScope) {
-        settingsManager.setEnabledModels(options.persistedScope);
-      }
-
-      const authStorage = AuthStorage.inMemory({ anthropic: { type: "api_key", key: "test-key" } });
-      const modelRuntime = getModelRuntime(
-        await createModelRegistry(authStorage, join(tempDir, "models.json")),
-      );
-      const agent = new Agent({
-        initialState: {
-          model: sonnet,
-          systemPrompt: "test",
-          tools: [],
-        },
-        streamFn: streamSimple,
-      });
-      const session = new AgentSession({
-        agent,
-        sessionManager: SessionManager.inMemory(tempDir),
-        settingsManager,
-        cwd: tempDir,
-        modelRuntime,
-        resourceLoader: createTestResourceLoader(),
-        scopedModels: options.scoped ? [{ model: sonnet }] : [],
-      });
-
-      return { session, settingsManager };
     }
 
-    test("adds a persisted default to an existing scoped model list", async () => {
-      const { session, settingsManager } = await createSession({
-        scoped: true,
-        persistedScope: [`${sonnet.provider}/${sonnet.id}`],
-      });
+    test("adds a persisted default to an existing scoped model list", () =>
+      runTest(
+        Effect.gen(function* () {
+          const { session, settingsManager } = yield* awaited(
+            createSession({
+              scoped: true,
+              persistedScope: [`${sonnet.provider}/${sonnet.id}`],
+            }),
+          );
 
-      await session.setModel(opus, { persist: true });
+          yield* awaited(session.setModel(opus, { persist: true }));
 
-      expect(settingsManager.getDefaultProvider()).toBe(opus.provider);
-      expect(settingsManager.getDefaultModel()).toBe(opus.id);
-      expect(
-        session.scopedModels.map((scoped) => `${scoped.model.provider}/${scoped.model.id}`),
-      ).toEqual([`${sonnet.provider}/${sonnet.id}`, `${opus.provider}/${opus.id}`]);
-      expect(settingsManager.getEnabledModels()).toEqual([
-        `${sonnet.provider}/${sonnet.id}`,
-        `${opus.provider}/${opus.id}`,
-      ]);
-    });
+          expect(settingsManager.getDefaultProvider()).toBe(opus.provider);
+          expect(settingsManager.getDefaultModel()).toBe(opus.id);
+          expect(
+            session.scopedModels.map((scoped) => `${scoped.model.provider}/${scoped.model.id}`),
+          ).toEqual([`${sonnet.provider}/${sonnet.id}`, `${opus.provider}/${opus.id}`]);
+          expect(settingsManager.getEnabledModels()).toEqual([
+            `${sonnet.provider}/${sonnet.id}`,
+            `${opus.provider}/${opus.id}`,
+          ]);
+        }),
+      ));
 
-    test("does not create a scoped model list when all models are available", async () => {
-      const { session, settingsManager } = await createSession({ scoped: false });
+    test("does not create a scoped model list when all models are available", () =>
+      runTest(
+        Effect.gen(function* () {
+          const { session, settingsManager } = yield* awaited(createSession({ scoped: false }));
 
-      await session.setModel(opus, { persist: true });
+          yield* awaited(session.setModel(opus, { persist: true }));
 
-      expect(session.scopedModels).toEqual([]);
-      expect(settingsManager.getEnabledModels()).toBeUndefined();
-    });
+          expect(session.scopedModels).toEqual([]);
+          expect(settingsManager.getEnabledModels()).toBeUndefined();
+        }),
+      ));
 
-    test("keeps session-only model changes out of scope", async () => {
-      const { session, settingsManager } = await createSession({
-        scoped: true,
-        persistedScope: [`${sonnet.provider}/${sonnet.id}`],
-      });
+    test("keeps session-only model changes out of scope", () =>
+      runTest(
+        Effect.gen(function* () {
+          const { session, settingsManager } = yield* awaited(
+            createSession({
+              scoped: true,
+              persistedScope: [`${sonnet.provider}/${sonnet.id}`],
+            }),
+          );
 
-      await session.setModel(opus, { persist: false });
+          yield* awaited(session.setModel(opus, { persist: false }));
 
-      expect(
-        session.scopedModels.map((scoped) => `${scoped.model.provider}/${scoped.model.id}`),
-      ).toEqual([`${sonnet.provider}/${sonnet.id}`]);
-      expect(settingsManager.getEnabledModels()).toEqual([`${sonnet.provider}/${sonnet.id}`]);
-    });
+          expect(
+            session.scopedModels.map((scoped) => `${scoped.model.provider}/${scoped.model.id}`),
+          ).toEqual([`${sonnet.provider}/${sonnet.id}`]);
+          expect(settingsManager.getEnabledModels()).toEqual([`${sonnet.provider}/${sonnet.id}`]);
+        }),
+      ));
   });
 });

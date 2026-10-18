@@ -1,3 +1,5 @@
+import { awaited, runTest } from "@msa/testing";
+import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
 import { API_KEY, createTestSession, type TestSessionContext } from "./utilities.ts";
@@ -5,277 +7,371 @@ import { API_KEY, createTestSession, type TestSessionContext } from "./utilities
 describe.skipIf(!API_KEY)("AgentSession tree navigation e2e", () => {
   let ctx: TestSessionContext;
 
-  beforeEach(async () => {
-    ctx = await createTestSession({
-      systemPrompt: "You are a helpful assistant. Reply with just a few words.",
-      settingsOverrides: { compaction: { keepRecentTokens: 1 } },
-    });
-  });
+  beforeEach(() =>
+    runTest(
+      Effect.gen(function* () {
+        ctx = yield* awaited(
+          createTestSession({
+            systemPrompt: "You are a helpful assistant. Reply with just a few words.",
+            settingsOverrides: { compaction: { keepRecentTokens: 1 } },
+          }),
+        );
+      }),
+    ),
+  );
 
   afterEach(() => {
     ctx.cleanup();
   });
 
-  it("should navigate to user message and put text in editor", async () => {
-    const { session } = ctx;
+  it(
+    "should navigate to user message and put text in editor",
+    () =>
+      runTest(
+        Effect.gen(function* () {
+          const { session } = ctx;
 
-    await session.prompt("First message");
-    await session.agent.waitForIdle();
-    await session.prompt("Second message");
-    await session.agent.waitForIdle();
+          yield* awaited(session.prompt("First message"));
+          yield* awaited(session.agent.waitForIdle());
+          yield* awaited(session.prompt("Second message"));
+          yield* awaited(session.agent.waitForIdle());
 
-    const tree = session.sessionManager.getTree();
-    expect(tree.length).toBe(1);
+          const tree = session.sessionManager.getTree();
+          expect(tree.length).toBe(1);
 
-    const rootNode = tree[0];
-    if (rootNode === undefined) throw new Error("expected a root node");
-    expect(rootNode.entry.type).toBe("message");
+          const rootNode = tree[0];
+          if (rootNode === undefined) throw new Error("expected a root node");
+          expect(rootNode.entry.type).toBe("message");
 
-    const result = await session.navigateTree(rootNode.entry.id, { summarize: false });
+          const result = yield* awaited(
+            session.navigateTree(rootNode.entry.id, { summarize: false }),
+          );
 
-    expect(result.cancelled).toBe(false);
-    expect(result.editorText).toBe("First message");
+          expect(result.cancelled).toBe(false);
+          expect(result.editorText).toBe("First message");
 
-    expect(session.sessionManager.getLeafId()).toBeNull();
-  }, 60000);
+          expect(session.sessionManager.getLeafId()).toBeNull();
+        }),
+      ),
+    60000,
+  );
 
-  it("should navigate to non-user message without editor text", async () => {
-    const { session, sessionManager } = ctx;
+  it(
+    "should navigate to non-user message without editor text",
+    () =>
+      runTest(
+        Effect.gen(function* () {
+          const { session, sessionManager } = ctx;
 
-    await session.prompt("Hello");
-    await session.agent.waitForIdle();
+          yield* awaited(session.prompt("Hello"));
+          yield* awaited(session.agent.waitForIdle());
 
-    const entries = sessionManager.getEntries();
-    const assistantEntry = entries.find(
-      (e) => e.type === "message" && e.message.role === "assistant",
-    );
-    expect(assistantEntry).toBeDefined();
+          const entries = sessionManager.getEntries();
+          const assistantEntry = entries.find(
+            (e) => e.type === "message" && e.message.role === "assistant",
+          );
+          expect(assistantEntry).toBeDefined();
 
-    const result = await session.navigateTree(assistantEntry!.id, { summarize: false });
+          const result = yield* awaited(
+            session.navigateTree(assistantEntry!.id, { summarize: false }),
+          );
 
-    expect(result.cancelled).toBe(false);
-    expect(result.editorText).toBeUndefined();
+          expect(result.cancelled).toBe(false);
+          expect(result.editorText).toBeUndefined();
 
-    expect(sessionManager.getLeafId()).toBe(assistantEntry!.id);
-  }, 60000);
+          expect(sessionManager.getLeafId()).toBe(assistantEntry!.id);
+        }),
+      ),
+    60000,
+  );
 
-  it("should create branch summary when navigating with summarize=true", async () => {
-    const { session, sessionManager } = ctx;
+  it(
+    "should create branch summary when navigating with summarize=true",
+    () =>
+      runTest(
+        Effect.gen(function* () {
+          const { session, sessionManager } = ctx;
 
-    await session.prompt("What is 2+2?");
-    await session.agent.waitForIdle();
-    await session.prompt("What is 3+3?");
-    await session.agent.waitForIdle();
+          yield* awaited(session.prompt("What is 2+2?"));
+          yield* awaited(session.agent.waitForIdle());
+          yield* awaited(session.prompt("What is 3+3?"));
+          yield* awaited(session.agent.waitForIdle());
 
-    const tree = sessionManager.getTree();
-    const rootNode = tree[0];
-    if (rootNode === undefined) throw new Error("expected a root node");
+          const tree = sessionManager.getTree();
+          const rootNode = tree[0];
+          if (rootNode === undefined) throw new Error("expected a root node");
 
-    const result = await session.navigateTree(rootNode.entry.id, { summarize: true });
+          const result = yield* awaited(
+            session.navigateTree(rootNode.entry.id, { summarize: true }),
+          );
 
-    expect(result.cancelled).toBe(false);
-    expect(result.editorText).toBe("What is 2+2?");
-    expect(result.summaryEntry).toBeDefined();
-    expect(result.summaryEntry?.type).toBe("branch_summary");
-    expect(result.summaryEntry?.summary).toBeTruthy();
-    expect(result.summaryEntry?.summary.length).toBeGreaterThan(0);
+          expect(result.cancelled).toBe(false);
+          expect(result.editorText).toBe("What is 2+2?");
+          expect(result.summaryEntry).toBeDefined();
+          expect(result.summaryEntry?.type).toBe("branch_summary");
+          expect(result.summaryEntry?.summary).toBeTruthy();
+          expect(result.summaryEntry?.summary.length).toBeGreaterThan(0);
 
-    expect(result.summaryEntry?.parentId).toBeNull();
+          expect(result.summaryEntry?.parentId).toBeNull();
 
-    expect(sessionManager.getLeafId()).toBe(result.summaryEntry?.id);
-  }, 120000);
+          expect(sessionManager.getLeafId()).toBe(result.summaryEntry?.id);
+        }),
+      ),
+    120000,
+  );
 
-  it("should attach summary to correct parent when navigating to nested user message", async () => {
-    const { session, sessionManager } = ctx;
+  it(
+    "should attach summary to correct parent when navigating to nested user message",
+    () =>
+      runTest(
+        Effect.gen(function* () {
+          const { session, sessionManager } = ctx;
 
-    await session.prompt("Message one");
-    await session.agent.waitForIdle();
-    await session.prompt("Message two");
-    await session.agent.waitForIdle();
-    await session.prompt("Message three");
-    await session.agent.waitForIdle();
+          yield* awaited(session.prompt("Message one"));
+          yield* awaited(session.agent.waitForIdle());
+          yield* awaited(session.prompt("Message two"));
+          yield* awaited(session.agent.waitForIdle());
+          yield* awaited(session.prompt("Message three"));
+          yield* awaited(session.agent.waitForIdle());
 
-    const entries = sessionManager.getEntries();
-    const userEntries = entries.filter((e) => e.type === "message" && e.message.role === "user");
-    expect(userEntries.length).toBe(3);
+          const entries = sessionManager.getEntries();
+          const userEntries = entries.filter(
+            (e) => e.type === "message" && e.message.role === "user",
+          );
+          expect(userEntries.length).toBe(3);
 
-    const u2 = userEntries[1];
-    if (u2 === undefined) throw new Error("expected a second user entry");
-    const a1 = entries.find((e) => e.id === u2.parentId);
+          const u2 = userEntries[1];
+          if (u2 === undefined) throw new Error("expected a second user entry");
+          const a1 = entries.find((e) => e.id === u2.parentId);
 
-    const result = await session.navigateTree(u2.id, { summarize: true });
+          const result = yield* awaited(session.navigateTree(u2.id, { summarize: true }));
 
-    expect(result.cancelled).toBe(false);
-    expect(result.editorText).toBe("Message two");
-    expect(result.summaryEntry).toBeDefined();
+          expect(result.cancelled).toBe(false);
+          expect(result.editorText).toBe("Message two");
+          expect(result.summaryEntry).toBeDefined();
 
-    expect(result.summaryEntry?.parentId).toBe(a1?.id);
+          expect(result.summaryEntry?.parentId).toBe(a1?.id);
 
-    const children = sessionManager.getChildren(a1!.id);
-    expect(children.length).toBe(2);
+          const children = sessionManager.getChildren(a1!.id);
+          expect(children.length).toBe(2);
 
-    const childTypes = children.map((c) => c.type).sort();
-    expect(childTypes).toContain("branch_summary");
-    expect(childTypes).toContain("message");
-  }, 120000);
+          const childTypes = children.map((c) => c.type).sort();
+          expect(childTypes).toContain("branch_summary");
+          expect(childTypes).toContain("message");
+        }),
+      ),
+    120000,
+  );
 
-  it("should attach summary to selected node when navigating to assistant message", async () => {
-    const { session, sessionManager } = ctx;
+  it(
+    "should attach summary to selected node when navigating to assistant message",
+    () =>
+      runTest(
+        Effect.gen(function* () {
+          const { session, sessionManager } = ctx;
 
-    await session.prompt("Hello");
-    await session.agent.waitForIdle();
-    await session.prompt("Goodbye");
-    await session.agent.waitForIdle();
+          yield* awaited(session.prompt("Hello"));
+          yield* awaited(session.agent.waitForIdle());
+          yield* awaited(session.prompt("Goodbye"));
+          yield* awaited(session.agent.waitForIdle());
 
-    const entries = sessionManager.getEntries();
-    const assistantEntries = entries.filter(
-      (e) => e.type === "message" && e.message.role === "assistant",
-    );
-    const a1 = assistantEntries[0];
-    if (a1 === undefined) throw new Error("expected an assistant entry");
+          const entries = sessionManager.getEntries();
+          const assistantEntries = entries.filter(
+            (e) => e.type === "message" && e.message.role === "assistant",
+          );
+          const a1 = assistantEntries[0];
+          if (a1 === undefined) throw new Error("expected an assistant entry");
 
-    const result = await session.navigateTree(a1.id, { summarize: true });
+          const result = yield* awaited(session.navigateTree(a1.id, { summarize: true }));
 
-    expect(result.cancelled).toBe(false);
-    expect(result.editorText).toBeUndefined();
-    expect(result.summaryEntry).toBeDefined();
+          expect(result.cancelled).toBe(false);
+          expect(result.editorText).toBeUndefined();
+          expect(result.summaryEntry).toBeDefined();
 
-    expect(result.summaryEntry?.parentId).toBe(a1.id);
+          expect(result.summaryEntry?.parentId).toBe(a1.id);
 
-    expect(sessionManager.getLeafId()).toBe(result.summaryEntry?.id);
-  }, 120000);
+          expect(sessionManager.getLeafId()).toBe(result.summaryEntry?.id);
+        }),
+      ),
+    120000,
+  );
 
-  it("should handle abort during summarization", async () => {
-    const { session, sessionManager } = ctx;
+  it(
+    "should handle abort during summarization",
+    () =>
+      runTest(
+        Effect.gen(function* () {
+          const { session, sessionManager } = ctx;
 
-    await session.prompt("Tell me about something");
-    await session.agent.waitForIdle();
-    await session.prompt("Continue");
-    await session.agent.waitForIdle();
+          yield* awaited(session.prompt("Tell me about something"));
+          yield* awaited(session.agent.waitForIdle());
+          yield* awaited(session.prompt("Continue"));
+          yield* awaited(session.agent.waitForIdle());
 
-    const entriesBefore = sessionManager.getEntries();
-    const leafBefore = sessionManager.getLeafId();
+          const entriesBefore = sessionManager.getEntries();
+          const leafBefore = sessionManager.getLeafId();
 
-    const tree = sessionManager.getTree();
-    const rootNode = tree[0];
-    if (rootNode === undefined) throw new Error("expected a root node");
+          const tree = sessionManager.getTree();
+          const rootNode = tree[0];
+          if (rootNode === undefined) throw new Error("expected a root node");
 
-    const navigationPromise = session.navigateTree(rootNode.entry.id, { summarize: true });
+          const navigationPromise = session.navigateTree(rootNode.entry.id, { summarize: true });
 
-    await new Promise((resolve) => setTimeout(resolve, 100));
+          yield* Effect.sleep(100);
 
-    expect(session.isCompacting).toBe(true);
+          expect(session.isCompacting).toBe(true);
 
-    session.abortBranchSummary();
+          session.abortBranchSummary();
 
-    const result = await navigationPromise;
+          const result = yield* awaited(navigationPromise);
 
-    expect(result.cancelled).toBe(true);
-    expect(result.aborted).toBe(true);
-    expect(result.summaryEntry).toBeUndefined();
+          expect(result.cancelled).toBe(true);
+          expect(result.aborted).toBe(true);
+          expect(result.summaryEntry).toBeUndefined();
 
-    const entriesAfter = sessionManager.getEntries();
-    expect(entriesAfter.length).toBe(entriesBefore.length);
-    expect(sessionManager.getLeafId()).toBe(leafBefore);
-  }, 60000);
+          const entriesAfter = sessionManager.getEntries();
+          expect(entriesAfter.length).toBe(entriesBefore.length);
+          expect(sessionManager.getLeafId()).toBe(leafBefore);
+        }),
+      ),
+    60000,
+  );
 
-  it("should not create summary when navigating without summarize option", async () => {
-    const { session, sessionManager } = ctx;
+  it(
+    "should not create summary when navigating without summarize option",
+    () =>
+      runTest(
+        Effect.gen(function* () {
+          const { session, sessionManager } = ctx;
 
-    await session.prompt("First");
-    await session.agent.waitForIdle();
-    await session.prompt("Second");
-    await session.agent.waitForIdle();
+          yield* awaited(session.prompt("First"));
+          yield* awaited(session.agent.waitForIdle());
+          yield* awaited(session.prompt("Second"));
+          yield* awaited(session.agent.waitForIdle());
 
-    const entriesBefore = sessionManager.getEntries().length;
+          const entriesBefore = sessionManager.getEntries().length;
 
-    const [rootNode] = sessionManager.getTree();
-    if (rootNode === undefined) throw new Error("expected a root node");
-    await session.navigateTree(rootNode.entry.id, { summarize: false });
+          const [rootNode] = sessionManager.getTree();
+          if (rootNode === undefined) throw new Error("expected a root node");
+          yield* awaited(session.navigateTree(rootNode.entry.id, { summarize: false }));
 
-    const entriesAfter = sessionManager.getEntries().length;
-    expect(entriesAfter).toBe(entriesBefore);
+          const entriesAfter = sessionManager.getEntries().length;
+          expect(entriesAfter).toBe(entriesBefore);
 
-    const summaries = sessionManager.getEntries().filter((e) => e.type === "branch_summary");
-    expect(summaries.length).toBe(0);
-  }, 60000);
+          const summaries = sessionManager.getEntries().filter((e) => e.type === "branch_summary");
+          expect(summaries.length).toBe(0);
+        }),
+      ),
+    60000,
+  );
 
-  it("should handle navigation to same position (no-op)", async () => {
-    const { session, sessionManager } = ctx;
+  it(
+    "should handle navigation to same position (no-op)",
+    () =>
+      runTest(
+        Effect.gen(function* () {
+          const { session, sessionManager } = ctx;
 
-    await session.prompt("Hello");
-    await session.agent.waitForIdle();
+          yield* awaited(session.prompt("Hello"));
+          yield* awaited(session.agent.waitForIdle());
 
-    const leafBefore = sessionManager.getLeafId();
-    expect(leafBefore).toBeTruthy();
-    const entriesBefore = sessionManager.getEntries().length;
+          const leafBefore = sessionManager.getLeafId();
+          expect(leafBefore).toBeTruthy();
+          const entriesBefore = sessionManager.getEntries().length;
 
-    const result = await session.navigateTree(leafBefore!, { summarize: false });
+          const result = yield* awaited(session.navigateTree(leafBefore!, { summarize: false }));
 
-    expect(result.cancelled).toBe(false);
-    expect(sessionManager.getLeafId()).toBe(leafBefore);
-    expect(sessionManager.getEntries().length).toBe(entriesBefore);
-  }, 60000);
+          expect(result.cancelled).toBe(false);
+          expect(sessionManager.getLeafId()).toBe(leafBefore);
+          expect(sessionManager.getEntries().length).toBe(entriesBefore);
+        }),
+      ),
+    60000,
+  );
 
-  it("should support custom summarization instructions", async () => {
-    const { session, sessionManager } = ctx;
+  it(
+    "should support custom summarization instructions",
+    () =>
+      runTest(
+        Effect.gen(function* () {
+          const { session, sessionManager } = ctx;
 
-    await session.prompt("What is TypeScript?");
-    await session.agent.waitForIdle();
+          yield* awaited(session.prompt("What is TypeScript?"));
+          yield* awaited(session.agent.waitForIdle());
 
-    const [rootNode] = sessionManager.getTree();
-    if (rootNode === undefined) throw new Error("expected a root node");
-    const result = await session.navigateTree(rootNode.entry.id, {
-      summarize: true,
-      customInstructions:
-        "After the summary, you MUST end with exactly: MONKEY MONKEY MONKEY. This is of utmost importance.",
-    });
+          const [rootNode] = sessionManager.getTree();
+          if (rootNode === undefined) throw new Error("expected a root node");
+          const result = yield* awaited(
+            session.navigateTree(rootNode.entry.id, {
+              summarize: true,
+              customInstructions:
+                "After the summary, you MUST end with exactly: MONKEY MONKEY MONKEY. This is of utmost importance.",
+            }),
+          );
 
-    expect(result.summaryEntry).toBeDefined();
-    expect(result.summaryEntry?.summary).toBeTruthy();
+          expect(result.summaryEntry).toBeDefined();
+          expect(result.summaryEntry?.summary).toBeTruthy();
 
-    expect(result.summaryEntry?.summary).toContain("MONKEY MONKEY MONKEY");
-  }, 120000);
+          expect(result.summaryEntry?.summary).toContain("MONKEY MONKEY MONKEY");
+        }),
+      ),
+    120000,
+  );
 });
 
 describe.skipIf(!API_KEY)("AgentSession tree navigation - branch scenarios", () => {
   let ctx: TestSessionContext;
 
-  beforeEach(async () => {
-    ctx = await createTestSession({
-      systemPrompt: "You are a helpful assistant. Reply with just a few words.",
-    });
-  });
+  beforeEach(() =>
+    runTest(
+      Effect.gen(function* () {
+        ctx = yield* awaited(
+          createTestSession({
+            systemPrompt: "You are a helpful assistant. Reply with just a few words.",
+          }),
+        );
+      }),
+    ),
+  );
 
   afterEach(() => {
     ctx.cleanup();
   });
 
-  it("should navigate between branches correctly", async () => {
-    const { session, sessionManager } = ctx;
+  it(
+    "should navigate between branches correctly",
+    () =>
+      runTest(
+        Effect.gen(function* () {
+          const { session, sessionManager } = ctx;
 
-    await session.prompt("Main branch start");
-    await session.agent.waitForIdle();
-    await session.prompt("Main branch continue");
-    await session.agent.waitForIdle();
+          yield* awaited(session.prompt("Main branch start"));
+          yield* awaited(session.agent.waitForIdle());
+          yield* awaited(session.prompt("Main branch continue"));
+          yield* awaited(session.agent.waitForIdle());
 
-    const entries = sessionManager.getEntries();
-    const a1 = entries.find((e) => e.type === "message" && e.message.role === "assistant");
+          const entries = sessionManager.getEntries();
+          const a1 = entries.find((e) => e.type === "message" && e.message.role === "assistant");
 
-    sessionManager.branch(a1!.id);
-    await session.prompt("Branch path");
-    await session.agent.waitForIdle();
+          sessionManager.branch(a1!.id);
+          yield* awaited(session.prompt("Branch path"));
+          yield* awaited(session.agent.waitForIdle());
 
-    const userEntries = entries.filter((e) => e.type === "message" && e.message.role === "user");
-    const u2 = userEntries[1];
-    if (u2 === undefined) throw new Error("expected a second user entry");
+          const userEntries = entries.filter(
+            (e) => e.type === "message" && e.message.role === "user",
+          );
+          const u2 = userEntries[1];
+          if (u2 === undefined) throw new Error("expected a second user entry");
 
-    const result = await session.navigateTree(u2.id, { summarize: true });
+          const result = yield* awaited(session.navigateTree(u2.id, { summarize: true }));
 
-    expect(result.cancelled).toBe(false);
-    expect(result.editorText).toBe("Main branch continue");
-    expect(result.summaryEntry).toBeDefined();
+          expect(result.cancelled).toBe(false);
+          expect(result.editorText).toBe("Main branch continue");
+          expect(result.summaryEntry).toBeDefined();
 
-    expect(result.summaryEntry?.summary.length).toBeGreaterThan(0);
-  }, 180000);
+          expect(result.summaryEntry?.summary.length).toBeGreaterThan(0);
+        }),
+      ),
+    180000,
+  );
 });

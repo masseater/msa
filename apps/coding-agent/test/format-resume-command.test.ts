@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
 
+import { joinPath } from "@msa/testing";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { APP_NAME } from "../src/config.ts";
@@ -28,9 +28,9 @@ function setStdoutIsTTY(value: boolean): void {
 }
 
 function createTempFile(): string {
-  const dir = mkdtempSync(join(tmpdir(), "msa-format-resume-command-"));
+  const dir = mkdtempSync(joinPath(tmpdir(), "msa-format-resume-command-"));
   tempDirs.push(dir);
-  const file = join(dir, "session.jsonl");
+  const file = joinPath(dir, "session.jsonl");
   writeFileSync(file, "\n");
   return file;
 }

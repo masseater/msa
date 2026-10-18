@@ -8,9 +8,19 @@ import {
   writeFileSync,
 } from "node:fs";
 import { homedir, tmpdir } from "node:os";
-import { join } from "node:path";
 
 import type { AssistantMessageEvent, Model, TranscriptContext } from "@msa/ai/compat";
+import {
+  awaited,
+  runTest,
+  currentTimeMillis,
+  abortController,
+  readTextFile,
+  writeTextFile,
+  changeMode,
+  joinPath,
+} from "@msa/testing";
+import { Effect, Stream } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { ENV_AGENT_DIR } from "../src/config.ts";
@@ -20,6 +30,7 @@ import type {
   ProviderConfig,
   RegisteredCommand,
 } from "../src/core/extensions/types.ts";
+import { envNames, envSnapshot, writeEnv } from "../src/core/process-env.ts";
 import accountsExtension from "../src/extensions/accounts/index.ts";
 import {
   accountEnv,
@@ -38,21 +49,21 @@ import { claudeCodeService } from "../src/extensions/cli-agents/claude-service.t
 import { registerOpenCode } from "../src/extensions/cli-agents/opencode.ts";
 
 let dir: string;
-const savedEnv = { ...process.env };
+const savedEnv = { ...envSnapshot() };
 
 beforeEach(() => {
-  dir = mkdtempSync(join(tmpdir(), "msa-cli-agents-"));
+  dir = mkdtempSync(joinPath(tmpdir(), "msa-cli-agents-"));
   process.env[ENV_AGENT_DIR] = dir;
 });
 
 afterEach(() => {
-  for (const key of Object.keys(process.env)) if (!(key in savedEnv)) delete process.env[key];
+  for (const key of envNames()) if (!(key in savedEnv)) delete process.env[key];
   Object.assign(process.env, savedEnv);
   rmSync(dir, { recursive: true, force: true });
 });
 
 function writeAccounts(accounts: unknown[]): void {
-  writeFileSync(join(dir, "claude-code-accounts.json"), JSON.stringify({ accounts }));
+  writeFileSync(joinPath(dir, "claude-code-accounts.json"), JSON.stringify({ accounts }));
 }
 
 describe("Claude Code accounts", () => {
@@ -62,7 +73,9 @@ describe("Claude Code accounts", () => {
 
   it("expands ~ in configDir", () => {
     writeAccounts([{ name: "main", configDir: "~/claude-main" }]);
-    expect(loadAccounts()).toEqual([{ name: "main", configDir: join(homedir(), "claude-main") }]);
+    expect(loadAccounts()).toEqual([
+      { name: "main", configDir: joinPath(homedir(), "claude-main") },
+    ]);
   });
 
   it("blocks an account that hit its usage limit until the reset", () => {
@@ -82,7 +95,7 @@ describe("Claude Code accounts", () => {
   });
 
   it("blocks an account by the error Claude Code classified", () => {
-    const now = Date.now();
+    const now = currentTimeMillis();
     const account = { name: "main" };
     expect(blockIfUnusable(account, { error: "401", cause: "authentication_failed" })).toBe(true);
     expect(blockOf(account, now + 60_000)).toBeDefined();
@@ -98,27 +111,37 @@ describe("Claude Code accounts", () => {
     expect(blockOf(account)).toBeUndefined();
   });
 
-  it("gives the token printed by tokenCommand only to that account", async () => {
-    process.env["CLAUDE_CODE_OAUTH_TOKEN"] = "inherited";
-    process.env["SHELL"] = "/bin/sh";
-    const env = await accountEnv({ name: "token", tokenCommand: "printf 'tok-123\\n'" });
-    expect(env["CLAUDE_CODE_OAUTH_TOKEN"]).toBe("tok-123");
-    const configured = await accountEnv({ name: "dir", configDir: "/tmp/claude-dir" });
-    expect(configured["CLAUDE_CODE_OAUTH_TOKEN"]).toBeUndefined();
-    expect(configured["CLAUDE_CONFIG_DIR"]).toBe("/tmp/claude-dir");
-  });
+  it("gives the token printed by tokenCommand only to that account", () =>
+    runTest(
+      Effect.gen(function* () {
+        process.env["CLAUDE_CODE_OAUTH_TOKEN"] = "inherited";
+        process.env["SHELL"] = "/bin/sh";
+        const env = yield* awaited(
+          accountEnv({ name: "token", tokenCommand: "printf 'tok-123\\n'" }),
+        );
+        expect(env["CLAUDE_CODE_OAUTH_TOKEN"]).toBe("tok-123");
+        const configured = yield* awaited(
+          accountEnv({ name: "dir", configDir: "/tmp/claude-dir" }),
+        );
+        expect(configured["CLAUDE_CODE_OAUTH_TOKEN"]).toBeUndefined();
+        expect(configured["CLAUDE_CONFIG_DIR"]).toBe("/tmp/claude-dir");
+      }),
+    ));
 
-  it("blocks an account whose tokenCommand fails", async () => {
-    process.env["SHELL"] = "/bin/sh";
-    const account = { name: "broken", tokenCommand: "echo nope >&2; exit 1" };
-    const error = await accountEnv(account).catch((caught: Error) => caught.message);
-    expect(error).toMatch(/^tokenCommand .*: nope$/);
-    expect(blockIfUnusable(account, { error: String(error) })).toBe(true);
-  });
+  it("blocks an account whose tokenCommand fails", () =>
+    runTest(
+      Effect.gen(function* () {
+        process.env["SHELL"] = "/bin/sh";
+        const account = { name: "broken", tokenCommand: "echo nope >&2; exit 1" };
+        const error = yield* awaited(accountEnv(account).catch((caught: Error) => caught.message));
+        expect(error).toMatch(/^tokenCommand .*: nope$/u);
+        expect(blockIfUnusable(account, { error: String(error) })).toBe(true);
+      }),
+    ));
 });
 
 describe("managing Claude Code accounts", () => {
-  const managed = (name: string) => join(dir, "claude-accounts", name);
+  const managed = (name: string) => joinPath(dir, "claude-accounts", name);
 
   it("keeps the implicit default account when the first account is added", () => {
     addAccount("work");
@@ -134,15 +157,15 @@ describe("managing Claude Code accounts", () => {
       name: "token",
       tokenCommand: "op read op://vault/claude",
     });
-    expect(() => addAccount("token")).toThrow(/already exists/);
-    expect(() => addAccount("Bad Name")).toThrow(/must be lowercase/);
+    expect(() => addAccount("token")).toThrow(/already exists/u);
+    expect(() => addAccount("Bad Name")).toThrow(/must be lowercase/u);
   });
 
   it("reorders, toggles rotation and removes accounts, keeping ~ as written", () => {
     writeAccounts([{ name: "main", configDir: "~/claude-main" }, { name: "sub" }]);
     preferAccount("sub");
     setAutoRotation("main", false);
-    const file = JSON.parse(readFileSync(join(dir, "claude-code-accounts.json"), "utf8"));
+    const file = JSON.parse(readFileSync(joinPath(dir, "claude-code-accounts.json"), "utf8"));
     expect(file.accounts).toEqual([
       { name: "sub" },
       { name: "main", configDir: "~/claude-main", auto: false },
@@ -151,8 +174,8 @@ describe("managing Claude Code accounts", () => {
     expect(loadAccounts()[1]?.auto).toBeUndefined();
     removeAccount("sub");
     expect(loadAccounts().map((account) => account.name)).toEqual(["main"]);
-    expect(() => removeAccount("main")).toThrow(/must remain/);
-    expect(() => preferAccount("nope")).toThrow(/No Claude account/);
+    expect(() => removeAccount("main")).toThrow(/must remain/u);
+    expect(() => preferAccount("nope")).toThrow(/No Claude account/u);
   });
 
   it("deletes the config dir msa made for a removed account", () => {
@@ -165,50 +188,70 @@ describe("managing Claude Code accounts", () => {
   });
 
   function fakeClaude(script: string): void {
-    const bin = join(dir, "bin");
+    const bin = joinPath(dir, "bin");
     mkdirSync(bin, { recursive: true });
-    writeFileSync(join(bin, "claude"), `#!/bin/sh\n${script}\n`);
-    chmodSync(join(bin, "claude"), 0o755);
-    process.env["CLAUDE_BIN"] = join(bin, "claude");
+    writeFileSync(joinPath(bin, "claude"), `#!/bin/sh\n${script}\n`);
+    chmodSync(joinPath(bin, "claude"), 0o755);
+    process.env["CLAUDE_BIN"] = joinPath(bin, "claude");
   }
 
-  it("signs an account in with the code the user pastes", async () => {
-    fakeClaude(
-      [
-        `if [ "$1 $2" = "auth status" ]; then`,
-        `  if [ -f "$CLAUDE_CONFIG_DIR/token" ]; then echo '{"loggedIn":true,"email":"a@example.com"}'; else echo '{"loggedIn":false}'; exit 1; fi`,
-        `  exit 0`,
-        `fi`,
-        `echo "Opening browser to sign in…"`,
-        `echo "If the browser didn't open, visit: https://claude.com/oauth?x=1"`,
-        `printf "Paste code here if prompted > "`,
-        `read code`,
-        `printf %s "$code" > "$CLAUDE_CONFIG_DIR/token"`,
-      ].join("\n"),
-    );
-    const account = addAccount("work");
-    expect(await authStatus(account)).toEqual({ loggedIn: false });
-    blockIfUnusable(account, { error: "Not logged in · Please run /login" });
-    let shown = "";
-    await loginAccount(account, {
-      askCode: async (url) => {
-        shown = url;
-        return "the-code";
-      },
-    });
-    expect(shown).toBe("https://claude.com/oauth?x=1");
-    expect(readFileSync(join(managed("work"), "token"), "utf8")).toBe("the-code");
-    expect(await authStatus(account)).toEqual({ loggedIn: true, email: "a@example.com" });
-    expect(blockOf(account)).toBeUndefined();
-  });
+  it("signs an account in with the code the user pastes", () =>
+    runTest(
+      Effect.gen(function* () {
+        const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-  it("cancels the login when the user gives no code", async () => {
-    fakeClaude(`echo "visit: https://claude.com/oauth"\nread code\nexit 1`);
-    const account = addAccount("work");
-    await expect(loginAccount(account, { askCode: async () => undefined })).rejects.toThrow(
-      /cancelled/,
-    );
-  });
+        fakeClaude(
+          [
+            `if [ "$1 $2" = "auth status" ]; then`,
+            `  if [ -f "$CLAUDE_CONFIG_DIR/token" ]; then echo '{"loggedIn":true,"email":"a@example.com"}'; else echo '{"loggedIn":false}'; exit 1; fi`,
+            `  exit 0`,
+            `fi`,
+            `echo "Opening browser to sign in…"`,
+            `echo "If the browser didn't open, visit: https://claude.com/oauth?x=1"`,
+            `printf "Paste code here if prompted > "`,
+            `read code`,
+            `printf %s "$code" > "$CLAUDE_CONFIG_DIR/token"`,
+          ].join("\n"),
+        );
+        const account = addAccount("work");
+        expect(yield* awaited(authStatus(account))).toEqual({ loggedIn: false });
+        blockIfUnusable(account, { error: "Not logged in · Please run /login" });
+        let shown = "";
+        yield* awaited(
+          loginAccount(account, {
+            askCode: (url) =>
+              effectRunPromise(
+                Effect.gen(function* () {
+                  shown = url;
+                  return yield* awaited("the-code");
+                }),
+              ),
+          }),
+        );
+        expect(shown).toBe("https://claude.com/oauth?x=1");
+        expect(yield* readTextFile(joinPath(managed("work"), "token"))).toBe("the-code");
+        expect(yield* awaited(authStatus(account))).toEqual({
+          loggedIn: true,
+          email: "a@example.com",
+        });
+        expect(blockOf(account)).toBeUndefined();
+      }),
+    ));
+
+  it("cancels the login when the user gives no code", () =>
+    runTest(
+      Effect.gen(function* () {
+        const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
+        fakeClaude(`echo "visit: https://claude.com/oauth"\nread code\nexit 1`);
+        const account = addAccount("work");
+        yield* awaited(
+          expect(
+            loginAccount(account, { askCode: () => effectRunPromise(awaited(undefined)) }),
+          ).rejects.toThrow(/cancelled/u),
+        );
+      }),
+    ));
   const claudeWithLogin = [
     `if [ "$1 $2" = "auth status" ]; then`,
     `  if [ -f "$CLAUDE_CONFIG_DIR/token" ]; then echo '{"loggedIn":true,"email":"a@example.com"}'; else echo '{"loggedIn":false}'; exit 1; fi`,
@@ -223,51 +266,69 @@ describe("managing Claude Code accounts", () => {
   function interaction(answers: { select?: string; prompts: string[] }) {
     return {
       showPage: vi.fn(),
-      select: vi.fn(async () => answers.select!),
-      prompt: vi.fn(async () => answers.prompts.shift()!),
+      select: vi.fn(() => runTest(awaited(answers.select!))),
+      prompt: vi.fn(() => runTest(awaited(answers.prompts.shift()!))),
     };
   }
 
-  it("tells /login how to install Claude Code when it is missing", async () => {
-    process.env["CLAUDE_BIN"] = "";
-    process.env["PATH"] = join(dir, "empty");
-    expect(await claudeCodeService.status()).toEqual({
-      installed: false,
-      install: "curl -fsSL https://claude.ai/install.sh | bash",
-    });
-  });
+  it("tells /login how to install Claude Code when it is missing", () =>
+    runTest(
+      Effect.gen(function* () {
+        process.env["CLAUDE_BIN"] = "";
+        process.env["PATH"] = joinPath(dir, "empty");
+        expect(yield* awaited(claudeCodeService.status())).toEqual({
+          installed: false,
+          install: "curl -fsSL https://claude.ai/install.sh | bash",
+        });
+      }),
+    ));
 
-  it("signs the only account in from /login without asking which", async () => {
-    fakeClaude(claudeWithLogin);
-    writeAccounts([{ name: "work", configDir: managed("work") }]);
-    expect(await claudeCodeService.status()).toEqual({ installed: true, signedIn: false });
-    const ui = interaction({ prompts: ["the-code"] });
-    await claudeCodeService.login(ui, new AbortController().signal);
-    expect(ui.select).not.toHaveBeenCalled();
-    expect(ui.showPage).toHaveBeenCalledWith({ url: "https://claude.com/oauth?x=1" });
-    expect(await claudeCodeService.status()).toEqual({ installed: true, signedIn: true });
+  it("signs the only account in from /login without asking which", () =>
+    runTest(
+      Effect.gen(function* () {
+        fakeClaude(claudeWithLogin);
+        writeAccounts([{ name: "work", configDir: managed("work") }]);
+        expect(yield* awaited(claudeCodeService.status())).toEqual({
+          installed: true,
+          signedIn: false,
+        });
+        const ui = interaction({ prompts: ["the-code"] });
+        yield* awaited(claudeCodeService.login(ui, abortController().signal));
+        expect(ui.select).not.toHaveBeenCalled();
+        expect(ui.showPage).toHaveBeenCalledWith({ url: "https://claude.com/oauth?x=1" });
+        expect(yield* awaited(claudeCodeService.status())).toEqual({
+          installed: true,
+          signedIn: true,
+        });
 
-    await claudeCodeService.logout(interaction({ prompts: [] }));
-    expect(await claudeCodeService.status()).toEqual({ installed: true, signedIn: false });
-  });
+        yield* awaited(claudeCodeService.logout(interaction({ prompts: [] })));
+        expect(yield* awaited(claudeCodeService.status())).toEqual({
+          installed: true,
+          signedIn: false,
+        });
+      }),
+    ));
 
-  it("adds a new account from /login when there are several", async () => {
-    fakeClaude(claudeWithLogin);
-    writeAccounts([
-      { name: "main", configDir: managed("main") },
-      { name: "token", tokenCommand: "echo token" },
-      { name: "sub", configDir: managed("sub") },
-    ]);
-    const ui = interaction({ select: "Add a new account", prompts: ["work", "the-code"] });
-    await claudeCodeService.login(ui, new AbortController().signal);
-    expect(ui.select).toHaveBeenCalledWith("Sign in which Claude account?", [
-      "main",
-      "sub",
-      "Add a new account",
-    ]);
-    expect(loadAccounts().at(-1)).toEqual({ name: "work", configDir: managed("work") });
-    expect(readFileSync(join(managed("work"), "token"), "utf8")).toBe("the-code");
-  });
+  it("adds a new account from /login when there are several", () =>
+    runTest(
+      Effect.gen(function* () {
+        fakeClaude(claudeWithLogin);
+        writeAccounts([
+          { name: "main", configDir: managed("main") },
+          { name: "token", tokenCommand: "echo token" },
+          { name: "sub", configDir: managed("sub") },
+        ]);
+        const ui = interaction({ select: "Add a new account", prompts: ["work", "the-code"] });
+        yield* awaited(claudeCodeService.login(ui, abortController().signal));
+        expect(ui.select).toHaveBeenCalledWith("Sign in which Claude account?", [
+          "main",
+          "sub",
+          "Add a new account",
+        ]);
+        expect(loadAccounts().at(-1)).toEqual({ name: "work", configDir: managed("work") });
+        expect(yield* readTextFile(joinPath(managed("work"), "token"))).toBe("the-code");
+      }),
+    ));
 });
 
 describe("/accounts", () => {
@@ -288,35 +349,46 @@ describe("/accounts", () => {
     const ctx = {
       hasUI: false,
       ui: { notify: (message: string) => notes.push(message) },
-      reload: async () => {
-        reloads += 1;
-      },
+      reload: () =>
+        runTest(
+          Effect.sync(() => {
+            reloads += 1;
+          }),
+        ),
     } as unknown as ExtensionCommandContext;
     return { ctx, notes, reloads: () => reloads };
   }
 
-  it("completes kinds, then the kind's actions and account names", async () => {
-    writeAccounts([{ name: "main" }, { name: "sub" }]);
-    const complete = command().getArgumentCompletions!;
-    expect((await complete("cl"))?.map((item) => item.value)).toEqual(["claude "]);
-    expect((await complete("claude lo"))?.map((item) => item.value)).toEqual([
-      "claude login ",
-      "claude logout ",
-    ]);
-    expect((await complete("claude use s"))?.map((item) => item.value)).toEqual(["claude use sub"]);
-  });
+  it("completes kinds, then the kind's actions and account names", () =>
+    runTest(
+      Effect.gen(function* () {
+        writeAccounts([{ name: "main" }, { name: "sub" }]);
+        const complete = command().getArgumentCompletions!;
+        expect((yield* awaited(complete("cl")))?.map((item) => item.value)).toEqual(["claude "]);
+        expect((yield* awaited(complete("claude lo")))?.map((item) => item.value)).toEqual([
+          "claude login ",
+          "claude logout ",
+        ]);
+        expect((yield* awaited(complete("claude use s")))?.map((item) => item.value)).toEqual([
+          "claude use sub",
+        ]);
+      }),
+    ));
 
-  it("routes to the kind and reloads when the account list changes", async () => {
-    process.env["CLAUDE_BIN"] = "/bin/false";
-    const { ctx, notes, reloads } = context();
-    await command().handler("claude add token printf tok", ctx);
-    expect(loadAccounts().map((account) => account.name)).toEqual(["default", "token"]);
-    expect(reloads()).toBe(1);
-    await command().handler("", ctx);
-    expect(notes.at(-1)).toMatch(/^claude:\n1\. default .*\n2\. token /);
-    await command().handler("nope", ctx);
-    expect(notes.at(-1)).toMatch(/Unknown account kind "nope"/);
-  });
+  it("routes to the kind and reloads when the account list changes", () =>
+    runTest(
+      Effect.gen(function* () {
+        process.env["CLAUDE_BIN"] = "/bin/false";
+        const { ctx, notes, reloads } = context();
+        yield* awaited(command().handler("claude add token printf tok", ctx));
+        expect(loadAccounts().map((account) => account.name)).toEqual(["default", "token"]);
+        expect(reloads()).toBe(1);
+        yield* awaited(command().handler("", ctx));
+        expect(notes.at(-1)).toMatch(/^claude:\n1\. default .*\n2\. token /u);
+        yield* awaited(command().handler("nope", ctx));
+        expect(notes.at(-1)).toMatch(/Unknown account kind "nope"/u);
+      }),
+    ));
 });
 
 describe("opencode-free provider", () => {
@@ -331,47 +403,70 @@ describe("opencode-free provider", () => {
     return config;
   }
 
-  async function run(script: string): Promise<AssistantMessageEvent[]> {
-    const bin = join(dir, "opencode");
-    writeFileSync(bin, `#!/bin/sh\ncat > "${dir}/stdin.txt"\n${script}\n`);
-    chmodSync(bin, 0o755);
-    process.env["OPENCODE_BIN"] = bin;
-    const config = register();
-    const model = { ...config.models![0]!, provider: "opencode-free", api: "openai-completions" };
-    const context = {
-      messages: [{ role: "user", content: "hello", timestamp: 0 }],
-    } as unknown as TranscriptContext;
-    const events: AssistantMessageEvent[] = [];
-    const stream = (
-      config.streamSimple as (
-        m: Model<string>,
-        c: TranscriptContext,
-      ) => AsyncIterable<AssistantMessageEvent>
-    )(model as unknown as Model<string>, context);
-    for await (const event of stream) events.push(event);
-    return events;
+  function run(script: string): Promise<AssistantMessageEvent[]> {
+    return runTest(
+      Effect.gen(function* () {
+        const bin = joinPath(dir, "opencode");
+        yield* writeTextFile(bin, `#!/bin/sh\ncat > "${dir}/stdin.txt"\n${script}\n`);
+        yield* changeMode(bin, 0o755);
+        writeEnv("OPENCODE_BIN", bin);
+        const config = register();
+        const model = {
+          ...config.models![0]!,
+          provider: "opencode-free",
+          api: "openai-completions" as const,
+        };
+        const context = {
+          messages: [{ role: "user", content: "hello", timestamp: 0 }],
+        } as unknown as TranscriptContext;
+        const stream = (
+          config.streamSimple as (
+            m: Model<string>,
+            c: TranscriptContext,
+          ) => AsyncIterable<AssistantMessageEvent>
+        )(model as unknown as Model<string>, context);
+        return Array.from(
+          yield* Stream.runCollect(Stream.fromAsyncIterable(stream, (error) => error)),
+        );
+      }),
+    );
   }
 
-  it("streams the CLI's text and usage as the reply", async () => {
-    const events = await run(
-      [
-        `echo '{"type":"text","part":{"id":"a","type":"text","text":"Hi"}}'`,
-        `echo '{"type":"text","part":{"id":"a","type":"text","text":"Hi there"}}'`,
-        `echo '{"type":"step_finish","part":{"tokens":{"input":5,"output":2,"cache":{"read":1,"write":0}}}}'`,
-      ].join("\n"),
-    );
-    const done = events.at(-1);
-    expect(done?.type).toBe("done");
-    if (done?.type !== "done") return;
-    expect(done.message.content).toEqual([{ type: "text", text: "Hi there" }]);
-    expect(done.message.usage).toMatchObject({ input: 5, output: 2, cacheRead: 1, totalTokens: 8 });
-  });
+  it("streams the CLI's text and usage as the reply", () =>
+    runTest(
+      Effect.gen(function* () {
+        const events = yield* awaited(
+          run(
+            [
+              `echo '{"type":"text","part":{"id":"a","type":"text","text":"Hi"}}'`,
+              `echo '{"type":"text","part":{"id":"a","type":"text","text":"Hi there"}}'`,
+              `echo '{"type":"step_finish","part":{"tokens":{"input":5,"output":2,"cache":{"read":1,"write":0}}}}'`,
+            ].join("\n"),
+          ),
+        );
+        const done = events.at(-1);
+        expect(done?.type).toBe("done");
+        if (done?.type !== "done") return;
+        expect(done.message.content).toEqual([{ type: "text" as const, text: "Hi there" }]);
+        expect(done.message.usage).toMatchObject({
+          input: 5,
+          output: 2,
+          cacheRead: 1,
+          totalTokens: 8,
+        });
+      }),
+    ));
 
-  it("reports an error event as a failed reply even when the CLI exits 0", async () => {
-    const events = await run(`echo '{"type":"error","error":{"message":"quota exceeded"}}'`);
-    const last = events.at(-1);
-    expect(last?.type).toBe("error");
-    if (last?.type !== "error") return;
-    expect(last.error.errorMessage).toBe("quota exceeded");
-  });
+  it("reports an error event as a failed reply even when the CLI exits 0", () =>
+    runTest(
+      Effect.gen(function* () {
+        const events = yield* awaited(
+          run(`echo '{"type":"error","error":{"message":"quota exceeded"}}'`),
+        );
+        const last = events.at(-1);
+        expect(last?.type).toBe("error");
+        if (last?.type !== "error") return;
+        expect(last.error.errorMessage).toBe("quota exceeded");
+      }),
+    ));
 });

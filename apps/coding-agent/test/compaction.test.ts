@@ -1,9 +1,10 @@
 import { readFileSync } from "fs";
-import { join } from "path";
 
 import type { AgentMessage } from "@msa/agent-core";
 import type { AssistantMessage, Usage } from "@msa/ai/compat";
 import { getModel } from "@msa/ai/compat";
+import { awaited, runTest, currentTimeMillis, currentDate, joinPath } from "@msa/testing";
+import { Effect } from "effect";
 import { beforeEach, describe, expect, it } from "vite-plus/test";
 
 import {
@@ -17,6 +18,7 @@ import {
   prepareCompaction,
   shouldCompact,
 } from "../src/core/compaction/index.ts";
+import { readEnv } from "../src/core/process-env.ts";
 import {
   buildSessionContext,
   type CompactionEntry,
@@ -30,7 +32,7 @@ import {
 } from "../src/core/session-manager.ts";
 
 function loadLargeSessionEntries(): SessionEntry[] {
-  const sessionPath = join(__dirname, "fixtures/large-session.jsonl");
+  const sessionPath = joinPath(__dirname, "fixtures/large-session.jsonl");
   const content = readFileSync(sessionPath, "utf-8");
   const entries = parseSessionEntries(content);
   migrateSessionEntries(entries);
@@ -49,17 +51,17 @@ function createMockUsage(input: number, output: number, cacheRead = 0, cacheWrit
 }
 
 function createUserMessage(text: string): AgentMessage {
-  return { role: "user", content: text, timestamp: Date.now() };
+  return { role: "user", content: text, timestamp: currentTimeMillis() };
 }
 
 function createAssistantMessage(text: string, usage?: Usage): AssistantMessage {
   return {
     role: "assistant",
-    content: [{ type: "text", text }],
+    content: [{ type: "text" as const, text }],
     usage: usage || createMockUsage(100, 50),
     stopReason: "stop",
-    timestamp: Date.now(),
-    api: "anthropic-messages",
+    timestamp: currentTimeMillis(),
+    api: "anthropic-messages" as const,
     provider: "anthropic",
     model: "claude-sonnet-4-5",
   };
@@ -80,10 +82,10 @@ beforeEach(() => {
 function createMessageEntry(message: AgentMessage): SessionMessageEntry {
   const id = `test-id-${entryCounter++}`;
   const entry: SessionMessageEntry = {
-    type: "message",
+    type: "message" as const,
     id,
     parentId: lastId,
-    timestamp: new Date().toISOString(),
+    timestamp: currentDate().toISOString(),
     message,
   };
   lastId = id;
@@ -93,10 +95,10 @@ function createMessageEntry(message: AgentMessage): SessionMessageEntry {
 function createCompactionEntry(summary: string, firstKeptEntryId: string): CompactionEntry {
   const id = `test-id-${entryCounter++}`;
   const entry: CompactionEntry = {
-    type: "compaction",
+    type: "compaction" as const,
     id,
     parentId: lastId,
-    timestamp: new Date().toISOString(),
+    timestamp: currentDate().toISOString(),
     summary,
     firstKeptEntryId,
     tokensBefore: 10000,
@@ -108,10 +110,10 @@ function createCompactionEntry(summary: string, firstKeptEntryId: string): Compa
 function createModelChangeEntry(provider: string, modelId: string): ModelChangeEntry {
   const id = `test-id-${entryCounter++}`;
   const entry: ModelChangeEntry = {
-    type: "model_change",
+    type: "model_change" as const,
     id,
     parentId: lastId,
-    timestamp: new Date().toISOString(),
+    timestamp: currentDate().toISOString(),
     provider,
     modelId,
   };
@@ -122,10 +124,10 @@ function createModelChangeEntry(provider: string, modelId: string): ModelChangeE
 function createThinkingLevelEntry(thinkingLevel: string): ThinkingLevelChangeEntry {
   const id = `test-id-${entryCounter++}`;
   const entry: ThinkingLevelChangeEntry = {
-    type: "thinking_level_change",
+    type: "thinking_level_change" as const,
     id,
     parentId: lastId,
-    timestamp: new Date().toISOString(),
+    timestamp: currentDate().toISOString(),
     thinkingLevel,
   };
   lastId = id;
@@ -135,10 +137,10 @@ function createThinkingLevelEntry(thinkingLevel: string): ThinkingLevelChangeEnt
 function createCustomMessageEntry(content: string): CustomMessageEntry {
   const id = `test-id-${entryCounter++}`;
   const entry: CustomMessageEntry = {
-    type: "custom_message",
+    type: "custom_message" as const,
     id,
     parentId: lastId,
-    timestamp: new Date().toISOString(),
+    timestamp: currentDate().toISOString(),
     customType: "test",
     content,
     display: true,
@@ -368,16 +370,18 @@ describe("findCutPoint", () => {
     const currentUser = createMessageEntry(createUserMessage("read the large file"));
     const toolCall = createMessageEntry({
       ...createAssistantMessage(""),
-      content: [{ type: "toolCall", id: "call-1", name: "read", arguments: { path: "big.txt" } }],
+      content: [
+        { type: "toolCall" as const, id: "call-1", name: "read", arguments: { path: "big.txt" } },
+      ],
       stopReason: "toolUse",
     });
     const toolResult = createMessageEntry({
       role: "toolResult",
       toolCallId: "call-1",
       toolName: "read",
-      content: [{ type: "text", text: "x".repeat(8000) }],
+      content: [{ type: "text" as const, text: "x".repeat(8000) }],
       isError: false,
-      timestamp: Date.now(),
+      timestamp: currentTimeMillis(),
     });
     const entries = [oldUser, oldAssistant, currentUser, toolCall, toolResult];
 
@@ -488,7 +492,7 @@ describe("prepareCompaction", () => {
       role: "system",
       content: "",
       sections: { preamble: "current prompt" },
-      timestamp: Date.now(),
+      timestamp: currentTimeMillis(),
     });
     const user = createMessageEntry(createUserMessage("one long turn"));
     const assistant = createMessageEntry(createAssistantMessage("assistant suffix"));
@@ -597,63 +601,73 @@ describe("Large session fixture", () => {
   });
 });
 
-describe.skipIf(!process.env["ANTHROPIC_OAUTH_TOKEN"])("LLM summarization", () => {
-  it("should generate a compaction result for the large session", async () => {
-    const entries = loadLargeSessionEntries();
-    const model = getModel("anthropic", "claude-sonnet-4-5")!;
+describe.skipIf(!readEnv("ANTHROPIC_OAUTH_TOKEN"))("LLM summarization", () => {
+  it(
+    "should generate a compaction result for the large session",
+    () =>
+      runTest(
+        Effect.gen(function* () {
+          const entries = loadLargeSessionEntries();
+          const model = getModel("anthropic", "claude-sonnet-4-5")!;
 
-    const preparation = prepareCompaction(entries, DEFAULT_COMPACTION_SETTINGS);
-    expect(preparation).toBeDefined();
+          const preparation = prepareCompaction(entries, DEFAULT_COMPACTION_SETTINGS);
+          expect(preparation).toBeDefined();
 
-    const compactionResult = await compact(
-      preparation!,
-      model,
-      process.env["ANTHROPIC_OAUTH_TOKEN"]!,
-    );
+          const compactionResult = yield* awaited(
+            compact(preparation!, model, readEnv("ANTHROPIC_OAUTH_TOKEN")!),
+          );
 
-    expect(compactionResult.summary.length).toBeGreaterThan(100);
-    expect(compactionResult.firstKeptEntryId).toBeTruthy();
-    expect(compactionResult.tokensBefore).toBeGreaterThan(0);
+          expect(compactionResult.summary.length).toBeGreaterThan(100);
+          expect(compactionResult.firstKeptEntryId).toBeTruthy();
+          expect(compactionResult.tokensBefore).toBeGreaterThan(0);
 
-    console.log("Summary length:", compactionResult.summary.length);
-    console.log("First kept entry ID:", compactionResult.firstKeptEntryId);
-    console.log("Tokens before:", compactionResult.tokensBefore);
-    console.log("\n--- SUMMARY ---\n");
-    console.log(compactionResult.summary);
-  }, 60000);
+          yield* Effect.log("Summary length:", compactionResult.summary.length);
+          yield* Effect.log("First kept entry ID:", compactionResult.firstKeptEntryId);
+          yield* Effect.log("Tokens before:", compactionResult.tokensBefore);
+          yield* Effect.log("\n--- SUMMARY ---\n");
+          yield* Effect.log(compactionResult.summary);
+        }),
+      ),
+    60000,
+  );
 
-  it("should produce valid session after compaction", async () => {
-    const entries = loadLargeSessionEntries();
-    const loaded = buildSessionContext(entries);
-    const model = getModel("anthropic", "claude-sonnet-4-5")!;
+  it(
+    "should produce valid session after compaction",
+    () =>
+      runTest(
+        Effect.gen(function* () {
+          const entries = loadLargeSessionEntries();
+          const loaded = buildSessionContext(entries);
+          const model = getModel("anthropic", "claude-sonnet-4-5")!;
 
-    const preparation = prepareCompaction(entries, DEFAULT_COMPACTION_SETTINGS);
-    expect(preparation).toBeDefined();
+          const preparation = prepareCompaction(entries, DEFAULT_COMPACTION_SETTINGS);
+          expect(preparation).toBeDefined();
 
-    const compactionResult = await compact(
-      preparation!,
-      model,
-      process.env["ANTHROPIC_OAUTH_TOKEN"]!,
-    );
+          const compactionResult = yield* awaited(
+            compact(preparation!, model, readEnv("ANTHROPIC_OAUTH_TOKEN")!),
+          );
 
-    const lastEntry = entries.at(-1);
-    if (lastEntry === undefined) throw new Error("expected session entries");
-    const parentId = lastEntry.id;
-    const compactionEntry: CompactionEntry = {
-      type: "compaction",
-      id: "compaction-test-id",
-      parentId,
-      timestamp: new Date().toISOString(),
-      ...compactionResult,
-    };
-    const newEntries = [...entries, compactionEntry];
-    const reloaded = buildSessionContext(newEntries);
+          const lastEntry = entries.at(-1);
+          if (lastEntry === undefined) throw new Error("expected session entries");
+          const parentId = lastEntry.id;
+          const compactionEntry: CompactionEntry = {
+            type: "compaction" as const,
+            id: "compaction-test-id",
+            parentId,
+            timestamp: currentDate().toISOString(),
+            ...compactionResult,
+          };
+          const newEntries = [...entries, compactionEntry];
+          const reloaded = buildSessionContext(newEntries);
 
-    expect(reloaded.messages.length).toBeLessThan(loaded.messages.length);
-    expect(reloaded.messages[0]?.role).toBe("compactionSummary");
-    expect((reloaded.messages[0] as any).summary).toContain(compactionResult.summary);
+          expect(reloaded.messages.length).toBeLessThan(loaded.messages.length);
+          expect(reloaded.messages[0]?.role).toBe("compactionSummary");
+          expect((reloaded.messages[0] as any).summary).toContain(compactionResult.summary);
 
-    console.log("Original messages:", loaded.messages.length);
-    console.log("After compaction:", reloaded.messages.length);
-  }, 60000);
+          yield* Effect.log("Original messages:", loaded.messages.length);
+          yield* Effect.log("After compaction:", reloaded.messages.length);
+        }),
+      ),
+    60000,
+  );
 });

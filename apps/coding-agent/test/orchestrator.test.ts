@@ -1,5 +1,7 @@
 import type { AgentMessage } from "@msa/agent-core";
 import { type Api, fauxAssistantMessage, type Model } from "@msa/ai";
+import { awaited, runTest } from "@msa/testing";
+import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
@@ -14,7 +16,7 @@ function model(provider: string, id: string): Model<Api> {
   return {
     id,
     name: id,
-    api: "faux",
+    api: "faux" as const,
     provider,
     baseUrl: "",
     input: ["text"],
@@ -48,34 +50,52 @@ class FakeWorker implements WorkerSession {
     this.sessionFile = `/sessions/${index}.jsonl`;
   }
 
-  prompt = async (text: string) => {
-    this.prompts.push(text);
-    this.isStreaming = true;
-    await new Promise<void>((resolve, reject) => {
-      this.pending.push({
-        finish: (reply) => {
-          this.messages = [...this.messages, fauxAssistantMessage(reply)];
-          resolve();
-        },
-        fail: reject,
-      });
-    });
-    this.isStreaming = false;
+  prompt = (text: string) => {
+    const self = this;
+    return runTest(
+      Effect.gen(function* () {
+        self.prompts.push(text);
+        self.isStreaming = true;
+        yield* awaited(
+          new Promise<void>((resolve, reject) => {
+            self.pending.push({
+              finish: (reply: string) => {
+                self.messages = [...self.messages, fauxAssistantMessage(reply)];
+                resolve();
+              },
+              fail: reject,
+            });
+          }),
+        );
+        self.isStreaming = false;
+      }),
+    );
   };
 
-  steer = async (text: string) => {
-    this.steered.push(text);
-    return "queued" as never;
+  steer = (text: string) => {
+    const self = this;
+    return runTest(
+      Effect.gen(function* () {
+        self.steered.push(text);
+        return yield* awaited("queued" as never);
+      }),
+    );
   };
 
-  abort = async () => {
-    this.isStreaming = false;
-    if (this.abortReturns) this.pending.pop()?.fail(new Error("aborted"));
-  };
+  abort = () =>
+    runTest(
+      Effect.sync(() => {
+        this.isStreaming = false;
+        if (this.abortReturns) this.pending.pop()?.fail(new Error("aborted"));
+      }),
+    );
 
-  setModel = async (next: Model<any>) => {
-    this.model = next;
-  };
+  setModel = (next: Model<any>) =>
+    runTest(
+      Effect.sync(() => {
+        this.model = next;
+      }),
+    );
 
   setThinkingLevel = (level: string) => {
     this.thinkingLevel = level;
@@ -105,12 +125,15 @@ function setup(maxConcurrentSessions = 4) {
   const orchestrator = new Orchestrator({
     project: "project",
     cwd: "/repo",
-    connectGraph: async () => graph,
-    createWorker: async (options) => {
-      const worker = new FakeWorker(options, workers.length);
-      workers.push(worker);
-      return worker;
-    },
+    connectGraph: () => runTest(awaited(graph)),
+    createWorker: (options) =>
+      runTest(
+        Effect.gen(function* () {
+          const worker = new FakeWorker(options, workers.length);
+          workers.push(worker);
+          return yield* awaited(worker);
+        }),
+      ),
     resolveModel: (reference) => {
       const found = MODELS.find(
         (candidate) => `${candidate.provider}/${candidate.id}` === reference,
@@ -133,9 +156,12 @@ function setup(maxConcurrentSessions = 4) {
       workers.find((worker) => worker.sessionFile === found?.sessionFile),
     );
   };
-  const settled = async (count: number) => {
-    await expect.poll(() => reports.length).toBe(count);
-  };
+  const settled = (count: number) =>
+    runTest(
+      Effect.gen(function* () {
+        yield* awaited(expect.poll(() => reports.length).toBe(count));
+      }),
+    );
   return { graph, workers, reports, orchestrator, workerFor, settled };
 }
 
@@ -153,178 +179,232 @@ const task = (title: string, dependsOn: string[] = [], extra: object = {}) => ({
 });
 
 describe("Orchestrator", () => {
-  it("runs independent sessions in parallel with the worker default model", async () => {
-    const { orchestrator, workers, reports, settled } = setup();
-    const started = await Promise.all(
-      ["a", "b", "c"].map((title) => orchestrator.start(task(title))),
-    );
-    expect(started.map(({ session }) => session.status)).toEqual(["running", "running", "running"]);
-    expect(workers.map((worker) => worker.model.id)).toEqual(["flash", "flash", "flash"]);
-    expect(workers.map((worker) => worker.thinkingLevel)).toEqual(["low", "low", "low"]);
+  it("runs independent sessions in parallel with the worker default model", () =>
+    runTest(
+      Effect.gen(function* () {
+        const { orchestrator, workers, reports, settled } = setup();
+        const started = yield* awaited(
+          Promise.all(["a", "b", "c"].map((title) => orchestrator.start(task(title)))),
+        );
+        expect(started.map(({ session }) => session.status)).toEqual([
+          "running",
+          "running",
+          "running",
+        ]);
+        expect(workers.map((worker) => worker.model.id)).toEqual(["flash", "flash", "flash"]);
+        expect(workers.map((worker) => worker.thinkingLevel)).toEqual(["low", "low", "low"]);
 
-    at(workers, 1).complete("b is done");
-    await settled(1);
-    expect(at(reports, 0).details).toMatchObject({ status: "completed", kind: "task" });
-    expect(at(reports, 0).text).toContain("b is done");
-    const list = await orchestrator.list();
-    expect(list.map((node) => [node.title, node.status]).toSorted()).toEqual([
-      ["Review of round 1", "queued"],
-      ["a", "running"],
-      ["b", "completed"],
-      ["c", "running"],
-    ]);
-  });
+        at(workers, 1).complete("b is done");
+        yield* awaited(settled(1));
+        expect(at(reports, 0).details).toMatchObject({
+          status: "completed",
+          kind: "task" as const,
+        });
+        expect(at(reports, 0).text).toContain("b is done");
+        const list = yield* awaited(orchestrator.list());
+        expect(list.map((node) => [node.title, node.status]).toSorted()).toEqual([
+          ["Review of round 1", "queued"],
+          ["a", "running"],
+          ["b", "completed"],
+          ["c", "running"],
+        ]);
+      }),
+    ));
 
-  it("shows a running session's partial reply, run time, and retries", async () => {
-    const { orchestrator, workers, settled } = setup();
-    const { session } = await orchestrator.start(task("a"));
-    const worker = at(workers, 0);
-    const partial = fauxAssistantMessage("half way");
-    worker.state = { streamingMessage: partial } as WorkerSession["state"];
-    worker.isRetrying = true;
-    expect(orchestrator.messages(session.id).at(-1)).toBe(partial);
-    expect(orchestrator.progress(session.id)).toEqual({
-      startedAt: expect.any(Number),
-      retrying: true,
-    });
+  it("shows a running session's partial reply, run time, and retries", () =>
+    runTest(
+      Effect.gen(function* () {
+        const { orchestrator, workers, settled } = setup();
+        const { session } = yield* awaited(orchestrator.start(task("a")));
+        const worker = at(workers, 0);
+        const partial = fauxAssistantMessage("half way");
+        worker.state = { streamingMessage: partial } as WorkerSession["state"];
+        worker.isRetrying = true;
+        expect(orchestrator.messages(session.id).at(-1)).toBe(partial);
+        expect(orchestrator.progress(session.id)).toEqual({
+          startedAt: expect.any(Number),
+          retrying: true,
+        });
 
-    worker.complete("done");
-    await settled(1);
-    expect(orchestrator.progress(session.id).startedAt).toBeUndefined();
-  });
+        worker.complete("done");
+        yield* awaited(settled(1));
+        expect(orchestrator.progress(session.id).startedAt).toBeUndefined();
+      }),
+    ));
 
-  it("starts one task on a smaller model and switches a running one", async () => {
-    const { orchestrator, workers, workerFor } = setup();
-    const { session } = await orchestrator.start(task("small", [], { model: "fast/tiny" }));
-    expect(at(workers, 0).model.id).toBe("tiny");
+  it("starts one task on a smaller model and switches a running one", () =>
+    runTest(
+      Effect.gen(function* () {
+        const { orchestrator, workers, workerFor } = setup();
+        const { session } = yield* awaited(
+          orchestrator.start(task("small", [], { model: "fast/tiny" })),
+        );
+        expect(at(workers, 0).model.id).toBe("tiny");
 
-    await orchestrator.setModel(session.id, "sub/fable", "high");
-    const worker = await workerFor(session.id);
-    expect(worker?.model.id).toBe("fable");
-    expect(worker?.thinkingLevel).toBe("high");
-    expect(await orchestrator.read(session.id)).toMatchObject({
-      model: "sub/fable",
-      thinkingLevel: "high",
-    });
-    await expect(orchestrator.start(task("x", [], { model: "nope/none" }))).rejects.toThrow(
-      /not an available model/,
-    );
-  });
+        yield* awaited(orchestrator.setModel(session.id, "sub/fable", "high"));
+        const worker = yield* awaited(workerFor(session.id));
+        expect(worker?.model.id).toBe("fable");
+        expect(worker?.thinkingLevel).toBe("high");
+        expect(yield* awaited(orchestrator.read(session.id))).toMatchObject({
+          model: "sub/fable",
+          thinkingLevel: "high",
+        });
+        yield* awaited(
+          expect(orchestrator.start(task("x", [], { model: "nope/none" }))).rejects.toThrow(
+            /not an available model/u,
+          ),
+        );
+      }),
+    ));
 
-  it("waits for dependencies and passes their reports on", async () => {
-    const { orchestrator, workers, settled } = setup();
-    const a = await orchestrator.start(task("a"));
-    const b = await orchestrator.start(task("b", [a.session.id]));
-    expect(b.session.status).toBe("queued");
-    expect(workers).toHaveLength(1);
-    await expect(orchestrator.start(task("bad", ["s-missing"]))).rejects.toThrow(
-      /Unknown sessions/,
-    );
+  it("waits for dependencies and passes their reports on", () =>
+    runTest(
+      Effect.gen(function* () {
+        const { orchestrator, workers, settled } = setup();
+        const a = yield* awaited(orchestrator.start(task("a")));
+        const b = yield* awaited(orchestrator.start(task("b", [a.session.id])));
+        expect(b.session.status).toBe("queued");
+        expect(workers).toHaveLength(1);
+        yield* awaited(
+          expect(orchestrator.start(task("bad", ["s-missing"]))).rejects.toThrow(
+            /Unknown sessions/u,
+          ),
+        );
 
-    at(workers, 0).complete("api is at /v2");
-    await settled(1);
-    expect(workers).toHaveLength(2);
-    expect(at(workers, 1).prompts[0]).toContain("do b");
-    expect(at(workers, 1).prompts[0]).toContain("api is at /v2");
-  });
+        at(workers, 0).complete("api is at /v2");
+        yield* awaited(settled(1));
+        expect(workers).toHaveLength(2);
+        expect(at(workers, 1).prompts[0]).toContain("do b");
+        expect(at(workers, 1).prompts[0]).toContain("api is at /v2");
+      }),
+    ));
 
-  it("ends every round in one review that depends on the sinks and runs alone", async () => {
-    const { orchestrator, workers, reports, settled } = setup();
-    const a = await orchestrator.start(task("a"));
-    expect(a.review.dependsOn).toEqual([a.session.id]);
-    const b = await orchestrator.start(task("b", [a.session.id]));
-    expect(b.review.dependsOn).toEqual([b.session.id]);
-    const c = await orchestrator.start(task("c"));
-    expect(c.review.id).toBe(a.review.id);
-    expect(c.review.dependsOn).toEqual([b.session.id, c.session.id].toSorted());
-    await expect(orchestrator.start(task("loop", [a.review.id]))).rejects.toThrow(
-      /closes the current round/,
-    );
+  it("ends every round in one review that depends on the sinks and runs alone", () =>
+    runTest(
+      Effect.gen(function* () {
+        const { orchestrator, workers, reports, settled } = setup();
+        const a = yield* awaited(orchestrator.start(task("a")));
+        expect(a.review.dependsOn).toEqual([a.session.id]);
+        const b = yield* awaited(orchestrator.start(task("b", [a.session.id])));
+        expect(b.review.dependsOn).toEqual([b.session.id]);
+        const c = yield* awaited(orchestrator.start(task("c")));
+        expect(c.review.id).toBe(a.review.id);
+        expect(c.review.dependsOn).toEqual([b.session.id, c.session.id].toSorted());
+        yield* awaited(
+          expect(orchestrator.start(task("loop", [a.review.id]))).rejects.toThrow(
+            /closes the current round/u,
+          ),
+        );
 
-    at(workers, 0).complete("a done");
-    await settled(1);
-    at(workers, 1).complete("c done");
-    await settled(2);
-    expect(workers).toHaveLength(3);
-    at(workers, 2).complete("b done");
-    await settled(3);
+        at(workers, 0).complete("a done");
+        yield* awaited(settled(1));
+        at(workers, 1).complete("c done");
+        yield* awaited(settled(2));
+        expect(workers).toHaveLength(3);
+        at(workers, 2).complete("b done");
+        yield* awaited(settled(3));
 
-    expect(workers).toHaveLength(4);
-    const review = at(workers, 3);
-    expect(review.model.id).toBe("fable");
-    expect(review.thinkingLevel).toBe("high");
-    expect(review.prompts[0]).toContain("redesign");
-    expect(review.prompts[0]).toContain("a done");
-    expect(at(reports, 2).details.started).toEqual([a.review.id]);
+        expect(workers).toHaveLength(4);
+        const review = at(workers, 3);
+        expect(review.model.id).toBe("fable");
+        expect(review.thinkingLevel).toBe("high");
+        expect(review.prompts[0]).toContain("redesign");
+        expect(review.prompts[0]).toContain("a done");
+        expect(at(reports, 2).details.started).toEqual([a.review.id]);
 
-    const next = await orchestrator.start(task("d"));
-    expect(next.session.round).toBe(2);
-    expect(next.session.status).toBe("queued");
-    expect(next.review.id).not.toBe(a.review.id);
-    await expect(orchestrator.send(a.session.id, "again")).rejects.toThrow(/review is running/);
+        const next = yield* awaited(orchestrator.start(task("d")));
+        expect(next.session.round).toBe(2);
+        expect(next.session.status).toBe("queued");
+        expect(next.review.id).not.toBe(a.review.id);
+        yield* awaited(
+          expect(orchestrator.send(a.session.id, "again")).rejects.toThrow(/review is running/u),
+        );
 
-    review.complete("redesign: split d");
-    await settled(4);
-    expect(at(reports, 3).details).toMatchObject({ kind: "review", status: "completed" });
-    expect(at(reports, 3).details.started).toEqual([next.session.id]);
-    await expect(orchestrator.send(a.session.id, "again")).rejects.toThrow(/has been reviewed/);
-  });
+        review.complete("redesign: split d");
+        yield* awaited(settled(4));
+        expect(at(reports, 3).details).toMatchObject({
+          kind: "review" as const,
+          status: "completed",
+        });
+        expect(at(reports, 3).details.started).toEqual([next.session.id]);
+        yield* awaited(
+          expect(orchestrator.send(a.session.id, "again")).rejects.toThrow(/has been reviewed/u),
+        );
+      }),
+    ));
 
-  it("holds sessions beyond the concurrency limit", async () => {
-    const { orchestrator, workers, settled } = setup(2);
-    for (const title of ["a", "b", "c"]) await orchestrator.start(task(title));
-    expect(workers).toHaveLength(2);
-    at(workers, 0).complete("done");
-    await settled(1);
-    expect(workers).toHaveLength(3);
-  });
+  it("holds sessions beyond the concurrency limit", () =>
+    runTest(
+      Effect.gen(function* () {
+        const { orchestrator, workers, settled } = setup(2);
+        for (const title of ["a", "b", "c"]) yield* awaited(orchestrator.start(task(title)));
+        expect(workers).toHaveLength(2);
+        at(workers, 0).complete("done");
+        yield* awaited(settled(1));
+        expect(workers).toHaveLength(3);
+      }),
+    ));
 
-  it("stops sessions at once, reports waiting dependents, and reruns on a message", async () => {
-    const { orchestrator, workers, reports, settled } = setup();
-    const a = await orchestrator.start(task("a"));
-    const b = await orchestrator.start(task("b", [a.session.id]));
-    await orchestrator.send(a.session.id, "use the cache");
-    expect(at(workers, 0).steered).toEqual(["use the cache"]);
+  it("stops sessions at once, reports waiting dependents, and reruns on a message", () =>
+    runTest(
+      Effect.gen(function* () {
+        const { orchestrator, workers, reports, settled } = setup();
+        const a = yield* awaited(orchestrator.start(task("a")));
+        const b = yield* awaited(orchestrator.start(task("b", [a.session.id])));
+        yield* awaited(orchestrator.send(a.session.id, "use the cache"));
+        expect(at(workers, 0).steered).toEqual(["use the cache"]);
 
-    expect(await orchestrator.stop(a.session.id)).toMatchObject({ status: "stopped" });
-    expect(await orchestrator.read(b.session.id)).toMatchObject({ status: "queued" });
+        expect(yield* awaited(orchestrator.stop(a.session.id))).toMatchObject({
+          status: "stopped",
+        });
+        expect(yield* awaited(orchestrator.read(b.session.id))).toMatchObject({ status: "queued" });
 
-    await orchestrator.send(a.session.id, "try again");
-    expect(at(workers, 0).prompts.at(-1)).toBe("try again");
-    at(workers, 0).complete("a done");
-    await settled(1);
-    expect(at(reports, 0).details).toMatchObject({ status: "completed", started: [b.session.id] });
+        yield* awaited(orchestrator.send(a.session.id, "try again"));
+        expect(at(workers, 0).prompts.at(-1)).toBe("try again");
+        at(workers, 0).complete("a done");
+        yield* awaited(settled(1));
+        expect(at(reports, 0).details).toMatchObject({
+          status: "completed",
+          started: [b.session.id],
+        });
 
-    await orchestrator.stop(b.session.id);
-    const review = (await orchestrator.list()).find((node) => node.kind === "review");
-    expect(review?.dependsOn).toEqual([a.session.id]);
-  });
+        yield* awaited(orchestrator.stop(b.session.id));
+        const review = (yield* awaited(orchestrator.list())).find((node) => node.kind === "review");
+        expect(review?.dependsOn).toEqual([a.session.id]);
+      }),
+    ));
 
-  it("reports a failed session with the sessions waiting on it", async () => {
-    const { orchestrator, workers, reports, settled } = setup();
-    const a = await orchestrator.start(task("a"));
-    const b = await orchestrator.start(task("b", [a.session.id]));
-    at(workers, 0).abortReturns = true;
-    await at(workers, 0).abort();
-    await settled(1);
-    expect(at(reports, 0).details.status).toBe("failed");
-    expect(at(reports, 0).text).toContain(b.session.id);
-  });
+  it("reports a failed session with the sessions waiting on it", () =>
+    runTest(
+      Effect.gen(function* () {
+        const { orchestrator, workers, reports, settled } = setup();
+        const a = yield* awaited(orchestrator.start(task("a")));
+        const b = yield* awaited(orchestrator.start(task("b", [a.session.id])));
+        at(workers, 0).abortReturns = true;
+        yield* awaited(at(workers, 0).abort());
+        yield* awaited(settled(1));
+        expect(at(reports, 0).details.status).toBe("failed");
+        expect(at(reports, 0).text).toContain(b.session.id);
+      }),
+    ));
 
-  it("ignores a stopped run that returns after the session was rerun", async () => {
-    const { orchestrator, workers, reports, settled } = setup();
-    const a = await orchestrator.start(task("a"));
-    const worker = at(workers, 0);
-    worker.abortReturns = false;
-    await orchestrator.stop(a.session.id);
-    await orchestrator.send(a.session.id, "again");
+  it("ignores a stopped run that returns after the session was rerun", () =>
+    runTest(
+      Effect.gen(function* () {
+        const { orchestrator, workers, reports, settled } = setup();
+        const a = yield* awaited(orchestrator.start(task("a")));
+        const worker = at(workers, 0);
+        worker.abortReturns = false;
+        yield* awaited(orchestrator.stop(a.session.id));
+        yield* awaited(orchestrator.send(a.session.id, "again"));
 
-    worker.release("stale");
-    worker.complete("fresh");
-    await settled(1);
-    await new Promise((resolve) => setTimeout(resolve, 20));
-    expect(reports).toHaveLength(1);
-    expect(at(reports, 0).text).toContain("fresh");
-    expect(at(reports, 0).details.started).toEqual([a.review.id]);
-  });
+        worker.release("stale");
+        worker.complete("fresh");
+        yield* awaited(settled(1));
+        yield* Effect.sleep(20);
+        expect(reports).toHaveLength(1);
+        expect(at(reports, 0).text).toContain("fresh");
+        expect(at(reports, 0).details.started).toEqual([a.review.id]);
+      }),
+    ));
 });

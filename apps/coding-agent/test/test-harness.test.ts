@@ -1,5 +1,7 @@
 import type { AgentTool } from "@msa/agent-core";
 import type { AssistantMessage } from "@msa/ai";
+import { awaited, runTest } from "@msa/testing";
+import { Effect } from "effect";
 import { Type } from "typebox";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
@@ -12,338 +14,444 @@ describe("test harness", () => {
     harness?.cleanup();
   });
 
-  it("simple text response", async () => {
-    harness = await createHarness({ responses: ["hello world"] });
+  it("simple text response", () =>
+    runTest(
+      Effect.gen(function* () {
+        harness = yield* awaited(createHarness({ responses: ["hello world"] }));
 
-    await harness.session.prompt("hi");
+        yield* awaited(harness.session.prompt("hi"));
 
-    expect(harness.faux.callCount).toBe(1);
+        expect(harness.faux.callCount).toBe(1);
 
-    const assistantMessages = harness.session.messages.filter((m) => m.role === "assistant");
-    expect(assistantMessages).toHaveLength(1);
+        const assistantMessages = harness.session.messages.filter((m) => m.role === "assistant");
+        expect(assistantMessages).toHaveLength(1);
 
-    const msg = assistantMessages[0] as AssistantMessage;
-    expect(msg.content).toEqual([{ type: "text", text: "hello world" }]);
-    expect(msg.stopReason).toBe("stop");
-  });
+        const msg = assistantMessages[0] as AssistantMessage;
+        expect(msg.content).toEqual([{ type: "text" as const, text: "hello world" }]);
+        expect(msg.stopReason).toBe("stop");
+      }),
+    ));
 
-  it("response sequence", async () => {
-    harness = await createHarness({ responses: ["first", "second", "third"] });
+  it("response sequence", () =>
+    runTest(
+      Effect.gen(function* () {
+        harness = yield* awaited(createHarness({ responses: ["first", "second", "third"] }));
 
-    await harness.session.prompt("a");
-    await harness.session.prompt("b");
-    await harness.session.prompt("c");
+        yield* awaited(harness.session.prompt("a"));
+        yield* awaited(harness.session.prompt("b"));
+        yield* awaited(harness.session.prompt("c"));
 
-    expect(harness.faux.callCount).toBe(3);
+        expect(harness.faux.callCount).toBe(3);
 
-    const assistantTexts = harness.session.messages
-      .filter((m): m is AssistantMessage => m.role === "assistant")
-      .map((m) => m.content.find((c) => c.type === "text")?.text);
+        const assistantTexts = harness.session.messages
+          .filter((m): m is AssistantMessage => m.role === "assistant")
+          .map((m) => m.content.find((c) => c.type === "text")?.text);
 
-    expect(assistantTexts).toEqual(["first", "second", "third"]);
-  });
+        expect(assistantTexts).toEqual(["first", "second", "third"]);
+      }),
+    ));
 
-  it("tool call response triggers tool execution", async () => {
-    let toolExecuted = false;
-    const echoTool: AgentTool = {
-      name: "echo",
-      label: "Echo",
-      description: "Echo back",
-      parameters: Type.Object({ text: Type.String() }),
-      execute: async () => {
-        toolExecuted = true;
-        return { content: [{ type: "text", text: "echoed" }], details: {} };
-      },
-    };
+  it("tool call response triggers tool execution", () =>
+    runTest(
+      Effect.gen(function* () {
+        const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-    harness = await createHarness({
-      responses: [{ toolCalls: [{ name: "echo", args: { text: "hi" } }] }, "done after tool"],
-      tools: [echoTool],
-      baseToolsOverride: { echo: echoTool },
-    });
+        let toolExecuted = false;
+        const echoTool: AgentTool = {
+          name: "echo",
+          label: "Echo",
+          description: "Echo back",
+          parameters: Type.Object({ text: Type.String() }),
+          execute: () =>
+            effectRunPromise(
+              Effect.gen(function* () {
+                toolExecuted = true;
+                return yield* awaited({
+                  content: [{ type: "text" as const, text: "echoed" }],
+                  details: {},
+                });
+              }),
+            ),
+        };
 
-    await harness.session.prompt("use the tool");
+        harness = yield* awaited(
+          createHarness({
+            responses: [{ toolCalls: [{ name: "echo", args: { text: "hi" } }] }, "done after tool"],
+            tools: [echoTool],
+            baseToolsOverride: { echo: echoTool },
+          }),
+        );
 
-    expect(toolExecuted).toBe(true);
-    expect(harness.faux.callCount).toBe(2);
+        yield* awaited(harness.session.prompt("use the tool"));
 
-    const toolResults = harness.session.messages.filter((m) => m.role === "toolResult");
-    expect(toolResults).toHaveLength(1);
-  });
+        expect(toolExecuted).toBe(true);
+        expect(harness.faux.callCount).toBe(2);
 
-  it("error response", async () => {
-    harness = await createHarness({
-      responses: [{ error: "something broke" }],
-    });
+        const toolResults = harness.session.messages.filter((m) => m.role === "toolResult");
+        expect(toolResults).toHaveLength(1);
+      }),
+    ));
 
-    await harness.session.prompt("hi");
+  it("error response", () =>
+    runTest(
+      Effect.gen(function* () {
+        harness = yield* awaited(
+          createHarness({
+            responses: [{ error: "something broke" }],
+          }),
+        );
 
-    const assistantMessages = harness.session.messages.filter(
-      (m): m is AssistantMessage => m.role === "assistant",
-    );
-    expect(assistantMessages).toHaveLength(1);
-    expect(assistantMessages[0]?.stopReason).toBe("error");
-    expect(assistantMessages[0]?.errorMessage).toBe("something broke");
-  });
+        yield* awaited(harness.session.prompt("hi"));
 
-  it("turns a pending terminal response into an error", async () => {
-    harness = await createHarness({
-      responses: [{ text: "partial", stopReason: "pending" }],
-      settings: { retry: { enabled: false } },
-    });
+        const assistantMessages = harness.session.messages.filter(
+          (m): m is AssistantMessage => m.role === "assistant",
+        );
+        expect(assistantMessages).toHaveLength(1);
+        expect(assistantMessages[0]?.stopReason).toBe("error");
+        expect(assistantMessages[0]?.errorMessage).toBe("something broke");
+      }),
+    ));
 
-    await harness.session.prompt("hi");
+  it("turns a pending terminal response into an error", () =>
+    runTest(
+      Effect.gen(function* () {
+        harness = yield* awaited(
+          createHarness({
+            responses: [{ text: "partial", stopReason: "pending" }],
+            settings: { retry: { enabled: false } },
+          }),
+        );
 
-    const assistantMessages = harness.session.messages.filter(
-      (m): m is AssistantMessage => m.role === "assistant",
-    );
-    expect(assistantMessages).toHaveLength(1);
-    expect(assistantMessages[0]?.stopReason).toBe("error");
-    expect(assistantMessages[0]?.errorMessage).toBe("Faux response ended without a stop reason");
-  });
+        yield* awaited(harness.session.prompt("hi"));
 
-  it("retry on transient error", async () => {
-    harness = await createHarness({
-      responses: [{ error: "overloaded_error" }, "recovered"],
-      settings: { retry: { enabled: true, maxRetries: 3, baseDelayMs: 1 } },
-    });
+        const assistantMessages = harness.session.messages.filter(
+          (m): m is AssistantMessage => m.role === "assistant",
+        );
+        expect(assistantMessages).toHaveLength(1);
+        expect(assistantMessages[0]?.stopReason).toBe("error");
+        expect(assistantMessages[0]?.errorMessage).toBe(
+          "Faux response ended without a stop reason",
+        );
+      }),
+    ));
 
-    await harness.session.prompt("hi");
+  it("retry on transient error", () =>
+    runTest(
+      Effect.gen(function* () {
+        harness = yield* awaited(
+          createHarness({
+            responses: [{ error: "overloaded_error" }, "recovered"],
+            settings: { retry: { enabled: true, maxRetries: 3, baseDelayMs: 1 } },
+          }),
+        );
 
-    expect(harness.faux.callCount).toBe(2);
+        yield* awaited(harness.session.prompt("hi"));
 
-    const retryStarts = harness.eventsOfType("auto_retry_start");
-    expect(retryStarts).toHaveLength(1);
+        expect(harness.faux.callCount).toBe(2);
 
-    const retryEnds = harness.eventsOfType("auto_retry_end");
-    expect(retryEnds).toHaveLength(1);
-    expect(retryEnds[0]?.success).toBe(true);
-  });
+        const retryStarts = harness.eventsOfType("auto_retry_start");
+        expect(retryStarts).toHaveLength(1);
 
-  it("custom usage numbers", async () => {
-    harness = await createHarness({
-      responses: [{ text: "big response", usage: { input: 100000, output: 5000 } }],
-    });
+        const retryEnds = harness.eventsOfType("auto_retry_end");
+        expect(retryEnds).toHaveLength(1);
+        expect(retryEnds[0]?.success).toBe(true);
+      }),
+    ));
 
-    await harness.session.prompt("hi");
+  it("custom usage numbers", () =>
+    runTest(
+      Effect.gen(function* () {
+        harness = yield* awaited(
+          createHarness({
+            responses: [{ text: "big response", usage: { input: 100000, output: 5000 } }],
+          }),
+        );
 
-    const msg = harness.session.messages.find(
-      (m): m is AssistantMessage => m.role === "assistant",
-    )!;
-    expect(msg.usage.input).toBe(100000);
-    expect(msg.usage.output).toBe(5000);
-  });
+        yield* awaited(harness.session.prompt("hi"));
 
-  it("event capture", async () => {
-    harness = await createHarness({ responses: ["hello"] });
+        const msg = harness.session.messages.find(
+          (m): m is AssistantMessage => m.role === "assistant",
+        )!;
+        expect(msg.usage.input).toBe(100000);
+        expect(msg.usage.output).toBe(5000);
+      }),
+    ));
 
-    await harness.session.prompt("hi");
+  it("event capture", () =>
+    runTest(
+      Effect.gen(function* () {
+        harness = yield* awaited(createHarness({ responses: ["hello"] }));
 
-    const agentStarts = harness.eventsOfType("agent_start");
-    expect(agentStarts).toHaveLength(1);
+        yield* awaited(harness.session.prompt("hi"));
 
-    const agentEnds = harness.eventsOfType("agent_end");
-    expect(agentEnds).toHaveLength(1);
+        const agentStarts = harness.eventsOfType("agent_start");
+        expect(agentStarts).toHaveLength(1);
 
-    const messageEnds = harness.eventsOfType("message_end");
-    expect(messageEnds.length).toBeGreaterThanOrEqual(2);
-  });
+        const agentEnds = harness.eventsOfType("agent_end");
+        expect(agentEnds).toHaveLength(1);
 
-  it("context capture", async () => {
-    harness = await createHarness({ responses: ["reply"] });
+        const messageEnds = harness.eventsOfType("message_end");
+        expect(messageEnds.length).toBeGreaterThanOrEqual(2);
+      }),
+    ));
 
-    await harness.session.prompt("my question");
+  it("context capture", () =>
+    runTest(
+      Effect.gen(function* () {
+        harness = yield* awaited(createHarness({ responses: ["reply"] }));
 
-    expect(harness.faux.contexts).toHaveLength(1);
-    const ctx = harness.faux.contexts[0];
-    const userMsg = ctx?.messages.find((m) => m.role === "user");
-    expect(userMsg).toBeDefined();
-  });
+        yield* awaited(harness.session.prompt("my question"));
 
-  it("wraps around when more calls than responses", async () => {
-    harness = await createHarness({ responses: ["a", "b"] });
+        expect(harness.faux.contexts).toHaveLength(1);
+        const ctx = harness.faux.contexts[0];
+        const userMsg = ctx?.messages.find((m) => m.role === "user");
+        expect(userMsg).toBeDefined();
+      }),
+    ));
 
-    await harness.session.prompt("1");
-    await harness.session.prompt("2");
-    await harness.session.prompt("3");
+  it("wraps around when more calls than responses", () =>
+    runTest(
+      Effect.gen(function* () {
+        harness = yield* awaited(createHarness({ responses: ["a", "b"] }));
 
-    expect(harness.faux.callCount).toBe(3);
+        yield* awaited(harness.session.prompt("1"));
+        yield* awaited(harness.session.prompt("2"));
+        yield* awaited(harness.session.prompt("3"));
 
-    const texts = harness.session.messages
-      .filter((m): m is AssistantMessage => m.role === "assistant")
-      .map((m) => m.content.find((c) => c.type === "text")?.text);
+        expect(harness.faux.callCount).toBe(3);
 
-    expect(texts).toEqual(["a", "b", "a"]);
-  });
+        const texts = harness.session.messages
+          .filter((m): m is AssistantMessage => m.role === "assistant")
+          .map((m) => m.content.find((c) => c.type === "text")?.text);
 
-  it("streams text deltas", async () => {
-    harness = await createHarness({ responses: ["hello world"] });
+        expect(texts).toEqual(["a", "b", "a"]);
+      }),
+    ));
 
-    await harness.session.prompt("hi");
+  it("streams text deltas", () =>
+    runTest(
+      Effect.gen(function* () {
+        harness = yield* awaited(createHarness({ responses: ["hello world"] }));
 
-    const updates = harness.eventsOfType("message_update");
-    const textDeltas = updates.filter((e) => e.assistantMessageEvent.type === "text_delta");
-    expect(textDeltas.length).toBeGreaterThan(0);
+        yield* awaited(harness.session.prompt("hi"));
 
-    const reconstructed = textDeltas
-      .map((e) => (e.assistantMessageEvent as { delta: string }).delta)
-      .join("");
-    expect(reconstructed).toBe("hello world");
-  });
+        const updates = harness.eventsOfType("message_update");
+        const textDeltas = updates.filter((e) => e.assistantMessageEvent.type === "text_delta");
+        expect(textDeltas.length).toBeGreaterThan(0);
 
-  it("streams thinking deltas", async () => {
-    harness = await createHarness({
-      responses: [{ thinking: "let me think about this", text: "answer" }],
-    });
+        const reconstructed = textDeltas
+          .map((e) => (e.assistantMessageEvent as { delta: string }).delta)
+          .join("");
+        expect(reconstructed).toBe("hello world");
+      }),
+    ));
 
-    await harness.session.prompt("hi");
+  it("streams thinking deltas", () =>
+    runTest(
+      Effect.gen(function* () {
+        harness = yield* awaited(
+          createHarness({
+            responses: [{ thinking: "let me think about this", text: "answer" }],
+          }),
+        );
 
-    const updates = harness.eventsOfType("message_update");
-    const thinkingStarts = updates.filter((e) => e.assistantMessageEvent.type === "thinking_start");
-    const thinkingDeltas = updates.filter((e) => e.assistantMessageEvent.type === "thinking_delta");
-    const thinkingEnds = updates.filter((e) => e.assistantMessageEvent.type === "thinking_end");
+        yield* awaited(harness.session.prompt("hi"));
 
-    expect(thinkingStarts).toHaveLength(1);
-    expect(thinkingDeltas.length).toBeGreaterThan(0);
-    expect(thinkingEnds).toHaveLength(1);
+        const updates = harness.eventsOfType("message_update");
+        const thinkingStarts = updates.filter(
+          (e) => e.assistantMessageEvent.type === "thinking_start",
+        );
+        const thinkingDeltas = updates.filter(
+          (e) => e.assistantMessageEvent.type === "thinking_delta",
+        );
+        const thinkingEnds = updates.filter((e) => e.assistantMessageEvent.type === "thinking_end");
 
-    const reconstructed = thinkingDeltas
-      .map((e) => (e.assistantMessageEvent as { delta: string }).delta)
-      .join("");
-    expect(reconstructed).toBe("let me think about this");
-  });
+        expect(thinkingStarts).toHaveLength(1);
+        expect(thinkingDeltas.length).toBeGreaterThan(0);
+        expect(thinkingEnds).toHaveLength(1);
 
-  it("streams tool call deltas", async () => {
-    const echoTool: AgentTool = {
-      name: "echo",
-      label: "Echo",
-      description: "Echo back",
-      parameters: Type.Object({ text: Type.String() }),
-      execute: async () => ({ content: [{ type: "text", text: "echoed" }], details: {} }),
-    };
+        const reconstructed = thinkingDeltas
+          .map((e) => (e.assistantMessageEvent as { delta: string }).delta)
+          .join("");
+        expect(reconstructed).toBe("let me think about this");
+      }),
+    ));
 
-    harness = await createHarness({
-      responses: [{ toolCalls: [{ name: "echo", args: { text: "hi" } }] }, "done"],
-      tools: [echoTool],
-      baseToolsOverride: { echo: echoTool },
-    });
+  it("streams tool call deltas", () =>
+    runTest(
+      Effect.gen(function* () {
+        const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-    await harness.session.prompt("use tool");
+        const echoTool: AgentTool = {
+          name: "echo",
+          label: "Echo",
+          description: "Echo back",
+          parameters: Type.Object({ text: Type.String() }),
+          execute: () =>
+            effectRunPromise(
+              awaited({ content: [{ type: "text" as const, text: "echoed" }], details: {} }),
+            ),
+        };
 
-    const updates = harness.eventsOfType("message_update");
-    const toolcallStarts = updates.filter((e) => e.assistantMessageEvent.type === "toolcall_start");
-    const toolcallDeltas = updates.filter((e) => e.assistantMessageEvent.type === "toolcall_delta");
-    const toolcallEnds = updates.filter((e) => e.assistantMessageEvent.type === "toolcall_end");
+        harness = yield* awaited(
+          createHarness({
+            responses: [{ toolCalls: [{ name: "echo", args: { text: "hi" } }] }, "done"],
+            tools: [echoTool],
+            baseToolsOverride: { echo: echoTool },
+          }),
+        );
 
-    expect(toolcallStarts).toHaveLength(1);
-    expect(toolcallDeltas.length).toBeGreaterThan(0);
-    expect(toolcallEnds).toHaveLength(1);
-  });
+        yield* awaited(harness.session.prompt("use tool"));
 
-  it("streams thinking then text then tool call in order", async () => {
-    const echoTool: AgentTool = {
-      name: "echo",
-      label: "Echo",
-      description: "Echo back",
-      parameters: Type.Object({ text: Type.String() }),
-      execute: async () => ({ content: [{ type: "text", text: "echoed" }], details: {} }),
-    };
+        const updates = harness.eventsOfType("message_update");
+        const toolcallStarts = updates.filter(
+          (e) => e.assistantMessageEvent.type === "toolcall_start",
+        );
+        const toolcallDeltas = updates.filter(
+          (e) => e.assistantMessageEvent.type === "toolcall_delta",
+        );
+        const toolcallEnds = updates.filter((e) => e.assistantMessageEvent.type === "toolcall_end");
 
-    harness = await createHarness({
-      responses: [
-        {
-          thinking: "hmm",
-          text: "I will call a tool",
-          toolCalls: [{ name: "echo", args: { text: "x" } }],
-        },
-        "final",
-      ],
-      tools: [echoTool],
-      baseToolsOverride: { echo: echoTool },
-    });
+        expect(toolcallStarts).toHaveLength(1);
+        expect(toolcallDeltas.length).toBeGreaterThan(0);
+        expect(toolcallEnds).toHaveLength(1);
+      }),
+    ));
 
-    await harness.session.prompt("do it");
+  it("streams thinking then text then tool call in order", () =>
+    runTest(
+      Effect.gen(function* () {
+        const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-    const updates = harness.eventsOfType("message_update");
-    const streamTypes = updates.map((e) => e.assistantMessageEvent.type);
+        const echoTool: AgentTool = {
+          name: "echo",
+          label: "Echo",
+          description: "Echo back",
+          parameters: Type.Object({ text: Type.String() }),
+          execute: () =>
+            effectRunPromise(
+              awaited({ content: [{ type: "text" as const, text: "echoed" }], details: {} }),
+            ),
+        };
 
-    const firstThinking = streamTypes.indexOf("thinking_start");
-    const firstText = streamTypes.indexOf("text_start");
-    const firstToolcall = streamTypes.indexOf("toolcall_start");
-
-    expect(firstThinking).toBeLessThan(firstText);
-    expect(firstText).toBeLessThan(firstToolcall);
-  });
-
-  it("loads inline extension factories and disambiguates duplicate commands", async () => {
-    const calls: string[] = [];
-
-    harness = await createHarnessWithExtensions({
-      extensionFactories: [
-        {
-          path: "<alpha>",
-          factory: (msa) => {
-            msa.registerCommand("shared-cmd", {
-              description: "Alpha command",
-              handler: async (args) => {
-                calls.push(`alpha:${args}`);
+        harness = yield* awaited(
+          createHarness({
+            responses: [
+              {
+                thinking: "hmm",
+                text: "I will call a tool",
+                toolCalls: [{ name: "echo", args: { text: "x" } }],
               },
-            });
-          },
-        },
-        {
-          path: "<beta>",
-          factory: (msa) => {
-            msa.registerCommand("shared-cmd", {
-              description: "Beta command",
-              handler: async (args) => {
-                calls.push(`beta:${args}`);
+              "final",
+            ],
+            tools: [echoTool],
+            baseToolsOverride: { echo: echoTool },
+          }),
+        );
+
+        yield* awaited(harness.session.prompt("do it"));
+
+        const updates = harness.eventsOfType("message_update");
+        const streamTypes = updates.map((e) => e.assistantMessageEvent.type);
+
+        const firstThinking = streamTypes.indexOf("thinking_start");
+        const firstText = streamTypes.indexOf("text_start");
+        const firstToolcall = streamTypes.indexOf("toolcall_start");
+
+        expect(firstThinking).toBeLessThan(firstText);
+        expect(firstText).toBeLessThan(firstToolcall);
+      }),
+    ));
+
+  it("loads inline extension factories and disambiguates duplicate commands", () =>
+    runTest(
+      Effect.gen(function* () {
+        const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
+        const calls: string[] = [];
+
+        harness = yield* awaited(
+          createHarnessWithExtensions({
+            extensionFactories: [
+              {
+                path: "<alpha>",
+                factory: (msa) => {
+                  msa.registerCommand("shared-cmd", {
+                    description: "Alpha command",
+                    handler: (args) =>
+                      effectRunPromise(
+                        Effect.sync(() => {
+                          calls.push(`alpha:${args}`);
+                        }),
+                      ),
+                  });
+                },
               },
-            });
+              {
+                path: "<beta>",
+                factory: (msa) => {
+                  msa.registerCommand("shared-cmd", {
+                    description: "Beta command",
+                    handler: (args) =>
+                      effectRunPromise(
+                        Effect.sync(() => {
+                          calls.push(`beta:${args}`);
+                        }),
+                      ),
+                  });
+                },
+              },
+            ],
+          }),
+        );
+
+        const runner = harness.session.extensionRunner;
+        expect(runner).toBeDefined();
+
+        const commands = runner!.getRegisteredCommands();
+        expect(
+          commands.map((command) => ({
+            name: command.name,
+            invocationName: command.invocationName,
+            description: command.description,
+            path: command.sourceInfo.path,
+          })),
+        ).toEqual([
+          {
+            name: "shared-cmd",
+            invocationName: "shared-cmd:1",
+            description: "Alpha command",
+            path: "<alpha>",
           },
-        },
-      ],
-    });
+          {
+            name: "shared-cmd",
+            invocationName: "shared-cmd:2",
+            description: "Beta command",
+            path: "<beta>",
+          },
+        ]);
 
-    const runner = harness.session.extensionRunner;
-    expect(runner).toBeDefined();
+        yield* awaited(
+          runner!.getCommand("shared-cmd:1")?.handler("first", runner!.createCommandContext()),
+        );
+        yield* awaited(
+          runner!.getCommand("shared-cmd:2")?.handler("second", runner!.createCommandContext()),
+        );
 
-    const commands = runner!.getRegisteredCommands();
-    expect(
-      commands.map((command) => ({
-        name: command.name,
-        invocationName: command.invocationName,
-        description: command.description,
-        path: command.sourceInfo.path,
-      })),
-    ).toEqual([
-      {
-        name: "shared-cmd",
-        invocationName: "shared-cmd:1",
-        description: "Alpha command",
-        path: "<alpha>",
-      },
-      {
-        name: "shared-cmd",
-        invocationName: "shared-cmd:2",
-        description: "Beta command",
-        path: "<beta>",
-      },
-    ]);
+        expect(calls).toEqual(["alpha:first", "beta:second"]);
+      }),
+    ));
 
-    await runner!.getCommand("shared-cmd:1")?.handler("first", runner!.createCommandContext());
-    await runner!.getCommand("shared-cmd:2")?.handler("second", runner!.createCommandContext());
+  it("session persistence works", () =>
+    runTest(
+      Effect.gen(function* () {
+        harness = yield* awaited(createHarness({ responses: ["persisted"] }));
 
-    expect(calls).toEqual(["alpha:first", "beta:second"]);
-  });
+        yield* awaited(harness.session.prompt("hi"));
 
-  it("session persistence works", async () => {
-    harness = await createHarness({ responses: ["persisted"] });
-
-    await harness.session.prompt("hi");
-
-    const entries = harness.sessionManager.getEntries();
-    const messageEntries = entries.filter((e) => e.type === "message");
-    expect(messageEntries.length).toBeGreaterThanOrEqual(2);
-  });
+        const entries = harness.sessionManager.getEntries();
+        const messageEntries = entries.filter((e) => e.type === "message");
+        expect(messageEntries.length).toBeGreaterThanOrEqual(2);
+      }),
+    ));
 });

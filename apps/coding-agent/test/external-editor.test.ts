@@ -1,8 +1,19 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import {
+  awaited,
+  runTest,
+  fromJsonText,
+  readTextFile,
+  pathExists,
+  removePath,
+  joinPath,
+  dirnameOf,
+  basenameOf,
+} from "@msa/testing";
+import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
@@ -21,50 +32,65 @@ interface EditorCapture {
   directoryMode: number;
 }
 
-async function runExternalEditor(fixtureFlag?: "--fail" | "--empty"): Promise<{
+function runExternalEditor(fixtureFlag?: "--fail" | "--empty"): Promise<{
   result: ExternalEditorResult;
   capture: EditorCapture;
 }> {
-  const testDirectory = mkdtempSync(join(tmpdir(), "msa-external-editor-test-"));
-  const capturePath = join(testDirectory, "capture.json");
-  try {
-    const result = await editInExternalEditor({
-      command: `${process.execPath} ${editorFixturePath} ${capturePath}${fixtureFlag ? ` ${fixtureFlag}` : ""}`,
-      content: "original",
-    });
-    const capture = JSON.parse(readFileSync(capturePath, "utf-8")) as EditorCapture;
-    return { result, capture };
-  } finally {
-    rmSync(testDirectory, { recursive: true, force: true });
-  }
+  return runTest(
+    Effect.gen(function* () {
+      const testDirectory = mkdtempSync(joinPath(tmpdir(), "msa-external-editor-test-"));
+      const capturePath = joinPath(testDirectory, "capture.json");
+      try {
+        const result = yield* awaited(
+          editInExternalEditor({
+            command: `${process.execPath} ${editorFixturePath} ${capturePath}${fixtureFlag ? ` ${fixtureFlag}` : ""}`,
+            content: "original",
+          }),
+        );
+        const capture = (yield* fromJsonText(yield* readTextFile(capturePath))) as EditorCapture;
+        return yield* awaited({ result, capture });
+      } finally {
+        yield* removePath(testDirectory);
+      }
+    }),
+  );
 }
 
 describe("editInExternalEditor", () => {
-  it("edits a prompt inside a private temporary directory", async () => {
-    const { result, capture } = await runExternalEditor();
-    const directory = dirname(capture.filePath);
+  it("edits a prompt inside a private temporary directory", () =>
+    runTest(
+      Effect.gen(function* () {
+        const { result, capture } = yield* awaited(runExternalEditor());
+        const directory = dirnameOf(capture.filePath);
 
-    expect(result).toEqual({ status: "complete", content: "edited" });
-    expect(dirname(directory)).toBe(tmpdir());
-    expect(basename(directory)).toMatch(/^msa-editor-.+$/);
-    expect(basename(capture.filePath)).toBe("prompt.md");
-    expect(capture.entries).toEqual(["prompt.md"]);
-    expect(capture.content).toBe("original");
-    if (process.platform !== "win32") {
-      expect(capture.directoryMode & 0o077).toBe(0);
-    }
-    expect(existsSync(directory)).toBe(false);
-  });
+        expect(result).toEqual({ status: "complete", content: "edited" });
+        expect(dirnameOf(directory)).toBe(tmpdir());
+        expect(basenameOf(directory)).toMatch(/^msa-editor-.+$/u);
+        expect(basenameOf(capture.filePath)).toBe("prompt.md");
+        expect(capture.entries).toEqual(["prompt.md"]);
+        expect(capture.content).toBe("original");
+        if (process.platform !== "win32") {
+          expect(capture.directoryMode & 0o077).toBe(0);
+        }
+        expect(yield* pathExists(directory)).toBe(false);
+      }),
+    ));
 
-  it("keeps the original content when the editor exits unsuccessfully", async () => {
-    const { result, capture } = await runExternalEditor("--fail");
+  it("keeps the original content when the editor exits unsuccessfully", () =>
+    runTest(
+      Effect.gen(function* () {
+        const { result, capture } = yield* awaited(runExternalEditor("--fail"));
 
-    expect(result).toEqual({ status: "failed" });
-    expect(existsSync(dirname(capture.filePath))).toBe(false);
-  });
-  it("returns empty content when the editor clears the prompt", async () => {
-    const { result } = await runExternalEditor("--empty");
+        expect(result).toEqual({ status: "failed" });
+        expect(yield* pathExists(dirnameOf(capture.filePath))).toBe(false);
+      }),
+    ));
+  it("returns empty content when the editor clears the prompt", () =>
+    runTest(
+      Effect.gen(function* () {
+        const { result } = yield* awaited(runExternalEditor("--empty"));
 
-    expect(result).toEqual({ status: "complete", content: "" });
-  });
+        expect(result).toEqual({ status: "complete", content: "" });
+      }),
+    ));
 });

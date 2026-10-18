@@ -1,10 +1,11 @@
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
-import { join } from "path";
 
+import { joinPath } from "@msa/testing";
 import { colorToHex, okhslColor } from "@msa/tui";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
+import { deleteEnv, readEnv, writeEnv } from "../src/core/process-env.ts";
 import { getThemeExportColors } from "../src/modes/interactive/theme/theme.ts";
 
 type ThemeFile = {
@@ -23,18 +24,17 @@ describe("getThemeExportColors", () => {
   let previousAgentDir: string | undefined;
 
   beforeEach(() => {
-    tempRoot = mkdtempSync(join(tmpdir(), "msa-theme-export-"));
-    previousAgentDir = process.env["MSA_CODING_AGENT_DIR"];
-    process.env["MSA_CODING_AGENT_DIR"] = join(tempRoot, "agent");
-    mkdirSync(join(process.env["MSA_CODING_AGENT_DIR"], "themes"), { recursive: true });
+    tempRoot = mkdtempSync(joinPath(tmpdir(), "msa-theme-export-"));
+    writeEnv("MSA_CODING_AGENT_DIR", joinPath(tempRoot, "agent"));
+    mkdirSync(joinPath(readEnv("MSA_CODING_AGENT_DIR")!, "themes"), { recursive: true });
   });
 
   afterEach(() => {
     rmSync(tempRoot, { recursive: true, force: true });
     if (previousAgentDir === undefined) {
-      delete process.env["MSA_CODING_AGENT_DIR"];
+      deleteEnv("MSA_CODING_AGENT_DIR");
     } else {
-      process.env["MSA_CODING_AGENT_DIR"] = previousAgentDir;
+      writeEnv("MSA_CODING_AGENT_DIR", previousAgentDir);
     }
   });
 
@@ -61,7 +61,7 @@ describe("getThemeExportColors", () => {
     };
 
     writeFileSync(
-      join(process.env["MSA_CODING_AGENT_DIR"]!, "themes", "custom-export-vars.json"),
+      joinPath(readEnv("MSA_CODING_AGENT_DIR")!, "themes", "custom-export-vars.json"),
       JSON.stringify(customTheme, null, 2),
     );
 
@@ -83,7 +83,7 @@ describe("getThemeExportColors", () => {
       export: { pageBg: "okhsl(250 20% 15%)", cardBg: "card", infoBg: "oklch(30% 0.05 80)" },
     };
     writeFileSync(
-      join(process.env["MSA_CODING_AGENT_DIR"]!, "themes", "custom-export-okhsl.json"),
+      joinPath(readEnv("MSA_CODING_AGENT_DIR")!, "themes", "custom-export-okhsl.json"),
       JSON.stringify(customTheme, null, 2),
     );
 
@@ -116,7 +116,7 @@ describe("getThemeExportColors", () => {
     };
 
     writeFileSync(
-      join(process.env["MSA_CODING_AGENT_DIR"]!, "themes", "custom-export-recursive.json"),
+      joinPath(readEnv("MSA_CODING_AGENT_DIR")!, "themes", "custom-export-recursive.json"),
       JSON.stringify(customTheme, null, 2),
     );
 

@@ -1,5 +1,4 @@
-import { join, resolve } from "node:path";
-
+import { awaited, runTest, joinPath, resolvePath } from "@msa/testing";
 import {
   resetCapabilitiesCache,
   setCapabilities,
@@ -7,6 +6,7 @@ import {
   type TUI,
   type TuiMouseEvent,
 } from "@msa/tui";
+import { Effect } from "effect";
 import { Type } from "typebox";
 import { afterEach, beforeAll, describe, expect, test, vi } from "vite-plus/test";
 
@@ -26,10 +26,13 @@ function createBaseToolDefinition(name = "custom_tool"): ToolDefinition {
     label: name,
     description: "custom tool",
     parameters: Type.Any(),
-    execute: async () => ({
-      content: [{ type: "text", text: "ok" }],
-      details: {},
-    }),
+    execute: () =>
+      runTest(
+        awaited({
+          content: [{ type: "text" as const, text: "ok" }],
+          details: {},
+        }),
+      ),
   };
 }
 
@@ -51,36 +54,41 @@ describe("ToolExecutionComponent parity", () => {
     vi.useRealTimers();
   });
 
-  test("converts non-PNG tool images once the transcoder loads", async () => {
-    setCapabilities({ images: "kitty", trueColor: true, hyperlinks: true });
-    const component = new ToolExecutionComponent(
-      "tool",
-      "id",
-      {},
-      {},
-      undefined,
-      createFakeTui(),
-      process.cwd(),
-    );
-    component.updateResult(
-      {
-        content: [{ type: "image", data: "cGFydGlhbA==", mimeType: "image/jpeg" }],
-        isError: false,
-      },
-      true,
-    );
-    component.updateResult({
-      content: [{ type: "image", data: TINY_JPEG, mimeType: "image/jpeg" }],
-      isError: false,
-    });
+  test("converts non-PNG tool images once the transcoder loads", () =>
+    runTest(
+      Effect.gen(function* () {
+        setCapabilities({ images: "kitty", trueColor: true, hyperlinks: true });
+        const component = new ToolExecutionComponent(
+          "tool",
+          "id",
+          {},
+          {},
+          undefined,
+          createFakeTui(),
+          process.cwd(),
+        );
+        component.updateResult(
+          {
+            content: [{ type: "image" as const, data: "cGFydGlhbA==", mimeType: "image/jpeg" }],
+            isError: false,
+          },
+          true,
+        );
+        component.updateResult({
+          content: [{ type: "image" as const, data: TINY_JPEG, mimeType: "image/jpeg" }],
+          isError: false,
+        });
 
-    await vi.waitFor(() => expect(component.render(120).join("\n")).toContain(";iVBORw0KGgo"));
-    const rendered = component.render(120).join("\n");
-    expect(rendered).not.toContain("cGFydGlhbA==");
+        yield* awaited(
+          vi.waitFor(() => expect(component.render(120).join("\n")).toContain(";iVBORw0KGgo")),
+        );
+        const rendered = component.render(120).join("\n");
+        expect(rendered).not.toContain("cGFydGlhbA==");
 
-    component.invalidate();
-    expect(component.render(120).join("\n")).toBe(rendered);
-  });
+        component.invalidate();
+        expect(component.render(120).join("\n")).toBe(rendered);
+      }),
+    ));
 
   test("stacks custom call and result renderers like the old implementation", () => {
     const toolDefinition: ToolDefinition = {
@@ -102,7 +110,7 @@ describe("ToolExecutionComponent parity", () => {
 
     component.updateResult(
       {
-        content: [{ type: "text", text: "done" }],
+        content: [{ type: "text" as const, text: "done" }],
         details: {},
         isError: false,
       },
@@ -185,72 +193,92 @@ describe("ToolExecutionComponent parity", () => {
     expect(rendered).toContain("README.md");
   });
 
-  test("bash execute emits an initial empty partial update before output arrives", async () => {
-    const updates: Array<{ content: Array<{ type: string; text?: string }>; details?: unknown }> =
-      [];
-    const operations: BashOperations = {
-      exec: async () => {
-        await new Promise((resolve) => setTimeout(resolve, 10));
-        return { exitCode: 0 };
-      },
-    };
-    const tool = createBashToolDefinition(process.cwd(), {
-      operations,
-      exposeSessionEnvironment: false,
-    });
-    const promise = tool.execute(
-      "tool-bash-1",
-      { command: "sleep 10" },
-      undefined,
-      (update) =>
-        updates.push(
-          update as { content: Array<{ type: string; text?: string }>; details?: unknown },
-        ),
-      {} as never,
-    );
-    expect(updates).toEqual([{ content: [], details: undefined }]);
-    await promise;
-  });
+  test("bash execute emits an initial empty partial update before output arrives", () =>
+    runTest(
+      Effect.gen(function* () {
+        const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-  test("bash renderer does not duplicate final full output truncation details", async () => {
-    const operations: BashOperations = {
-      exec: async (_command, _cwd, { onData }) => {
-        for (let i = 1; i <= 4000; i++) {
-          onData(Buffer.from(`line-${String(i).padStart(4, "0")}\n`));
-        }
-        return { exitCode: 0 };
-      },
-    };
-    const tool = createBashToolDefinition(process.cwd(), {
-      operations,
-      exposeSessionEnvironment: false,
-    });
-    const result = await tool.execute(
-      "tool-bash-1b",
-      { command: "generate output" },
-      undefined,
-      undefined,
-      {} as never,
-    );
-    const component = new ToolExecutionComponent(
-      "bash",
-      "tool-bash-1b",
-      { command: "generate output" },
-      {},
-      tool,
-      createFakeTui(),
-      process.cwd(),
-    );
-    component.setExpanded(true);
-    component.updateResult({ ...result, isError: false }, false);
+        const updates: Array<{
+          content: Array<{ type: string; text?: string }>;
+          details?: unknown;
+        }> = [];
+        const operations: BashOperations = {
+          exec: () =>
+            effectRunPromise(
+              Effect.gen(function* () {
+                yield* Effect.sleep(10);
+                return yield* awaited({ exitCode: 0 });
+              }),
+            ),
+        };
+        const tool = createBashToolDefinition(process.cwd(), {
+          operations,
+          exposeSessionEnvironment: false,
+        });
+        const promise = tool.execute(
+          "tool-bash-1",
+          { command: "sleep 10" },
+          undefined,
+          (update) =>
+            updates.push(
+              update as { content: Array<{ type: string; text?: string }>; details?: unknown },
+            ),
+          {} as never,
+        );
+        expect(updates).toEqual([{ content: [], details: undefined }]);
+        yield* awaited(promise);
+      }),
+    ));
 
-    const rendered = stripAnsi(component.render(200).join("\n"));
-    expect(rendered.match(/Full output:/g)?.length ?? 0).toBe(1);
-    expect(rendered).toMatch(/line-4000[^\n]*\n[^\S\n]*\n \[Full output:/);
-    expect(rendered).not.toMatch(/line-4000[^\n]*\n[^\S\n]*\n[^\S\n]*\n \[Full output:/);
-    expect(rendered).toContain("Truncated: showing 2000 of 4000 lines");
-    expect(rendered).not.toContain("[Showing lines 2001-4000 of 4000. Full output:");
-  });
+  test("bash renderer does not duplicate final full output truncation details", () =>
+    runTest(
+      Effect.gen(function* () {
+        const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
+        const operations: BashOperations = {
+          exec: (_command, _cwd, { onData }) =>
+            effectRunPromise(
+              Effect.gen(function* () {
+                for (let i = 1; i <= 4000; i++) {
+                  onData(Buffer.from(`line-${String(i).padStart(4, "0")}\n`));
+                }
+                return yield* awaited({ exitCode: 0 });
+              }),
+            ),
+        };
+        const tool = createBashToolDefinition(process.cwd(), {
+          operations,
+          exposeSessionEnvironment: false,
+        });
+        const result = yield* awaited(
+          tool.execute(
+            "tool-bash-1b",
+            { command: "generate output" },
+            undefined,
+            undefined,
+            {} as never,
+          ),
+        );
+        const component = new ToolExecutionComponent(
+          "bash",
+          "tool-bash-1b",
+          { command: "generate output" },
+          {},
+          tool,
+          createFakeTui(),
+          process.cwd(),
+        );
+        component.setExpanded(true);
+        component.updateResult({ ...result, isError: false }, false);
+
+        const rendered = stripAnsi(component.render(200).join("\n"));
+        expect(rendered.match(/Full output:/gu)?.length ?? 0).toBe(1);
+        expect(rendered).toMatch(/line-4000[^\n]*\n[^\S\n]*\n \[Full output:/u);
+        expect(rendered).not.toMatch(/line-4000[^\n]*\n[^\S\n]*\n[^\S\n]*\n \[Full output:/u);
+        expect(rendered).toContain("Truncated: showing 2000 of 4000 lines");
+        expect(rendered).not.toContain("[Showing lines 2001-4000 of 4000. Full output:");
+      }),
+    ));
 
   test.each([
     { ms: 0, formatted: "0.0s" },
@@ -333,7 +361,7 @@ describe("ToolExecutionComponent parity", () => {
     );
     component.updateResult(
       {
-        content: [{ type: "text", text: "start\nmiddle\nend" }],
+        content: [{ type: "text" as const, text: "start\nmiddle\nend" }],
         isError: false,
         durationMs: 1_000,
       },
@@ -344,8 +372,8 @@ describe("ToolExecutionComponent parity", () => {
       .map((line) => line.trim())
       .filter(Boolean);
     expect(collapsed).toEqual([
-      expect.stringMatching(/^\$ echo start \(\+2 lines\)$/),
-      expect.stringMatching(/^3 lines, Took 1\.0s \(.* to expand\) {2}end$/),
+      expect.stringMatching(/^\$ echo start \(\+2 lines\)$/u),
+      expect.stringMatching(/^3 lines, Took 1\.0s \(.* to expand\) {2}end$/u),
     ]);
 
     component.setExpanded(true);
@@ -366,11 +394,11 @@ describe("ToolExecutionComponent parity", () => {
       process.cwd(),
     );
     component.updateResult(
-      { content: [{ type: "text", text: "hello" }], details: undefined, isError: false },
+      { content: [{ type: "text" as const, text: "hello" }], details: undefined, isError: false },
       false,
     );
     const rendered = stripAnsi(component.render(120).join("\n"));
-    expect(rendered.match(/\bread\b/g)?.length ?? 0).toBe(1);
+    expect(rendered.match(/\bread\b/gu)?.length ?? 0).toBe(1);
   });
 
   test("renders read calls with null offset and limit as full-file reads", () => {
@@ -404,7 +432,7 @@ describe("ToolExecutionComponent parity", () => {
       process.cwd(),
     );
     component.updateResult(
-      { content: [{ type: "text", text: "hello" }], details: undefined, isError: false },
+      { content: [{ type: "text" as const, text: "hello" }], details: undefined, isError: false },
       false,
     );
     component.setExpanded(true);
@@ -429,7 +457,7 @@ describe("ToolExecutionComponent parity", () => {
       process.cwd(),
     );
     component.updateResult(
-      { content: [{ type: "text", text: "hello" }], details: undefined, isError: false },
+      { content: [{ type: "text" as const, text: "hello" }], details: undefined, isError: false },
       false,
     );
     const rendered = stripAnsi(component.render(120).join("\n"));
@@ -454,7 +482,7 @@ describe("ToolExecutionComponent parity", () => {
       process.cwd(),
     );
     component.updateResult(
-      { content: [{ type: "text", text: "hello" }], details: undefined, isError: false },
+      { content: [{ type: "text" as const, text: "hello" }], details: undefined, isError: false },
       false,
     );
     const rendered = stripAnsi(component.render(120).join("\n"));
@@ -480,7 +508,7 @@ describe("ToolExecutionComponent parity", () => {
       process.cwd(),
     );
     component.updateResult(
-      { content: [{ type: "text", text: "hello" }], details: undefined, isError: false },
+      { content: [{ type: "text" as const, text: "hello" }], details: undefined, isError: false },
       false,
     );
     const rendered = stripAnsi(component.render(120).join("\n"));
@@ -511,7 +539,7 @@ describe("ToolExecutionComponent parity", () => {
       process.cwd(),
     );
     component.updateResult(
-      { content: [{ type: "text", text: "done" }], details: {}, isError: false },
+      { content: [{ type: "text" as const, text: "done" }], details: {}, isError: false },
       false,
     );
     const rendered = stripAnsi(component.render(120).join("\n"));
@@ -537,7 +565,7 @@ describe("ToolExecutionComponent parity", () => {
       process.cwd(),
     );
     component.updateResult(
-      { content: [{ type: "text", text: "done" }], details: {}, isError: false },
+      { content: [{ type: "text" as const, text: "done" }], details: {}, isError: false },
       false,
     );
     const rendered = stripAnsi(component.render(120).join("\n"));
@@ -568,7 +596,7 @@ describe("ToolExecutionComponent parity", () => {
     const expandedLines = expanded.split("\n").map((line) => line.trimEnd());
     const textLine = expandedLines.findIndex((line) => line.endsWith("  text: line one"));
     expect(textLine).toBeGreaterThan(-1);
-    expect(expandedLines[textLine + 1]).toMatch(/^\s+ {4}line two$/);
+    expect(expandedLines[textLine + 1]).toMatch(/^\s+ {4}line two$/u);
   });
 
   test("collapses fallback results until expanded", () => {
@@ -587,13 +615,13 @@ describe("ToolExecutionComponent parity", () => {
     );
     const output = Array.from({ length: 15 }, (_, index) => `line-${index + 1}`).join("\n");
     component.updateResult(
-      { content: [{ type: "text", text: output }], details: {}, isError: false },
+      { content: [{ type: "text" as const, text: output }], details: {}, isError: false },
       false,
     );
 
     const collapsed = stripAnsi(component.render(120).join("\n"));
     expect(collapsed).toContain("custom_tool");
-    expect(collapsed).toMatch(/15 lines \(.* to expand\) {2}line-1\b/);
+    expect(collapsed).toMatch(/15 lines \(.* to expand\) {2}line-1\b/u);
     expect(collapsed).not.toContain("line-2");
 
     component.setExpanded(true);
@@ -612,7 +640,7 @@ describe("ToolExecutionComponent parity", () => {
       createFakeTui(),
       process.cwd(),
     );
-    expect(stripAnsi(component.render(120).join("\n"))).toMatch(/2 lines \(.* to expand\)/);
+    expect(stripAnsi(component.render(120).join("\n"))).toMatch(/2 lines \(.* to expand\)/u);
     component.setExpanded(true);
     const rendered = stripAnsi(component.render(120).join("\n"));
     expect(rendered).toContain("one");
@@ -631,7 +659,11 @@ describe("ToolExecutionComponent parity", () => {
       process.cwd(),
     );
     component.updateResult(
-      { content: [{ type: "text", text: "one\ntwo\n" }], details: undefined, isError: false },
+      {
+        content: [{ type: "text" as const, text: "one\ntwo\n" }],
+        details: undefined,
+        isError: false,
+      },
       false,
     );
     component.setExpanded(true);
@@ -653,7 +685,7 @@ describe("ToolExecutionComponent parity", () => {
     );
     const error = "Offset 120 is beyond end of file (96 lines total)";
     component.updateResult(
-      { content: [{ type: "text", text: error }], details: undefined, isError: true },
+      { content: [{ type: "text" as const, text: error }], details: undefined, isError: true },
       false,
     );
 
@@ -673,7 +705,11 @@ describe("ToolExecutionComponent parity", () => {
       process.cwd(),
     );
     component.updateResult(
-      { content: [{ type: "text", text: "hidden content" }], details: undefined, isError: false },
+      {
+        content: [{ type: "text" as const, text: "hidden content" }],
+        details: undefined,
+        isError: false,
+      },
       false,
     );
     const width = 120;
@@ -681,7 +717,7 @@ describe("ToolExecutionComponent parity", () => {
     const resultRow = lines.findIndex((line) => stripAnsi(line).includes("notes.txt"));
     expect(resultRow).toBeGreaterThanOrEqual(0);
     const event: TuiMouseEvent = {
-      type: "click",
+      type: "click" as const,
       button: "left",
       x: 2,
       y: resultRow,
@@ -709,7 +745,11 @@ describe("ToolExecutionComponent parity", () => {
       process.cwd(),
     );
     component.updateResult(
-      { content: [{ type: "text", text: "hidden content" }], details: undefined, isError: false },
+      {
+        content: [{ type: "text" as const, text: "hidden content" }],
+        details: undefined,
+        isError: false,
+      },
       false,
     );
 
@@ -726,7 +766,7 @@ describe("ToolExecutionComponent parity", () => {
   for (const scenario of [
     {
       title: "SKILL.md",
-      path: join(process.cwd(), "attio", "SKILL.md"),
+      path: joinPath(process.cwd(), "attio", "SKILL.md"),
       content: "---\nname: attio\ndescription: CRM helper\n---\n\n# Hidden skill instructions",
       compact: "[skill] attio",
       hidden: "Hidden skill instructions",
@@ -734,7 +774,7 @@ describe("ToolExecutionComponent parity", () => {
     },
     {
       title: "AGENTS.md",
-      path: join(process.cwd(), ".msa", "AGENTS.md"),
+      path: joinPath(process.cwd(), ".msa", "AGENTS.md"),
       content: "Hidden resource instructions",
       compact: "read resource .msa/AGENTS.md",
       hidden: "Hidden resource instructions",
@@ -742,7 +782,7 @@ describe("ToolExecutionComponent parity", () => {
     },
     {
       title: "AGENTS.override.md",
-      path: join(process.cwd(), ".msa", "AGENTS.override.md"),
+      path: joinPath(process.cwd(), ".msa", "AGENTS.override.md"),
       content: "Hidden override instructions",
       compact: "read resource .msa/AGENTS.override.md",
       hidden: "Hidden override instructions",
@@ -750,9 +790,9 @@ describe("ToolExecutionComponent parity", () => {
     },
     {
       title: "outside AGENTS.md",
-      path: resolve(process.cwd(), "..", "AGENTS.md"),
+      path: resolvePath(process.cwd(), "..", "AGENTS.md"),
       content: "Hidden outside resource instructions",
-      compact: `read resource ${resolve(process.cwd(), "..", "AGENTS.md").replace(/\\/g, "/")}`,
+      compact: `read resource ${resolvePath(process.cwd(), "..", "AGENTS.md").replace(/\\/gu, "/")}`,
       hidden: "Hidden outside resource instructions",
       absent: undefined,
     },
@@ -776,7 +816,11 @@ describe("ToolExecutionComponent parity", () => {
         process.cwd(),
       );
       component.updateResult(
-        { content: [{ type: "text", text: scenario.content }], details: undefined, isError: false },
+        {
+          content: [{ type: "text" as const, text: scenario.content }],
+          details: undefined,
+          isError: false,
+        },
         false,
       );
 
@@ -796,7 +840,7 @@ describe("ToolExecutionComponent parity", () => {
   for (const scenario of [
     {
       title: "SKILL.md",
-      path: join(process.cwd(), "attio", "SKILL.md"),
+      path: joinPath(process.cwd(), "attio", "SKILL.md"),
       compact: "[skill] attio:120-329",
     },
     { title: "msa documentation", path: getReadmePath(), compact: "read docs README.md:120-329" },

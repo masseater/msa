@@ -8,6 +8,8 @@ import {
   type Usage,
 } from "@msa/ai";
 import { getBuiltinModel } from "@msa/ai/providers/all";
+import { awaited, runTest, abortController } from "@msa/testing";
+import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { AuthStorage } from "../src/core/auth-storage.ts";
@@ -73,7 +75,7 @@ function response(
 function branchWithPrompt(promptTokens: number): SessionEntry[] {
   return [
     {
-      type: "message",
+      type: "message" as const,
       id: "a",
       parentId: null,
       timestamp: new Date(0).toISOString(),
@@ -112,16 +114,20 @@ function fakeRuntime(
       streamSimple: (model, _context, streamOptions) => {
         calls.push({ model, options: streamOptions });
         return {
-          result: () => (options.result ?? (async (m: Model<Api>) => response(m)))(model),
+          result: () =>
+            (options.result ?? ((m: Model<Api>) => runTest(awaited(response(m)))))(model),
         } as unknown as AssistantMessageEventStream;
       },
     },
     { appendUsage, getBranch: () => state.branch },
     () => state.mode,
-    async (event) => {
-      events.push(event);
-      return options.decide?.(event) ?? event.action;
-    },
+    (event) =>
+      runTest(
+        Effect.gen(function* () {
+          events.push(event);
+          return yield* awaited(options.decide?.(event) ?? event.action);
+        }),
+      ),
   );
   warmer.onWarmed = (entry) => warmedEntries.push(entry);
   return { warmer, calls, events, warmedEntries, appendUsage, state };
@@ -161,181 +167,216 @@ describe("cache warming", () => {
     ]).toEqual([false, true, true, true]);
   });
 
-  it("replays profitable requests and preserves options across repeated refreshes", async () => {
-    vi.useFakeTimers();
-    const { warmer, calls, events, appendUsage, warmedEntries } = fakeRuntime();
-    const signal = new AbortController().signal;
-    const transformHeaders = async () => ({});
+  it("replays profitable requests and preserves options across repeated refreshes", () =>
+    runTest(
+      Effect.gen(function* () {
+        const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-    warmer.start(
-      request(adaptiveModel, { reasoning: "high", signal, sessionId: "s", transformHeaders }),
-      current,
-    );
-    await vi.advanceTimersByTimeAsync(270_000);
+        vi.useFakeTimers();
+        const { warmer, calls, events, appendUsage, warmedEntries } = fakeRuntime();
+        const signal = abortController().signal;
+        const transformHeaders = () => effectRunPromise(awaited({}));
 
-    expect(calls[0]).toMatchObject({
-      model: adaptiveModel,
-      options: { reasoning: "high", sessionId: "s", transformHeaders, maxTokens: 1, maxRetries: 0 },
-    });
-    expect(calls[0]?.options?.signal).not.toBe(signal);
-    expect(events[0]).toMatchObject({
-      type: "cache_warming_decision",
-      continuationProbability: 1,
-      action: "warm",
-    });
-    expect(events[0]?.missCost).toBeCloseTo(0.575);
-    expect(events[0]?.warmCost).toBeCloseTo(0.050025);
-    expect(appendUsage).toHaveBeenCalledWith(
-      "cache_warm",
-      adaptiveModel.provider,
-      adaptiveModel.id,
-      warmUsage,
-      undefined,
-    );
-    expect(warmedEntries).toEqual([appendUsage.mock.results[0]?.value]);
+        warmer.start(
+          request(adaptiveModel, { reasoning: "high", signal, sessionId: "s", transformHeaders }),
+          current,
+        );
+        yield* awaited(vi.advanceTimersByTimeAsync(270_000));
 
-    await vi.advanceTimersByTimeAsync(270_000);
-    expect(calls).toHaveLength(2);
-    warmer.cancel();
-  });
+        expect(calls[0]).toMatchObject({
+          model: adaptiveModel,
+          options: {
+            reasoning: "high",
+            sessionId: "s",
+            transformHeaders,
+            maxTokens: 1,
+            maxRetries: 0,
+          },
+        });
+        expect(calls[0]?.options?.signal).not.toBe(signal);
+        expect(events[0]).toMatchObject({
+          type: "cache_warming_decision" as const,
+          continuationProbability: 1,
+          action: "warm",
+        });
+        expect(events[0]?.missCost).toBeCloseTo(0.575);
+        expect(events[0]?.warmCost).toBeCloseTo(0.050025);
+        expect(appendUsage).toHaveBeenCalledWith(
+          "cache_warm",
+          adaptiveModel.provider,
+          adaptiveModel.id,
+          warmUsage,
+          undefined,
+        );
+        expect(warmedEntries).toEqual([appendUsage.mock.results[0]?.value]);
 
-  it("does not issue refreshes after their safe deadline", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(0);
-    const { warmer, calls } = fakeRuntime();
-    warmer.start(request(), current);
+        yield* awaited(vi.advanceTimersByTimeAsync(270_000));
+        expect(calls).toHaveLength(2);
+        warmer.cancel();
+      }),
+    ));
 
-    vi.setSystemTime(285_001);
-    vi.clearAllTimers();
-    const internal = warmer as unknown as {
-      run: object | undefined;
-      refresh: (run: object) => Promise<void>;
-    };
-    if (!internal.run) throw new Error("expected an active cache-warming run");
-    await internal.refresh(internal.run);
+  it("does not issue refreshes after their safe deadline", () =>
+    runTest(
+      Effect.gen(function* () {
+        vi.useFakeTimers();
+        vi.setSystemTime(0);
+        const { warmer, calls } = fakeRuntime();
+        warmer.start(request(), current);
 
-    expect(calls).toHaveLength(0);
-    expect(warmer.status).toMatchObject({
-      state: "inactive",
-      reason: "cache refresh deadline missed",
-    });
-  });
-
-  it("rechecks the deadline after an extension decision", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(0);
-    const { warmer, calls } = fakeRuntime({
-      decide: async () => {
-        await Promise.resolve();
         vi.setSystemTime(285_001);
-        return "warm" as const;
-      },
-    });
-    warmer.start(request(), current);
-    vi.clearAllTimers();
-    const internal = warmer as unknown as {
-      run: object | undefined;
-      refresh: (run: object) => Promise<void>;
-    };
-    if (!internal.run) throw new Error("expected an active cache-warming run");
-    await internal.refresh(internal.run);
+        vi.clearAllTimers();
+        const internal = warmer as unknown as {
+          run: object | undefined;
+          refresh: (run: object) => Promise<void>;
+        };
+        if (!internal.run) throw new Error("expected an active cache-warming run");
+        yield* awaited(internal.refresh(internal.run));
 
-    expect(calls).toHaveLength(0);
-    expect(warmer.status).toMatchObject({
-      state: "inactive",
-      reason: "cache refresh deadline missed",
-    });
-  });
+        expect(calls).toHaveLength(0);
+        expect(warmer.status).toMatchObject({
+          state: "inactive",
+          reason: "cache refresh deadline missed",
+        });
+      }),
+    ));
 
-  it("applies economic decisions and extension overrides", async () => {
-    vi.useFakeTimers();
-    const unprofitable = fakeRuntime({ branch: branchWithPrompt(5_000) });
-    unprofitable.warmer.start(request(), current);
-    await vi.advanceTimersByTimeAsync(270_000);
-    expect(unprofitable.calls).toHaveLength(0);
-    expect(unprofitable.warmer.status).toMatchObject({
-      state: "inactive",
-      decision: { action: "stop", economicsAvailable: true },
-      extensionOverride: false,
-    });
+  it("rechecks the deadline after an extension decision", () =>
+    runTest(
+      Effect.gen(function* () {
+        const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-    const forced = fakeRuntime({ branch: branchWithPrompt(5_000), decide: () => "warm" });
-    forced.warmer.start(request(), current);
-    await vi.advanceTimersByTimeAsync(270_000);
-    expect(forced.calls).toHaveLength(1);
-    expect(forced.warmedEntries[0]?.note).toBe("extension override");
-    forced.warmer.cancel();
+        vi.useFakeTimers();
+        vi.setSystemTime(0);
+        const { warmer, calls } = fakeRuntime({
+          decide: () =>
+            effectRunPromise(
+              Effect.gen(function* () {
+                yield* awaited(Promise.resolve());
+                vi.setSystemTime(285_001);
+                return yield* awaited("warm" as const);
+              }),
+            ),
+        });
+        warmer.start(request(), current);
+        vi.clearAllTimers();
+        const internal = warmer as unknown as {
+          run: object | undefined;
+          refresh: (run: object) => Promise<void>;
+        };
+        if (!internal.run) throw new Error("expected an active cache-warming run");
+        yield* awaited(internal.refresh(internal.run));
 
-    const vetoed = fakeRuntime({ decide: () => "stop" });
-    vetoed.warmer.start(request(), current);
-    await vi.advanceTimersByTimeAsync(270_000);
-    expect(vetoed.calls).toHaveLength(0);
-    expect(vetoed.warmer.status).toMatchObject({ state: "inactive", extensionOverride: true });
+        expect(calls).toHaveLength(0);
+        expect(warmer.status).toMatchObject({
+          state: "inactive",
+          reason: "cache refresh deadline missed",
+        });
+      }),
+    ));
 
-    const unavailable = fakeRuntime({ branch: branchWithPrompt(0) });
-    unavailable.warmer.start(request(), current);
-    expect(unavailable.warmer.status).toMatchObject({
-      state: "inactive",
-      reason: "cache economics unavailable",
-    });
-    await vi.advanceTimersByTimeAsync(270_000);
-    expect(unavailable.calls).toHaveLength(0);
-  });
+  it("applies economic decisions and extension overrides", () =>
+    runTest(
+      Effect.gen(function* () {
+        vi.useFakeTimers();
+        const unprofitable = fakeRuntime({ branch: branchWithPrompt(5_000) });
+        unprofitable.warmer.start(request(), current);
+        yield* awaited(vi.advanceTimersByTimeAsync(270_000));
+        expect(unprofitable.calls).toHaveLength(0);
+        expect(unprofitable.warmer.status).toMatchObject({
+          state: "inactive",
+          decision: { action: "stop", economicsAvailable: true },
+          extensionOverride: false,
+        });
 
-  it("stops for unsupported requests, context changes, and mode changes", async () => {
-    vi.useFakeTimers();
-    const unsupported = fakeRuntime();
-    unsupported.state.mode = "off";
-    unsupported.warmer.start(request(), current);
-    expect(unsupported.warmer.status.reason).toBe("cache warming disabled");
-    unsupported.state.mode = "idle";
-    unsupported.warmer.start(request(unknownModel), current);
-    expect(unsupported.warmer.status.reason).toBe("cache lifetime unavailable");
-    unsupported.warmer.start(request(budgetModel, { reasoning: "high" }), current);
-    expect(unsupported.warmer.status.reason).toBe("request cannot be replayed safely");
+        const forced = fakeRuntime({ branch: branchWithPrompt(5_000), decide: () => "warm" });
+        forced.warmer.start(request(), current);
+        yield* awaited(vi.advanceTimersByTimeAsync(270_000));
+        expect(forced.calls).toHaveLength(1);
+        expect(forced.warmedEntries[0]?.note).toBe("extension override");
+        forced.warmer.cancel();
 
-    let stillCurrent = true;
-    unsupported.warmer.start(request(), () => stillCurrent);
-    stillCurrent = false;
-    expect(unsupported.warmer.status.reason).toBe("conversation context changed");
-    await vi.advanceTimersByTimeAsync(270_000);
-    expect(unsupported.calls).toHaveLength(0);
+        const vetoed = fakeRuntime({ decide: () => "stop" });
+        vetoed.warmer.start(request(), current);
+        yield* awaited(vi.advanceTimersByTimeAsync(270_000));
+        expect(vetoed.calls).toHaveLength(0);
+        expect(vetoed.warmer.status).toMatchObject({ state: "inactive", extensionOverride: true });
 
-    unsupported.warmer.start(request(), current);
-    unsupported.state.mode = "off";
-    await vi.advanceTimersByTimeAsync(270_000);
-    expect(unsupported.calls).toHaveLength(0);
+        const unavailable = fakeRuntime({ branch: branchWithPrompt(0) });
+        unavailable.warmer.start(request(), current);
+        expect(unavailable.warmer.status).toMatchObject({
+          state: "inactive",
+          reason: "cache economics unavailable",
+        });
+        yield* awaited(vi.advanceTimersByTimeAsync(270_000));
+        expect(unavailable.calls).toHaveLength(0);
+      }),
+    ));
 
-    const streaming = fakeRuntime({ mode: "streaming", branch: branchWithPrompt(400_000) });
-    streaming.warmer.start(request(), current);
-    streaming.warmer.onAgentSettled();
-    expect(streaming.warmer.status.reason).toBe("agent run settled");
-  });
+  it("stops for unsupported requests, context changes, and mode changes", () =>
+    runTest(
+      Effect.gen(function* () {
+        vi.useFakeTimers();
+        const unsupported = fakeRuntime();
+        unsupported.state.mode = "off";
+        unsupported.warmer.start(request(), current);
+        expect(unsupported.warmer.status.reason).toBe("cache warming disabled");
+        unsupported.state.mode = "idle";
+        unsupported.warmer.start(request(unknownModel), current);
+        expect(unsupported.warmer.status.reason).toBe("cache lifetime unavailable");
+        unsupported.warmer.start(request(budgetModel, { reasoning: "high" }), current);
+        expect(unsupported.warmer.status.reason).toBe("request cannot be replayed safely");
 
-  it("aborts replaced requests and does not record failed refreshes", async () => {
-    vi.useFakeTimers();
-    let release!: () => void;
-    const pending = fakeRuntime({
-      result: (model) =>
-        new Promise((resolve) => {
-          release = () => resolve(response(model));
-        }),
-    });
-    pending.warmer.start(request(), current);
-    await vi.advanceTimersByTimeAsync(270_000);
-    pending.warmer.start(request(), current);
-    expect(pending.calls[0]?.options?.signal?.aborted).toBe(true);
-    release();
-    pending.warmer.cancel();
-    await vi.advanceTimersByTimeAsync(600_000);
-    expect(pending.calls).toHaveLength(1);
+        let stillCurrent = true;
+        unsupported.warmer.start(request(), () => stillCurrent);
+        stillCurrent = false;
+        expect(unsupported.warmer.status.reason).toBe("conversation context changed");
+        yield* awaited(vi.advanceTimersByTimeAsync(270_000));
+        expect(unsupported.calls).toHaveLength(0);
 
-    const failed = fakeRuntime({ result: async (model) => response(model, "error") });
-    failed.warmer.start(request(), current);
-    await vi.advanceTimersByTimeAsync(270_000);
-    expect(failed.appendUsage).not.toHaveBeenCalled();
-    failed.warmer.cancel();
-  });
+        unsupported.warmer.start(request(), current);
+        unsupported.state.mode = "off";
+        yield* awaited(vi.advanceTimersByTimeAsync(270_000));
+        expect(unsupported.calls).toHaveLength(0);
+
+        const streaming = fakeRuntime({ mode: "streaming", branch: branchWithPrompt(400_000) });
+        streaming.warmer.start(request(), current);
+        streaming.warmer.onAgentSettled();
+        expect(streaming.warmer.status.reason).toBe("agent run settled");
+      }),
+    ));
+
+  it("aborts replaced requests and does not record failed refreshes", () =>
+    runTest(
+      Effect.gen(function* () {
+        const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
+        vi.useFakeTimers();
+        let release!: () => void;
+        const pending = fakeRuntime({
+          result: (model) =>
+            new Promise((resolve) => {
+              release = () => resolve(response(model));
+            }),
+        });
+        pending.warmer.start(request(), current);
+        yield* awaited(vi.advanceTimersByTimeAsync(270_000));
+        pending.warmer.start(request(), current);
+        expect(pending.calls[0]?.options?.signal?.aborted).toBe(true);
+        release();
+        pending.warmer.cancel();
+        yield* awaited(vi.advanceTimersByTimeAsync(600_000));
+        expect(pending.calls).toHaveLength(1);
+
+        const failed = fakeRuntime({
+          result: (model) => effectRunPromise(awaited(response(model, "error"))),
+        });
+        failed.warmer.start(request(), current);
+        yield* awaited(vi.advanceTimersByTimeAsync(270_000));
+        expect(failed.appendUsage).not.toHaveBeenCalled();
+        failed.warmer.cancel();
+      }),
+    ));
 
   it("formats status and usage entries", () => {
     const decision: CacheWarmingDecision = {
@@ -372,37 +413,42 @@ describe("cache warming", () => {
 });
 
 describe("ExtensionRunner.emitCacheWarmingDecision", () => {
-  it("uses the last extension override", async () => {
-    const runtime = createExtensionRuntime();
-    const eventBus = createEventBus();
-    const factories: ExtensionFactory[] = [
-      (msa) => {
-        msa.on("cache_warming_decision", () => ({ action: "warm" }));
-      },
-      (msa) => {
-        msa.on("cache_warming_decision", () => ({ action: "stop" }));
-      },
-    ];
-    const extensions = [];
-    for (const factory of factories) {
-      extensions.push(await loadExtensionFromFactory(factory, process.cwd(), eventBus, runtime));
-    }
-    const modelRegistry = await createInMemoryModelRegistry(AuthStorage.inMemory());
-    const runner = new ExtensionRunner(
-      extensions,
-      runtime,
-      process.cwd(),
-      SessionManager.inMemory(),
-      modelRegistry,
-    );
-    const event: CacheWarmingDecisionEvent = {
-      type: "cache_warming_decision",
-      warmCost: 0.05,
-      missCost: 0.5,
-      continuationProbability: 0.15,
-      action: "warm",
-    };
+  it("uses the last extension override", () =>
+    runTest(
+      Effect.gen(function* () {
+        const runtime = createExtensionRuntime();
+        const eventBus = createEventBus();
+        const factories: ExtensionFactory[] = [
+          (msa) => {
+            msa.on("cache_warming_decision", () => ({ action: "warm" }));
+          },
+          (msa) => {
+            msa.on("cache_warming_decision", () => ({ action: "stop" }));
+          },
+        ];
+        const extensions = [];
+        for (const factory of factories) {
+          extensions.push(
+            yield* awaited(loadExtensionFromFactory(factory, process.cwd(), eventBus, runtime)),
+          );
+        }
+        const modelRegistry = yield* awaited(createInMemoryModelRegistry(AuthStorage.inMemory()));
+        const runner = new ExtensionRunner(
+          extensions,
+          runtime,
+          process.cwd(),
+          SessionManager.inMemory(),
+          modelRegistry,
+        );
+        const event: CacheWarmingDecisionEvent = {
+          type: "cache_warming_decision" as const,
+          warmCost: 0.05,
+          missCost: 0.5,
+          continuationProbability: 0.15,
+          action: "warm",
+        };
 
-    expect(await runner.emitCacheWarmingDecision(event)).toBe("stop");
-  });
+        expect(yield* awaited(runner.emitCacheWarmingDecision(event))).toBe("stop");
+      }),
+    ));
 });

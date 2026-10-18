@@ -1,7 +1,8 @@
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
 
+import { awaited, runTest, joinPath } from "@msa/testing";
+import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import type { ExtensionToolContext } from "../src/core/extensions/types.ts";
@@ -9,17 +10,29 @@ import { createEditToolDefinition } from "../src/core/tools/edit.ts";
 
 const tempDirs: string[] = [];
 
-async function createTempDir(): Promise<string> {
-  const dir = await mkdtemp(join(tmpdir(), "msa-edit-legacy-input-"));
-  tempDirs.push(dir);
-  return dir;
+function createTempDir(): Promise<string> {
+  return runTest(
+    Effect.gen(function* () {
+      const dir = yield* awaited(mkdtemp(joinPath(tmpdir(), "msa-edit-legacy-input-")));
+      tempDirs.push(dir);
+      return yield* awaited(dir);
+    }),
+  );
 }
 
-afterEach(async () => {
-  await Promise.all(
-    tempDirs.splice(0, tempDirs.length).map((dir) => rm(dir, { recursive: true, force: true })),
-  );
-});
+afterEach(() =>
+  runTest(
+    Effect.gen(function* () {
+      yield* awaited(
+        Promise.all(
+          tempDirs
+            .splice(0, tempDirs.length)
+            .map((dir) => rm(dir, { recursive: true, force: true })),
+        ),
+      );
+    }),
+  ),
+);
 
 describe("edit tool prepareArguments", () => {
   it("keeps legacy fields out of the public schema", () => {
@@ -75,30 +88,29 @@ describe("edit tool prepareArguments", () => {
     expect(definition.prepareArguments!("garbage")).toBe("garbage");
   });
 
-  it("prepared args execute correctly", async () => {
-    const dir = await createTempDir();
-    const filePath = join(dir, "legacy.txt");
-    await writeFile(filePath, "before\n", "utf8");
+  it("prepared args execute correctly", () =>
+    runTest(
+      Effect.gen(function* () {
+        const dir = yield* awaited(createTempDir());
+        const filePath = joinPath(dir, "legacy.txt");
+        yield* awaited(writeFile(filePath, "before\n", "utf8"));
 
-    const definition = createEditToolDefinition(dir);
-    const prepared = definition.prepareArguments!({
-      path: "legacy.txt",
-      oldText: "before",
-      newText: "after",
-    });
+        const definition = createEditToolDefinition(dir);
+        const prepared = definition.prepareArguments!({
+          path: "legacy.txt",
+          oldText: "before",
+          newText: "after",
+        });
 
-    const result = await definition.execute(
-      "tool-1",
-      prepared,
-      undefined,
-      undefined,
-      {} as ExtensionToolContext,
-    );
-    expect(result.content).toEqual([
-      { type: "text", text: "Successfully replaced 1 block(s) in legacy.txt." },
-    ]);
-    expect(await readFile(filePath, "utf8")).toBe("after\n");
-  });
+        const result = yield* awaited(
+          definition.execute("tool-1", prepared, undefined, undefined, {} as ExtensionToolContext),
+        );
+        expect(result.content).toEqual([
+          { type: "text" as const, text: "Successfully replaced 1 block(s) in legacy.txt." },
+        ]);
+        expect(yield* awaited(readFile(filePath, "utf8"))).toBe("after\n");
+      }),
+    ));
 });
 
 describe("edit tool stringified edits", () => {

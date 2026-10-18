@@ -1,8 +1,19 @@
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
 
+import {
+  awaited,
+  runTest,
+  currentTimeMillis,
+  toJsonText,
+  randomSuffixSync,
+  writeTextFile,
+  makeDirectory,
+  removePath,
+  joinPath,
+} from "@msa/testing";
+import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
 import { DefaultPackageManager } from "../src/core/package-manager.ts";
@@ -27,7 +38,7 @@ function initGitRepo(repoDir: string): void {
 }
 
 function createCommit(repoDir: string, filename: string, content: string, message: string): string {
-  writeFileSync(join(repoDir, filename), content);
+  writeFileSync(joinPath(repoDir, filename), content);
   git(["add", filename], repoDir);
   git(["commit", "-m", message], repoDir);
   return git(["rev-parse", "HEAD"], repoDir);
@@ -38,7 +49,7 @@ function getCurrentCommit(repoDir: string): string {
 }
 
 function getFileContent(repoDir: string, filename: string): string {
-  return readFileSync(join(repoDir, filename), "utf-8");
+  return readFileSync(joinPath(repoDir, filename), "utf-8");
 }
 
 type GitSourceForTest = {
@@ -67,15 +78,12 @@ describe("DefaultPackageManager git update", () => {
 
   beforeEach(() => {
     allowNetwork();
-    tempDir = join(
-      tmpdir(),
-      `git-update-test-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-    );
+    tempDir = joinPath(tmpdir(), `git-update-test-${currentTimeMillis()}-${randomSuffixSync()}`);
     mkdirSync(tempDir, { recursive: true });
-    remoteDir = join(tempDir, "remote");
-    agentDir = join(tempDir, "agent");
+    remoteDir = joinPath(tempDir, "remote");
+    agentDir = joinPath(tempDir, "agent");
 
-    installedDir = join(agentDir, "git", "github.com", "test", "extension");
+    installedDir = joinPath(agentDir, "git", "github.com", "test", "extension");
 
     mkdirSync(agentDir, { recursive: true });
 
@@ -98,7 +106,7 @@ describe("DefaultPackageManager git update", () => {
     initGitRepo(remoteDir);
     createCommit(remoteDir, "extension.ts", "// v1", "Initial commit");
 
-    mkdirSync(join(agentDir, "git", "github.com", "test"), { recursive: true });
+    mkdirSync(joinPath(agentDir, "git", "github.com", "test"), { recursive: true });
     git(["clone", remoteDir, installedDir], tempDir);
     git(["config", "--local", "user.email", "test@test.com"], installedDir);
     git(["config", "--local", "user.name", "Test"], installedDir);
@@ -107,165 +115,201 @@ describe("DefaultPackageManager git update", () => {
   }
 
   describe("normal updates (no force-push)", () => {
-    it("should skip reset, clean, and install when already up to date", async () => {
-      mkdirSync(remoteDir, { recursive: true });
-      initGitRepo(remoteDir);
-      writeFileSync(
-        join(remoteDir, "package.json"),
-        JSON.stringify({ name: "test-extension", version: "1.0.0" }),
-      );
-      createCommit(remoteDir, "extension.ts", "// v1", "Initial commit");
+    it("should skip reset, clean, and install when already up to date", () =>
+      runTest(
+        Effect.gen(function* () {
+          const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-      mkdirSync(join(agentDir, "git", "github.com", "test"), { recursive: true });
-      git(["clone", remoteDir, installedDir], tempDir);
-      settingsManager.setPackages([gitSource]);
+          yield* makeDirectory(remoteDir);
+          initGitRepo(remoteDir);
+          yield* writeTextFile(
+            joinPath(remoteDir, "package.json"),
+            yield* toJsonText({ name: "test-extension", version: "1.0.0" }),
+          );
+          createCommit(remoteDir, "extension.ts", "// v1", "Initial commit");
 
-      const executedCommands: string[] = [];
-      const managerWithInternals = packageManager as unknown as {
-        runCommand: (command: string, args: string[], options?: { cwd?: string }) => Promise<void>;
-      };
-      managerWithInternals.runCommand = async (command, args, options) => {
-        executedCommands.push(`${command} ${args.join(" ")}`);
-        if (command === "npm") {
-          return;
-        }
-        const result = spawnSync(command, args, {
-          cwd: options?.cwd,
-          encoding: "utf-8",
-        });
-        if (result.status !== 0) {
-          throw new Error(`Command failed: ${command} ${args.join(" ")}\n${result.stderr}`);
-        }
-      };
+          yield* makeDirectory(joinPath(agentDir, "git", "github.com", "test"));
+          git(["clone", remoteDir, installedDir], tempDir);
+          settingsManager.setPackages([gitSource]);
 
-      await packageManager.update();
+          const executedCommands: string[] = [];
+          const managerWithInternals = packageManager as unknown as {
+            runCommand: (
+              command: string,
+              args: string[],
+              options?: { cwd?: string },
+            ) => Promise<void>;
+          };
+          managerWithInternals.runCommand = (command, args, options) =>
+            effectRunPromise(
+              Effect.sync(() => {
+                executedCommands.push(`${command} ${args.join(" ")}`);
+                if (command === "npm") {
+                  return;
+                }
+                const result = spawnSync(command, args, {
+                  cwd: options?.cwd,
+                  encoding: "utf-8",
+                });
+                if (result.status !== 0) {
+                  throw new Error(`Command failed: ${command} ${args.join(" ")}\n${result.stderr}`);
+                }
+              }),
+            );
 
-      expect(executedCommands).toContain(
-        "git fetch --prune --no-tags origin +refs/heads/main:refs/remotes/origin/main",
-      );
-      expect(executedCommands).not.toContain("git fetch --prune origin");
-      expect(executedCommands).not.toContain("git reset --hard @{upstream}");
-      expect(executedCommands).not.toContain("git reset --hard origin/HEAD");
-      expect(executedCommands).not.toContain("git clean -fdx");
-      expect(executedCommands).not.toContain("npm install");
-    });
+          yield* awaited(packageManager.update());
 
-    it("should update to latest commit when remote has new commits", async () => {
-      setupRemoteAndInstall();
-      expect(getFileContent(installedDir, "extension.ts")).toBe("// v1");
+          expect(executedCommands).toContain(
+            "git fetch --prune --no-tags origin +refs/heads/main:refs/remotes/origin/main",
+          );
+          expect(executedCommands).not.toContain("git fetch --prune origin");
+          expect(executedCommands).not.toContain("git reset --hard @{upstream}");
+          expect(executedCommands).not.toContain("git reset --hard origin/HEAD");
+          expect(executedCommands).not.toContain("git clean -fdx");
+          expect(executedCommands).not.toContain("npm install");
+        }),
+      ));
 
-      const newCommit = createCommit(remoteDir, "extension.ts", "// v2", "Second commit");
+    it("should update to latest commit when remote has new commits", () =>
+      runTest(
+        Effect.gen(function* () {
+          setupRemoteAndInstall();
+          expect(getFileContent(installedDir, "extension.ts")).toBe("// v1");
 
-      await packageManager.update();
+          const newCommit = createCommit(remoteDir, "extension.ts", "// v2", "Second commit");
 
-      expect(getCurrentCommit(installedDir)).toBe(newCommit);
-      expect(getFileContent(installedDir, "extension.ts")).toBe("// v2");
-    });
+          yield* awaited(packageManager.update());
+
+          expect(getCurrentCommit(installedDir)).toBe(newCommit);
+          expect(getFileContent(installedDir, "extension.ts")).toBe("// v2");
+        }),
+      ));
   });
 
   describe("force-push scenarios", () => {
-    it("should handle complete history rewrite", async () => {
-      setupRemoteAndInstall();
+    it("should handle complete history rewrite", () =>
+      runTest(
+        Effect.gen(function* () {
+          setupRemoteAndInstall();
 
-      createCommit(remoteDir, "extension.ts", "// v2", "v2");
-      createCommit(remoteDir, "extension.ts", "// v3", "v3");
+          createCommit(remoteDir, "extension.ts", "// v2", "v2");
+          createCommit(remoteDir, "extension.ts", "// v3", "v3");
 
-      await packageManager.update();
-      expect(getFileContent(installedDir, "extension.ts")).toBe("// v3");
+          yield* awaited(packageManager.update());
+          expect(getFileContent(installedDir, "extension.ts")).toBe("// v3");
 
-      git(["reset", "--hard", "HEAD~2"], remoteDir);
-      createCommit(remoteDir, "extension.ts", "// rewrite-a", "Rewrite A");
-      const finalCommit = createCommit(remoteDir, "extension.ts", "// rewrite-b", "Rewrite B");
+          git(["reset", "--hard", "HEAD~2"], remoteDir);
+          createCommit(remoteDir, "extension.ts", "// rewrite-a", "Rewrite A");
+          const finalCommit = createCommit(remoteDir, "extension.ts", "// rewrite-b", "Rewrite B");
 
-      await packageManager.update();
+          yield* awaited(packageManager.update());
 
-      expect(getCurrentCommit(installedDir)).toBe(finalCommit);
-      expect(getFileContent(installedDir, "extension.ts")).toBe("// rewrite-b");
-    });
+          expect(getCurrentCommit(installedDir)).toBe(finalCommit);
+          expect(getFileContent(installedDir, "extension.ts")).toBe("// rewrite-b");
+        }),
+      ));
   });
 
   describe("pinned sources", () => {
-    it("should checkout the configured pinned git ref during full and targeted updates", async () => {
-      mkdirSync(remoteDir, { recursive: true });
-      initGitRepo(remoteDir);
-      const v1Commit = createCommit(remoteDir, "extension.ts", "// v1", "Initial commit");
-      git(["tag", "v1"], remoteDir);
-      const v2Commit = createCommit(remoteDir, "extension.ts", "// v2", "Second commit");
-      git(["tag", "v2"], remoteDir);
+    it("should checkout the configured pinned git ref during full and targeted updates", () =>
+      runTest(
+        Effect.gen(function* () {
+          yield* makeDirectory(remoteDir);
+          initGitRepo(remoteDir);
+          const v1Commit = createCommit(remoteDir, "extension.ts", "// v1", "Initial commit");
+          git(["tag", "v1"], remoteDir);
+          const v2Commit = createCommit(remoteDir, "extension.ts", "// v2", "Second commit");
+          git(["tag", "v2"], remoteDir);
 
-      mkdirSync(join(agentDir, "git", "github.com", "test"), { recursive: true });
-      git(["clone", remoteDir, installedDir], tempDir);
-      git(["checkout", "v1"], installedDir);
-      expect(getCurrentCommit(installedDir)).toBe(v1Commit);
+          yield* makeDirectory(joinPath(agentDir, "git", "github.com", "test"));
+          git(["clone", remoteDir, installedDir], tempDir);
+          git(["checkout", "v1"], installedDir);
+          expect(getCurrentCommit(installedDir)).toBe(v1Commit);
 
-      const pinnedSource = `${gitSource}@v2`;
-      settingsManager.setPackages([pinnedSource]);
+          const pinnedSource = `${gitSource}@v2`;
+          settingsManager.setPackages([pinnedSource]);
 
-      await packageManager.update();
+          yield* awaited(packageManager.update());
 
-      expect(getCurrentCommit(installedDir)).toBe(v2Commit);
-      expect(getFileContent(installedDir, "extension.ts")).toBe("// v2");
+          expect(getCurrentCommit(installedDir)).toBe(v2Commit);
+          expect(getFileContent(installedDir, "extension.ts")).toBe("// v2");
 
-      git(["checkout", "v1"], installedDir);
+          git(["checkout", "v1"], installedDir);
 
-      await packageManager.update(pinnedSource);
+          yield* awaited(packageManager.update(pinnedSource));
 
-      expect(getCurrentCommit(installedDir)).toBe(v2Commit);
-      expect(getFileContent(installedDir, "extension.ts")).toBe("// v2");
-    });
+          expect(getCurrentCommit(installedDir)).toBe(v2Commit);
+          expect(getFileContent(installedDir, "extension.ts")).toBe("// v2");
+        }),
+      ));
   });
 
   describe("temporary git sources", () => {
-    it("should refresh cached temporary git sources when resolving", async () => {
-      const managerWithPaths = packageManager as unknown as PackageManagerPathInternals;
-      const cachedDir = managerWithPaths.getGitInstallPath(
-        managerWithPaths.parseSource(gitSource),
-        "temporary",
-      );
-      const extensionFile = join(cachedDir, "msa-extensions", "session-breakdown.ts");
+    it("should refresh cached temporary git sources when resolving", () =>
+      runTest(
+        Effect.gen(function* () {
+          const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-      rmSync(cachedDir, { recursive: true, force: true });
-      mkdirSync(join(cachedDir, "msa-extensions"), { recursive: true });
-      writeFileSync(
-        join(cachedDir, "package.json"),
-        JSON.stringify({ msa: { extensions: ["./msa-extensions"] } }, null, 2),
-      );
-      writeFileSync(extensionFile, "// stale");
+          const managerWithPaths = packageManager as unknown as PackageManagerPathInternals;
+          const cachedDir = managerWithPaths.getGitInstallPath(
+            managerWithPaths.parseSource(gitSource),
+            "temporary",
+          );
+          const extensionFile = joinPath(cachedDir, "msa-extensions", "session-breakdown.ts");
 
-      const executedCommands: string[] = [];
-      const managerWithInternals = packageManager as unknown as {
-        runCommand: (command: string, args: string[], options?: { cwd?: string }) => Promise<void>;
-        runCommandCapture: (
-          command: string,
-          args: string[],
-          options?: { cwd?: string },
-        ) => Promise<string>;
-      };
-      managerWithInternals.runCommand = async (command, args) => {
-        executedCommands.push(`${command} ${args.join(" ")}`);
-        if (command === "git" && args[0] === "reset") {
-          writeFileSync(extensionFile, "// fresh");
-        }
-      };
-      managerWithInternals.runCommandCapture = async (_command, args) => {
-        if (args[0] === "rev-parse" && args[1] === "HEAD") {
-          return "local-head";
-        }
-        if (args[0] === "rev-parse" && args[1] === "@{upstream}") {
-          return "remote-head";
-        }
-        if (args[0] === "rev-parse" && args[1] === "--abbrev-ref") {
-          return "origin/main";
-        }
-        return "";
-      };
+          yield* removePath(cachedDir);
+          yield* makeDirectory(joinPath(cachedDir, "msa-extensions"));
+          yield* writeTextFile(
+            joinPath(cachedDir, "package.json"),
+            JSON.stringify({ msa: { extensions: ["./msa-extensions"] } }, null, 2),
+          );
+          yield* writeTextFile(extensionFile, "// stale");
 
-      await packageManager.resolveExtensionSources([gitSource], { temporary: true });
+          const executedCommands: string[] = [];
+          const managerWithInternals = packageManager as unknown as {
+            runCommand: (
+              command: string,
+              args: string[],
+              options?: { cwd?: string },
+            ) => Promise<void>;
+            runCommandCapture: (
+              command: string,
+              args: string[],
+              options?: { cwd?: string },
+            ) => Promise<string>;
+          };
+          managerWithInternals.runCommand = (command, args) =>
+            effectRunPromise(
+              Effect.sync(() => {
+                executedCommands.push(`${command} ${args.join(" ")}`);
+                if (command === "git" && args[0] === "reset") {
+                  writeFileSync(extensionFile, "// fresh");
+                }
+              }),
+            );
+          managerWithInternals.runCommandCapture = (_command, args) =>
+            effectRunPromise(
+              Effect.gen(function* () {
+                if (args[0] === "rev-parse" && args[1] === "HEAD") {
+                  return yield* awaited("local-head");
+                }
+                if (args[0] === "rev-parse" && args[1] === "@{upstream}") {
+                  return yield* awaited("remote-head");
+                }
+                if (args[0] === "rev-parse" && args[1] === "--abbrev-ref") {
+                  return yield* awaited("origin/main");
+                }
+                return yield* awaited("");
+              }),
+            );
 
-      expect(executedCommands).toContain(
-        "git fetch --prune --no-tags origin +refs/heads/main:refs/remotes/origin/main",
-      );
-      expect(getFileContent(cachedDir, "msa-extensions/session-breakdown.ts")).toBe("// fresh");
-    });
+          yield* awaited(packageManager.resolveExtensionSources([gitSource], { temporary: true }));
+
+          expect(executedCommands).toContain(
+            "git fetch --prune --no-tags origin +refs/heads/main:refs/remotes/origin/main",
+          );
+          expect(getFileContent(cachedDir, "msa-extensions/session-breakdown.ts")).toBe("// fresh");
+        }),
+      ));
   });
 });

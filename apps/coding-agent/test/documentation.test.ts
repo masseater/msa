@@ -1,6 +1,7 @@
 import { existsSync, globSync, readFileSync, statSync } from "node:fs";
 import { dirname, isAbsolute, posix, relative, resolve, sep } from "node:path";
 
+import {} from "@msa/testing";
 import { lexer, type Token, type Tokens, walkTokens } from "marked";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -43,7 +44,7 @@ function requireDocumentationPath(value: unknown, location: string): string {
   const normalizedPath = posix.normalize(path);
   const escapesDocsRoot = normalizedPath === ".." || normalizedPath.startsWith("../");
   const hasUrlSyntax = path.includes("?") || path.includes("#");
-  const hasWindowsSyntax = path.includes("\\") || /^[a-z]:/i.test(path);
+  const hasWindowsSyntax = path.includes("\\") || /^[a-z]:/iu.test(path);
 
   if (
     path !== path.trim() ||
@@ -194,9 +195,9 @@ describe("coding-agent documentation", () => {
       reachable.add(source);
 
       for (const href of markdownLinks(readFileSync(resolve(docsRoot, source), "utf8"))) {
-        if (/^[a-z][a-z\d+.-]*:/i.test(href) || href.startsWith("//") || href.startsWith("/"))
+        if (/^[a-z][a-z\d+.-]*:/iu.test(href) || href.startsWith("//") || href.startsWith("/"))
           continue;
-        const linkedPath = href.split(/[?#]/, 1)[0] ?? "";
+        const linkedPath = href.split(/[?#]/u, 1)[0] ?? "";
         const fragment = fragmentOf(href);
         if (linkedPath === "" && fragment !== "") {
           if (!markdownAnchors(readFileSync(resolve(docsRoot, source), "utf8")).has(fragment))

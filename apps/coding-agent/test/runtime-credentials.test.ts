@@ -1,99 +1,154 @@
 import type { CredentialStore } from "@msa/ai";
+import { awaited, runTest, currentTimeMillis, abortController } from "@msa/testing";
+import { Effect } from "effect";
 import { describe, expect, test, vi } from "vite-plus/test";
 
 import { AuthStorage } from "../src/core/auth-storage.ts";
 import { RuntimeCredentials } from "../src/core/runtime-credentials.ts";
 
 describe("RuntimeCredentials", () => {
-  test("runtime overrides mask stored credentials without persisting", async () => {
-    const storage = AuthStorage.inMemory({ anthropic: { type: "api_key", key: "stored-key" } });
-    const credentials = new RuntimeCredentials(storage);
+  test("runtime overrides mask stored credentials without persisting", () =>
+    runTest(
+      Effect.gen(function* () {
+        const storage = AuthStorage.inMemory({
+          anthropic: { type: "api_key" as const, key: "stored-key" },
+        });
+        const credentials = new RuntimeCredentials(storage);
 
-    credentials.setRuntimeApiKey("anthropic", "runtime-key");
-    expect(await credentials.read("anthropic")).toEqual({ type: "api_key", key: "runtime-key" });
-    expect(await storage.read("anthropic")).toEqual({ type: "api_key", key: "stored-key" });
+        credentials.setRuntimeApiKey("anthropic", "runtime-key");
+        expect(yield* awaited(credentials.read("anthropic"))).toEqual({
+          type: "api_key" as const,
+          key: "runtime-key",
+        });
+        expect(yield* awaited(storage.read("anthropic"))).toEqual({
+          type: "api_key" as const,
+          key: "stored-key",
+        });
 
-    credentials.removeRuntimeApiKey("anthropic");
-    expect(await credentials.read("anthropic")).toEqual({ type: "api_key", key: "stored-key" });
-  });
+        credentials.removeRuntimeApiKey("anthropic");
+        expect(yield* awaited(credentials.read("anthropic"))).toEqual({
+          type: "api_key" as const,
+          key: "stored-key",
+        });
+      }),
+    ));
 
-  test("enumeration merges overrides without exposing keys", async () => {
-    const storage = AuthStorage.inMemory({
-      anthropic: {
-        type: "oauth",
-        access: "access",
-        refresh: "refresh",
-        expires: Date.now() + 60_000,
-      },
-    });
-    const credentials = new RuntimeCredentials(storage);
-    credentials.setRuntimeApiKey("anthropic", "runtime-key");
-    credentials.setRuntimeApiKey("openai", "other-runtime-key");
+  test("enumeration merges overrides without exposing keys", () =>
+    runTest(
+      Effect.gen(function* () {
+        const storage = AuthStorage.inMemory({
+          anthropic: {
+            type: "oauth" as const,
+            access: "access",
+            refresh: "refresh",
+            expires: currentTimeMillis() + 60_000,
+          },
+        });
+        const credentials = new RuntimeCredentials(storage);
+        credentials.setRuntimeApiKey("anthropic", "runtime-key");
+        credentials.setRuntimeApiKey("openai", "other-runtime-key");
 
-    expect(await credentials.list()).toEqual([
-      { providerId: "anthropic", type: "api_key" },
-      { providerId: "openai", type: "api_key" },
-    ]);
-  });
+        expect(yield* awaited(credentials.list())).toEqual([
+          { providerId: "anthropic", type: "api_key" as const },
+          { providerId: "openai", type: "api_key" as const },
+        ]);
+      }),
+    ));
 
-  test("forwards operation signals to the persistent store", async () => {
-    const controller = new AbortController();
-    const received: AbortSignal[] = [];
-    const storage: CredentialStore = {
-      read: async (_providerId, options) => {
-        received.push(options?.signal as AbortSignal);
-        return undefined;
-      },
-      list: async (options) => {
-        received.push(options?.signal as AbortSignal);
-        return [];
-      },
-      modify: async (_providerId, _fn, options) => {
-        received.push(options?.signal as AbortSignal);
-        return undefined;
-      },
-      delete: async (_providerId, options) => {
-        received.push(options?.signal as AbortSignal);
-      },
-    };
-    const credentials = new RuntimeCredentials(storage);
+  test("forwards operation signals to the persistent store", () =>
+    runTest(
+      Effect.gen(function* () {
+        const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-    await credentials.read("anthropic", { signal: controller.signal });
-    await credentials.list({ signal: controller.signal });
-    await credentials.modify("anthropic", async () => undefined, { signal: controller.signal });
-    await credentials.delete("anthropic", { signal: controller.signal });
+        const controller = abortController();
+        const received: AbortSignal[] = [];
+        const storage: CredentialStore = {
+          read: (_providerId, options) =>
+            effectRunPromise(
+              Effect.gen(function* () {
+                received.push(options?.signal as AbortSignal);
+                return yield* awaited(undefined);
+              }),
+            ),
+          list: (options) =>
+            effectRunPromise(
+              Effect.gen(function* () {
+                received.push(options?.signal as AbortSignal);
+                return yield* awaited([]);
+              }),
+            ),
+          modify: (_providerId, _fn, options) =>
+            effectRunPromise(
+              Effect.gen(function* () {
+                received.push(options?.signal as AbortSignal);
+                return yield* awaited(undefined);
+              }),
+            ),
+          delete: (_providerId, options) =>
+            effectRunPromise(
+              Effect.sync(() => {
+                received.push(options?.signal as AbortSignal);
+              }),
+            ),
+        };
+        const credentials = new RuntimeCredentials(storage);
 
-    expect(received).toEqual([
-      controller.signal,
-      controller.signal,
-      controller.signal,
-      controller.signal,
-    ]);
-  });
+        yield* awaited(credentials.read("anthropic", { signal: controller.signal }));
+        yield* awaited(credentials.list({ signal: controller.signal }));
+        yield* awaited(
+          credentials.modify("anthropic", () => effectRunPromise(awaited(undefined)), {
+            signal: controller.signal,
+          }),
+        );
+        yield* awaited(credentials.delete("anthropic", { signal: controller.signal }));
 
-  test("keeps a runtime override when persistent deletion is cancelled", async () => {
-    const aborted = new Error("cancelled");
-    aborted.name = "AbortError";
-    const storage = AuthStorage.inMemory({ anthropic: { type: "api_key", key: "stored-key" } });
-    const deleteSpy = vi.spyOn(storage, "delete").mockRejectedValueOnce(aborted);
-    const credentials = new RuntimeCredentials(storage);
-    credentials.setRuntimeApiKey("anthropic", "runtime-key");
+        expect(received).toEqual([
+          controller.signal,
+          controller.signal,
+          controller.signal,
+          controller.signal,
+        ]);
+      }),
+    ));
 
-    await expect(
-      credentials.delete("anthropic", { signal: new AbortController().signal }),
-    ).rejects.toBe(aborted);
-    expect(deleteSpy).toHaveBeenCalledTimes(1);
-    expect(await credentials.read("anthropic")).toEqual({ type: "api_key", key: "runtime-key" });
-  });
+  test("keeps a runtime override when persistent deletion is cancelled", () =>
+    runTest(
+      Effect.gen(function* () {
+        const aborted = new Error("cancelled");
+        aborted.name = "AbortError";
+        const storage = AuthStorage.inMemory({
+          anthropic: { type: "api_key" as const, key: "stored-key" },
+        });
+        const deleteSpy = vi.spyOn(storage, "delete").mockRejectedValueOnce(aborted);
+        const credentials = new RuntimeCredentials(storage);
+        credentials.setRuntimeApiKey("anthropic", "runtime-key");
 
-  test("delete clears both the override and persisted credential", async () => {
-    const storage = AuthStorage.inMemory({ anthropic: { type: "api_key", key: "stored-key" } });
-    const credentials = new RuntimeCredentials(storage);
-    credentials.setRuntimeApiKey("anthropic", "runtime-key");
+        yield* awaited(
+          expect(
+            credentials.delete("anthropic", { signal: abortController().signal }),
+          ).rejects.toBe(aborted),
+        );
+        expect(deleteSpy).toHaveBeenCalledTimes(1);
+        expect(yield* awaited(credentials.read("anthropic"))).toEqual({
+          type: "api_key" as const,
+          key: "runtime-key",
+        });
+      }),
+    ));
 
-    await credentials.delete("anthropic");
+  test("delete clears both the override and persisted credential", () =>
+    runTest(
+      Effect.gen(function* () {
+        const storage = AuthStorage.inMemory({
+          anthropic: { type: "api_key" as const, key: "stored-key" },
+        });
+        const credentials = new RuntimeCredentials(storage);
+        credentials.setRuntimeApiKey("anthropic", "runtime-key");
 
-    expect(await credentials.read("anthropic")).toBeUndefined();
-    expect(await credentials.list()).toEqual([]);
-  });
+        yield* awaited(credentials.delete("anthropic"));
+
+        expect(yield* awaited(credentials.read("anthropic"))).toBeUndefined();
+        expect(yield* awaited(credentials.list())).toEqual([]);
+      }),
+    ));
 });

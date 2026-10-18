@@ -1,4 +1,6 @@
+import { awaited, runTest } from "@msa/testing";
 import { setKeybindings } from "@msa/tui";
+import { Effect } from "effect";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { KeybindingsManager } from "../src/core/keybindings.ts";
@@ -6,10 +8,16 @@ import type { SessionInfo } from "../src/core/session-manager.ts";
 import { SessionSelectorComponent } from "../src/modes/interactive/components/session-selector.ts";
 import { initTheme } from "../src/modes/interactive/theme/theme.ts";
 
-async function flushPromises(): Promise<void> {
-  await new Promise<void>((resolve) => {
-    setImmediate(resolve);
-  });
+function flushPromises(): Promise<void> {
+  return runTest(
+    Effect.gen(function* () {
+      yield* awaited(
+        new Promise<void>((resolve) => {
+          setImmediate(resolve);
+        }),
+      );
+    }),
+  );
 }
 
 function makeSession(overrides: Partial<SessionInfo> & { id: string }): SessionInfo {
@@ -37,72 +45,87 @@ describe("session selector rename", () => {
     setKeybindings(new KeybindingsManager());
   });
 
-  it("shows rename hint in interactive /resume picker configuration", async () => {
-    const sessions = [makeSession({ id: "a" })];
-    const keybindings = new KeybindingsManager();
-    const selector = new SessionSelectorComponent(
-      async () => sessions,
-      async () => [],
-      () => {},
-      () => {},
-      () => {},
-      () => {},
-      { showRenameHint: true, keybindings },
-    );
-    await flushPromises();
+  it("shows rename hint in interactive /resume picker configuration", () =>
+    runTest(
+      Effect.gen(function* () {
+        const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-    const output = selector.render(120).join("\n");
-    expect(output).toContain("ctrl+r");
-    expect(output).toContain("rename");
-  });
+        const sessions = [makeSession({ id: "a" })];
+        const keybindings = new KeybindingsManager();
+        const selector = new SessionSelectorComponent(
+          () => effectRunPromise(awaited(sessions)),
+          () => effectRunPromise(awaited([])),
+          () => {},
+          () => {},
+          () => {},
+          () => {},
+          { showRenameHint: true, keybindings },
+        );
+        yield* awaited(flushPromises());
 
-  it("does not show rename hint in --resume picker configuration", async () => {
-    const sessions = [makeSession({ id: "a" })];
-    const keybindings = new KeybindingsManager();
-    const selector = new SessionSelectorComponent(
-      async () => sessions,
-      async () => [],
-      () => {},
-      () => {},
-      () => {},
-      () => {},
-      { showRenameHint: false, keybindings },
-    );
-    await flushPromises();
+        const output = selector.render(120).join("\n");
+        expect(output).toContain("ctrl+r");
+        expect(output).toContain("rename");
+      }),
+    ));
 
-    const output = selector.render(120).join("\n");
-    expect(output).not.toContain("ctrl+r");
-    expect(output).not.toContain("rename");
-  });
+  it("does not show rename hint in --resume picker configuration", () =>
+    runTest(
+      Effect.gen(function* () {
+        const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-  it("enters rename mode on Ctrl+R and submits with Enter", async () => {
-    const sessions = [makeSession({ id: "a", name: "Old" })];
-    const renameSession = vi.fn(async () => {});
+        const sessions = [makeSession({ id: "a" })];
+        const keybindings = new KeybindingsManager();
+        const selector = new SessionSelectorComponent(
+          () => effectRunPromise(awaited(sessions)),
+          () => effectRunPromise(awaited([])),
+          () => {},
+          () => {},
+          () => {},
+          () => {},
+          { showRenameHint: false, keybindings },
+        );
+        yield* awaited(flushPromises());
 
-    const keybindings = new KeybindingsManager();
-    const selector = new SessionSelectorComponent(
-      async () => sessions,
-      async () => [],
-      () => {},
-      () => {},
-      () => {},
-      () => {},
-      { renameSession, showRenameHint: true, keybindings },
-    );
-    await flushPromises();
+        const output = selector.render(120).join("\n");
+        expect(output).not.toContain("ctrl+r");
+        expect(output).not.toContain("rename");
+      }),
+    ));
 
-    selector.getSessionList().handleInput(CTRL_R);
-    await flushPromises();
+  it("enters rename mode on Ctrl+R and submits with Enter", () =>
+    runTest(
+      Effect.gen(function* () {
+        const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-    const output = selector.render(120).join("\n");
-    expect(output).toContain("Rename Session");
-    expect(output).not.toContain("Resume Session");
+        const sessions = [makeSession({ id: "a", name: "Old" })];
+        const renameSession = vi.fn(() => effectRunPromise(Effect.sync(() => {})));
 
-    selector.handleInput("X");
-    selector.handleInput("\r");
-    await flushPromises();
+        const keybindings = new KeybindingsManager();
+        const selector = new SessionSelectorComponent(
+          () => effectRunPromise(awaited(sessions)),
+          () => effectRunPromise(awaited([])),
+          () => {},
+          () => {},
+          () => {},
+          () => {},
+          { renameSession, showRenameHint: true, keybindings },
+        );
+        yield* awaited(flushPromises());
 
-    expect(renameSession).toHaveBeenCalledTimes(1);
-    expect(renameSession).toHaveBeenCalledWith(sessions[0]!.path, "XOld");
-  });
+        selector.getSessionList().handleInput(CTRL_R);
+        yield* awaited(flushPromises());
+
+        const output = selector.render(120).join("\n");
+        expect(output).toContain("Rename Session");
+        expect(output).not.toContain("Resume Session");
+
+        selector.handleInput("X");
+        selector.handleInput("\r");
+        yield* awaited(flushPromises());
+
+        expect(renameSession).toHaveBeenCalledTimes(1);
+        expect(renameSession).toHaveBeenCalledWith(sessions[0]!.path, "XOld");
+      }),
+    ));
 });

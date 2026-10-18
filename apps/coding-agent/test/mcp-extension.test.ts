@@ -2,7 +2,6 @@ import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSy
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
 
 import { renderToolOutputType } from "@msa/codemode/declarations";
 import {
@@ -13,9 +12,20 @@ import {
   McpSessionExpiredError,
 } from "@msa/mcp";
 import { createInMemoryTransportPair, type InMemoryTransport } from "@msa/mcp/testing";
+import {
+  awaited,
+  runTest,
+  readTextFile,
+  writeTextFile,
+  makeDirectory,
+  removePath,
+  joinPath,
+} from "@msa/testing";
+import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { InMemoryAuthStorageBackend } from "../src/core/auth-storage.ts";
+import { deleteEnv, readEnv, writeEnv } from "../src/core/process-env.ts";
 import { truncateMiddle } from "../src/core/tools/truncate.ts";
 import {
   getMcpToolExposure,
@@ -45,14 +55,14 @@ describe("MCP config", () => {
   });
 
   function setup(global: unknown, project: unknown) {
-    const root = mkdtempSync(join(tmpdir(), "msa-mcp-config-"));
+    const root = mkdtempSync(joinPath(tmpdir(), "msa-mcp-config-"));
     dirs.push(root);
-    const agentDir = join(root, "agent");
-    const cwd = join(root, "project");
+    const agentDir = joinPath(root, "agent");
+    const cwd = joinPath(root, "project");
     mkdirSync(agentDir, { recursive: true });
-    mkdirSync(join(cwd, ".msa"), { recursive: true });
-    writeFileSync(join(agentDir, "mcp.json"), JSON.stringify(global));
-    writeFileSync(join(cwd, ".msa", "mcp.json"), JSON.stringify(project));
+    mkdirSync(joinPath(cwd, ".msa"), { recursive: true });
+    writeFileSync(joinPath(agentDir, "mcp.json"), JSON.stringify(global));
+    writeFileSync(joinPath(cwd, ".msa", "mcp.json"), JSON.stringify(project));
     return { agentDir, cwd };
   }
 
@@ -64,7 +74,7 @@ describe("MCP config", () => {
           remote: { url: "https://example.com/mcp", headers: { Authorization: TOKEN_HEADER } },
           off: { command: "x", enabled: false },
           bad: { args: ["no command"] },
-          legacy: { type: "sse", url: "https://example.com/sse" },
+          legacy: { type: "sse" as const, url: "https://example.com/sse" },
           badUrl: { url: "example.com/mcp" },
           "bad name": { command: "x" },
         },
@@ -101,7 +111,7 @@ describe("MCP config", () => {
 
       { mcpServers: { tools: { enabled: false, args: ["y"] }, missing: { enabled: false } } },
     );
-    const project = join(paths.cwd, ".msa", "mcp.json");
+    const project = joinPath(paths.cwd, ".msa", "mcp.json");
     const { servers, errors } = loadMcpConfig({ ...paths, projectTrusted: true });
     expect(servers.map((server) => [server.name, server.override, server.config])).toEqual([
       ["tools", undefined, { command: "x", env: { TOKEN: "secret" } }],
@@ -346,12 +356,12 @@ describe("MCP tools", () => {
     expect(createMcpToolName("my-server", "get.item/v2")).toBe("mcp__my_server__get_item_v2");
     const long = createMcpToolName("server", "x".repeat(100));
     expect(long).toHaveLength(64);
-    expect(long).toMatch(/^mcp__server__x+_[0-9a-f]{8}$/);
+    expect(long).toMatch(/^mcp__server__x+_[0-9a-f]{8}$/u);
     expect(createMcpToolName("server", `${"x".repeat(100)}y`)).not.toBe(long);
 
     const taken = createMcpToolName("s", "a_b");
     const second = createMcpToolName("s", "a-b", (name) => name === taken);
-    expect(second).toMatch(/^mcp__s__a_b_[0-9a-f]{8}$/);
+    expect(second).toMatch(/^mcp__s__a_b_[0-9a-f]{8}$/u);
   });
 
   it("declares the CallToolResult scripts receive, keeping references in the server's output schema", () => {
@@ -362,13 +372,17 @@ describe("MCP tools", () => {
       `{ ${content} structuredContent?: unknown; [key: string]: unknown; }`,
     );
 
-    const hit = { type: "object", properties: { id: { type: "string" } }, required: ["id"] };
+    const hit = {
+      type: "object" as const,
+      properties: { id: { type: "string" as const } },
+      required: ["id"],
+    };
     const schema = createMcpResultSchema({
-      type: "object",
+      type: "object" as const,
       properties: {
-        hits: { type: "array", items: { $ref: "#/$defs/Hit~1v1" } },
+        hits: { type: "array" as const, items: { $ref: "#/$defs/Hit~1v1" } },
         again: { $ref: "#/properties/hits" },
-        children: { type: "array", items: { $ref: "#" } },
+        children: { type: "array" as const, items: { $ref: "#" } },
 
         default: { $ref: "#/definitions/Hit" },
         remote: { $ref: "https://example.com/schema.json" },
@@ -388,146 +402,179 @@ describe("MCP tools", () => {
     );
   });
 
-  it("converts results, passing the CallToolResult to scripts and flagging errors", async () => {
-    const blocks = [
-      { type: "resource_link" as const, uri: "file:///a", name: "a" },
-      { type: "resource" as const, resource: { uri: "file:///b", text: "b text" } },
-      { type: "audio" as const, data: "", mimeType: "audio/wav" },
-    ];
-    expect(
-      await convertMcpResult("docs", "t", {
-        content: blocks,
-        structuredContent: { ok: true },
-        _meta: { trace: "x" },
+  it("converts results, passing the CallToolResult to scripts and flagging errors", () =>
+    runTest(
+      Effect.gen(function* () {
+        const blocks = [
+          { type: "resource_link" as const, uri: "file:///a", name: "a" },
+          { type: "resource" as const, resource: { uri: "file:///b", text: "b text" } },
+          { type: "audio" as const, data: "", mimeType: "audio/wav" },
+        ];
+        expect(
+          yield* awaited(
+            convertMcpResult("docs", "t", {
+              content: blocks,
+              structuredContent: { ok: true },
+              _meta: { trace: "x" },
+            }),
+          ),
+        ).toEqual({
+          content: [
+            { type: "text" as const, text: '[Resource file:///a "a"]' },
+            { type: "text" as const, text: "b text" },
+            { type: "text" as const, text: "[audio audio/wav omitted]" },
+          ],
+          details: { server: "docs", tool: "t" },
+
+          structuredContent: { content: blocks, structuredContent: { ok: true } },
+        });
+        expect(
+          (yield* awaited(
+            convertMcpResult("docs", "t", { content: [], structuredContent: { n: 1 } }),
+          )).content,
+        ).toEqual([{ type: "text" as const, text: '{\n  "n": 1\n}' }]);
+
+        expect(
+          yield* awaited(
+            convertMcpResult("docs", "t", { content: [], structuredContent: [{ id: 1 }] }),
+          ),
+        ).toEqual({
+          content: [{ type: "text" as const, text: '[\n  {\n    "id": 1\n  }\n]' }],
+          details: { server: "docs", tool: "t" },
+          structuredContent: { content: [], structuredContent: [{ id: 1 }] },
+        });
+        expect(
+          yield* awaited(
+            convertMcpResult("docs", "t", {
+              content: [{ type: "text" as const, text: "nope" }],
+              isError: true,
+            }),
+          ),
+        ).toEqual({
+          content: [{ type: "text" as const, text: "nope" }],
+          details: { server: "docs", tool: "t" },
+          structuredContent: { content: [{ type: "text" as const, text: "nope" }], isError: true },
+          isError: true,
+        });
+        expect(
+          (yield* awaited(convertMcpResult("docs", "t", { content: [], isError: true }))).content,
+        ).toEqual([{ type: "text" as const, text: "MCP tool docs/t returned an error" }]);
       }),
-    ).toEqual({
-      content: [
-        { type: "text", text: '[Resource file:///a "a"]' },
-        { type: "text", text: "b text" },
-        { type: "text", text: "[audio audio/wav omitted]" },
-      ],
-      details: { server: "docs", tool: "t" },
+    ));
 
-      structuredContent: { content: blocks, structuredContent: { ok: true } },
-    });
-    expect(
-      (await convertMcpResult("docs", "t", { content: [], structuredContent: { n: 1 } })).content,
-    ).toEqual([{ type: "text", text: '{\n  "n": 1\n}' }]);
+  it("points resource links to read_mcp_resource and saves binary resources", () =>
+    runTest(
+      Effect.gen(function* () {
+        const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-    expect(
-      await convertMcpResult("docs", "t", { content: [], structuredContent: [{ id: 1 }] }),
-    ).toEqual({
-      content: [{ type: "text", text: '[\n  {\n    "id": 1\n  }\n]' }],
-      details: { server: "docs", tool: "t" },
-      structuredContent: { content: [], structuredContent: [{ id: 1 }] },
-    });
-    expect(
-      await convertMcpResult("docs", "t", {
-        content: [{ type: "text", text: "nope" }],
-        isError: true,
-      }),
-    ).toEqual({
-      content: [{ type: "text", text: "nope" }],
-      details: { server: "docs", tool: "t" },
-      structuredContent: { content: [{ type: "text", text: "nope" }], isError: true },
-      isError: true,
-    });
-    expect((await convertMcpResult("docs", "t", { content: [], isError: true })).content).toEqual([
-      { type: "text", text: "MCP tool docs/t returned an error" },
-    ]);
-  });
-
-  it("points resource links to read_mcp_resource and saves binary resources", async () => {
-    const saved: [string | Uint8Array, string][] = [];
-    const saveOutput = async (data: string | Uint8Array, extension: string) => {
-      saved.push([data, extension]);
-      return `/tmp/saved${extension}`;
-    };
-    const converted = await convertMcpResult(
-      "docs",
-      "t",
-      {
-        content: [
-          {
-            type: "resource_link",
-            uri: "docs://guide",
-            name: "guide",
-            title: "The Guide",
-            mimeType: "text/markdown",
-            size: 2048,
-            description: "How to use it",
-          },
-          {
-            type: "resource",
-            resource: {
-              uri: "file:///r/report.pdf",
-              mimeType: "application/pdf",
-              blob: "JVBERg==",
+        const saved: [string | Uint8Array, string][] = [];
+        const saveOutput = (data: string | Uint8Array, extension: string) =>
+          effectRunPromise(
+            Effect.gen(function* () {
+              saved.push([data, extension]);
+              return yield* awaited(`/tmp/saved${extension}`);
+            }),
+          );
+        const converted = yield* awaited(
+          convertMcpResult(
+            "docs",
+            "t",
+            {
+              content: [
+                {
+                  type: "resource_link" as const,
+                  uri: "docs://guide",
+                  name: "guide",
+                  title: "The Guide",
+                  mimeType: "text/markdown",
+                  size: 2048,
+                  description: "How to use it",
+                },
+                {
+                  type: "resource" as const,
+                  resource: {
+                    uri: "file:///r/report.pdf",
+                    mimeType: "application/pdf",
+                    blob: "JVBERg==",
+                  },
+                },
+                {
+                  type: "resource" as const,
+                  resource: { uri: "docs://logo", mimeType: "image/png", blob: "AAAA" },
+                },
+              ],
             },
+            { saveOutput, readableResources: true },
+          ),
+        );
+        expect(converted.content).toEqual([
+          {
+            type: "text" as const,
+            text: '[Resource docs://guide "The Guide" (text/markdown, 2.0KB): How to use it. Read it with read_mcp_resource (server "docs")]',
           },
           {
-            type: "resource",
-            resource: { uri: "docs://logo", mimeType: "image/png", blob: "AAAA" },
+            type: "text" as const,
+            text: "[Binary resource file:///r/report.pdf (application/pdf, 4B) saved to /tmp/saved.pdf]",
           },
-        ],
-      },
-      { saveOutput, readableResources: true },
-    );
-    expect(converted.content).toEqual([
-      {
-        type: "text",
-        text: '[Resource docs://guide "The Guide" (text/markdown, 2.0KB): How to use it. Read it with read_mcp_resource (server "docs")]',
-      },
-      {
-        type: "text",
-        text: "[Binary resource file:///r/report.pdf (application/pdf, 4B) saved to /tmp/saved.pdf]",
-      },
-      { type: "image", data: "AAAA", mimeType: "image/png" },
-    ]);
-    expect(saved).toEqual([[Buffer.from("%PDF"), ".pdf"]]);
-  });
+          { type: "image" as const, data: "AAAA", mimeType: "image/png" },
+        ]);
+        expect(saved).toEqual([[Buffer.from("%PDF"), ".pdf"]]);
+      }),
+    ));
 
-  it("cuts the middle of model-facing text over 20KB and keeps the full result for scripts", async () => {
-    const saved: (string | Uint8Array)[] = [];
-    const saveOutput = async (data: string | Uint8Array) => {
-      saved.push(data);
-      return "/tmp/full.txt";
-    };
-    const lines = Array.from({ length: 3000 }, (_, index) => `line ${index + 1}`);
-    const full = lines.join("\n");
-    const image = { type: "image" as const, data: "AAAA", mimeType: "image/png" };
-    const result = { content: [{ type: "text" as const, text: full }, image] };
-    const converted = await convertMcpResult("docs", "snapshot", result, { saveOutput });
-    expect(converted.content).toHaveLength(2);
-    const text = (converted.content[0] as { text: string }).text;
+  it("cuts the middle of model-facing text over 20KB and keeps the full result for scripts", () =>
+    runTest(
+      Effect.gen(function* () {
+        const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-    expect(text).toMatch(
-      new RegExp(
-        `^Warning: truncated output \\(original token count: ${Math.ceil(full.length / 4)}\\)\nTotal output lines: 3000\n\nline 1\nline 2\n`,
-      ),
-    );
-    expect(text).toMatch(/…\d+ chars truncated…/);
-    expect(
-      text.endsWith("line 3000\n\n[Full output: /tmp/full.txt (read it with offset/limit)]"),
-    ).toBe(true);
-    expect(Buffer.byteLength(text)).toBeLessThan(21 * 1024);
-    expect(converted.content[1]).toEqual(image);
-    expect(converted.details).toEqual({
-      server: "docs",
-      tool: "snapshot",
-      fullOutputPath: "/tmp/full.txt",
-    });
-    expect(saved).toEqual([full]);
-    expect(converted.structuredContent).toEqual(result);
+        const saved: (string | Uint8Array)[] = [];
+        const saveOutput = (data: string | Uint8Array) =>
+          effectRunPromise(
+            Effect.gen(function* () {
+              saved.push(data);
+              return yield* awaited("/tmp/full.txt");
+            }),
+          );
+        const lines = Array.from({ length: 3000 }, (_, index) => `line ${index + 1}`);
+        const full = lines.join("\n");
+        const image = { type: "image" as const, data: "AAAA", mimeType: "image/png" };
+        const result = { content: [{ type: "text" as const, text: full }, image] };
+        const converted = yield* awaited(
+          convertMcpResult("docs", "snapshot", result, { saveOutput }),
+        );
+        expect(converted.content).toHaveLength(2);
+        const text = (converted.content[0] as { text: string }).text;
 
-    await convertMcpResult(
-      "docs",
-      "small",
-      { content: [{ type: "text", text: "ok" }] },
-      { saveOutput },
-    );
-    expect(saved).toHaveLength(1);
-  });
+        expect(text).toMatch(
+          new RegExp(
+            `^Warning: truncated output \\(original token count: ${Math.ceil(full.length / 4)}\\)\nTotal output lines: 3000\n\nline 1\nline 2\n`,
+          ),
+        );
+        expect(text).toMatch(/…\d+ chars truncated…/u);
+        expect(
+          text.endsWith("line 3000\n\n[Full output: /tmp/full.txt (read it with offset/limit)]"),
+        ).toBe(true);
+        expect(Buffer.byteLength(text)).toBeLessThan(21 * 1024);
+        expect(converted.content[1]).toEqual(image);
+        expect(converted.details).toEqual({
+          server: "docs",
+          tool: "snapshot",
+          fullOutputPath: "/tmp/full.txt",
+        });
+        expect(saved).toEqual([full]);
+        expect(converted.structuredContent).toEqual(result);
+
+        yield* awaited(
+          convertMcpResult(
+            "docs",
+            "small",
+            { content: [{ type: "text" as const, text: "ok" }] },
+            { saveOutput },
+          ),
+        );
+        expect(saved).toHaveLength(1);
+      }),
+    ));
 
   it("cuts multi-byte text only at character boundaries", () => {
     const text = `${"é".repeat(20_000)}end`;
@@ -535,7 +582,7 @@ describe("MCP tools", () => {
     expect(result.truncated).toBe(true);
     expect(result.content).not.toContain("\uFFFD");
     expect(result.content.endsWith("end")).toBe(true);
-    const [head, tail] = result.content.split(/…\d+ chars truncated…/);
+    const [head, tail] = result.content.split(/…\d+ chars truncated…/u);
     if (head === undefined || tail === undefined) throw new Error("expected a truncation marker");
     expect(Buffer.byteLength(head)).toBeLessThanOrEqual(500);
     expect(Buffer.byteLength(tail)).toBeLessThanOrEqual(501);
@@ -592,7 +639,7 @@ describe("MCP connections", () => {
               : {
                   jsonrpc: "2.0",
                   id: message.id,
-                  result: { content: [{ type: "text", text: "ok" }] },
+                  result: { content: [{ type: "text" as const, text: "ok" }] },
                 };
       queueMicrotask(() => void pair.server.send(response));
     });
@@ -600,11 +647,14 @@ describe("MCP connections", () => {
     if (options.expireFirstCall) {
       const send = pair.client.send.bind(pair.client);
 
-      pair.client.send = async (message: JsonRpcMessage) => {
-        if ("method" in message && message.method === "tools/call")
-          throw new McpSessionExpiredError("gone");
-        return send(message);
-      };
+      pair.client.send = (message: JsonRpcMessage) =>
+        runTest(
+          Effect.gen(function* () {
+            if ("method" in message && message.method === "tools/call")
+              throw new McpSessionExpiredError("gone");
+            return yield* awaited(send(message));
+          }),
+        );
     }
     return pair.client;
   }
@@ -630,34 +680,38 @@ describe("MCP connections", () => {
     return { connection, opened: () => opened };
   }
 
-  it("starts a new session and retries once when the session expired", async () => {
-    const { connection, opened } = connect(
-      { name: "fake", config: { command: "unused" }, source: "test" },
-      [() => createTransport({ expireFirstCall: true }), () => createTransport()],
-    );
-    const results = await Promise.all([
-      connection.callTool("echo", {}, {}),
-      connection.callTool("echo", {}, {}),
-    ]);
-    expect(results).toEqual([
-      { content: [{ type: "text", text: "ok" }] },
-      { content: [{ type: "text", text: "ok" }] },
-    ]);
-    expect(opened()).toBe(2);
-    await connection.close();
-  });
+  it("starts a new session and retries once when the session expired", () =>
+    runTest(
+      Effect.gen(function* () {
+        const { connection, opened } = connect(
+          { name: "fake", config: { command: "unused" }, source: "test" },
+          [() => createTransport({ expireFirstCall: true }), () => createTransport()],
+        );
+        const results = yield* awaited(
+          Promise.all([connection.callTool("echo", {}, {}), connection.callTool("echo", {}, {})]),
+        );
+        expect(results).toEqual([
+          { content: [{ type: "text" as const, text: "ok" }] },
+          { content: [{ type: "text" as const, text: "ok" }] },
+        ]);
+        expect(opened()).toBe(2);
+        yield* awaited(connection.close());
+      }),
+    ));
 
   it.skipIf(process.platform === "win32")(
     "expands ~ in the command, arguments, and cwd of stdio servers",
-    async () => {
-      const home = mkdtempSync(join(tmpdir(), "msa-mcp-home-"));
-      const previousHome = process.env["HOME"];
-      process.env["HOME"] = home;
-      mkdirSync(join(home, "work"));
+    () =>
+      runTest(
+        Effect.gen(function* () {
+          const home = mkdtempSync(joinPath(tmpdir(), "msa-mcp-home-"));
+          const previousHome = readEnv("HOME");
+          writeEnv("HOME", home);
+          yield* makeDirectory(joinPath(home, "work"));
 
-      writeFileSync(
-        join(home, "server.mjs"),
-        `import { createInterface } from "node:readline";
+          yield* writeTextFile(
+            joinPath(home, "server.mjs"),
+            `import { createInterface } from "node:readline";
 for await (const line of createInterface({ input: process.stdin })) {
 	const message = JSON.parse(line);
 	if (!("id" in message)) continue;
@@ -668,294 +722,363 @@ for await (const line of createInterface({ input: process.stdin })) {
 			: { content: [{ type: "text", text: process.cwd() }] };
 	process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id: message.id, result }) + "\\n");
 }`,
-      );
-      const connection = new McpServerConnection({
-        entry: {
-          name: "home",
-          config: { command: process.execPath, args: ["~/server.mjs"], cwd: "~/work" },
-          source: "test",
-        },
-        cwd: tmpdir(),
-        createTransport: createDefaultTransport,
-        credentials: new McpOAuthCredentialStore(new InMemoryAuthStorageBackend()),
-        onTools: () => {},
-      });
-      try {
-        const result = await connection.callTool("cwd", {}, {});
-        expect(realpathSync((result.content[0] as { text: string }).text)).toBe(
-          realpathSync(join(home, "work")),
-        );
-      } finally {
-        await connection.close();
-        process.env["HOME"] = previousHome;
-        rmSync(home, { recursive: true, force: true });
-      }
-    },
+          );
+          const connection = new McpServerConnection({
+            entry: {
+              name: "home",
+              config: { command: process.execPath, args: ["~/server.mjs"], cwd: "~/work" },
+              source: "test",
+            },
+            cwd: tmpdir(),
+            createTransport: createDefaultTransport,
+            credentials: new McpOAuthCredentialStore(new InMemoryAuthStorageBackend()),
+            onTools: () => {},
+          });
+          try {
+            const result = yield* awaited(connection.callTool("cwd", {}, {}));
+            expect(realpathSync((result.content[0] as { text: string }).text)).toBe(
+              realpathSync(joinPath(home, "work")),
+            );
+          } finally {
+            yield* awaited(connection.close());
+            if (previousHome === undefined) deleteEnv("HOME");
+            else writeEnv("HOME", previousHome);
+            yield* removePath(home);
+          }
+        }),
+      ),
   );
 
-  it("connects to servers without the tools capability without listing tools", async () => {
-    const methods: string[] = [];
-    const { connection } = connect(
-      { name: "fake", config: { command: "unused" }, source: "test" },
-      [() => createTransport({ noTools: true, methods })],
-    );
-    await connection.getClient();
-    expect(connection.state).toBe("connected");
-    expect(connection.tools).toEqual([]);
-    expect(methods).toEqual(["initialize"]);
-    await connection.close();
-  });
+  it("connects to servers without the tools capability without listing tools", () =>
+    runTest(
+      Effect.gen(function* () {
+        const methods: string[] = [];
+        const { connection } = connect(
+          { name: "fake", config: { command: "unused" }, source: "test" },
+          [() => createTransport({ noTools: true, methods })],
+        );
+        yield* awaited(connection.getClient());
+        expect(connection.state).toBe("connected");
+        expect(connection.tools).toEqual([]);
+        expect(methods).toEqual(["initialize"]);
+        yield* awaited(connection.close());
+      }),
+    ));
 
-  it("marks a dropped connection and reconnects on the next call", async () => {
-    const { connection, opened } = connect(
-      { name: "fake", config: { command: "unused" }, source: "test" },
-      [() => createTransport(), () => createTransport()],
-    );
-    await connection.getClient();
-    await servers.at(-1)?.close();
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(connection.state).toBe("disconnected");
-    expect(connection.error).toBe("Connection closed");
-    expect(await connection.callTool("echo", {}, {})).toEqual({
-      content: [{ type: "text", text: "ok" }],
-    });
-    expect(connection.state).toBe("connected");
-    expect(opened()).toBe(2);
-    await connection.close();
-  });
+  it("marks a dropped connection and reconnects on the next call", () =>
+    runTest(
+      Effect.gen(function* () {
+        const { connection, opened } = connect(
+          { name: "fake", config: { command: "unused" }, source: "test" },
+          [() => createTransport(), () => createTransport()],
+        );
+        yield* awaited(connection.getClient());
+        yield* awaited(servers.at(-1)?.close());
+        yield* Effect.sleep(0);
+        expect(connection.state).toBe("disconnected");
+        expect(connection.error).toBe("Connection closed");
+        expect(yield* awaited(connection.callTool("echo", {}, {}))).toEqual({
+          content: [{ type: "text" as const, text: "ok" }],
+        });
+        expect(connection.state).toBe("connected");
+        expect(opened()).toBe(2);
+        yield* awaited(connection.close());
+      }),
+    ));
 
-  it("retries HTTP connections that fail with a transient error", async () => {
-    const { connection, opened } = connect(
-      {
-        name: "fake",
-        config: { url: "http://unused.invalid", headers: { Authorization: "x" } },
-        source: "test",
-      },
-      [
-        () => {
-          const transport = createTransport();
-          transport.send = async () => {
-            throw new McpHttpError(503, "MCP HTTP request failed with status 503");
-          };
-          return transport;
-        },
-        () => createTransport(),
-      ],
-    );
-    await connection.getClient();
-    expect(connection.state).toBe("connected");
-    expect(opened()).toBe(2);
-    await connection.close();
+  it("retries HTTP connections that fail with a transient error", () =>
+    runTest(
+      Effect.gen(function* () {
+        const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-    const failing = connect(
-      {
-        name: "fake",
-        config: { url: "http://unused.invalid", headers: { Authorization: "x" } },
-        source: "test",
-      },
-      [
-        () => {
-          const transport = createTransport();
-          transport.send = async () => {
-            throw new McpHttpError(400, "MCP HTTP request failed with status 400: bad");
-          };
-          return transport;
-        },
-      ],
-    );
-    await expect(failing.connection.getClient()).rejects.toThrow("status 400: bad");
-    expect(failing.connection.state).toBe("failed");
-    expect(failing.opened()).toBe(1);
-  });
+        const { connection, opened } = connect(
+          {
+            name: "fake",
+            config: { url: "http://unused.invalid", headers: { Authorization: "x" } },
+            source: "test",
+          },
+          [
+            () => {
+              const transport = createTransport();
+              transport.send = () =>
+                effectRunPromise(
+                  Effect.sync(() => {
+                    throw new McpHttpError(503, "MCP HTTP request failed with status 503");
+                  }),
+                );
+              return transport;
+            },
+            () => createTransport(),
+          ],
+        );
+        yield* awaited(connection.getClient());
+        expect(connection.state).toBe("connected");
+        expect(opened()).toBe(2);
+        yield* awaited(connection.close());
 
-  it("closes a connection that is still initializing before close returns", async () => {
-    const pair = createInMemoryTransportPair();
+        const failing = connect(
+          {
+            name: "fake",
+            config: { url: "http://unused.invalid", headers: { Authorization: "x" } },
+            source: "test",
+          },
+          [
+            () => {
+              const transport = createTransport();
+              transport.send = () =>
+                effectRunPromise(
+                  Effect.sync(() => {
+                    throw new McpHttpError(400, "MCP HTTP request failed with status 400: bad");
+                  }),
+                );
+              return transport;
+            },
+          ],
+        );
+        yield* awaited(expect(failing.connection.getClient()).rejects.toThrow("status 400: bad"));
+        expect(failing.connection.state).toBe("failed");
+        expect(failing.opened()).toBe(1);
+      }),
+    ));
 
-    const initializing = new Promise<void>((resolve) => {
-      pair.server.onMessage(() => resolve());
-    });
-    void pair.server.start();
-    let transportClosed = false;
-    pair.client.onClose(() => {
-      transportClosed = true;
-    });
-    const { connection } = connect(
-      { name: "fake", config: { command: "unused" }, source: "test" },
-      [() => pair.client],
-    );
-    let failure: unknown;
-    void connection.getClient().catch((error) => {
-      failure = error;
-    });
-    await initializing;
-    await connection.close();
-    expect(transportClosed).toBe(true);
-    expect(String(failure)).toContain("failed to connect");
-  });
+  it("closes a connection that is still initializing before close returns", () =>
+    runTest(
+      Effect.gen(function* () {
+        const pair = createInMemoryTransportPair();
 
-  it("stops waiting to retry a connection when closed", async () => {
-    const { connection } = connect(
-      {
-        name: "fake",
-        config: { url: "http://unused.invalid", headers: { Authorization: "x" } },
-        source: "test",
-      },
-      [
-        () => {
-          const transport = createTransport();
-          transport.send = async () => {
-            throw new McpHttpError(503, "MCP HTTP request failed with status 503");
-          };
-          return transport;
-        },
-      ],
-    );
-    let failure: unknown;
-    void connection.getClient().catch((error) => {
-      failure = error;
-    });
+        const initializing = new Promise<void>((resolve) => {
+          pair.server.onMessage(() => resolve());
+        });
+        void pair.server.start();
+        let transportClosed = false;
+        pair.client.onClose(() => {
+          transportClosed = true;
+        });
+        const { connection } = connect(
+          { name: "fake", config: { command: "unused" }, source: "test" },
+          [() => pair.client],
+        );
+        let failure: unknown;
+        void connection.getClient().catch((error) => {
+          failure = error;
+        });
+        yield* awaited(initializing);
+        yield* awaited(connection.close());
+        expect(transportClosed).toBe(true);
+        expect(String(failure)).toContain("failed to connect");
+      }),
+    ));
 
-    await new Promise((resolve) => setTimeout(resolve, 10));
-    await connection.close();
-    expect(String(failure)).toContain("status 503");
-  });
+  it("stops waiting to retry a connection when closed", () =>
+    runTest(
+      Effect.gen(function* () {
+        const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-  it("retries resource reads, but not tool calls, after a transient HTTP error", async () => {
-    const transport = createTransport();
-    const send = transport.send.bind(transport);
-    const failed = new Set<string>();
+        const { connection } = connect(
+          {
+            name: "fake",
+            config: { url: "http://unused.invalid", headers: { Authorization: "x" } },
+            source: "test",
+          },
+          [
+            () => {
+              const transport = createTransport();
+              transport.send = () =>
+                effectRunPromise(
+                  Effect.sync(() => {
+                    throw new McpHttpError(503, "MCP HTTP request failed with status 503");
+                  }),
+                );
+              return transport;
+            },
+          ],
+        );
+        let failure: unknown;
+        void connection.getClient().catch((error) => {
+          failure = error;
+        });
 
-    transport.send = async (message) => {
-      const method = "method" in message ? message.method : "";
-      if ((method === "resources/read" || method === "tools/call") && !failed.has(method)) {
-        failed.add(method);
-        throw new McpHttpError(502, "MCP HTTP request failed with status 502");
-      }
-      return send(message);
-    };
-    const { connection } = connect(
-      { name: "fake", config: { command: "unused" }, source: "test" },
-      [() => transport],
-    );
-    expect(await connection.readResource("docs://a", {})).toEqual({
-      contents: [{ uri: "docs://a", text: "ok" }],
-    });
-    await expect(connection.callTool("echo", {}, {})).rejects.toThrow("status 502");
-    await connection.close();
-  });
+        yield* Effect.sleep(10);
+        yield* awaited(connection.close());
+        expect(String(failure)).toContain("status 503");
+      }),
+    ));
 
-  it("asks OAuth servers that keep rejecting requests for a new sign-in", async () => {
-    const { connection } = connect(
-      { name: "fake", config: { url: "http://unused.invalid" }, source: "test" },
-      [
-        () => {
-          const transport = createTransport();
-          transport.send = async () => {
-            throw new McpAuthRequiredError(new Response(null, { status: 401 }));
-          };
-          return transport;
-        },
-      ],
-    );
-    await expect(connection.getClient()).rejects.toThrow(
-      'MCP server "fake" requires sign-in. Run /mcp to sign in.',
-    );
-    expect(connection.state).toBe("needs-auth");
-    await connection.close();
-  });
+  it("retries resource reads, but not tool calls, after a transient HTTP error", () =>
+    runTest(
+      Effect.gen(function* () {
+        const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-  it("sends the provider token and asks for the provider login when the server rejects it", async () => {
-    const authorizations: (string | undefined)[] = [];
-    const server = createServer((request, response) => {
-      authorizations.push(request.headers.authorization);
-      request.resume();
-      response.writeHead(401).end();
-    });
-    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-    const { port } = server.address() as AddressInfo;
-    const connection = new McpServerConnection({
-      entry: {
-        name: "openrouter",
-        config: { url: `http://127.0.0.1:${port}/mcp`, auth: { provider: "openrouter" } },
-        source: "test",
-      },
-      cwd: process.cwd(),
-      createTransport: createDefaultTransport,
-      credentials: new McpOAuthCredentialStore(new InMemoryAuthStorageBackend()),
-      providerToken: async (provider) => (provider === "openrouter" ? "tok" : undefined),
-      onTools: () => {},
-    });
-    try {
-      expect(connection.oauthUrl).toBeUndefined();
-      await expect(connection.getClient()).rejects.toThrow(
-        'MCP server "openrouter" requires sign-in. Run /login openrouter to sign in.',
-      );
-      expect(connection.state).toBe("needs-auth");
-      expect(authorizations).toEqual(["Bearer tok"]);
-    } finally {
-      await connection.close();
-      await new Promise((resolve) => server.close(resolve));
-    }
-  });
+        const transport = createTransport();
+        const send = transport.send.bind(transport);
+        const failed = new Set<string>();
 
-  it("appends server log messages to the log file", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "msa-mcp-log-"));
-    try {
-      const path = join(dir, "mcp.log");
-      const { connection } = connect(
-        { name: "fake", config: { command: "unused" }, source: "test" },
-        [() => createTransport()],
-        new McpServerLog(path),
-      );
-      await connection.getClient();
-      const server = servers.at(-1);
-      await server?.send({
-        jsonrpc: "2.0",
-        method: "notifications/message",
-        params: { level: "warning", logger: "db", data: "slow\nquery" },
-      });
-      await server?.send({
-        jsonrpc: "2.0",
-        method: "notifications/message",
-        params: { level: "error", data: { code: 7 } },
-      });
-      await new Promise((resolve) => setTimeout(resolve, 0));
-      const lines = readFileSync(path, "utf8").replace(/^\S+ /gm, "");
-      expect(lines).toBe('[fake] warning db: slow\n    query\n[fake] error {"code":7}\n');
-      await connection.close();
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
-  });
+        transport.send = (message) =>
+          effectRunPromise(
+            Effect.gen(function* () {
+              const method = "method" in message ? message.method : "";
+              if ((method === "resources/read" || method === "tools/call") && !failed.has(method)) {
+                failed.add(method);
+                throw new McpHttpError(502, "MCP HTTP request failed with status 502");
+              }
+              return yield* awaited(send(message));
+            }),
+          );
+        const { connection } = connect(
+          { name: "fake", config: { command: "unused" }, source: "test" },
+          [() => transport],
+        );
+        expect(yield* awaited(connection.readResource("docs://a", {}))).toEqual({
+          contents: [{ uri: "docs://a", text: "ok" }],
+        });
+        yield* awaited(expect(connection.callTool("echo", {}, {})).rejects.toThrow("status 502"));
+        yield* awaited(connection.close());
+      }),
+    ));
 
-  it("resolves the OAuth client secret lazily", async () => {
-    const { connection } = connect(
-      {
-        name: "fake",
-        config: { url: "http://unused.invalid", oauth: { clientSecret: "!exit 1" } },
-        source: "test",
-      },
-      [() => createTransport()],
-    );
-    expect(await connection.callTool("echo", {}, {})).toEqual({
-      content: [{ type: "text", text: "ok" }],
-    });
-    expect(() => connection.oauthSettings()).toThrow("oauth.clientSecret");
-    await connection.close();
-  });
+  it("asks OAuth servers that keep rejecting requests for a new sign-in", () =>
+    runTest(
+      Effect.gen(function* () {
+        const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-  it("connects to servers with resources without listing them", async () => {
-    const methods: string[] = [];
-    const { connection } = connect(
-      { name: "fake", config: { command: "unused" }, source: "test" },
-      [() => createTransport({ resources: true, methods })],
-    );
-    await connection.getClient();
-    expect(connection.state).toBe("connected");
-    expect(connection.hasResources).toBe(true);
-    expect(methods).toEqual(["initialize", "tools/list"]);
-    await connection.close();
-  });
+        const { connection } = connect(
+          { name: "fake", config: { url: "http://unused.invalid" }, source: "test" },
+          [
+            () => {
+              const transport = createTransport();
+              transport.send = () =>
+                effectRunPromise(
+                  Effect.sync(() => {
+                    throw new McpAuthRequiredError(new Response(null, { status: 401 }));
+                  }),
+                );
+              return transport;
+            },
+          ],
+        );
+        yield* awaited(
+          expect(connection.getClient()).rejects.toThrow(
+            'MCP server "fake" requires sign-in. Run /mcp to sign in.',
+          ),
+        );
+        expect(connection.state).toBe("needs-auth");
+        yield* awaited(connection.close());
+      }),
+    ));
+
+  it("sends the provider token and asks for the provider login when the server rejects it", () =>
+    runTest(
+      Effect.gen(function* () {
+        const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
+        const authorizations: (string | undefined)[] = [];
+        const server = createServer((request, response) => {
+          authorizations.push(request.headers.authorization);
+          request.resume();
+          response.writeHead(401).end();
+        });
+        yield* awaited(new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve)));
+        const { port } = server.address() as AddressInfo;
+        const connection = new McpServerConnection({
+          entry: {
+            name: "openrouter",
+            config: { url: `http://127.0.0.1:${port}/mcp`, auth: { provider: "openrouter" } },
+            source: "test",
+          },
+          cwd: process.cwd(),
+          createTransport: createDefaultTransport,
+          credentials: new McpOAuthCredentialStore(new InMemoryAuthStorageBackend()),
+          providerToken: (provider) =>
+            effectRunPromise(awaited(provider === "openrouter" ? "tok" : undefined)),
+          onTools: () => {},
+        });
+        try {
+          expect(connection.oauthUrl).toBeUndefined();
+          yield* awaited(
+            expect(connection.getClient()).rejects.toThrow(
+              'MCP server "openrouter" requires sign-in. Run /login openrouter to sign in.',
+            ),
+          );
+          expect(connection.state).toBe("needs-auth");
+          expect(authorizations).toEqual(["Bearer tok"]);
+        } finally {
+          yield* awaited(connection.close());
+          yield* awaited(new Promise((resolve) => server.close(resolve)));
+        }
+      }),
+    ));
+
+  it("appends server log messages to the log file", () =>
+    runTest(
+      Effect.gen(function* () {
+        const dir = mkdtempSync(joinPath(tmpdir(), "msa-mcp-log-"));
+        try {
+          const path = joinPath(dir, "mcp.log");
+          const { connection } = connect(
+            { name: "fake", config: { command: "unused" }, source: "test" },
+            [() => createTransport()],
+            new McpServerLog(path),
+          );
+          yield* awaited(connection.getClient());
+          const server = servers.at(-1);
+          yield* awaited(
+            server?.send({
+              jsonrpc: "2.0",
+              method: "notifications/message",
+              params: { level: "warning", logger: "db", data: "slow\nquery" },
+            }),
+          );
+          yield* awaited(
+            server?.send({
+              jsonrpc: "2.0",
+              method: "notifications/message",
+              params: { level: "error", data: { code: 7 } },
+            }),
+          );
+          yield* Effect.sleep(0);
+          const lines = (yield* readTextFile(path)).replace(/^\S+ /gmu, "");
+          expect(lines).toBe('[fake] warning db: slow\n    query\n[fake] error {"code":7}\n');
+          yield* awaited(connection.close());
+        } finally {
+          yield* removePath(dir);
+        }
+      }),
+    ));
+
+  it("resolves the OAuth client secret lazily", () =>
+    runTest(
+      Effect.gen(function* () {
+        const { connection } = connect(
+          {
+            name: "fake",
+            config: { url: "http://unused.invalid", oauth: { clientSecret: "!exit 1" } },
+            source: "test",
+          },
+          [() => createTransport()],
+        );
+        expect(yield* awaited(connection.callTool("echo", {}, {}))).toEqual({
+          content: [{ type: "text" as const, text: "ok" }],
+        });
+        expect(() => connection.oauthSettings()).toThrow("oauth.clientSecret");
+        yield* awaited(connection.close());
+      }),
+    ));
+
+  it("connects to servers with resources without listing them", () =>
+    runTest(
+      Effect.gen(function* () {
+        const methods: string[] = [];
+        const { connection } = connect(
+          { name: "fake", config: { command: "unused" }, source: "test" },
+          [() => createTransport({ resources: true, methods })],
+        );
+        yield* awaited(connection.getClient());
+        expect(connection.state).toBe("connected");
+        expect(connection.hasResources).toBe(true);
+        expect(methods).toEqual(["initialize", "tools/list"]);
+        yield* awaited(connection.close());
+      }),
+    ));
 });
 
 describe("MCP servers section", () => {
@@ -1007,8 +1130,8 @@ describe("MCP servers section", () => {
     const section = renderServersSection(servers) ?? "";
     expect(section.length).toBeLessThanOrEqual(MAX_SERVERS_SECTION_CHARS);
     const lines = section.split("\n");
-    expect(lines.at(-1)).toMatch(/^- … \d+ more servers; find their tools with searchTools\(\)$/);
-    const omitted = Number(/(\d+) more/.exec(lines.at(-1) ?? "")?.[1]);
+    expect(lines.at(-1)).toMatch(/^- … \d+ more servers; find their tools with searchTools\(\)$/u);
+    const omitted = Number(/(\d+) more/u.exec(lines.at(-1) ?? "")?.[1]);
     expect(lines.length - 2 + omitted).toBe(200);
   });
 });

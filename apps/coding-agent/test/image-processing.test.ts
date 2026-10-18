@@ -1,3 +1,5 @@
+import { awaited, runTest } from "@msa/testing";
+import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { convertToPng, loadPngTranscoder } from "../src/utils/image-convert.ts";
@@ -48,130 +50,172 @@ function jpegWithXmpBeforeOrientation(): string {
 }
 
 describe("convertToPng", () => {
-  it("should return original data for PNG input", async () => {
-    const result = await convertToPng(TINY_PNG, "image/png");
-    expect(result).not.toBeNull();
-    expect(result!.data).toBe(TINY_PNG);
-    expect(result!.mimeType).toBe("image/png");
-  });
+  it("should return original data for PNG input", () =>
+    runTest(
+      Effect.gen(function* () {
+        const result = yield* awaited(convertToPng(TINY_PNG, "image/png"));
+        expect(result).not.toBeNull();
+        expect(result!.data).toBe(TINY_PNG);
+        expect(result!.mimeType).toBe("image/png");
+      }),
+    ));
 
-  it("should convert JPEG to PNG", async () => {
-    const result = await convertToPng(TINY_JPEG, "image/jpeg");
-    expect(result).not.toBeNull();
-    expect(result!.mimeType).toBe("image/png");
+  it("should convert JPEG to PNG", () =>
+    runTest(
+      Effect.gen(function* () {
+        const result = yield* awaited(convertToPng(TINY_JPEG, "image/jpeg"));
+        expect(result).not.toBeNull();
+        expect(result!.mimeType).toBe("image/png");
 
-    expect(() => Buffer.from(result!.data, "base64")).not.toThrow();
+        expect(() => Buffer.from(result!.data, "base64")).not.toThrow();
 
-    const buffer = Buffer.from(result!.data, "base64");
-    expect(buffer[0]).toBe(0x89);
-    expect(buffer[1]).toBe(0x50);
-    expect(buffer[2]).toBe(0x4e);
-    expect(buffer[3]).toBe(0x47);
-  });
+        const buffer = Buffer.from(result!.data, "base64");
+        expect(buffer[0]).toBe(0x89);
+        expect(buffer[1]).toBe(0x50);
+        expect(buffer[2]).toBe(0x4e);
+        expect(buffer[3]).toBe(0x47);
+      }),
+    ));
 
-  it("should apply EXIF orientation after an XMP APP1 segment", async () => {
-    const result = await convertToPng(jpegWithXmpBeforeOrientation(), "image/jpeg");
+  it("should apply EXIF orientation after an XMP APP1 segment", () =>
+    runTest(
+      Effect.gen(function* () {
+        const result = yield* awaited(convertToPng(jpegWithXmpBeforeOrientation(), "image/jpeg"));
 
-    expect(result).not.toBeNull();
-    const png = Buffer.from(result!.data, "base64");
-    expect(png.readUInt32BE(16)).toBe(1);
-    expect(png.readUInt32BE(20)).toBe(2);
-  });
+        expect(result).not.toBeNull();
+        const png = Buffer.from(result!.data, "base64");
+        expect(png.readUInt32BE(16)).toBe(1);
+        expect(png.readUInt32BE(20)).toBe(2);
+      }),
+    ));
 });
 
-it("loadPngTranscoder converts synchronously to oriented PNG data", async () => {
-  const transcoder = (await loadPngTranscoder())!;
-  const png = Buffer.from(transcoder(jpegWithXmpBeforeOrientation(), "image/jpeg")!, "base64");
-  expect([png.readUInt32BE(16), png.readUInt32BE(20)]).toEqual([1, 2]);
-  expect(transcoder(Buffer.from("not an image").toString("base64"), "image/jpeg")).toBeNull();
-});
+it("loadPngTranscoder converts synchronously to oriented PNG data", () =>
+  runTest(
+    Effect.gen(function* () {
+      const transcoder = (yield* awaited(loadPngTranscoder()))!;
+      const png = Buffer.from(transcoder(jpegWithXmpBeforeOrientation(), "image/jpeg")!, "base64");
+      expect([png.readUInt32BE(16), png.readUInt32BE(20)]).toEqual([1, 2]);
+      expect(transcoder(Buffer.from("not an image").toString("base64"), "image/jpeg")).toBeNull();
+    }),
+  ));
 
 describe("resizeImage", () => {
-  it("should keep caller input bytes intact", async () => {
-    const input = new Uint8Array(imageBytes(TINY_PNG));
-    const originalByteLength = input.byteLength;
-    const originalFirstByte = input[0];
+  it("should keep caller input bytes intact", () =>
+    runTest(
+      Effect.gen(function* () {
+        const input = new Uint8Array(imageBytes(TINY_PNG));
+        const originalByteLength = input.byteLength;
+        const originalFirstByte = input[0];
 
-    const result = await resizeImage(input, "image/png", {
-      maxWidth: 100,
-      maxHeight: 100,
-      maxBytes: 1024 * 1024,
-    });
+        const result = yield* awaited(
+          resizeImage(input, "image/png", {
+            maxWidth: 100,
+            maxHeight: 100,
+            maxBytes: 1024 * 1024,
+          }),
+        );
 
-    expect(result).not.toBeNull();
-    expect(input.byteLength).toBe(originalByteLength);
-    expect(input[0]).toBe(originalFirstByte);
-  });
+        expect(result).not.toBeNull();
+        expect(input.byteLength).toBe(originalByteLength);
+        expect(input[0]).toBe(originalFirstByte);
+      }),
+    ));
 
-  it("should return original image if within limits", async () => {
-    const result = await resizeImage(imageBytes(TINY_PNG), "image/png", {
-      maxWidth: 100,
-      maxHeight: 100,
-      maxBytes: 1024 * 1024,
-    });
+  it("should return original image if within limits", () =>
+    runTest(
+      Effect.gen(function* () {
+        const result = yield* awaited(
+          resizeImage(imageBytes(TINY_PNG), "image/png", {
+            maxWidth: 100,
+            maxHeight: 100,
+            maxBytes: 1024 * 1024,
+          }),
+        );
 
-    expect(result).not.toBeNull();
-    expect(result!.wasResized).toBe(false);
-    expect(result!.data).toBe(TINY_PNG);
-    expect(result!.originalWidth).toBe(2);
-    expect(result!.originalHeight).toBe(2);
-    expect(result!.width).toBe(2);
-    expect(result!.height).toBe(2);
-  });
+        expect(result).not.toBeNull();
+        expect(result!.wasResized).toBe(false);
+        expect(result!.data).toBe(TINY_PNG);
+        expect(result!.originalWidth).toBe(2);
+        expect(result!.originalHeight).toBe(2);
+        expect(result!.width).toBe(2);
+        expect(result!.height).toBe(2);
+      }),
+    ));
 
-  it("should resize image exceeding dimension limits", async () => {
-    const result = await resizeImage(imageBytes(MEDIUM_PNG_100x100), "image/png", {
-      maxWidth: 50,
-      maxHeight: 50,
-      maxBytes: 1024 * 1024,
-    });
+  it("should resize image exceeding dimension limits", () =>
+    runTest(
+      Effect.gen(function* () {
+        const result = yield* awaited(
+          resizeImage(imageBytes(MEDIUM_PNG_100x100), "image/png", {
+            maxWidth: 50,
+            maxHeight: 50,
+            maxBytes: 1024 * 1024,
+          }),
+        );
 
-    expect(result).not.toBeNull();
-    expect(result!.wasResized).toBe(true);
-    expect(result!.originalWidth).toBe(100);
-    expect(result!.originalHeight).toBe(100);
-    expect(result!.width).toBeLessThanOrEqual(50);
-    expect(result!.height).toBeLessThanOrEqual(50);
-  });
+        expect(result).not.toBeNull();
+        expect(result!.wasResized).toBe(true);
+        expect(result!.originalWidth).toBe(100);
+        expect(result!.originalHeight).toBe(100);
+        expect(result!.width).toBeLessThanOrEqual(50);
+        expect(result!.height).toBeLessThanOrEqual(50);
+      }),
+    ));
 
-  it("should resize image exceeding byte limit", async () => {
-    const originalBuffer = Buffer.from(LARGE_PNG_200x200, "base64");
-    const originalSize = originalBuffer.length;
+  it("should resize image exceeding byte limit", () =>
+    runTest(
+      Effect.gen(function* () {
+        const originalBuffer = Buffer.from(LARGE_PNG_200x200, "base64");
+        const originalSize = originalBuffer.length;
 
-    const result = await resizeImage(imageBytes(LARGE_PNG_200x200), "image/png", {
-      maxWidth: 2000,
-      maxHeight: 2000,
-      maxBytes: Math.floor(LARGE_PNG_200x200.length * 0.9),
-    });
+        const result = yield* awaited(
+          resizeImage(imageBytes(LARGE_PNG_200x200), "image/png", {
+            maxWidth: 2000,
+            maxHeight: 2000,
+            maxBytes: Math.floor(LARGE_PNG_200x200.length * 0.9),
+          }),
+        );
 
-    expect(result).not.toBeNull();
-    const resultBuffer = Buffer.from(result!.data, "base64");
-    expect(resultBuffer.length).toBeLessThan(originalSize);
-    expect(result!.data.length).toBeLessThan(LARGE_PNG_200x200.length);
-  });
+        expect(result).not.toBeNull();
+        const resultBuffer = Buffer.from(result!.data, "base64");
+        expect(resultBuffer.length).toBeLessThan(originalSize);
+        expect(result!.data.length).toBeLessThan(LARGE_PNG_200x200.length);
+      }),
+    ));
 
-  it("should return null when image cannot be resized below maxBytes", async () => {
-    const result = await resizeImage(imageBytes(LARGE_PNG_200x200), "image/png", {
-      maxWidth: 2000,
-      maxHeight: 2000,
-      maxBytes: 1,
-    });
+  it("should return null when image cannot be resized below maxBytes", () =>
+    runTest(
+      Effect.gen(function* () {
+        const result = yield* awaited(
+          resizeImage(imageBytes(LARGE_PNG_200x200), "image/png", {
+            maxWidth: 2000,
+            maxHeight: 2000,
+            maxBytes: 1,
+          }),
+        );
 
-    expect(result).toBeNull();
-  });
+        expect(result).toBeNull();
+      }),
+    ));
 
-  it("should handle JPEG input", async () => {
-    const result = await resizeImage(imageBytes(TINY_JPEG), "image/jpeg", {
-      maxWidth: 100,
-      maxHeight: 100,
-      maxBytes: 1024 * 1024,
-    });
+  it("should handle JPEG input", () =>
+    runTest(
+      Effect.gen(function* () {
+        const result = yield* awaited(
+          resizeImage(imageBytes(TINY_JPEG), "image/jpeg", {
+            maxWidth: 100,
+            maxHeight: 100,
+            maxBytes: 1024 * 1024,
+          }),
+        );
 
-    expect(result).not.toBeNull();
-    expect(result!.wasResized).toBe(false);
-    expect(result!.originalWidth).toBe(2);
-    expect(result!.originalHeight).toBe(2);
-  });
+        expect(result).not.toBeNull();
+        expect(result!.wasResized).toBe(false);
+        expect(result!.originalWidth).toBe(2);
+        expect(result!.originalHeight).toBe(2);
+      }),
+    ));
 });
 
 describe("formatDimensionNote", () => {

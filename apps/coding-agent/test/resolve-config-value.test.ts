@@ -1,9 +1,10 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
 
+import { currentTimeMillis, randomSuffixSync, joinPath } from "@msa/testing";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
 
+import { deleteEnv, writeEnv } from "../src/core/process-env.ts";
 import {
   clearConfigValueCache,
   resolveConfigValue,
@@ -15,10 +16,7 @@ describe("resolveConfigValue", () => {
   let tempDir: string;
 
   beforeEach(() => {
-    tempDir = join(
-      tmpdir(),
-      `msa-config-value-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-    );
+    tempDir = joinPath(tmpdir(), `msa-config-value-${currentTimeMillis()}-${randomSuffixSync()}`);
     mkdirSync(tempDir, { recursive: true });
     clearConfigValueCache();
   });
@@ -30,8 +28,8 @@ describe("resolveConfigValue", () => {
   });
 
   test("resolves literals, environment templates, and escapes", () => {
-    process.env["TEST_CONFIG_LEFT"] = "left";
-    process.env["TEST_CONFIG_RIGHT"] = "right";
+    writeEnv("TEST_CONFIG_LEFT", "left");
+    writeEnv("TEST_CONFIG_RIGHT", "right");
     try {
       expect(resolveConfigValue("literal-key")).toBe("literal-key");
       expect(resolveConfigValue("$TEST_CONFIG_LEFT")).toBe("left");
@@ -39,19 +37,19 @@ describe("resolveConfigValue", () => {
       expect(resolveConfigValue("$$TEST_CONFIG_LEFT")).toBe("$TEST_CONFIG_LEFT");
       expect(resolveConfigValue("$!literal-$TEST_CONFIG_RIGHT")).toBe("!literal-right");
     } finally {
-      delete process.env["TEST_CONFIG_LEFT"];
-      delete process.env["TEST_CONFIG_RIGHT"];
+      deleteEnv("TEST_CONFIG_LEFT");
+      deleteEnv("TEST_CONFIG_RIGHT");
     }
   });
 
   test("uses credential-scoped environment before process.env", () => {
-    process.env["TEST_CONFIG_SCOPED"] = "process";
+    writeEnv("TEST_CONFIG_SCOPED", "process");
     try {
       expect(resolveConfigValue("$TEST_CONFIG_SCOPED", { TEST_CONFIG_SCOPED: "credential" })).toBe(
         "credential",
       );
     } finally {
-      delete process.env["TEST_CONFIG_SCOPED"];
+      deleteEnv("TEST_CONFIG_SCOPED");
     }
   });
 
@@ -69,9 +67,9 @@ describe("resolveConfigValue", () => {
   );
 
   test("caches successful and failed commands until explicitly cleared", () => {
-    const counterFile = join(tempDir, "counter");
+    const counterFile = joinPath(tempDir, "counter");
     writeFileSync(counterFile, "0");
-    const escapedPath = counterFile.replace(/\\/g, "/").replace(/"/g, '\\"');
+    const escapedPath = counterFile.replace(/\\/gu, "/").replace(/"/gu, '\\"');
     const success = `!sh -c 'count=$(cat "${escapedPath}"); echo $((count + 1)) > "${escapedPath}"; echo value'`;
 
     expect(resolveConfigValue(success)).toBe("value");
@@ -89,20 +87,20 @@ describe("resolveConfigValue", () => {
   });
 
   test("does not cache environment values", () => {
-    process.env["TEST_CONFIG_DYNAMIC"] = "first";
+    writeEnv("TEST_CONFIG_DYNAMIC", "first");
     try {
       expect(resolveConfigValue("$TEST_CONFIG_DYNAMIC")).toBe("first");
-      process.env["TEST_CONFIG_DYNAMIC"] = "second";
+      writeEnv("TEST_CONFIG_DYNAMIC", "second");
       expect(resolveConfigValue("$TEST_CONFIG_DYNAMIC")).toBe("second");
     } finally {
-      delete process.env["TEST_CONFIG_DYNAMIC"];
+      deleteEnv("TEST_CONFIG_DYNAMIC");
     }
   });
 
   test("uncached resolution executes a command on every call", () => {
-    const counterFile = join(tempDir, "uncached-counter");
+    const counterFile = joinPath(tempDir, "uncached-counter");
     writeFileSync(counterFile, "0");
-    const escapedPath = counterFile.replace(/\\/g, "/").replace(/"/g, '\\"');
+    const escapedPath = counterFile.replace(/\\/gu, "/").replace(/"/gu, '\\"');
     const command = `!sh -c 'count=$(cat "${escapedPath}"); echo $((count + 1)) > "${escapedPath}"; echo value'`;
     expect(resolveConfigValueUncached(command)).toBe("value");
     expect(resolveConfigValueUncached(command)).toBe("value");

@@ -1,5 +1,7 @@
 import type { AgentMessage } from "@msa/agent-core";
 import type { AssistantMessage } from "@msa/ai";
+import { awaited, runTest, currentTimeMillis } from "@msa/testing";
+import { Effect } from "effect";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import planModeExtension from "../examples/extensions/plan-mode/index.ts";
@@ -14,8 +16,8 @@ type AgentEndHandler = (
 function createAssistantMessage(text: string): AssistantMessage {
   return {
     role: "assistant",
-    content: [{ type: "text", text }],
-    api: "anthropic-messages",
+    content: [{ type: "text" as const, text }],
+    api: "anthropic-messages" as const,
     provider: "anthropic",
     model: "mock",
     usage: {
@@ -27,7 +29,7 @@ function createAssistantMessage(text: string): AssistantMessage {
       cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
     },
     stopReason: "stop",
-    timestamp: Date.now(),
+    timestamp: currentTimeMillis(),
   };
 }
 
@@ -68,8 +70,8 @@ function setup(
     hasUI: true,
     ui: {
       notify: vi.fn(),
-      select: vi.fn(async () => options.selectChoice),
-      editor: vi.fn(async () => options.editorText),
+      select: vi.fn(() => runTest(awaited(options.selectChoice))),
+      editor: vi.fn(() => runTest(awaited(options.editorText))),
       setStatus: vi.fn(),
       setWidget: vi.fn(),
       theme: {
@@ -82,15 +84,28 @@ function setup(
     hasPendingMessages: () => false,
   } as unknown as ExtensionContext;
 
-  async function runCommand(name: string): Promise<void> {
-    const command = commands.get(name);
-    if (!command) throw new Error(`Missing command: ${name}`);
-    await command("", ctx);
+  function runCommand(name: string): Promise<void> {
+    return runTest(
+      Effect.gen(function* () {
+        const command = commands.get(name);
+        if (!command) throw new Error(`Missing command: ${name}`);
+        yield* awaited(command("", ctx));
+      }),
+    );
   }
 
-  async function triggerAgentEnd(text: string): Promise<void> {
-    if (!agentEndHandler) throw new Error("Missing agent_end handler");
-    await agentEndHandler({ type: "agent_end", messages: [createAssistantMessage(text)] }, ctx);
+  function triggerAgentEnd(text: string): Promise<void> {
+    return runTest(
+      Effect.gen(function* () {
+        if (!agentEndHandler) throw new Error("Missing agent_end handler");
+        yield* awaited(
+          agentEndHandler(
+            { type: "agent_end" as const, messages: [createAssistantMessage(text)] },
+            ctx,
+          ),
+        );
+      }),
+    );
   }
 
   return {
@@ -106,78 +121,100 @@ function setup(
 }
 
 describe("plan-mode example extension", () => {
-  it("preserves custom active tools while toggling plan mode", async () => {
-    const { activeTools, runCommand, setActiveTools } = setup({
-      activeTools: ["read", "bash", "edit", "write", "echo_tool"],
-    });
+  it("preserves custom active tools while toggling plan mode", () =>
+    runTest(
+      Effect.gen(function* () {
+        const { activeTools, runCommand, setActiveTools } = setup({
+          activeTools: ["read", "bash", "edit", "write", "echo_tool"],
+        });
 
-    await runCommand("plan");
+        yield* awaited(runCommand("plan"));
 
-    expect(activeTools()).toEqual([
-      "read",
-      "bash",
-      "echo_tool",
-      "grep",
-      "find",
-      "ls",
-      "questionnaire",
-    ]);
-    expect(setActiveTools).toHaveBeenLastCalledWith([
-      "read",
-      "bash",
-      "echo_tool",
-      "grep",
-      "find",
-      "ls",
-      "questionnaire",
-    ]);
+        expect(activeTools()).toEqual([
+          "read",
+          "bash",
+          "echo_tool",
+          "grep",
+          "find",
+          "ls",
+          "questionnaire",
+        ]);
+        expect(setActiveTools).toHaveBeenLastCalledWith([
+          "read",
+          "bash",
+          "echo_tool",
+          "grep",
+          "find",
+          "ls",
+          "questionnaire",
+        ]);
 
-    await runCommand("plan");
+        yield* awaited(runCommand("plan"));
 
-    expect(activeTools()).toEqual(["read", "bash", "edit", "write", "echo_tool"]);
-    expect(setActiveTools).toHaveBeenLastCalledWith(["read", "bash", "edit", "write", "echo_tool"]);
-  });
+        expect(activeTools()).toEqual(["read", "bash", "edit", "write", "echo_tool"]);
+        expect(setActiveTools).toHaveBeenLastCalledWith([
+          "read",
+          "bash",
+          "edit",
+          "write",
+          "echo_tool",
+        ]);
+      }),
+    ));
 
-  it("does not prompt when the assistant response contains no plan", async () => {
-    const { ctx, runCommand, sendMessage, triggerAgentEnd } = setup();
+  it("does not prompt when the assistant response contains no plan", () =>
+    runTest(
+      Effect.gen(function* () {
+        const { ctx, runCommand, sendMessage, triggerAgentEnd } = setup();
 
-    await runCommand("plan");
-    await triggerAgentEnd("This file defines the command-line argument parser.");
+        yield* awaited(runCommand("plan"));
+        yield* awaited(triggerAgentEnd("This file defines the command-line argument parser."));
 
-    expect(ctx.ui.select).not.toHaveBeenCalled();
-    expect(sendMessage).not.toHaveBeenCalled();
-  });
+        expect(ctx.ui.select).not.toHaveBeenCalled();
+        expect(sendMessage).not.toHaveBeenCalled();
+      }),
+    ));
 
-  it("queues plan refinement as a follow-up user message", async () => {
-    const { runCommand, sendUserMessage, triggerAgentEnd } = setup({
-      selectChoice: "Refine the plan",
-      editorText: "Add a regression test.",
-    });
+  it("queues plan refinement as a follow-up user message", () =>
+    runTest(
+      Effect.gen(function* () {
+        const { runCommand, sendUserMessage, triggerAgentEnd } = setup({
+          selectChoice: "Refine the plan",
+          editorText: "Add a regression test.",
+        });
 
-    await runCommand("plan");
-    await triggerAgentEnd("Plan:\n1. Inspect the current implementation\n2. Add a regression test");
+        yield* awaited(runCommand("plan"));
+        yield* awaited(
+          triggerAgentEnd("Plan:\n1. Inspect the current implementation\n2. Add a regression test"),
+        );
 
-    expect(sendUserMessage).toHaveBeenCalledWith("Add a regression test.", {
-      deliverAs: "followUp",
-    });
-  });
+        expect(sendUserMessage).toHaveBeenCalledWith("Add a regression test.", {
+          deliverAs: "followUp",
+        });
+      }),
+    ));
 
-  it("queues plan execution as a follow-up custom message", async () => {
-    const { activeTools, runCommand, sendMessage, triggerAgentEnd } = setup({
-      activeTools: ["read", "bash", "edit", "write", "echo_tool"],
-      selectChoice: "Execute the plan (track progress)",
-    });
+  it("queues plan execution as a follow-up custom message", () =>
+    runTest(
+      Effect.gen(function* () {
+        const { activeTools, runCommand, sendMessage, triggerAgentEnd } = setup({
+          activeTools: ["read", "bash", "edit", "write", "echo_tool"],
+          selectChoice: "Execute the plan (track progress)",
+        });
 
-    await runCommand("plan");
-    await triggerAgentEnd("Plan:\n1. Inspect the current implementation\n2. Add a regression test");
+        yield* awaited(runCommand("plan"));
+        yield* awaited(
+          triggerAgentEnd("Plan:\n1. Inspect the current implementation\n2. Add a regression test"),
+        );
 
-    expect(activeTools()).toEqual(["read", "bash", "edit", "write", "echo_tool"]);
-    expect(sendMessage).toHaveBeenCalledWith(
-      expect.objectContaining({ customType: "plan-mode-execute" }),
-      {
-        triggerTurn: true,
-        deliverAs: "followUp",
-      },
-    );
-  });
+        expect(activeTools()).toEqual(["read", "bash", "edit", "write", "echo_tool"]);
+        expect(sendMessage).toHaveBeenCalledWith(
+          expect.objectContaining({ customType: "plan-mode-execute" }),
+          {
+            triggerTurn: true,
+            deliverAs: "followUp",
+          },
+        );
+      }),
+    ));
 });

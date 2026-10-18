@@ -1,7 +1,8 @@
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
 
+import { awaited, runTest, currentTimeMillis, randomSuffixSync, joinPath } from "@msa/testing";
+import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
 import { createExtensionRuntime } from "../src/core/extensions/loader.ts";
@@ -15,12 +16,12 @@ describe("createAgentSession skills option", () => {
   let skillsDir: string;
 
   beforeEach(() => {
-    tempDir = join(tmpdir(), `msa-sdk-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
-    skillsDir = join(tempDir, "skills", "test-skill");
+    tempDir = joinPath(tmpdir(), `msa-sdk-test-${currentTimeMillis()}-${randomSuffixSync()}`);
+    skillsDir = joinPath(tempDir, "skills", "test-skill");
     mkdirSync(skillsDir, { recursive: true });
 
     writeFileSync(
-      join(skillsDir, "SKILL.md"),
+      joinPath(skillsDir, "SKILL.md"),
       `---
 name: test-skill
 description: A test skill for SDK tests.
@@ -39,77 +40,96 @@ This is a test skill.
     }
   });
 
-  it("should discover skills by default and expose them on session.skills", async () => {
-    const { session } = await createAgentSession({
-      cwd: tempDir,
-      agentDir: tempDir,
-      sessionManager: SessionManager.inMemory(),
-    });
+  it("should discover skills by default and expose them on session.skills", () =>
+    runTest(
+      Effect.gen(function* () {
+        const { session } = yield* awaited(
+          createAgentSession({
+            cwd: tempDir,
+            agentDir: tempDir,
+            sessionManager: SessionManager.inMemory(),
+          }),
+        );
 
-    expect(session.resourceLoader.getSkills().skills.length).toBeGreaterThan(0);
-    expect(session.resourceLoader.getSkills().skills.some((s) => s.name === "test-skill")).toBe(
-      true,
-    );
-  });
+        expect(session.resourceLoader.getSkills().skills.length).toBeGreaterThan(0);
+        expect(session.resourceLoader.getSkills().skills.some((s) => s.name === "test-skill")).toBe(
+          true,
+        );
+      }),
+    ));
 
-  it("should have empty skills when resource loader returns none (--no-skills)", async () => {
-    const resourceLoader: ResourceLoader = {
-      getExtensions: () => ({ extensions: [], errors: [], runtime: createExtensionRuntime() }),
-      getSkills: () => ({ skills: [], diagnostics: [] }),
-      getPrompts: () => ({ prompts: [], diagnostics: [] }),
-      getThemes: () => ({ themes: [], diagnostics: [] }),
-      getAgentsFiles: () => ({ agentsFiles: [] }),
-      getSystemPrompt: () => undefined,
-      getSystemPromptSource: () => undefined,
-      getAppendSystemPrompt: () => [],
-      getAppendSystemPromptSources: () => [],
-      extendResources: () => {},
-      reload: async () => {},
-    };
+  it("should have empty skills when resource loader returns none (--no-skills)", () =>
+    runTest(
+      Effect.gen(function* () {
+        const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-    const { session } = await createAgentSession({
-      cwd: tempDir,
-      agentDir: tempDir,
-      sessionManager: SessionManager.inMemory(),
-      resourceLoader,
-    });
+        const resourceLoader: ResourceLoader = {
+          getExtensions: () => ({ extensions: [], errors: [], runtime: createExtensionRuntime() }),
+          getSkills: () => ({ skills: [], diagnostics: [] }),
+          getPrompts: () => ({ prompts: [], diagnostics: [] }),
+          getThemes: () => ({ themes: [], diagnostics: [] }),
+          getAgentsFiles: () => ({ agentsFiles: [] }),
+          getSystemPrompt: () => undefined,
+          getSystemPromptSource: () => undefined,
+          getAppendSystemPrompt: () => [],
+          getAppendSystemPromptSources: () => [],
+          extendResources: () => {},
+          reload: () => effectRunPromise(Effect.sync(() => {})),
+        };
 
-    expect(session.resourceLoader.getSkills().skills).toEqual([]);
-    expect(session.resourceLoader.getSkills().diagnostics).toEqual([]);
-  });
+        const { session } = yield* awaited(
+          createAgentSession({
+            cwd: tempDir,
+            agentDir: tempDir,
+            sessionManager: SessionManager.inMemory(),
+            resourceLoader,
+          }),
+        );
 
-  it("should use provided skills when resource loader supplies them", async () => {
-    const customSkill = {
-      name: "custom-skill",
-      description: "A custom skill",
-      filePath: "/fake/path/SKILL.md",
-      baseDir: "/fake/path",
-      sourceInfo: createSyntheticSourceInfo("/fake/path/SKILL.md", { source: "sdk" }),
-      disableModelInvocation: false,
-    };
+        expect(session.resourceLoader.getSkills().skills).toEqual([]);
+        expect(session.resourceLoader.getSkills().diagnostics).toEqual([]);
+      }),
+    ));
 
-    const resourceLoader: ResourceLoader = {
-      getExtensions: () => ({ extensions: [], errors: [], runtime: createExtensionRuntime() }),
-      getSkills: () => ({ skills: [customSkill], diagnostics: [] }),
-      getPrompts: () => ({ prompts: [], diagnostics: [] }),
-      getThemes: () => ({ themes: [], diagnostics: [] }),
-      getAgentsFiles: () => ({ agentsFiles: [] }),
-      getSystemPrompt: () => undefined,
-      getSystemPromptSource: () => undefined,
-      getAppendSystemPrompt: () => [],
-      getAppendSystemPromptSources: () => [],
-      extendResources: () => {},
-      reload: async () => {},
-    };
+  it("should use provided skills when resource loader supplies them", () =>
+    runTest(
+      Effect.gen(function* () {
+        const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-    const { session } = await createAgentSession({
-      cwd: tempDir,
-      agentDir: tempDir,
-      sessionManager: SessionManager.inMemory(),
-      resourceLoader,
-    });
+        const customSkill = {
+          name: "custom-skill",
+          description: "A custom skill",
+          filePath: "/fake/path/SKILL.md",
+          baseDir: "/fake/path",
+          sourceInfo: createSyntheticSourceInfo("/fake/path/SKILL.md", { source: "sdk" }),
+          disableModelInvocation: false,
+        };
 
-    expect(session.resourceLoader.getSkills().skills).toEqual([customSkill]);
-    expect(session.resourceLoader.getSkills().diagnostics).toEqual([]);
-  });
+        const resourceLoader: ResourceLoader = {
+          getExtensions: () => ({ extensions: [], errors: [], runtime: createExtensionRuntime() }),
+          getSkills: () => ({ skills: [customSkill], diagnostics: [] }),
+          getPrompts: () => ({ prompts: [], diagnostics: [] }),
+          getThemes: () => ({ themes: [], diagnostics: [] }),
+          getAgentsFiles: () => ({ agentsFiles: [] }),
+          getSystemPrompt: () => undefined,
+          getSystemPromptSource: () => undefined,
+          getAppendSystemPrompt: () => [],
+          getAppendSystemPromptSources: () => [],
+          extendResources: () => {},
+          reload: () => effectRunPromise(Effect.sync(() => {})),
+        };
+
+        const { session } = yield* awaited(
+          createAgentSession({
+            cwd: tempDir,
+            agentDir: tempDir,
+            sessionManager: SessionManager.inMemory(),
+            resourceLoader,
+          }),
+        );
+
+        expect(session.resourceLoader.getSkills().skills).toEqual([customSkill]);
+        expect(session.resourceLoader.getSkills().diagnostics).toEqual([]);
+      }),
+    ));
 });

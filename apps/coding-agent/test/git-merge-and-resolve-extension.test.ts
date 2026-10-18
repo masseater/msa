@@ -1,7 +1,8 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
 
+import { awaited, runTest, writeTextFile, makeDirectory, joinPath } from "@msa/testing";
+import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import mergeAndResolve from "../examples/extensions/git-merge-and-resolve.ts";
@@ -28,10 +29,14 @@ function setup(cwd: string, execResults: Map<string, ExecResult>) {
   let handler: AgentEndHandler | undefined;
   const sendUserMessage = vi.fn();
 
-  const exec = vi.fn<ExtensionAPI["exec"]>().mockImplementation(async (cmd, args) => {
-    const key = [cmd, ...args].join(" ");
-    return execResults.get(key) ?? fail;
-  });
+  const exec = vi.fn<ExtensionAPI["exec"]>().mockImplementation((cmd, args) =>
+    runTest(
+      Effect.gen(function* () {
+        const key = [cmd, ...args].join(" ");
+        return yield* awaited(execResults.get(key) ?? fail);
+      }),
+    ),
+  );
 
   const api = {
     on: (event: string, h: AgentEndHandler) => {
@@ -45,8 +50,12 @@ function setup(cwd: string, execResults: Map<string, ExecResult>) {
 
   const ctx = { cwd, ui: { notify: vi.fn() } } as unknown as ExtensionContext;
 
-  async function trigger() {
-    await handler!({ type: "agent_end" }, ctx);
+  function trigger() {
+    return runTest(
+      Effect.gen(function* () {
+        yield* awaited(handler!({ type: "agent_end" as const }, ctx));
+      }),
+    );
   }
 
   return { trigger, exec, sendUserMessage };
@@ -60,164 +69,194 @@ describe("git-merge-and-resolve example", () => {
   });
 
   function createTempDir() {
-    tempDir = mkdtempSync(join(tmpdir(), "msa-merge-test-"));
+    tempDir = mkdtempSync(joinPath(tmpdir(), "msa-merge-test-"));
     return tempDir;
   }
 
-  it("skips when not a git repository", async () => {
-    const cwd = createTempDir();
-    const results = new Map<string, ExecResult>();
-    results.set("git rev-parse --git-dir", fail);
+  it("skips when not a git repository", () =>
+    runTest(
+      Effect.gen(function* () {
+        const cwd = createTempDir();
+        const results = new Map<string, ExecResult>();
+        results.set("git rev-parse --git-dir", fail);
 
-    const { trigger, exec, sendUserMessage } = setup(cwd, results);
-    await trigger();
+        const { trigger, exec, sendUserMessage } = setup(cwd, results);
+        yield* awaited(trigger());
 
-    expect(exec).toHaveBeenCalledTimes(1);
-    expect(sendUserMessage).not.toHaveBeenCalled();
-  });
+        expect(exec).toHaveBeenCalledTimes(1);
+        expect(sendUserMessage).not.toHaveBeenCalled();
+      }),
+    ));
 
-  it("skips when no upstream is configured", async () => {
-    const cwd = createTempDir();
-    const results = new Map<string, ExecResult>();
-    results.set("git rev-parse --git-dir", ok);
-    results.set("git rev-parse --abbrev-ref --symbolic-full-name @{u}", fail);
+  it("skips when no upstream is configured", () =>
+    runTest(
+      Effect.gen(function* () {
+        const cwd = createTempDir();
+        const results = new Map<string, ExecResult>();
+        results.set("git rev-parse --git-dir", ok);
+        results.set("git rev-parse --abbrev-ref --symbolic-full-name @{u}", fail);
 
-    const { trigger, sendUserMessage } = setup(cwd, results);
-    await trigger();
+        const { trigger, sendUserMessage } = setup(cwd, results);
+        yield* awaited(trigger());
 
-    expect(sendUserMessage).not.toHaveBeenCalled();
-  });
+        expect(sendUserMessage).not.toHaveBeenCalled();
+      }),
+    ));
 
-  it("re-sends conflicts when in an unfinished merge", async () => {
-    const cwd = createTempDir();
-    const conflictContent = [
-      "<<<<<<< HEAD",
-      "ours",
-      "=======",
-      "theirs",
-      ">>>>>>> origin/main",
-    ].join("\n");
-    writeFileSync(join(cwd, "file.ts"), conflictContent);
+  it("re-sends conflicts when in an unfinished merge", () =>
+    runTest(
+      Effect.gen(function* () {
+        const cwd = createTempDir();
+        const conflictContent = [
+          "<<<<<<< HEAD",
+          "ours",
+          "=======",
+          "theirs",
+          ">>>>>>> origin/main",
+        ].join("\n");
+        yield* writeTextFile(joinPath(cwd, "file.ts"), conflictContent);
 
-    const results = new Map<string, ExecResult>();
-    results.set("git rev-parse --git-dir", ok);
-    results.set("git rev-parse MERGE_HEAD", ok);
-    results.set("git diff --name-only --diff-filter=U", { ...ok, stdout: "file.ts\n" });
+        const results = new Map<string, ExecResult>();
+        results.set("git rev-parse --git-dir", ok);
+        results.set("git rev-parse MERGE_HEAD", ok);
+        results.set("git diff --name-only --diff-filter=U", { ...ok, stdout: "file.ts\n" });
 
-    const { trigger, exec, sendUserMessage } = setup(cwd, results);
-    await trigger();
+        const { trigger, exec, sendUserMessage } = setup(cwd, results);
+        yield* awaited(trigger());
 
-    expect(exec).not.toHaveBeenCalledWith("git", ["fetch", "origin"]);
-    expect(sendUserMessage).toHaveBeenCalledTimes(1);
-    const [call] = sendUserMessage.mock.calls;
-    if (call === undefined) throw new Error("expected sendUserMessage to be called");
-    const message = call[0] as string;
-    expect(message).toContain("file.ts:1-5");
-  });
+        expect(exec).not.toHaveBeenCalledWith("git", ["fetch", "origin"]);
+        expect(sendUserMessage).toHaveBeenCalledTimes(1);
+        const [call] = sendUserMessage.mock.calls;
+        if (call === undefined) throw new Error("expected sendUserMessage to be called");
+        const message = call[0] as string;
+        expect(message).toContain("file.ts:1-5");
+      }),
+    ));
 
-  it("skips when working tree is dirty and not in a merge", async () => {
-    const cwd = createTempDir();
-    const results = new Map<string, ExecResult>();
-    results.set("git rev-parse --git-dir", ok);
-    results.set("git rev-parse MERGE_HEAD", fail);
-    results.set("git status --porcelain", { ...ok, stdout: " M src/index.ts\n" });
+  it("skips when working tree is dirty and not in a merge", () =>
+    runTest(
+      Effect.gen(function* () {
+        const cwd = createTempDir();
+        const results = new Map<string, ExecResult>();
+        results.set("git rev-parse --git-dir", ok);
+        results.set("git rev-parse MERGE_HEAD", fail);
+        results.set("git status --porcelain", { ...ok, stdout: " M src/index.ts\n" });
 
-    const { trigger, exec, sendUserMessage } = setup(cwd, results);
-    await trigger();
+        const { trigger, exec, sendUserMessage } = setup(cwd, results);
+        yield* awaited(trigger());
 
-    expect(exec).not.toHaveBeenCalledWith("git", ["fetch", "origin"]);
-    expect(sendUserMessage).not.toHaveBeenCalled();
-  });
+        expect(exec).not.toHaveBeenCalledWith("git", ["fetch", "origin"]);
+        expect(sendUserMessage).not.toHaveBeenCalled();
+      }),
+    ));
 
-  it("skips when fetch fails", async () => {
-    const cwd = createTempDir();
-    const results = withUpstream(new Map<string, ExecResult>());
-    results.set("git fetch origin", fail);
+  it("skips when fetch fails", () =>
+    runTest(
+      Effect.gen(function* () {
+        const cwd = createTempDir();
+        const results = withUpstream(new Map<string, ExecResult>());
+        results.set("git fetch origin", fail);
 
-    const { trigger, sendUserMessage } = setup(cwd, results);
-    await trigger();
+        const { trigger, sendUserMessage } = setup(cwd, results);
+        yield* awaited(trigger());
 
-    expect(sendUserMessage).not.toHaveBeenCalled();
-  });
+        expect(sendUserMessage).not.toHaveBeenCalled();
+      }),
+    ));
 
-  it("skips when merge is clean", async () => {
-    const cwd = createTempDir();
-    const results = withUpstream(new Map<string, ExecResult>());
-    results.set("git merge --no-ff origin/main", ok);
+  it("skips when merge is clean", () =>
+    runTest(
+      Effect.gen(function* () {
+        const cwd = createTempDir();
+        const results = withUpstream(new Map<string, ExecResult>());
+        results.set("git merge --no-ff origin/main", ok);
 
-    const { trigger, sendUserMessage } = setup(cwd, results);
-    await trigger();
+        const { trigger, sendUserMessage } = setup(cwd, results);
+        yield* awaited(trigger());
 
-    expect(sendUserMessage).not.toHaveBeenCalled();
-  });
+        expect(sendUserMessage).not.toHaveBeenCalled();
+      }),
+    ));
 
-  it("sends conflict report as a follow-up", async () => {
-    const cwd = createTempDir();
-    const conflictContent = [
-      "line 1",
-      "<<<<<<< HEAD",
-      "our change",
-      "=======",
-      "their change",
-      ">>>>>>> origin/main",
-      "line 7",
-      "<<<<<<< HEAD",
-      "second conflict",
-      "=======",
-      "their second",
-      ">>>>>>> origin/main",
-    ].join("\n");
+  it("sends conflict report as a follow-up", () =>
+    runTest(
+      Effect.gen(function* () {
+        const cwd = createTempDir();
+        const conflictContent = [
+          "line 1",
+          "<<<<<<< HEAD",
+          "our change",
+          "=======",
+          "their change",
+          ">>>>>>> origin/main",
+          "line 7",
+          "<<<<<<< HEAD",
+          "second conflict",
+          "=======",
+          "their second",
+          ">>>>>>> origin/main",
+        ].join("\n");
 
-    mkdirSync(join(cwd, "src"), { recursive: true });
-    writeFileSync(join(cwd, "src/index.ts"), conflictContent);
+        yield* makeDirectory(joinPath(cwd, "src"));
+        yield* writeTextFile(joinPath(cwd, "src/index.ts"), conflictContent);
 
-    const results = withUpstream(new Map<string, ExecResult>());
-    results.set("git merge --no-ff origin/main", { ...fail, code: 1 });
-    results.set("git diff --name-only --diff-filter=U", { ...ok, stdout: "src/index.ts\n" });
+        const results = withUpstream(new Map<string, ExecResult>());
+        results.set("git merge --no-ff origin/main", { ...fail, code: 1 });
+        results.set("git diff --name-only --diff-filter=U", { ...ok, stdout: "src/index.ts\n" });
 
-    const { trigger, sendUserMessage } = setup(cwd, results);
-    await trigger();
+        const { trigger, sendUserMessage } = setup(cwd, results);
+        yield* awaited(trigger());
 
-    expect(sendUserMessage).toHaveBeenCalledTimes(1);
-    const [call] = sendUserMessage.mock.calls;
-    if (call === undefined) throw new Error("expected sendUserMessage to be called");
-    const [message, options] = call;
-    expect(message).toContain("src/index.ts:2-6 (ours 3, theirs 5)");
-    expect(message).toContain("src/index.ts:8-12 (ours 9, theirs 11)");
-    expect(options).toEqual({ deliverAs: "followUp" });
-  });
+        expect(sendUserMessage).toHaveBeenCalledTimes(1);
+        const [call] = sendUserMessage.mock.calls;
+        if (call === undefined) throw new Error("expected sendUserMessage to be called");
+        const [message, options] = call;
+        expect(message).toContain("src/index.ts:2-6 (ours 3, theirs 5)");
+        expect(message).toContain("src/index.ts:8-12 (ours 9, theirs 11)");
+        expect(options).toEqual({ deliverAs: "followUp" });
+      }),
+    ));
 
-  it("handles empty ours or theirs sections", async () => {
-    const cwd = createTempDir();
-    const conflictContent = ["<<<<<<< HEAD", "=======", "only theirs", ">>>>>>> origin/main"].join(
-      "\n",
-    );
+  it("handles empty ours or theirs sections", () =>
+    runTest(
+      Effect.gen(function* () {
+        const cwd = createTempDir();
+        const conflictContent = [
+          "<<<<<<< HEAD",
+          "=======",
+          "only theirs",
+          ">>>>>>> origin/main",
+        ].join("\n");
 
-    writeFileSync(join(cwd, "empty-ours.ts"), conflictContent);
+        yield* writeTextFile(joinPath(cwd, "empty-ours.ts"), conflictContent);
 
-    const results = withUpstream(new Map<string, ExecResult>());
-    results.set("git merge --no-ff origin/main", { ...fail, code: 1 });
-    results.set("git diff --name-only --diff-filter=U", { ...ok, stdout: "empty-ours.ts\n" });
+        const results = withUpstream(new Map<string, ExecResult>());
+        results.set("git merge --no-ff origin/main", { ...fail, code: 1 });
+        results.set("git diff --name-only --diff-filter=U", { ...ok, stdout: "empty-ours.ts\n" });
 
-    const { trigger, sendUserMessage } = setup(cwd, results);
-    await trigger();
+        const { trigger, sendUserMessage } = setup(cwd, results);
+        yield* awaited(trigger());
 
-    expect(sendUserMessage).toHaveBeenCalledTimes(1);
-    const [call] = sendUserMessage.mock.calls;
-    if (call === undefined) throw new Error("expected sendUserMessage to be called");
-    const message = call[0] as string;
-    expect(message).toContain("empty-ours.ts:1-4 (ours empty, theirs 3)");
-  });
+        expect(sendUserMessage).toHaveBeenCalledTimes(1);
+        const [call] = sendUserMessage.mock.calls;
+        if (call === undefined) throw new Error("expected sendUserMessage to be called");
+        const message = call[0] as string;
+        expect(message).toContain("empty-ours.ts:1-4 (ours empty, theirs 3)");
+      }),
+    ));
 
-  it("skips message when merge fails but no conflict markers found", async () => {
-    const cwd = createTempDir();
-    const results = withUpstream(new Map<string, ExecResult>());
-    results.set("git merge --no-ff origin/main", { ...fail, code: 1 });
-    results.set("git diff --name-only --diff-filter=U", { ...ok, stdout: "" });
+  it("skips message when merge fails but no conflict markers found", () =>
+    runTest(
+      Effect.gen(function* () {
+        const cwd = createTempDir();
+        const results = withUpstream(new Map<string, ExecResult>());
+        results.set("git merge --no-ff origin/main", { ...fail, code: 1 });
+        results.set("git diff --name-only --diff-filter=U", { ...ok, stdout: "" });
 
-    const { trigger, sendUserMessage } = setup(cwd, results);
-    await trigger();
+        const { trigger, sendUserMessage } = setup(cwd, results);
+        yield* awaited(trigger());
 
-    expect(sendUserMessage).not.toHaveBeenCalled();
-  });
+        expect(sendUserMessage).not.toHaveBeenCalled();
+      }),
+    ));
 });

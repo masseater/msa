@@ -172,7 +172,10 @@ describe("parseArgs", () => {
       expect(result.messages).toEqual([]);
       expect(result.unknownFlags.size).toBe(0);
       expect(result.diagnostics).toEqual([
-        { type: "error", message: `Invalid mode "${mode}". Valid values: text, json, rpc` },
+        {
+          type: "error" as const,
+          message: `Invalid mode "${mode}". Valid values: text, json, rpc`,
+        },
       ]);
     });
 
@@ -181,7 +184,7 @@ describe("parseArgs", () => {
       expect(result.mode).toBeUndefined();
       expect(result.unknownFlags.size).toBe(0);
       expect(result.diagnostics).toEqual([
-        { type: "error", message: "--mode requires text, json, or rpc" },
+        { type: "error" as const, message: "--mode requires text, json, or rpc" },
       ]);
     });
 
@@ -191,14 +194,14 @@ describe("parseArgs", () => {
       expect(result.version).toBe(true);
       expect(result.unknownFlags.size).toBe(0);
       expect(result.diagnostics).toEqual([
-        { type: "error", message: "--mode requires text, json, or rpc" },
+        { type: "error" as const, message: "--mode requires text, json, or rpc" },
       ]);
     });
 
     test("reports an invalid --mode value after a valid one", () => {
       const result = parseArgs(["--mode", "json", "--mode", "yaml"]);
       expect(result.diagnostics).toEqual([
-        { type: "error", message: 'Invalid mode "yaml". Valid values: text, json, rpc' },
+        { type: "error" as const, message: 'Invalid mode "yaml". Valid values: text, json, rpc' },
       ]);
     });
   });
@@ -226,7 +229,9 @@ describe("parseArgs", () => {
 
     test("reports missing value", () => {
       const result = parseArgs(["--name"]);
-      expect(result.diagnostics).toEqual([{ type: "error", message: "--name requires a value" }]);
+      expect(result.diagnostics).toEqual([
+        { type: "error" as const, message: "--name requires a value" },
+      ]);
     });
 
     test("works alongside other flags", () => {
@@ -345,7 +350,7 @@ describe("parseArgs", () => {
       expect(result.useTheme).toBeUndefined();
       expect(result.print).toBe(true);
       expect(result.diagnostics).toEqual([
-        { type: "error", message: "--use-theme requires a theme name" },
+        { type: "error" as const, message: "--use-theme requires a theme name" },
       ]);
     });
   });
@@ -428,14 +433,17 @@ describe("parseArgs", () => {
     test("rejects invalid modes", () => {
       const result = parseArgs(["--tui-mode", "other"]);
       expect(result.diagnostics).toEqual([
-        { type: "error", message: 'Invalid TUI mode "other". Valid values: regular, fullscreen' },
+        {
+          type: "error" as const,
+          message: 'Invalid TUI mode "other". Valid values: regular, fullscreen',
+        },
       ]);
     });
 
     test("requires a mode", () => {
       const result = parseArgs(["--tui-mode"]);
       expect(result.diagnostics).toEqual([
-        { type: "error", message: "--tui-mode requires regular or fullscreen" },
+        { type: "error" as const, message: "--tui-mode requires regular or fullscreen" },
       ]);
     });
 
@@ -488,7 +496,7 @@ describe("parseArgs", () => {
       expect(result.tools).toBeUndefined();
       expect(result.diagnostics).toEqual([
         {
-          type: "error",
+          type: "error" as const,
           message: "--tools: tool names cannot be mixed with +name or -name entries",
         },
       ]);
@@ -499,7 +507,7 @@ describe("parseArgs", () => {
       expect(result.tools).toBeUndefined();
       expect(result.diagnostics).toEqual([
         {
-          type: "error",
+          type: "error" as const,
           message:
             "-t: +name and -name entries take exact tool names, not patterns: +mcp__github__*",
         },

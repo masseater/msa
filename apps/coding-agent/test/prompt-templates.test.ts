@@ -1,7 +1,7 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
-import { join } from "path";
 
+import { currentTimeMillis, joinPath } from "@msa/testing";
 import { afterAll, describe, expect, test } from "vite-plus/test";
 
 import { getAgentDir } from "../src/config.ts";
@@ -512,11 +512,11 @@ describe("parseCommandArgs + substituteArgs integration", () => {
 });
 
 describe("loadPromptTemplates - argument-hint", () => {
-  const testDir = join(tmpdir(), `msa-test-prompts-${Date.now()}`);
+  const testDir = joinPath(tmpdir(), `msa-test-prompts-${currentTimeMillis()}`);
 
   function writeTemplate(name: string, content: string) {
     mkdirSync(testDir, { recursive: true });
-    writeFileSync(join(testDir, `${name}.md`), content);
+    writeFileSync(joinPath(testDir, `${name}.md`), content);
   }
 
   test("should parse required argument-hint from frontmatter", () => {
@@ -641,14 +641,14 @@ Analyze GitHub issue(s): $ARGUMENTS`,
 
 describe("loadPromptTemplates - diagnostics", () => {
   test("reports invalid YAML frontmatter and keeps valid siblings", () => {
-    const testDir = mkdtempSync(join(tmpdir(), "msa-test-prompts-invalid-"));
-    const invalidPromptPath = join(testDir, "invalid.md");
+    const testDir = mkdtempSync(joinPath(tmpdir(), "msa-test-prompts-invalid-"));
+    const invalidPromptPath = joinPath(testDir, "invalid.md");
     try {
       writeFileSync(
         invalidPromptPath,
         "---\ndescription: Broken: unquoted colon\n---\nDo something.\n",
       );
-      writeFileSync(join(testDir, "valid.md"), "Valid prompt content.");
+      writeFileSync(joinPath(testDir, "valid.md"), "Valid prompt content.");
 
       const { templates, diagnostics } = loadPromptTemplates({
         cwd: process.cwd(),
@@ -660,7 +660,7 @@ describe("loadPromptTemplates - diagnostics", () => {
       expect(templates.map((template) => template.name)).toEqual(["valid"]);
       expect(diagnostics).toEqual([
         expect.objectContaining({
-          type: "warning",
+          type: "warning" as const,
           path: invalidPromptPath,
           message: expect.stringContaining("line 1, column 14"),
         }),

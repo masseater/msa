@@ -1,4 +1,6 @@
+import { awaited, runTest } from "@msa/testing";
 import { Container } from "@msa/tui";
+import { Effect } from "effect";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { SessionManager } from "../src/core/session-manager.ts";
@@ -24,14 +26,22 @@ function createTreeUI() {
     session: {
       isStreaming: false,
       isCompacting: false,
-      abort: vi.fn(async () => {
-        ui.session.isStreaming = false;
-      }),
+      abort: vi.fn(() =>
+        runTest(
+          Effect.sync(() => {
+            ui.session.isStreaming = false;
+          }),
+        ),
+      ),
       abortBranchSummary: vi.fn(),
-      navigateTree: vi.fn(async () => {
-        if (ui.session.isCompacting) throw new Error(busyMessage);
-        return { cancelled: false };
-      }),
+      navigateTree: vi.fn(() =>
+        runTest(
+          Effect.gen(function* () {
+            if (ui.session.isCompacting) throw new Error(busyMessage);
+            return yield* awaited({ cancelled: false });
+          }),
+        ),
+      ),
     },
     defaultEditor: { onEscape },
     editor: { getText: () => "", setText: vi.fn() },
@@ -49,7 +59,7 @@ function createTreeUI() {
         selector = create(vi.fn()).component;
       },
     },
-    extensionDialogs: { select: vi.fn(async () => "No summary") },
+    extensionDialogs: { select: vi.fn(() => runTest(awaited("No summary"))) },
 
     showStatusIndicator: vi.fn((indicator: StatusIndicator) => indicator.dispose()),
     clearStatusIndicator: vi.fn(),
@@ -57,7 +67,7 @@ function createTreeUI() {
     renderInitialMessages: vi.fn(),
     showStatus: vi.fn(),
     showError: vi.fn(),
-    flushCompactionQueue: vi.fn(async () => {}),
+    flushCompactionQueue: vi.fn(() => runTest(Effect.sync(() => {}))),
   };
   const showTreeSelector = Reflect.get(InteractiveMode.prototype, "showTreeSelector") as (
     this: typeof ui,
@@ -68,9 +78,13 @@ function createTreeUI() {
     ui,
     onEscape,
     targetId,
-    async select() {
-      expect(selector).toBeDefined();
-      await selector!.getTreeList().onSelect!(targetId);
+    select() {
+      return runTest(
+        Effect.gen(function* () {
+          expect(selector).toBeDefined();
+          yield* awaited(selector!.getTreeList().onSelect!(targetId));
+        }),
+      );
     },
   };
 }
@@ -80,75 +94,111 @@ describe("InteractiveMode tree navigation availability", () => {
 
   it.each(["Summarize", "No summary"])(
     "preserves operation UI when choosing %s while busy",
-    async (choice) => {
-      const { ui, onEscape, select } = createTreeUI();
-      const originalLeafId = ui.sessionManager.getLeafId();
-      ui.extensionDialogs.select.mockImplementation(async () => {
-        ui.session.isCompacting = true;
-        return choice;
-      });
+    (choice) =>
+      runTest(
+        Effect.gen(function* () {
+          const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-      await select();
+          const { ui, onEscape, select } = createTreeUI();
+          const originalLeafId = ui.sessionManager.getLeafId();
+          ui.extensionDialogs.select.mockImplementation(() =>
+            effectRunPromise(
+              Effect.gen(function* () {
+                ui.session.isCompacting = true;
+                return yield* awaited(choice);
+              }),
+            ),
+          );
 
-      expect(ui.showError).toHaveBeenCalledWith(busyMessage);
-      expect(ui.showStatusIndicator).not.toHaveBeenCalled();
-      expect(ui.clearStatusIndicator).not.toHaveBeenCalled();
-      expect(ui.defaultEditor.onEscape).toBe(onEscape);
-      expect(ui.session.navigateTree).not.toHaveBeenCalled();
-      expect(ui.session.abort).not.toHaveBeenCalled();
-      expect(ui.sessionManager.getLeafId()).toBe(originalLeafId);
-    },
+          yield* awaited(select());
+
+          expect(ui.showError).toHaveBeenCalledWith(busyMessage);
+          expect(ui.showStatusIndicator).not.toHaveBeenCalled();
+          expect(ui.clearStatusIndicator).not.toHaveBeenCalled();
+          expect(ui.defaultEditor.onEscape).toBe(onEscape);
+          expect(ui.session.navigateTree).not.toHaveBeenCalled();
+          expect(ui.session.abort).not.toHaveBeenCalled();
+          expect(ui.sessionManager.getLeafId()).toBe(originalLeafId);
+        }),
+      ),
   );
 
-  it("allows navigation when compaction finishes while the dialog is open", async () => {
-    const { ui, targetId, select } = createTreeUI();
-    ui.session.isCompacting = true;
-    ui.extensionDialogs.select.mockImplementation(async () => {
-      ui.session.isCompacting = false;
-      return "No summary";
-    });
+  it("allows navigation when compaction finishes while the dialog is open", () =>
+    runTest(
+      Effect.gen(function* () {
+        const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-    await select();
+        const { ui, targetId, select } = createTreeUI();
+        ui.session.isCompacting = true;
+        ui.extensionDialogs.select.mockImplementation(() =>
+          effectRunPromise(
+            Effect.gen(function* () {
+              ui.session.isCompacting = false;
+              return yield* awaited("No summary");
+            }),
+          ),
+        );
 
-    expect(ui.session.navigateTree).toHaveBeenCalledWith(targetId, {
-      summarize: false,
-      customInstructions: undefined,
-    });
-    expect(ui.showError).not.toHaveBeenCalled();
-  });
+        yield* awaited(select());
 
-  it("still aborts an active response before navigating", async () => {
-    const { ui, select } = createTreeUI();
-    ui.session.isStreaming = true;
-    ui.session.navigateTree.mockImplementation(async () => {
-      expect(ui.session.isStreaming).toBe(false);
-      expect(ui.restoreQueuedMessagesToEditor).toHaveBeenCalledOnce();
-      return { cancelled: false };
-    });
+        expect(ui.session.navigateTree).toHaveBeenCalledWith(targetId, {
+          summarize: false,
+          customInstructions: undefined,
+        });
+        expect(ui.showError).not.toHaveBeenCalled();
+      }),
+    ));
 
-    await select();
+  it("still aborts an active response before navigating", () =>
+    runTest(
+      Effect.gen(function* () {
+        const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-    expect(ui.session.abort).toHaveBeenCalledOnce();
-    expect(ui.session.navigateTree).toHaveBeenCalledOnce();
-    expect(ui.showError).not.toHaveBeenCalled();
-  });
+        const { ui, select } = createTreeUI();
+        ui.session.isStreaming = true;
+        ui.session.navigateTree.mockImplementation(() =>
+          effectRunPromise(
+            Effect.gen(function* () {
+              expect(ui.session.isStreaming).toBe(false);
+              expect(ui.restoreQueuedMessagesToEditor).toHaveBeenCalledOnce();
+              return yield* awaited({ cancelled: false });
+            }),
+          ),
+        );
 
-  it("rechecks availability after the response abort settles", async () => {
-    const { ui, onEscape, select } = createTreeUI();
-    ui.session.isStreaming = true;
-    ui.extensionDialogs.select.mockResolvedValue("Summarize");
-    ui.session.abort.mockImplementation(async () => {
-      ui.session.isStreaming = false;
-      ui.session.isCompacting = true;
-    });
+        yield* awaited(select());
 
-    await select();
+        expect(ui.session.abort).toHaveBeenCalledOnce();
+        expect(ui.session.navigateTree).toHaveBeenCalledOnce();
+        expect(ui.showError).not.toHaveBeenCalled();
+      }),
+    ));
 
-    expect(ui.session.abort).toHaveBeenCalledOnce();
-    expect(ui.showError).toHaveBeenCalledWith(busyMessage);
-    expect(ui.showStatusIndicator).not.toHaveBeenCalled();
-    expect(ui.clearStatusIndicator).not.toHaveBeenCalled();
-    expect(ui.defaultEditor.onEscape).toBe(onEscape);
-    expect(ui.session.navigateTree).not.toHaveBeenCalled();
-  });
+  it("rechecks availability after the response abort settles", () =>
+    runTest(
+      Effect.gen(function* () {
+        const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
+        const { ui, onEscape, select } = createTreeUI();
+        ui.session.isStreaming = true;
+        ui.extensionDialogs.select.mockResolvedValue("Summarize");
+        ui.session.abort.mockImplementation(() =>
+          effectRunPromise(
+            Effect.sync(() => {
+              ui.session.isStreaming = false;
+              ui.session.isCompacting = true;
+            }),
+          ),
+        );
+
+        yield* awaited(select());
+
+        expect(ui.session.abort).toHaveBeenCalledOnce();
+        expect(ui.showError).toHaveBeenCalledWith(busyMessage);
+        expect(ui.showStatusIndicator).not.toHaveBeenCalled();
+        expect(ui.clearStatusIndicator).not.toHaveBeenCalled();
+        expect(ui.defaultEditor.onEscape).toBe(onEscape);
+        expect(ui.session.navigateTree).not.toHaveBeenCalled();
+      }),
+    ));
 });

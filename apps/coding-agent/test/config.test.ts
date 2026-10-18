@@ -1,7 +1,7 @@
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
-import { delimiter, join } from "path";
 
+import { joinPath, pathDelimiter } from "@msa/testing";
 import { afterEach, describe, expect, test } from "vite-plus/test";
 
 import {
@@ -12,10 +12,11 @@ import {
   getSelfUpdateUnavailableInstruction,
   getUpdateInstruction,
 } from "../src/config.ts";
+import { deleteEnv, readEnv, writeEnv } from "../src/core/process-env.ts";
 
 const execPathDescriptor = Object.getOwnPropertyDescriptor(process, "execPath");
-const originalPath = process.env["PATH"];
-const originalMsaPackageDir = process.env["MSA_PACKAGE_DIR"];
+const originalPath = readEnv("PATH");
+const originalMsaPackageDir = readEnv("MSA_PACKAGE_DIR");
 const originalArgv1 = process.argv[1];
 let tempDir: string | undefined;
 
@@ -31,14 +32,14 @@ afterEach(() => {
     Object.defineProperty(process, "execPath", execPathDescriptor);
   }
   if (originalPath === undefined) {
-    delete process.env["PATH"];
+    deleteEnv("PATH");
   } else {
-    process.env["PATH"] = originalPath;
+    writeEnv("PATH", originalPath);
   }
   if (originalMsaPackageDir === undefined) {
-    delete process.env["MSA_PACKAGE_DIR"];
+    deleteEnv("MSA_PACKAGE_DIR");
   } else {
-    process.env["MSA_PACKAGE_DIR"] = originalMsaPackageDir;
+    writeEnv("MSA_PACKAGE_DIR", originalMsaPackageDir);
   }
   if (originalArgv1 === undefined) {
     process.argv.splice(1, 1);
@@ -53,34 +54,34 @@ afterEach(() => {
 });
 
 function createNpmPrefixInstall(template = "msa-prefix-"): { prefix: string; packageDir: string } {
-  const prefix = mkdtempSync(join(tmpdir(), template));
-  const root = join(prefix, "lib", "node_modules");
-  const scopeDir = join(root, "@msa");
-  const packageDir = join(scopeDir, "coding-agent");
+  const prefix = mkdtempSync(joinPath(tmpdir(), template));
+  const root = joinPath(prefix, "lib", "node_modules");
+  const scopeDir = joinPath(root, "@msa");
+  const packageDir = joinPath(scopeDir, "coding-agent");
   mkdirSync(packageDir, { recursive: true });
   tempDir = prefix;
-  process.env["MSA_PACKAGE_DIR"] = packageDir;
-  setExecPath(join(packageDir, "dist", "cli.js"));
+  writeEnv("MSA_PACKAGE_DIR", packageDir);
+  setExecPath(joinPath(packageDir, "dist", "cli.js"));
   return { prefix, packageDir };
 }
 
 function createPnpmGlobalInstall(): { root: string; packageDir: string } {
-  const temp = mkdtempSync(join(tmpdir(), "msa-pnpm-"));
-  const binDir = join(temp, "bin");
-  const root = join(temp, "pnpm", "global", "5", "node_modules");
-  const packageDir = join(root, "@mariozechner", "msa-coding-agent");
+  const temp = mkdtempSync(joinPath(tmpdir(), "msa-pnpm-"));
+  const binDir = joinPath(temp, "bin");
+  const root = joinPath(temp, "pnpm", "global", "5", "node_modules");
+  const packageDir = joinPath(root, "@mariozechner", "msa-coding-agent");
   mkdirSync(packageDir, { recursive: true });
   mkdirSync(binDir, { recursive: true });
   writeFileSync(
-    join(binDir, process.platform === "win32" ? "pnpm.cmd" : "pnpm"),
+    joinPath(binDir, process.platform === "win32" ? "pnpm.cmd" : "pnpm"),
     createFakePnpmScript(root),
   );
-  chmodSync(join(binDir, process.platform === "win32" ? "pnpm.cmd" : "pnpm"), 0o755);
+  chmodSync(joinPath(binDir, process.platform === "win32" ? "pnpm.cmd" : "pnpm"), 0o755);
   tempDir = temp;
-  process.env["PATH"] = `${binDir}${delimiter}${originalPath ?? ""}`;
-  process.env["MSA_PACKAGE_DIR"] = packageDir;
+  writeEnv("PATH", `${binDir}${pathDelimiter}${originalPath ?? ""}`);
+  writeEnv("MSA_PACKAGE_DIR", packageDir);
   setExecPath(
-    join(
+    joinPath(
       root,
       ".pnpm",
       "@mariozechner+msa-coding-agent@0.0.0",
@@ -95,42 +96,42 @@ function createPnpmGlobalInstall(): { root: string; packageDir: string } {
 }
 
 function createYarnGlobalInstall(): { globalDir: string; packageDir: string } {
-  const temp = mkdtempSync(join(tmpdir(), "msa-yarn-"));
-  const binDir = join(temp, "bin");
-  const globalDir = join(temp, "yarn", "global");
-  const packageDir = join(globalDir, "node_modules", "@mariozechner", "msa-coding-agent");
+  const temp = mkdtempSync(joinPath(tmpdir(), "msa-yarn-"));
+  const binDir = joinPath(temp, "bin");
+  const globalDir = joinPath(temp, "yarn", "global");
+  const packageDir = joinPath(globalDir, "node_modules", "@mariozechner", "msa-coding-agent");
   mkdirSync(packageDir, { recursive: true });
   mkdirSync(binDir, { recursive: true });
   writeFileSync(
-    join(binDir, process.platform === "win32" ? "yarn.cmd" : "yarn"),
+    joinPath(binDir, process.platform === "win32" ? "yarn.cmd" : "yarn"),
     createFakeYarnScript(globalDir),
   );
-  chmodSync(join(binDir, process.platform === "win32" ? "yarn.cmd" : "yarn"), 0o755);
+  chmodSync(joinPath(binDir, process.platform === "win32" ? "yarn.cmd" : "yarn"), 0o755);
   tempDir = temp;
-  process.env["PATH"] = `${binDir}${delimiter}${originalPath ?? ""}`;
-  process.env["MSA_PACKAGE_DIR"] = packageDir;
-  setExecPath(join(globalDir, ".yarn", "@mariozechner", "msa-coding-agent", "dist", "cli.js"));
+  writeEnv("PATH", `${binDir}${pathDelimiter}${originalPath ?? ""}`);
+  writeEnv("MSA_PACKAGE_DIR", packageDir);
+  setExecPath(joinPath(globalDir, ".yarn", "@mariozechner", "msa-coding-agent", "dist", "cli.js"));
   return { globalDir, packageDir };
 }
 
 function createBunGlobalInstall(): { packageDir: string } {
-  const temp = mkdtempSync(join(tmpdir(), "msa-bun-"));
-  const prefix = join(temp, ".bun");
-  const bunBin = join(prefix, "bin");
-  const root = join(prefix, "install", "global", "node_modules");
-  const scopeDir = join(root, "@msa");
-  const packageDir = join(scopeDir, "coding-agent");
+  const temp = mkdtempSync(joinPath(tmpdir(), "msa-bun-"));
+  const prefix = joinPath(temp, ".bun");
+  const bunBin = joinPath(prefix, "bin");
+  const root = joinPath(prefix, "install", "global", "node_modules");
+  const scopeDir = joinPath(root, "@msa");
+  const packageDir = joinPath(scopeDir, "coding-agent");
   mkdirSync(packageDir, { recursive: true });
   mkdirSync(bunBin, { recursive: true });
   writeFileSync(
-    join(bunBin, process.platform === "win32" ? "bun.cmd" : "bun"),
+    joinPath(bunBin, process.platform === "win32" ? "bun.cmd" : "bun"),
     createFakeBunScript(bunBin),
   );
-  chmodSync(join(bunBin, process.platform === "win32" ? "bun.cmd" : "bun"), 0o755);
+  chmodSync(joinPath(bunBin, process.platform === "win32" ? "bun.cmd" : "bun"), 0o755);
   tempDir = temp;
-  process.env["PATH"] = `${bunBin}${delimiter}${originalPath ?? ""}`;
-  process.env["MSA_PACKAGE_DIR"] = packageDir;
-  setExecPath(join(packageDir, "dist", "cli.js"));
+  writeEnv("PATH", `${bunBin}${pathDelimiter}${originalPath ?? ""}`);
+  writeEnv("MSA_PACKAGE_DIR", packageDir);
+  setExecPath(joinPath(packageDir, "dist", "cli.js"));
   return { packageDir };
 }
 
@@ -160,12 +161,12 @@ function createFakeBunScript(bunBin: string): string {
 
 describe("findNodePackageDir", () => {
   test("skips binary metadata copied into dist", () => {
-    tempDir = mkdtempSync(join(tmpdir(), "msa-package-dir-"));
-    const distDir = join(tempDir, "dist");
-    const bundleDir = join(distDir, "bundle");
+    tempDir = mkdtempSync(joinPath(tmpdir(), "msa-package-dir-"));
+    const distDir = joinPath(tempDir, "dist");
+    const bundleDir = joinPath(distDir, "bundle");
     mkdirSync(bundleDir, { recursive: true });
-    writeFileSync(join(tempDir, "package.json"), "{}");
-    writeFileSync(join(distDir, "package.json"), "{}");
+    writeFileSync(joinPath(tempDir, "package.json"), "{}");
+    writeFileSync(joinPath(distDir, "package.json"), "{}");
 
     expect(findNodePackageDir(bundleDir)).toBe(tempDir);
   });
@@ -329,7 +330,7 @@ describe("detectInstallMethod", () => {
 
   test("does not infer Windows npm custom prefixes from package paths", () => {
     const packageDir = "C:\\Users\\Admin\\npm prefix\\node_modules\\@msa\\coding-agent";
-    process.env["MSA_PACKAGE_DIR"] = packageDir;
+    writeEnv("MSA_PACKAGE_DIR", packageDir);
     setExecPath(`${packageDir}\\dist\\cli.js`);
 
     expect(detectInstallMethod()).toBe("npm");
@@ -388,12 +389,12 @@ describe("detectInstallMethod", () => {
   });
 
   test("self-updates pnpm v11 global installs resolved through the store", () => {
-    const temp = mkdtempSync(join(tmpdir(), "msa-pnpm11-"));
-    const binDir = join(temp, "bin");
-    const root = join(temp, "Library", "pnpm", "global", "v11");
+    const temp = mkdtempSync(joinPath(tmpdir(), "msa-pnpm11-"));
+    const binDir = joinPath(temp, "bin");
+    const root = joinPath(temp, "Library", "pnpm", "global", "v11");
     const packageName = "@msa/coding-agent";
-    const globalPackageDir = join(root, "11e9a", "node_modules", "@msa", "coding-agent");
-    const storePackageDir = join(
+    const globalPackageDir = joinPath(root, "11e9a", "node_modules", "@msa", "coding-agent");
+    const storePackageDir = joinPath(
       temp,
       "Library",
       "pnpm",
@@ -411,17 +412,17 @@ describe("detectInstallMethod", () => {
     mkdirSync(globalPackageDir, { recursive: true });
     mkdirSync(storePackageDir, { recursive: true });
     mkdirSync(binDir, { recursive: true });
-    writeFileSync(join(globalPackageDir, "package.json"), "{}");
+    writeFileSync(joinPath(globalPackageDir, "package.json"), "{}");
     writeFileSync(
-      join(binDir, process.platform === "win32" ? "pnpm.cmd" : "pnpm"),
+      joinPath(binDir, process.platform === "win32" ? "pnpm.cmd" : "pnpm"),
       createFakePnpmScript(root),
     );
-    chmodSync(join(binDir, process.platform === "win32" ? "pnpm.cmd" : "pnpm"), 0o755);
+    chmodSync(joinPath(binDir, process.platform === "win32" ? "pnpm.cmd" : "pnpm"), 0o755);
     tempDir = temp;
-    process.env["PATH"] = `${binDir}${delimiter}${originalPath ?? ""}`;
-    process.env["MSA_PACKAGE_DIR"] = storePackageDir;
-    process.argv[1] = join(globalPackageDir, "dist", "cli.js");
-    setExecPath(join(storePackageDir, "dist", "cli.js"));
+    writeEnv("PATH", `${binDir}${pathDelimiter}${originalPath ?? ""}`);
+    writeEnv("MSA_PACKAGE_DIR", storePackageDir);
+    process.argv[1] = joinPath(globalPackageDir, "dist", "cli.js");
+    setExecPath(joinPath(storePackageDir, "dist", "cli.js"));
 
     const command = getSelfUpdateCommand(packageName);
 
@@ -506,11 +507,13 @@ describe("detectInstallMethod", () => {
 
 describe("detectInstallChange", () => {
   test("reports a removed install instead of reading a package.json further up", () => {
-    tempDir = mkdtempSync(join(tmpdir(), "msa-install-change-"));
-    const installDir = join(tempDir, "global", "hash");
+    tempDir = mkdtempSync(joinPath(tmpdir(), "msa-install-change-"));
+    const installDir = joinPath(tempDir, "global", "hash");
     mkdirSync(installDir, { recursive: true });
-    writeFileSync(join(tempDir, "package.json"), JSON.stringify({ version: "0.0.1" }));
+    writeFileSync(joinPath(tempDir, "package.json"), JSON.stringify({ version: "0.0.1" }));
     rmSync(installDir, { recursive: true, force: true });
-    expect(detectInstallChange(join(installDir, "package.json"))).toEqual({ kind: "removed" });
+    expect(detectInstallChange(joinPath(installDir, "package.json"))).toEqual({
+      kind: "removed" as const,
+    });
   });
 });

@@ -1,5 +1,7 @@
 import type { AgentTool, AgentToolCall } from "@msa/agent-core";
 import type { Usage } from "@msa/ai";
+import { awaited, runTest } from "@msa/testing";
+import { Effect } from "effect";
 import { Type } from "typebox";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -27,194 +29,245 @@ function createRunner(tools: AgentTool[], options: { sequential?: boolean } = {}
   const host: NestedToolCallHost = {
     getTools: () => tools,
     isSequential: () => options.sequential ?? false,
-    runToolCall: async (toolCall, _parentId, signal, onUpdate) => {
-      const tool = tools.find((candidate) => candidate.name === toolCall.name);
-      if (!tool) {
-        return {
-          toolCall,
-          result: {
-            content: [{ type: "text", text: `Tool ${toolCall.name} not found` }],
-            details: {},
-          },
-          isError: true,
-        };
-      }
-      const result = await tool.execute(
-        toolCall.id,
-        toolCall.arguments,
-        signal,
-        (partial) => void onUpdate(partial),
-      );
-      return { toolCall, result, isError: result.isError === true };
-    },
-    emit: async (event) => {
-      events.push(event);
-    },
+    runToolCall: (toolCall, _parentId, signal, onUpdate) =>
+      runTest(
+        Effect.gen(function* () {
+          const tool = tools.find((candidate) => candidate.name === toolCall.name);
+          if (!tool) {
+            return yield* awaited({
+              toolCall,
+              result: {
+                content: [{ type: "text" as const, text: `Tool ${toolCall.name} not found` }],
+                details: {},
+              },
+              isError: true,
+            });
+          }
+          const result = yield* awaited(
+            tool.execute(
+              toolCall.id,
+              toolCall.arguments,
+              signal,
+              (partial) => void onUpdate(partial),
+            ),
+          );
+          return yield* awaited({ toolCall, result, isError: result.isError === true });
+        }),
+      ),
+    emit: (event) =>
+      runTest(
+        Effect.sync(() => {
+          events.push(event);
+        }),
+      ),
   };
   return { runner: new NestedToolCallRunner(host), events };
 }
 
 describe("NestedToolCallRunner", () => {
-  it("assigns ids below the caller, emits events with the parent id, and records the calls", async () => {
-    const echo: AgentTool = {
-      name: "echo",
-      label: "Echo",
-      description: "Echo",
-      parameters: Type.Object({}),
-      async execute(_id, _params, _signal, onUpdate) {
-        onUpdate?.({ content: [{ type: "text", text: "partial" }], details: {} });
-        return { content: [{ type: "text", text: "ok" }], details: {} };
-      },
-    };
-    const { runner, events } = createRunner([echo]);
-    const updates: unknown[] = [];
+  it("assigns ids below the caller, emits events with the parent id, and records the calls", () =>
+    runTest(
+      Effect.gen(function* () {
+        const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-    const first = await runner.execute(
-      "call",
-      "echo",
-      { a: 1 },
-      { onUpdate: (partial) => updates.push(partial) },
-    );
-    const missing = await runner.execute("call", "missing", {});
-
-    expect(first.toolCall.id).toBe("call/1");
-    expect(missing).toMatchObject({ toolCall: { id: "call/2" }, isError: true });
-    expect(updates).toHaveLength(1);
-    expect(events.map((event) => [event.type, event.toolCallId, event.parentToolCallId])).toEqual([
-      ["tool_execution_start", "call/1", "call"],
-      ["tool_execution_update", "call/1", "call"],
-      ["tool_execution_end", "call/1", "call"],
-      ["tool_execution_start", "call/2", "call"],
-      ["tool_execution_end", "call/2", "call"],
-    ]);
-    expect(runner.takeRecord("call")?.calls).toEqual({
-      calls: [
-        {
-          id: "call/1",
+        const echo: AgentTool = {
           name: "echo",
-          arguments: { a: 1 },
-          status: "ok",
-          durationMs: expect.any(Number),
-        },
-        {
-          id: "call/2",
-          name: "missing",
-          arguments: {},
-          status: "error",
-          durationMs: expect.any(Number),
-          error: "Tool missing not found",
-        },
-      ],
-      complete: true,
-    });
+          label: "Echo",
+          description: "Echo",
+          parameters: Type.Object({}),
+          execute(_id, _params, _signal, onUpdate) {
+            return effectRunPromise(
+              Effect.gen(function* () {
+                onUpdate?.({ content: [{ type: "text" as const, text: "partial" }], details: {} });
+                return yield* awaited({
+                  content: [{ type: "text" as const, text: "ok" }],
+                  details: {},
+                });
+              }),
+            );
+          },
+        };
+        const { runner, events } = createRunner([echo]);
+        const updates: unknown[] = [];
 
-    expect(runner.takeRecord("call")).toBeUndefined();
-    expect(runner.takeRecord("other")).toBeUndefined();
-  });
+        const first = yield* awaited(
+          runner.execute(
+            "call",
+            "echo",
+            { a: 1 },
+            { onUpdate: (partial) => updates.push(partial) },
+          ),
+        );
+        const missing = yield* awaited(runner.execute("call", "missing", {}));
 
-  it("records calls of nested tools on the model-issued call", async () => {
-    const leaf: AgentTool = {
-      name: "leaf",
-      label: "Leaf",
-      description: "Leaf",
-      parameters: Type.Object({}),
-      async execute() {
-        return { content: [], details: {} };
-      },
-    };
-    const tools: AgentTool[] = [leaf];
-    const { runner } = createRunner(tools);
-    tools.push({
-      name: "middle",
-      label: "Middle",
-      description: "Calls leaf",
-      parameters: Type.Object({}),
-      async execute(toolCallId) {
-        await runner.execute(toolCallId, "leaf", {});
-        return { content: [], details: {} };
-      },
-    });
+        expect(first.toolCall.id).toBe("call/1");
+        expect(missing).toMatchObject({ toolCall: { id: "call/2" }, isError: true });
+        expect(updates).toHaveLength(1);
+        expect(
+          events.map((event) => [event.type, event.toolCallId, event.parentToolCallId]),
+        ).toEqual([
+          ["tool_execution_start", "call/1", "call"],
+          ["tool_execution_update", "call/1", "call"],
+          ["tool_execution_end", "call/1", "call"],
+          ["tool_execution_start", "call/2", "call"],
+          ["tool_execution_end", "call/2", "call"],
+        ]);
+        expect(runner.takeRecord("call")?.calls).toEqual({
+          calls: [
+            {
+              id: "call/1",
+              name: "echo",
+              arguments: { a: 1 },
+              status: "ok",
+              durationMs: expect.any(Number),
+            },
+            {
+              id: "call/2",
+              name: "missing",
+              arguments: {},
+              status: "error",
+              durationMs: expect.any(Number),
+              error: "Tool missing not found",
+            },
+          ],
+          complete: true,
+        });
 
-    await runner.execute("call", "middle", {});
+        expect(runner.takeRecord("call")).toBeUndefined();
+        expect(runner.takeRecord("other")).toBeUndefined();
+      }),
+    ));
 
-    expect(runner.takeRecord("call")?.calls?.calls.map((call) => call.id)).toEqual([
-      "call/1",
-      "call/1/1",
-    ]);
-  });
+  it("records calls of nested tools on the model-issued call", () =>
+    runTest(
+      Effect.gen(function* () {
+        const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-  it("sums the usage of nested results at every depth", async () => {
-    const leaf: AgentTool = {
-      name: "leaf",
-      label: "Leaf",
-      description: "Leaf",
-      parameters: Type.Object({}),
-      async execute() {
-        return { content: [], details: {}, usage: usage(10, 0.01) };
-      },
-    };
-    const plain: AgentTool = {
-      ...leaf,
-      name: "plain",
-      execute: async () => ({ content: [], details: {} }),
-    };
-    const tools: AgentTool[] = [leaf, plain];
-    const { runner } = createRunner(tools);
-    tools.push({
-      name: "middle",
-      label: "Middle",
-      description: "Calls leaf",
-      parameters: Type.Object({}),
-      async execute(toolCallId) {
-        await runner.execute(toolCallId, "leaf", {});
+        const leaf: AgentTool = {
+          name: "leaf",
+          label: "Leaf",
+          description: "Leaf",
+          parameters: Type.Object({}),
+          execute() {
+            return effectRunPromise(awaited({ content: [], details: {} }));
+          },
+        };
+        const tools: AgentTool[] = [leaf];
+        const { runner } = createRunner(tools);
+        tools.push({
+          name: "middle",
+          label: "Middle",
+          description: "Calls leaf",
+          parameters: Type.Object({}),
+          execute(toolCallId) {
+            return effectRunPromise(
+              Effect.gen(function* () {
+                yield* awaited(runner.execute(toolCallId, "leaf", {}));
+                return yield* awaited({ content: [], details: {} });
+              }),
+            );
+          },
+        });
 
-        return { content: [], details: {}, usage: usage(5, 0.005) };
-      },
-    });
+        yield* awaited(runner.execute("call", "middle", {}));
 
-    await runner.execute("call", "middle", {});
-    await runner.execute("call", "leaf", {});
-    await runner.execute("call", "plain", {});
-    await runner.execute("free", "plain", {});
+        expect(runner.takeRecord("call")?.calls?.calls.map((call) => call.id)).toEqual([
+          "call/1",
+          "call/1/1",
+        ]);
+      }),
+    ));
 
-    const summary = runner.takeRecord("call");
-    expect(summary?.usage?.input).toBe(25);
-    expect(summary?.usage?.cost.total).toBeCloseTo(0.025, 10);
-    expect(runner.takeRecord("free")).toMatchObject({
-      calls: { complete: true },
-      usage: undefined,
-    });
-  });
+  it("sums the usage of nested results at every depth", () =>
+    runTest(
+      Effect.gen(function* () {
+        const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-  it("serializes concurrent calls to sequential tools", async () => {
-    let active = 0;
-    let maxActive = { sequential: 0, parallel: 0 };
-    const makeTool = (name: "sequential" | "parallel"): AgentTool => ({
-      name,
-      label: name,
-      description: name,
-      parameters: Type.Object({}),
-      ...(name === "sequential" ? { executionMode: "sequential" as const } : {}),
-      async execute() {
-        active++;
-        maxActive = { ...maxActive, [name]: Math.max(maxActive[name], active) };
-        await new Promise((resolve) => setTimeout(resolve, 5));
-        active--;
-        return { content: [], details: {} };
-      },
-    });
-    const { runner } = createRunner([makeTool("sequential"), makeTool("parallel")]);
+        const leaf: AgentTool = {
+          name: "leaf",
+          label: "Leaf",
+          description: "Leaf",
+          parameters: Type.Object({}),
+          execute() {
+            return effectRunPromise(awaited({ content: [], details: {}, usage: usage(10, 0.01) }));
+          },
+        };
+        const plain: AgentTool = {
+          ...leaf,
+          name: "plain",
+          execute: () => effectRunPromise(awaited({ content: [], details: {} })),
+        };
+        const tools: AgentTool[] = [leaf, plain];
+        const { runner } = createRunner(tools);
+        tools.push({
+          name: "middle",
+          label: "Middle",
+          description: "Calls leaf",
+          parameters: Type.Object({}),
+          execute(toolCallId) {
+            return effectRunPromise(
+              Effect.gen(function* () {
+                yield* awaited(runner.execute(toolCallId, "leaf", {}));
 
-    await Promise.all([1, 2, 3].map(() => runner.execute("call", "sequential", {})));
-    await Promise.all([1, 2, 3].map(() => runner.execute("call", "parallel", {})));
+                return yield* awaited({ content: [], details: {}, usage: usage(5, 0.005) });
+              }),
+            );
+          },
+        });
 
-    expect(maxActive).toEqual({ sequential: 1, parallel: 3 });
-  });
+        yield* awaited(runner.execute("call", "middle", {}));
+        yield* awaited(runner.execute("call", "leaf", {}));
+        yield* awaited(runner.execute("call", "plain", {}));
+        yield* awaited(runner.execute("free", "plain", {}));
+
+        const summary = runner.takeRecord("call");
+        expect(summary?.usage?.input).toBe(25);
+        expect(summary?.usage?.cost.total).toBeCloseTo(0.025, 10);
+        expect(runner.takeRecord("free")).toMatchObject({
+          calls: { complete: true },
+          usage: undefined,
+        });
+      }),
+    ));
+
+  it("serializes concurrent calls to sequential tools", () =>
+    runTest(
+      Effect.gen(function* () {
+        const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
+        let active = 0;
+        let maxActive = { sequential: 0, parallel: 0 };
+        const makeTool = (name: "sequential" | "parallel"): AgentTool => ({
+          name,
+          label: name,
+          description: name,
+          parameters: Type.Object({}),
+          ...(name === "sequential" ? { executionMode: "sequential" as const } : {}),
+          execute() {
+            return effectRunPromise(
+              Effect.gen(function* () {
+                active++;
+                maxActive = { ...maxActive, [name]: Math.max(maxActive[name], active) };
+                yield* Effect.sleep(5);
+                active--;
+                return yield* awaited({ content: [], details: {} });
+              }),
+            );
+          },
+        });
+        const { runner } = createRunner([makeTool("sequential"), makeTool("parallel")]);
+
+        yield* awaited(Promise.all([1, 2, 3].map(() => runner.execute("call", "sequential", {}))));
+        yield* awaited(Promise.all([1, 2, 3].map(() => runner.execute("call", "parallel", {}))));
+
+        expect(maxActive).toEqual({ sequential: 1, parallel: 3 });
+      }),
+    ));
 });
 
 describe("NestedCallRecorder", () => {
   const call = (id: string, args: AgentToolCall["arguments"]): AgentToolCall => ({
-    type: "toolCall",
+    type: "toolCall" as const,
     id,
     name: "t",
     arguments: args,

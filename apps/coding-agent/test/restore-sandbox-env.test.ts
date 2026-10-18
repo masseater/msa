@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vite-plus/test";
 
+import { deleteEnv, envNames, envSnapshot } from "../src/core/process-env.ts";
+
 const readFileSync = vi.fn();
 
 vi.mock("node:fs", () => ({
@@ -14,7 +16,7 @@ describe("restoreSandboxEnv", () => {
     Object.defineProperty(process, "versions", {
       value: { node: "20.0.0" },
     });
-    const envBefore = { ...process.env };
+    const envBefore = { ...envSnapshot() };
 
     restoreSandboxEnv();
 
@@ -31,12 +33,12 @@ describe("restoreSandboxEnv", () => {
       value: { bun: "1.2.0", node: "20.0.0" },
     });
     process.env["RESTORE_SANDBOX_ENV_TEST"] = "1";
-    const envBefore = { ...process.env };
+    const envBefore = { ...envSnapshot() };
 
     restoreSandboxEnv();
 
     expect(process.env).toEqual(envBefore);
-    delete process.env["RESTORE_SANDBOX_ENV_TEST"];
+    deleteEnv("RESTORE_SANDBOX_ENV_TEST");
 
     if (originalVersions) {
       Object.defineProperty(process, "versions", originalVersions);
@@ -49,8 +51,8 @@ describe("restoreSandboxEnv", () => {
       value: { bun: "1.2.0", node: "20.0.0" },
     });
 
-    const envBackup = { ...process.env };
-    for (const key of Object.keys(process.env)) {
+    const envBackup = { ...envSnapshot() };
+    for (const key of envNames()) {
       delete process.env[key];
     }
 
@@ -62,7 +64,7 @@ describe("restoreSandboxEnv", () => {
     expect(process.env["FOO"]).toBe("bar");
     expect(process.env["BAZ"]).toBe("qux");
 
-    for (const key of Object.keys(process.env)) {
+    for (const key of envNames()) {
       delete process.env[key];
     }
     Object.assign(process.env, envBackup);

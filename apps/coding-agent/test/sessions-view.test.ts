@@ -1,6 +1,8 @@
 import type { AgentMessage } from "@msa/agent-core";
 import { fauxAssistantMessage } from "@msa/ai";
+import { awaited, runTest, currentTimeMillis } from "@msa/testing";
 import { setKeybindings } from "@msa/tui";
+import { Effect } from "effect";
 import { beforeAll, describe, expect, it, vi } from "vite-plus/test";
 
 import { KeybindingsManager } from "../src/core/keybindings.ts";
@@ -21,7 +23,7 @@ function node(
   return {
     id,
     project: "p",
-    kind: "task",
+    kind: "task" as const,
     title: id,
     prompt: `do ${id}`,
     status: "queued",
@@ -36,7 +38,12 @@ function node(
 }
 
 const SESSIONS = [
-  node("review", { kind: "review", title: "Review of round 1", dependsOn: ["readme"], prompt: "" }),
+  node("review", {
+    kind: "review" as const,
+    title: "Review of round 1",
+    dependsOn: ["readme"],
+    prompt: "",
+  }),
   node("readme", { dependsOn: ["fizzbuzz", "primes"] }),
   node("fizzbuzz", { status: "running" }),
   node("primes", { status: "completed", report: "primes.py written\nmore" }),
@@ -51,7 +58,9 @@ function setup(
     fizzbuzz: [
       {
         ...fauxAssistantMessage(""),
-        content: [{ type: "toolCall", id: "1", name: "write", arguments: { path: "fizzbuzz.py" } }],
+        content: [
+          { type: "toolCall" as const, id: "1", name: "write", arguments: { path: "fizzbuzz.py" } },
+        ],
       } as AgentMessage,
     ],
   };
@@ -59,9 +68,9 @@ function setup(
     sessions,
     messages: (id: string) => messages[id] ?? [],
     progress,
-    stop: vi.fn(async () => undefined),
-    send: vi.fn(async () => undefined),
-    start: vi.fn(async () => ({ session: node("new"), review: node("review") })),
+    stop: vi.fn(() => runTest(awaited(undefined))),
+    send: vi.fn(() => runTest(awaited(undefined))),
+    start: vi.fn(() => runTest(awaited({ session: node("new"), review: node("review") }))),
   };
   const onClose = vi.fn();
   const onPickModel = vi.fn();
@@ -91,7 +100,7 @@ describe("SessionsView", () => {
     const { screen } = setup();
     const lines = screen();
     const groups = lines.filter((line) =>
-      /^ (Failed|Running|Waiting|Done|Stopped|Review)$/.test(line),
+      /^ (Failed|Running|Waiting|Done|Stopped|Review)$/u.test(line),
     );
     expect(groups.map((line) => line.trim())).toEqual([
       "Failed",
@@ -120,37 +129,47 @@ describe("SessionsView", () => {
     expect(screen().join("\n")).toContain("Failed");
   });
 
-  it("starts a session for a task the user types, independent from the list", async () => {
-    const { view, orchestrator, screen } = setup();
-    view.handleInput("n");
-    expect(screen().join("\n")).toContain("Task of a session to start now");
-    for (const key of "write the changelog") view.handleInput(key);
-    view.handleInput(ENTER);
-    await vi.waitFor(() =>
-      expect(orchestrator.start).toHaveBeenCalledWith({
-        title: "write the changelog",
-        prompt: "write the changelog",
-        dependsOn: [],
+  it("starts a session for a task the user types, independent from the list", () =>
+    runTest(
+      Effect.gen(function* () {
+        const { view, orchestrator, screen } = setup();
+        view.handleInput("n");
+        expect(screen().join("\n")).toContain("Task of a session to start now");
+        for (const key of "write the changelog") view.handleInput(key);
+        view.handleInput(ENTER);
+        yield* awaited(
+          vi.waitFor(() =>
+            expect(orchestrator.start).toHaveBeenCalledWith({
+              title: "write the changelog",
+              prompt: "write the changelog",
+              dependsOn: [],
+            }),
+          ),
+        );
       }),
-    );
-  });
+    ));
 
-  it("starts a session that waits for the open one", async () => {
-    const { view, orchestrator, screen } = setup();
-    view.handleInput(ENTER);
-    view.handleInput("n");
-    expect(screen().join("\n")).toContain("Task of a session that starts after notes");
-    for (const key of "retry it") view.handleInput(key);
-    view.handleInput(ENTER);
-    await vi.waitFor(() =>
-      expect(orchestrator.start).toHaveBeenCalledWith({
-        title: "retry it",
-        prompt: "retry it",
-        dependsOn: ["notes"],
+  it("starts a session that waits for the open one", () =>
+    runTest(
+      Effect.gen(function* () {
+        const { view, orchestrator, screen } = setup();
+        view.handleInput(ENTER);
+        view.handleInput("n");
+        expect(screen().join("\n")).toContain("Task of a session that starts after notes");
+        for (const key of "retry it") view.handleInput(key);
+        view.handleInput(ENTER);
+        yield* awaited(
+          vi.waitFor(() =>
+            expect(orchestrator.start).toHaveBeenCalledWith({
+              title: "retry it",
+              prompt: "retry it",
+              dependsOn: ["notes"],
+            }),
+          ),
+        );
+        expect(orchestrator.send).not.toHaveBeenCalled();
       }),
-    );
-    expect(orchestrator.send).not.toHaveBeenCalled();
-  });
+    ));
 
   it("stops only sessions that are running or waiting, and closes on escape", () => {
     const { view, orchestrator, onClose, onPickModel } = setup();
@@ -166,7 +185,7 @@ describe("SessionsView", () => {
   });
 
   it("shows how long a running session has run and when it is retrying", () => {
-    const startedAt = Date.now() - 75_000;
+    const startedAt = currentTimeMillis() - 75_000;
     const { view, screen } = setup(SESSIONS, (id) => ({
       startedAt,
       retrying: id === "fizzbuzz",
@@ -175,7 +194,7 @@ describe("SessionsView", () => {
     view.handleInput(DOWN);
     view.handleInput(ENTER);
     expect(screen().join("\n")).toMatch(
-      /Activity\n {3}write path="fizzbuzz\.py"\n {3}1m 15s {2}retrying/,
+      /Activity\n {3}write path="fizzbuzz\.py"\n {3}1m 15s {2}retrying/u,
     );
   });
 });
@@ -185,7 +204,7 @@ describe("describeSessionCounts", () => {
     expect(stripAnsi(describeSessionCounts(SESSIONS) ?? "")).toBe(
       "Sessions  ● 1 running  ○ 1 waiting  ✗ 1 failed  ✓ 1 done",
     );
-    expect(describeSessionCounts([node("r", { kind: "review" })])).toBeUndefined();
+    expect(describeSessionCounts([node("r", { kind: "review" as const })])).toBeUndefined();
   });
 });
 
