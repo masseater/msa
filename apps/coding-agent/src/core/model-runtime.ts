@@ -74,6 +74,7 @@ import { toErrorMessage } from "../utils/errors.ts";
 import { AuthStorage as DefaultAuthStorage } from "./auth-storage.ts";
 import { ModelConfig } from "./model-config.ts";
 import { FileModelsStore, InMemoryCodingAgentModelsStore } from "./models-store.ts";
+import { readEnv } from "./process-env.ts";
 import {
   type AuthStatus,
   type CompatibilityRequestConfig,
@@ -258,7 +259,7 @@ export class ModelRuntime implements Models {
       modelsPath,
       modelsStore,
       providers,
-      process.env["MSA_OFFLINE"] === undefined,
+      readEnv("MSA_OFFLINE") === undefined,
     );
     runtime.rebuildProviders();
     const refreshFromNetwork = runtime.modelNetworkEnabled && options.allowModelNetwork === true;

@@ -46,6 +46,14 @@ release. Add a tool name to select part of the graph. For example, run
 ## 環境変数
 
 - 環境変数は環境ごとに変わる値だけにする。変わらない値はコードかフラグにする。
+- 読み書きは `apps/coding-agent/src/core/process-env.ts` の `readEnv`・`writeEnv`・`deleteEnv`・`envSnapshot` を通す。`process.env` と `node:process` の `env` は lint で禁じている。
+
+## テスト
+
+- テストは `Effect.gen` と `@msa/testing` で書く。`it` には `runTest(effect)` を渡し、`async` 関数と `await` は使わない。
+- fs・path・JSON・一時ディレクトリ・時刻・乱数は `@msa/testing` の関数を使い、`node:fs`・`node:path`・`JSON.parse`・`Date.now`・`Math.random`・`console` を直接触らない。
+- 環境変数は `withEnv` で与える（`effect.pipe(withEnv({ MSA_X: "1" }))`）。スコープを抜けると元に戻る。子プロセスへは `envSnapshot()` を `env` に渡す。
+- 書き方の実例は `apps/coding-agent/test/keybindings-migration.test.ts` と `apps/coding-agent/test/process-env.test.ts`。
 
 ## ライブラリ
 

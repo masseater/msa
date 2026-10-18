@@ -14,10 +14,11 @@ import { Compile } from "typebox/compile";
 import { getAgentDir } from "../config.ts";
 import { stripBom } from "../utils/text.ts";
 import { KeybindingValueSchema } from "./key-id-schema.ts";
+import { envSnapshot } from "./process-env.ts";
 
 export function useWindowsKeybindings(
   platform: NodeJS.Platform = process.platform,
-  env: NodeJS.ProcessEnv = process.env,
+  env: NodeJS.ProcessEnv = envSnapshot(),
 ): boolean {
   return (
     platform === "win32" ||

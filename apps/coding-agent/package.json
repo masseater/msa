@@ -82,6 +82,7 @@
   },
   "devDependencies": {
     "@effect/vitest": "catalog:stack",
+    "@msa/testing": "workspace:*",
     "@types/cross-spawn": "catalog:",
     "@types/hosted-git-info": "catalog:",
     "@types/node": "catalog:",

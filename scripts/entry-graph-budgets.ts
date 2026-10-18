@@ -12,6 +12,7 @@ const WORKSPACE: Readonly<Record<string, string>> = {
   "@msa/telemetry": "libs/telemetry/src",
   "@msa/mcp": "libs/mcp/src",
   "@msa/tui": "libs/tui/src",
+  "@msa/testing": "libs/testing/src",
 };
 
 const codemodeIsolatedEntryForbids: ReadonlyArray<string> = [
