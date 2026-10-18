@@ -10,7 +10,13 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { abortController, awaited } from "./effect-support.ts";
 import { context, flush } from "./session-support.ts";
-import { deferred, createState, StateDoc, type State } from "./session-watches-support.ts";
+import {
+  StateDoc,
+  createState,
+  deferred,
+  type State,
+  writeState,
+} from "./session-watches-support.ts";
 
 const neverFoldsFlightStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
@@ -31,30 +37,14 @@ const neverFoldsFlightStep1 = Effect.gen(function* () {
       }),
     ),
   );
-  yield* awaited(
-    session.commit(
-      (tx) =>
-        runPromise(
-          Effect.gen(function* () {
-            (yield* awaited(tx.doc(StateDoc))).value = 1;
-          }),
-        ),
-      context,
-    ),
-  );
+  yield* writeState(session, (state) => {
+    state.value = 1;
+  });
   yield* awaited(entered.promise);
   for (const value of Array.from({ length: 101 }, (_, i) => 2 + i)) {
-    yield* awaited(
-      session.commit(
-        (tx) =>
-          runPromise(
-            Effect.gen(function* () {
-              (yield* awaited(tx.doc(StateDoc))).value = value;
-            }),
-          ),
-        context,
-      ),
-    );
+    yield* writeState(session, (state) => {
+      state.value = value;
+    });
   }
   return { watch, release, deliveries };
 });
@@ -70,22 +60,12 @@ const neverFoldsFlight = Effect.gen(function* () {
 });
 
 const foldsRetirementOverflow = Effect.gen(function* () {
-  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
   const { session } = yield* createState();
   const watch = (yield* awaited(session.watchDoc(StateDoc, context)))!;
   for (const value of Array.from({ length: 100 }, (_, i) => 1 + i)) {
-    yield* awaited(
-      session.commit(
-        (tx) =>
-          runPromise(
-            Effect.gen(function* () {
-              (yield* awaited(tx.doc(StateDoc))).value = value;
-            }),
-          ),
-        context,
-      ),
-    );
+    yield* writeState(session, (state) => {
+      state.value = value;
+    });
   }
   yield* awaited(session.commit((tx) => tx.retireDoc(StateDoc), context));
   const deliveries: Array<{ value: Readonly<State> | null; ops: unknown }> = [];

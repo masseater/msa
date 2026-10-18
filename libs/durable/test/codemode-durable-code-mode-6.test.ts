@@ -9,8 +9,6 @@ import { awaited, context, eventually } from "./support.ts";
 afterEach(removeDirectories);
 
 const checksRerunCalls = Effect.gen(function* () {
-  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
   const chat = codemodeChat();
   const { harness, result } = yield* restart(
     chat,
@@ -19,25 +17,23 @@ const checksRerunCalls = Effect.gen(function* () {
 			if (k) tools.echo({ text: "new" });
 			await tools.hold({});`,
     (opened, task) =>
-      runPromise(
-        Effect.gen(function* () {
-          const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+      Effect.gen(function* () {
+        const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-          yield* awaited(
-            opened.commit(
-              (tx) =>
-                runPromise(
-                  Effect.gen(function* () {
-                    const run = yield* awaited(tx.doc(CodemodeRunDoc, task));
-                    run.start!.store = { k: "x" };
-                    (yield* awaited(tx.doc(CodemodeJournalDoc, task))).entries.length = 0;
-                  }),
-                ),
-              context,
-            ),
-          );
-        }),
-      ),
+        yield* awaited(
+          opened.commit(
+            (tx) =>
+              runPromise(
+                Effect.gen(function* () {
+                  const run = yield* awaited(tx.doc(CodemodeRunDoc, task));
+                  run.start!.store = { k: "x" };
+                  (yield* awaited(tx.doc(CodemodeJournalDoc, task))).entries.length = 0;
+                }),
+              ),
+            context,
+          ),
+        );
+      }),
   );
   expect(result.isError).toBe(true);
   expect(result.text).toContain("its first run made 3 calls, where it had made 2");
@@ -47,31 +43,27 @@ const checksRerunCalls = Effect.gen(function* () {
 });
 
 const endsCallRerun = Effect.gen(function* () {
-  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
   const chat = codemodeChat({ globals: [{ name: "pick", execute: () => Promise.resolve(1) }] });
   const { harness, result } = yield* restart(
     chat,
     `if (load("k")) { await pick(); await tools.echo({ text: "new" }); } else { await tools.hold({}); }`,
     (opened, task) =>
-      runPromise(
-        Effect.gen(function* () {
-          const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+      Effect.gen(function* () {
+        const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-          yield* awaited(
-            opened.commit(
-              (tx) =>
-                runPromise(
-                  Effect.gen(function* () {
-                    const run = yield* awaited(tx.doc(CodemodeRunDoc, task));
-                    run.start!.store = { k: true };
-                  }),
-                ),
-              context,
-            ),
-          );
-        }),
-      ),
+        yield* awaited(
+          opened.commit(
+            (tx) =>
+              runPromise(
+                Effect.gen(function* () {
+                  const run = yield* awaited(tx.doc(CodemodeRunDoc, task));
+                  run.start!.store = { k: true };
+                }),
+              ),
+            context,
+          ),
+        );
+      }),
   );
   expect(result.isError).toBe(true);
   expect(result.text).toContain("call 1 is pick(), but was tools.hold({})");
@@ -88,8 +80,6 @@ describe("durable code mode", () => {
 });
 
 const endsCallRerunFirst = Effect.gen(function* () {
-  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
   const chat = codemodeChat({ globals: [{ name: "pick", execute: () => Promise.resolve(1) }] });
   const { harness, result } = yield* restart(
     chat,
@@ -100,41 +90,37 @@ const endsCallRerunFirst = Effect.gen(function* () {
 			await pick();
 			await tools.echo({ text: "new" });`,
     (opened, task) =>
-      runPromise(
-        Effect.gen(function* () {
-          const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+      Effect.gen(function* () {
+        const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-          yield* awaited(
-            opened.commit(
-              (tx) =>
-                runPromise(
-                  Effect.gen(function* () {
-                    const run = yield* awaited(tx.doc(CodemodeRunDoc, task));
-                    run.start!.store = { k: true };
-                  }),
-                ),
-              context,
-            ),
-          );
-        }),
-      ),
+        yield* awaited(
+          opened.commit(
+            (tx) =>
+              runPromise(
+                Effect.gen(function* () {
+                  const run = yield* awaited(tx.doc(CodemodeRunDoc, task));
+                  run.start!.store = { k: true };
+                }),
+              ),
+            context,
+          ),
+        );
+      }),
     (opened, task) =>
-      runPromise(
-        Effect.gen(function* () {
-          const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+      Effect.gen(function* () {
+        const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-          yield* eventually(() =>
-            runPromise(
-              Effect.gen(function* () {
-                return (
-                  (yield* awaited(opened.snapshot(CodemodeJournalDoc, task, context)))
-                    ?.firstIssued === 2
-                );
-              }),
-            ),
-          );
-        }),
-      ),
+        yield* eventually(() =>
+          runPromise(
+            Effect.gen(function* () {
+              return (
+                (yield* awaited(opened.snapshot(CodemodeJournalDoc, task, context)))
+                  ?.firstIssued === 2
+              );
+            }),
+          ),
+        );
+      }),
   );
   expect(result.isError).toBe(true);
   expect(result.text).toContain("its first run made 1 calls, where it had made 2");
@@ -148,48 +134,42 @@ describe("durable code mode", () => {
 });
 
 const endsCallRerunWithout = Effect.gen(function* () {
-  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
   const chat = codemodeChat();
   const { harness, result } = yield* restart(
     chat,
     `if (load("k")) { store("x", 1); return "early"; } await tools.hold({});`,
     (opened, task) =>
-      runPromise(
-        Effect.gen(function* () {
-          const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+      Effect.gen(function* () {
+        const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-          yield* awaited(
-            opened.commit(
-              (tx) =>
-                runPromise(
-                  Effect.gen(function* () {
-                    const run = yield* awaited(tx.doc(CodemodeRunDoc, task));
-                    run.start!.store = { k: true };
-                  }),
-                ),
-              context,
-            ),
-          );
-        }),
-      ),
+        yield* awaited(
+          opened.commit(
+            (tx) =>
+              runPromise(
+                Effect.gen(function* () {
+                  const run = yield* awaited(tx.doc(CodemodeRunDoc, task));
+                  run.start!.store = { k: true };
+                }),
+              ),
+            context,
+          ),
+        );
+      }),
     (opened, task) =>
-      runPromise(
-        Effect.gen(function* () {
-          const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+      Effect.gen(function* () {
+        const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-          yield* eventually(() =>
-            runPromise(
-              Effect.gen(function* () {
-                return (
-                  (yield* awaited(opened.snapshot(CodemodeJournalDoc, task, context)))
-                    ?.firstIssued === 1
-                );
-              }),
-            ),
-          );
-        }),
-      ),
+        yield* eventually(() =>
+          runPromise(
+            Effect.gen(function* () {
+              return (
+                (yield* awaited(opened.snapshot(CodemodeJournalDoc, task, context)))
+                  ?.firstIssued === 1
+              );
+            }),
+          ),
+        );
+      }),
   );
   expect(result.isError).toBe(true);
   expect(result.text).toContain("it ended after result 0, where it went on before");

@@ -59,6 +59,12 @@ type ReporterInput = {
 
 type ReporterState = { phase: "deliver" } | { phase: "report"; report?: string };
 
+const next = (report?: string) =>
+  ({
+    status: "running",
+    checkpoint: { phase: "report", ...(report === undefined ? {} : { report }) },
+  }) as const;
+
 const Reporter = defineTask<ReporterInput, ReporterState, null>({
   name: "app.subagent-reporter",
   version: 1,
@@ -85,14 +91,6 @@ const Reporter = defineTask<ReporterInput, ReporterState, null>({
               (tx) =>
                 runPromise(
                   Effect.gen(function* () {
-                    const next = (report?: string) =>
-                      ({
-                        status: "running",
-                        checkpoint: {
-                          phase: "report",
-                          ...(report === undefined ? {} : { report }),
-                        },
-                      }) as const;
                     if (settled.status === "unanswered") {
                       return next(
                         settled.reason === "aborted"

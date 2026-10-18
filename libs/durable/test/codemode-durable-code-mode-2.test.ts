@@ -81,24 +81,22 @@ const checksEveryCall = Effect.gen(function* () {
 			if (k) tools.echo({ text: "new" }); else forever();
 			await tools.hold({ id: k ? 2 : 1 });`,
     (opened, task) =>
-      runPromise(
-        Effect.gen(function* () {
-          const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+      Effect.gen(function* () {
+        const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-          yield* awaited(
-            opened.commit(
-              (tx) =>
-                runPromise(
-                  Effect.gen(function* () {
-                    const run = yield* awaited(tx.doc(CodemodeRunDoc, task));
-                    run.start!.store = { k: true };
-                  }),
-                ),
-              context,
-            ),
-          );
-        }),
-      ),
+        yield* awaited(
+          opened.commit(
+            (tx) =>
+              runPromise(
+                Effect.gen(function* () {
+                  const run = yield* awaited(tx.doc(CodemodeRunDoc, task));
+                  run.start!.store = { k: true };
+                }),
+              ),
+            context,
+          ),
+        );
+      }),
   );
   expect(result.isError).toBe(true);
   expect(result.text).toContain('call 2 is tools.hold({"id":2}), but was tools.hold({"id":1})');

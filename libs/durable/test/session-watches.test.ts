@@ -3,7 +3,13 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { awaited } from "./effect-support.ts";
 import { context, documentChanges, flush, openTestSession } from "./session-support.ts";
-import { deferred, createState, StateDoc, type State } from "./session-watches-support.ts";
+import {
+  StateDoc,
+  createState,
+  deferred,
+  type State,
+  writeState,
+} from "./session-watches-support.ts";
 
 const neverCreatesAbsent = Effect.gen(function* () {
   const { session, storage } = openTestSession();
@@ -14,35 +20,17 @@ const neverCreatesAbsent = Effect.gen(function* () {
 });
 
 const keepsAcquisitionRevisionStep1 = Effect.gen(function* () {
-  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
   const { session, publications } = yield* createState();
   const watch = (yield* awaited(session.watchDoc(StateDoc, context)))!;
   const initial = watch.value;
-  yield* awaited(
-    session.commit(
-      (tx) =>
-        runPromise(
-          Effect.gen(function* () {
-            (yield* awaited(tx.doc(StateDoc))).value = 1;
-          }),
-        ),
-      context,
-    ),
-  );
+  yield* writeState(session, (state) => {
+    state.value = 1;
+  });
   yield* flush;
   const firstPublished = documentChanges(publications.at(-1)!)[0]!;
-  yield* awaited(
-    session.commit(
-      (tx) =>
-        runPromise(
-          Effect.gen(function* () {
-            (yield* awaited(tx.doc(StateDoc))).value = 2;
-          }),
-        ),
-      context,
-    ),
-  );
+  yield* writeState(session, (state) => {
+    state.value = 2;
+  });
   yield* flush;
   const secondPublished = documentChanges(publications.at(-1)!)[0]!;
   expect(watch.value).toBe(initial);
@@ -111,30 +99,14 @@ const serializesCallbacksBuffers = Effect.gen(function* () {
       }),
     ),
   );
-  yield* awaited(
-    session.commit(
-      (tx) =>
-        runPromise(
-          Effect.gen(function* () {
-            (yield* awaited(tx.doc(StateDoc))).value = 1;
-          }),
-        ),
-      context,
-    ),
-  );
+  yield* writeState(session, (state) => {
+    state.value = 1;
+  });
   yield* awaited(entered.promise);
   for (const value of Array.from({ length: 19 }, (_, i) => 2 + i)) {
-    yield* awaited(
-      session.commit(
-        (tx) =>
-          runPromise(
-            Effect.gen(function* () {
-              (yield* awaited(tx.doc(StateDoc))).value = value;
-            }),
-          ),
-        context,
-      ),
-    );
+    yield* writeState(session, (state) => {
+      state.value = value;
+    });
   }
   expect(values).toEqual([1]);
   release.resolve();
@@ -159,61 +131,33 @@ const allowsListenerInitiate = Effect.gen(function* () {
   watch.start((value) =>
     runPromise(
       Effect.gen(function* () {
-        const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
         const current = value?.value ?? -1;
         values.push(current);
         if (current === 1) {
-          yield* awaited(
-            session.commit(
-              (tx) =>
-                runPromise(
-                  Effect.gen(function* () {
-                    (yield* awaited(tx.doc(StateDoc))).value = 2;
-                  }),
-                ),
-              context,
-            ),
-          );
+          yield* writeState(session, (state) => {
+            state.value = 2;
+          });
         } else {
           completed.resolve();
         }
       }),
     ),
   );
-  yield* awaited(
-    session.commit(
-      (tx) =>
-        runPromise(
-          Effect.gen(function* () {
-            (yield* awaited(tx.doc(StateDoc))).value = 1;
-          }),
-        ),
-      context,
-    ),
-  );
+  yield* writeState(session, (state) => {
+    state.value = 1;
+  });
   yield* awaited(completed.promise);
   expect(values).toEqual([1, 2]);
   yield* awaited(watch.stop());
 });
 
 const collapses101Pending = Effect.gen(function* () {
-  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
   const { session } = yield* createState();
   const watch = (yield* awaited(session.watchDoc(StateDoc, context)))!;
   for (const value of Array.from({ length: 101 }, (_, i) => 1 + i)) {
-    yield* awaited(
-      session.commit(
-        (tx) =>
-          runPromise(
-            Effect.gen(function* () {
-              (yield* awaited(tx.doc(StateDoc))).value = value;
-            }),
-          ),
-        context,
-      ),
-    );
+    yield* writeState(session, (state) => {
+      state.value = value;
+    });
   }
   const deliveries: Array<{ value: number; ops: unknown }> = [];
   watch.start((value, ops) => {

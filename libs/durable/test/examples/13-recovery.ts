@@ -12,70 +12,60 @@ import { joinPath, makeTempDir, removeDir } from "../platform-support.ts";
 
 const context = BACKGROUND_CONTEXT;
 
-const main = Effect.gen(function* () {
-  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+let reachedTick = (_n: number): void => {};
+const Ticker = defineTask<{ to: number }, { phase: "tick"; n: number }, string>({
+  name: "example.ticker",
+  version: 1,
+  initial: () => ({ phase: "tick", n: 1 }),
+  phases: {
+    tick: (task, runtime, taskContext) =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          const n = task.state.checkpoint.n;
+          if ((yield* awaited(runtime.memo(`printed-${n}`, taskContext))) === undefined) {
+            yield* awaited(runtime.memo(`printed-${n}`, true, taskContext));
+            yield* Console.log(`tick ${n}`);
+          }
+          reachedTick(n);
+          yield* awaited(
+            runtime.commit(
+              () =>
+                n === task.input.to
+                  ? {
+                      status: "terminal",
+                      outcome: { status: "completed", result: `counted to ${n}` },
+                    }
+                  : { status: "running", checkpoint: { phase: "tick", n: n + 1 } },
+              taskContext,
+            ),
+          );
+          yield* awaited(runtime.sleep(currentTimeMillis() + 50, taskContext));
+        }),
+      ),
+  },
+  abort: (_task, runtime, taskContext) =>
+    Promise.resolve(
+      runtime.commit(() => ({ status: "terminal", outcome: { status: "aborted" } }), taskContext),
+    ).then(() => undefined),
+});
+const registry = createRegistry();
+registry.install(defineExtension({ name: "ticker", tasks: [Ticker] }));
 
+const open = Effect.fn("open")(function* (databasePath: string) {
+  return yield* awaited(
+    Harness.open(
+      yield* awaited(openNodeSqliteStorage(databasePath)),
+      { models: createModels(), registry },
+      context,
+    ),
+  );
+});
+
+const main = Effect.gen(function* () {
   const directory = yield* makeTempDir("msa-durable-example-");
   const databasePath = joinPath(directory, "session.sqlite");
 
-  let reachedTick = (_n: number): void => {};
-  const Ticker = defineTask<{ to: number }, { phase: "tick"; n: number }, string>({
-    name: "example.ticker",
-    version: 1,
-    initial: () => ({ phase: "tick", n: 1 }),
-    phases: {
-      tick: (task, runtime, taskContext) =>
-        runPromise(
-          Effect.gen(function* () {
-            const n = task.state.checkpoint.n;
-            if ((yield* awaited(runtime.memo(`printed-${n}`, taskContext))) === undefined) {
-              yield* awaited(runtime.memo(`printed-${n}`, true, taskContext));
-              yield* Console.log(`tick ${n}`);
-            }
-            reachedTick(n);
-            yield* awaited(
-              runtime.commit(
-                () =>
-                  n === task.input.to
-                    ? {
-                        status: "terminal",
-                        outcome: { status: "completed", result: `counted to ${n}` },
-                      }
-                    : { status: "running", checkpoint: { phase: "tick", n: n + 1 } },
-                taskContext,
-              ),
-            );
-            yield* awaited(runtime.sleep(currentTimeMillis() + 50, taskContext));
-          }),
-        ),
-    },
-    abort: (_task, runtime, taskContext) =>
-      runPromise(
-        Effect.asVoid(
-          Effect.suspend(() =>
-            awaited(
-              runtime.commit(
-                () => ({ status: "terminal", outcome: { status: "aborted" } }),
-                taskContext,
-              ),
-            ),
-          ),
-        ),
-      ),
-  });
-  const registry = createRegistry();
-  registry.install(defineExtension({ name: "ticker", tasks: [Ticker] }));
-  const open = Effect.fn("open")(function* () {
-    return yield* awaited(
-      Harness.open(
-        yield* awaited(openNodeSqliteStorage(databasePath)),
-        { models: createModels(), registry },
-        context,
-      ),
-    );
-  });
-
-  const firstRun = yield* open();
+  const firstRun = yield* open(databasePath);
   const tickerId = yield* awaited(
     (yield* awaited(firstRun.root(context))).commit(
       (tx) => tx.createTask(Ticker, { to: 5 }, { ownership: { kind: "conversation" } }),
@@ -91,12 +81,12 @@ const main = Effect.gen(function* () {
   yield* awaited(firstRun.close(context));
   reachedTick = () => {};
 
-  const reader = yield* open();
+  const reader = yield* open(databasePath);
   const saved = (yield* awaited(reader.getTask(tickerId, context)))!;
   yield* awaited(reader.close(context));
   yield* Console.log("closed; saved checkpoint:", saved.state, "memos:", saved.memos);
 
-  const secondRun = yield* open();
+  const secondRun = yield* open(databasePath);
   const counted = yield* awaited(secondRun.waitForTask(tickerId, context));
   yield* Console.log("after reopen:", counted.state.outcome);
   yield* awaited(secondRun.close(context));

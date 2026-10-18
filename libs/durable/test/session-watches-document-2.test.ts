@@ -6,7 +6,13 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { awaited } from "./effect-support.ts";
 import { context, flush, openTestSession } from "./session-support.ts";
-import { deferred, createState, StateDoc, type State } from "./session-watches-support.ts";
+import {
+  StateDoc,
+  createState,
+  deferred,
+  type State,
+  writeState,
+} from "./session-watches-support.ts";
 
 const sessionCloseStops = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
@@ -25,17 +31,9 @@ const sessionCloseStops = Effect.gen(function* () {
       }),
     ),
   );
-  yield* awaited(
-    session.commit(
-      (tx) =>
-        runPromise(
-          Effect.gen(function* () {
-            (yield* awaited(tx.doc(StateDoc))).value = 1;
-          }),
-        ),
-      context,
-    ),
-  );
+  yield* writeState(session, (state) => {
+    state.value = 1;
+  });
   yield* awaited(entered.promise);
   yield* awaited(session.close(context));
   expect(deliveryContext!.abortSignal).toBeUndefined();
@@ -44,8 +42,6 @@ const sessionCloseStops = Effect.gen(function* () {
 });
 
 const settlesListenerFailure = Effect.gen(function* () {
-  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
   const { session } = yield* createState();
   const failed = (yield* awaited(session.watchDoc(StateDoc, context)))!;
   const healthy = (yield* awaited(session.watchDoc(StateDoc, context)))!;
@@ -56,17 +52,9 @@ const settlesListenerFailure = Effect.gen(function* () {
 
     return Promise.resolve();
   });
-  yield* awaited(
-    session.commit(
-      (tx) =>
-        runPromise(
-          Effect.gen(function* () {
-            (yield* awaited(tx.doc(StateDoc))).value = 1;
-          }),
-        ),
-      context,
-    ),
-  );
+  yield* writeState(session, (state) => {
+    state.value = 1;
+  });
   const end = yield* awaited(failed.closed);
   expect(end.reason).toBe("listener_error");
   if (end.reason === "listener_error") expect(end.error.message).toBe("listener failed");
@@ -167,8 +155,6 @@ const canReplayEvery = Effect.gen(function* () {
 });
 
 const continuesTrackerCache = Effect.gen(function* () {
-  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
   const { session, storage } = yield* createState();
   const watch = (yield* awaited(session.watchDoc(StateDoc, context)))!;
   const baseline = watch.value;
@@ -179,17 +165,9 @@ const continuesTrackerCache = Effect.gen(function* () {
   expect(reloaded).not.toBe(baseline);
   expect(storage.documentReadCount).toBeGreaterThan(reads);
   watch.start(() => Promise.resolve(undefined));
-  yield* awaited(
-    session.commit(
-      (tx) =>
-        runPromise(
-          Effect.gen(function* () {
-            (yield* awaited(tx.doc(StateDoc))).value = 7;
-          }),
-        ),
-      context,
-    ),
-  );
+  yield* writeState(session, (state) => {
+    state.value = 7;
+  });
   yield* flush;
   expect(watch.value?.value).toBe(7);
   yield* awaited(watch.stop());

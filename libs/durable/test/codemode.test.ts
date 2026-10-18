@@ -130,31 +130,27 @@ describe("durable code mode", () => {
 });
 
 const endsCallResumed = Effect.gen(function* () {
-  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
   const chat = codemodeChat();
   const { harness, result } = yield* restart(
     chat,
     `await tools.echo({ text: "a" }); await tools.hold({});`,
     (opened, task) =>
-      runPromise(
-        Effect.gen(function* () {
-          const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+      Effect.gen(function* () {
+        const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-          yield* awaited(
-            opened.commit(
-              (tx) =>
-                runPromise(
-                  Effect.gen(function* () {
-                    const journal = yield* awaited(tx.doc(CodemodeJournalDoc, task));
-                    journal.entries[0]!.issuedAfter = 7;
-                  }),
-                ),
-              context,
-            ),
-          );
-        }),
-      ),
+        yield* awaited(
+          opened.commit(
+            (tx) =>
+              runPromise(
+                Effect.gen(function* () {
+                  const journal = yield* awaited(tx.doc(CodemodeJournalDoc, task));
+                  journal.entries[0]!.issuedAfter = 7;
+                }),
+              ),
+            context,
+          ),
+        );
+      }),
   );
   expect(result.isError).toBe(true);
   expect(result.text).toContain("after result 1 it had made 2 calls, where it had made 7");
@@ -162,31 +158,27 @@ const endsCallResumed = Effect.gen(function* () {
 });
 
 const endsCallOnce = Effect.gen(function* () {
-  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
   const chat = codemodeChat();
   const { harness, result } = yield* restart(
     chat,
     `await tools.echo({ text: "a" }); await tools.hold({});`,
     (opened, task) =>
-      runPromise(
-        Effect.gen(function* () {
-          const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+      Effect.gen(function* () {
+        const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-          yield* awaited(
-            opened.commit(
-              (tx) =>
-                runPromise(
-                  Effect.gen(function* () {
-                    const journal = yield* awaited(tx.doc(CodemodeJournalDoc, task));
-                    journal.entries[0]!.id = 99;
-                  }),
-                ),
-              context,
-            ),
-          );
-        }),
-      ),
+        yield* awaited(
+          opened.commit(
+            (tx) =>
+              runPromise(
+                Effect.gen(function* () {
+                  const journal = yield* awaited(tx.doc(CodemodeJournalDoc, task));
+                  journal.entries[0]!.id = 99;
+                }),
+              ),
+            context,
+          ),
+        );
+      }),
   );
   expect(result.isError).toBe(true);
   expect(result.text).toContain("it waits without making call 99");

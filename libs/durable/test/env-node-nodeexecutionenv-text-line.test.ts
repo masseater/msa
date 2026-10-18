@@ -128,9 +128,7 @@ describe("NodeExecutionEnv shell", () => {
     Effect.runPromise(canReplaceRather));
 });
 
-const usesStdinCommand = Effect.gen(function* () {
-  if (process.platform === "win32") return;
-  const root = yield* createTempDir;
+const writeFakeWslBash = Effect.fn("writeFakeWslBash")(function* (root: string) {
   const shellPath = "C:\\Windows\\System32\\bash.exe";
   const env = new NodeExecutionEnv({ cwd: root });
   getOrThrow(
@@ -143,33 +141,19 @@ const usesStdinCommand = Effect.gen(function* () {
     ),
   );
   yield* changeMode(joinPath(root, shellPath), 0o755);
+  return shellPath;
+});
 
+const asWindowsIn = <A, E>(root: string, effect: Effect.Effect<A, E>): Effect.Effect<A, E> => {
   const originalCwd = process.cwd();
   const originalPath = environmentVariable("PATH", true);
   const platformDescriptor = Object.getOwnPropertyDescriptor(process, "platform");
-  yield* Effect.gen(function* () {
+  return Effect.sync(() => {
     process.chdir(root);
     vi.stubEnv("PATH", `${root}${pathDelimiter}${originalPath ?? ""}`);
-    Object.defineProperty(process, "platform", {
-      configurable: true,
-      value: "win32",
-    });
-
-    const wslEnv = new NodeExecutionEnv({ cwd: root, shellPath });
-    const nameExpansion = "${name}";
-    const collected = yield* awaited(
-      collectShellOutput(
-        wslEnv,
-        `name='World'; echo "Hello, ${nameExpansion}!"`,
-        undefined,
-        BACKGROUND_CONTEXT,
-      ),
-    );
-    const result = getOrThrow(collected.result);
-    expect(collected.output).toContain("Hello, World!");
-    expect(collected.output).toContain("args:-s");
-    expect(result.exitCode).toBe(0);
+    Object.defineProperty(process, "platform", { configurable: true, value: "win32" });
   }).pipe(
+    Effect.andThen(effect),
     Effect.ensuring(
       Effect.sync(() => {
         process.chdir(originalCwd);
@@ -179,6 +163,31 @@ const usesStdinCommand = Effect.gen(function* () {
         }
       }),
     ),
+  );
+};
+
+const usesStdinCommand = Effect.gen(function* () {
+  if (process.platform === "win32") return;
+  const root = yield* createTempDir;
+  const shellPath = yield* writeFakeWslBash(root);
+  yield* asWindowsIn(
+    root,
+    Effect.gen(function* () {
+      const wslEnv = new NodeExecutionEnv({ cwd: root, shellPath });
+      const nameExpansion = "${name}";
+      const collected = yield* awaited(
+        collectShellOutput(
+          wslEnv,
+          `name='World'; echo "Hello, ${nameExpansion}!"`,
+          undefined,
+          BACKGROUND_CONTEXT,
+        ),
+      );
+      const result = getOrThrow(collected.result);
+      expect(collected.output).toContain("Hello, World!");
+      expect(collected.output).toContain("args:-s");
+      expect(result.exitCode).toBe(0);
+    }),
   );
 });
 

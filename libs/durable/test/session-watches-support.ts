@@ -1,3 +1,4 @@
+import type { Draft } from "@msa/chord";
 import { defineDoc } from "@msa/durable";
 import { Effect } from "effect";
 
@@ -24,4 +25,11 @@ export const createState = Effect.fn("createState")(function* () {
   const harness = openTestSession();
   yield* awaited(harness.session.commit((tx) => tx.doc(StateDoc).then(() => undefined), context));
   return harness;
+});
+
+export const writeState = Effect.fn("writeState")(function* (
+  session: ReturnType<typeof openTestSession>["session"],
+  edit: (state: Draft<State>) => void,
+) {
+  yield* awaited(session.commit((tx) => tx.doc(StateDoc).then(edit), context));
 });

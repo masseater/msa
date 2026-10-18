@@ -8,7 +8,7 @@ import {
   fauxToolCall,
 } from "@msa/ai";
 import { openaiProvider } from "@msa/ai/providers/openai";
-import { type AgentEvent, type ConversationId, LiveDoc } from "@msa/durable";
+import { type AgentEvent, LiveDoc } from "@msa/durable";
 import { createRegistry, Harness, watchEvents } from "@msa/durable/harness";
 import { Console, Effect } from "effect";
 
@@ -70,129 +70,131 @@ if (environmentVariable("OPENAI_API_KEY", true) === undefined) {
 const registry = createRegistry();
 registry.install(SubagentTools);
 
-const main = Effect.gen(function* () {
-  const directory = yield* makeTempDir("msa-durable-subagents-");
-  const open = Effect.fn("open")(function* () {
-    const harness = yield* awaited(
-      Harness.open(
-        yield* awaited(openNodeSqliteStorage(joinPath(directory, "session.sqlite"))),
-        { models, registry },
-        context,
-      ),
-    );
-    const root = yield* awaited(harness.root(context, { agent: { model } }));
-    return { harness, root };
-  });
+const open = Effect.fn("open")(function* (directory: string) {
+  const harness = yield* awaited(
+    Harness.open(
+      yield* awaited(openNodeSqliteStorage(joinPath(directory, "session.sqlite"))),
+      { models, registry },
+      context,
+    ),
+  );
+  const root = yield* awaited(harness.root(context, { agent: { model } }));
+  return { harness, root };
+});
 
-  const color = (code: number) => (text: string) =>
-    process.stdout.isTTY ? `\x1b[${code}m${text}\x1b[0m` : text;
-  const bold = color(1);
-  const dim = color(2);
-  const cyan = color(36);
-  const yellow = color(33);
-  const magenta = color(35);
+type Session = Effect.Success<ReturnType<typeof open>>;
 
-  function contentText(content: string | readonly { type: string; text?: string }[]): string {
-    return typeof content === "string"
-      ? content
-      : content.flatMap((part) => (part.text === undefined ? [] : [part.text])).join("");
+const color = (code: number) => (text: string) =>
+  process.stdout.isTTY ? `\x1b[${code}m${text}\x1b[0m` : text;
+const bold = color(1);
+const dim = color(2);
+const cyan = color(36);
+const yellow = color(33);
+const magenta = color(35);
+
+function contentText(content: string | readonly { type: string; text?: string }[]): string {
+  return typeof content === "string"
+    ? content
+    : content.flatMap((part) => (part.text === undefined ? [] : [part.text])).join("");
+}
+
+const print = (line: string): void => Effect.runSync(Console.log(line));
+
+function printEvent(event: AgentEvent): void {
+  if (event.type !== "message_end") return;
+  const message = event.entry.model?.[0];
+  if (message?.role === "user") {
+    const text = contentText(message.content);
+    const report = /^\[subagent (\S+) ([^\]]*)\] ?(.*)$/su.exec(text);
+    if (report === null) print(`\n${cyan(bold(">"))} ${bold(text)}`);
+    else print(`\n${magenta(bold(`> ${report[1]}:`))} ${report[3] || report[2]}`);
+  } else if (message?.role === "assistant") {
+    for (const part of message.content) {
+      if (part.type !== "toolCall") continue;
+      const { action, name, message: sent } = part.arguments as Record<string, string | undefined>;
+      const quoted = sent === undefined ? "" : ` ${JSON.stringify(sent)}`;
+      print(yellow(`  ${part.name} ${action}${name === undefined ? "" : ` ${name}`}${quoted}`));
+    }
+    if (textOf(message) !== "") print(textOf(message));
+  } else if (message?.role === "toolResult") {
+    print(dim(`  → ${contentText(message.content)}`));
   }
+}
 
-  const follow = Effect.fn("follow")(function* (harness: Harness, id: ConversationId) {
-    const runSync = Effect.runSyncWith(yield* Effect.context<never>());
+const follow = Effect.fn("follow")(function* ({ harness, root }: Session) {
+  const stream = yield* awaited(watchEvents(harness, root.id, context));
+  stream.start((events: readonly AgentEvent[]) => {
+    for (const event of events) printEvent(event);
 
-    const stream = yield* awaited(watchEvents(harness, id, context));
-    stream.start((events: readonly AgentEvent[]) => {
-      for (const event of events) {
-        if (event.type !== "message_end") continue;
-        const message = event.entry.model?.[0];
-        if (message?.role === "user") {
-          const text = contentText(message.content);
-          const report = /^\[subagent (\S+) ([^\]]*)\] ?(.*)$/su.exec(text);
-          if (report === null) runSync(Console.log(`\n${cyan(bold(">"))} ${bold(text)}`));
-          else
-            runSync(Console.log(`\n${magenta(bold(`> ${report[1]}:`))} ${report[3] || report[2]}`));
-        } else if (message?.role === "assistant") {
-          for (const part of message.content) {
-            if (part.type !== "toolCall") continue;
-            const {
-              action,
-              name,
-              message: sent,
-            } = part.arguments as Record<string, string | undefined>;
-            const quoted = sent === undefined ? "" : ` ${JSON.stringify(sent)}`;
-            runSync(
-              Console.log(
-                yellow(`  ${part.name} ${action}${name === undefined ? "" : ` ${name}`}${quoted}`),
-              ),
-            );
-          }
-          if (textOf(message) !== "") runSync(Console.log(textOf(message)));
-        } else if (message?.role === "toolResult") {
-          runSync(Console.log(dim(`  → ${contentText(message.content)}`)));
-        }
-      }
-
-      return Promise.resolve();
-    });
+    return Promise.resolve();
   });
+});
 
-  let { harness, root } = yield* open();
-  yield* follow(harness, root.id);
+const say = Effect.fn("say")(function* ({ root }: Session, text: string) {
+  yield* awaited(
+    (yield* awaited(root.submit({ type: "input", content: text }, context))).wait(context),
+  );
+});
 
-  const say = Effect.fn("say")(function* (text: string) {
-    yield* awaited(
-      (yield* awaited(root.submit({ type: "input", content: text }, context))).wait(context),
+const settle = Effect.fn("settle")(function* ({ harness, root }: Session) {
+  const reporters =
+    (yield* awaited(harness.snapshot(Subagents, root.id, context)))?.reporters ?? {};
+  for (const id of Object.values(reporters)) yield* awaited(harness.waitForTask(id, context));
+  yield* awaited(root.waitForIdle(context));
+  yield* Effect.sleep(50);
+});
+
+const until = Effect.fn("until")(function* (check: Effect.Effect<boolean>) {
+  for (let tries = 0; tries < 1000 && !(yield* check); tries++) yield* Effect.sleep(10);
+});
+
+const working = ({ harness, root }: Session, name: string): Effect.Effect<boolean> =>
+  Effect.gen(function* () {
+    const agent = (yield* awaited(harness.snapshot(Subagents, root.id, context)))?.agents[name];
+    return (
+      agent !== undefined &&
+      (yield* awaited(harness.snapshot(LiveDoc, agent.conversationId, context)))?.run !== undefined
     );
   });
-  const settle = Effect.fn("settle")(function* () {
-    const reporters =
-      (yield* awaited(harness.snapshot(Subagents, root.id, context)))?.reporters ?? {};
-    for (const id of Object.values(reporters)) yield* awaited(harness.waitForTask(id, context));
-    yield* awaited(root.waitForIdle(context));
-    yield* Effect.sleep(50);
-  });
-  const until = Effect.fn("until")(function* (check: Effect.Effect<boolean>) {
-    for (let tries = 0; tries < 1000 && !(yield* check); tries++) yield* Effect.sleep(10);
-  });
-  const working = (name: string): Effect.Effect<boolean> =>
-    Effect.gen(function* () {
-      const agent = (yield* awaited(harness.snapshot(Subagents, root.id, context)))?.agents[name];
-      return (
-        agent !== undefined &&
-        (yield* awaited(harness.snapshot(LiveDoc, agent.conversationId, context)))?.run !==
-          undefined
-      );
-    });
 
-  yield* say("Start a subagent named reader that summarizes Moby Dick.");
-  yield* settle();
-
-  yield* say("Ask reader to summarize every chapter.");
-  yield* until(working("reader"));
-  yield* say("Stop reader.");
-  yield* settle();
-
-  yield* say("What are my subagents doing?");
-  yield* settle();
-
-  const reporters = Effect.gen(function* () {
+const reporterCount = ({ harness, root }: Session): Effect.Effect<number> =>
+  Effect.gen(function* () {
     return Object.keys(
       (yield* awaited(harness.snapshot(Subagents, root.id, context)))?.reporters ?? {},
     ).length;
   });
-  const before = yield* reporters;
-  yield* awaited(
-    root.submit({ type: "input", content: "Ask reader for the whale's name." }, context),
-  );
-  yield* until(Effect.map(reporters, (count) => count > before));
-  yield* awaited(harness.close(context));
-  yield* Console.log(dim("\n  (process restarts)"));
-  ({ harness, root } = yield* open());
-  yield* follow(harness, root.id);
-  yield* settle();
 
-  yield* awaited(harness.close(context));
+const converse = Effect.fn("converse")(function* (session: Session) {
+  yield* say(session, "Start a subagent named reader that summarizes Moby Dick.");
+  yield* settle(session);
+
+  yield* say(session, "Ask reader to summarize every chapter.");
+  yield* until(working(session, "reader"));
+  yield* say(session, "Stop reader.");
+  yield* settle(session);
+
+  yield* say(session, "What are my subagents doing?");
+  yield* settle(session);
+
+  const before = yield* reporterCount(session);
+  yield* awaited(
+    session.root.submit({ type: "input", content: "Ask reader for the whale's name." }, context),
+  );
+  yield* until(Effect.map(reporterCount(session), (count) => count > before));
+});
+
+const main = Effect.gen(function* () {
+  const directory = yield* makeTempDir("msa-durable-subagents-");
+  const first = yield* open(directory);
+  yield* follow(first);
+  yield* converse(first);
+  yield* awaited(first.harness.close(context));
+  yield* Console.log(dim("\n  (process restarts)"));
+  const second = yield* open(directory);
+  yield* follow(second);
+  yield* settle(second);
+
+  yield* awaited(second.harness.close(context));
   yield* removeDir(directory);
 });
 

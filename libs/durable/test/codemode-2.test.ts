@@ -16,31 +16,27 @@ afterEach(() =>
 );
 
 const endsCallResumedScript = Effect.gen(function* () {
-  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
   const chat = codemodeChat({ globals: [{ name: "next", execute: () => Promise.resolve(1) }] });
   const { harness, result } = yield* restart(
     chat,
     `await next(); await tools.hold({});`,
     (opened, task) =>
-      runPromise(
-        Effect.gen(function* () {
-          const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+      Effect.gen(function* () {
+        const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-          yield* awaited(
-            opened.commit(
-              (tx) =>
-                runPromise(
-                  Effect.gen(function* () {
-                    const journal = yield* awaited(tx.doc(CodemodeJournalDoc, task));
-                    journal.entries[0]!.global!.args = "other";
-                  }),
-                ),
-              context,
-            ),
-          );
-        }),
-      ),
+        yield* awaited(
+          opened.commit(
+            (tx) =>
+              runPromise(
+                Effect.gen(function* () {
+                  const journal = yield* awaited(tx.doc(CodemodeJournalDoc, task));
+                  journal.entries[0]!.global!.args = "other";
+                }),
+              ),
+            context,
+          ),
+        );
+      }),
   );
   expect(result.isError).toBe(true);
   expect(result.text).toContain("call 1 is next");
@@ -48,8 +44,6 @@ const endsCallResumedScript = Effect.gen(function* () {
 });
 
 const admitsNoCall = Effect.gen(function* () {
-  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
   const chat = codemodeChat();
   const { harness, result } = yield* restart(
     chat,
@@ -58,41 +52,37 @@ const admitsNoCall = Effect.gen(function* () {
 			for (let i = 0; i < extra; i++) tools.echo({ text: "extra" + i });
 			await tools.hold({});`,
     (opened, task) =>
-      runPromise(
-        Effect.gen(function* () {
-          const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+      Effect.gen(function* () {
+        const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-          yield* awaited(
-            opened.commit(
-              (tx) =>
-                runPromise(
-                  Effect.gen(function* () {
-                    const run = yield* awaited(tx.doc(CodemodeRunDoc, task));
-                    run.start!.store = { k: 3 };
-                  }),
-                ),
-              context,
-            ),
-          );
-        }),
-      ),
+        yield* awaited(
+          opened.commit(
+            (tx) =>
+              runPromise(
+                Effect.gen(function* () {
+                  const run = yield* awaited(tx.doc(CodemodeRunDoc, task));
+                  run.start!.store = { k: 3 };
+                }),
+              ),
+            context,
+          ),
+        );
+      }),
     (opened, task) =>
-      runPromise(
-        Effect.gen(function* () {
-          const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+      Effect.gen(function* () {
+        const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-          yield* eventually(() =>
-            runPromise(
-              Effect.gen(function* () {
-                return (
-                  (yield* awaited(opened.snapshot(CodemodeJournalDoc, task, context)))?.entries[0]
-                    ?.issuedAfter === 2
-                );
-              }),
-            ),
-          );
-        }),
-      ),
+        yield* eventually(() =>
+          runPromise(
+            Effect.gen(function* () {
+              return (
+                (yield* awaited(opened.snapshot(CodemodeJournalDoc, task, context)))?.entries[0]
+                  ?.issuedAfter === 2
+              );
+            }),
+          ),
+        );
+      }),
   );
   expect(result.isError).toBe(true);
   expect(result.text).toContain("after result 1 it had made 5 calls, where it had made 2");
@@ -110,48 +100,42 @@ describe("durable code mode", () => {
 });
 
 const endsCallResumedScriptEnds = Effect.gen(function* () {
-  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
   const chat = codemodeChat();
   const { harness, result } = yield* restart(
     chat,
     `await tools.echo({ text: "a" }); if (load("k")) return "early"; await tools.hold({});`,
     (opened, task) =>
-      runPromise(
-        Effect.gen(function* () {
-          const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+      Effect.gen(function* () {
+        const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-          yield* awaited(
-            opened.commit(
-              (tx) =>
-                runPromise(
-                  Effect.gen(function* () {
-                    const run = yield* awaited(tx.doc(CodemodeRunDoc, task));
-                    run.start!.store = { k: true };
-                  }),
-                ),
-              context,
-            ),
-          );
-        }),
-      ),
+        yield* awaited(
+          opened.commit(
+            (tx) =>
+              runPromise(
+                Effect.gen(function* () {
+                  const run = yield* awaited(tx.doc(CodemodeRunDoc, task));
+                  run.start!.store = { k: true };
+                }),
+              ),
+            context,
+          ),
+        );
+      }),
     (opened, task) =>
-      runPromise(
-        Effect.gen(function* () {
-          const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+      Effect.gen(function* () {
+        const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-          yield* eventually(() =>
-            runPromise(
-              Effect.gen(function* () {
-                return (
-                  (yield* awaited(opened.snapshot(CodemodeJournalDoc, task, context)))?.entries[0]
-                    ?.issuedAfter === 2
-                );
-              }),
-            ),
-          );
-        }),
-      ),
+        yield* eventually(() =>
+          runPromise(
+            Effect.gen(function* () {
+              return (
+                (yield* awaited(opened.snapshot(CodemodeJournalDoc, task, context)))?.entries[0]
+                  ?.issuedAfter === 2
+              );
+            }),
+          ),
+        );
+      }),
   );
   expect(result.isError).toBe(true);
   expect(result.text).toContain("it ended after result 1, where it went on before");
@@ -159,33 +143,29 @@ const endsCallResumedScriptEnds = Effect.gen(function* () {
 });
 
 const endsCallResumedScriptEndsCalls = Effect.gen(function* () {
-  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
   const chat = codemodeChat();
   const { harness, result } = yield* restart(
     chat,
     `await tools.echo({ text: "a" }); if (load("k")) return "early"; await tools.echo({ text: "b" }); await tools.hold({});`,
     (opened, task) =>
-      runPromise(
-        Effect.gen(function* () {
-          const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+      Effect.gen(function* () {
+        const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-          yield* awaited(
-            opened.commit(
-              (tx) =>
-                runPromise(
-                  Effect.gen(function* () {
-                    const run = yield* awaited(tx.doc(CodemodeRunDoc, task));
-                    run.start!.store = { k: true };
-                    const journal = yield* awaited(tx.doc(CodemodeJournalDoc, task));
-                    delete journal.entries[0]!.issuedAfter;
-                  }),
-                ),
-              context,
-            ),
-          );
-        }),
-      ),
+        yield* awaited(
+          opened.commit(
+            (tx) =>
+              runPromise(
+                Effect.gen(function* () {
+                  const run = yield* awaited(tx.doc(CodemodeRunDoc, task));
+                  run.start!.store = { k: true };
+                  const journal = yield* awaited(tx.doc(CodemodeJournalDoc, task));
+                  delete journal.entries[0]!.issuedAfter;
+                }),
+              ),
+            context,
+          ),
+        );
+      }),
   );
   expect(result.isError).toBe(true);
   expect(result.text).toContain("it ended after result 1, where it went on before");
@@ -201,33 +181,29 @@ describe("durable code mode", () => {
 });
 
 const endsCallResumedScriptMakes = Effect.gen(function* () {
-  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
   const chat = codemodeChat();
   const { harness, result } = yield* restart(
     chat,
     `await tools.echo({ text: load("k") ?? "a" }); await tools.hold({});`,
     (opened, task) =>
-      runPromise(
-        Effect.gen(function* () {
-          const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+      Effect.gen(function* () {
+        const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-          yield* awaited(
-            opened.commit(
-              (tx) =>
-                runPromise(
-                  Effect.gen(function* () {
-                    const run = yield* awaited(tx.doc(CodemodeRunDoc, task));
-                    run.start!.store = { k: "other" };
-                    const journal = yield* awaited(tx.doc(CodemodeJournalDoc, task));
-                    journal.entries.length = 0;
-                  }),
-                ),
-              context,
-            ),
-          );
-        }),
-      ),
+        yield* awaited(
+          opened.commit(
+            (tx) =>
+              runPromise(
+                Effect.gen(function* () {
+                  const run = yield* awaited(tx.doc(CodemodeRunDoc, task));
+                  run.start!.store = { k: "other" };
+                  const journal = yield* awaited(tx.doc(CodemodeJournalDoc, task));
+                  journal.entries.length = 0;
+                }),
+              ),
+            context,
+          ),
+        );
+      }),
   );
   expect(result.isError).toBe(true);
   expect(result.text).toContain("different path");

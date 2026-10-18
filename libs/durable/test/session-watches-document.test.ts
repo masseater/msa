@@ -5,11 +5,15 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { awaited } from "./effect-support.ts";
 import { context, flush } from "./session-support.ts";
-import { deferred, createState, StateDoc, type State } from "./session-watches-support.ts";
+import {
+  StateDoc,
+  createState,
+  deferred,
+  type State,
+  writeState,
+} from "./session-watches-support.ts";
 
 const keepsEarlierImmutable = Effect.gen(function* () {
-  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
   const { session } = yield* createState();
   const watch = (yield* awaited(session.watchDoc(StateDoc, context)))!;
   const initial = watch.value;
@@ -19,17 +23,9 @@ const keepsEarlierImmutable = Effect.gen(function* () {
 
     return Promise.resolve();
   });
-  yield* awaited(
-    session.commit(
-      (tx) =>
-        runPromise(
-          Effect.gen(function* () {
-            (yield* awaited(tx.doc(StateDoc))).value = 1;
-          }),
-        ),
-      context,
-    ),
-  );
+  yield* writeState(session, (state) => {
+    state.value = 1;
+  });
   yield* flush;
   expect(delivered).toBe(watch.value);
   expect(delivered).not.toBe(initial);
@@ -67,17 +63,9 @@ const deliversRetirementDoes = Effect.gen(function* () {
 
   const replacement = (yield* awaited(session.watchDoc(StateDoc, context)))!;
   expect(replacement.value?.value).toBe(10);
-  yield* awaited(
-    session.commit(
-      (tx) =>
-        runPromise(
-          Effect.gen(function* () {
-            (yield* awaited(tx.doc(StateDoc))).value = 11;
-          }),
-        ),
-      context,
-    ),
-  );
+  yield* writeState(session, (state) => {
+    state.value = 11;
+  });
   yield* flush;
   expect(oldWatch.value).toBeNull();
   yield* awaited(replacement.stop());
@@ -118,17 +106,9 @@ const sessionCloseDiscardsRetirement = Effect.gen(function* () {
       }),
     ),
   );
-  yield* awaited(
-    session.commit(
-      (tx) =>
-        runPromise(
-          Effect.gen(function* () {
-            (yield* awaited(tx.doc(StateDoc))).value = 1;
-          }),
-        ),
-      context,
-    ),
-  );
+  yield* writeState(session, (state) => {
+    state.value = 1;
+  });
   yield* awaited(entered.promise);
   yield* awaited(session.commit((tx) => tx.retireDoc(StateDoc), context));
   yield* awaited(session.close(context));
@@ -195,17 +175,9 @@ const cancelsFutureDelivery = Effect.gen(function* () {
       }),
     ),
   );
-  yield* awaited(
-    session.commit(
-      (tx) =>
-        runPromise(
-          Effect.gen(function* () {
-            (yield* awaited(tx.doc(StateDoc))).value = 1;
-          }),
-        ),
-      context,
-    ),
-  );
+  yield* writeState(session, (state) => {
+    state.value = 1;
+  });
   yield* awaited(entered.promise);
   child.cancel();
   expect(yield* awaited(watch.closed)).toEqual({ reason: "cancelled" });

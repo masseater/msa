@@ -101,19 +101,19 @@ export const resultText = Effect.fn("resultText")(function* (
 export const restart = Effect.fn("restart")(function* (
   chat: ReturnType<typeof codemodeChat>,
   code: string,
-  between: (harness: Harness, task: TaskId) => Promise<void> = () => Promise.resolve(),
-  beforeClose: (harness: Harness, task: TaskId) => Promise<void> = () => Promise.resolve(),
+  between: (harness: Harness, task: TaskId) => Effect.Effect<void> = () => Effect.void,
+  beforeClose: (harness: Harness, task: TaskId) => Effect.Effect<void> = () => Effect.void,
 ) {
   const path = yield* sqlitePath();
   chat.setup.faux.setResponses([script(code), DONE]);
   let opened = yield* openStoredChat(path, chat.setup);
   const id = (yield* awaited(opened.root.submit({ type: "input", content: "go" }, context))).id;
   yield* awaited(chat.holds.reached.promise);
-  yield* awaited(beforeClose(opened.harness, yield* scriptTask(opened.harness)));
+  yield* beforeClose(opened.harness, yield* scriptTask(opened.harness));
   yield* awaited(opened.harness.close(context));
   chat.holds.block = false;
   opened = yield* openStoredChat(path, chat.setup);
-  yield* awaited(between(opened.harness, yield* scriptTask(opened.harness)));
+  yield* between(opened.harness, yield* scriptTask(opened.harness));
   opened.harness.resume();
   expect(
     (yield* awaited((yield* awaited(opened.harness.submission(id, context)))!.wait(context)))
