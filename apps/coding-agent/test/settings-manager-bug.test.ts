@@ -1,127 +1,156 @@
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "fs";
-import { join } from "path";
-
-import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
+import {
+  awaited,
+  joinPath,
+  makeDirectory,
+  makeTempDir,
+  readJsonFile,
+  removeDirs,
+  runTest,
+  writeJsonFile,
+} from "@msa/testing";
+import { Effect } from "effect";
+import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { SettingsManager } from "../src/core/settings-manager.ts";
 
+interface SettingsFile {
+  theme?: unknown;
+  packages?: unknown;
+  extensions?: unknown;
+  prompts?: unknown;
+}
+
+interface SettingsPaths {
+  readonly settingsPath: string;
+  readonly projectSettingsPath: string;
+  readonly openManager: () => SettingsManager;
+}
+
+const tempDirs: string[] = [];
+
+afterEach(() => runTest(removeDirs(tempDirs.splice(0))));
+
+const withSettings = <A, E>(
+  use: (paths: SettingsPaths) => Effect.Effect<A, E>,
+): Effect.Effect<A, E> =>
+  Effect.gen(function* () {
+    const testDir = yield* makeTempDir("settings-bug-test-");
+    tempDirs.push(testDir);
+    const agentDir = joinPath(testDir, "agent");
+    const projectDir = joinPath(testDir, "project");
+    yield* makeDirectory(agentDir);
+    yield* makeDirectory(joinPath(projectDir, ".msa"));
+    return yield* use({
+      settingsPath: joinPath(agentDir, "settings.json"),
+      projectSettingsPath: joinPath(projectDir, ".msa", "settings.json"),
+      openManager: () => SettingsManager.create(projectDir, agentDir),
+    });
+  });
+
+const readSettings = (file: string): Effect.Effect<SettingsFile> =>
+  readJsonFile(file) as Effect.Effect<SettingsFile>;
+
 describe("SettingsManager - External Edit Preservation", () => {
-  const testDir = join(process.cwd(), "test-settings-bug-tmp");
-  const agentDir = join(testDir, "agent");
-  const projectDir = join(testDir, "project");
+  it("should preserve file changes to packages array when changing unrelated setting", () =>
+    runTest(
+      withSettings(({ settingsPath, openManager }) =>
+        Effect.gen(function* () {
+          yield* writeJsonFile(settingsPath, {
+            theme: "dark",
+            packages: ["npm:msa-mcp-adapter"],
+          });
 
-  beforeEach(() => {
-    if (existsSync(testDir)) {
-      rmSync(testDir, { recursive: true });
-    }
-    mkdirSync(agentDir, { recursive: true });
-    mkdirSync(join(projectDir, ".msa"), { recursive: true });
-  });
+          const manager = openManager();
 
-  afterEach(() => {
-    if (existsSync(testDir)) {
-      rmSync(testDir, { recursive: true });
-    }
-  });
+          expect(manager.getPackages()).toEqual(["npm:msa-mcp-adapter"]);
 
-  it("should preserve file changes to packages array when changing unrelated setting", async () => {
-    const settingsPath = join(agentDir, "settings.json");
+          const currentSettings = yield* readSettings(settingsPath);
+          currentSettings.packages = [];
+          yield* writeJsonFile(settingsPath, currentSettings);
 
-    writeFileSync(
-      settingsPath,
-      JSON.stringify({
-        theme: "dark",
-        packages: ["npm:msa-mcp-adapter"],
-      }),
-    );
+          expect((yield* readSettings(settingsPath)).packages).toEqual([]);
 
-    const manager = SettingsManager.create(projectDir, agentDir);
+          manager.setTheme("light");
+          yield* awaited(manager.flush());
 
-    expect(manager.getPackages()).toEqual(["npm:msa-mcp-adapter"]);
+          const savedSettings = yield* readSettings(settingsPath);
 
-    const currentSettings = JSON.parse(readFileSync(settingsPath, "utf-8"));
-    currentSettings.packages = [];
-    writeFileSync(settingsPath, JSON.stringify(currentSettings, null, 2));
+          expect(savedSettings.packages).toEqual([]);
+          expect(savedSettings.theme).toBe("light");
+        }),
+      ),
+    ));
 
-    expect(JSON.parse(readFileSync(settingsPath, "utf-8")).packages).toEqual([]);
+  it("should preserve file changes to extensions array when changing unrelated setting", () =>
+    runTest(
+      withSettings(({ settingsPath, openManager }) =>
+        Effect.gen(function* () {
+          yield* writeJsonFile(settingsPath, {
+            theme: "dark",
+            extensions: ["/old/extension.ts"],
+          });
 
-    manager.setTheme("light");
-    await manager.flush();
+          const manager = openManager();
 
-    const savedSettings = JSON.parse(readFileSync(settingsPath, "utf-8"));
+          const currentSettings = yield* readSettings(settingsPath);
+          currentSettings.extensions = ["/new/extension.ts"];
+          yield* writeJsonFile(settingsPath, currentSettings);
 
-    expect(savedSettings.packages).toEqual([]);
-    expect(savedSettings.theme).toBe("light");
-  });
+          manager.setDefaultThinkingLevel("high");
+          yield* awaited(manager.flush());
 
-  it("should preserve file changes to extensions array when changing unrelated setting", async () => {
-    const settingsPath = join(agentDir, "settings.json");
+          const savedSettings = yield* readSettings(settingsPath);
 
-    writeFileSync(
-      settingsPath,
-      JSON.stringify({
-        theme: "dark",
-        extensions: ["/old/extension.ts"],
-      }),
-    );
+          expect(savedSettings.extensions).toEqual(["/new/extension.ts"]);
+        }),
+      ),
+    ));
 
-    const manager = SettingsManager.create(projectDir, agentDir);
+  it("should preserve external project settings changes when updating unrelated project field", () =>
+    runTest(
+      withSettings(({ projectSettingsPath, openManager }) =>
+        Effect.gen(function* () {
+          yield* writeJsonFile(projectSettingsPath, {
+            extensions: ["./old-extension.ts"],
+            prompts: ["./old-prompt.md"],
+          });
 
-    const currentSettings = JSON.parse(readFileSync(settingsPath, "utf-8"));
-    currentSettings.extensions = ["/new/extension.ts"];
-    writeFileSync(settingsPath, JSON.stringify(currentSettings, null, 2));
+          const manager = openManager();
 
-    manager.setDefaultThinkingLevel("high");
-    await manager.flush();
+          const currentProjectSettings = yield* readSettings(projectSettingsPath);
+          currentProjectSettings.prompts = ["./new-prompt.md"];
+          yield* writeJsonFile(projectSettingsPath, currentProjectSettings);
 
-    const savedSettings = JSON.parse(readFileSync(settingsPath, "utf-8"));
+          manager.setProjectExtensionPaths(["./updated-extension.ts"]);
+          yield* awaited(manager.flush());
 
-    expect(savedSettings.extensions).toEqual(["/new/extension.ts"]);
-  });
+          const savedProjectSettings = yield* readSettings(projectSettingsPath);
+          expect(savedProjectSettings.prompts).toEqual(["./new-prompt.md"]);
+          expect(savedProjectSettings.extensions).toEqual(["./updated-extension.ts"]);
+        }),
+      ),
+    ));
 
-  it("should preserve external project settings changes when updating unrelated project field", async () => {
-    const projectSettingsPath = join(projectDir, ".msa", "settings.json");
-    writeFileSync(
-      projectSettingsPath,
-      JSON.stringify({
-        extensions: ["./old-extension.ts"],
-        prompts: ["./old-prompt.md"],
-      }),
-    );
+  it("should let in-memory project changes override external changes for the same project field", () =>
+    runTest(
+      withSettings(({ projectSettingsPath, openManager }) =>
+        Effect.gen(function* () {
+          yield* writeJsonFile(projectSettingsPath, {
+            extensions: ["./initial-extension.ts"],
+          });
 
-    const manager = SettingsManager.create(projectDir, agentDir);
+          const manager = openManager();
 
-    const currentProjectSettings = JSON.parse(readFileSync(projectSettingsPath, "utf-8"));
-    currentProjectSettings.prompts = ["./new-prompt.md"];
-    writeFileSync(projectSettingsPath, JSON.stringify(currentProjectSettings, null, 2));
+          const currentProjectSettings = yield* readSettings(projectSettingsPath);
+          currentProjectSettings.extensions = ["./external-extension.ts"];
+          yield* writeJsonFile(projectSettingsPath, currentProjectSettings);
 
-    manager.setProjectExtensionPaths(["./updated-extension.ts"]);
-    await manager.flush();
+          manager.setProjectExtensionPaths(["./in-memory-extension.ts"]);
+          yield* awaited(manager.flush());
 
-    const savedProjectSettings = JSON.parse(readFileSync(projectSettingsPath, "utf-8"));
-    expect(savedProjectSettings.prompts).toEqual(["./new-prompt.md"]);
-    expect(savedProjectSettings.extensions).toEqual(["./updated-extension.ts"]);
-  });
-
-  it("should let in-memory project changes override external changes for the same project field", async () => {
-    const projectSettingsPath = join(projectDir, ".msa", "settings.json");
-    writeFileSync(
-      projectSettingsPath,
-      JSON.stringify({
-        extensions: ["./initial-extension.ts"],
-      }),
-    );
-
-    const manager = SettingsManager.create(projectDir, agentDir);
-
-    const currentProjectSettings = JSON.parse(readFileSync(projectSettingsPath, "utf-8"));
-    currentProjectSettings.extensions = ["./external-extension.ts"];
-    writeFileSync(projectSettingsPath, JSON.stringify(currentProjectSettings, null, 2));
-
-    manager.setProjectExtensionPaths(["./in-memory-extension.ts"]);
-    await manager.flush();
-
-    const savedProjectSettings = JSON.parse(readFileSync(projectSettingsPath, "utf-8"));
-    expect(savedProjectSettings.extensions).toEqual(["./in-memory-extension.ts"]);
-  });
+          const savedProjectSettings = yield* readSettings(projectSettingsPath);
+          expect(savedProjectSettings.extensions).toEqual(["./in-memory-extension.ts"]);
+        }),
+      ),
+    ));
 });

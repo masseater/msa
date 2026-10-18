@@ -1,21 +1,23 @@
 import type { ModelsRefreshOptions, ModelsRefreshResult } from "@msa/ai";
-import { awaited, runTest, abortController } from "@msa/testing";
-import { Effect } from "effect";
+import { abortController, awaited, failure, runTest } from "@msa/testing";
+import { Deferred, Effect } from "effect";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import { refreshModelCatalogs } from "../src/modes/interactive/model-catalog-refresh.ts";
 
-interface Deferred<T> {
+interface DeferredResult<T> {
   promise: Promise<T>;
   resolve(value: T): void;
 }
 
-function createDeferred<T>(): Deferred<T> {
-  let resolvePromise!: (value: T) => void;
-  const promise = new Promise<T>((resolve) => {
-    resolvePromise = resolve;
-  });
-  return { promise, resolve: resolvePromise };
+function createDeferred<T>(): DeferredResult<T> {
+  const deferred = Deferred.makeUnsafe<T>();
+  return {
+    promise: runTest(Deferred.await(deferred)),
+    resolve: (value: T) => {
+      Effect.runSync(Deferred.succeed(deferred, value));
+    },
+  };
 }
 
 function successfulRefresh(): ModelsRefreshResult {
@@ -36,8 +38,8 @@ describe("interactive model catalog refresh", () => {
 
         expect(runtime.refresh).toHaveBeenCalledOnce();
         deferred.resolve(successfulRefresh());
-        yield* awaited(expect(first).resolves.toEqual(successfulRefresh()));
-        yield* awaited(expect(second).resolves.toEqual(successfulRefresh()));
+        expect(yield* awaited(first)).toEqual(successfulRefresh());
+        expect(yield* awaited(second)).toEqual(successfulRefresh());
       }),
     ));
 
@@ -58,11 +60,11 @@ describe("interactive model catalog refresh", () => {
         const second = refreshModelCatalogs(runtime, secondController.signal);
 
         firstController.abort();
-        yield* awaited(expect(first).rejects.toMatchObject({ name: "AbortError" }));
+        expect(yield* failure(awaited(first))).toMatchObject({ name: "AbortError" });
         expect(refreshSignal?.aborted).toBe(false);
 
         deferred.resolve(successfulRefresh());
-        yield* awaited(expect(second).resolves.toEqual(successfulRefresh()));
+        expect(yield* awaited(second)).toEqual(successfulRefresh());
       }),
     ));
 
@@ -73,21 +75,21 @@ describe("interactive model catalog refresh", () => {
         const runtime = {
           refresh: vi.fn((options?: ModelsRefreshOptions) => {
             if (options?.signal !== undefined) refreshSignals.push(options.signal);
-            return new Promise<ModelsRefreshResult>(() => {});
+            return runTest(Effect.never);
           }),
         };
         const firstController = abortController();
         const first = refreshModelCatalogs(runtime, firstController.signal);
 
         firstController.abort();
-        yield* awaited(expect(first).rejects.toMatchObject({ name: "AbortError" }));
+        expect(yield* failure(awaited(first))).toMatchObject({ name: "AbortError" });
         yield* awaited(vi.waitFor(() => expect(refreshSignals[0]?.aborted).toBe(true)));
 
         const secondController = abortController();
         const second = refreshModelCatalogs(runtime, secondController.signal);
         expect(runtime.refresh).toHaveBeenCalledTimes(2);
         secondController.abort();
-        yield* awaited(expect(second).rejects.toMatchObject({ name: "AbortError" }));
+        expect(yield* failure(awaited(second))).toMatchObject({ name: "AbortError" });
       }),
     ));
 });
