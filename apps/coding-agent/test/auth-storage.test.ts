@@ -542,10 +542,10 @@ describe("AuthStorage", () => {
         vi.spyOn(lockfile, "lock").mockImplementation((_file, options) =>
           effectRunPromise(
             Effect.gen(function* () {
-              const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+              const nestedRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
               options?.onCompromised?.(compromised);
-              return yield* awaited(() => effectRunPromise(Effect.sync(() => {})));
+              return yield* awaited(() => nestedRunPromise(Effect.sync(() => {})));
             }),
           ),
         );

@@ -81,7 +81,7 @@ describe.skipIf(!(API_KEY !== undefined && API_KEY.length > 0))("AgentSession fo
         };
         const createRuntime: CreateAgentSessionRuntimeFactory = ({
           cwd,
-          sessionManager,
+          sessionManager: innerSessionManager,
           sessionStartEvent,
         }) =>
           effectRunPromise(
@@ -96,7 +96,7 @@ describe.skipIf(!(API_KEY !== undefined && API_KEY.length > 0))("AgentSession fo
                 ...(yield* awaited(
                   createAgentSessionFromServices({
                     services,
-                    sessionManager,
+                    sessionManager: innerSessionManager,
                     ...(sessionStartEvent === undefined ? {} : { sessionStartEvent }),
                     model,
                     tools: ["read", "bash", "edit", "write"],
