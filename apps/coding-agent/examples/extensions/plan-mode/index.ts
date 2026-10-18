@@ -1,133 +1,32 @@
 import type { AgentMessage } from "@msa/agent-core";
-import type { AssistantMessage, TextContent } from "@msa/ai";
-import type { ExtensionAPI, ExtensionContext } from "@msa/coding-agent";
+import type { AssistantMessage } from "@msa/ai";
+import type { ExtensionAPI, ExtensionContext, SessionEntry } from "@msa/coding-agent";
 import { Key } from "@msa/tui";
 import { Effect } from "effect";
 
-import { extractTodoItems, isSafeCommand, markCompletedSteps, type TodoItem } from "./utils.ts";
+import { handleAgentEnd } from "./approval.ts";
+import {
+  executionContextMessage,
+  filterPlanContext,
+  guardBash,
+  planModeContextMessage,
+} from "./context.ts";
+import { createPlanStore, type PlanStore } from "./state.ts";
+import { markCompletedSteps } from "./utils.ts";
 
-const PLAN_MODE_TOOLS = ["read", "bash", "grep", "find", "ls", "questionnaire"];
-const NORMAL_MODE_TOOLS = ["read", "bash", "edit", "write"];
-const PLAN_MODE_DISABLED_TOOLS = new Set<string>(["edit", "write"]);
-const PLAN_MANAGED_TOOLS = new Set<string>([...PLAN_MODE_TOOLS, ...NORMAL_MODE_TOOLS]);
+const isAssistantMessage = (m: AgentMessage): m is AssistantMessage =>
+  m.role === "assistant" && Array.isArray(m.content);
 
-interface PlanModeState {
-  enabled: boolean;
-  todos?: TodoItem[];
-  executing?: boolean;
-  toolsBeforePlanMode?: string[];
-}
-
-function isAssistantMessage(m: AgentMessage): m is AssistantMessage {
-  return m.role === "assistant" && Array.isArray(m.content);
-}
-
-function getTextContent(message: AssistantMessage): string {
-  return message.content
-    .filter((block): block is TextContent => block.type === "text")
+const getTextContent = (message: AssistantMessage): string =>
+  message.content
+    .filter((block): block is { type: "text"; text: string } => block.type === "text")
     .map((block) => block.text)
     .join("\n");
-}
 
-export default function planModeExtension(msa: ExtensionAPI): void {
-  let planModeEnabled = false;
-  let executionMode = false;
-  let todoItems: TodoItem[] = [];
-  let toolsBeforePlanMode: string[] | undefined;
-
-  msa.registerFlag("plan", {
-    description: "Start in plan mode (read-only exploration)",
-    type: "boolean",
-    default: false,
-  });
-
-  function updateStatus(ctx: ExtensionContext): void {
-    if (executionMode && todoItems.length > 0) {
-      const completed = todoItems.filter((t) => t.completed).length;
-      ctx.ui.setStatus(
-        "plan-mode",
-        ctx.ui.theme.fg("accent", `📋 ${completed}/${todoItems.length}`),
-      );
-    } else if (planModeEnabled) {
-      ctx.ui.setStatus("plan-mode", ctx.ui.theme.fg("warning", "⏸ plan"));
-    } else {
-      ctx.ui.setStatus("plan-mode", undefined);
-    }
-
-    if (executionMode && todoItems.length > 0) {
-      const lines = todoItems.map((item) => {
-        if (item.completed) {
-          return (
-            ctx.ui.theme.fg("success", "☑ ") +
-            ctx.ui.theme.fg("muted", ctx.ui.theme.strikethrough(item.text))
-          );
-        }
-        return `${ctx.ui.theme.fg("muted", "☐ ")}${item.text}`;
-      });
-      ctx.ui.setWidget("plan-todos", lines);
-    } else {
-      ctx.ui.setWidget("plan-todos", undefined);
-    }
-  }
-
-  function uniqueToolNames(toolNames: string[]): string[] {
-    return [...new Set(toolNames)];
-  }
-
-  function getPlanModeTools(activeToolNames: string[]): string[] {
-    return uniqueToolNames([
-      ...activeToolNames.filter((name) => !PLAN_MODE_DISABLED_TOOLS.has(name)),
-      ...PLAN_MODE_TOOLS,
-    ]);
-  }
-
-  function getNormalModeTools(activeToolNames: string[]): string[] {
-    return uniqueToolNames([
-      ...NORMAL_MODE_TOOLS,
-      ...activeToolNames.filter((name) => !PLAN_MANAGED_TOOLS.has(name)),
-    ]);
-  }
-
-  function enablePlanModeTools(): void {
-    if (toolsBeforePlanMode === undefined) {
-      toolsBeforePlanMode = msa.getActiveTools();
-    }
-    msa.setActiveTools(getPlanModeTools(toolsBeforePlanMode));
-  }
-
-  function restoreNormalModeTools(): void {
-    msa.setActiveTools(toolsBeforePlanMode ?? getNormalModeTools(msa.getActiveTools()));
-    toolsBeforePlanMode = undefined;
-  }
-
-  function persistState(): void {
-    msa.appendEntry("plan-mode", {
-      enabled: planModeEnabled,
-      todos: todoItems,
-      executing: executionMode,
-      toolsBeforePlanMode,
-    });
-  }
-
-  function togglePlanMode(ctx: ExtensionContext): void {
-    planModeEnabled = !planModeEnabled;
-    executionMode = false;
-    todoItems = [];
-
-    if (planModeEnabled) {
-      enablePlanModeTools();
-      ctx.ui.notify("Plan mode enabled. Built-in write tools disabled.");
-    } else {
-      restoreNormalModeTools();
-      ctx.ui.notify("Plan mode disabled. Full access restored.");
-    }
-    updateStatus(ctx);
-    persistState();
-  }
-
+const registerCommands = (msa: ExtensionAPI, store: PlanStore): void => {
   msa.registerCommand("plan", {
     description: "Toggle plan mode (read-only exploration)",
-    handler: (_args, ctx) => Effect.runPromise(Effect.sync(() => togglePlanMode(ctx))),
+    handler: (_args, ctx) => Effect.runPromise(Effect.sync(() => store.toggle(ctx))),
   });
 
   msa.registerCommand("todos", {
@@ -135,11 +34,12 @@ export default function planModeExtension(msa: ExtensionAPI): void {
     handler: (_args, ctx) =>
       Effect.runPromise(
         Effect.sync(() => {
-          if (todoItems.length === 0) {
+          const { todos } = store.runtime;
+          if (todos.length === 0) {
             ctx.ui.notify("No todos. Create a plan first with /plan", "info");
             return;
           }
-          const list = todoItems
+          const list = todos
             .map((item, i) => `${i + 1}. ${item.completed ? "✓" : "○"} ${item.text}`)
             .join("\n");
           ctx.ui.notify(`Plan Progress:\n${list}`, "info");
@@ -149,234 +49,106 @@ export default function planModeExtension(msa: ExtensionAPI): void {
 
   msa.registerShortcut(Key.ctrlAlt("p"), {
     description: "Toggle plan mode",
-    handler: (ctx) => togglePlanMode(ctx),
+    handler: (ctx) => store.toggle(ctx),
   });
+};
 
-  msa.on("tool_call", (event) => {
-    if (!planModeEnabled || event.toolName !== "bash") return;
+const registerGuards = (msa: ExtensionAPI, store: PlanStore): void => {
+  const { runtime } = store;
+  const guard = guardBash(runtime);
+  const filter = filterPlanContext(runtime);
 
-    const command = event.input.command as string;
-    if (!isSafeCommand(command)) {
-      return {
-        block: true,
-        reason: `Plan mode: command blocked (not allowlisted). Use /plan to disable plan mode first.\nCommand: ${command}`,
-      };
-    }
-    return undefined;
-  });
+  msa.on("tool_call", (event) =>
+    guard(event.toolName, (event.input as { command: string }).command),
+  );
 
-  msa.on("context", (event) => {
-    if (planModeEnabled) return;
-
-    return {
-      messages: event.messages.filter((m) => {
-        const msg = m as AgentMessage & { customType?: string };
-        if (msg.customType === "plan-mode-context") return false;
-        if (msg.role !== "user") return true;
-
-        const content = msg.content;
-        if (typeof content === "string") {
-          return !content.includes("[PLAN MODE ACTIVE]");
-        }
-        if (Array.isArray(content)) {
-          return !content.some(
-            (c) => c.type === "text" && (c as TextContent).text?.includes("[PLAN MODE ACTIVE]"),
-          );
-        }
-        return true;
-      }),
-    };
-  });
+  msa.on("context", (event) => filter(event.messages));
 
   msa.on("before_agent_start", (event) => {
     if (event.messageType !== "user") return;
 
-    if (planModeEnabled) {
-      return {
-        message: {
-          customType: "plan-mode-context",
-          content: `[PLAN MODE ACTIVE]
-You are in plan mode - a read-only exploration mode for safe code analysis.
+    if (runtime.enabled) return planModeContextMessage();
 
-Restrictions:
-- Built-in edit and write tools are disabled
-- Other currently active tools remain available
-- Bash is restricted to an allowlist of read-only commands
-
-Ask clarifying questions using the questionnaire tool.
-Use brave-search skill via bash for web research.
-
-Create a detailed numbered plan under a "Plan:" header:
-
-Plan:
-1. First step description
-2. Second step description
-...
-
-Do NOT attempt to make changes - just describe what you would do.`,
-          display: false,
-        },
-      };
-    }
-
-    if (executionMode && todoItems.length > 0) {
-      const remaining = todoItems.filter((t) => !t.completed);
-      const todoList = remaining.map((t) => `${t.step}. ${t.text}`).join("\n");
-      return {
-        message: {
-          customType: "plan-execution-context",
-          content: `[EXECUTING PLAN - Full tool access enabled]
-
-Remaining steps:
-${todoList}
-
-Execute each step in order.
-After completing a step, include a [DONE:n] tag in your response.`,
-          display: false,
-        },
-      };
+    if (runtime.executing && runtime.todos.length > 0) {
+      const remaining = runtime.todos.filter((t) => !t.completed);
+      return executionContextMessage(remaining.map((t) => `${t.step}. ${t.text}`).join("\n"));
     }
     return undefined;
   });
+};
+
+const registerProgress = (msa: ExtensionAPI, store: PlanStore): void => {
+  const { runtime } = store;
 
   msa.on("turn_end", (event, ctx) => {
-    if (!executionMode || todoItems.length === 0) return;
+    if (!runtime.executing || runtime.todos.length === 0) return;
     if (!isAssistantMessage(event.message)) return;
 
-    const text = getTextContent(event.message);
-    if (markCompletedSteps(text, todoItems) > 0) {
-      updateStatus(ctx);
+    if (markCompletedSteps(getTextContent(event.message), runtime.todos) > 0) {
+      store.updateStatus(ctx);
     }
-    persistState();
+    store.persist();
   });
 
-  msa.on("agent_end", async (event, ctx) => {
-    if (executionMode && todoItems.length > 0) {
-      if (todoItems.every((t) => t.completed)) {
-        const completedList = todoItems.map((t) => `~~${t.text}~~`).join("\n");
-        msa.sendMessage(
-          {
-            customType: "plan-complete",
-            content: `**Plan Complete!** ✓\n\n${completedList}`,
-            display: true,
-          },
-          { triggerTurn: false },
-        );
-        executionMode = false;
-        todoItems = [];
-        updateStatus(ctx);
-        persistState();
-      }
-      return;
+  msa.on("agent_end", (event, ctx) =>
+    Effect.runPromise(handleAgentEnd({ msa, store, event, ctx })),
+  );
+};
+
+const completedTextSinceExecute = (entries: SessionEntry[]): string => {
+  let executeIndex = -1;
+  for (let i = entries.length - 1; i >= 0; i--) {
+    const entry = entries[i] as { type: string; customType?: string };
+    if (entry.customType === "plan-mode-execute") {
+      executeIndex = i;
+      break;
     }
+  }
 
-    if (!planModeEnabled || !ctx.hasUI) return;
-
-    const lastAssistant = [...event.messages].reverse().find(isAssistantMessage);
-    if (lastAssistant !== undefined) {
-      const extracted = extractTodoItems(getTextContent(lastAssistant));
-      if (extracted.length > 0) {
-        todoItems = extracted;
-      }
+  const messages: AssistantMessage[] = [];
+  for (const entry of entries.slice(executeIndex + 1)) {
+    if (entry.type === "message" && isAssistantMessage(entry.message as AgentMessage)) {
+      messages.push(entry.message as AssistantMessage);
     }
+  }
+  return messages.map(getTextContent).join("\n");
+};
 
-    if (todoItems.length === 0) return;
-    persistState();
+const restoreFromBranch = (msa: ExtensionAPI, store: PlanStore, ctx: ExtensionContext): void => {
+  const { runtime } = store;
+  if (msa.getFlag("plan") === true) {
+    runtime.enabled = true;
+  }
 
-    const todoListText = todoItems.map((t, i) => `${i + 1}. ☐ ${t.text}`).join("\n");
-    const planTodoListMessage = {
-      customType: "plan-todo-list",
-      content: `**Plan Steps (${todoItems.length}):**\n\n${todoListText}`,
-      display: true,
-    };
+  const entries = ctx.sessionManager.getEntries();
+  const planModeEntry = entries
+    .filter(
+      (e: { type: string; customType?: string }) =>
+        e.type === "custom" && e.customType === "plan-mode",
+    )
+    .pop() as { data?: Parameters<PlanStore["restore"]>[0] } | undefined;
 
-    const choice = await ctx.ui.select("Plan mode - what next?", [
-      "Execute the plan (track progress)",
-      "Stay in plan mode",
-      "Refine the plan",
-    ]);
+  if (planModeEntry !== undefined && runtime.executing && runtime.todos.length > 0) {
+    markCompletedSteps(completedTextSinceExecute(entries), runtime.todos);
+  }
 
-    if (choice?.startsWith("Execute") === true) {
-      const firstTodoItem = todoItems[0];
-      if (firstTodoItem === undefined) return;
+  store.restore(planModeEntry?.data, ctx);
+};
 
-      planModeEnabled = false;
-      executionMode = true;
-      restoreNormalModeTools();
-      updateStatus(ctx);
-      persistState();
+export default function planModeExtension(msa: ExtensionAPI): void {
+  const store = createPlanStore(msa);
 
-      const remainingList = todoItems.map((t) => `${t.step}. ${t.text}`).join("\n");
-      const execMessage = `Execute the plan.
-
-Remaining steps:
-${remainingList}
-
-Start with: ${firstTodoItem.text}
-After completing a step, include a [DONE:n] tag in your response.`;
-      msa.sendMessage(planTodoListMessage, { deliverAs: "followUp" });
-      msa.sendMessage(
-        { customType: "plan-mode-execute", content: execMessage, display: true },
-        { triggerTurn: true, deliverAs: "followUp" },
-      );
-    } else if (choice === "Refine the plan") {
-      const refinement = await ctx.ui.editor("Refine the plan:", "");
-      if (refinement !== undefined && refinement.trim().length > 0) {
-        msa.sendMessage(planTodoListMessage, { deliverAs: "followUp" });
-        msa.sendUserMessage(refinement.trim(), { deliverAs: "followUp" });
-      }
-    }
+  msa.registerFlag("plan", {
+    description: "Start in plan mode (read-only exploration)",
+    type: "boolean",
+    default: false,
   });
+
+  registerCommands(msa, store);
+  registerGuards(msa, store);
+  registerProgress(msa, store);
 
   msa.on("session_start", (_event, ctx) => {
-    if (msa.getFlag("plan") === true) {
-      planModeEnabled = true;
-    }
-
-    const entries = ctx.sessionManager.getEntries();
-
-    const planModeEntry = entries
-      .filter(
-        (e: { type: string; customType?: string }) =>
-          e.type === "custom" && e.customType === "plan-mode",
-      )
-      .pop() as { data?: PlanModeState } | undefined;
-
-    if (planModeEntry?.data !== undefined) {
-      planModeEnabled = planModeEntry.data.enabled ?? planModeEnabled;
-      todoItems = planModeEntry.data.todos ?? todoItems;
-      executionMode = planModeEntry.data.executing ?? executionMode;
-      toolsBeforePlanMode = planModeEntry.data.toolsBeforePlanMode ?? toolsBeforePlanMode;
-    }
-
-    const isResume = planModeEntry !== undefined;
-    if (isResume && executionMode && todoItems.length > 0) {
-      let executeIndex = -1;
-      for (let i = entries.length - 1; i >= 0; i--) {
-        const entry = entries[i] as { type: string; customType?: string };
-        if (entry.customType === "plan-mode-execute") {
-          executeIndex = i;
-          break;
-        }
-      }
-
-      const messages: AssistantMessage[] = [];
-      for (const entry of entries.slice(executeIndex + 1)) {
-        if (
-          entry.type === "message" &&
-          "message" in entry &&
-          isAssistantMessage(entry.message as AgentMessage)
-        ) {
-          messages.push(entry.message as AssistantMessage);
-        }
-      }
-      const allText = messages.map(getTextContent).join("\n");
-      markCompletedSteps(allText, todoItems);
-    }
-
-    if (planModeEnabled) {
-      enablePlanModeTools();
-    }
-    updateStatus(ctx);
+    restoreFromBranch(msa, store, ctx);
   });
 }
