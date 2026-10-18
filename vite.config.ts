@@ -177,6 +177,12 @@ export default defineConfig({
         },
       },
       {
+        files: ["**/*.ts"],
+        rules: {
+          "import/extensions": ["error", "ignorePackages", { js: "never", checkTypeImports: true }],
+        },
+      },
+      {
         files: ["tools/**", "lint.config.ts", "syncpack.config.ts", "vite.config.ts"],
         rules: {
           "no-comments/disallowComments": [
@@ -217,8 +223,7 @@ export default defineConfig({
         ],
       },
       "engine-checks": {
-        command:
-          "node scripts/check-ts-relative-imports.ts && node scripts/check-entry-graphs.ts && node scripts/check-browser-smoke.ts",
+        command: "node scripts/check-entry-graphs.ts && node scripts/check-browser-smoke.ts",
       },
       "workspace-layout": "node tools/workspace-layout.ts",
       "lint-categories": "node tools/lint-categories.ts",
