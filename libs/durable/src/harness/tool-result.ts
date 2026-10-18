@@ -1,5 +1,6 @@
 import type { ImageContent, TextContent, ToolCall, ToolResultMessage } from "@msa/ai";
-import { copyJson, type JsonValue } from "@msa/chord";
+import type { JsonValue } from "@msa/chord";
+import { copyJson } from "@msa/chord/json";
 import { boundOutput, type OutputLimits } from "@msa/chord/output";
 import { Effect, Function } from "effect";
 

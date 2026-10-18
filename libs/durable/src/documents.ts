@@ -1,5 +1,6 @@
-import { copyJson, type JsonValue } from "@msa/chord";
+import type { JsonValue } from "@msa/chord";
 import type { Op } from "@msa/chord/delta";
+import { copyJson } from "@msa/chord/json";
 import { Function } from "effect";
 
 import type { Dual2, Dual3, Dual4 } from "./dual.ts";

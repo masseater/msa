@@ -1,4 +1,5 @@
-import { copyJson, type Draft, type JsonRepresentation } from "@msa/chord";
+import type { Draft, JsonRepresentation } from "@msa/chord";
+import { copyJson } from "@msa/chord/json";
 import { Effect, Function } from "effect";
 
 import { defineDoc } from "../documents.ts";

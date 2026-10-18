@@ -1,6 +1,6 @@
 import { type Context, copyJson, type JsonValue } from "@msa/chord";
-import { overlap } from "@msa/chord/delta";
-import { Progress } from "@msa/chord/output";
+import { overlap } from "@msa/chord/delta/overlap";
+import { Progress } from "@msa/chord/progress";
 import { Effect, Function } from "effect";
 
 import { utf8ByteLength } from "../truncate.ts";

@@ -1,4 +1,5 @@
-import { type Context, copyJson, type JsonValue } from "@msa/chord";
+import type { Context, JsonValue } from "@msa/chord";
+import { copyJson } from "@msa/chord/json";
 
 import { promiseTry } from "../promise-try.ts";
 import type { ContextRange } from "./context.ts";

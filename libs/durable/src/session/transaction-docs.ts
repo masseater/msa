@@ -1,5 +1,6 @@
-import { copyJson, type Draft, type JsonValue } from "@msa/chord";
-import { track as trackValue } from "@msa/chord/delta";
+import type { Draft, JsonValue } from "@msa/chord";
+import { track as trackValue } from "@msa/chord/delta/tracker";
+import { copyJson } from "@msa/chord/json";
 import { Effect, Function } from "effect";
 
 import {

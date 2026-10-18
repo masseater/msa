@@ -1,4 +1,4 @@
-import { applyImmutableBatches } from "@msa/chord/delta";
+import { applyImmutableBatches } from "@msa/chord/delta/apply";
 import { Function } from "effect";
 
 import { StorageRequestError } from "../../errors.ts";

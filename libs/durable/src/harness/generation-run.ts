@@ -1,5 +1,6 @@
 import type { AssistantMessage } from "@msa/ai";
-import { copyJson, type Draft } from "@msa/chord";
+import type { Draft } from "@msa/chord";
+import { copyJson } from "@msa/chord/json";
 import { Effect, Function } from "effect";
 
 import { AssistantEntry } from "../entries.ts";

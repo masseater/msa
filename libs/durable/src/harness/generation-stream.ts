@@ -1,5 +1,6 @@
 import type { Api, AssistantMessage, Message, Model, SimpleStreamOptions } from "@msa/ai";
-import { type Context, copyJson, type Draft, type JsonValue } from "@msa/chord";
+import type { Context, Draft, JsonValue } from "@msa/chord";
+import { copyJson } from "@msa/chord/json";
 import { Cause, Effect, Fiber } from "effect";
 
 import { commitTask, eachHook, hookResult } from "./bridge.ts";

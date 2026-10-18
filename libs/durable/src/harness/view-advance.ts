@@ -1,6 +1,7 @@
 import type { Context, JsonValue } from "@msa/chord";
 import { withoutAbortSignal } from "@msa/chord/context";
-import { applyImmutable, type NonEmptyPath, type Op, type Path } from "@msa/chord/delta";
+import type { NonEmptyPath, Op, Path } from "@msa/chord/delta";
+import { applyImmutable } from "@msa/chord/delta/apply";
 import { Function } from "effect";
 
 import { contained } from "../session/session.ts";

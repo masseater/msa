@@ -1,5 +1,5 @@
 import type { Context } from "@msa/chord";
-import { track } from "@msa/chord/delta";
+import { track } from "@msa/chord/delta/tracker";
 import { Effect, Function } from "effect";
 
 import { type AnyDocDefinition, materializeDocument } from "../documents.ts";

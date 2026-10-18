@@ -1,5 +1,5 @@
-import { replicatedState } from "@msa/chord";
 import { withoutAbortSignal } from "@msa/chord/context";
+import { replicatedState } from "@msa/chord/state";
 import { Effect, Function } from "effect";
 
 import type { Dual3 } from "../dual.ts";

@@ -1,5 +1,6 @@
-import { type Context, copyJson, type JsonValue } from "@msa/chord";
+import type { Context, JsonValue } from "@msa/chord";
 import { withAbortSignal } from "@msa/chord/context";
+import { copyJson } from "@msa/chord/json";
 import { Effect } from "effect";
 
 import { promiseTry } from "../promise-try.ts";

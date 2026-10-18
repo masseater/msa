@@ -1,10 +1,5 @@
-import {
-  type Context,
-  copyJson,
-  type Draft,
-  type JsonRepresentation,
-  type JsonValue,
-} from "@msa/chord";
+import type { Context, Draft, JsonRepresentation, JsonValue } from "@msa/chord";
+import { copyJson } from "@msa/chord/json";
 import { Effect } from "effect";
 
 import { commitTask } from "./bridge.ts";

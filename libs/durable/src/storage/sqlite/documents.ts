@@ -1,4 +1,5 @@
-import { apply, type Op } from "@msa/chord/delta";
+import type { Op } from "@msa/chord/delta";
+import { apply } from "@msa/chord/delta/apply";
 import { Effect, Function } from "effect";
 
 import { StorageRequestError } from "../../errors.ts";
