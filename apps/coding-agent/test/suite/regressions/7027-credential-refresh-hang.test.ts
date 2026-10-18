@@ -1,4 +1,5 @@
 import type { Api, Model, Provider } from "@msa/ai";
+import { gate } from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
@@ -40,10 +41,7 @@ let harness!: Harness;
 
 const doesNotHoldLoginBehindAn = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-  let markNetworkStarted: (() => void) | undefined;
-  const networkStarted = new Promise<void>((resolve) => {
-    markNetworkStarted = resolve;
-  });
+  const networkStarted = gate();
   const provider: Provider<"openai-completions"> = {
     id: "stalled-login",
     name: "Stalled Login",
@@ -72,7 +70,7 @@ const doesNotHoldLoginBehindAn = Effect.gen(function* () {
       runPromise(
         Effect.gen(function* () {
           if (!allowNetwork) return;
-          markNetworkStarted?.();
+          networkStarted.release();
           yield* Effect.promise(() => new Promise<void>(() => {}));
         }),
       ),

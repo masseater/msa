@@ -1,9 +1,9 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
+import { joinPath } from "@msa/testing";
 import { Effect, FileSystem, ManagedRuntime } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
 import { createFindToolDefinition } from "../../../src/core/tools/find.ts";
-import { join } from "../../test-path.ts";
 
 const runtime = ManagedRuntime.make(NodeServices.layer);
 const fs = runtime.runSync(FileSystem.FileSystem.useSync((service) => service));
@@ -59,11 +59,14 @@ describe("issue #3302 find returns no results for path-based glob patterns", () 
     runtime.runPromise(
       Effect.gen(function* () {
         tempRoot = yield* fs.makeTempDirectory({ prefix: "msa-3302-" });
-        yield* fs.makeDirectory(join(tempRoot, "some", "parent", "child"), { recursive: true });
-        yield* fs.makeDirectory(join(tempRoot, "src", "foo", "bar"), { recursive: true });
-        yield* fs.writeFileString(join(tempRoot, "some", "parent", "child", "file.ext"), "");
-        yield* fs.writeFileString(join(tempRoot, "some", "parent", "child", "test.spec.ts"), "");
-        yield* fs.writeFileString(join(tempRoot, "src", "foo", "bar", "example.spec.ts"), "");
+        yield* fs.makeDirectory(joinPath(tempRoot, "some", "parent", "child"), { recursive: true });
+        yield* fs.makeDirectory(joinPath(tempRoot, "src", "foo", "bar"), { recursive: true });
+        yield* fs.writeFileString(joinPath(tempRoot, "some", "parent", "child", "file.ext"), "");
+        yield* fs.writeFileString(
+          joinPath(tempRoot, "some", "parent", "child", "test.spec.ts"),
+          "",
+        );
+        yield* fs.writeFileString(joinPath(tempRoot, "src", "foo", "bar", "example.spec.ts"), "");
       }),
     ),
   );

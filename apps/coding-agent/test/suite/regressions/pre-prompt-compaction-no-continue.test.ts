@@ -1,9 +1,9 @@
 import { type AssistantMessage, fauxAssistantMessage } from "@msa/ai";
+import { currentTimeMillis } from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import type { Model } from "../../../../../libs/ai/src/model-types.ts";
-import { nowMillis } from "../../test-time.ts";
 import { createHarness, getUserTexts, type Harness } from "../harness.ts";
 
 function createUsage(totalTokens: number) {
@@ -41,7 +41,7 @@ const compactsLengthStopOverflowBeforeA = Effect.gen(function* () {
     }),
   );
   harnesses.push(harness);
-  const now = nowMillis();
+  const now = currentTimeMillis();
   const model = harness.getModel();
   harness.sessionManager.appendMessage({
     role: "user",

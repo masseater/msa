@@ -1,5 +1,6 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { fauxAssistantMessage, registerFauxProvider } from "@msa/ai/compat";
+import { joinPath } from "@msa/testing";
 import { Effect, FileSystem, ManagedRuntime } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
@@ -18,7 +19,6 @@ import type {
   ExtensionCommandContext,
   ExtensionFactory,
 } from "../../../src/index.ts";
-import { join } from "../../test-path.ts";
 
 const runtime = ManagedRuntime.make(NodeServices.layer);
 const fs = runtime.runSync(FileSystem.FileSystem.useSync((service) => service));
@@ -61,7 +61,7 @@ function createRuntimeForTest(extensionFactory: ExtensionFactory, responses: str
       const modelRuntime = yield* Effect.promise(() =>
         ModelRuntime.create({
           credentials: authStorage,
-          modelsPath: join(tempDir, "models.json"),
+          modelsPath: joinPath(tempDir, "models.json"),
         }),
       );
 

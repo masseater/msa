@@ -1,6 +1,7 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { Agent } from "@msa/agent-core";
 import { fauxAssistantMessage, registerFauxProvider, streamSimple } from "@msa/ai/compat";
+import { joinPath } from "@msa/testing";
 import { Effect, FileSystem, ManagedRuntime } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
@@ -14,7 +15,6 @@ import { SessionManager } from "../../../src/core/session-manager.ts";
 import { SettingsManager } from "../../../src/core/settings-manager.ts";
 import { initTheme } from "../../../src/modes/interactive/theme/theme.ts";
 import { createInMemoryModelRegistry, getModelRuntime } from "../../model-runtime-test-utils.ts";
-import { join } from "../../test-path.ts";
 import { createTestResourceLoader } from "../../utilities.ts";
 
 const runtime = ManagedRuntime.make(NodeServices.layer);
@@ -68,7 +68,7 @@ const exportsWithTheActiveFallbackThemePart2 = (
   settingsManager: SettingsManager,
 ) =>
   Effect.gen(function* () {
-    const sessionManager = SessionManager.create(tempDir, join(tempDir, "sessions"));
+    const sessionManager = SessionManager.create(tempDir, joinPath(tempDir, "sessions"));
     const agent = new Agent({
       getApiKey: () => "faux-key",
       initialState: {
@@ -110,7 +110,7 @@ const exportsWithTheActiveFallbackThemePart3 = (
     );
     yield* Effect.promise(() => session.prompt("hi"));
     initTheme(settingsManager.getTheme());
-    const outputPath = join(tempDir, "export.html");
+    const outputPath = joinPath(tempDir, "export.html");
     yield* Effect.promise(() => expect(session.exportToHtml(outputPath)).resolves.toBe(outputPath));
     expect(yield* fs.exists(outputPath)).toBe(true);
     expect(settingsManager.getTheme()).toBe("missing-theme");

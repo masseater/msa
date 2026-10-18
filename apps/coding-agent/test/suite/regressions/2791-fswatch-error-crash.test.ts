@@ -1,11 +1,9 @@
 import { execFileSync } from "node:child_process";
 
 import * as NodeServices from "@effect/platform-node/NodeServices";
+import { fromJsonText, joinPath, toJsonText } from "@msa/testing";
 import { Effect, FileSystem, ManagedRuntime } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
-
-import { parseJson, stringifyJsonPretty } from "../../test-json.ts";
-import { join } from "../../test-path.ts";
 
 const runtime = ManagedRuntime.make(NodeServices.layer);
 const fs = runtime.runSync(FileSystem.FileSystem.useSync((service) => service));
@@ -15,13 +13,13 @@ let tempRoot: string;
 const processShouldSurviveAnErrorEvent = () =>
   runtime.runPromise(
     Effect.gen(function* () {
-      const themeModulePath = join(
+      const themeModulePath = joinPath(
         __dirname,
         "../../../src/modes/interactive/theme/theme.ts",
       ).replace(/\\/gu, "/");
-      const agentDir = join(tempRoot, "agent").replace(/\\/gu, "/");
+      const agentDir = joinPath(tempRoot, "agent").replace(/\\/gu, "/");
 
-      const scriptPath = join(tempRoot, "test-watcher-error.mts");
+      const scriptPath = joinPath(tempRoot, "test-watcher-error.mts");
       yield* fs.writeFileString(
         scriptPath,
         `
@@ -83,16 +81,18 @@ describe("issue #2791 fs.watch error event crashes process", () => {
     runtime.runPromise(
       Effect.gen(function* () {
         tempRoot = yield* fs.makeTempDirectory({ prefix: "msa-2791-" });
-        const agentDir = join(tempRoot, "agent");
-        const themesDir = join(agentDir, "themes");
+        const agentDir = joinPath(tempRoot, "agent");
+        const themesDir = joinPath(agentDir, "themes");
         yield* fs.makeDirectory(themesDir, { recursive: true });
 
-        const darkThemePath = join(__dirname, "../../../src/modes/interactive/theme/dark.json");
-        const darkTheme = parseJson(yield* fs.readFileString(darkThemePath)) as { name: string };
+        const darkThemePath = joinPath(__dirname, "../../../src/modes/interactive/theme/dark.json");
+        const darkTheme = (yield* fromJsonText(yield* fs.readFileString(darkThemePath))) as {
+          name: string;
+        };
         darkTheme.name = "custom-test";
         yield* fs.writeFileString(
-          join(themesDir, "custom-test.json"),
-          stringifyJsonPretty(darkTheme),
+          joinPath(themesDir, "custom-test.json"),
+          yield* toJsonText(darkTheme),
         );
       }),
     ),

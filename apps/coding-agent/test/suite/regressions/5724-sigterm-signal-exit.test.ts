@@ -1,3 +1,4 @@
+import { gate } from "@msa/testing";
 import { Cause, Effect, Exit } from "effect";
 import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 
@@ -21,13 +22,10 @@ const interactiveModePrototype = InteractiveMode.prototype as unknown;
 class ProcessExitError extends Error {}
 
 function deferred(): { promise: Promise<void>; resolve: () => void } {
-  let resolve: (() => void) | undefined;
-  const promise = new Promise<void>((res) => {
-    resolve = res;
-  });
+  const promise = gate();
   return {
     promise,
-    resolve: () => resolve?.(),
+    resolve: () => promise.release(),
   };
 }
 

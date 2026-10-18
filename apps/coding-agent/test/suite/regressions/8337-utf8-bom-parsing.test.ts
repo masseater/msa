@@ -1,12 +1,11 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
+import { joinPath, toJsonText } from "@msa/testing";
 import { Effect, FileSystem, ManagedRuntime } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
 import { SettingsManager } from "../../../src/core/settings-manager.ts";
 import { parseFrontmatter } from "../../../src/utils/frontmatter.ts";
 import { splitBom } from "../../../src/utils/text.ts";
-import { stringifyJson } from "../../test-json.ts";
-import { join } from "../../test-path.ts";
 
 const runtime = ManagedRuntime.make(NodeServices.layer);
 const fs = runtime.runSync(FileSystem.FileSystem.useSync((service) => service));
@@ -21,18 +20,18 @@ const loadsFrontmatterAndSettingsWithA = Effect.gen(function* () {
     body: "Body",
   });
 
-  const agentDir = join(testDir, "agent");
-  const projectDir = join(testDir, "project");
-  yield* fs.makeDirectory(join(projectDir, ".msa"), { recursive: true });
+  const agentDir = joinPath(testDir, "agent");
+  const projectDir = joinPath(testDir, "project");
+  yield* fs.makeDirectory(joinPath(projectDir, ".msa"), { recursive: true });
   yield* fs.makeDirectory(agentDir, { recursive: true });
-  const globalSettingsPath = join(agentDir, "settings.json");
+  const globalSettingsPath = joinPath(agentDir, "settings.json");
   yield* fs.writeFileString(
     globalSettingsPath,
-    `\uFEFF${stringifyJson({ defaultModel: "global-model" })}`,
+    `\uFEFF${yield* toJsonText({ defaultModel: "global-model" })}`,
   );
   yield* fs.writeFileString(
-    join(projectDir, ".msa", "settings.json"),
-    `\uFEFF${stringifyJson({ defaultProvider: "project-provider" })}`,
+    joinPath(projectDir, ".msa", "settings.json"),
+    `\uFEFF${yield* toJsonText({ defaultProvider: "project-provider" })}`,
   );
 
   const settings = SettingsManager.create(projectDir, agentDir);

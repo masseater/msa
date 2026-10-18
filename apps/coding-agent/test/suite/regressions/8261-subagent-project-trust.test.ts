@@ -1,11 +1,11 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { fauxAssistantMessage, fauxToolCall } from "@msa/ai";
+import { joinPath } from "@msa/testing";
 import { Effect, FileSystem, ManagedRuntime } from "effect";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import subagentExtension from "../../../examples/extensions/subagent/index.ts";
 import type { ExtensionUIContext } from "../../../src/core/extensions/index.ts";
-import { join } from "../../test-path.ts";
 import { createHarness, getMessageText } from "../harness.ts";
 
 const runtime = ManagedRuntime.make(NodeServices.layer);
@@ -38,10 +38,10 @@ function runProjectAgent(
       const confirm = vi.fn(() => Promise.resolve(options.confirmResult ?? false));
 
       try {
-        const agentsDir = join(harness.tempDir, ".msa", "agents");
+        const agentsDir = joinPath(harness.tempDir, ".msa", "agents");
         yield* fs.makeDirectory(agentsDir, { recursive: true });
         yield* fs.writeFileString(
-          join(agentsDir, "project-agent.md"),
+          joinPath(agentsDir, "project-agent.md"),
           "---\nname: project-agent\ndescription: Project test agent\n---\n\nHandle the delegated task.\n",
         );
         harness.settingsManager.setProjectTrusted(options.trusted);
@@ -59,7 +59,7 @@ function runProjectAgent(
               agent: "project-agent",
               task: "Test project trust",
               agentScope: "project",
-              cwd: join(harness.tempDir, "missing-cwd"),
+              cwd: joinPath(harness.tempDir, "missing-cwd"),
             }),
             { stopReason: "toolUse" },
           ),

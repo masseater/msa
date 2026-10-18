@@ -2,6 +2,7 @@ import { Buffer } from "node:buffer";
 
 import type { AgentTool } from "@msa/agent-core";
 import { fauxAssistantMessage, fauxToolCall } from "@msa/ai";
+import { gate } from "@msa/testing";
 import { Effect } from "effect";
 import { Type } from "typebox";
 import { afterEach, describe, expect, it } from "vite-plus/test";
@@ -50,10 +51,7 @@ const recordsBashResultsImmediatelyWhileIdle = Effect.gen(function* () {
 
 const defersBashResultsWhileStreamingAnd = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-  let releaseToolExecution: (() => void) | undefined;
-  const toolRelease = new Promise<void>((resolve) => {
-    releaseToolExecution = resolve;
-  });
+  const toolRelease = gate();
   const waitTool: AgentTool = {
     name: "wait",
     label: "Wait",
@@ -99,7 +97,7 @@ const defersBashResultsWhileStreamingAnd = Effect.gen(function* () {
   expect(harness.session.hasPendingBashMessages).toBe(true);
   expect(harness.session.messages.some((message) => message.role === "bashExecution")).toBe(false);
 
-  releaseToolExecution?.();
+  toolRelease.release();
   yield* Effect.promise(() => firstPrompt);
 
   expect(harness.session.hasPendingBashMessages).toBe(false);

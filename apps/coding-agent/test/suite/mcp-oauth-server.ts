@@ -2,9 +2,8 @@ import { createHash } from "node:crypto";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 
 import { LATEST_PROTOCOL_VERSION } from "@msa/mcp";
+import { fromJsonText } from "@msa/testing";
 import { Effect, Stream } from "effect";
-
-import { parseJson } from "../test-json.ts";
 
 function readBody(request: IncomingMessage): Promise<string> {
   return Effect.runPromise(
@@ -74,7 +73,9 @@ export function startOAuthMcpServer(
                 .end();
               return;
             }
-            const message = parseJson(yield* Effect.promise(() => readBody(request))) as {
+            const message = (yield* fromJsonText(
+              yield* Effect.promise(() => readBody(request)),
+            )) as {
               id?: number;
               method: string;
               params?: unknown;
@@ -140,9 +141,9 @@ export function startOAuthMcpServer(
                     : {}),
                 });
               case "/register": {
-                const metadata = parseJson(
+                const metadata = (yield* fromJsonText(
                   yield* Effect.promise(() => readBody(request)),
-                ) as Record<string, unknown>;
+                )) as Record<string, unknown>;
                 log.push("register");
                 registrations.push(metadata);
                 return json(response, 201, { ...metadata, client_id: "client-1" });

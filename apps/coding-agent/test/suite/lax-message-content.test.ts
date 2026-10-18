@@ -1,5 +1,6 @@
 import type { AgentMessage, AgentToolResult } from "@msa/agent-core";
 import { fauxAssistantMessage, fauxToolCall } from "@msa/ai";
+import { currentTimeMillis, nowIso } from "@msa/testing";
 import { Effect } from "effect";
 import { Type } from "typebox";
 import { describe, expect, it } from "vite-plus/test";
@@ -9,7 +10,6 @@ import {
   sessionEntryToContextMessages,
 } from "../../src/core/session-manager.ts";
 import type { ExtensionFactory } from "../../src/index.ts";
-import { nowIso, nowMillis } from "../test-time.ts";
 import { createHarness } from "./harness.ts";
 
 function messageEntry(message: Record<string, unknown>): SessionEntry {
@@ -111,7 +111,7 @@ const normalizesNullContentInCustomMessages = Effect.gen(function* () {
 
 const normalizesNullOrMissingContentWhen = () => {
   const badMessages = [
-    { role: "user", content: null, timestamp: nowMillis() },
+    { role: "user", content: null, timestamp: currentTimeMillis() },
     {
       role: "assistant",
       content: null,
@@ -127,14 +127,14 @@ const normalizesNullOrMissingContentWhen = () => {
         cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
       },
       stopReason: "stop",
-      timestamp: nowMillis(),
+      timestamp: currentTimeMillis(),
     },
     {
       role: "toolResult",
       toolCallId: "call_1",
       toolName: "web_search",
       isError: false,
-      timestamp: nowMillis(),
+      timestamp: currentTimeMillis(),
     },
   ];
 
@@ -177,7 +177,7 @@ describe("lax message content handling", () => {
   );
   it("keeps valid message content untouched when loading session entries", () => {
     const [message] = sessionEntryToContextMessages(
-      messageEntry({ role: "user", content: "hello", timestamp: nowMillis() }),
+      messageEntry({ role: "user", content: "hello", timestamp: currentTimeMillis() }),
     );
     expect(message).toMatchObject({ role: "user", content: "hello" });
   });

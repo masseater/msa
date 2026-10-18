@@ -7,6 +7,7 @@ import {
   type Model,
   type TranscriptContext,
 } from "@msa/ai";
+import { joinPath, toJsonText } from "@msa/testing";
 import { Effect, FileSystem, ManagedRuntime } from "effect";
 import { Type } from "typebox";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
@@ -18,8 +19,6 @@ import type {
 } from "../../src/core/extensions/index.ts";
 import type { PromptTemplate } from "../../src/core/prompt-templates.ts";
 import { createSyntheticSourceInfo } from "../../src/core/source-info.ts";
-import { stringifyJson } from "../test-json.ts";
-import { join } from "../test-path.ts";
 import { createTestResourceLoader } from "../utilities.ts";
 import { createHarness, getMessageText, type Harness } from "./harness.ts";
 
@@ -254,7 +253,7 @@ const expandsSkillCommandsBeforeSendingThe = Effect.gen(function* () {
   const tempDir = yield* fs.makeTempDirectory({ prefix: `msa-skill-` });
   yield* fs.makeDirectory(tempDir, { recursive: true });
   tempDirs.push(tempDir);
-  const skillPath = join(tempDir, "test-skill.md");
+  const skillPath = joinPath(tempDir, "test-skill.md");
   yield* fs.writeFileString(skillPath, "# Test Skill\n\nUse the skill body.");
 
   const template: PromptTemplate = {
@@ -805,7 +804,7 @@ const includesACustomMessageSentWithout = Effect.gen(function* () {
   yield* Effect.promise(() => harness.session.prompt("hello"));
 
   expect(requests).toHaveLength(1);
-  expect(stringifyJson(requests[0]?.messages)).toContain("context from handler");
+  expect(yield* toJsonText(requests[0]?.messages)).toContain("context from handler");
 });
 
 const abortsARunWhenAbortIs = Effect.gen(function* () {

@@ -1,9 +1,9 @@
 import { fauxAssistantMessage } from "@msa/ai";
+import { currentTimeMillis } from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import type { SessionBeforeCompactEvent } from "../../src/core/extensions/index.ts";
-import { nowMillis } from "../test-time.ts";
 import { createHarness, type Harness } from "./harness.ts";
 
 function seedHistory(harness: Harness, totalTokens = 650): string {
@@ -13,10 +13,10 @@ function seedHistory(harness: Harness, totalTokens = 650): string {
     recentUserId = harness.sessionManager.appendMessage({
       role: "user",
       content: [{ type: "text", text: label.padEnd(400, "x") }],
-      timestamp: nowMillis() - 2000,
+      timestamp: currentTimeMillis() - 2000,
     });
     const assistant = fauxAssistantMessage(label.padEnd(400, "y"), {
-      timestamp: nowMillis() - 1000,
+      timestamp: currentTimeMillis() - 1000,
     });
     harness.sessionManager.appendMessage({
       ...assistant,

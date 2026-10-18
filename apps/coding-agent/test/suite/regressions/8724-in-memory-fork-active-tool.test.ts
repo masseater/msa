@@ -1,5 +1,6 @@
 import type { AgentTool, AgentToolResult } from "@msa/agent-core";
 import { fauxAssistantMessage, fauxToolCall } from "@msa/ai";
+import { gate } from "@msa/testing";
 import { Effect } from "effect";
 import { Type } from "typebox";
 import { afterEach, describe, expect, it } from "vite-plus/test";
@@ -16,10 +17,7 @@ const cleanups: Array<() => Promise<void> | void> = [];
 
 const doesNotAppendTheAbortedTurn = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-  let markToolStarted = () => {};
-  const toolStarted = new Promise<void>((resolve) => {
-    markToolStarted = resolve;
-  });
+  const toolStarted = gate();
   const blockingTool: AgentTool = {
     name: "block",
     label: "Block",
@@ -27,7 +25,7 @@ const doesNotAppendTheAbortedTurn = Effect.gen(function* () {
     parameters: Type.Object({}),
     execute: (_toolCallId, _params, signal) =>
       new Promise<AgentToolResult<unknown>>((resolve) => {
-        markToolStarted();
+        toolStarted.release();
         signal?.addEventListener(
           "abort",
           () => resolve({ content: [{ type: "text", text: "tool aborted" }], details: {} }),

@@ -1,4 +1,5 @@
 import { type AssistantMessage, fauxAssistantMessage } from "@msa/ai";
+import { gate } from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
@@ -84,16 +85,13 @@ const cancelsSummarizationAuthentication = Effect.gen(function* () {
   );
   harnesses.push(harness);
   seedCompactableSession(harness);
-  let markAuthStarted = () => {};
-  const authStarted = new Promise<void>((resolve) => {
-    markAuthStarted = resolve;
-  });
+  const authStarted = gate();
   let authSignal: AbortSignal | undefined;
   vi.spyOn(harness.session.modelRuntime, "getAuth").mockImplementation((_model, options) =>
     runPromise(
       Effect.gen(function* () {
         authSignal = options?.signal;
-        markAuthStarted();
+        authStarted.release();
         if (authSignal === undefined) throw new Error("Missing auth abort signal");
         return yield* Effect.promise(
           () =>

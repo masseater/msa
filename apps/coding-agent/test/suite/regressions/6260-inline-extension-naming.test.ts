@@ -1,10 +1,10 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
+import { joinPath } from "@msa/testing";
 import { Effect, FileSystem, ManagedRuntime } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
 import { DefaultResourceLoader } from "../../../src/core/resource-loader.ts";
 import type { ExtensionAPI } from "../../../src/index.ts";
-import { join } from "../../test-path.ts";
 
 const runtime = ManagedRuntime.make(NodeServices.layer);
 const fs = runtime.runSync(FileSystem.FileSystem.useSync((service) => service));
@@ -17,8 +17,8 @@ function fixture(name: string) {
   return runtime.runPromise(
     Effect.gen(function* () {
       const root = yield* fs.makeTempDirectory({ prefix: `msa-inline-naming-${name}-` });
-      const cwd = join(root, "project");
-      const agentDir = join(root, "agent");
+      const cwd = joinPath(root, "project");
+      const agentDir = joinPath(root, "agent");
       yield* fs.makeDirectory(cwd, { recursive: true });
       yield* fs.makeDirectory(agentDir, { recursive: true });
       roots.push(root);

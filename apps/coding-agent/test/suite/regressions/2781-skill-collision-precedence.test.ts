@@ -1,10 +1,9 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
+import { joinPath, toJsonText } from "@msa/testing";
 import { Effect, FileSystem, ManagedRuntime } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
 import { DefaultResourceLoader } from "../../../src/core/resource-loader.ts";
-import { stringifyJsonPretty } from "../../test-json.ts";
-import { join } from "../../test-path.ts";
 
 const runtime = ManagedRuntime.make(NodeServices.layer);
 const fs = runtime.runSync(FileSystem.FileSystem.useSync((service) => service));
@@ -18,19 +17,19 @@ let cwd: string;
 function createPackageWithSkill(name: string, description: string) {
   return runtime.runPromise(
     Effect.gen(function* () {
-      const pkgDir = join(tempDir, `fake-package-${name}`);
-      const skillDir = join(pkgDir, "skills", name);
+      const pkgDir = joinPath(tempDir, `fake-package-${name}`);
+      const skillDir = joinPath(pkgDir, "skills", name);
       yield* fs.makeDirectory(skillDir, { recursive: true });
       yield* fs.writeFileString(
-        join(pkgDir, "package.json"),
-        stringifyJsonPretty({
+        joinPath(pkgDir, "package.json"),
+        yield* toJsonText({
           name: `fake-pkg-${name}`,
           version: "1.0.0",
           msa: { skills: [`skills/${name}`] },
         }),
       );
       yield* fs.writeFileString(
-        join(skillDir, "SKILL.md"),
+        joinPath(skillDir, "SKILL.md"),
         `---\nname: ${name}\ndescription: ${description}\n---\nPackage skill content`,
       );
       return pkgDir;
@@ -41,9 +40,9 @@ function createPackageWithSkill(name: string, description: string) {
 function createUserSkill(name: string, description: string) {
   return runtime.runPromise(
     Effect.gen(function* () {
-      const skillDir = join(agentDir, "skills", name);
+      const skillDir = joinPath(agentDir, "skills", name);
       yield* fs.makeDirectory(skillDir, { recursive: true });
-      const skillPath = join(skillDir, "SKILL.md");
+      const skillPath = joinPath(skillDir, "SKILL.md");
       yield* fs.writeFileString(
         skillPath,
         `---\nname: ${name}\ndescription: ${description}\n---\nUser skill content`,
@@ -56,9 +55,9 @@ function createUserSkill(name: string, description: string) {
 function createProjectSkill(name: string, description: string) {
   return runtime.runPromise(
     Effect.gen(function* () {
-      const skillDir = join(cwd, ".msa", "skills", name);
+      const skillDir = joinPath(cwd, ".msa", "skills", name);
       yield* fs.makeDirectory(skillDir, { recursive: true });
-      const skillPath = join(skillDir, "SKILL.md");
+      const skillPath = joinPath(skillDir, "SKILL.md");
       yield* fs.writeFileString(
         skillPath,
         `---\nname: ${name}\ndescription: ${description}\n---\nProject skill content`,
@@ -71,11 +70,11 @@ function createProjectSkill(name: string, description: string) {
 function createSettingsWithPackage(pkgDir: string, scope: "user" | "project") {
   return runtime.runPromise(
     Effect.gen(function* () {
-      const settingsDir = scope === "user" ? agentDir : join(cwd, ".msa");
+      const settingsDir = scope === "user" ? agentDir : joinPath(cwd, ".msa");
       yield* fs.makeDirectory(settingsDir, { recursive: true });
       yield* fs.writeFileString(
-        join(settingsDir, "settings.json"),
-        stringifyJsonPretty({ packages: [pkgDir] }),
+        joinPath(settingsDir, "settings.json"),
+        yield* toJsonText({ packages: [pkgDir] }),
       );
     }),
   );
@@ -162,8 +161,8 @@ describe("issue #2781 skill collision precedence: user skills should override pa
     runtime.runPromise(
       Effect.gen(function* () {
         tempDir = yield* fs.makeTempDirectory({ prefix: `msa-2781-` });
-        agentDir = join(tempDir, "agent");
-        cwd = join(tempDir, "project");
+        agentDir = joinPath(tempDir, "agent");
+        cwd = joinPath(tempDir, "project");
         yield* fs.makeDirectory(agentDir, { recursive: true });
         yield* fs.makeDirectory(cwd, { recursive: true });
       }),

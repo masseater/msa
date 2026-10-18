@@ -3,6 +3,7 @@ import { fauxAssistantMessage, fauxToolCall } from "@msa/ai";
 import type { SystemMessage, ToolResultMessage } from "@msa/ai/compat";
 import { type JsonRpcRequest, LATEST_PROTOCOL_VERSION } from "@msa/mcp";
 import { createInMemoryTransportPair } from "@msa/mcp/testing";
+import { fromJsonText } from "@msa/testing";
 import { Effect, FileSystem, ManagedRuntime } from "effect";
 import { Type } from "typebox";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
@@ -15,7 +16,6 @@ import { createMcpExtension, MCP_SERVERS_SECTION } from "../../src/extensions/mc
 import { createMcpToolName } from "../../src/extensions/mcp/tools.ts";
 import { createToolSearchExtension } from "../../src/extensions/tool-search/index.ts";
 import { TOOL_SEARCH_DESCRIPTION } from "../../src/extensions/tool-search/tool.ts";
-import { parseJson } from "../test-json.ts";
 import { createTestExtensionsResult, createTestResourceLoader } from "../utilities.ts";
 import {
   createHarness,
@@ -438,7 +438,7 @@ const exposesCodemodeOnlyMcpToolsThrough = Effect.gen(function* () {
     data: TINY_PNG_BASE64,
     mimeType: "image/png",
   });
-  expect(parseJson((result.content[3] as { text: string }).text)).toEqual({
+  expect(yield* fromJsonText((result.content[3] as { text: string }).text)).toEqual({
     hits: ["mcp guide", "mcp faq", "msa guide", "msa faq"],
     failed: true,
     failure: "server exploded",
@@ -540,15 +540,17 @@ const listsAndReadsResourcesWithCodex = Effect.gen(function* () {
       "read_mcp_resource",
     ]),
   );
-  expect(parseJson(getMessageText(toolResult(harness, "list_mcp_resources")))).toEqual({
+  expect(yield* fromJsonText(getMessageText(toolResult(harness, "list_mcp_resources")))).toEqual({
     resources: [{ server: "docs", uri: "docs://intro", name: "intro", mimeType: "text/markdown" }],
   });
   return yield* listsAndReadsResourcesWithCodexPart2(harness, calls);
 });
 
 const listsAndReadsResourcesWithCodexPart2 = (harness: Harness, calls: string[]) =>
-  Effect.sync(() => {
-    expect(parseJson(getMessageText(toolResult(harness, "list_mcp_resource_templates")))).toEqual({
+  Effect.gen(function* () {
+    expect(
+      yield* fromJsonText(getMessageText(toolResult(harness, "list_mcp_resource_templates"))),
+    ).toEqual({
       server: "docs",
       resourceTemplates: [{ server: "docs", uriTemplate: "docs://pages/{slug}", name: "page" }],
     });
@@ -590,7 +592,7 @@ return { uris: listed.resources.map((r) => r.uri), text: read.contents[0].text }
 
   expect(harness.session.getActiveToolNames()).toEqual(["codemode"]);
   expect(
-    parseJson(getMessageText(toolResult(harness, "codemode")).split("\n").at(-1) ?? ""),
+    yield* fromJsonText(getMessageText(toolResult(harness, "codemode")).split("\n").at(-1) ?? ""),
   ).toEqual({
     uris: ["docs://intro"],
     text: "# docs://intro",
@@ -645,7 +647,7 @@ return { docs, sameForAliases: aliases.every((alias) => JSON.stringify(alias) ==
   for (const name of ["codemode", "tool_search"])
     expect(description(name)).not.toContain("Always search");
   expect(
-    parseJson(getMessageText(toolResult(harness, "codemode")).split("\n").at(-1) ?? ""),
+    yield* fromJsonText(getMessageText(toolResult(harness, "codemode")).split("\n").at(-1) ?? ""),
   ).toEqual({
     docs: {
       name: "mcp__docs",
@@ -940,7 +942,7 @@ const waitsForTheServersACodemode = Effect.gen(function* () {
 
   const result = toolResult(harness, "codemode");
   expect(result.isError).toBe(false);
-  expect(parseJson(getMessageText(result).split("\n").at(-1) ?? "")).toEqual({
+  expect(yield* fromJsonText(getMessageText(result).split("\n").at(-1) ?? "")).toEqual({
     hits: ["q guide", "q faq"],
   });
   expect(calls).toEqual(['search:{"query":"q"}']);
@@ -1066,7 +1068,7 @@ const findsToolsFromScriptsWithSearchtools = Effect.gen(function* () {
 
   const result = toolResult(harness, "codemode");
   expect(result.isError).toBe(false);
-  expect(parseJson((result.content[1] as { text: string }).text)).toEqual({
+  expect(yield* fromJsonText((result.content[1] as { text: string }).text)).toEqual({
     name: "mcp__docs__search",
     sameAsAllTools: true,
     none: 0,

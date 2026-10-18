@@ -4,10 +4,10 @@ import {
   createAssistantMessageEventStream,
   fauxAssistantMessage,
 } from "@msa/ai";
+import { currentTimeMillis } from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { nowMillis } from "../../test-time.ts";
 import { createHarness, type Harness } from "../harness.ts";
 
 const harnesses: Harness[] = [];
@@ -25,7 +25,7 @@ function createUsage(totalTokens: number) {
 
 function seedCompactableSession(harness: Harness): void {
   harness.settingsManager.applyOverrides({ compaction: { keepRecentTokens: 1 } });
-  const now = nowMillis();
+  const now = currentTimeMillis();
   harness.sessionManager.appendMessage({
     role: "user",
     content: [{ type: "text", text: "message to compact" }],

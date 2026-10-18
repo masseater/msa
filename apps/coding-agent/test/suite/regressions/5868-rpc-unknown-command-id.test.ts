@@ -1,9 +1,9 @@
+import { toJsonText } from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 
 import type { AgentSessionRuntime } from "../../../src/core/agent-session-runtime.ts";
 import { runRpcMode } from "../../../src/modes/rpc/rpc-mode.ts";
-import { stringifyJson } from "../../test-json.ts";
 import { createHarness, type Harness } from "../harness.ts";
 
 const rpcIo = vi.hoisted(() => ({
@@ -92,7 +92,7 @@ const preservesTheRequestIdOnUnknown = Effect.gen(function* () {
     void runRpcMode(createRuntimeHost(harness));
     yield* Effect.promise(() => vi.waitFor(() => expect(rpcIo.lineHandler).toBeDefined()));
 
-    rpcIo.lineHandler?.(stringifyJson({ id: "test", type: "foobar" }));
+    rpcIo.lineHandler?.(yield* toJsonText({ id: "test", type: "foobar" }));
 
     yield* Effect.promise(() =>
       vi.waitFor(() => {

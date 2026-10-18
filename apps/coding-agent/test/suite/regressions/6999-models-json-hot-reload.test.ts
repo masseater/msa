@@ -1,4 +1,5 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
+import { gate, joinPath, toJsonText } from "@msa/testing";
 import { setKeybindings, type TUI } from "@msa/tui";
 import { Effect, FileSystem, ManagedRuntime } from "effect";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vite-plus/test";
@@ -9,23 +10,18 @@ import { ModelSelectorComponent } from "../../../src/modes/interactive/component
 import { initTheme } from "../../../src/modes/interactive/theme/theme.ts";
 import { stripAnsi } from "../../../src/utils/ansi.ts";
 import { createModelRegistry, getModelRuntime } from "../../model-runtime-test-utils.ts";
-import { stringifyJson } from "../../test-json.ts";
-import { join } from "../../test-path.ts";
 
 const runtime = ManagedRuntime.make(NodeServices.layer);
 const fs = runtime.runSync(FileSystem.FileSystem.useSync((service) => service));
 
 function observeRefreshRender(): { tui: TUI; renderedAfterRefresh: Promise<void> } {
   let renderCount = 0;
-  let resolveRefreshRender = () => {};
-  const renderedAfterRefresh = new Promise<void>((resolve) => {
-    resolveRefreshRender = resolve;
-  });
+  const renderedAfterRefresh = gate();
   return {
     tui: {
       requestRender: () => {
         renderCount++;
-        if (renderCount === 2) resolveRefreshRender();
+        if (renderCount === 2) renderedAfterRefresh.release();
       },
     } as unknown as TUI,
     renderedAfterRefresh,
@@ -49,14 +45,14 @@ let tempDir: string | undefined;
 
 const reloadsModelsJsonWhenOpeningModel = Effect.gen(function* () {
   tempDir = yield* fs.makeTempDirectory({ prefix: "msa-models-json-hot-reload-" });
-  const modelsPath = join(tempDir, "models.json");
-  yield* fs.writeFileString(modelsPath, stringifyJson(modelsJson("old-provider", "old-model")));
+  const modelsPath = joinPath(tempDir, "models.json");
+  yield* fs.writeFileString(modelsPath, yield* toJsonText(modelsJson("old-provider", "old-model")));
   const modelRuntime = getModelRuntime(
     yield* Effect.promise(() => createModelRegistry(AuthStorage.inMemory(), modelsPath)),
   );
   expect(modelRuntime.getModel("old-provider", "old-model")).toBeDefined();
 
-  yield* fs.writeFileString(modelsPath, stringifyJson(modelsJson("new-provider", "new-model")));
+  yield* fs.writeFileString(modelsPath, yield* toJsonText(modelsJson("new-provider", "new-model")));
   const { tui, renderedAfterRefresh } = observeRefreshRender();
   const selector = new ModelSelectorComponent(
     tui,

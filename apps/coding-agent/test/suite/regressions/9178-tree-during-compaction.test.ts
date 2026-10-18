@@ -1,3 +1,4 @@
+import { gate } from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
@@ -5,11 +6,8 @@ import { assistantMsg, userMsg } from "../../utilities.ts";
 import { createHarness, getMessageText, type Harness } from "../harness.ts";
 
 function createDeferred(): { promise: Promise<void>; resolve: () => void } {
-  let resolve!: () => void;
-  const promise = new Promise<void>((promiseResolve) => {
-    resolve = promiseResolve;
-  });
-  return { promise, resolve };
+  const promise = gate();
+  return { promise, resolve: () => promise.release() };
 }
 
 let harness!: Harness;

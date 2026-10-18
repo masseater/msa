@@ -1,9 +1,9 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
+import { joinPath } from "@msa/testing";
 import { Effect, FileSystem, ManagedRuntime } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
 import { createFindToolDefinition } from "../../../src/core/tools/find.ts";
-import { join } from "../../test-path.ts";
 
 const runtime = ManagedRuntime.make(NodeServices.layer);
 const fs = runtime.runSync(FileSystem.FileSystem.useSync((service) => service));
@@ -61,14 +61,14 @@ describe("issue #3303 nested .gitignore rules leak into sibling directories", ()
       runtime.runPromise(
         Effect.gen(function* () {
           tempRoot = yield* fs.makeTempDirectory({ prefix: "msa-3303-flat-" });
-          yield* fs.makeDirectory(join(tempRoot, "a"), { recursive: true });
-          yield* fs.makeDirectory(join(tempRoot, "b"), { recursive: true });
-          yield* fs.writeFileString(join(tempRoot, "a", ".gitignore"), "ignored.txt\n");
-          yield* fs.writeFileString(join(tempRoot, "a", "ignored.txt"), "");
-          yield* fs.writeFileString(join(tempRoot, "a", "kept.txt"), "");
-          yield* fs.writeFileString(join(tempRoot, "b", "ignored.txt"), "");
-          yield* fs.writeFileString(join(tempRoot, "b", "kept.txt"), "");
-          yield* fs.writeFileString(join(tempRoot, "root.txt"), "");
+          yield* fs.makeDirectory(joinPath(tempRoot, "a"), { recursive: true });
+          yield* fs.makeDirectory(joinPath(tempRoot, "b"), { recursive: true });
+          yield* fs.writeFileString(joinPath(tempRoot, "a", ".gitignore"), "ignored.txt\n");
+          yield* fs.writeFileString(joinPath(tempRoot, "a", "ignored.txt"), "");
+          yield* fs.writeFileString(joinPath(tempRoot, "a", "kept.txt"), "");
+          yield* fs.writeFileString(joinPath(tempRoot, "b", "ignored.txt"), "");
+          yield* fs.writeFileString(joinPath(tempRoot, "b", "kept.txt"), "");
+          yield* fs.writeFileString(joinPath(tempRoot, "root.txt"), "");
         }),
       ),
     );
@@ -80,18 +80,18 @@ describe("issue #3303 nested .gitignore rules leak into sibling directories", ()
       runtime.runPromise(
         Effect.gen(function* () {
           tempRoot = yield* fs.makeTempDirectory({ prefix: "msa-3303-deep-" });
-          yield* fs.makeDirectory(join(tempRoot, "a", "deep"), { recursive: true });
-          yield* fs.makeDirectory(join(tempRoot, "b"), { recursive: true });
-          yield* fs.writeFileString(join(tempRoot, "a", ".gitignore"), "ignored.txt\n");
-          yield* fs.writeFileString(join(tempRoot, "a", "deep", ".gitignore"), "secret.txt\n");
-          yield* fs.writeFileString(join(tempRoot, "a", "ignored.txt"), "");
-          yield* fs.writeFileString(join(tempRoot, "a", "kept.txt"), "");
-          yield* fs.writeFileString(join(tempRoot, "a", "deep", "ignored.txt"), "");
-          yield* fs.writeFileString(join(tempRoot, "a", "deep", "secret.txt"), "");
-          yield* fs.writeFileString(join(tempRoot, "a", "deep", "kept.txt"), "");
-          yield* fs.writeFileString(join(tempRoot, "b", "ignored.txt"), "");
-          yield* fs.writeFileString(join(tempRoot, "b", "kept.txt"), "");
-          yield* fs.writeFileString(join(tempRoot, "root.txt"), "");
+          yield* fs.makeDirectory(joinPath(tempRoot, "a", "deep"), { recursive: true });
+          yield* fs.makeDirectory(joinPath(tempRoot, "b"), { recursive: true });
+          yield* fs.writeFileString(joinPath(tempRoot, "a", ".gitignore"), "ignored.txt\n");
+          yield* fs.writeFileString(joinPath(tempRoot, "a", "deep", ".gitignore"), "secret.txt\n");
+          yield* fs.writeFileString(joinPath(tempRoot, "a", "ignored.txt"), "");
+          yield* fs.writeFileString(joinPath(tempRoot, "a", "kept.txt"), "");
+          yield* fs.writeFileString(joinPath(tempRoot, "a", "deep", "ignored.txt"), "");
+          yield* fs.writeFileString(joinPath(tempRoot, "a", "deep", "secret.txt"), "");
+          yield* fs.writeFileString(joinPath(tempRoot, "a", "deep", "kept.txt"), "");
+          yield* fs.writeFileString(joinPath(tempRoot, "b", "ignored.txt"), "");
+          yield* fs.writeFileString(joinPath(tempRoot, "b", "kept.txt"), "");
+          yield* fs.writeFileString(joinPath(tempRoot, "root.txt"), "");
         }),
       ),
     );

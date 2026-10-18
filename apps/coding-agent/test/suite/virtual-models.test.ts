@@ -1,5 +1,6 @@
 import type { AgentTool } from "@msa/agent-core";
 import { type FauxResponseStep, fauxAssistantMessage, fauxToolCall } from "@msa/ai";
+import { currentTimeMillis } from "@msa/testing";
 import { Effect } from "effect";
 import { Type } from "typebox";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
@@ -10,7 +11,6 @@ import {
   type ModelRouteRequest,
   VIRTUAL_MODEL_STATE_ENTRY,
 } from "../../src/core/virtual-models.ts";
-import { nowMillis } from "../test-time.ts";
 import { createHarness, type Harness, type HarnessOptions } from "./harness.ts";
 
 const echoTool: AgentTool = {
@@ -154,7 +154,7 @@ const routesTheCompactAndRetryAfter = Effect.gen(function* () {
     () =>
       fauxAssistantMessage("x".repeat(64), {
         stopReason: "length",
-        timestamp: nowMillis() + 10_000,
+        timestamp: currentTimeMillis() + 10_000,
       }),
     fauxAssistantMessage("done"),
   ]);

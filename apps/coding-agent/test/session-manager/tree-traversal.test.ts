@@ -1,9 +1,9 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
+import { currentTimeMillis } from "@msa/testing";
 import { Effect, FileSystem, ManagedRuntime } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { type CustomEntry, SessionManager } from "../../src/core/session-manager.ts";
-import { nowMillis } from "../test-time.ts";
 import { assistantMsg, readSessionFileRoles, userMsg } from "../utilities.ts";
 
 const runtime = ManagedRuntime.make(NodeServices.layer);
@@ -564,7 +564,7 @@ const preservesToolAndSummaryUsageAcross = () =>
           content: [{ type: "text", text: "result" }],
           isError: false,
           usage,
-          timestamp: nowMillis(),
+          timestamp: currentTimeMillis(),
         });
         session.appendCompaction("summary", rootId, 100, undefined, false, usage);
         session.branchWithSummary(rootId, "branch summary", undefined, false, usage);

@@ -1,5 +1,6 @@
 import type { AgentMessage } from "@msa/agent-core";
 import type { AssistantMessage, ToolResultMessage, Usage } from "@msa/ai";
+import { currentTimeMillis, nowIso } from "@msa/testing";
 import { Container, Text, type TUI } from "@msa/tui";
 import { Effect } from "effect";
 import { beforeAll, describe, expect, test, vi } from "vite-plus/test";
@@ -10,7 +11,6 @@ import type { ToolExecutionComponent } from "../../../src/modes/interactive/comp
 import { InteractiveMode } from "../../../src/modes/interactive/interactive-mode.ts";
 import { initTheme } from "../../../src/modes/interactive/theme/theme.ts";
 import { stripAnsi } from "../../../src/utils/ansi.ts";
-import { nowIso, nowMillis } from "../../test-time.ts";
 
 const TOOL_CALL_ID = "tool-4167";
 const TOOL_NAME = "slow_tool";
@@ -116,7 +116,7 @@ function createAssistantToolCallMessage(): AssistantMessage {
     model: "test-model",
     usage: EMPTY_USAGE,
     stopReason: "toolUse",
-    timestamp: nowMillis(),
+    timestamp: currentTimeMillis(),
   };
 }
 
@@ -127,7 +127,7 @@ function createToolResultMessage(text: string): ToolResultMessage {
     toolName: TOOL_NAME,
     content: [{ type: "text", text }],
     isError: false,
-    timestamp: nowMillis(),
+    timestamp: currentTimeMillis(),
   };
 }
 

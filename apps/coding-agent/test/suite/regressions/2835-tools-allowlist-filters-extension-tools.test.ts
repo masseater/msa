@@ -1,5 +1,6 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { getModel } from "@msa/ai/compat";
+import { joinPath } from "@msa/testing";
 import { Effect, FileSystem, ManagedRuntime } from "effect";
 import { Type } from "typebox";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
@@ -8,7 +9,6 @@ import { DefaultResourceLoader } from "../../../src/core/resource-loader.ts";
 import { createAgentSession } from "../../../src/core/sdk.ts";
 import { SessionManager } from "../../../src/core/session-manager.ts";
 import { SettingsManager } from "../../../src/core/settings-manager.ts";
-import { join } from "../../test-path.ts";
 
 const runtime = ManagedRuntime.make(NodeServices.layer);
 const fs = runtime.runSync(FileSystem.FileSystem.useSync((service) => service));
@@ -96,7 +96,7 @@ describe("regression #2835: tool allowlists filter extension tools", () => {
     runtime.runPromise(
       Effect.gen(function* () {
         tempDir = yield* fs.makeTempDirectory({ prefix: `msa-tools-filter-` });
-        agentDir = join(tempDir, "agent");
+        agentDir = joinPath(tempDir, "agent");
         yield* fs.makeDirectory(agentDir, { recursive: true });
       }),
     ),

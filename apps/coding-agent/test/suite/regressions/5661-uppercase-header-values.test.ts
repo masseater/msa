@@ -1,4 +1,5 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
+import { fromJsonText, joinPath, toJsonText } from "@msa/testing";
 import { Effect, FileSystem, ManagedRuntime } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
@@ -6,8 +7,6 @@ import { ENV_AGENT_DIR } from "../../../src/config.ts";
 import { AuthStorage } from "../../../src/core/auth-storage.ts";
 import { runMigrations } from "../../../src/migrations.ts";
 import { createModelRegistry } from "../../model-runtime-test-utils.ts";
-import { parseJson, stringifyJsonPretty } from "../../test-json.ts";
-import { join } from "../../test-path.ts";
 import { createHarness } from "../harness.ts";
 import type { Harness } from "../harness.ts";
 
@@ -33,10 +32,10 @@ const keepsUppercaseHeaderStringsAsLiterals = Effect.gen(function* () {
   cleanups.push(() => {
     vi.unstubAllEnvs();
   });
-  const modelsPath = join(harness.tempDir, "models.json");
+  const modelsPath = joinPath(harness.tempDir, "models.json");
   yield* fs.writeFileString(
     modelsPath,
-    `${stringifyJsonPretty({
+    `${yield* toJsonText({
       providers: {
         "my-provider": {
           baseUrl: "https://example.com/v1",
@@ -49,7 +48,7 @@ const keepsUppercaseHeaderStringsAsLiterals = Effect.gen(function* () {
     })}\n`,
   );
   withAgentDir(harness.tempDir, () => runMigrations(harness.tempDir));
-  const migrated = parseJson(yield* fs.readFileString(modelsPath)) as {
+  const migrated = (yield* fromJsonText(yield* fs.readFileString(modelsPath))) as {
     providers: Record<string, { apiKey?: string; headers?: Record<string, string> }>;
   };
   expect(migrated.providers["my-provider"]?.apiKey).toBe("CUSTOM_API_KEY");
@@ -60,7 +59,7 @@ const keepsUppercaseHeaderStringsAsLiterals = Effect.gen(function* () {
 const keepsUppercaseHeaderStringsAsLiteralsPart2 = (harness: Harness, modelsPath: string) =>
   Effect.gen(function* () {
     const registry = yield* Effect.promise(() =>
-      createModelRegistry(AuthStorage.create(join(harness.tempDir, "auth.json")), modelsPath),
+      createModelRegistry(AuthStorage.create(joinPath(harness.tempDir, "auth.json")), modelsPath),
     );
     const model = registry.find("my-provider", "my-model");
     expect(model).toBeDefined();

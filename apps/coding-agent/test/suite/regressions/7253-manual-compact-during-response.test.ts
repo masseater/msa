@@ -1,5 +1,6 @@
 import type { AgentTool } from "@msa/agent-core";
 import { fauxAssistantMessage, fauxToolCall } from "@msa/ai";
+import { gate } from "@msa/testing";
 import { Effect } from "effect";
 import { Type } from "typebox";
 import { afterEach, describe, expect, it } from "vite-plus/test";
@@ -20,14 +21,8 @@ const harnesses: Harness[] = [];
 
 const persistsTheAbortedResponseBeforeRunning = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-  let markSecondResponseStarted = () => {};
-  const secondResponseStarted = new Promise<void>((resolve) => {
-    markSecondResponseStarted = resolve;
-  });
-  let releaseSecondResponse = () => {};
-  const secondResponseReleased = new Promise<void>((resolve) => {
-    releaseSecondResponse = resolve;
-  });
+  const secondResponseStarted = gate();
+  const secondResponseReleased = gate();
 
   const harness = yield* Effect.promise(() =>
     createHarness({
@@ -56,7 +51,7 @@ const persistsTheAbortedResponseBeforeRunning = Effect.gen(function* () {
     () =>
       runPromise(
         Effect.gen(function* () {
-          markSecondResponseStarted();
+          secondResponseStarted.release();
           yield* Effect.promise(() => secondResponseReleased);
           return fauxAssistantMessage(`second response:${"x".repeat(4000)}`);
         }),
@@ -70,7 +65,7 @@ const persistsTheAbortedResponseBeforeRunning = Effect.gen(function* () {
   const compactExpectation = expect(compactPromise).resolves.toMatchObject({
     summary: "manual summary",
   });
-  releaseSecondResponse();
+  secondResponseReleased.release();
   yield* Effect.promise(() => Promise.all([promptPromise, compactExpectation]));
 
   expect(harness.eventsOfType("compaction_start").map((event) => event.reason)).toEqual(["manual"]);

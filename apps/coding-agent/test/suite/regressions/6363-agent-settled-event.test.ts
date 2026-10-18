@@ -1,5 +1,6 @@
 import type { AgentTool } from "@msa/agent-core";
 import { fauxAssistantMessage, fauxToolCall } from "@msa/ai";
+import { gate } from "@msa/testing";
 import { Effect } from "effect";
 import { Type } from "typebox";
 import { afterEach, describe, expect, it } from "vite-plus/test";
@@ -95,14 +96,8 @@ const settlesOnlyAfterFollowUpsQueued = Effect.gen(function* () {
 
 const extensionCommandWaitforidleWaitsForSession = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-  let releaseTool = () => {};
-  const released = new Promise<void>((resolve) => {
-    releaseTool = resolve;
-  });
-  let markCommandStarted = () => {};
-  const commandStarted = new Promise<void>((resolve) => {
-    markCommandStarted = resolve;
-  });
+  const released = gate();
+  const commandStarted = gate();
   const commandResults: boolean[] = [];
   const harness = yield* Effect.promise(() =>
     createHarness({
@@ -114,7 +109,7 @@ const extensionCommandWaitforidleWaitsForSession = Effect.gen(function* () {
             handler: (_args, ctx) =>
               runPromise(
                 Effect.gen(function* () {
-                  markCommandStarted();
+                  commandStarted.release();
                   yield* Effect.promise(() => ctx.waitForIdle());
                   commandResults.push(ctx.isIdle());
                 }),
@@ -162,7 +157,7 @@ const extensionCommandWaitforidleWaitsForSession = Effect.gen(function* () {
   yield* Effect.sleep(0);
   expect(commandFinished).toBe(false);
 
-  releaseTool();
+  released.release();
   yield* Effect.promise(() => Promise.all([promptPromise, commandPromise]));
 
   expect(commandResults).toEqual([true]);

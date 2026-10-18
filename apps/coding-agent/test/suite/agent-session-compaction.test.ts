@@ -10,13 +10,12 @@ import {
   type SimpleStreamOptions,
   type TranscriptContext,
 } from "@msa/ai";
+import { currentTimeMillis, toJsonText } from "@msa/testing";
 import { Effect } from "effect";
 import { Type } from "typebox";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { estimateTokens } from "../../src/core/compaction/index.ts";
-import { stringifyJson } from "../test-json.ts";
-import { nowMillis } from "../test-time.ts";
 import { createHarness, getUserTexts, type Harness } from "./harness.ts";
 
 type SessionWithCompactionInternals = {
@@ -88,7 +87,7 @@ function useSummaryStreamFn(
 
 function seedCompactableSession(harness: Harness): void {
   harness.settingsManager.applyOverrides({ compaction: { keepRecentTokens: 1 } });
-  const now = nowMillis();
+  const now = currentTimeMillis();
   harness.sessionManager.appendMessage({
     role: "user",
     content: [{ type: "text", text: "message to compact" }],
@@ -217,19 +216,19 @@ const checkpointsTheReplayedSystemStateAnd = Effect.gen(function* () {
     content: "summarized instruction",
     sections: { early: "<early>1</early>" },
     toolsRemoved: [{ name: "bash" }],
-    timestamp: nowMillis(),
+    timestamp: currentTimeMillis(),
   });
   const firstKeptEntryId = harness.sessionManager.appendMessage({
     role: "user",
     content: [{ type: "text", text: "kept before patch" }],
-    timestamp: nowMillis(),
+    timestamp: currentTimeMillis(),
   });
   harness.sessionManager.appendMessage({
     role: "system",
     content: "retained instruction",
     sections: { extra: "<extra>late</extra>" },
     toolsRemoved: [{ name: "read" }],
-    timestamp: nowMillis(),
+    timestamp: currentTimeMillis(),
   });
   return yield* checkpointsTheReplayedSystemStateAndPart2(harness, declared, firstKeptEntryId);
 });
@@ -243,7 +242,7 @@ const checkpointsTheReplayedSystemStateAndPart2 = (
     harness.sessionManager.appendMessage({
       role: "user",
       content: [{ type: "text", text: "kept after patch" }],
-      timestamp: nowMillis(),
+      timestamp: currentTimeMillis(),
     });
     harness.sessionManager.appendCompaction("compacted", firstKeptEntryId, 100);
     const messages = harness.sessionManager.buildSessionContext().messages;
@@ -411,7 +410,7 @@ const usesTheStandaloneCompactionRequestContext = Effect.gen(function* () {
   );
   expect(getCurrentTools(requestContext?.messages ?? [])).toEqual([]);
 
-  expect(stringifyJson(requestContext?.messages)).toContain(
+  expect(yield* toJsonText(requestContext?.messages)).toContain(
     "# Conversation\\n[User]: message to compact",
   );
   expect(requestOptions).toMatchObject({ cacheRetention: "none" });
@@ -725,12 +724,12 @@ const stopsAfterOneCompactAndRetryPart2 = (harness: Harness) =>
       () =>
         fauxAssistantMessage("x".repeat(64), {
           stopReason: "length",
-          timestamp: nowMillis() + 10_000,
+          timestamp: currentTimeMillis() + 10_000,
         }),
       () =>
         fauxAssistantMessage("y".repeat(64), {
           stopReason: "length",
-          timestamp: nowMillis() + 10_000,
+          timestamp: currentTimeMillis() + 10_000,
         }),
     ]);
     yield* Effect.promise(() => harness.session.prompt("x".repeat(5000)));
@@ -754,7 +753,7 @@ const keepsOverflowWordingWhenARepeated = Effect.gen(function* () {
   const lengthOverflowMessage = createAssistant(harness, {
     stopReason: "length",
     totalTokens: 100,
-    timestamp: nowMillis(),
+    timestamp: currentTimeMillis(),
   });
   const runAutoCompactionSpy = vi
     .spyOn(sessionInternals, "_runAutoCompaction")
@@ -774,7 +773,7 @@ const keepsOverflowWordingWhenARepeated = Effect.gen(function* () {
   yield* Effect.promise(() =>
     sessionInternals["_checkCompaction"]({
       ...lengthOverflowMessage,
-      timestamp: nowMillis() + 1,
+      timestamp: currentTimeMillis() + 1,
     }),
   );
 
@@ -855,7 +854,7 @@ const resumesAfterThresholdCompactionWhenOnly = Effect.gen(function* () {
     customType: "test",
     content: [{ type: "text", text: "queued custom" }],
     display: false,
-    timestamp: nowMillis(),
+    timestamp: currentTimeMillis(),
   });
 
   const sessionInternals = harness.session as unknown as SessionWithCompactionInternals;
@@ -872,7 +871,7 @@ const doesNotRetryOverflowRecoveryMore = Effect.gen(function* () {
   const overflowMessage = createAssistant(harness, {
     stopReason: "error",
     errorMessage: "prompt is too long",
-    timestamp: nowMillis(),
+    timestamp: currentTimeMillis(),
   });
   const runAutoCompactionSpy = vi
     .spyOn(sessionInternals, "_runAutoCompaction")
@@ -890,7 +889,10 @@ const doesNotRetryOverflowRecoveryMore = Effect.gen(function* () {
 
   yield* Effect.promise(() => sessionInternals["_checkCompaction"](overflowMessage));
   yield* Effect.promise(() =>
-    sessionInternals["_checkCompaction"]({ ...overflowMessage, timestamp: nowMillis() + 1 }),
+    sessionInternals["_checkCompaction"]({
+      ...overflowMessage,
+      timestamp: currentTimeMillis() + 1,
+    }),
   );
 
   expect(runAutoCompactionSpy).toHaveBeenCalledTimes(1);
@@ -938,7 +940,7 @@ const ignoresStalePreCompactionAssistantUsage = Effect.gen(function* () {
   const harness = yield* Effect.promise(() => createHarness());
   harnesses.push(harness);
   const sessionInternals = harness.session as unknown as SessionWithCompactionInternals;
-  const staleTimestamp = nowMillis() - 10_000;
+  const staleTimestamp = currentTimeMillis() - 10_000;
   const staleAssistant = createAssistant(harness, {
     stopReason: "stop",
     totalTokens: 610_000,
@@ -962,7 +964,7 @@ const ignoresStalePreCompactionAssistantUsage = Effect.gen(function* () {
   harness.sessionManager.appendMessage({
     role: "user",
     content: [{ type: "text", text: "after compaction" }],
-    timestamp: nowMillis(),
+    timestamp: currentTimeMillis(),
   });
 
   const runAutoCompactionSpy = vi
@@ -981,21 +983,25 @@ const triggersThresholdCompactionForErrorMessages = Effect.gen(function* () {
   const successfulAssistant = createAssistant(harness, {
     stopReason: "stop",
     totalTokens: 190_000,
-    timestamp: nowMillis(),
+    timestamp: currentTimeMillis(),
   });
   const errorAssistant = createAssistant(harness, {
     stopReason: "error",
     errorMessage: "529 overloaded",
-    timestamp: nowMillis() + 1000,
+    timestamp: currentTimeMillis() + 1000,
   });
   harness.session.agent.state.messages = [
     {
       role: "user",
       content: [{ type: "text", text: "hello" }],
-      timestamp: nowMillis() - 1000,
+      timestamp: currentTimeMillis() - 1000,
     },
     successfulAssistant,
-    { role: "user", content: [{ type: "text", text: "retry" }], timestamp: nowMillis() + 500 },
+    {
+      role: "user",
+      content: [{ type: "text", text: "retry" }],
+      timestamp: currentTimeMillis() + 500,
+    },
     errorAssistant,
   ];
 
@@ -1015,13 +1021,13 @@ const doesNotTriggerThresholdCompactionFor = Effect.gen(function* () {
   const errorAssistant = createAssistant(harness, {
     stopReason: "error",
     errorMessage: "529 overloaded",
-    timestamp: nowMillis(),
+    timestamp: currentTimeMillis(),
   });
   harness.session.agent.state.messages = [
     {
       role: "user",
       content: [{ type: "text", text: "hello" }],
-      timestamp: nowMillis() - 1000,
+      timestamp: currentTimeMillis() - 1000,
     },
     errorAssistant,
   ];
@@ -1039,7 +1045,7 @@ const doesNotTriggerThresholdCompactionWhen = Effect.gen(function* () {
   const harness = yield* Effect.promise(() => createHarness());
   harnesses.push(harness);
   const sessionInternals = harness.session as unknown as SessionWithCompactionInternals;
-  const preCompactionTimestamp = nowMillis() - 10_000;
+  const preCompactionTimestamp = currentTimeMillis() - 10_000;
   const keptAssistant = createAssistant(harness, {
     stopReason: "stop",
     totalTokens: 190_000,
@@ -1062,7 +1068,7 @@ const doesNotTriggerThresholdCompactionWhen = Effect.gen(function* () {
   const errorAssistant = createAssistant(harness, {
     stopReason: "error",
     errorMessage: "529 overloaded",
-    timestamp: nowMillis(),
+    timestamp: currentTimeMillis(),
   });
   return yield* doesNotTriggerThresholdCompactionWhenPart2(
     harness,
@@ -1091,7 +1097,7 @@ const doesNotTriggerThresholdCompactionWhenPart2 = (
       {
         role: "user",
         content: [{ type: "text", text: "new prompt" }],
-        timestamp: nowMillis() - 500,
+        timestamp: currentTimeMillis() - 500,
       },
       errorAssistant,
     ];
@@ -1128,7 +1134,7 @@ const doesNotTriggerThresholdCompactionBelow = Effect.gen(function* () {
       createAssistant(belowThresholdHarness, {
         stopReason: "stop",
         totalTokens: 1_000,
-        timestamp: nowMillis(),
+        timestamp: currentTimeMillis(),
       }),
     ),
   );
@@ -1137,7 +1143,7 @@ const doesNotTriggerThresholdCompactionBelow = Effect.gen(function* () {
       createAssistant(disabledHarness, {
         stopReason: "stop",
         totalTokens: 1_000_000,
-        timestamp: nowMillis(),
+        timestamp: currentTimeMillis(),
       }),
     ),
   );

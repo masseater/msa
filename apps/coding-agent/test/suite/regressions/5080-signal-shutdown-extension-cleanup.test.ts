@@ -1,4 +1,5 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
+import { joinPath } from "@msa/testing";
 import chalk from "chalk";
 import { Cause, Effect, Exit, FileSystem, ManagedRuntime } from "effect";
 import { afterEach, describe, expect, test, vi } from "vite-plus/test";
@@ -6,7 +7,6 @@ import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 import { APP_NAME } from "../../../src/config.ts";
 import type { SessionManager } from "../../../src/core/session-manager.ts";
 import { InteractiveMode } from "../../../src/modes/interactive/interactive-mode.ts";
-import { join } from "../../test-path.ts";
 
 const runtime = ManagedRuntime.make(NodeServices.layer);
 const fs = runtime.runSync(FileSystem.FileSystem.useSync((service) => service));
@@ -52,7 +52,7 @@ function createTempFile() {
     Effect.gen(function* () {
       const dir = yield* fs.makeTempDirectory({ prefix: "msa-shutdown-resume-hint-" });
       tempDirs.push(dir);
-      const file = join(dir, "session.jsonl");
+      const file = joinPath(dir, "session.jsonl");
       yield* fs.writeFileString(file, "\n");
       return file;
     }),

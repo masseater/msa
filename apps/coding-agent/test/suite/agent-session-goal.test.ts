@@ -6,13 +6,13 @@ import {
   getCurrentSystemPrompt,
   type TranscriptContext,
 } from "@msa/ai";
+import { toJsonText } from "@msa/testing";
 import { Effect } from "effect";
 import { Type } from "typebox";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { GOAL_ENTRY_TYPE, type GoalEntryData } from "../../src/core/goal.ts";
 import { SessionManager } from "../../src/core/session-manager.ts";
-import { stringifyJson } from "../test-json.ts";
 import { createHarness, getUserTexts, type Harness } from "./harness.ts";
 
 const touchTool: AgentTool = {
@@ -89,7 +89,7 @@ const worksFromTheConditionAloneAnd = Effect.gen(function* () {
   const guidance = harness.session.messages.find(
     (message) => message.role === "custom" && message.customType === "msa.goal.continue",
   );
-  expect(stringifyJson(guidance)).toContain("tests still fail");
+  expect(yield* toJsonText(guidance)).toContain("tests still fail");
   expect(harness.session.isIdle).toBe(true);
 });
 

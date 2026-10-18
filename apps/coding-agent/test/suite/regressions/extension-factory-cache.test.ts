@@ -1,4 +1,5 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
+import { joinPath } from "@msa/testing";
 import { Effect, FileSystem, ManagedRuntime } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
@@ -8,7 +9,6 @@ import {
   loadExtensionsCached,
 } from "../../../src/core/extensions/loader.ts";
 import { DefaultResourceLoader } from "../../../src/core/resource-loader.ts";
-import { join } from "../../test-path.ts";
 
 const runtime = ManagedRuntime.make(NodeServices.layer);
 const fs = runtime.runSync(FileSystem.FileSystem.useSync((service) => service));
@@ -53,8 +53,8 @@ function fixture(name: string) {
   return runtime.runPromise(
     Effect.gen(function* () {
       const root = yield* fs.makeTempDirectory({ prefix: `msa-extension-cache-${name}-` });
-      const cwd = join(root, "project");
-      const agentDir = join(root, "agent");
+      const cwd = joinPath(root, "project");
+      const agentDir = joinPath(root, "agent");
       yield* fs.makeDirectory(cwd, { recursive: true });
       yield* fs.makeDirectory(agentDir, { recursive: true });
       roots.push(root);
@@ -65,7 +65,7 @@ function fixture(name: string) {
 
 const cachesExtensionModulesForCachedSame = Effect.gen(function* () {
   const { root, cwd } = yield* Effect.promise(() => fixture("same-cwd"));
-  const extensionPath = join(root, "counting.ts");
+  const extensionPath = joinPath(root, "counting.ts");
   yield* Effect.promise(() => writeCountingExtension(extensionPath));
 
   const first = yield* Effect.promise(() => loadExtensionsCached([extensionPath], cwd));
@@ -79,7 +79,7 @@ const cachesExtensionModulesForCachedSame = Effect.gen(function* () {
 
 const doesNotCacheDirectLoadextensionsCalls = Effect.gen(function* () {
   const { root, cwd } = yield* Effect.promise(() => fixture("direct"));
-  const extensionPath = join(root, "counting.ts");
+  const extensionPath = joinPath(root, "counting.ts");
   yield* Effect.promise(() => writeCountingExtension(extensionPath));
 
   yield* Effect.promise(() => loadExtensions([extensionPath], cwd));
@@ -91,9 +91,9 @@ const doesNotCacheDirectLoadextensionsCalls = Effect.gen(function* () {
 
 const clearsTheCacheOnResourceLoader = Effect.gen(function* () {
   const { cwd, agentDir } = yield* Effect.promise(() => fixture("reload"));
-  const extensionDir = join(agentDir, "extensions");
+  const extensionDir = joinPath(agentDir, "extensions");
   yield* fs.makeDirectory(extensionDir, { recursive: true });
-  yield* Effect.promise(() => writeCountingExtension(join(extensionDir, "counting.ts")));
+  yield* Effect.promise(() => writeCountingExtension(joinPath(extensionDir, "counting.ts")));
   const loader = new DefaultResourceLoader({
     cwd,
     agentDir,
@@ -111,11 +111,11 @@ const clearsTheCacheOnResourceLoader = Effect.gen(function* () {
 
 const keepsTheCacheScopedToOne = Effect.gen(function* () {
   const { root } = yield* Effect.promise(() => fixture("cross-cwd"));
-  const firstCwd = join(root, "first");
-  const secondCwd = join(root, "second");
+  const firstCwd = joinPath(root, "first");
+  const secondCwd = joinPath(root, "second");
   yield* fs.makeDirectory(firstCwd, { recursive: true });
   yield* fs.makeDirectory(secondCwd, { recursive: true });
-  const extensionPath = join(root, "counting.ts");
+  const extensionPath = joinPath(root, "counting.ts");
   yield* Effect.promise(() => writeCountingExtension(extensionPath));
 
   yield* Effect.promise(() => loadExtensionsCached([extensionPath], firstCwd));

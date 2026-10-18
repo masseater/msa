@@ -3,6 +3,7 @@ import { type AddressInfo, createServer } from "node:net";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { fauxAssistantMessage, fauxToolCall } from "@msa/ai";
 import type { ToolResultMessage } from "@msa/ai/compat";
+import { currentTimeMillis, joinPath, toJsonText } from "@msa/testing";
 import { Effect, FileSystem, ManagedRuntime } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
@@ -12,9 +13,6 @@ import { runMcpCommand } from "../../src/extensions/mcp/cli.ts";
 import type { McpOAuthConfig, McpServerEntry } from "../../src/extensions/mcp/config.ts";
 import { createMcpExtension } from "../../src/extensions/mcp/index.ts";
 import { McpOAuthCredentialStore } from "../../src/extensions/mcp/oauth.ts";
-import { stringifyJson } from "../test-json.ts";
-import { join } from "../test-path.ts";
-import { nowMillis } from "../test-time.ts";
 import { createHarness, createTestUiContext, getMessageText, type Harness } from "./harness.ts";
 import { startOAuthMcpServer } from "./mcp-oauth-server.ts";
 
@@ -129,7 +127,7 @@ const signsInThroughTheBrowserRefreshes = Effect.gen(function* () {
 
   backend.withLock((current) => {
     const states = JSON.parse(current ?? "{}") as Record<string, { tokensExpireAt?: number }>;
-    for (const state of Object.values(states)) state.tokensExpireAt = nowMillis() - 1_000;
+    for (const state of Object.values(states)) state.tokensExpireAt = currentTimeMillis() - 1_000;
     return { result: undefined, next: JSON.stringify(states) };
   });
   expect(getMessageText(yield* Effect.promise(() => callWhoami(harness)))).toBe("token access-3");
@@ -154,14 +152,14 @@ const acceptsAPastedRedirectUrlWhen = Effect.gen(function* () {
 function shutdown(harness: Harness): Promise<number> {
   return Effect.runPromise(
     Effect.gen(function* () {
-      const start = nowMillis();
+      const start = currentTimeMillis();
       yield* Effect.promise(() =>
         emitSessionShutdownEvent(harness.session.extensionRunner, {
           type: "session_shutdown",
           reason: "quit",
         }),
       );
-      return nowMillis() - start;
+      return currentTimeMillis() - start;
     }),
   );
 }
@@ -195,7 +193,7 @@ const closesTheSessionWithoutRefreshingAn = Effect.gen(function* () {
 
   backend.withLock((current) => {
     const states = JSON.parse(current ?? "{}") as Record<string, { tokensExpireAt?: number }>;
-    for (const state of Object.values(states)) state.tokensExpireAt = nowMillis() + 10_000;
+    for (const state of Object.values(states)) state.tokensExpireAt = currentTimeMillis() + 10_000;
     return { result: undefined, next: JSON.stringify(states) };
   });
   server.stall.add("/token");
@@ -283,8 +281,8 @@ const givesUpOnMsaMcpLogin = Effect.gen(function* () {
   const agentDir = yield* fs.makeTempDirectory({ prefix: "msa-mcp-login-" });
   cleanups.push(() => runtime.runPromise(fs.remove(agentDir, { recursive: true, force: true })));
   yield* fs.writeFileString(
-    join(agentDir, "mcp.json"),
-    stringifyJson({ mcpServers: { issues: { url: server.url } } }),
+    joinPath(agentDir, "mcp.json"),
+    yield* toJsonText({ mcpServers: { issues: { url: server.url } } }),
   );
   const login = () =>
     runPromise(
@@ -320,8 +318,8 @@ const usesCredentialsFromMsaMcpLogin = Effect.gen(function* () {
   const agentDir = yield* fs.makeTempDirectory({ prefix: "msa-mcp-login-" });
   cleanups.push(() => runtime.runPromise(fs.remove(agentDir, { recursive: true, force: true })));
   yield* fs.writeFileString(
-    join(agentDir, "mcp.json"),
-    stringifyJson({ mcpServers: { issues: { url: server.url } } }),
+    joinPath(agentDir, "mcp.json"),
+    yield* toJsonText({ mcpServers: { issues: { url: server.url } } }),
   );
 
   const output: string[] = [];

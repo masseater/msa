@@ -1,18 +1,15 @@
 import type { AgentTool } from "@msa/agent-core";
 import { fauxAssistantMessage, fauxToolCall } from "@msa/ai";
+import { currentTimeMillis, gate } from "@msa/testing";
 import { Effect } from "effect";
 import { Type } from "typebox";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { nowMillis } from "../test-time.ts";
 import { createHarness, getMessageText, type Harness } from "./harness.ts";
 
 function deferred(): { promise: Promise<void>; resolve: () => void } {
-  let resolve = () => {};
-  const promise = new Promise<void>((done) => {
-    resolve = done;
-  });
-  return { promise, resolve };
+  const promise = gate();
+  return { promise, resolve: () => promise.release() };
 }
 
 const harnesses: Harness[] = [];
@@ -122,10 +119,10 @@ const keepsABoundaryReplacementVerbatimThrough = Effect.gen(function* () {
   harness.sessionManager.appendMessage({
     role: "user",
     content: "older input",
-    timestamp: nowMillis() - 2,
+    timestamp: currentTimeMillis() - 2,
   });
   harness.sessionManager.appendMessage(
-    fauxAssistantMessage("older answer", { timestamp: nowMillis() - 1 }),
+    fauxAssistantMessage("older answer", { timestamp: currentTimeMillis() - 1 }),
   );
   harness.session.refreshContext();
   harness.setResponses([
@@ -606,10 +603,10 @@ const doesNotTriggerThresholdCompactionFrom = Effect.gen(function* () {
   const userId = harness.sessionManager.appendMessage({
     role: "user",
     content: "small input",
-    timestamp: nowMillis() - 3,
+    timestamp: currentTimeMillis() - 3,
   });
   harness.sessionManager.appendContextEdit(userId, { content: "edited input" });
-  const response = fauxAssistantMessage("answer", { timestamp: nowMillis() - 2 });
+  const response = fauxAssistantMessage("answer", { timestamp: currentTimeMillis() - 2 });
   response.usage = { ...response.usage, input: 50_000, output: 1, totalTokens: 50_001 };
   harness.sessionManager.appendMessage(response);
   harness.sessionManager.appendCompaction("small summary", userId, 50_001);
@@ -631,7 +628,7 @@ const doesNotTriggerThresholdCompactionFrom = Effect.gen(function* () {
   const error = fauxAssistantMessage("", {
     stopReason: "error",
     errorMessage: "invalid_api_key",
-    timestamp: nowMillis() + 1_000,
+    timestamp: currentTimeMillis() + 1_000,
   });
 
   yield* Effect.promise(() => checkCompaction(error));
@@ -962,9 +959,12 @@ const resetsLengthRecoveryAfterASuccessfulPart2 = (harness: Harness) =>
       () =>
         fauxAssistantMessage("second partial", {
           stopReason: "length",
-          timestamp: nowMillis() + 1_000,
+          timestamp: currentTimeMillis() + 1_000,
         }),
-      () => fauxAssistantMessage("completed second recovery", { timestamp: nowMillis() + 2_000 }),
+      () =>
+        fauxAssistantMessage("completed second recovery", {
+          timestamp: currentTimeMillis() + 2_000,
+        }),
     ]);
     yield* Effect.promise(() => harness.session.prompt("x".repeat(5000)));
     const omittedIds = harness.sessionManager
@@ -1024,9 +1024,9 @@ const givesADistinctQueuedFollowUpPart2 = (harness: Harness) =>
       () =>
         fauxAssistantMessage("follow-up partial", {
           stopReason: "length",
-          timestamp: nowMillis() + 1_000,
+          timestamp: currentTimeMillis() + 1_000,
         }),
-      () => fauxAssistantMessage("follow-up recovered", { timestamp: nowMillis() + 2_000 }),
+      () => fauxAssistantMessage("follow-up recovered", { timestamp: currentTimeMillis() + 2_000 }),
     ]);
     yield* Effect.promise(() => harness.session.prompt("x".repeat(5000)));
     const lengthIds = harness.sessionManager
@@ -1082,11 +1082,11 @@ const omitsARecoverableProjectedReplacementBy = Effect.gen(function* () {
   harness.sessionManager.appendMessage({
     role: "user",
     content: "x".repeat(5_000),
-    timestamp: nowMillis() - 2,
+    timestamp: currentTimeMillis() - 2,
   });
   const partial = fauxAssistantMessage("original partial", {
     stopReason: "length",
-    timestamp: nowMillis() - 1,
+    timestamp: currentTimeMillis() - 1,
   });
   const partialId = harness.sessionManager.appendMessage(partial);
   harness.sessionManager.appendContextEdit(partialId, {

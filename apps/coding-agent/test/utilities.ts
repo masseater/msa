@@ -1,6 +1,7 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { Agent } from "@msa/agent-core";
 import { getModel, streamSimple } from "@msa/ai/compat";
+import { currentTimeMillis, joinPath } from "@msa/testing";
 import { Config, Effect, FileSystem, ManagedRuntime, Option } from "effect";
 
 import { AgentSession } from "../src/core/agent-session.ts";
@@ -18,8 +19,6 @@ import { SessionManager } from "../src/core/session-manager.ts";
 import { SettingsManager } from "../src/core/settings-manager.ts";
 import { createCodingTools } from "../src/index.ts";
 import { createModelRegistry, getModelRuntime } from "./model-runtime-test-utils.ts";
-import { join } from "./test-path.ts";
-import { nowMillis } from "./test-time.ts";
 
 const runtime = ManagedRuntime.make(NodeServices.layer);
 const fs = runtime.runSync(FileSystem.FileSystem.useSync((service) => service));
@@ -30,7 +29,7 @@ const readEnv = (name: string): string | undefined =>
 export const API_KEY = readEnv("ANTHROPIC_OAUTH_TOKEN") ?? readEnv("ANTHROPIC_API_KEY");
 
 export function userMsg(text: string) {
-  return { role: "user" as const, content: text, timestamp: nowMillis() };
+  return { role: "user" as const, content: text, timestamp: currentTimeMillis() };
 }
 
 export function assistantMsg(text: string) {
@@ -49,7 +48,7 @@ export function assistantMsg(text: string) {
       cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
     },
     stopReason: "stop" as const,
-    timestamp: nowMillis(),
+    timestamp: currentTimeMillis(),
   };
 }
 
@@ -183,7 +182,7 @@ export function createTestSession(options: TestSessionOptions = {}): Promise<Tes
         settingsManager.applyOverrides(options.settingsOverrides);
       }
 
-      const authStorage = AuthStorage.create(join(tempDir, "auth.json"));
+      const authStorage = AuthStorage.create(joinPath(tempDir, "auth.json"));
       const modelRegistry = yield* Effect.promise(() => createModelRegistry(authStorage, tempDir));
 
       const session = new AgentSession({

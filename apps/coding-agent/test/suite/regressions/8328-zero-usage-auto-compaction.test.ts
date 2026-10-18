@@ -1,8 +1,8 @@
 import type { AssistantMessage } from "@msa/ai";
+import { currentTimeMillis } from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { nowMillis } from "../../test-time.ts";
 import { createHarness, type Harness } from "../harness.ts";
 
 type SessionWithCompactionInternals = {
@@ -27,7 +27,7 @@ function createZeroUsageAssistant(harness: Harness): AssistantMessage {
       cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
     },
     stopReason: "stop",
-    timestamp: nowMillis(),
+    timestamp: currentTimeMillis(),
   };
 }
 
@@ -55,7 +55,7 @@ const usesTheMessageEstimateWhenNo = Effect.gen(function* () {
     {
       role: "user",
       content: [{ type: "text", text: "x".repeat(400) }],
-      timestamp: nowMillis() - 1,
+      timestamp: currentTimeMillis() - 1,
     },
     assistant,
   ];
@@ -74,7 +74,11 @@ const doesNotCompactWhenTheZero = Effect.gen(function* () {
   const harness = yield* Effect.promise(() => createCompactionHarness());
   const assistant = createZeroUsageAssistant(harness);
   harness.session.agent.state.messages = [
-    { role: "user", content: [{ type: "text", text: "short" }], timestamp: nowMillis() - 1 },
+    {
+      role: "user",
+      content: [{ type: "text", text: "short" }],
+      timestamp: currentTimeMillis() - 1,
+    },
     assistant,
   ];
   const sessionInternals = harness.session as unknown as SessionWithCompactionInternals;

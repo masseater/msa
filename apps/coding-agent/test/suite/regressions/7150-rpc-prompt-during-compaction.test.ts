@@ -1,23 +1,17 @@
 import { fauxAssistantMessage } from "@msa/ai";
+import { currentTimeMillis, gate } from "@msa/testing";
 import { Cause, Effect, Exit } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import type { PromptDisposition } from "../../../src/core/agent-session.ts";
-import { nowMillis } from "../../test-time.ts";
 import { createHarness, getMessageText, getUserTexts, type Harness } from "../harness.ts";
 
 const harnesses: Harness[] = [];
 
 const rejectsAnRpcPromptWhileManual = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-  let markCompactionStarted = () => {};
-  const compactionStarted = new Promise<void>((resolve) => {
-    markCompactionStarted = resolve;
-  });
-  let releaseCompaction = () => {};
-  const compactionReleased = new Promise<void>((resolve) => {
-    releaseCompaction = resolve;
-  });
+  const compactionStarted = gate();
+  const compactionReleased = gate();
 
   const harness = yield* Effect.promise(() =>
     createHarness({
@@ -27,7 +21,7 @@ const rejectsAnRpcPromptWhileManual = Effect.gen(function* () {
           msa.on("session_before_compact", (event) =>
             runPromise(
               Effect.gen(function* () {
-                markCompactionStarted();
+                compactionStarted.release();
                 yield* Effect.promise(() => compactionReleased);
                 return {
                   compaction: {
@@ -46,7 +40,7 @@ const rejectsAnRpcPromptWhileManual = Effect.gen(function* () {
   );
   harnesses.push(harness);
 
-  const timestamp = nowMillis();
+  const timestamp = currentTimeMillis();
   harness.sessionManager.appendMessage({
     role: "user",
     content: [{ type: "text", text: "old user message" }],
@@ -81,7 +75,7 @@ const rejectsAnRpcPromptWhileManual = Effect.gen(function* () {
       promptError = error;
     }
   } finally {
-    releaseCompaction();
+    compactionReleased.release();
     yield* Effect.promise(() => compactPromise);
   }
 

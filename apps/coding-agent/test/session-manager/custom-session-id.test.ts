@@ -1,11 +1,9 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
+import { basenameOf, currentTimeMillis, joinPath, nowIso, toJsonText } from "@msa/testing";
 import { Effect, FileSystem, ManagedRuntime } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { SessionManager } from "../../src/core/session-manager.ts";
-import { stringifyJson } from "../test-json.ts";
-import { basename, join } from "../test-path.ts";
-import { nowIso, nowMillis } from "../test-time.ts";
 
 const runtime = ManagedRuntime.make(NodeServices.layer);
 const fs = runtime.runSync(FileSystem.FileSystem.useSync((service) => service));
@@ -71,7 +69,7 @@ const usesTheProvidedIdWhenCreating = () =>
       expect(session.getHeader()!.id).toBe("created-session-id");
       const sessionFile = session.getSessionFile()!;
       expect(sessionFile).toContain("created-session-id");
-      expect(basename(sessionFile)).toMatch(
+      expect(basenameOf(sessionFile)).toMatch(
         /^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z_created-session-id\.jsonl$/u,
       );
       expect(yield* fs.exists(sessionFile)).toBe(false);
@@ -83,7 +81,7 @@ const generatesAUuidv7IdWhenCreating = () => {
   const firstId = session.appendMessage({
     role: "user",
     content: [{ type: "text", text: "hello" }],
-    timestamp: nowMillis(),
+    timestamp: currentTimeMillis(),
   });
 
   session.createBranchedSession(firstId);
@@ -96,18 +94,18 @@ const generatesAUuidv7IdWhenForking = () =>
   runtime.runPromise(
     Effect.gen(function* () {
       const tempDir = yield* fs.makeTempDirectory({ prefix: "msa-session-manager-" });
-      const sourcePath = join(tempDir, "source.jsonl");
+      const sourcePath = joinPath(tempDir, "source.jsonl");
       yield* fs.writeFileString(
         sourcePath,
         `${[
-          stringifyJson({
+          yield* toJsonText({
             type: "session",
             version: 3,
             id: "legacy-session-id",
             timestamp: nowIso(),
             cwd: tempDir,
           }),
-          stringifyJson({
+          yield* toJsonText({
             type: "message",
             id: "entry-1",
             parentId: null,
@@ -127,7 +125,7 @@ const generatesAUuidv7IdWhenForking = () =>
                 cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
               },
               stopReason: "stop",
-              timestamp: nowMillis(),
+              timestamp: currentTimeMillis(),
             },
           }),
         ].join("\n")}
@@ -146,10 +144,10 @@ const usesTheProvidedIdWhenForking = () =>
   runtime.runPromise(
     Effect.gen(function* () {
       const tempDir = yield* fs.makeTempDirectory({ prefix: "msa-session-manager-" });
-      const sourcePath = join(tempDir, "source.jsonl");
+      const sourcePath = joinPath(tempDir, "source.jsonl");
       yield* fs.writeFileString(
         sourcePath,
-        `${stringifyJson({
+        `${yield* toJsonText({
           type: "session",
           version: 3,
           id: "source-session-id",
@@ -167,7 +165,7 @@ const usesTheProvidedIdWhenForking = () =>
       expect(header!.parentSession).toBe(sourcePath);
       const sessionFile = forked.getSessionFile()!;
       expect(sessionFile).toContain("forked-session-id");
-      expect(basename(sessionFile)).toMatch(
+      expect(basenameOf(sessionFile)).toMatch(
         /^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z_forked-session-id\.jsonl$/u,
       );
     }),

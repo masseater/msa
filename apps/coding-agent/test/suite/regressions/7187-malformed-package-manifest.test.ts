@@ -1,11 +1,10 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
+import { joinPath, toJsonText } from "@msa/testing";
 import { Effect, FileSystem, ManagedRuntime } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { DefaultPackageManager } from "../../../src/core/package-manager.ts";
 import { SettingsManager } from "../../../src/core/settings-manager.ts";
-import { stringifyJson } from "../../test-json.ts";
-import { join } from "../../test-path.ts";
 import { createHarness } from "../harness.ts";
 
 const runtime = ManagedRuntime.make(NodeServices.layer);
@@ -14,18 +13,18 @@ const fs = runtime.runSync(FileSystem.FileSystem.useSync((service) => service));
 const ignoresInvalidResourceFieldsWithoutDropping = Effect.gen(function* () {
   const harness = yield* Effect.promise(() => createHarness());
   const tempDir = yield* fs.makeTempDirectory({ prefix: "msa-7187-" });
-  const agentDir = join(tempDir, "agent");
+  const agentDir = joinPath(tempDir, "agent");
   try {
-    const packageDir = join(agentDir, "npm", "node_modules", "bad-package");
-    const skillPath = join(packageDir, "skills", "bad", "SKILL.md");
-    const promptPath = join(packageDir, "prompts", "valid.md");
-    yield* fs.makeDirectory(join(packageDir, "skills", "bad"), { recursive: true });
-    yield* fs.makeDirectory(join(packageDir, "prompts"), { recursive: true });
+    const packageDir = joinPath(agentDir, "npm", "node_modules", "bad-package");
+    const skillPath = joinPath(packageDir, "skills", "bad", "SKILL.md");
+    const promptPath = joinPath(packageDir, "prompts", "valid.md");
+    yield* fs.makeDirectory(joinPath(packageDir, "skills", "bad"), { recursive: true });
+    yield* fs.makeDirectory(joinPath(packageDir, "prompts"), { recursive: true });
     yield* fs.writeFileString(skillPath, "---\nname: bad\ndescription: Must not load\n---\n");
     yield* fs.writeFileString(promptPath, "Valid prompt\n");
     yield* fs.writeFileString(
-      join(packageDir, "package.json"),
-      stringifyJson({
+      joinPath(packageDir, "package.json"),
+      yield* toJsonText({
         name: "bad-package",
         version: "1.0.0",
         msa: {

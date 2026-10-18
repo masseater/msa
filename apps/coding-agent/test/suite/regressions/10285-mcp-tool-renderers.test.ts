@@ -1,4 +1,5 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
+import { fromJsonText, joinPath } from "@msa/testing";
 import { Effect, FileSystem, ManagedRuntime } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -7,8 +8,6 @@ import { SessionManager } from "../../../src/core/session-manager.ts";
 import { createMcpExtension } from "../../../src/extensions/mcp/index.ts";
 import { initTheme, theme } from "../../../src/modes/interactive/theme/theme.ts";
 import { stripAnsi } from "../../../src/utils/ansi.ts";
-import { parseJson } from "../../test-json.ts";
-import { join } from "../../test-path.ts";
 import { createHarness } from "../harness.ts";
 import type { Harness } from "../harness.ts";
 
@@ -43,7 +42,7 @@ const rendersCallsToMcpToolsThat = Effect.gen(function* () {
 const rendersThemInHtmlExportsToo = Effect.gen(function* () {
   initTheme("dark");
   const dir = yield* fs.makeTempDirectory({ prefix: "msa-10285-" });
-  const sessionManager = SessionManager.create(dir, join(dir, "sessions"));
+  const sessionManager = SessionManager.create(dir, joinPath(dir, "sessions"));
   const harness = yield* Effect.promise(() =>
     createHarness({ extensionFactories: [mcpExtension], sessionManager }),
   );
@@ -84,12 +83,12 @@ const rendersThemInHtmlExportsTooPart2 = (
       });
 
       const html = yield* fs.readFileString(
-        yield* Effect.promise(() => harness.session.exportToHtml(join(dir, "export.html"))),
+        yield* Effect.promise(() => harness.session.exportToHtml(joinPath(dir, "export.html"))),
       );
       const data =
         /<script id="session-data" type="application\/json">([^<]*)<\/script>/u.exec(html)?.[1] ??
         "";
-      const session = parseJson(Buffer.from(data, "base64").toString("utf8")) as {
+      const session = (yield* fromJsonText(Buffer.from(data, "base64").toString("utf8"))) as {
         renderedTools?: Record<string, { callHtml?: string }>;
       };
       expect(stripAnsi(session.renderedTools?.["call-1"]?.callHtml ?? "")).toContain(

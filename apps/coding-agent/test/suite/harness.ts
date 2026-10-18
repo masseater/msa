@@ -9,6 +9,7 @@ import type {
   ToolResultMessage,
 } from "@msa/ai/compat";
 import { registerFauxProvider, streamSimple } from "@msa/ai/compat";
+import { joinPath, toJsonText } from "@msa/testing";
 import { Effect, FileSystem, ManagedRuntime } from "effect";
 
 import { AgentSession, type AgentSessionEvent } from "../../src/core/agent-session.ts";
@@ -25,8 +26,6 @@ import {
   createModelRegistry,
   getModelRuntime,
 } from "../model-runtime-test-utils.ts";
-import { stringifyJson } from "../test-json.ts";
-import { join } from "../test-path.ts";
 import {
   type CreateTestExtensionsResultInput,
   createTestExtensionsResult,
@@ -179,7 +178,7 @@ export function createHarness(options: HarnessOptions = {}): Promise<Harness> {
 
       const sessionManager = options.sessionManager ?? SessionManager.inMemory();
       const settingsManager = SettingsManager.inMemory({
-        memory: { database: join(tempDir, "memory.db"), embedding: { enabled: false } },
+        memory: { database: joinPath(tempDir, "memory.db"), embedding: { enabled: false } },
         ...options.settings,
       });
 
@@ -192,9 +191,9 @@ export function createHarness(options: HarnessOptions = {}): Promise<Harness> {
         );
       }
       const modelsPath =
-        options.modelsJson === undefined ? undefined : join(tempDir, "models.json");
+        options.modelsJson === undefined ? undefined : joinPath(tempDir, "models.json");
       if (modelsPath !== undefined && modelsPath !== "")
-        yield* fs.writeFileString(modelsPath, stringifyJson(options.modelsJson));
+        yield* fs.writeFileString(modelsPath, yield* toJsonText(options.modelsJson));
       const modelRegistry =
         modelsPath !== undefined && modelsPath !== ""
           ? yield* Effect.promise(() => createModelRegistry(authStorage, modelsPath))

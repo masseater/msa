@@ -1,3 +1,4 @@
+import { gate } from "@msa/testing";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -68,10 +69,7 @@ const doesNotDiscardAConcurrentlyLoaded = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
   const runtime = createExtensionRuntime();
   const eventBus = createEventBus();
-  let releaseFailure!: () => void;
-  const waitBeforeFailure = new Promise<void>((resolve) => {
-    releaseFailure = resolve;
-  });
+  const waitBeforeFailure = gate();
   const failingLoad = loadExtensionFromFactory(
     (msa) =>
       runPromise(
@@ -96,7 +94,7 @@ const doesNotDiscardAConcurrentlyLoaded = Effect.gen(function* () {
       "<working>",
     ),
   );
-  releaseFailure();
+  waitBeforeFailure.release();
 
   yield* Effect.promise(() => expect(failingLoad).rejects.toThrow("factory failed"));
   expect(runtime.pendingProviderRegistrations.map(({ name }) => name)).toEqual([

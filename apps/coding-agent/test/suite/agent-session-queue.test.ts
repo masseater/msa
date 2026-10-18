@@ -1,6 +1,7 @@
 import type { AgentTool } from "@msa/agent-core";
 import { fauxAssistantMessage, fauxToolCall } from "@msa/ai";
 import type { ExtensionAPI, InputEvent } from "@msa/coding-agent";
+import { gate } from "@msa/testing";
 import { Effect } from "effect";
 import { Type } from "typebox";
 import { afterEach, describe, expect, it } from "vite-plus/test";
@@ -29,10 +30,7 @@ function createWaitingHarness(
   return Effect.runPromise(
     Effect.gen(function* () {
       const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-      let releaseToolExecution: (() => void) | undefined;
-      const toolRelease = new Promise<void>((resolve) => {
-        releaseToolExecution = resolve;
-      });
+      const toolRelease = gate();
       const waitTool: AgentTool = {
         name: "wait",
         label: "Wait",
@@ -69,7 +67,7 @@ function createWaitingHarness(
 
       return {
         harness,
-        releaseToolExecution: () => releaseToolExecution?.(),
+        releaseToolExecution: () => toolRelease.release(),
         promptPromise: harness.session.prompt("start"),
         waitForToolStart,
       };

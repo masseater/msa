@@ -1,9 +1,9 @@
 import { type AssistantMessage, fauxAssistantMessage, fauxProvider } from "@msa/ai";
 import { getApiProvider } from "@msa/ai/compat";
+import { currentTimeMillis } from "@msa/testing";
 import { Effect, Stream } from "effect";
 import { expect, it } from "vite-plus/test";
 
-import { nowMillis } from "../../test-time.ts";
 import { createHarness } from "../harness.ts";
 
 it.each(["stream", "streamSimple"] as const)(
@@ -45,7 +45,9 @@ it.each(["stream", "streamSimple"] as const)(
                       Effect.gen(function* () {
                         const model = ctx.modelRegistry.find(faux.provider.id, faux.getModel().id)!;
                         const stream = ctx.modelRegistry[method](model, {
-                          messages: [{ role: "user", content: "Hello", timestamp: nowMillis() }],
+                          messages: [
+                            { role: "user", content: "Hello", timestamp: currentTimeMillis() },
+                          ],
                         });
                         yield* Stream.fromAsyncIterable(stream, (error) => error).pipe(
                           Stream.orDie,

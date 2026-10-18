@@ -1,6 +1,7 @@
 import type { AgentTool } from "@msa/agent-core";
 import { fauxAssistantMessage, fauxToolCall } from "@msa/ai";
 import type { ExtensionAPI } from "@msa/coding-agent";
+import { gate } from "@msa/testing";
 import { Effect } from "effect";
 import { Type } from "typebox";
 import { afterEach, describe, expect, it } from "vite-plus/test";
@@ -13,10 +14,7 @@ const treatsExtensionOriginQueuedSlashCommand = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
   let extensionApi: ExtensionAPI | undefined;
   const commandRuns: string[] = [];
-  let releaseToolExecution: (() => void) | undefined;
-  const toolRelease = new Promise<void>((resolve) => {
-    releaseToolExecution = resolve;
-  });
+  const toolRelease = gate();
   const waitTool: AgentTool = {
     name: "wait",
     label: "Wait",
@@ -74,7 +72,7 @@ const treatsExtensionOriginQueuedSlashCommand = Effect.gen(function* () {
   yield* Effect.sleep(0);
 
   extensionApi?.sendUserMessage("/testcmd queued", { deliverAs: "followUp" });
-  releaseToolExecution?.();
+  toolRelease.release();
   yield* Effect.promise(() => promptPromise);
 
   expect(commandRuns).toEqual([]);

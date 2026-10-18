@@ -16,6 +16,7 @@ import {
   type TranscriptContext,
 } from "@msa/ai";
 import type { ToolResultMessage, Usage } from "@msa/ai/compat";
+import { fromJsonText, joinPath } from "@msa/testing";
 import { Effect, FileSystem, ManagedRuntime } from "effect";
 import { Type } from "typebox";
 import { afterEach, beforeEach, describe, expect, it, type MockInstance, vi } from "vite-plus/test";
@@ -31,9 +32,6 @@ import {
   type CodemodeToolDetails,
   createCodemodeTool,
 } from "../../src/extensions/codemode/tool.ts";
-import { parseJson } from "../test-json.ts";
-import { join } from "../test-path.ts";
-import { randomSuffix } from "../test-time.ts";
 import { createHarness, getToolResult, type Harness, type HarnessOptions } from "./harness.ts";
 
 const runtime = ManagedRuntime.make(NodeServices.layer);
@@ -329,7 +327,7 @@ const routesNestedCallsThroughExtensionHooksPart2 = (harness: Harness) =>
     ]);
     yield* Effect.promise(() => harness.session.prompt("go"));
     const result = codemodeResult(harness);
-    expect(parseJson(resultText(result))).toEqual({
+    expect(yield* fromJsonText(resultText(result))).toEqual({
       blocked: "echo of forbidden text is blocked",
       stats: "redacted",
     });
@@ -407,7 +405,7 @@ const keepsStructuredContentThatToolResult = Effect.gen(function* () {
     fauxAssistantMessage("done"),
   ]);
   yield* Effect.promise(() => harness.session.prompt("go"));
-  expect(parseJson(resultText(codemodeResult(harness)))).toEqual({ files: 0, names: [] });
+  expect(yield* fromJsonText(resultText(codemodeResult(harness)))).toEqual({ files: 0, names: [] });
 });
 
 const attachesOnlyTheImagesTheScript = Effect.gen(function* () {
@@ -614,7 +612,7 @@ const limitsScriptMemorySoRunawayAllocations = Effect.gen(function* () {
     ),
   );
   expect(result.isError).toBe(false);
-  const { n, error } = parseJson(resultText(result)) as { n: number; error: string };
+  const { n, error } = (yield* fromJsonText(resultText(result))) as { n: number; error: string };
   expect(error).toContain("out of memory");
 
   expect(n).toBeLessThan(512);
@@ -698,8 +696,11 @@ const resolvesReadCallsToTextFor = Effect.gen(function* () {
     }),
   );
   harnesses3.push(harness);
-  yield* fs.writeFileString(join(harness.tempDir, "notes.txt"), "hello");
-  yield* fs.writeFile(join(harness.tempDir, "pixel.png"), Buffer.from(TINY_PNG_BASE64, "base64"));
+  yield* fs.writeFileString(joinPath(harness.tempDir, "notes.txt"), "hello");
+  yield* fs.writeFile(
+    joinPath(harness.tempDir, "pixel.png"),
+    Buffer.from(TINY_PNG_BASE64, "base64"),
+  );
   const result = yield* Effect.promise(() =>
     run(
       harness,
@@ -772,24 +773,26 @@ const loadsTheValuesWrittenOnThe = Effect.gen(function* () {
   expect(resultText(yield* Effect.promise(() => run(harness, increment)))).toBe("1");
 });
 
-const foldsStoreEntriesFromTheRoot = () => {
-  const entry = (data: unknown, customType = CODEMODE_STORE_ENTRY_TYPE): CustomEntry => ({
-    type: "custom",
-    customType,
-    data,
-    id: randomSuffix(),
-    parentId: null,
-    timestamp: new Date(0).toISOString(),
+const foldsStoreEntriesFromTheRoot = () =>
+  Effect.gen(function* () {
+    let counter = 0;
+    const entry = (data: unknown, customType = CODEMODE_STORE_ENTRY_TYPE): CustomEntry => ({
+      type: "custom",
+      customType,
+      data,
+      id: `entry-${++counter}`,
+      parentId: null,
+      timestamp: nowIso(),
+    });
+    expect(
+      readCodemodeStore([
+        entry({ set: { a: 1, b: { c: 2 } }, delete: [] }),
+        entry({ set: { a: 3 }, delete: ["b"] }),
+        entry({ set: { z: 1 } }),
+        entry({ set: { other: 1 }, delete: [] }, "other-extension"),
+      ]),
+    ).toEqual({ a: 3 });
   });
-  expect(
-    readCodemodeStore([
-      entry({ set: { a: 1, b: { c: 2 } }, delete: [] }),
-      entry({ set: { a: 3 }, delete: ["b"] }),
-      entry({ set: { z: 1 } }),
-      entry({ set: { other: 1 }, delete: [] }, "other-extension"),
-    ]),
-  ).toEqual({ a: 3 });
-};
 
 describe("codemode options and store", () => {
   afterEach(() => {
@@ -1014,7 +1017,7 @@ const listsModelsAndClassifiesWithCatalog = Effect.gen(function* () {
     ),
   );
   expect(result.isError).toBe(false);
-  expect(parseJson(resultText(result))).toEqual({
+  expect(yield* fromJsonText(resultText(result))).toEqual({
     id: "judge",
     headers: false,
     listed: true,
@@ -1075,7 +1078,7 @@ const generatesImagesWithCatalogAuthAnd = Effect.gen(function* () {
   expect(rest[0]).toBe("<saved>");
   expect(rest[1]).toBe("<image>");
   expect(rest[2]).toBe("==> text 2/2 <==");
-  expect(parseJson(rest.slice(3).join("\n"))).toEqual({
+  expect(yield* fromJsonText(rest.slice(3).join("\n"))).toEqual({
     id: "painter",
     stopReason: "stop",
     failed: ["error", "painter exploded"],
@@ -1177,7 +1180,7 @@ const reportsProviderErrorsAsResultsAnd = Effect.gen(function* () {
     ),
   );
   expect(result.isError).toBe(false);
-  const value = parseJson(resultText(result)) as unknown as Record<string, string[]>;
+  const value = (yield* fromJsonText(resultText(result))) as unknown as Record<string, string[]>;
   expect(value["failed"]).toEqual(["error", "classifier exploded"]);
   expect(value["textOnly"]).toEqual(["error", "Model scorer/judge does not accept image input"]);
   expect(value["badClassifierImage"]).toContain(

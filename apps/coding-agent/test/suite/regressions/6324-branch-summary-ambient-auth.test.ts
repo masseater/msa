@@ -1,8 +1,8 @@
 import { createAssistantMessageEventStream } from "@msa/ai";
+import { currentTimeMillis } from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { nowMillis } from "../../test-time.ts";
 import { assistantMsg, userMsg } from "../../utilities.ts";
 import { createHarness, type Harness } from "../harness.ts";
 
@@ -36,7 +36,7 @@ const summarizesTreeBranchesWhenRequestAuth = Effect.gen(function* () {
           cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0.25 },
         },
         stopReason: "stop",
-        timestamp: nowMillis(),
+        timestamp: currentTimeMillis(),
       },
     });
     return stream;

@@ -1,5 +1,6 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { fauxAssistantMessage, fauxToolCall, registerFauxProvider } from "@msa/ai/compat";
+import { basenameOf, currentTimeMillis, gate, joinPath, nowIso, toJsonText } from "@msa/testing";
 import { Effect, FileSystem, ManagedRuntime } from "effect";
 import { Type } from "typebox";
 import { afterEach, describe, expect, it } from "vite-plus/test";
@@ -23,9 +24,6 @@ import type {
   SessionShutdownEvent,
   SessionStartEvent,
 } from "../../src/index.ts";
-import { stringifyJson } from "../test-json.ts";
-import { join, stem } from "../test-path.ts";
-import { nowIso, nowMillis } from "../test-time.ts";
 
 const runtime = ManagedRuntime.make(NodeServices.layer);
 const fs = runtime.runSync(FileSystem.FileSystem.useSync((service) => service));
@@ -202,10 +200,7 @@ const persistsMessageEndAssistantReplacementsTo = Effect.gen(function* () {
 });
 
 const settlesTheActiveResponseBeforeSession = Effect.gen(function* () {
-  let toolStarted!: () => void;
-  const toolStartedPromise = new Promise<void>((resolve) => {
-    toolStarted = resolve;
-  });
+  const toolStartedPromise = gate();
   const { runtime, faux } = yield* Effect.promise(() =>
     createRuntimeForTest((msa: ExtensionAPI) => {
       msa.registerTool({
@@ -215,7 +210,7 @@ const settlesTheActiveResponseBeforeSession = Effect.gen(function* () {
         parameters: Type.Object({}),
         execute: (_toolCallId, _params, signal) =>
           new Promise<AgentToolResult<unknown>>((resolve) => {
-            toolStarted();
+            toolStartedPromise.release();
             signal?.addEventListener("abort", () =>
               resolve({ content: [{ type: "text", text: "tool aborted" }], details: {} }),
             );
@@ -267,18 +262,18 @@ const settlesTheActiveResponseBeforeSessionPart2 = (
 const preservesAnExistingSessionWhenImporting = Effect.gen(function* () {
   const { runtime, tempDir } = yield* Effect.promise(() => createRuntimeForTest(() => {}));
   const sessionDir = runtime.session.sessionManager.getSessionDir();
-  const importDir = join(tempDir, "import");
+  const importDir = joinPath(tempDir, "import");
   const filename = "collision.jsonl";
-  const storedPath = join(sessionDir, filename);
-  const importPath = join(importDir, filename);
-  const storedSession = `${stringifyJson({
+  const storedPath = joinPath(sessionDir, filename);
+  const importPath = joinPath(importDir, filename);
+  const storedSession = `${yield* toJsonText({
     type: "session",
     version: 3,
     id: "stored",
     timestamp: nowIso(),
     cwd: tempDir,
   })}\n`;
-  const importedSession = `${stringifyJson({
+  const importedSession = `${yield* toJsonText({
     type: "session",
     version: 3,
     id: "imported",
@@ -391,7 +386,7 @@ const honorsSessionBeforeSwitchCancellationFor = Effect.gen(function* () {
   otherSession.appendMessage({
     role: "user",
     content: [{ type: "text", text: "other" }],
-    timestamp: nowMillis(),
+    timestamp: currentTimeMillis(),
   });
   const otherSessionFile = otherSession.getSessionFile();
   cancelReason = "resume";
@@ -440,7 +435,7 @@ const emitsSessionBeforeForkAndSession = Effect.gen(function* () {
     },
     { type: "session_start", reason: "fork", previousSessionFile },
   ]);
-  const sessionFileName = stem(runtime.session.sessionFile!);
+  const sessionFileName = basenameOf(runtime.session.sessionFile!).replace(/\.[^.]*$/u, "");
   expect(sessionFileName.endsWith(`_${runtime.session.sessionId}`)).toBe(true);
 
   events.length = 0;
@@ -764,7 +759,7 @@ const restoresModelAndThinkingStateFrom = Effect.gen(function* () {
       bootstrapThinkingLevel: false,
     }),
   );
-  const otherDir = join(tempDir, "other");
+  const otherDir = joinPath(tempDir, "other");
   yield* fs.makeDirectory(otherDir, { recursive: true });
   const otherAuthStorage = AuthStorage.inMemory();
   yield* Effect.promise(() =>
