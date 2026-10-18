@@ -1,49 +1,51 @@
-import { createHash } from "node:crypto";
-import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
-
+import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
+import * as NodeServices from "@effect/platform-node/NodeServices";
 import { LATEST_PROTOCOL_VERSION } from "@msa/mcp";
 import { fromJsonText } from "@msa/testing";
-import { Effect, Stream } from "effect";
+import { Context, Crypto, Deferred, Effect, Exit, Layer, ManagedRuntime, Scope } from "effect";
+import { HttpEffect, HttpServer } from "effect/http";
+import * as NetAddress from "effect/net/NetAddress";
 
-function readBody(request: IncomingMessage): Promise<string> {
-  return Effect.runPromise(
-    Stream.fromAsyncIterable(request, (error) => error).pipe(
-      Stream.orDie,
-      Stream.runCollect,
-      Effect.map((chunks) =>
-        Buffer.concat(chunks.map((chunk) => Buffer.from(chunk))).toString("utf8"),
-      ),
-    ),
+const runtime = ManagedRuntime.make(NodeServices.layer);
+
+interface StalledRequest {
+  path: string;
+  request: Request;
+}
+
+const json = (status: number, body: unknown, headers: Record<string, string> = {}): Response =>
+  new Response(JSON.stringify(body), {
+    status,
+    headers: { "content-type": "application/json", ...headers },
+  });
+
+const readText = (request: Request): Effect.Effect<string> => Effect.promise(() => request.text());
+
+const readJson = (request: Request): Effect.Effect<unknown> =>
+  Effect.flatMap(readText(request), fromJsonText);
+
+const sha256Base64Url = (value: string) =>
+  Effect.map(
+    Crypto.Crypto.use((crypto) => crypto.digest("SHA-256", new TextEncoder().encode(value))),
+    (digest) => Buffer.from(digest).toString("base64url"),
   );
-}
-
-function json(
-  response: ServerResponse,
-  status: number,
-  body: unknown,
-  headers: Record<string, string> = {},
-): void {
-  response
-    .writeHead(status, { "content-type": "application/json", ...headers })
-    .end(JSON.stringify(body));
-}
 
 export function startOAuthMcpServer(
   options: { iss?: string; issParameter?: boolean; cimd?: boolean; redirectPath?: string } = {},
 ) {
-  return Effect.runPromise(
+  return runtime.runPromise(
     Effect.gen(function* () {
-      const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
       const log: string[] = [];
       const registrations: Record<string, unknown>[] = [];
       const authorizations: URLSearchParams[] = [];
       const tokenRequests: URLSearchParams[] = [];
       const deletes: (string | undefined)[] = [];
       const stall = new Set<string>();
-      const stalled: { path: string; request: IncomingMessage }[] = [];
+      const stalled: StalledRequest[] = [];
       const validTokens = new Set<string>();
       const refreshTokens = new Set<string>();
       const challenges = new Map<string, string>();
+      const closing = Deferred.makeUnsafe<void>();
       let issued = 0;
       let origin = "";
 
@@ -55,172 +57,149 @@ export function startOAuthMcpServer(
         return { ...tokens, token_type: "Bearer", expires_in: 3600 };
       };
 
-      const handleMcp = (request: IncomingMessage, response: ServerResponse) =>
-        runPromise(
-          Effect.gen(function* () {
-            const token = request.headers.authorization?.replace(/^Bearer /u, "");
-            if (request.method === "DELETE") deletes.push(token);
-            if (request.method !== "POST") {
-              response.writeHead(request.method === "GET" ? 405 : 200).end();
-              return;
-            }
-            if (token === undefined || token === "" || !validTokens.has(token)) {
-              log.push(`401 ${token ?? "none"}`);
-              response
-                .writeHead(401, {
-                  "www-authenticate": `Bearer resource_metadata="${origin}/.well-known/oauth-protected-resource/mcp"`,
-                })
-                .end();
-              return;
-            }
-            const message = (yield* fromJsonText(
-              yield* Effect.promise(() => readBody(request)),
-            )) as {
-              id?: number;
-              method: string;
-              params?: unknown;
+      const handleMcp = (request: Request) =>
+        Effect.gen(function* () {
+          const token = request.headers.get("authorization")?.replace(/^Bearer /u, "");
+          if (request.method === "DELETE") deletes.push(token);
+          if (request.method !== "POST") {
+            return new Response(null, { status: request.method === "GET" ? 405 : 200 });
+          }
+          if (token === undefined || token === "" || !validTokens.has(token)) {
+            log.push(`401 ${token ?? "none"}`);
+            return new Response(null, {
+              status: 401,
+              headers: {
+                "www-authenticate": `Bearer resource_metadata="${origin}/.well-known/oauth-protected-resource/mcp"`,
+              },
+            });
+          }
+          const message = (yield* readJson(request)) as {
+            id?: number;
+            method: string;
+            params?: unknown;
+          };
+          if (message.id === undefined) return new Response(null, { status: 202 });
+          let result: unknown;
+          if (message.method === "initialize") {
+            result = {
+              protocolVersion: LATEST_PROTOCOL_VERSION,
+              capabilities: { tools: {} },
+              serverInfo: { name: "issues", version: "1.0.0" },
             };
-            if (message.id === undefined) {
-              response.writeHead(202).end();
-              return;
-            }
-            let result: unknown;
-            if (message.method === "initialize") {
-              result = {
-                protocolVersion: LATEST_PROTOCOL_VERSION,
-                capabilities: { tools: {} },
-                serverInfo: { name: "issues", version: "1.0.0" },
-              };
-            } else if (message.method === "tools/list") {
-              result = {
-                tools: [{ name: "whoami", inputSchema: { type: "object", properties: {} } }],
-              };
-            } else if (message.method === "tools/call") {
-              log.push(`call ${token}`);
-              result = { content: [{ type: "text", text: `token ${token}` }] };
-            } else {
-              result = {};
-            }
-            json(
-              response,
-              200,
-              { jsonrpc: "2.0", id: message.id, result },
-              { "mcp-session-id": "session-1" },
-            );
-          }),
-        );
-
-      const handle = (request: IncomingMessage, response: ServerResponse) =>
-        runPromise(
-          Effect.gen(function* () {
-            const url = new URL(request.url ?? "/", origin);
-            if (stall.has(url.pathname)) {
-              stalled.push({ path: url.pathname, request });
-              return;
-            }
-            switch (url.pathname) {
-              case "/mcp":
-                return yield* Effect.promise(() => handleMcp(request, response));
-              case "/.well-known/oauth-protected-resource/mcp":
-                return json(response, 200, {
-                  resource: `${origin}/mcp`,
-                  authorization_servers: [origin],
-                });
-              case "/.well-known/oauth-authorization-server":
-                return json(response, 200, {
-                  issuer: origin,
-                  authorization_endpoint: `${origin}/authorize`,
-                  token_endpoint: `${origin}/token`,
-                  registration_endpoint: `${origin}/register`,
-                  response_types_supported: ["code"],
-                  code_challenge_methods_supported: ["S256"],
-                  token_endpoint_auth_methods_supported: ["none"],
-                  ...(options.cimd === true ? { client_id_metadata_document_supported: true } : {}),
-                  ...(options.issParameter === true
-                    ? { authorization_response_iss_parameter_supported: true }
-                    : {}),
-                });
-              case "/register": {
-                const metadata = (yield* fromJsonText(
-                  yield* Effect.promise(() => readBody(request)),
-                )) as Record<string, unknown>;
-                log.push("register");
-                registrations.push(metadata);
-                return json(response, 201, { ...metadata, client_id: "client-1" });
-              }
-              case "/authorize": {
-                authorizations.push(url.searchParams);
-                const code = `code-${challenges.size + 1}`;
-                challenges.set(code, url.searchParams.get("code_challenge") ?? "");
-                const redirect = new URL(url.searchParams.get("redirect_uri") ?? "");
-                if (options.redirectPath !== undefined && options.redirectPath !== "")
-                  redirect.pathname = options.redirectPath;
-                redirect.searchParams.set("code", code);
-                redirect.searchParams.set("state", url.searchParams.get("state") ?? "");
-                const iss = options.iss ?? (options.issParameter === true ? origin : undefined);
-                if (iss !== undefined && iss !== "") redirect.searchParams.set("iss", iss);
-                response.writeHead(302, { location: redirect.href }).end();
-                return;
-              }
-              case "/token": {
-                const params = new URLSearchParams(yield* Effect.promise(() => readBody(request)));
-                tokenRequests.push(params);
-                if (params.get("grant_type") === "authorization_code") {
-                  const challenge = challenges.get(params.get("code") ?? "");
-                  const verifier = createHash("sha256")
-                    .update(params.get("code_verifier") ?? "")
-                    .digest("base64url");
-                  if (challenge === undefined || challenge === "" || challenge !== verifier)
-                    return json(response, 400, { error: "invalid_grant" });
-                  challenges.delete(params.get("code") ?? "");
-                  log.push("token code");
-                  return json(response, 200, issueTokens());
-                }
-                const refresh = params.get("refresh_token") ?? "";
-                if (!refreshTokens.delete(refresh))
-                  return json(response, 400, { error: "invalid_grant" });
-                log.push("token refresh");
-                return json(response, 200, issueTokens());
-              }
-              default:
-                response.writeHead(404).end();
-            }
-          }),
-        );
-
-      const server: Server = createServer((request, response) => {
-        void handle(request, response).catch((error) => {
-          response.writeHead(500).end(String(error));
+          } else if (message.method === "tools/list") {
+            result = {
+              tools: [{ name: "whoami", inputSchema: { type: "object", properties: {} } }],
+            };
+          } else if (message.method === "tools/call") {
+            log.push(`call ${token}`);
+            result = { content: [{ type: "text", text: `token ${token}` }] };
+          } else {
+            result = {};
+          }
+          return json(
+            200,
+            { jsonrpc: "2.0", id: message.id, result },
+            { "mcp-session-id": "session-1" },
+          );
         });
-      });
-      yield* Effect.callback<void>((resume) => {
-        server.listen(0, "127.0.0.1", () => resume(Effect.void));
-      });
-      const address = server.address();
-      if (address === null || address === "" || typeof address === "string")
-        throw new Error("test server did not bind to TCP");
+
+      const handleToken = (params: URLSearchParams) =>
+        Effect.gen(function* () {
+          tokenRequests.push(params);
+          if (params.get("grant_type") === "authorization_code") {
+            const challenge = challenges.get(params.get("code") ?? "");
+            const verifier = yield* sha256Base64Url(params.get("code_verifier") ?? "");
+            if (challenge === undefined || challenge === "" || challenge !== verifier)
+              return json(400, { error: "invalid_grant" });
+            challenges.delete(params.get("code") ?? "");
+            log.push("token code");
+            return json(200, issueTokens());
+          }
+          const refresh = params.get("refresh_token") ?? "";
+          if (!refreshTokens.delete(refresh)) return json(400, { error: "invalid_grant" });
+          log.push("token refresh");
+          return json(200, issueTokens());
+        });
+
+      const authorize = (url: URL) => {
+        authorizations.push(url.searchParams);
+        const code = `code-${challenges.size + 1}`;
+        challenges.set(code, url.searchParams.get("code_challenge") ?? "");
+        const redirect = new URL(url.searchParams.get("redirect_uri") ?? "");
+        if (options.redirectPath !== undefined && options.redirectPath !== "")
+          redirect.pathname = options.redirectPath;
+        redirect.searchParams.set("code", code);
+        redirect.searchParams.set("state", url.searchParams.get("state") ?? "");
+        const iss = options.iss ?? (options.issParameter === true ? origin : undefined);
+        if (iss !== undefined && iss !== "") redirect.searchParams.set("iss", iss);
+        return new Response(null, { status: 302, headers: { location: redirect.href } });
+      };
+
+      const handle = (request: Request) =>
+        Effect.gen(function* () {
+          const url = new URL(request.url);
+          if (stall.has(url.pathname)) {
+            stalled.push({ path: url.pathname, request });
+            yield* Deferred.await(closing);
+            return new Response(null, { status: 503 });
+          }
+          switch (url.pathname) {
+            case "/mcp":
+              return yield* handleMcp(request);
+            case "/.well-known/oauth-protected-resource/mcp":
+              return json(200, { resource: `${origin}/mcp`, authorization_servers: [origin] });
+            case "/.well-known/oauth-authorization-server":
+              return json(200, {
+                issuer: origin,
+                authorization_endpoint: `${origin}/authorize`,
+                token_endpoint: `${origin}/token`,
+                registration_endpoint: `${origin}/register`,
+                response_types_supported: ["code"],
+                code_challenge_methods_supported: ["S256"],
+                token_endpoint_auth_methods_supported: ["none"],
+                ...(options.cimd === true ? { client_id_metadata_document_supported: true } : {}),
+                ...(options.issParameter === true
+                  ? { authorization_response_iss_parameter_supported: true }
+                  : {}),
+              });
+            case "/register": {
+              const metadata = (yield* readJson(request)) as Record<string, unknown>;
+              log.push("register");
+              registrations.push(metadata);
+              return json(201, { ...metadata, client_id: "client-1" });
+            }
+            case "/authorize":
+              return authorize(url);
+            case "/token":
+              return yield* handleToken(new URLSearchParams(yield* readText(request)));
+            default:
+              return new Response(null, { status: 404 });
+          }
+        });
+
+      const scope = yield* Scope.make();
+      const serving = HttpServer.serve(
+        HttpEffect.fromWebHandler((request) => runtime.runPromise(handle(request))),
+      ).pipe(Layer.provideMerge(NodeHttpServer.layerTest));
+      const services = yield* Layer.buildWithScope(serving, scope);
+      const { address } = Context.get(services, HttpServer.HttpServer);
+      if (!NetAddress.isInetAddress(address)) throw new Error("test server did not bind to TCP");
       origin = `http://127.0.0.1:${address.port}`;
       return {
         url: `${origin}/mcp`,
         log,
-
         registrations,
-
         authorizations,
-
         tokenRequests,
-
         deletes,
         stall,
-
         stalled,
-
         expireAccessTokens: () => validTokens.clear(),
         close: () =>
-          runPromise(
-            Effect.callback<void>((resume) => {
-              server.closeAllConnections();
-              server.close(() => resume(Effect.void));
+          runtime.runPromise(
+            Effect.gen(function* () {
+              Deferred.doneUnsafe(closing, Effect.void);
+              yield* Scope.close(scope, Exit.void);
             }),
           ),
       };

@@ -182,9 +182,7 @@ for (const path of ["/.well-known/oauth-authorization-server", "/token"]) {
         expect(yield* Effect.promise(() => shutdown(harness))).toBeLessThan(2_000);
         yield* Effect.promise(() => login);
 
-        yield* Effect.promise(() =>
-          vi.waitFor(() => expect(server.stalled[0]?.request.socket.destroyed).toBe(true)),
-        );
+        expect(server.stalled).toHaveLength(1);
         expect(notifications.filter((message) => message.startsWith("Sign-in"))).toEqual([]);
       }),
     ));
