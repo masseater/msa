@@ -1,7 +1,7 @@
 import type { ExtensionAPI } from "@msa/coding-agent";
 import { Effect } from "effect";
 
-export default function (msa: ExtensionAPI) {
+const registerAsk = (msa: ExtensionAPI): void => {
   msa.registerCommand("ask", {
     description: "Send a user message to the agent",
     handler: (args, ctx) =>
@@ -21,7 +21,9 @@ export default function (msa: ExtensionAPI) {
         }),
       ),
   });
+};
 
+const registerSteer = (msa: ExtensionAPI): void => {
   msa.registerCommand("steer", {
     description: "Send a steering message (interrupts current processing)",
     handler: (args, ctx) =>
@@ -40,7 +42,9 @@ export default function (msa: ExtensionAPI) {
         }),
       ),
   });
+};
 
+const registerFollowup = (msa: ExtensionAPI): void => {
   msa.registerCommand("followup", {
     description: "Queue a follow-up message (waits for current processing)",
     handler: (args, ctx) =>
@@ -60,7 +64,9 @@ export default function (msa: ExtensionAPI) {
         }),
       ),
   });
+};
 
+const registerAskwith = (msa: ExtensionAPI): void => {
   msa.registerCommand("askwith", {
     description: "Send a user message with structured content",
     handler: (args, ctx) =>
@@ -83,4 +89,11 @@ export default function (msa: ExtensionAPI) {
         }),
       ),
   });
+};
+
+export default function (msa: ExtensionAPI) {
+  registerAsk(msa);
+  registerSteer(msa);
+  registerFollowup(msa);
+  registerAskwith(msa);
 }

@@ -2,7 +2,7 @@ import type { ExtensionAPI } from "@msa/coding-agent";
 import { Effect } from "effect";
 import { Type } from "typebox";
 
-export default function (msa: ExtensionAPI) {
+const registerQuit = (msa: ExtensionAPI): void => {
   msa.registerCommand("quit", {
     description: "Exit msa cleanly",
     handler: (_args, ctx) =>
@@ -12,7 +12,9 @@ export default function (msa: ExtensionAPI) {
         }),
       ),
   });
+};
 
+const registerFinishAndExit = (msa: ExtensionAPI): void => {
   msa.registerTool({
     name: "finish_and_exit",
     label: "Finish and Exit",
@@ -30,7 +32,9 @@ export default function (msa: ExtensionAPI) {
         }),
       ),
   });
+};
 
+const registerDeployAndExit = (msa: ExtensionAPI): void => {
   msa.registerTool({
     name: "deploy_and_exit",
     label: "Deploy and Exit",
@@ -59,4 +63,10 @@ export default function (msa: ExtensionAPI) {
         }),
       ),
   });
+};
+
+export default function (msa: ExtensionAPI) {
+  registerQuit(msa);
+  registerFinishAndExit(msa);
+  registerDeployAndExit(msa);
 }
