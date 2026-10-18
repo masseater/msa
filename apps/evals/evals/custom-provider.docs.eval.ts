@@ -3,7 +3,6 @@ import { afterAll, beforeAll, beforeEach } from "vite-plus/test";
 import { describeEval, StructuredOutputJudge } from "vitest-evals";
 
 import { createMsaDocumentationEvalHarness } from "../src/harness.ts";
-import { setEnv, unsetEnv } from "../src/platform.ts";
 import {
   createAcmeServer,
   STREAM_API_DOCUMENTATION,
@@ -18,15 +17,9 @@ const DOCUMENTATION_PATH = "fixtures/acme-stream-api.json";
 const STREAM_API_KEY = "resolved-stream-key";
 const server = createAcmeServer("stream");
 
-beforeAll(() => {
-  setEnv("ACME_STREAM_API_KEY", STREAM_API_KEY);
-  return Effect.runPromise(server.start);
-});
+beforeAll(() => Effect.runPromise(server.start));
 beforeEach(() => server.reset());
-afterAll(() => {
-  unsetEnv("ACME_STREAM_API_KEY");
-  return Effect.runPromise(server.stop);
-});
+afterAll(() => Effect.runPromise(server.stop));
 
 const expected: ProviderRuntimeOutput = {
   result: {

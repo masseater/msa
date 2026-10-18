@@ -1,13 +1,9 @@
-import { homedir } from "node:os";
-
 import { getDocsPath, getExamplesPath, getReadmePath } from "@msa/coding-agent";
-import { describe, expect, it, vi } from "vite-plus/test";
+import { describe, expect, it } from "vite-plus/test";
 
 import { buildSystemPrompt } from "../../coding-agent/src/core/system-prompt.ts";
 import { createMsaDocumentationEvalHarness } from "../src/harness.ts";
-import { applyIsolatedEnvironment } from "../src/isolation.ts";
 import { resolveModelSelection } from "../src/model-selection.ts";
-import { readEnv } from "../src/platform.ts";
 import {
   DOCUMENTATION_EVAL_TOOLS,
   excludeMsaDocumentation,
@@ -45,29 +41,6 @@ describe("resolveModelSelection", () => {
       );
     },
   );
-});
-
-describe("isolateProcessEnvironment", () => {
-  it("removes runner metadata and restores the process environment", () => {
-    vi.stubEnv("MSA_EVAL_VARIANT", "with_docs");
-    vi.stubEnv("MSA_EVAL_ARTIFACT_DIR", "/tmp/artifacts");
-    const oldHome = readEnv("HOME");
-    try {
-      const restore = applyIsolatedEnvironment("/tmp/eval-home", "/tmp/eval-agent");
-      try {
-        expect(homedir()).toBe("/tmp/eval-home");
-        expect(readEnv("MSA_CODING_AGENT_DIR")).toBe("/tmp/eval-agent");
-        expect(readEnv("MSA_EVAL_VARIANT")).toBeUndefined();
-        expect(readEnv("MSA_EVAL_ARTIFACT_DIR")).toBeUndefined();
-      } finally {
-        restore();
-      }
-      expect(readEnv("HOME")).toBe(oldHome);
-      expect(readEnv("MSA_EVAL_VARIANT")).toBe("with_docs");
-    } finally {
-      vi.unstubAllEnvs();
-    }
-  });
 });
 
 describe("documentation variant", () => {

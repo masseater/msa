@@ -29,7 +29,6 @@ export type RunState<TOutput extends JsonValue> = {
   session: AgentSession | undefined;
   result: SimpleHarnessResult<string | TOutput> | undefined;
   diagnostics: MsaRunDiagnostics | undefined;
-  hiddenCredential: { name: string; value: string } | undefined;
 };
 
 export type HostSelection = {
@@ -38,7 +37,7 @@ export type HostSelection = {
   sandboxIdentity: SandboxIdentity | undefined;
 };
 
-export type RunPaths = { root: string; workspace: string; isolatedHome: string; agentDir: string };
+export type RunPaths = { root: string; workspace: string; agentDir: string };
 
 export type AgentRunContext = {
   host: HostSelection;

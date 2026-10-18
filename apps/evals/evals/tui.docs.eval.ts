@@ -13,7 +13,6 @@ import { createJudge, describeEval } from "vitest-evals";
 
 import type { MsaCodingAgentInput } from "../src/harness-types.ts";
 import { createMsaDocumentationEvalHarness } from "../src/harness.ts";
-import { readEnv, setEnv, unsetEnv } from "../src/platform.ts";
 import { RecordingTerminal } from "./recording-terminal.ts";
 
 const CONTEXT_WINDOW = 272_000;
@@ -153,15 +152,7 @@ const inspectContextFooter = (
     const { oracleSession, runtime } = yield* createOracleRuntime(session, agentDir, model);
     const terminal = new RecordingTerminal();
     const mode = new InteractiveMode(runtime, { tuiMode: "regular", terminal });
-    const previousOffline = readEnv("MSA_OFFLINE");
-    setEnv("MSA_OFFLINE", "1");
-    const restoreOffline = Effect.sync(() => {
-      if (previousOffline === undefined) unsetEnv("MSA_OFFLINE");
-      else setEnv("MSA_OFFLINE", previousOffline);
-    });
-    const disposeRuntime = Effect.promise(() => runtime.dispose()).pipe(
-      Effect.ensuring(restoreOffline),
-    );
+    const disposeRuntime = Effect.promise(() => runtime.dispose());
     return yield* observeFooter(session, oracleSession, model, mode, terminal).pipe(
       Effect.ensuring(
         Effect.sync(() => mode.stop("resume-hint")).pipe(Effect.ensuring(disposeRuntime)),

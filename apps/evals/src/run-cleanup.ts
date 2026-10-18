@@ -7,7 +7,7 @@ import {
 } from "vitest-evals/harness";
 
 import type { MsaCodingAgentInput } from "./harness-types.ts";
-import { files, setEnv } from "./platform.ts";
+import { files } from "./platform.ts";
 import { MSA_SESSION_SNAPSHOT_ARTIFACT } from "./report-types.ts";
 import type { RunState } from "./run-types.ts";
 
@@ -25,12 +25,10 @@ const collectingErrors =
 export const cleanup = <TOutput extends JsonValue>({
   state,
   root,
-  restoreEnvironment,
   setArtifact,
 }: {
   state: RunState<TOutput>;
   root: string;
-  restoreEnvironment: () => void;
   setArtifact: HarnessContext["setArtifact"];
 }): Effect.Effect<unknown[]> =>
   Effect.gen(function* () {
@@ -48,9 +46,6 @@ export const cleanup = <TOutput extends JsonValue>({
     }
     yield* collect(Effect.sync(() => state.session?.dispose()));
     yield* collect(files.remove(root));
-    restoreEnvironment();
-    const hidden = state.hiddenCredential;
-    if (hidden !== undefined) setEnv(hidden.name, hidden.value);
     return errors;
   });
 
