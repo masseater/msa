@@ -1,23 +1,17 @@
-/**
- * Bounded output streams and adaptive progress commits: `OutputBuffer` keeps a head or tail window of a stream at a cost
- * proportional to each chunk, and `Progress` paces commits of a changing value by their size.
- */
+import { dual } from "effect/Function";
 
-/** Retention limits of one output stream. */
 export type OutputLimits = {
   readonly maxBytes: number;
   readonly maxLines: number;
   readonly retain: "head" | "tail";
 };
 
-/** Retained output and what the limits dropped. */
 export type BoundedOutput = {
   readonly text: string;
   readonly droppedBytes: number;
   readonly droppedLines: number;
 };
 
-/** An exact slice of the input within the limits, and what it left out. */
 export type OutputSlice = {
   readonly text: string;
   readonly bytes: number;
@@ -25,36 +19,22 @@ export type OutputSlice = {
   readonly droppedLines: number;
 };
 
-/**
- * Output a producer omitted before a chunk, measured on the decoded text: every U+FFFD counts as three bytes, and no
- * sanitizing is applied.
- */
 export interface OutputSkip {
-  /** UTF-8 byte length of the omitted text. */
   readonly bytes: number;
-  /** Newlines (U+000A) in the omitted text. */
   readonly newlines: number;
-  /** Whether the omitted text ends with a newline. */
   readonly endsWithNewline: boolean;
 }
 
 const NEWLINE = 0x0a;
-const INVALID_OUTPUT = /[\x00-\x08\x0b-\x1f\ufff9-\ufffb]/g;
+const INVALID_OUTPUT = /(?![\t\n\u007f-\u009f])\p{Cc}|[\ufff9-\ufffb]/gu;
 const encoder = new TextEncoder();
-/** Slices decode exactly: a U+FEFF at a slice's start is text, not a byte-order mark. */
 const decoder = new TextDecoder("utf-8", { ignoreBOM: true });
 
-/** Remove control characters that break display and transcripts; tabs and newlines stay. */
 export function sanitizeOutput(text: string): string {
   return text.replace(INVALID_OUTPUT, "");
 }
 
-/**
- * Bound `text` to whole lines within the limits: the first lines for `head`, the last lines for `tail`. The result is an
- * exact slice, trailing newline included. A single line longer than `maxBytes` is cut at the byte limit on a character
- * boundary.
- */
-export function boundOutput(text: string, limits: OutputLimits): OutputSlice {
+function outputBounded(text: string, limits: OutputLimits): OutputSlice {
   const bytes = encoder.encode(text);
   const [from, to] = limits.retain === "head" ? headRange(bytes, limits) : tailRange(bytes, limits);
   const kept = bytes.subarray(from, to);
@@ -89,7 +69,6 @@ function headRange(bytes: Uint8Array, limits: OutputLimits): [number, number] {
 
 function tailRange(bytes: Uint8Array, limits: OutputLimits): [number, number] {
   if (limits.maxLines === 0 || limits.maxBytes === 0) return [bytes.length, bytes.length];
-  // A trailing newline ends the last line rather than starting another.
   const last = bytes[bytes.length - 1] === NEWLINE ? bytes.length - 2 : bytes.length - 1;
   let start = 0;
   let newlines = 1;
@@ -104,21 +83,18 @@ function tailRange(bytes: Uint8Array, limits: OutputLimits): [number, number] {
   if (bytes.length - start > limits.maxBytes) {
     const from = bytes.length - limits.maxBytes;
     const newline = bytes.indexOf(NEWLINE, from - 1);
-    // The first line starting inside the byte window, or a cut of the last line when it alone is too long.
     start =
       newline !== -1 && newline + 1 < bytes.length ? newline + 1 : characterStart(bytes, from);
   }
   return [start, bytes.length];
 }
 
-/** The last character boundary at or before `index`. */
-export function characterEnd(bytes: Uint8Array, index: number): number {
+function endOfCharacter(bytes: Uint8Array, index: number): number {
   let end = index;
   while (end > 0 && ((bytes[end] ?? 0) & 0xc0) === 0x80) end--;
   return end;
 }
 
-/** The first character boundary at or after `index`. */
 function characterStart(bytes: Uint8Array, index: number): number {
   let start = index;
   while (start < bytes.length && ((bytes[start] ?? 0) & 0xc0) === 0x80) start++;
@@ -133,21 +109,10 @@ function lineCount(bytes: Uint8Array): number {
   return newlines + (bytes[bytes.length - 1] === NEWLINE ? 0 : 1);
 }
 
-/**
- * Bounded running output of one stream, such as a tool call's or a process's. Accepting a chunk costs time proportional to the chunk: head retention stops
- * storing once the window is full, and tail retention drops stored text the window no longer needs when it snapshots.
- * Counts of the whole stream are kept so the dropped totals stay exact.
- */
 export class OutputBuffer {
   readonly #limits: OutputLimits;
-  /**
-   * Decoder of byte chunks. A string chunk or a skip ends an incomplete character of earlier bytes (it becomes U+FFFD);
-   * the next byte chunk then starts a new character. As in `StreamDecoder`, only a byte-order mark at the very start of
-   * the output is dropped, never a U+FEFF later in it.
-   */
   readonly #decoder = new TextDecoder("utf-8", { ignoreBOM: true });
   #started = false;
-  /** Stored chunks: for head the start of the stream, for tail a suffix that still contains the next window. */
   #chunks: { readonly text: string; readonly bytes: number; readonly newlines: number }[] = [];
   #storedBytes = 0;
   #storedNewlines = 0;
@@ -160,17 +125,11 @@ export class OutputBuffer {
     this.#limits = limits;
   }
 
-  /** Bytes currently held; bounded by the limits plus one chunk. */
   get storedBytes(): number {
     return this.#storedBytes;
   }
 
-  /**
-   * Accept a chunk; returns whether anything was accepted. `skipped` is output omitted right before the chunk, which
-   * must be more than the tail window by at least one byte or line; only tail retention accepts it.
-   */
   push(chunk: string | Uint8Array, skipped?: OutputSkip): boolean {
-    // Bytes of an incomplete character from an earlier byte chunk come first.
     const pending =
       typeof chunk === "string" || skipped !== undefined ? this.#decoder.decode() : "";
     let text = typeof chunk === "string" ? chunk : this.#decoder.decode(chunk, { stream: true });
@@ -185,7 +144,6 @@ export class OutputBuffer {
     return true;
   }
 
-  /** Count omitted output; nothing stored before it can be in the window once the text after it arrives. */
   #skip(skipped: OutputSkip): void {
     if (skipped.bytes === 0) return;
     this.#totalBytes += skipped.bytes;
@@ -196,7 +154,6 @@ export class OutputBuffer {
     this.#storedNewlines = 0;
   }
 
-  /** Flush an incomplete trailing character as a replacement character; call when the stream ends. */
   end(): void {
     this.#accept(this.#decoder.decode());
   }
@@ -213,13 +170,10 @@ export class OutputBuffer {
     this.#storedBytes += bytes;
     this.#storedNewlines += newlines;
     if (this.#limits.retain === "head") {
-      // Nothing past a full window is ever needed.
       this.#full =
         this.#storedBytes > this.#limits.maxBytes || this.#storedNewlines >= this.#limits.maxLines;
       return true;
     }
-    // Drop leading chunks while the rest still holds more than a window: more than `maxBytes` bytes or `maxLines`
-    // newlines, plus one, so the window's line start can still be found. Each chunk is dropped once.
     while (this.#chunks.length > 1) {
       const first = this.#chunks[0]!;
       const bytesAfter = this.#storedBytes - first.bytes;
@@ -233,7 +187,6 @@ export class OutputBuffer {
     return true;
   }
 
-  /** Retained, sanitized output and what the limits dropped from the whole stream. */
   snapshot(): BoundedOutput {
     const stored =
       this.#chunks.length === 1
@@ -242,8 +195,6 @@ export class OutputBuffer {
     const kept = boundOutput(stored, this.#limits);
     const storedLines = lines(this.#storedNewlines, stored === "" || stored.endsWith("\n"));
     const keptLines = storedLines - kept.droppedLines;
-    // Tail windows never reach back before this one, but finding a later window's first line needs what precedes it:
-    // keep the shortest suffix longer than the window by a byte or a line, as `#accept` does.
     if (this.#limits.retain === "tail" || this.#chunks.length > 1) {
       const text = this.#limits.retain === "tail" ? tailMargin(stored, this.#limits) : stored;
       const bytes = this.#limits.retain === "tail" ? utf8ByteLength(text) : this.#storedBytes;
@@ -259,10 +210,6 @@ export class OutputBuffer {
   }
 }
 
-/**
- * The shortest suffix of `text` with more than `maxBytes` bytes or more than `maxLines` newlines, or all of it. The
- * tail window of any text that ends with this suffix, followed by anything, is the same as of `text` followed by it.
- */
 function tailMargin(text: string, limits: OutputLimits): string {
   const bytes = encoder.encode(text);
   const byteStart =
@@ -284,7 +231,6 @@ function tailMargin(text: string, limits: OutputLimits): string {
   return start === 0 ? text : decoder.decode(bytes.subarray(start));
 }
 
-/** Lines of text with `newlines` newlines; a final unterminated line counts. */
 function lines(newlines: number, terminated: boolean): number {
   return newlines + (terminated ? 0 : 1);
 }
@@ -294,11 +240,10 @@ interface RuntimeBuffer {
 }
 
 const runtimeBuffer = (globalThis as { Buffer?: RuntimeBuffer }).Buffer;
-const nonAsciiPattern = /[^\x00-\x7f]/;
+const nonAsciiPattern = /\P{ASCII}/u;
 
-/** UTF-8 byte length of `content`; a lone surrogate counts as U+FFFD, three bytes. */
 export function utf8ByteLength(content: string): number {
-  if (runtimeBuffer) return runtimeBuffer.byteLength(content, "utf8");
+  if (runtimeBuffer !== undefined) return runtimeBuffer.byteLength(content, "utf8");
   const firstNonAscii = content.search(nonAsciiPattern);
   if (firstNonAscii === -1) return content.length;
   let bytes = firstNonAscii;
@@ -323,90 +268,12 @@ function countNewlines(text: string): number {
   return count;
 }
 
-/** Each progress commit also buys a pause proportional to what it wrote. */
-export const PROGRESS_BYTES_PER_SECOND = 100 * 1024;
+export const boundOutput: {
+  (limits: OutputLimits): (text: string) => OutputSlice;
+  (text: string, limits: OutputLimits): OutputSlice;
+} = dual(2, outputBounded);
 
-/**
- * Adaptive progress commits: the first change after an idle period commits at once; each commit then delays the next
- * by at least `minIntervalMs` and by its written size at 100 KiB/s. At most one commit is in flight; changes made
- * meanwhile coalesce into the next one.
- */
-export class Progress {
-  readonly #write: () => Promise<number>;
-  readonly #onError: (error: unknown) => void;
-  readonly #minIntervalMs: number;
-  #waiters: PromiseWithResolvers<void>[] = [];
-  #timer: ReturnType<typeof setTimeout> | undefined;
-  #inFlight: Promise<void> | undefined;
-  #nextAt = 0;
-  #dirty = false;
-  #stopped = false;
-
-  constructor(
-    write: () => Promise<number>,
-    onError: (error: unknown) => void,
-    minIntervalMs: number,
-  ) {
-    this.#write = write;
-    this.#onError = onError;
-    this.#minIntervalMs = minIntervalMs;
-  }
-
-  /** Schedule a commit. */
-  mark(): void {
-    this.#dirty = true;
-    this.#schedule();
-  }
-
-  /** Schedule a commit; the promise settles with the commit that includes this change. */
-  markAndWait(): Promise<void> {
-    const waiter = Promise.withResolvers<void>();
-    this.#waiters.push(waiter);
-    this.mark();
-    return waiter.promise;
-  }
-
-  /** Stop committing and wait for the commit in flight; returns the waiters the final commit must settle. */
-  async stop(): Promise<PromiseWithResolvers<void>[]> {
-    this.#stopped = true;
-    clearTimeout(this.#timer);
-    this.#timer = undefined;
-    await this.#inFlight;
-    return this.#waiters.splice(0);
-  }
-
-  #schedule(): void {
-    if (this.#stopped || this.#timer !== undefined || this.#inFlight !== undefined) return;
-    const wait = this.#nextAt - Date.now();
-    if (wait <= 0) this.#flush();
-    else
-      this.#timer = setTimeout(() => {
-        this.#timer = undefined;
-        this.#flush();
-      }, wait);
-  }
-
-  #flush(): void {
-    if (this.#stopped || !this.#dirty) return;
-    this.#dirty = false;
-    const waiters = this.#waiters.splice(0);
-    const started = Date.now();
-    this.#inFlight = this.#write()
-      .then(
-        (bytes) => {
-          this.#nextAt =
-            started + Math.max(this.#minIntervalMs, (bytes * 1000) / PROGRESS_BYTES_PER_SECOND);
-          for (const waiter of waiters) waiter.resolve();
-        },
-        (error: unknown) => {
-          this.#nextAt = started + this.#minIntervalMs;
-          for (const waiter of waiters) waiter.reject(error);
-          this.#onError(error);
-        },
-      )
-      .finally(() => {
-        this.#inFlight = undefined;
-        if (this.#dirty) this.#schedule();
-      });
-  }
-}
+export const characterEnd: {
+  (index: number): (bytes: Uint8Array) => number;
+  (bytes: Uint8Array, index: number): number;
+} = dual(2, endOfCharacter);

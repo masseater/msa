@@ -35,6 +35,8 @@
         "name": "@effect/language-service",
         "allowedUnstableApis": [
           "@effect/platform-node-shared/NodeChildProcessSpawner#layer",
+          "@effect/platform-node-shared/NodeSink#fromWritable",
+          "@effect/platform-node-shared/NodeStream#fromReadable",
           "@effect/platform-node/NodeCrypto#layer",
           "@effect/platform-node/NodeFileSystem#layer",
           "@effect/platform-node/NodeHttpClient#layerUndici",
@@ -46,6 +48,8 @@
           "effect/FileSystem#FileSystem",
           "effect/Path#Path",
           "effect/PlatformError#PlatformError",
+          "effect/encoding/Ndjson#decode",
+          "effect/encoding/Ndjson#encode",
           "effect/http/HttpClient#execute",
           "effect/http/HttpClientRequest#fromWeb",
           "effect/http/HttpEffect#fromWebHandler",
@@ -57,6 +61,7 @@
           "effect/net/NetAddress#isInetAddress",
           "effect/net/NetAddress#isUnixPathAddress",
           "effect/process/ChildProcess#make",
+          "effect/process/ChildProcessSpawner#ChildProcessHandle",
           "effect/process/ChildProcessSpawner#ChildProcessSpawner"
         ]
       }

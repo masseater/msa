@@ -781,7 +781,7 @@ const worker = createHost<Principal>({
   name: `session:${id}`,
   self: { kind: "host" },
   principalKey,
-  upstream: { link: ipcLink(process), principal: { kind: "server" } }, // the server's own requests act as this
+  upstream: { link: ipcLink(parentChannel()), principal: { kind: "server" } }, // the server's own requests act as this
 });
 
 // anywhere

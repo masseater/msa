@@ -1,4 +1,3 @@
-/** Node-only parts of Chord: child host processes, their manager, and the facet module loader. */
 export { nodeLoader } from "./loader.ts";
 export {
   type ControlMessage,
@@ -12,5 +11,6 @@ export {
   type HostManagerOptions,
   type Instance,
   type Liveness,
+  parentChannel,
   processLock,
 } from "./manager.ts";

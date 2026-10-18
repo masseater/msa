@@ -27,9 +27,9 @@ export {
 export type { EventOf, Resource, ResourceDeclaration, Subscribable, ValueOf } from "./declare.ts";
 export type { Draft } from "./delta/index.ts";
 export { ChordError, type ChordErrorCode, forbidden, invalid, isChordError } from "./errors.ts";
-export type { ConnectOptions, PrincipalMatch, PrincipalPattern, Route } from "./host.ts";
+export type { ConnectOptions, PrincipalMatch, PrincipalPattern, Route } from "./host-types.ts";
+export { createHost } from "./host.ts";
 export {
-  createHost,
   defineFacet,
   type Facet,
   type FacetApi,
@@ -40,7 +40,7 @@ export {
   type LoadOptions,
   type PluginRef,
   type RootOptions,
-} from "./host.ts";
+} from "./host-types.ts";
 export {
   type CopyJsonOptions,
   copyJson,
@@ -69,7 +69,7 @@ export type {
   ServeOptionsFor,
   StateInit,
   StateOptions,
-} from "./object.ts";
+} from "./service.ts";
 export {
   defineRegistry,
   type Registry,

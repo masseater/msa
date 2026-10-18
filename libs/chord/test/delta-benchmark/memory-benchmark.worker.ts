@@ -1,9 +1,11 @@
-import assert from "node:assert/strict";
 import { PerformanceObserver, performance } from "node:perf_hooks";
-import { setImmediate } from "node:timers/promises";
+
+import { Console, Effect } from "effect";
 
 import type { Draft } from "../../src/delta/draft.ts";
 import { type Op, track } from "../../src/delta/index.ts";
+import { collectGarbage } from "../fixtures/benchmark.ts";
+import { ticks } from "../fixtures/timing.ts";
 
 const MiB = 1024 * 1024;
 
@@ -45,13 +47,7 @@ function fixture(count: number): Document {
   };
 }
 
-async function collect(): Promise<void> {
-  assert.ok(global.gc, "memory benchmark requires --expose-gc");
-  for (let attempt = 0; attempt < 3; attempt++) {
-    await setImmediate();
-    global.gc();
-  }
-}
+const collect = collectGarbage(3);
 
 function createTracker(value: Document): TrackerLike {
   return track(value) as TrackerLike;
@@ -69,18 +65,18 @@ function acquireSnapshot(tracker: TrackerLike): Document {
   return tracker.value;
 }
 
-let warmup: TrackerLike | undefined = createTracker(fixture(16));
-const warmupChange = warmup.beginChange();
-warmupChange.state.rows[0]!.value = -1;
-const warmupPrepared = warmupChange.prepare();
-warmup.adopt(warmupPrepared);
-warmup = undefined;
-await collect();
+const warmUp = (): void => {
+  const warmup = createTracker(fixture(16));
+  const warmupChange = warmup.beginChange();
+  warmupChange.state.rows[0]!.value = -1;
+  const warmupPrepared = warmupChange.prepare();
+  warmup.adopt(warmupPrepared);
+};
+warmUp();
+await Effect.runPromise(collect);
 const processBaseline = process.memoryUsage();
-let input: Document | undefined = fixture(size);
-let tracker: TrackerLike | undefined = createTracker(input);
-input = undefined;
-await collect();
+let tracker: TrackerLike | undefined = createTracker(fixture(size));
+await Effect.runPromise(collect);
 const ready = process.memoryUsage();
 let peakHeap = ready.heapUsed;
 let peakRss = ready.rss;
@@ -131,53 +127,55 @@ if (scenario === "idle-control") {
   }
 }
 const workMs = performance.now() - workStart;
-for (let attempt = 0; attempt < 3; attempt++) await setImmediate();
+await Effect.runPromise(ticks(3));
 observer.disconnect();
 samplePeak();
-await collect();
+await Effect.runPromise(collect);
 const retained = process.memoryUsage();
 const checksum = tracker.value.rows[0]!.value + tracker.value.rows.at(-1)!.value + snapshots.length;
 
 snapshots = [];
-await collect();
+await Effect.runPromise(collect);
 const afterSnapshotRelease = process.memoryUsage();
 tracker = undefined;
-await collect();
+await Effect.runPromise(collect);
 const released = process.memoryUsage();
 
-console.log(
-  JSON.stringify({
-    mode,
-    scenario,
-    trial,
-    size,
-    updates:
-      scenario === "staggered-revisions"
-        ? watchCount - 1
-        : scenario === "idle-control"
-          ? 0
-          : updates,
-    watchCount:
-      scenario === "staggered-revisions" || scenario === "lagging-watches" ? watchCount : 0,
-    workMs,
-    acquisitionMs,
-    gcCount,
-    gcMs,
-    readyHeapMiB: (ready.heapUsed - processBaseline.heapUsed) / MiB,
-    readyRssMiB: (ready.rss - processBaseline.rss) / MiB,
-    peakOverReadyHeapMiB: (peakHeap - ready.heapUsed) / MiB,
-    peakOverProcessBaselineHeapMiB: (peakHeap - processBaseline.heapUsed) / MiB,
-    peakOverReadyRssMiB: (peakRss - ready.rss) / MiB,
-    retainedOverReadyHeapMiB: (retained.heapUsed - ready.heapUsed) / MiB,
-    retainedOverProcessBaselineHeapMiB: (retained.heapUsed - processBaseline.heapUsed) / MiB,
-    retainedOverReadyRssMiB: (retained.rss - ready.rss) / MiB,
-    snapshotRetainedHeapMiB: (retained.heapUsed - afterSnapshotRelease.heapUsed) / MiB,
-    afterSnapshotReleaseOverReadyHeapMiB: (afterSnapshotRelease.heapUsed - ready.heapUsed) / MiB,
-    afterSnapshotReleaseOverProcessBaselineHeapMiB:
-      (afterSnapshotRelease.heapUsed - processBaseline.heapUsed) / MiB,
-    releasedOverProcessBaselineHeapMiB: (released.heapUsed - processBaseline.heapUsed) / MiB,
-    releasedOverProcessBaselineRssMiB: (released.rss - processBaseline.rss) / MiB,
-    maxRssMiB: process.resourceUsage().maxRSS / 1024,
-    checksum,
-  }),
+await Effect.runPromise(
+  Console.log(
+    JSON.stringify({
+      mode,
+      scenario,
+      trial,
+      size,
+      updates:
+        scenario === "staggered-revisions"
+          ? watchCount - 1
+          : scenario === "idle-control"
+            ? 0
+            : updates,
+      watchCount:
+        scenario === "staggered-revisions" || scenario === "lagging-watches" ? watchCount : 0,
+      workMs,
+      acquisitionMs,
+      gcCount,
+      gcMs,
+      readyHeapMiB: (ready.heapUsed - processBaseline.heapUsed) / MiB,
+      readyRssMiB: (ready.rss - processBaseline.rss) / MiB,
+      peakOverReadyHeapMiB: (peakHeap - ready.heapUsed) / MiB,
+      peakOverProcessBaselineHeapMiB: (peakHeap - processBaseline.heapUsed) / MiB,
+      peakOverReadyRssMiB: (peakRss - ready.rss) / MiB,
+      retainedOverReadyHeapMiB: (retained.heapUsed - ready.heapUsed) / MiB,
+      retainedOverProcessBaselineHeapMiB: (retained.heapUsed - processBaseline.heapUsed) / MiB,
+      retainedOverReadyRssMiB: (retained.rss - ready.rss) / MiB,
+      snapshotRetainedHeapMiB: (retained.heapUsed - afterSnapshotRelease.heapUsed) / MiB,
+      afterSnapshotReleaseOverReadyHeapMiB: (afterSnapshotRelease.heapUsed - ready.heapUsed) / MiB,
+      afterSnapshotReleaseOverProcessBaselineHeapMiB:
+        (afterSnapshotRelease.heapUsed - processBaseline.heapUsed) / MiB,
+      releasedOverProcessBaselineHeapMiB: (released.heapUsed - processBaseline.heapUsed) / MiB,
+      releasedOverProcessBaselineRssMiB: (released.rss - processBaseline.rss) / MiB,
+      maxRssMiB: process.resourceUsage().maxRSS / 1024,
+      checksum,
+    }),
+  ),
 );

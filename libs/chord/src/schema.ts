@@ -1,9 +1,9 @@
+import { dual } from "effect/Function";
 import type { TSchema } from "typebox";
 import { Value } from "typebox/value";
 
 import { type ChordErrorReason, invalid } from "./errors.ts";
 
-/** JSON Schema as data. TypeBox schemas are plain JSON Schema objects. */
 type Schema = { readonly [key: string]: unknown };
 
 const asSchema = (schema: unknown): Schema =>
@@ -13,7 +13,6 @@ const asSchema = (schema: unknown): Schema =>
       ? { not: {} }
       : {};
 
-/** Canonical JSON: sorted object keys, `undefined` members dropped. */
 export function canonicalJson(value: unknown): string {
   if (value === null || typeof value !== "object") return JSON.stringify(value) ?? "null";
   if (Array.isArray(value)) return `[${value.map((item) => canonicalJson(item)).join(",")}]`;
@@ -23,7 +22,6 @@ export function canonicalJson(value: unknown): string {
   return `{${keys.map((key) => `${JSON.stringify(key)}:${canonicalJson((value as Record<string, unknown>)[key])}`).join(",")}}`;
 }
 
-/** Non-cryptographic 64-bit hash (two FNV-1a lanes). Contracts are trusted, so collisions are not an attack surface. */
 export function hash64(text: string): string {
   let a = 0x811c9dc5;
   let b = 0x01000193 ^ 0x5bd1e995;
@@ -35,34 +33,40 @@ export function hash64(text: string): string {
   return (a >>> 0).toString(16).padStart(8, "0") + (b >>> 0).toString(16).padStart(8, "0");
 }
 
-export function deepEqual(a: unknown, b: unknown): boolean {
-  return a === b || canonicalJson(a) === canonicalJson(b);
-}
+export const deepEqual: {
+  (b: unknown): (a: unknown) => boolean;
+  (a: unknown, b: unknown): boolean;
+} = dual(2, (a: unknown, b: unknown): boolean => a === b || canonicalJson(a) === canonicalJson(b));
 
-/** Throws `invalid` (with `reason`) and the first schema errors when `value` does not match. */
-export function assertValid(
-  reason: ChordErrorReason,
-  what: string,
-  schema: TSchema,
-  value: unknown,
-): void {
+function checkValid(reason: ChordErrorReason, what: string, schema: TSchema, value: unknown): void {
   if (Value.Check(schema, value)) return;
   const errors = [...Value.Errors(schema, value)].slice(0, 3);
   const summary = errors.map((error) => `${error.instancePath || "/"} ${error.message}`).join("; ");
   throw invalid(reason, `${what}: ${summary}`, errors);
 }
 
-/** Applies defaults, strips unknown fields, validates. Returns a fresh value. */
-export function normalize(schema: TSchema, value: unknown, what: string): unknown {
-  const normalized = Value.Clean(schema, Value.Default(schema, Value.Clone(value ?? {})));
-  assertValid("input", what, schema, normalized);
-  return normalized;
+function normalized(schema: TSchema, value: unknown, what: string): unknown {
+  const clean = Value.Clean(schema, Value.Default(schema, Value.Clone(value ?? {})));
+  assertValid("input", what, schema, clean);
+  return clean;
 }
 
-/** Canonical identity of a normalized value: fields equal to their schema default are omitted. */
-export function canonicalIdentity(schema: TSchema, value: unknown): string {
-  return canonicalJson(stripDefaults(asSchema(schema), value));
-}
+export const canonicalIdentity: {
+  (value: unknown): (schema: TSchema) => string;
+  (schema: TSchema, value: unknown): string;
+} = dual(2, (schema: TSchema, value: unknown): string =>
+  canonicalJson(stripDefaults(asSchema(schema), value)),
+);
+
+export const assertValid: {
+  (what: string, schema: TSchema, value: unknown): (reason: ChordErrorReason) => void;
+  (reason: ChordErrorReason, what: string, schema: TSchema, value: unknown): void;
+} = dual(4, checkValid);
+
+export const normalize: {
+  (value: unknown, what: string): (schema: TSchema) => unknown;
+  (schema: TSchema, value: unknown, what: string): unknown;
+} = dual(3, normalized);
 
 function stripDefaults(schema: Schema, value: unknown): unknown {
   if (Array.isArray(value)) {
@@ -106,7 +110,6 @@ const typesOf = (schema: Schema): string[] | undefined =>
       ? (schema["type"] as string[])
       : undefined;
 
-/** Keywords `fits` reasons about. Any other validation keyword in the provider's schema forces exact equality. */
 const KNOWN: ReadonlySet<string> = new Set([
   ...CONSTRAINTS,
   "type",
@@ -123,7 +126,6 @@ const KNOWN: ReadonlySet<string> = new Set([
   "returnType",
 ]);
 
-/** Annotations: no effect on validity. */
 const ANNOTATIONS: ReadonlySet<string> = new Set([
   "title",
   "description",
@@ -140,13 +142,7 @@ const ANNOTATIONS: ReadonlySet<string> = new Set([
 const withoutAnnotations = (schema: Schema): Schema =>
   Object.fromEntries(Object.entries(schema).filter(([key]) => !ANNOTATIONS.has(key)));
 
-/**
- * Conservative structural subtyping: true only if every value valid under `sub` is valid under `sup`, where object
- * fields missing from `sub` but optional in `sup` count as fine (unknown fields are stripped at the provider, see
- * `RecordImpl.call`). A provider schema using a keyword this function does not model (`not`, `allOf`, `contains`,
- * `$ref`, ...) or an `additionalProperties` schema only fits an identical consumer schema.
- */
-export function fits(subSchema: unknown, supSchema: unknown): boolean {
+function schemaFits(subSchema: unknown, supSchema: unknown): boolean {
   const sub = withoutAnnotations(asSchema(subSchema));
   const sup = withoutAnnotations(asSchema(supSchema));
   if (Object.keys(sup).length === 0) return true;
@@ -197,8 +193,6 @@ function objectFits(sub: Schema, sup: Schema): boolean {
       typeof sub["additionalProperties"] === "object" &&
       !fits(sub["additionalProperties"], property)
     ) {
-      // The consumer may send this name with any value its `additionalProperties` allows. Open consumer objects
-      // are fine: unknown names are stripped with the consumer's own schema before the call (`RecordImpl.call`).
       return false;
     }
   }
@@ -208,8 +202,6 @@ function objectFits(sub: Schema, sup: Schema): boolean {
   }
   const supPatterns = asSchema(sup["patternProperties"]);
   if (Object.keys(supPatterns).length > 0) {
-    // Every value the consumer may put under a matching name must fit, and the consumer must not allow arbitrary
-    // extra names (it would then allow any value under a matching one).
     const subPatterns = asSchema(sub["patternProperties"]);
     if (sub["additionalProperties"] !== false && Object.keys(subPatterns).length === 0)
       return false;
@@ -243,9 +235,13 @@ function arrayFits(sub: Schema, sup: Schema): boolean {
 function functionFits(sub: Schema, sup: Schema): boolean {
   const subParameters = (sub["parameters"] as unknown[] | undefined) ?? [];
   const supParameters = (sup["parameters"] as unknown[] | undefined) ?? [];
-  // A function accepting fewer parameters is fine; each shared parameter is contravariant.
   if (subParameters.length > supParameters.length) return false;
   if (!subParameters.every((parameter, index) => fits(supParameters[index], parameter)))
     return false;
   return fits(sub["returnType"], sup["returnType"]);
 }
+
+export const fits: {
+  (supSchema: unknown): (subSchema: unknown) => boolean;
+  (subSchema: unknown, supSchema: unknown): boolean;
+} = dual(2, schemaFits);

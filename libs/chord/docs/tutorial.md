@@ -28,9 +28,11 @@ asking for it again.
 <!-- example:01 -->
 
 ```ts
-const host = createHost({ self: "server", name: "todo-server" });
-assert.equal(host.name, "todo-server");
-await host.close();
+const objectsLiveInsideHosts = Effect.gen(function* () {
+  const host = createHost({ self: "server", name: "todo-server" });
+  assert.equal(host.name, "todo-server");
+  yield* Effect.promise(() => host.close());
+});
 ```
 
 The assertion passes: the host's name is `todo-server`. Creating a host does
@@ -39,8 +41,14 @@ shuts down its objects and connections.
 
 > **Tip:** These are executable TypeScript examples, using assertions to show
 > results. Shared imports are at the end. Later sections reuse earlier contracts
-> and functions, but each section's test starts with fresh hosts. Test-only
-> cleanup closes hosts even when an assertion fails; snippets omit that cleanup.
+> and functions, but each section's test starts with fresh hosts.
+> `onTestFinished` closes them even when an assertion fails.
+>
+> Chord's calls return promises. Each section is an
+> [Effect](https://effect.website) program that its test runs, so waiting for a
+> promise is written `yield* Effect.promise(() => …)`. Callbacks that Chord
+> itself calls, such as a root's function or a method, return promises and
+> chain them with `then`.
 
 ## 2. Your first object
 
@@ -59,7 +67,7 @@ it is not an argument to `label`.
 <!-- example:02-contract -->
 
 ```ts
-const TodoLabel = local("tutorial.todos", {
+export const TodoLabel = local("tutorial.todos", {
   version: 1,
   input: Type.Object({ list: Type.String() }),
   members: { label: method(undefined, Type.String()) },
@@ -79,16 +87,18 @@ call from that root.
 <!-- example:02-call -->
 
 ```ts
-const host = createHost({ self: "server" });
-host.serve(TodoLabel, ({ list }) => ({ label: () => `Todos for ${list}` }));
-const result = await host.root(async (ctx) => {
-  const todos = await ctx.get(TodoLabel, { list: "family" });
-  return todos.label(ctx);
+const firstObject = Effect.gen(function* () {
+  onTestFinished(() => host.close());
+  const host = createHost({ self: "server" });
+  host.serve(TodoLabel, ({ list }) => ({ label: () => `Todos for ${list}` }));
+  const result = yield* Effect.promise(() =>
+    host.root((ctx) => ctx.get(TodoLabel, { list: "family" }).then((todos) => todos.label(ctx))),
+  );
+  assert.equal(result, "Todos for family");
 });
-assert.equal(result, "Todos for family");
 ```
 
-The result is `"Todos for family"`. `await ctx.get` resolves once the object is
+The result is `"Todos for family"`. `ctx.get` resolves once the object is
 live (and, as we will see, has its state). The reference acquired through
 `ctx.get` is released when this root ends. We never receive the factory's
 returned object directly. A standalone call without `ctx`, such as
@@ -120,9 +130,9 @@ name, because it holds nothing a reload must keep.
 <!-- example:03-contract -->
 
 ```ts
-const Todo = Type.Object({ text: Type.String(), done: Type.Boolean() });
-const Rows = Type.Array(Todo);
-const TodoStore = local("tutorial.todos", {
+export const Todo = Type.Object({ text: Type.String(), done: Type.Boolean() });
+export const Rows = Type.Array(Todo);
+export const TodoStore = local("tutorial.todos", {
   version: 1,
   input: Type.Object({ list: Type.String() }),
   members: {
@@ -138,7 +148,9 @@ const TodoStore = local("tutorial.todos", {
 
 The factory now declares a cell and a derivation. It is wrapped in `todoStore`,
 which takes the cell's options (section 9 raises its version); for now
-`todoFactory` uses the defaults. Each method receives its arguments and a
+`todoFactory`, which each test module defines as `const todoFactory = todoStore();`,
+uses the defaults. The contracts and this factory live in
+`test/fixtures/tutorial.ts`, so they are exported. Each method receives its arguments and a
 context; changing the cell updates its readers and its derived count together.
 `add`, `finish` and `reset` declare no result, so they return nothing.
 
@@ -146,7 +158,7 @@ context; changing the cell updates its readers and its derived count together.
 
 ```ts
 /** The store's factory; `options` versions its rows (section 9). */
-const todoStore =
+export const todoStore =
   (options?: StateOptions<Static<typeof Rows>>): Factory<typeof TodoStore> =>
   ({ list }, _principal, self) => {
     const rows = self.state("rows", Rows, [], options);
@@ -163,7 +175,7 @@ const todoStore =
       finish: ({ index }, ctx) => {
         rows.change(ctx, (draft) => {
           const todo = draft[index];
-          if (!todo) throw invalid("args", "No such todo");
+          if (todo === undefined) throw invalid("args", "No such todo");
           todo.done = true;
         });
       },
@@ -172,7 +184,6 @@ const todoStore =
       },
     };
   };
-const todoFactory = todoStore();
 ```
 
 `change(ctx, fn)` gives `fn` a temporary mutable **draft**. Here `add`
@@ -189,20 +200,26 @@ receive the same resulting value.
 <!-- example:03-call -->
 
 ```ts
-const host = createHost({ self: "server", dev: true });
-host.serve(TodoStore, todoFactory);
-const todos = await host.get(TodoStore, { list: "family" });
-const counts: (number | undefined)[] = [];
-const stop = todos.openCount.subscribe((value) => counts.push(value));
-await host.root(async (ctx) => {
-  await todos.add({ text: "Buy milk" }, ctx);
-  await todos.finish({ index: 0 }, ctx);
-  await todos.reset([], ctx);
+const liveState = Effect.gen(function* () {
+  onTestFinished(() => host.close());
+  const host = createHost({ self: "server", dev: true });
+  host.serve(TodoStore, todoFactory);
+  const todos = yield* Effect.promise(() => host.get(TodoStore, { list: "family" }));
+  const counts: (number | undefined)[] = [];
+  const stop = todos.openCount.subscribe((value) => counts.push(value));
+  yield* Effect.promise(() =>
+    host.root((ctx) =>
+      todos
+        .add({ text: "Buy milk" }, ctx)
+        .then(() => todos.finish({ index: 0 }, ctx))
+        .then(() => todos.reset([], ctx)),
+    ),
+  );
+  assert.deepEqual(counts, [0, 1, 0]);
+  assert.deepEqual(todos.rows.value, []);
+  stop();
+  todos.release();
 });
-assert.deepEqual(counts, [0, 1, 0]);
-assert.deepEqual(todos.rows.value, []);
-stop();
-todos.release();
 ```
 
 The count subscriber sees `0, 1, 0`: initially empty, one unfinished todo,
@@ -232,80 +249,76 @@ strings in memory.
 JSON state and cannot be sent over a link. `self.expose` connects that member
 to a declared resource, without reading the resource during the factory.
 
-<!-- example:04-database -->
+<!-- example:04-contracts -->
 
 ```ts
-const Database = local("tutorial.database", {
+export const Database = local("tutorial.database", {
   version: 1,
   input: Type.Object({}),
   members: { db: opaque<{ saved: string[] }>("tutorial.database@1") },
 });
-const SavedTodos = local("tutorial.saved-todos", {
+export const SavedTodos = local("tutorial.saved-todos", {
   version: 1,
   input: Type.Object({ list: Type.String() }),
   members: { add: method(Type.Object({ text: Type.String() })) },
 });
-const host = createHost({ self: "server" });
-let opens = 0;
-const closed = Promise.withResolvers<void>();
-host.serve(Database, (_input, _principal, self) => {
-  const db = self.resource("db", {
-    version: 1,
-    open: async () => {
-      opens++;
-      return { saved: [] as string[] };
-    },
-    close: () => closed.resolve(),
-  });
-  return { db: self.expose(db) };
-});
 ```
 
-The factory returns an exposed marker, not an opened connection. Chord runs
-`open` after declarations finish. The promise named `closed` lets the test
-observe eventual cleanup.
+The host serves `Database` with a resource and counts how often it opens. The
+factory returns an exposed marker, not an opened connection; Chord runs `open`
+after declarations finish. The promise named `closed` lets the test observe
+eventual cleanup. `SavedTodos` holds both the store and the database, and its
+editing method uses these dependencies only after activation. An outside
+consumer holds a `SavedTodos` reference; we also hold `Database` directly so we
+can inspect what was saved.
 
-Now declare `SavedTodos` as an object that holds both the store and the database.
-Its editing method uses these dependencies only after activation.
-
-<!-- example:04-saving -->
+<!-- example:04 -->
 
 ```ts
-host.serve(TodoStore, todoFactory);
-host.serve(
-  SavedTodos,
-  ({ list }, _principal, self) => {
-    const database = self.get(Database, {});
-    const todos = self.get(TodoStore, { list });
-    return {
-      add: async ({ text }, ctx) => {
-        database.db!.saved.push(text);
-        await todos.add({ text }, ctx);
+const objectsUseObjects = Effect.gen(function* () {
+  onTestFinished(() => host.close());
+  const host = createHost({ self: "server" });
+  let opens = 0;
+  const closed = Promise.withResolvers<void>();
+  host.serve(Database, (_input, _principal, self) => {
+    const db = self.resource("db", {
+      version: 1,
+      open: () => {
+        opens++;
+        return { saved: [] as string[] };
       },
-    };
-  },
-  { linger: 0 },
-);
-```
-
-An outside consumer holds a `SavedTodos` reference. We also hold `Database`
-directly so we can inspect what was saved.
-
-<!-- example:04-call -->
-
-```ts
-const saved = await host.get(SavedTodos, { list: "family" });
-const database = await host.get(Database, {});
-await host.root((ctx) => saved.add({ text: "Buy milk" }, ctx));
-assert.deepEqual(database.db!.saved, ["Buy milk"]);
-assert.equal(opens, 1);
-const statuses: string[] = [];
-saved.onStatus((status) => statuses.push(status));
-database.release();
-saved.release();
-await closed.promise;
-assert.equal(saved.status, "released");
-assert.ok(statuses.includes("released"));
+      close: () => closed.resolve(),
+    });
+    return { db: self.expose(db) };
+  });
+  host.serve(TodoStore, todoFactory);
+  host.serve(
+    SavedTodos,
+    ({ list }, _principal, self) => {
+      const database = self.get(Database, {});
+      const todos = self.get(TodoStore, { list });
+      return {
+        add: ({ text }, ctx) => {
+          database.db!.saved.push(text);
+          return todos.add({ text }, ctx);
+        },
+      };
+    },
+    { linger: 0 },
+  );
+  const saved = yield* Effect.promise(() => host.get(SavedTodos, { list: "family" }));
+  const database = yield* Effect.promise(() => host.get(Database, {}));
+  yield* Effect.promise(() => host.root((ctx) => saved.add({ text: "Buy milk" }, ctx)));
+  assert.deepEqual(database.db!.saved, ["Buy milk"]);
+  assert.equal(opens, 1);
+  const statuses: string[] = [];
+  saved.onStatus((status) => statuses.push(status));
+  database.release();
+  saved.release();
+  yield* Effect.promise(() => closed.promise);
+  assert.equal(saved.status, "released");
+  assert.ok(statuses.includes("released"));
+});
 ```
 
 After the method, the fake database contains `["Buy milk"]`. It opened once,
@@ -346,7 +359,7 @@ puts every `Todos` object on the host named `server`. Section 6 uses that.
 <!-- example:05-views -->
 
 ```ts
-const Todos = remote("tutorial.todo-view", {
+export const Todos = remote("tutorial.todo-view", {
   version: 1,
   input: Type.Object({ list: Type.String() }),
   host: hostNamed("server"),
@@ -360,9 +373,9 @@ const Todos = remote("tutorial.todo-view", {
 });
 
 /** Who may ask: the owner, a guest, or the server's own code. */
-type Principal = "owner" | "guest" | "server";
+export type Principal = "owner" | "guest" | "server";
 
-function serveViews(api: Pick<Host<Principal>, "serve">): void {
+export function serveViews(api: Pick<Host<Principal>, "serve">): void {
   api.serve(Todos, ({ list }, principal, self) => {
     if (list !== "family") throw forbidden("This list is not shared");
     const store = self.get(TodoStore, { list });
@@ -393,24 +406,39 @@ revision, not display names.
 <!-- example:05-call -->
 
 ```ts
-const host = createHost<Principal>({
-  name: "server",
-  self: "server",
-  principalKey: (principal) => principal,
+const principalViews = Effect.gen(function* () {
+  onTestFinished(() => host.close());
+  const host = createHost<Principal>({
+    name: "server",
+    self: "server",
+    principalKey: (principal) => principal,
+  });
+  host.serve(TodoStore, todoFactory);
+  serveViews(host);
+  const owner = yield* Effect.promise(() =>
+    host.get(Todos, { list: "family" }, { principal: "owner" }),
+  );
+  const guest = yield* Effect.promise(() =>
+    host.get(Todos, { list: "family" }, { principal: "guest" }),
+  );
+  assert.ok(owner.variant === "editor"); // narrows the reference to the editor variant
+  assert.equal(guest.variant, "viewer");
+  yield* Effect.promise(() =>
+    host.root((ctx) => owner.add({ text: "Buy milk" }, ctx), { principal: "owner" }),
+  );
+  assert.deepEqual(guest.rows.value, [{ text: "Buy milk", done: false }]);
+  // A viewer has no add: TypeScript refuses it, and so does the provider.
+  expectTypeOf(guest).not.toHaveProperty("add");
+  yield* Effect.promise(() =>
+    assert.rejects(
+      Reflect.apply(Reflect.get(guest, "add"), guest, [{ text: "Not allowed" }]),
+      (error) => isChordError(error, "not_in_variant"),
+    ),
+  );
+  yield* Effect.promise(() =>
+    assert.rejects(owner.add({ text: " " }), (error) => isChordError(error, "invalid")),
+  );
 });
-host.serve(TodoStore, todoFactory);
-serveViews(host);
-const owner = await host.get(Todos, { list: "family" }, { principal: "owner" });
-const guest = await host.get(Todos, { list: "family" }, { principal: "guest" });
-assert.ok(owner.variant === "editor"); // narrows the reference to the editor variant
-assert.equal(guest.variant, "viewer");
-await host.root((ctx) => owner.add({ text: "Buy milk" }, ctx), { principal: "owner" });
-assert.deepEqual(guest.rows.value, [{ text: "Buy milk", done: false }]);
-// @ts-expect-error A viewer has no add: TypeScript refuses it, and so does the provider.
-await assert.rejects(guest.add({ text: "Not allowed" }), (error) =>
-  isChordError(error, "not_in_variant"),
-);
-await assert.rejects(owner.add({ text: " " }), (error) => isChordError(error, "invalid"));
 ```
 
 The owner gets `editor`; the guest gets `viewer`. Both see the same milk
@@ -450,33 +478,39 @@ principal })`).
 <!-- example:06 -->
 
 ```ts
-const server = createHost<Principal>({ self: "server", name: "server" });
-server.serve(TodoStore, todoFactory);
-serveViews(server);
-const [down, up] = memoryLinkPair();
-server.accept(down, { principal: "owner", kind: "client" });
-const browser = createHost({
-  self: "browser",
-  name: "browser",
-  kind: "client",
-  upstream: { link: up, principal: "server" },
+const overAMemoryLink = Effect.gen(function* () {
+  onTestFinished(() => server.close());
+  onTestFinished(() => browser.close());
+  const server = createHost<Principal>({ self: "server", name: "server" });
+  server.serve(TodoStore, todoFactory);
+  serveViews(server);
+  const [down, up] = memoryLinkPair();
+  server.accept(down, { principal: "owner", kind: "client" });
+  const browser = createHost({
+    self: "browser",
+    name: "browser",
+    kind: "client",
+    upstream: { link: up, principal: "server" },
+  });
+  const todos = yield* Effect.promise(() => browser.get(Todos, { list: "family" }));
+  assert.ok(todos.variant === "editor");
+  assert.deepEqual(todos.rows.value, []);
+  const updated = Promise.withResolvers<void>();
+  const stop = todos.rows.subscribe((rows) => {
+    if (rows.length === 1) updated.resolve();
+  });
+  yield* Effect.promise(() => browser.root((ctx) => todos.add({ text: "Buy milk" }, ctx)));
+  yield* Effect.promise(() => updated.promise);
+  assert.deepEqual(todos.rows.value, [{ text: "Buy milk", done: false }]);
+  yield* Effect.promise(() =>
+    // Deliberately bypass TypeScript to simulate a malformed caller.
+    assert.rejects(todos.add({ text: 123 } as never), (error) => isChordError(error, "invalid")),
+  );
+  stop();
+  // A held reference keeps its state without listeners.
+  assert.deepEqual(todos.rows.value, [{ text: "Buy milk", done: false }]);
+  todos.release();
 });
-const todos = await browser.get(Todos, { list: "family" });
-assert.ok(todos.variant === "editor");
-assert.deepEqual(todos.rows.value, []);
-const updated = Promise.withResolvers<void>();
-const stop = todos.rows.subscribe((rows) => {
-  if (rows.length === 1) updated.resolve();
-});
-await browser.root((ctx) => todos.add({ text: "Buy milk" }, ctx));
-await updated.promise;
-assert.deepEqual(todos.rows.value, [{ text: "Buy milk", done: false }]);
-// Deliberately bypass TypeScript to simulate a malformed caller.
-await assert.rejects(todos.add({ text: 123 } as never), (error) => isChordError(error, "invalid"));
-stop();
-// A held reference keeps its state without listeners.
-assert.deepEqual(todos.rows.value, [{ text: "Buy milk", done: false }]);
-todos.release();
 ```
 
 The browser sees an empty snapshot, then the new milk todo. `ready` means
@@ -516,39 +550,42 @@ test; they are not stored application state.
 <!-- example:07 -->
 
 ```ts
-const Activity = local("tutorial.activity", {
-  version: 1,
-  input: Type.Object({}),
-  members: { seen: Type.Number() },
-});
-const host = createHost({ self: "server" });
-host.serve(TodoStore, todoFactory);
-const observed = Promise.withResolvers<void>();
-const seeded = Promise.withResolvers<void>();
-const stopped = Promise.withResolvers<void>();
-host.serve(Activity, (_input, _principal, self) => {
-  const todos = self.get(TodoStore, { list: "family" });
-  const seen = self.state("seen", Type.Number(), 0);
-  self.on("rows", todos.rows, (rows, ctx) => {
-    seen.replace(ctx, rows?.length ?? 0);
-    if (rows?.length === 1) observed.resolve();
+const listenersAndTasks = Effect.gen(function* () {
+  onTestFinished(() => host.close());
+  const Activity = local("tutorial.activity", {
+    version: 1,
+    input: Type.Object({}),
+    members: { seen: Type.Number() },
   });
-  self.task(async (ctx) => {
-    await todos.add({ text: "Review the list" }, ctx);
-    seeded.resolve();
-    await new Promise<void>((resolve) => {
-      if (ctx.signal.aborted) resolve();
-      else ctx.signal.addEventListener("abort", () => resolve(), { once: true });
+  const host = createHost({ self: "server" });
+  host.serve(TodoStore, todoFactory);
+  const observed = Promise.withResolvers<void>();
+  const seeded = Promise.withResolvers<void>();
+  const stopped = Promise.withResolvers<void>();
+  host.serve(Activity, (_input, _principal, self) => {
+    const todos = self.get(TodoStore, { list: "family" });
+    const seen = self.state("seen", Type.Number(), 0);
+    self.on("rows", todos.rows, (rows, ctx) => {
+      seen.replace(ctx, rows?.length ?? 0);
+      if (rows?.length === 1) observed.resolve();
     });
-    stopped.resolve();
+    self.task((ctx) =>
+      todos.add({ text: "Review the list" }, ctx).then(() => {
+        seeded.resolve();
+        const aborted = Promise.withResolvers<void>();
+        if (ctx.signal.aborted) aborted.resolve();
+        else ctx.signal.addEventListener("abort", () => aborted.resolve(), { once: true });
+        return aborted.promise.then(() => stopped.resolve());
+      }),
+    );
+    return { seen };
   });
-  return { seen };
+  const activity = yield* Effect.promise(() => host.get(Activity, {}));
+  yield* Effect.promise(() => Promise.all([seeded.promise, observed.promise]));
+  assert.equal(activity.seen.value, 1);
+  activity.release();
+  yield* Effect.promise(() => stopped.promise);
 });
-const activity = await host.get(Activity, {});
-await Promise.all([seeded.promise, observed.promise]);
-assert.equal(activity.seen.value, 1);
-activity.release();
-await stopped.promise;
 ```
 
 The final `seen` is `1`. Each listener event receives a fresh root's
@@ -589,41 +626,42 @@ default lifetime, `"referenced"`, are still created only when referenced.
 <!-- example:08 -->
 
 ```ts
-const Actions = defineRegistry<(ctx: Ctx) => Promise<number>>("tutorial.actions");
-const Menu = local("tutorial.menu", { version: 1, input: Type.Object({}) });
-let click: (() => Promise<number>) | undefined;
-const storeFacet: Facet = {
-  name: "todo-store",
-  ...defineFacet((api) => api.serve(TodoStore, todoFactory)),
-};
-const menuFacet: Facet = {
-  name: "todo-menu",
-  ...defineFacet(
-    (api) => {
-      api.serve(
-        Menu,
-        (_input, _principal, self) => {
-          const todos = self.get(TodoStore, { list: "family" });
-          self.register(Actions, {
-            addSample: async (ctx) => {
-              await todos.add({ text: "Try plugins" }, ctx);
-              return todos.openCount.value;
-            },
-          });
-          return {};
-        },
-        { lifetime: "host" },
-      );
-      click = () => api.root((ctx) => api.registry(Actions).get("addSample", ctx)!(ctx));
-    },
-    { uses: [TodoStore] },
-  ),
-};
-const host = createHost({ self: "server" });
-await host.load([menuFacet, storeFacet], { awaitHostObjects: false });
-await host.ready();
-assert.equal(await click!(), 1);
-assert.equal(host.registry(Actions).table().size, 1);
+const plugins = Effect.gen(function* () {
+  onTestFinished(() => host.close());
+  const Actions = defineRegistry<(ctx: Ctx) => Promise<number>>("tutorial.actions");
+  const Menu = local("tutorial.menu", { version: 1, input: Type.Object({}) });
+  let click: (() => Promise<number>) | undefined;
+  const storeFacet: Facet = {
+    name: "todo-store",
+    ...defineFacet((api) => api.serve(TodoStore, todoFactory)),
+  };
+  const menuFacet: Facet = {
+    name: "todo-menu",
+    ...defineFacet(
+      (api) => {
+        api.serve(
+          Menu,
+          (_input, _principal, self) => {
+            const todos = self.get(TodoStore, { list: "family" });
+            self.register(Actions, {
+              addSample: (ctx) =>
+                todos.add({ text: "Try plugins" }, ctx).then(() => todos.openCount.value),
+            });
+            return {};
+          },
+          { lifetime: "host" },
+        );
+        click = () => api.root((ctx) => api.registry(Actions).get("addSample", ctx)!(ctx));
+      },
+      { uses: [TodoStore] },
+    ),
+  };
+  const host = createHost({ self: "server" });
+  yield* Effect.promise(() => host.load([menuFacet, storeFacet], { awaitHostObjects: false }));
+  yield* Effect.promise(() => host.ready());
+  assert.equal(yield* Effect.promise(() => click!()), 1);
+  assert.equal(host.registry(Actions).table().size, 1);
+});
 ```
 
 Clicking returns `1`, and the registry has one entry. The menu's dependency
@@ -668,10 +706,9 @@ Give the same named facet a new factory. It changes the label but keeps the
 cell declaration. This test deliberately pauses one caller to show what an
 old root sees; application methods should not pause like this.
 
-<!-- example:09-compatible -->
+<!-- example:09-facet -->
 
 ```ts
-const host = createHost({ self: "server" });
 const facet = (label: string): Facet => ({
   name: "todos",
   setup: (api) =>
@@ -680,24 +717,50 @@ const facet = (label: string): Facet => ({
       label: () => label,
     })),
 });
-await host.load([facet("Original")]);
-const todos = await host.get(TodoStore, { list: "family" });
-await todos.add({ text: "Buy milk" });
-const entered = Promise.withResolvers<void>();
-const resume = Promise.withResolvers<void>();
-const oldRoot = host.root(async (ctx) => {
-  const first = await todos.label(ctx);
-  entered.resolve();
-  await resume.promise; // Test-only pause: pin an old caller during reload.
-  return [first, await todos.label(ctx)];
+```
+
+The section's program loads that facet, takes a reference, adds a row, and then
+runs three steps on that `host` and `todos`, each an Effect program of its own:
+
+<!-- example:09-run -->
+
+```ts
+const reloadKeepsTheList = Effect.gen(function* () {
+  onTestFinished(() => host.close());
+  const host = createHost({ self: "server" });
+  yield* Effect.promise(() => host.load([facet("Original")]));
+  const todos = yield* Effect.promise(() => host.get(TodoStore, { list: "family" }));
+  yield* Effect.promise(() => todos.add({ text: "Buy milk" }));
+  yield* compatibleReload(host, todos);
+  yield* migrateRows(host, todos);
+  yield* renameWithAdapter(host, todos);
 });
-await entered.promise;
-const compatible = await host.reload([facet("Updated")]);
-assert.deepEqual(compatible.gated, []);
-assert.equal(await todos.label(), "Updated");
-resume.resolve();
-assert.deepEqual(await oldRoot, ["Original", "Original"]);
-assert.equal(todos.rows.value?.[0]?.text, "Buy milk");
+```
+
+The first step reloads compatible code:
+
+<!-- example:09-compatible -->
+
+```ts
+const compatibleReload = (host: Host, todos: Ref<typeof TodoStore>) =>
+  Effect.gen(function* () {
+    const entered = Promise.withResolvers<void>();
+    const resume = Promise.withResolvers<void>();
+    const oldRoot = host.root((ctx) =>
+      todos.label(ctx).then((first) => {
+        entered.resolve();
+        // Test-only pause: pin an old caller during reload.
+        return resume.promise.then(() => todos.label(ctx)).then((second) => [first, second]);
+      }),
+    );
+    yield* Effect.promise(() => entered.promise);
+    const compatible = yield* Effect.promise(() => host.reload([facet("Updated")]));
+    assert.deepEqual(compatible.gated, []);
+    assert.equal(yield* Effect.promise(() => todos.label()), "Updated");
+    resume.resolve();
+    assert.deepEqual(yield* Effect.promise(() => oldRoot), ["Original", "Original"]);
+    assert.equal(todos.rows.value?.[0]?.text, "Buy milk");
+  });
 ```
 
 Reload commits while the old root is paused: `gated` is empty. New calls see
@@ -712,34 +775,40 @@ version** (`self.state`'s `version` option, default 1). It belongs to one cell,
 independently of the contract version. A **migration** (`migrate`) converts an
 old value of that cell to the new representation.
 
+The second step reloads with a migration:
+
 <!-- example:09-migrate -->
 
 ```ts
-const events: string[] = [];
-const stopEvents = todos.rows.events((event) => events.push(event.type));
-const migrated = await host.reload([
-  {
-    name: "todos",
-    setup: (api) =>
-      api.serve(
-        TodoStore,
-        todoStore({
-          version: 2,
-          migrate: (old, from) => {
-            assert.equal(from, 1);
-            return (old as Static<typeof Rows>).map((todo) => ({
-              ...todo,
-              text: todo.text.toUpperCase(),
-            }));
-          },
-        }),
-      ),
-  },
-]);
-assert.equal(migrated.gated.length, 1);
-assert.deepEqual(todos.rows.value, [{ text: "BUY MILK", done: false }]);
-assert.deepEqual(events, ["snap", "reset"]);
-stopEvents();
+const migrateRows = (host: Host, todos: Ref<typeof TodoStore>) =>
+  Effect.gen(function* () {
+    const events: string[] = [];
+    const stopEvents = todos.rows.events((event) => events.push(event.type));
+    const migrated = yield* Effect.promise(() =>
+      host.reload([
+        {
+          name: "todos",
+          setup: (api) =>
+            api.serve(
+              TodoStore,
+              todoStore({
+                version: 2,
+                migrate: (old, from) => {
+                  assert.equal(from, 1);
+                  return (old as Static<typeof Rows>).map((todo) =>
+                    Object.assign(todo, { text: todo.text.toUpperCase() }),
+                  );
+                },
+              }),
+            ),
+        },
+      ]),
+    );
+    assert.equal(migrated.gated.length, 1);
+    assert.deepEqual(todos.rows.value, [{ text: "BUY MILK", done: false }]);
+    assert.deepEqual(events, ["snap", "reset"]);
+    stopEvents();
+  });
 ```
 
 The migration receives the old rows and their state version, `1`. It returns
@@ -773,28 +842,44 @@ const RenamedStore = local("tutorial.todos", {
   input: TodoStore.def.input,
   members: { ...members, heading: method(undefined, Type.String()) },
 });
-await host.reload([
-  {
-    name: "todos",
-    setup: (api) =>
-      api.serve(
-        RenamedStore,
-        (input, principal, self) => {
-          const { label, ...implementation } = todoStore({ version: 2 })(input, principal, self);
-          return { ...implementation, heading: label };
-        },
+```
+
+The third step reloads the renamed provider with its adapter:
+
+<!-- example:09-adapter -->
+
+```ts
+const renameWithAdapter = (host: Host, todos: Ref<typeof TodoStore>) =>
+  Effect.gen(function* () {
+    yield* Effect.promise(() =>
+      host.reload([
         {
-          accepts: {
-            1: (current) => ({ ...current, label: current["heading"] }),
-          },
+          name: "todos",
+          setup: (api) =>
+            api.serve(
+              RenamedStore,
+              (input, principal, self) => {
+                const { label, ...implementation } = todoStore({ version: 2 })(
+                  input,
+                  principal,
+                  self,
+                );
+                return { ...implementation, heading: label };
+              },
+              {
+                accepts: {
+                  1: (current) => ({ ...current, label: current["heading"] }),
+                },
+              },
+            ),
         },
-      ),
-  },
-]);
-assert.equal(await todos.label(), "Todos for family");
-const newer = await host.get(RenamedStore, { list: "family" });
-assert.equal(await newer.heading(), "Todos for family");
-assert.equal(todos.rows.value?.[0]?.text, "BUY MILK");
+      ]),
+    );
+    assert.equal(yield* Effect.promise(() => todos.label()), "Todos for family");
+    const newer = yield* Effect.promise(() => host.get(RenamedStore, { list: "family" }));
+    assert.equal(yield* Effect.promise(() => newer.heading()), "Todos for family");
+    assert.equal(todos.rows.value?.[0]?.text, "BUY MILK");
+  });
 ```
 
 The old reference's `label` and the new reference's `heading` both return
@@ -820,28 +905,37 @@ Here the fake records what the editing view sends to the store.
 <!-- example:10 -->
 
 ```ts
-const host = createHost<Principal>({ name: "server", self: "server", dev: true });
-const received: string[] = [];
-const fake: Facet = {
-  name: "fake-store",
-  ...defineFacet((api: FacetApi) => {
-    api.serve(TodoStore, (input, principal, self) => ({
-      ...todoFactory(input, principal, self),
-      add: ({ text }) => {
-        received.push(text);
-      },
-    }));
-  }),
-};
-await host.load([fake]);
-serveViews(host);
-const owner = await host.get(Todos, { list: "family" }, { principal: "owner" });
-assert.ok(owner.variant === "editor");
-await owner.add({ text: "Test delegation" });
-assert.deepEqual(received, ["Test delegation"]);
-await assert.rejects(owner.add({ text: "" }), (error) => isChordError(error, "invalid"));
-owner.release();
-await assert.rejects(owner.add({ text: "Too late" }), (error) => isChordError(error, "released"));
+const fakeProvider = Effect.gen(function* () {
+  onTestFinished(() => host.close());
+  const host = createHost<Principal>({ name: "server", self: "server", dev: true });
+  const received: string[] = [];
+  const fake: Facet = {
+    name: "fake-store",
+    ...defineFacet((api: FacetApi) => {
+      api.serve(TodoStore, (input, principal, self) => ({
+        ...todoFactory(input, principal, self),
+        add: ({ text }) => {
+          received.push(text);
+        },
+      }));
+    }),
+  };
+  yield* Effect.promise(() => host.load([fake]));
+  serveViews(host);
+  const owner = yield* Effect.promise(() =>
+    host.get(Todos, { list: "family" }, { principal: "owner" }),
+  );
+  assert.ok(owner.variant === "editor");
+  yield* Effect.promise(() => owner.add({ text: "Test delegation" }));
+  assert.deepEqual(received, ["Test delegation"]);
+  yield* Effect.promise(() =>
+    assert.rejects(owner.add({ text: "" }), (error) => isChordError(error, "invalid")),
+  );
+  owner.release();
+  yield* Effect.promise(() =>
+    assert.rejects(owner.add({ text: "Too late" }), (error) => isChordError(error, "released")),
+  );
+});
 ```
 
 The fake received `["Test delegation"]`. Empty text failed before reaching
@@ -868,15 +962,22 @@ screen should not lose its data merely because a button click finishes. Use
 <!-- example:11 -->
 
 ```ts
-const host = createHost({ self: "server" });
-host.serve(TodoStore, todoFactory);
-const screen = await host.get(TodoStore, { list: "family" });
-await host.root(async (ctx) => {
-  const temporary = await ctx.get(TodoStore, { list: "family" });
-  await temporary.add({ text: "Keep roots short" }, ctx);
-}); // The temporary reference is released here; screen still holds the store.
-assert.equal(screen.openCount.value, 1);
-screen.release(); // No reference remains; without persistence, disposal loses these rows.
+const shortRoots = Effect.gen(function* () {
+  onTestFinished(() => host.close());
+  const host = createHost({ self: "server" });
+  host.serve(TodoStore, todoFactory);
+  const screen = yield* Effect.promise(() => host.get(TodoStore, { list: "family" }));
+  yield* Effect.promise(() =>
+    host.root((ctx) =>
+      ctx
+        .get(TodoStore, { list: "family" })
+        .then((temporary) => temporary.add({ text: "Keep roots short" }, ctx)),
+    ),
+  );
+  // The temporary reference is released here; screen still holds the store.
+  assert.equal(screen.openCount.value, 1);
+  screen.release(); // No reference remains; without persistence, disposal loses these rows.
+});
 ```
 
 The screen still sees count `1` after the root finishes, because it owns a
@@ -908,18 +1009,62 @@ explicit load/save policy.
 
 ### Imports and running the examples
 
-These are the shared imports from `test/tutorial.test.ts`. The relative
-path is correct from that test directory; applications import the same names
-from `@msa/chord`. `assert` expresses expected values; `it` and
-`onTestFinished` come from the test runner; `readFileSync` is used by the
-tutorial's source-matching check, not by the application.
+The shared contracts and factories are in `test/fixtures/tutorial.ts`, which
+imports the following. The relative paths are correct from the test directory;
+applications import the same names from `@msa/chord`. `assert` expresses
+expected values; `it` and `onTestFinished` come from the test runner; `Effect`
+runs each section.
+
+<!-- example:imports-contracts -->
+
+```ts
+import { type Static, Type } from "typebox";
+
+import {
+  type Factory,
+  forbidden,
+  type Host,
+  hostNamed,
+  invalid,
+  local,
+  method,
+  opaque,
+  remote,
+  type StateOptions,
+} from "../../src/index.ts";
+```
+
+The sections in `test/tutorial.test.ts` (1 to 6) import:
 
 <!-- example:imports -->
 
 ```ts
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 
+import { Effect } from "effect";
+import { expectTypeOf, it, onTestFinished } from "vite-plus/test";
+
+import { createHost, isChordError, memoryLinkPair } from "../src/index.ts";
+import {
+  Database,
+  type Principal,
+  SavedTodos,
+  serveViews,
+  TodoLabel,
+  Todos,
+  TodoStore,
+  todoStore,
+} from "./fixtures/tutorial.ts";
+```
+
+and those in `test/tutorial-tasks-plugins-reload.test.ts` (7 to 11) import:
+
+<!-- example:imports-2 -->
+
+```ts
+import assert from "node:assert/strict";
+
+import { Effect } from "effect";
 import { type Static, Type } from "typebox";
 import { it, onTestFinished } from "vite-plus/test";
 
@@ -930,25 +1075,26 @@ import {
   defineRegistry,
   type Facet,
   type FacetApi,
-  type Factory,
-  forbidden,
   type Host,
-  hostNamed,
-  invalid,
   isChordError,
   local,
-  memoryLinkPair,
   method,
-  opaque,
-  remote,
-  type StateOptions,
+  type Ref,
 } from "../src/index.ts";
+import {
+  type Principal,
+  Rows,
+  serveViews,
+  Todos,
+  TodoStore,
+  todoStore,
+} from "./fixtures/tutorial.ts";
 ```
 
 From `libs/chord`, run:
 
 ```sh
-node ../../node_modules/vitest/dist/cli.js --run test/tutorial.test.ts
+node ../../node_modules/vitest/dist/cli.js --run test/tutorial.test.ts test/tutorial-tasks-plugins-reload.test.ts
 ```
 
 There is one test per numbered section. Every TypeScript block is matched

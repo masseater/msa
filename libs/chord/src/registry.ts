@@ -1,14 +1,14 @@
+import { dual } from "effect/Function";
+
 import type { Ctx } from "./types.ts";
 
 export interface Registry<V> {
   readonly name: string;
   readonly conflict: "error" | "last";
-  /** Type carrier only; never set. */
   readonly value?: V;
 }
 
-/** `conflict: "error"` rejects two objects registering one key; `"last"` keeps the later registration. */
-export const defineRegistry = <V>(
+const registryOf = <V>(
   name: string,
   options: { conflict?: "error" | "last" } = {},
 ): Registry<V> => ({
@@ -16,13 +16,16 @@ export const defineRegistry = <V>(
   conflict: options.conflict ?? "error",
 });
 
+export const defineRegistry: {
+  (options?: { conflict?: "error" | "last" }): <V>(name: string) => Registry<V>;
+  <V>(name: string, options?: { conflict?: "error" | "last" }): Registry<V>;
+} = dual((args) => args.length >= 1, registryOf);
+
 export type RegistryTable<V> = ReadonlyMap<string, V>;
 
 export interface RegistryView<V> {
-  /** Table of `ctx.codeVersion`, or of the current code version without ctx. */
   table(ctx?: Ctx): RegistryTable<V>;
   get(key: string, ctx?: Ctx): V | undefined;
-  /** Called with the current table immediately and whenever a new table is installed. */
   subscribe(listener: (table: RegistryTable<V>, codeVersion: number) => void): () => void;
 }
 

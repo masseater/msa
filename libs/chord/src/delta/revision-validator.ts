@@ -5,7 +5,6 @@ type JsonContainer = JsonValue[] | Record<string, JsonValue>;
 const isContainer = (value: JsonValue): value is JsonContainer =>
   typeof value === "object" && value !== null;
 
-/** Validates immutable replica revisions while skipping containers validated in earlier revisions. */
 export class JsonRevisionValidator {
   readonly #validated = new WeakSet<object>();
 
@@ -30,7 +29,11 @@ export class JsonRevisionValidator {
           if (typeof key === "symbol")
             throw new TypeError("Replicated state cannot contain symbol properties");
           const descriptor = Object.getOwnPropertyDescriptor(value, key);
-          if (descriptor === undefined || !descriptor.enumerable || !("value" in descriptor)) {
+          if (
+            descriptor === undefined ||
+            descriptor.enumerable !== true ||
+            !("value" in descriptor)
+          ) {
             throw new TypeError("Replicated state objects must contain enumerable data properties");
           }
           this.#validate(descriptor.value as JsonValue, ancestors, finished);
@@ -67,7 +70,7 @@ function assertDenseArray(value: readonly unknown[]): void {
     const descriptor = Object.getOwnPropertyDescriptor(value, String(index));
     if (
       descriptor === undefined ||
-      !descriptor.enumerable ||
+      descriptor.enumerable !== true ||
       !("value" in descriptor) ||
       descriptor.value === undefined
     ) {

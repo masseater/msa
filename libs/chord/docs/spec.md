@@ -259,7 +259,7 @@ Per-code-version immutable tables; order = first registration order, kept on rep
 ## 9. Hosts and links
 
 - `createHost({ name, self, principalKey, upstream?: { link, principal } })`; `host.accept(link, { principal })` for children; `host.connect(link, { principal })` for the parent; `host.route(prefix, { authorize(principal, hostName), resolve(hostName) => Promise<Link>, principal(hostName) })`.
-- Links: `memoryLinkPair()` (tests), Node IPC (child_process), WebSocket (server `ws`, browser `WebSocket`).
+- Links: `memoryLinkPair()` (tests), a child process (NDJSON on fds 3 and 4, `parentChannel()` in the child), WebSocket (server `ws`, browser `WebSocket`).
 - Principal stamping: the accepting side stamps the principal of what connects (from its authenticator); forwarded principals accepted only from the parent link; the parent's own requests (no forwarded principal) act as the principal given to `connect`; payload principal fields ignored.
 - A child that connects behind its parent's code version is fenced (nothing routed to it) and reconciled by a reload of its modules to the parent's code version. Calls its roots of the old code version make upstream are admitted in the parent's current code version (the parent never ran that code version), not rejected `superseded`.
 - Relay: server forwards a hold to the child link of its target host (`at`, resolved by the consumer from the contract's placement and the normalized input, and checked against both), mapping references per origin connection; authorizes before resolving/spawning and re-checks after.
