@@ -54,12 +54,7 @@ function settle(
   return runtime.exclusive(settleEffect(runtime, sessionId, run, worker, error));
 }
 
-function afterTurn(
-  runtime: Runtime,
-  sessionId: string,
-  run: number,
-  worker: WorkerSession,
-): void {
+function afterTurn(runtime: Runtime, sessionId: string, run: number, worker: WorkerSession): void {
   if (runtime.runs.get(sessionId) !== run) return;
   const assignments = store.assignmentsOfSession(runtime.database, sessionId);
   const taskIds = assignments.map((assignment) => assignment.taskId);

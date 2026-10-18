@@ -11,7 +11,9 @@ function notesBlock(notes: readonly Note[]): string {
   return [
     "<shared-notes>",
     "Messages sent to this work while it was waiting or between turns. Follow them.",
-    ...notes.map((note) => `<note id="${note.id}" from="${note.author}">\n${note.content}\n</note>`),
+    ...notes.map(
+      (note) => `<note id="${note.id}" from="${note.author}">\n${note.content}\n</note>`,
+    ),
     "</shared-notes>",
   ].join("\n");
 }
@@ -124,7 +126,8 @@ function describeTask(task: TaskView): string {
 
 function formatTaskDetail(task: TaskView, sessions: readonly string[]): string {
   const reports = task.reports.map(
-    (report) => `<report role="${report.role}" status="${report.status}">\n${report.content}\n</report>`,
+    (report) =>
+      `<report role="${report.role}" status="${report.status}">\n${report.content}\n</report>`,
   );
   return [
     describeTask(task),
@@ -135,4 +138,14 @@ function formatTaskDetail(task: TaskView, sessions: readonly string[]): string {
   ].join("\n\n");
 }
 
-export const prompts = { notesBlock, dependencyBlock, latestReport, workerPrompt, taskReviewerPrompt, roundReviewPrompt, taskHeading, formatTaskList, formatTaskDetail };
+export const prompts = {
+  notesBlock,
+  dependencyBlock,
+  latestReport,
+  workerPrompt,
+  taskReviewerPrompt,
+  roundReviewPrompt,
+  taskHeading,
+  formatTaskList,
+  formatTaskDetail,
+};

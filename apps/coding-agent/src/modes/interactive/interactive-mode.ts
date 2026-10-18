@@ -189,7 +189,7 @@ import { createMermaidMarkdownTransformer } from "./components/mermaid.ts";
 import { ModelSelectorComponent } from "./components/model-selector.ts";
 import { ScopedModelsSelectorComponent } from "./components/scoped-models-selector.ts";
 import { SessionSelectorComponent } from "./components/session-selector.ts";
-import { createTaskReportRenderer } from "./components/tasks-view-helpers.ts";
+import { createTaskReportRenderer, viewHelpers } from "./components/tasks-view-helpers.ts";
 import { TasksView } from "./components/tasks-view.ts";
 import { SettingsSelectorComponent } from "./components/settings-selector.ts";
 import { SkillInvocationMessageComponent } from "./components/skill-invocation-message.ts";
@@ -408,6 +408,7 @@ export class InteractiveMode {
   private fdPath: string | undefined;
   private editorContainer: Container;
   private readonly editorSlot: EditorSlot;
+  private readonly tasksViewState = viewHelpers.createTasksViewState();
   private readonly loginFlow: LoginFlow;
   private footer: FooterComponent;
   private footerContainer: Container;
@@ -5099,6 +5100,7 @@ export class InteractiveMode {
           onError: (message) => this.showError(message),
           requestRender: () => this.ui.requestRender(),
           maxHeight: () => this.ui.terminal.rows - 4,
+          state: this.tasksViewState,
         },
         initialId,
       );

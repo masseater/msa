@@ -27,7 +27,8 @@ const STATUS_LABEL: Record<TaskStatus, string> = {
 
 function glyph(task: TaskSnapshot): string {
   if (task.kind === "review") {
-    const color = task.status === "failed" ? "error" : task.status === "running" ? "accent" : "muted";
+    const color =
+      task.status === "failed" ? "error" : task.status === "running" ? "accent" : "muted";
     return theme.fg(color, "◆");
   }
   switch (task.status) {

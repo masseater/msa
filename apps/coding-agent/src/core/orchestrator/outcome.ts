@@ -26,7 +26,10 @@ function outcomeOf(worker: WorkerSession, error: unknown): Outcome {
     const text = contentText(last.content).trim();
     return { status: "failed", content: [text, last.errorMessage].filter(Boolean).join("\n") };
   }
-  return { status: "completed", content: last === undefined ? "" : contentText(last.content).trim() };
+  return {
+    status: "completed",
+    content: last === undefined ? "" : contentText(last.content).trim(),
+  };
 }
 
 function applyOutcome(

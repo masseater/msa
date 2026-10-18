@@ -13,7 +13,7 @@ import type { TaskSnapshot } from "../../../core/orchestrator/types.ts";
 import { toErrorMessage } from "../../../utils/errors.ts";
 import { theme } from "../theme/theme.ts";
 import { DynamicBorder } from "./dynamic-border.ts";
-import { keyHint, keyText, rawKeyHint } from "./keybinding-hints.ts";
+import { keyHint } from "./keybinding-hints.ts";
 import { taskDetail } from "./tasks-view-detail.ts";
 import { type TasksViewState, viewHelpers } from "./tasks-view-helpers.ts";
 
@@ -96,16 +96,18 @@ export class TasksView implements Component, Focusable {
 
   render(width: number): string[] {
     const open =
-      this.openId === undefined
-        ? undefined
-        : this.tasks().find((task) => task.id === this.openId);
+      this.openId === undefined ? undefined : this.tasks().find((task) => task.id === this.openId);
     const lines = open === undefined ? this.renderList(width) : this.renderDetail(open, width);
     const max = Math.max(8, this.options.maxHeight());
     const hints = lines.pop() ?? "";
     return [...lines.slice(0, max - 1), hints];
   }
 
-  private renderRound(round: { id: string; title: string }, selected: TaskSnapshot | undefined, width: number): string[] {
+  private renderRound(
+    round: { id: string; title: string },
+    selected: TaskSnapshot | undefined,
+    width: number,
+  ): string[] {
     const tasks = this.tasks();
     const inRound = roundTasks(tasks, round.id);
     if (inRound.length === 0) return [];
@@ -150,22 +152,6 @@ export class TasksView implements Component, Focusable {
     return lines;
   }
 
-  private renderHints(selected: TaskSnapshot | undefined): string {
-    return ` ${[
-      rawKeyHint(`${keyText("tui.select.up")}/${keyText("tui.select.down")}`, "select"),
-      keyHint("tui.select.confirm", "open"),
-      keyHint("app.orchestrator.message", "message"),
-      keyHint("app.orchestrator.note", "note"),
-      keyHint("app.orchestrator.toggleFinished", this.state.showFinished ? "hide finished" : "show finished"),
-      selected !== undefined && stoppable(selected) ? keyHint("app.orchestrator.stop", "stop") : undefined,
-      selected === undefined ? undefined : keyHint("app.orchestrator.priority", "priority"),
-      keyHint("app.orchestrator.model", "model"),
-      keyHint("tui.select.cancel", "close"),
-    ]
-      .filter(Boolean)
-      .join("  ")}`;
-  }
-
   private renderList(width: number): string[] {
     const tasks = this.tasks();
     const lines = this.header("Tasks", viewHelpers.describeTaskCounts(tasks) ?? "", width);
@@ -179,7 +165,7 @@ export class TasksView implements Component, Focusable {
     }
     lines.push("");
     if (this.composing === undefined) {
-      lines.push(this.renderHints(selected));
+      lines.push(taskDetail.listHints(this.state.showFinished, selected));
       return lines;
     }
     lines.push(...this.renderComposer(width));
@@ -191,7 +177,10 @@ export class TasksView implements Component, Focusable {
       "dim",
       `${STATUS_LABEL[task.status].toLowerCase()} · ${task.round} · priority ${task.priority}`,
     );
-    const lines = [...this.header(`${glyph(task)} ${task.title}`, right, width), ...taskDetail.sections(this.options.orchestrator, task, width)];
+    const lines = [
+      ...this.header(`${glyph(task)} ${task.title}`, right, width),
+      ...taskDetail.sections(this.options.orchestrator, task, width),
+    ];
     lines.push("");
     if (this.composing === undefined) lines.push(taskDetail.hints(task));
     else lines.push(...this.renderComposer(width));
@@ -240,7 +229,11 @@ export class TasksView implements Component, Focusable {
       this.startComposing({ kind: "note", round: selected.round });
     } else if (kb.matches(data, "app.orchestrator.priority") && selected !== undefined) {
       this.startComposing({ kind: "priority", taskId: selected.id });
-    } else if (kb.matches(data, "app.orchestrator.stop") && selected !== undefined && stoppable(selected)) {
+    } else if (
+      kb.matches(data, "app.orchestrator.stop") &&
+      selected !== undefined &&
+      stoppable(selected)
+    ) {
       this.options.orchestrator.stop(selected.id).catch((error: unknown) => {
         this.options.onError(toErrorMessage(error));
       });
@@ -282,7 +275,9 @@ export class TasksView implements Component, Focusable {
       this.options.onError(toErrorMessage(error));
     };
     if (composing.kind === "priority") {
-      this.options.orchestrator.setPriority(composing.taskId, Number.parseInt(text, 10)).catch(failed);
+      this.options.orchestrator
+        .setPriority(composing.taskId, Number.parseInt(text, 10))
+        .catch(failed);
       return;
     }
     if (composing.kind === "note") {

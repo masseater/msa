@@ -161,7 +161,10 @@ function setModel(
     if (session !== undefined) {
       const worker = runtime.workers.get(session.id);
       if (worker !== undefined) {
-        yield* Effect.tryPromise({ try: () => worker.setModel(resolved), catch: orchestratorError });
+        yield* Effect.tryPromise({
+          try: () => worker.setModel(resolved),
+          catch: orchestratorError,
+        });
         if (thinkingLevel !== undefined) worker.setThinkingLevel(thinkingLevel);
       }
       yield* Effect.sync(() => store.updateSession(runtime.database, session.id, patch, now));

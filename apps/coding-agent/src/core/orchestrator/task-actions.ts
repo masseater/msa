@@ -42,7 +42,10 @@ function sendNote(
       if (!tasks.some((task) => actionHelpers.appliesTo(note, task))) continue;
       const worker = runtime.workers.get(session.id);
       if (worker === undefined) continue;
-      yield* Effect.tryPromise({ try: () => worker.steer(input.content), catch: orchestratorError });
+      yield* Effect.tryPromise({
+        try: () => worker.steer(input.content),
+        catch: orchestratorError,
+      });
       yield* Effect.sync(() => store.markNoteRead(database, note.id, session.id, now));
       steered.push(session.id);
     }
@@ -89,7 +92,9 @@ function stop(runtime: Runtime, taskId: string): Effect.Effect<TaskView, Orchest
         .get(session.id)
         ?.abort()
         .catch(() => undefined);
-      yield* Effect.sync(() => store.updateSession(database, session.id, { status: "stopped" }, now));
+      yield* Effect.sync(() =>
+        store.updateSession(database, session.id, { status: "stopped" }, now),
+      );
     }
     yield* Effect.sync(() => {
       store.setTaskStatus(database, taskId, "stopped", now);

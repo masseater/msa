@@ -7,11 +7,7 @@ function storedMaxConcurrent(database: DatabaseSync, project: string): number | 
   return row?.max_concurrent_sessions ?? null;
 }
 
-function storeMaxConcurrent(
-  database: DatabaseSync,
-  project: string,
-  value: number,
-): void {
+function storeMaxConcurrent(database: DatabaseSync, project: string, value: number): void {
   database
     .prepare(
       `INSERT INTO orchestrator_state (project, max_concurrent_sessions) VALUES (?, ?)
@@ -21,3 +17,15 @@ function storeMaxConcurrent(
 }
 
 export const stateStore = { storedMaxConcurrent, storeMaxConcurrent };
+
+function recoverRunning(database: DatabaseSync, project: string, now: number): void {
+  database
+    .prepare("UPDATE sessions SET status = 'stopped', updated_at = ? WHERE project = ? AND status = 'running'")
+    .run(now, project);
+  database
+    .prepare("UPDATE tasks SET status = 'waiting', updated_at = ? WHERE project = ? AND status = 'running'")
+    .run(now, project);
+}
+
+
+export const recovery = { recoverRunning };

@@ -1,10 +1,9 @@
 import { truncateToWidth } from "@msa/tui";
 
-import { firstLine } from "../../../core/orchestrator/text.ts";
-import { formatToolDuration } from "../../../core/tools/render-utils.ts";
-
 import type { Orchestrator } from "../../../core/orchestrator/orchestrator.ts";
+import { firstLine } from "../../../core/orchestrator/text.ts";
 import type { TaskSnapshot } from "../../../core/orchestrator/types.ts";
+import { formatToolDuration } from "../../../core/tools/render-utils.ts";
 import { theme } from "../theme/theme.ts";
 import { keyHint } from "./keybinding-hints.ts";
 import { viewHelpers } from "./tasks-view-helpers.ts";
@@ -19,7 +18,8 @@ function reasonLine(orchestrator: Orchestrator, task: TaskSnapshot): string {
     if (active !== undefined) {
       const { startedAt, retrying } = orchestrator.progress(active.sessionId);
       const doing = activityLines(orchestrator.messages(active.sessionId)).at(-1);
-      const elapsed = startedAt === undefined ? "" : ` ${formatToolDuration(performance.now() - startedAt)}`;
+      const elapsed =
+        startedAt === undefined ? "" : ` ${formatToolDuration(performance.now() - startedAt)}`;
       return `${active.role}${elapsed} ${retrying ? "retrying" : (doing ?? "")}`.trim();
     }
   }
@@ -32,7 +32,8 @@ function sessionLines(orchestrator: Orchestrator, task: TaskSnapshot): string[] 
     const session = orchestrator.snapshot.sessions.find(
       (candidate) => candidate.id === assignment.sessionId,
     );
-    const model = session === undefined ? "?" : `${modelName(session.model)}/${session.thinkingLevel}`;
+    const model =
+      session === undefined ? "?" : `${modelName(session.model)}/${session.thinkingLevel}`;
     return `${assignment.role} ${assignment.sessionId} (${model}) ${session?.status ?? "?"}`;
   });
 }
@@ -96,4 +97,18 @@ function hints(task: TaskSnapshot): string {
     .join("  ")}`;
 }
 
-export const taskDetail = { reasonLine, sessionLines, sections, hints };
+function listHints(showFinished: boolean, selected: TaskSnapshot | undefined): string {
+  return ` ${[
+    keyHint("app.orchestrator.message", "message"),
+    keyHint("app.orchestrator.note", "note"),
+    keyHint("app.orchestrator.toggleFinished", showFinished ? "hide finished" : "show finished"),
+    selected !== undefined && stoppable(selected) ? keyHint("app.orchestrator.stop", "stop") : undefined,
+    selected === undefined ? undefined : keyHint("app.orchestrator.priority", "priority"),
+    keyHint("app.orchestrator.model", "model"),
+    keyHint("tui.select.cancel", "close"),
+  ]
+    .filter(Boolean)
+    .join("  ")}`;
+}
+
+export const taskDetail = { reasonLine, sessionLines, sections, hints, listHints };

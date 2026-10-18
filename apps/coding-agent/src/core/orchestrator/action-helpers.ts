@@ -1,10 +1,12 @@
+import type { Runtime } from "./runtime.ts";
 import { snapshots } from "./snapshot.ts";
 import { store } from "./store.ts";
-import type { Runtime } from "./runtime.ts";
 import type { Note, Task, TaskView } from "./types.ts";
 
 function taskView(runtime: Runtime, id: string): TaskView {
-  const found = snapshots.taskViews(runtime.database, runtime.options.project).find((task) => task.id === id);
+  const found = snapshots
+    .taskViews(runtime.database, runtime.options.project)
+    .find((task) => task.id === id);
   if (found === undefined) throw new Error(`Unknown task: ${id}`);
   return found;
 }

@@ -1,12 +1,11 @@
 import { Effect, Fiber } from "effect";
 
-import { type OrchestratorError, orchestratorError } from "./errors.ts";
-
 import { conditions } from "./condition.ts";
+import { type OrchestratorError, orchestratorError } from "./errors.ts";
 import { type Runtime, nowMillis } from "./runtime.ts";
 import { scheduler } from "./scheduler.ts";
-import { store } from "./store.ts";
 import { starting } from "./start.ts";
+import { store } from "./store.ts";
 
 function scheduleEffect(runtime: Runtime): Effect.Effect<string[], OrchestratorError> {
   return Effect.gen(function* () {
@@ -44,7 +43,9 @@ function pollEffect(runtime: Runtime): Effect.Effect<void, OrchestratorError> {
       if (task.condition === null) continue;
       const met = yield* conditions.runCondition(task.condition, task.cwd);
       if (met) {
-        yield* Effect.sync(() => store.updateTask(runtime.database, task.id, { condition: null }, now));
+        yield* Effect.sync(() =>
+          store.updateTask(runtime.database, task.id, { condition: null }, now),
+        );
       }
     }
     const started = yield* scheduleEffect(runtime);

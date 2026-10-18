@@ -115,10 +115,9 @@ function updateSession(
   patch: Partial<Pick<Session, "model" | "thinkingLevel" | "status" | "sessionFile">>,
   now: number,
 ): void {
-  const entries = db.definedEntries(patch).map(([key, value]) => [
-    SESSION_COLUMNS[key] ?? key,
-    value,
-  ]) as [string, string | null][];
+  const entries = db
+    .definedEntries(patch)
+    .map(([key, value]) => [SESSION_COLUMNS[key] ?? key, value]) as [string, string | null][];
   if (entries.length === 0) return;
   const assignments = entries.map(([column]) => `${column} = ?`).join(", ");
   database
@@ -158,10 +157,7 @@ function listAssignments(database: DatabaseSync, project: string): Assignment[] 
   return rows.map(toAssignment);
 }
 
-function assignmentsOfSession(
-  database: DatabaseSync,
-  sessionId: string,
-): Assignment[] {
+function assignmentsOfSession(database: DatabaseSync, sessionId: string): Assignment[] {
   const rows = database
     .prepare("SELECT * FROM assignments WHERE session_id = ? ORDER BY created_at, task_id")
     .all(sessionId) as unknown as AssignmentRow[];
@@ -175,10 +171,7 @@ function assignmentsOfTask(database: DatabaseSync, taskId: string): Assignment[]
   return rows.map(toAssignment);
 }
 
-function sessionViews(
-  database: DatabaseSync,
-  project: string,
-): SessionView[] {
+function sessionViews(database: DatabaseSync, project: string): SessionView[] {
   const sessions = listSessions(database, project);
   const assignments = listAssignments(database, project);
   return sessions.map((session) =>
@@ -258,4 +251,19 @@ function searchReports(
   }));
 }
 
-export const sessionStore = { toSession, toAssignment, toReport, insertSession, getSession, updateSession, listSessions, runningSessions, insertAssignment, listAssignments, assignmentsOfSession, assignmentsOfTask, sessionViews, insertReport, reportsOfTask, listReports, searchReports };
+export const sessionStore = {
+  insertSession,
+  getSession,
+  updateSession,
+  listSessions,
+  runningSessions,
+  insertAssignment,
+  listAssignments,
+  assignmentsOfSession,
+  assignmentsOfTask,
+  sessionViews,
+  insertReport,
+  reportsOfTask,
+  listReports,
+  searchReports,
+};

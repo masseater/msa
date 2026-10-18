@@ -95,13 +95,17 @@ const PATCH_COLUMNS: Readonly<Record<string, string>> = {
 function updateTask(
   database: DatabaseSync,
   id: string,
-  patch: Partial<Pick<Task, "title" | "prompt" | "status" | "priority" | "condition" | "model" | "thinkingLevel">>,
+  patch: Partial<
+    Pick<Task, "title" | "prompt" | "status" | "priority" | "condition" | "model" | "thinkingLevel">
+  >,
   now: number,
 ): void {
-  const entries = db.definedEntries(patch).map(([key, value]) => [
-    PATCH_COLUMNS[key] ?? key,
-    value,
-  ]) as [string, string | number | null][];
+  const entries = db
+    .definedEntries(patch)
+    .map(([key, value]) => [PATCH_COLUMNS[key] ?? key, value]) as [
+    string,
+    string | number | null,
+  ][];
   if (entries.length === 0) return;
   const assignments = entries.map(([column]) => `${column} = ?`).join(", ");
   database
@@ -109,12 +113,7 @@ function updateTask(
     .run(...entries.map(([, value]) => value), now, id);
 }
 
-function setTaskStatus(
-  database: DatabaseSync,
-  id: string,
-  status: TaskStatus,
-  now: number,
-): void {
+function setTaskStatus(database: DatabaseSync, id: string, status: TaskStatus, now: number): void {
   updateTask(database, id, { status }, now);
 }
 
@@ -180,11 +179,7 @@ function addDependency(
     .run(taskId, dependsOn);
 }
 
-function removeDependency(
-  database: DatabaseSync,
-  taskId: string,
-  dependsOn: string,
-): void {
+function removeDependency(database: DatabaseSync, taskId: string, dependsOn: string): void {
   database
     .prepare("DELETE FROM task_dependencies WHERE task_id = ? AND depends_on = ?")
     .run(taskId, dependsOn);
@@ -279,4 +274,23 @@ function workTasksOfRound(database: DatabaseSync, project: string, round: string
   return rows.map(toTask);
 }
 
-export const taskStore = { toTask, insertTask, getTask, listTasks, updateTask, setTaskStatus, dependenciesOf, dependentsOf, listDependencyPairs, reaches, addDependency, removeDependency, replaceDependencies, unfinishedDependencies, readyTasks, tasksWithCondition, insertRound, listRoundIds, reviewTaskOfRound, workTasksOfRound };
+export const taskStore = {
+  insertTask,
+  getTask,
+  listTasks,
+  updateTask,
+  setTaskStatus,
+  dependenciesOf,
+  dependentsOf,
+  listDependencyPairs,
+  addDependency,
+  removeDependency,
+  replaceDependencies,
+  unfinishedDependencies,
+  readyTasks,
+  tasksWithCondition,
+  insertRound,
+  listRoundIds,
+  reviewTaskOfRound,
+  workTasksOfRound,
+};

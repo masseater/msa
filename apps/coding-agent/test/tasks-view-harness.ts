@@ -3,12 +3,16 @@ import { fauxAssistantMessage } from "@msa/ai";
 import { vi } from "vite-plus/test";
 
 import type { Orchestrator } from "../src/core/orchestrator/orchestrator.ts";
-import type { OrchestratorSnapshot, SessionView, TaskSnapshot } from "../src/core/orchestrator/types.ts";
-import { TasksView } from "../src/modes/interactive/components/tasks-view.ts";
+import type {
+  OrchestratorSnapshot,
+  SessionView,
+  TaskSnapshot,
+} from "../src/core/orchestrator/types.ts";
 import {
   type TasksViewState,
   viewHelpers,
 } from "../src/modes/interactive/components/tasks-view-helpers.ts";
+import { TasksView } from "../src/modes/interactive/components/tasks-view.ts";
 import { stripAnsi } from "../src/utils/ansi.ts";
 
 function task(id: string, patch: Partial<TaskSnapshot> = {}): TaskSnapshot {
@@ -108,7 +112,9 @@ export function setup(options: { initialId?: string; state?: TasksViewState } = 
   const snapshot: OrchestratorSnapshot = {
     tasks: TASKS,
     sessions: SESSIONS,
-    rounds: [{ id: "main", title: "main", reviewTaskId: "rev-main", taskIds: TASKS.map((t) => t.id) }],
+    rounds: [
+      { id: "main", title: "main", reviewTaskId: "rev-main", taskIds: TASKS.map((t) => t.id) },
+    ],
     maxConcurrentSessions: 4,
   };
   const messages: Record<string, AgentMessage[]> = {

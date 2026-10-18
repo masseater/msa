@@ -71,12 +71,14 @@ export function taskToolsA(orchestrator: Orchestrator): Record<string, ToolDefin
         "When a closing review reports, act on it: create the next round's tasks, or tell the user the work is done.",
       ],
       parameters: createSchema,
-      run: (params) => orchestrator.createTask(params).then((task) => prompts.formatTaskList([task])),
+      run: (params) =>
+        orchestrator.createTask(params).then((task) => prompts.formatTaskList([task])),
     }),
     list_tasks: tool({
       name: "list_tasks",
       label: "list tasks",
-      description: "List tasks with status, round, dependencies, assignments, paths, and conditions.",
+      description:
+        "List tasks with status, round, dependencies, assignments, paths, and conditions.",
       promptSnippet: "List the task DAG",
       parameters: Type.Object({}),
       run: () => orchestrator.list().then(prompts.formatTaskList),
@@ -88,14 +90,12 @@ export function taskToolsA(orchestrator: Orchestrator): Record<string, ToolDefin
       promptSnippet: "Read a task's full state and reports",
       parameters: taskIdObject,
       run: ({ taskId }) =>
-        orchestrator
-          .read(taskId)
-          .then((task) =>
-            prompts.formatTaskDetail(
-              task,
-              task.assignments.map((assignment) => `${assignment.sessionId} (${assignment.role})`),
-            ),
+        orchestrator.read(taskId).then((task) =>
+          prompts.formatTaskDetail(
+            task,
+            task.assignments.map((assignment) => `${assignment.sessionId} (${assignment.role})`),
           ),
+        ),
     }),
   };
 }
@@ -128,7 +128,8 @@ export function taskToolsB(orchestrator: Orchestrator): Record<string, ToolDefin
     set_task_priority: tool({
       name: "set_task_priority",
       label: "set task priority",
-      description: "Change the priority of a waiting task; the scheduler runs higher priorities first.",
+      description:
+        "Change the priority of a waiting task; the scheduler runs higher priorities first.",
       promptSnippet: "Change a task's priority",
       parameters: prioritySchema,
       run: ({ taskId, priority }) =>

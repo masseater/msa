@@ -117,7 +117,9 @@ function setup(options: HarnessOptions = {}) {
       return Promise.resolve(worker);
     },
     resolveModel: (reference) => {
-      const found = MODELS.find((candidate) => `${candidate.provider}/${candidate.id}` === reference);
+      const found = MODELS.find(
+        (candidate) => `${candidate.provider}/${candidate.id}` === reference,
+      );
       if (found === undefined) throw new Error(`"${reference}" is not an available model`);
       return found;
     },

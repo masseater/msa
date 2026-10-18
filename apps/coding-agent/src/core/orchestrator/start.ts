@@ -28,7 +28,10 @@ function markRead(runtime: Runtime, notes: readonly Note[], sessionId: string, n
   for (const note of notes) store.markNoteRead(runtime.database, note.id, sessionId, now);
 }
 
-function dependencyViews(tasks: readonly TaskView[], byId: ReadonlyMap<string, TaskView>): TaskView[] {
+function dependencyViews(
+  tasks: readonly TaskView[],
+  byId: ReadonlyMap<string, TaskView>,
+): TaskView[] {
   const ids = [...new Set(tasks.flatMap((task) => task.dependsOn))];
   return ids.flatMap((id) => byId.get(id) ?? []);
 }
@@ -82,7 +85,11 @@ function planSession(
   const views = snapshots.taskViews(runtime.database, runtime.options.project);
   const byId = new Map(views.map((view) => [view.id, view]));
   const promptTasks = tasks.flatMap((task) => byId.get(task.id) ?? []);
-  const notes = notesFor(runtime, tasks.map((task) => task.id), sessionId);
+  const notes = notesFor(
+    runtime,
+    tasks.map((task) => task.id),
+    sessionId,
+  );
   const prompt = promptFor(runtime, promptTasks, role, workerReport, notes, extra);
   const model = role === "worker" ? (first.model ?? defaults.workerModel) : defaults.reviewModel;
   const thinkingLevel =
@@ -128,7 +135,12 @@ function insertRunningSession(
     updatedAt: now,
   });
   for (const task of tasks) {
-    store.insertAssignment(database, { taskId: task.id, sessionId: plan.sessionId, role, createdAt: now });
+    store.insertAssignment(database, {
+      taskId: task.id,
+      sessionId: plan.sessionId,
+      role,
+      createdAt: now,
+    });
     store.setTaskStatus(database, task.id, "running", now);
   }
   markRead(runtime, plan.notes, plan.sessionId, now);
@@ -156,16 +168,29 @@ function openWorker(
       }),
     );
     if (Result.isFailure(created)) {
-      yield* Effect.sync(() => failSession(runtime, plan, tasks, first, role, now, created.failure.message));
+      yield* Effect.sync(() =>
+        failSession(runtime, plan, tasks, first, role, now, created.failure.message),
+      );
       return undefined;
     }
     return created.success;
   });
 }
 
-function launch(runtime: Runtime, sessionId: string, worker: WorkerSession, prompt: string, now: number): void {
+function launch(
+  runtime: Runtime,
+  sessionId: string,
+  worker: WorkerSession,
+  prompt: string,
+  now: number,
+): void {
   const run = runtime.nextRun();
-  store.updateSession(runtime.database, sessionId, { sessionFile: worker.sessionFile ?? null }, now);
+  store.updateSession(
+    runtime.database,
+    sessionId,
+    { sessionFile: worker.sessionFile ?? null },
+    now,
+  );
   runtime.workers.set(sessionId, worker);
   worker.subscribe(() => runtime.publish());
   runtime.runs.set(sessionId, run);

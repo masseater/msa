@@ -63,7 +63,8 @@ function roundViews(
   return store.listRoundIds(database, project).map((round) => ({
     id: round.id,
     title: round.title,
-    reviewTaskId: tasks.find((task) => task.round === round.id && task.kind === "review")?.id ?? null,
+    reviewTaskId:
+      tasks.find((task) => task.round === round.id && task.kind === "review")?.id ?? null,
     taskIds: tasks.filter((task) => task.round === round.id).map((task) => task.id),
   }));
 }
@@ -77,7 +78,8 @@ function buildSnapshot(
   const byId = new Map(views.map((task) => [task.id, task]));
   const running = views.filter((task) => task.status === "running");
   const sessions = store.listSessions(database, project);
-  const free = maxConcurrentSessions - sessions.filter((session) => session.status === "running").length;
+  const free =
+    maxConcurrentSessions - sessions.filter((session) => session.status === "running").length;
   const runningKeys = scheduler.occupiedKeys(running);
   const snapshots: TaskSnapshot[] = views.map((task) => ({
     ...task,

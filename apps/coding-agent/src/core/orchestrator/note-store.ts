@@ -88,15 +88,17 @@ function markNoteRead(
     .run(noteId, sessionId, now);
 }
 
-function noteRead(
-  database: DatabaseSync,
-  noteId: string,
-  sessionId: string,
-): boolean {
+function noteRead(database: DatabaseSync, noteId: string, sessionId: string): boolean {
   const row = database
     .prepare("SELECT 1 AS found FROM note_reads WHERE note_id = ? AND session_id = ?")
     .get(noteId, sessionId);
   return row !== undefined;
 }
 
-export const noteStore = { targetsOf, toNote, insertNote, listNotes, unreadNotes, markNoteRead, noteRead };
+export const noteStore = {
+  insertNote,
+  listNotes,
+  unreadNotes,
+  markNoteRead,
+  noteRead,
+};

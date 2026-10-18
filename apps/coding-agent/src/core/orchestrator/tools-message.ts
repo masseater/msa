@@ -19,7 +19,9 @@ const noteSchema = Type.Object({
     description: "Who receives the note.",
   }),
   round: Type.Optional(Type.String({ description: "Round id, when audience is round." })),
-  taskIds: Type.Optional(Type.Array(taskIdSchema, { description: "Tasks, when audience is tasks." })),
+  taskIds: Type.Optional(
+    Type.Array(taskIdSchema, { description: "Tasks, when audience is tasks." }),
+  ),
 });
 
 const searchSchema = Type.Object({
@@ -87,16 +89,18 @@ export function messageToolsC(orchestrator: Orchestrator): Record<string, ToolDe
       promptSnippet: "Search reports across tasks and sessions",
       parameters: searchSchema,
       run: ({ query, limit }) =>
-        orchestrator.searchReports(query, limit).then((hits) =>
-          hits.length === 0
-            ? "No matching reports."
-            : hits
-                .map(
-                  (hit) =>
-                    `- ${hit.taskTitle} (${hit.report.role}, ${hit.sessionModel}): ${hit.report.content.slice(0, 240)}`,
-                )
-                .join("\n"),
-        ),
+        orchestrator
+          .searchReports(query, limit)
+          .then((hits) =>
+            hits.length === 0
+              ? "No matching reports."
+              : hits
+                  .map(
+                    (hit) =>
+                      `- ${hit.taskTitle} (${hit.report.role}, ${hit.sessionModel}): ${hit.report.content.slice(0, 240)}`,
+                  )
+                  .join("\n"),
+          ),
     }),
   };
 }
@@ -110,7 +114,8 @@ export function messageToolsB(orchestrator: Orchestrator): Record<string, ToolDe
         "Stop a task, aborting its running session. Dependents keep waiting until it is rerun, or you remove the dependency.",
       promptSnippet: "Stop a task",
       parameters: taskIdObject,
-      run: ({ taskId }) => orchestrator.stop(taskId).then((task) => `${task.id} is ${task.status}.`),
+      run: ({ taskId }) =>
+        orchestrator.stop(taskId).then((task) => `${task.id} is ${task.status}.`),
     }),
     rerun_task: tool({
       name: "rerun_task",
@@ -119,7 +124,8 @@ export function messageToolsB(orchestrator: Orchestrator): Record<string, ToolDe
         "Run a finished, failed, or stopped task again in a new session. Dependencies and notes apply as usual.",
       promptSnippet: "Rerun a task in a new session",
       parameters: taskIdObject,
-      run: ({ taskId }) => orchestrator.rerun(taskId).then((task) => `${task.id} is ${task.status}.`),
+      run: ({ taskId }) =>
+        orchestrator.rerun(taskId).then((task) => `${task.id} is ${task.status}.`),
     }),
     set_max_concurrent_sessions: tool({
       name: "set_max_concurrent_sessions",
@@ -128,7 +134,9 @@ export function messageToolsB(orchestrator: Orchestrator): Record<string, ToolDe
       promptSnippet: "Change the concurrency limit",
       parameters: maxConcurrentSchema,
       run: ({ value }) =>
-        orchestrator.setMaxConcurrentSessions(value).then((max) => `Max concurrent sessions: ${max}.`),
+        orchestrator
+          .setMaxConcurrentSessions(value)
+          .then((max) => `Max concurrent sessions: ${max}.`),
     }),
   };
 }

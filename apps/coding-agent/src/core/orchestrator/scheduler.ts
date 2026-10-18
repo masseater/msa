@@ -1,10 +1,7 @@
 import type { Task } from "./types.ts";
 
 function pathKeys(task: Task): string[] {
-  return [
-    ...task.paths.map((path) => `path:${path}`),
-    ...task.repos.map((repo) => `repo:${repo}`),
-  ];
+  return [...task.paths.map((path) => `path:${path}`), ...task.repos.map((repo) => `repo:${repo}`)];
 }
 
 function overlaps(left: readonly string[], right: readonly string[]): boolean {
@@ -38,7 +35,8 @@ function clusterByPaths(tasks: readonly Task[]): Task[][] {
     clusters.push(merged);
   }
   return clusters.toSorted((left, right) => {
-    const priority = Math.max(...right.map((task) => task.priority)) -
+    const priority =
+      Math.max(...right.map((task) => task.priority)) -
       Math.max(...left.map((task) => task.priority));
     return priority === 0 ? left[0]!.createdAt - right[0]!.createdAt : priority;
   });

@@ -24,11 +24,15 @@ function createHarness() {
     mkdirSync(tempDir, { recursive: true });
     const sessionDir = `${tempDir}/sessions`;
     const faux = registerFauxProvider();
-    faux.setResponses(Array.from({ length: 6 }, (_, index) => fauxAssistantMessage(`reply ${index}`)));
+    faux.setResponses(
+      Array.from({ length: 6 }, (_, index) => fauxAssistantMessage(`reply ${index}`)),
+    );
     const model = faux.getModel();
     const authStorage = AuthStorage.inMemory();
     yield* Effect.promise(() =>
-      authStorage.modify(model.provider, () => Promise.resolve({ type: "api_key", key: "faux-key" })),
+      authStorage.modify(model.provider, () =>
+        Promise.resolve({ type: "api_key", key: "faux-key" }),
+      ),
     );
     const modelRuntime = yield* Effect.promise(() =>
       ModelRuntime.create({ credentials: authStorage, modelsPath: `${tempDir}/models.json` }),
@@ -72,9 +76,12 @@ it("keeps worker transcripts out of the sessions --continue and /resume pick fro
       const { session, sessionManager, sessionDir } = yield* createHarness();
       const orchestrator = session.orchestrator;
       if (orchestrator === undefined) throw new Error("orchestrator missing");
-      const task = yield* Effect.promise(() => orchestrator.createTask({ title: "t", prompt: "do t" }));
+      const task = yield* Effect.promise(() =>
+        orchestrator.createTask({ title: "t", prompt: "do t" }),
+      );
       yield* waitFor(
-        () => orchestrator.snapshot.tasks.find((item) => item.id === task.id)?.status === "completed",
+        () =>
+          orchestrator.snapshot.tasks.find((item) => item.id === task.id)?.status === "completed",
         3000,
       );
       const worker = yield* Effect.promise(() => orchestrator.read(task.id));
@@ -85,7 +92,9 @@ it("keeps worker transcripts out of the sessions --continue and /resume pick fro
       if (sessionFile === null || sessionFile === undefined) {
         throw new Error("worker session file missing");
       }
-      expect(sessionFile.slice(0, sessionDir.length + "/workers".length)).toBe(`${sessionDir}/workers`);
+      expect(sessionFile.slice(0, sessionDir.length + "/workers".length)).toBe(
+        `${sessionDir}/workers`,
+      );
       expect(SessionManager.continueRecent(tempDir, sessionDir).getSessionFile()).toBe(
         sessionManager.getSessionFile(),
       );

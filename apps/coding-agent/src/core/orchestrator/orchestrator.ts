@@ -2,7 +2,7 @@ import type { AgentMessage } from "@msa/agent-core";
 import { Effect, Fiber } from "effect";
 
 import { actions } from "./actions.ts";
-import type { Runtime } from "./runtime.ts";
+import { type Runtime, nowMillis } from "./runtime.ts";
 import { scheduling } from "./schedule.ts";
 import { settling } from "./settle.ts";
 import {
@@ -16,7 +16,6 @@ import {
 } from "./snapshot.ts";
 import { store } from "./store.ts";
 import { TranscriptCache } from "./transcripts.ts";
-
 import type { OrchestratorOptions, WorkerSession } from "./worker.ts";
 
 export type {
@@ -27,7 +26,11 @@ export type {
   WorkerSession,
 } from "./worker.ts";
 export type { CreateTaskInput, NoteDelivery, SendNoteInput } from "./types.ts";
-export { ORCHESTRATOR_TOOL_NAMES, createOrchestratorToolDefinitions, isOrchestratorTool } from "./tools.ts";
+export {
+  ORCHESTRATOR_TOOL_NAMES,
+  createOrchestratorToolDefinitions,
+  isOrchestratorTool,
+} from "./tools.ts";
 
 export const ORCHESTRATOR_REPORT_MESSAGE_TYPE = "msa.orchestrator.report";
 
@@ -55,6 +58,7 @@ export class Orchestrator implements Runtime {
   constructor(options: OrchestratorOptions) {
     this.options = options;
     this.database = store.openDatabase(options.databasePath);
+    store.recoverRunning(this.database, options.project, Effect.runSync(nowMillis));
     this.maxConcurrentSessions =
       store.storedMaxConcurrent(this.database, options.project) ??
       options.defaults().maxConcurrentSessions;
@@ -87,12 +91,7 @@ export class Orchestrator implements Runtime {
     for (const listener of this.listeners) listener();
   }
 
-  settle(
-    sessionId: string,
-    run: number,
-    worker: WorkerSession,
-    error: unknown,
-  ): Promise<void> {
+  settle(sessionId: string, run: number, worker: WorkerSession, error: unknown): Promise<void> {
     return settling.settle(this, sessionId, run, worker, error);
   }
 
@@ -155,10 +154,12 @@ export class Orchestrator implements Runtime {
     return this.exclusive(actions.setPriority(this, taskId, priority));
   }
 
-  setModel(taskId: string, model: string, thinkingLevel?: TaskView["thinkingLevel"]): Promise<TaskView> {
-    return this.exclusive(
-      actions.setModel(this, taskId, model, thinkingLevel ?? undefined),
-    );
+  setModel(
+    taskId: string,
+    model: string,
+    thinkingLevel?: TaskView["thinkingLevel"],
+  ): Promise<TaskView> {
+    return this.exclusive(actions.setModel(this, taskId, model, thinkingLevel ?? undefined));
   }
 
   sendNote(input: SendNoteInput): Promise<NoteDelivery> {

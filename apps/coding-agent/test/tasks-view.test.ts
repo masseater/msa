@@ -74,7 +74,11 @@ it("collapses completed and stopped tasks by default and remembers the toggle ac
   const state = viewHelpers.createTasksViewState();
   const first = setup({ state });
   expect(
-    first.screen().some((line) => line.includes("1 done") && line.includes("1 stopped") && line.includes("show")),
+    first
+      .screen()
+      .some(
+        (line) => line.includes("1 done") && line.includes("1 stopped") && line.includes("show"),
+      ),
   ).toBe(true);
   expect(first.screen().join("\n")).not.toContain("finished-work");
   expect(first.screen().join("\n")).not.toContain("stopped-work");

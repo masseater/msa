@@ -1,4 +1,5 @@
 import type { DatabaseSync } from "node:sqlite";
+
 import { DateTime, Effect } from "effect";
 
 import type { OrchestratorOptions, WorkerSession } from "./worker.ts";
@@ -13,12 +14,7 @@ export interface Runtime {
   nextRun(): number;
   exclusive<A>(effect: Effect.Effect<A, unknown>): Promise<A>;
   publish(): void;
-  settle(
-    sessionId: string,
-    run: number,
-    worker: WorkerSession,
-    error: unknown,
-  ): Promise<void>;
+  settle(sessionId: string, run: number, worker: WorkerSession, error: unknown): Promise<void>;
   afterTurn(sessionId: string, run: number, worker: WorkerSession): void;
 }
 
