@@ -1,5 +1,4 @@
 import * as fs from "node:fs";
-import * as path from "node:path";
 
 import type { ThinkingLevel } from "@msa/agent-core";
 import {
@@ -47,11 +46,10 @@ import {
 
 export { SYSTEM_THEME_NAME } from "./system-theme.ts";
 
-// ============================================================================
-// Types & Schema
-// ============================================================================
+import { dual } from "effect/Function";
 
-/** The schema that validates this shape lives in `theme-schema.ts`; importing the type is free. */
+import { type Scheduled, schedule } from "../../../core/platform.ts";
+import { join } from "../../path.ts";
 import type {
   ThemeColorValue as ColorValue,
   ValidatedThemeJson as ThemeJson,
@@ -60,10 +58,6 @@ import type {
 export type { ValidatedThemeJson as ThemeJson } from "./theme-schema.ts";
 export type { ThemeBg, ThemeColor, ThemeToken } from "./theme-tokens.ts";
 
-/**
- * Tokens are only accepted in their own slot, because "" (terminal default) means the default foreground
- * or background depending on the slot. Use `theme.colors[token]` to use a token's color in the other slot.
- */
 export interface ThemeStyle extends TextAttributes {
   fg?: ThemeColor | Color;
   bg?: ThemeBg | Color;
@@ -73,18 +67,9 @@ export type ThemeJsonValidator = (label: string, json: unknown) => ThemeJson;
 
 let themeJsonValidator: ThemeJsonValidator | undefined;
 
-/**
- * Install full theme validation. Without it, documents are accepted as-is, which is what built-in
- * themes already do: validating user-authored JSON needs typebox, and a presentation that only uses
- * built-in themes should not pay ~17 MB of module graph for it.
- */
 export function setThemeJsonValidator(validator: ThemeJsonValidator): void {
   themeJsonValidator = validator;
 }
-
-// ============================================================================
-// Color Utilities
-// ============================================================================
 
 function resolveVarRefs(
   value: ColorValue,
@@ -95,7 +80,7 @@ function resolveVarRefs(
     typeof value === "number" ||
     value === "" ||
     value.startsWith("#") ||
-    /^ok(lch|hsl)\(/i.test(value)
+    /^ok(lch|hsl)\(/iu.test(value)
   ) {
     return value;
   }
@@ -139,54 +124,36 @@ function withThemeTokenFallbacks<Value>(
   return resolved as ResolvedThemeColorValues<Value>;
 }
 
-// ============================================================================
-// Appearance & Terminal Default Colors
-// ============================================================================
-
-/** The background a theme is designed for. */
 export type ThemeAppearance = TerminalTheme;
 
-// The terminal's reported colors. Replaced (never mutated) on update, so themes can cache resolved colors
-// by identity.
 let terminalColors: TerminalColors = {};
-// While the terminal color query is in flight, the system theme renders in grayscale.
 let terminalColorsPending = false;
-// The terminal's last light/dark report (mode 2031). Only used while it has not reported a background.
 let terminalColorScheme: TerminalTheme | undefined;
 
-/**
- * Record the terminal's reported colors. Themes use the default colors for tokens set to "" (terminal
- * default); the system theme is generated from all of them. Ends the pending state.
- */
 export function setTerminalColors(colors: TerminalColors): void {
   terminalColors = { ...colors };
   terminalColorsPending = false;
 }
 
-/** Record the terminal's light/dark report, the fallback for terminals that do not report their background. */
 export function setTerminalColorScheme(scheme: TerminalTheme | undefined): void {
   terminalColorScheme = scheme;
 }
 
-/** Render the system theme in grayscale until `setTerminalColors()` reports the terminal's colors. */
 export function markTerminalColorsPending(): void {
   terminalColorsPending = true;
 }
 
-/** Assumed terminal default colors when the terminal does not report them. */
 const GUESSED_DEFAULT_COLORS: Record<ThemeAppearance, { foreground: Color; background: Color }> = {
   dark: { foreground: parseColor("#e5e5e7"), background: parseColor("#000000") },
   light: { foreground: parseColor("#000000"), background: parseColor("#ffffff") },
 };
 
 function averageLightness(colors: Color[]): number | undefined {
-  // Palette colors 0-15 follow the user's terminal palette, so they say nothing about the theme.
   const fixed = colors.filter((color) => color.kind !== "indexed" || color.index >= 16);
   if (fixed.length === 0) return undefined;
   return fixed.reduce((sum, color) => sum + colorToOklch(color).l, 0) / fixed.length;
 }
 
-/** Detect the background a theme is designed for from the lightness of its own colors. */
 function detectAppearance(foregrounds: Color[], backgrounds: Color[]): ThemeAppearance | undefined {
   const fg = averageLightness(foregrounds);
   const bg = averageLightness(backgrounds);
@@ -196,23 +163,16 @@ function detectAppearance(foregrounds: Color[], backgrounds: Color[]): ThemeAppe
   return undefined;
 }
 
-// ============================================================================
-// Theme Class
-// ============================================================================
-
 export class Theme {
   readonly name?: string | undefined;
   readonly sourcePath?: string | undefined;
   sourceInfo?: SourceInfo | undefined;
   private mode: TerminalColorMode;
-  // Precomputed escape sequences keep fg()/bg() on the render hot path to a lookup and concat.
   private readonly fgAnsi = new Map<ThemeColor, string>();
   private readonly bgAnsi = new Map<ThemeBg, string>();
-  // Tokens set to "" have no color of their own; `colors` fills them from the terminal defaults.
   private readonly concreteColors: Partial<Record<ThemeToken, Color>> = {};
   private readonly defaultForegroundTokens: ThemeToken[] = [];
   private readonly defaultBackgroundTokens: ThemeToken[] = [];
-  // Foreground tokens rendered faint (SGR 2) on top of their color.
   private readonly dimTokens: ReadonlySet<ThemeColor>;
   private readonly ownAppearance: ThemeAppearance | undefined;
   private resolvedColors:
@@ -228,7 +188,6 @@ export class Theme {
       sourcePath?: string | undefined;
       sourceInfo?: SourceInfo | undefined;
       appearance?: ThemeAppearance | undefined;
-      /** Foreground tokens to render faint (SGR 2). */
       dim?: readonly ThemeColor[] | undefined;
     } = {},
   ) {
@@ -242,7 +201,6 @@ export class Theme {
     );
     const concreteForegrounds: Color[] = [];
     const concreteBackgrounds: Color[] = [];
-    // Returns the escape sequence for the token's own slot.
     const addToken = (token: ThemeToken, value: string | number, isBackground: boolean): string => {
       if (value === "") {
         (isBackground ? this.defaultBackgroundTokens : this.defaultForegroundTokens).push(token);
@@ -263,25 +221,16 @@ export class Theme {
       options.appearance ?? detectAppearance(concreteForegrounds, concreteBackgrounds);
   }
 
-  /**
-   * The background the theme is designed for: declared in the theme JSON, detected from its colors,
-   * or, for themes without usable colors, the terminal's appearance.
-   */
   get appearance(): ThemeAppearance {
     return this.ownAppearance ?? getTerminalTheme();
   }
 
-  /**
-   * Concrete colors for all tokens. Tokens set to "" (terminal default) use the terminal's reported
-   * default colors, or a guess based on `appearance` when the terminal did not report them. Faint
-   * tokens are approximated by mixing their color toward the background.
-   */
   get colors(): Readonly<Record<ThemeToken, Color>> {
     const terminal = terminalColors;
     if (this.resolvedColors?.terminal !== terminal) {
       const guess = GUESSED_DEFAULT_COLORS[this.appearance];
       const toColor = (rgb: RgbColor | undefined, fallback: Color) =>
-        rgb ? rgbColor(rgb.r, rgb.g, rgb.b) : fallback;
+        rgb === undefined ? fallback : rgbColor(rgb.r, rgb.g, rgb.b);
       const foreground = toColor(terminal.foreground, guess.foreground);
       const background = toColor(terminal.background, guess.background);
       const colors = { ...this.concreteColors };
@@ -289,7 +238,7 @@ export class Theme {
       for (const token of this.defaultBackgroundTokens) colors[token] = background;
       for (const token of this.dimTokens) {
         const color = colors[token];
-        if (color) colors[token] = mixColors(color, background, 0.4);
+        if (color !== undefined) colors[token] = mixColors(color, background, 0.4);
       }
       this.resolvedColors = {
         terminal,
@@ -355,7 +304,6 @@ export class Theme {
     return chalk.strikethrough(text);
   }
 
-  /** Opening escape sequence for a foreground token. Faint tokens include SGR 2, which `\x1b[22m` closes. */
   getFgAnsi(color: ThemeColor): string {
     const ansi = this.tokenAnsi(this.fgAnsi, color);
     return this.dimTokens.has(color) ? `${ansi}\x1b[2m` : ansi;
@@ -370,7 +318,6 @@ export class Theme {
   }
 
   getThinkingBorderColor(level: ThinkingLevel): (str: string) => string {
-    // Map thinking levels to dedicated theme colors
     switch (level) {
       case "off":
         return (str: string) => this.fg("thinkingOff", str);
@@ -396,17 +343,13 @@ export class Theme {
   }
 }
 
-// ============================================================================
-// Theme Loading
-// ============================================================================
-
 let BUILTIN_THEMES: Record<string, ThemeJson> | undefined;
 
 function getBuiltinThemes(): Record<string, ThemeJson> {
-  if (!BUILTIN_THEMES) {
+  if (BUILTIN_THEMES === undefined) {
     const themesDir = getThemesDir();
-    const darkPath = path.join(themesDir, "dark.json");
-    const lightPath = path.join(themesDir, "light.json");
+    const darkPath = join(themesDir, "dark.json");
+    const lightPath = join(themesDir, "light.json");
     BUILTIN_THEMES = {
       dark: JSON.parse(stripBom(fs.readFileSync(darkPath, "utf-8"))) as ThemeJson,
       light: JSON.parse(stripBom(fs.readFileSync(lightPath, "utf-8"))) as ThemeJson,
@@ -436,13 +379,11 @@ export function getAvailableThemesWithPaths(): ThemeInfo[] {
     result.push(themeInfo);
   };
 
-  // Built-in themes. The system theme is generated, so it has no file.
   addTheme({ name: SYSTEM_THEME_NAME, path: undefined });
   for (const name of Object.keys(getBuiltinThemes())) {
-    addTheme({ name, path: path.join(themesDir, `${name}.json`) });
+    addTheme({ name, path: join(themesDir, `${name}.json`) });
   }
 
-  // Custom themes
   for (const themeInfo of getCustomThemeInfos()) {
     addTheme(themeInfo);
   }
@@ -451,7 +392,6 @@ export function getAvailableThemesWithPaths(): ThemeInfo[] {
     addTheme({ name, path: theme.sourcePath });
   }
 
-  // The system theme comes first: it is the default and adapts to every terminal.
   return result.sort((a, b) =>
     a.name === SYSTEM_THEME_NAME
       ? -1
@@ -472,16 +412,13 @@ function getCustomThemeInfos(): ThemeInfo[] {
     if (!file.endsWith(".json")) {
       continue;
     }
-    const themePath = path.join(customThemesDir, file);
+    const themePath = join(customThemesDir, file);
     try {
       const customTheme = loadThemeFromPath(themePath);
-      if (customTheme.name) {
+      if (customTheme.name !== undefined && customTheme.name !== "") {
         result.push({ name: customTheme.name, path: themePath });
       }
-    } catch {
-      // Invalid themes are ignored here; the resource loader reports them
-      // during normal startup/reload.
-    }
+    } catch {}
   }
   return result;
 }
@@ -495,7 +432,7 @@ function assertThemeNameIsValid(name: string): void {
 }
 
 function parseThemeJson(label: string, json: unknown): ThemeJson {
-  if (themeJsonValidator) return themeJsonValidator(label, json);
+  if (themeJsonValidator !== undefined) return themeJsonValidator(label, json);
   if (typeof json !== "object" || json === null || !("colors" in json)) {
     throw new Error(`Invalid theme "${label}": expected an object with a "colors" map.`);
   }
@@ -515,19 +452,19 @@ function parseThemeJsonContent(label: string, content: string): ThemeJson {
 function loadThemeJson(name: string): ThemeJson {
   const builtinThemes = getBuiltinThemes();
   const builtinTheme = builtinThemes[name];
-  if (builtinTheme) {
+  if (builtinTheme !== undefined) {
     return builtinTheme;
   }
   const registeredTheme = registeredThemes.get(name);
-  if (registeredTheme?.sourcePath) {
+  if (registeredTheme?.sourcePath !== undefined && registeredTheme?.sourcePath !== "") {
     const content = fs.readFileSync(registeredTheme.sourcePath, "utf-8");
     return parseThemeJsonContent(registeredTheme.sourcePath, content);
   }
-  if (registeredTheme) {
+  if (registeredTheme !== undefined) {
     throw new Error(`Theme "${name}" does not have a source path for export`);
   }
   const customThemesDir = getCustomThemesDir();
-  const themePath = path.join(customThemesDir, `${name}.json`);
+  const themePath = join(customThemesDir, `${name}.json`);
   if (!fs.existsSync(themePath)) {
     throw new Error(`Theme not found: ${name}`);
   }
@@ -564,7 +501,6 @@ function createTheme(themeJson: ThemeJson, mode?: TerminalColorMode, sourcePath?
   });
 }
 
-/** Generate the system theme from the terminal's reported colors (grayscale while they are pending). */
 function createSystemTheme(mode?: TerminalColorMode): Theme {
   const generated = generateSystemThemeColors({
     ...terminalColors,
@@ -579,17 +515,22 @@ function createSystemTheme(mode?: TerminalColorMode): Theme {
   });
 }
 
-export function loadThemeFromPath(themePath: string, mode?: TerminalColorMode): Theme {
-  const content = fs.readFileSync(themePath, "utf-8");
-  const themeJson = parseThemeJsonContent(themePath, content);
-  return createTheme(themeJson, mode, themePath);
-}
+export const loadThemeFromPath: {
+  (mode?: TerminalColorMode): (themePath: string) => Theme;
+  (themePath: string, mode?: TerminalColorMode): Theme;
+} = dual(
+  (args) => typeof args[0] === "string" && args[0] !== "truecolor" && args[0] !== "256color",
+  (themePath: string, mode?: TerminalColorMode): Theme => {
+    const content = fs.readFileSync(themePath, "utf-8");
+    const themeJson = parseThemeJsonContent(themePath, content);
+    return createTheme(themeJson, mode, themePath);
+  },
+);
 
 function loadTheme(name: string, mode?: TerminalColorMode): Theme {
-  // The system theme name is reserved: it takes precedence over custom themes of the same name.
   if (name === SYSTEM_THEME_NAME) return createSystemTheme(mode);
   const registeredTheme = registeredThemes.get(name);
-  if (registeredTheme) {
+  if (registeredTheme !== undefined) {
     return registeredTheme;
   }
   const themeJson = loadThemeJson(name);
@@ -609,7 +550,7 @@ export type TerminalTheme = "dark" | "light";
 export function parseAutoThemeSetting(
   themeSetting: string | undefined,
 ): { lightTheme: string; darkTheme: string } | undefined {
-  if (!themeSetting) return undefined;
+  if (themeSetting === undefined || themeSetting === "") return undefined;
   const slashIndex = themeSetting.indexOf("/");
   if (slashIndex === -1 || themeSetting.indexOf("/", slashIndex + 1) !== -1) {
     return undefined;
@@ -617,76 +558,70 @@ export function parseAutoThemeSetting(
 
   const lightTheme = themeSetting.slice(0, slashIndex).trim();
   const darkTheme = themeSetting.slice(slashIndex + 1).trim();
-  if (!lightTheme || !darkTheme) {
+  if (lightTheme === "" || darkTheme === "") {
     return undefined;
   }
   return { lightTheme, darkTheme };
 }
 
-export function resolveThemeSetting(
-  themeSetting: string | undefined,
-  terminalTheme: TerminalTheme,
-): string | undefined {
-  const autoTheme = parseAutoThemeSetting(themeSetting);
-  if (autoTheme) {
-    return terminalTheme === "light" ? autoTheme.lightTheme : autoTheme.darkTheme;
-  }
-  if (themeSetting?.includes("/")) return undefined;
-  if (typeof themeSetting === "string") return themeSetting;
-  return undefined;
-}
+export const resolveThemeSetting: {
+  (terminalTheme: TerminalTheme): (themeSetting: string | undefined) => string | undefined;
+  (themeSetting: string | undefined, terminalTheme: TerminalTheme): string | undefined;
+} = dual(
+  2,
+  (themeSetting: string | undefined, terminalTheme: TerminalTheme): string | undefined => {
+    const autoTheme = parseAutoThemeSetting(themeSetting);
+    if (autoTheme !== undefined) {
+      return terminalTheme === "light" ? autoTheme.lightTheme : autoTheme.darkTheme;
+    }
+    if (themeSetting?.includes("/") === true) return undefined;
+    if (typeof themeSetting === "string") return themeSetting;
+    return undefined;
+  },
+);
 
-/**
- * Dark or light from the `COLORFGBG` environment variable some terminals set, or undefined without a
- * usable background index. The value is `fg;bg` or `fg;xpm;bg` (rxvt), where a field is an ANSI color
- * index or `default` when the color is not in the palette. The index refers to the terminal's own palette,
- * whose colors are unknown here, so it is classified by index like Vim does: 0-6 and 8 (bright black, e.g.
- * Solarized Dark's background) are dark, 7 and 9-15 are light.
- */
 export function detectColorFgBgTheme(
   env: NodeJS.ProcessEnv = process.env,
 ): TerminalTheme | undefined {
   const bg = env["COLORFGBG"]?.split(";").at(-1)?.trim();
-  if (!bg || !/^\d{1,2}$/.test(bg)) return undefined;
+  if (bg === undefined || bg === "" || !/^\d{1,2}$/u.test(bg)) return undefined;
   const index = Number(bg);
   if (index > 15) return undefined;
   return index <= 6 || index === 8 ? "dark" : "light";
 }
 
-/**
- * Whether the terminal is dark or light. The background it renders decides, classified the same way the
- * system theme does. Without a reported background: the terminal's light/dark report, then COLORFGBG,
- * then dark.
- */
-export function detectTerminalTheme(
-  colors: TerminalColors = {},
-  reportedScheme?: TerminalTheme,
-  env: NodeJS.ProcessEnv = process.env,
-): TerminalTheme {
-  const { background, foreground } = colors;
-  if (background) return terminalAppearance(background, foreground);
-  return reportedScheme ?? detectColorFgBgTheme(env) ?? "dark";
-}
+export const detectTerminalTheme: {
+  (
+    reportedScheme?: TerminalTheme,
+    env?: NodeJS.ProcessEnv,
+  ): (colors?: TerminalColors) => TerminalTheme;
+  (colors?: TerminalColors, reportedScheme?: TerminalTheme, env?: NodeJS.ProcessEnv): TerminalTheme;
+} = dual(
+  (args) =>
+    (typeof args[0] === "object" && args[0] !== null) ||
+    (args[0] === undefined && typeof args[1] !== "object"),
+  (
+    colors: TerminalColors = {},
+    reportedScheme?: TerminalTheme,
+    env: NodeJS.ProcessEnv = process.env,
+  ): TerminalTheme => {
+    const { background, foreground } = colors;
+    if (background !== undefined) return terminalAppearance(background, foreground);
+    return reportedScheme ?? detectColorFgBgTheme(env) ?? "dark";
+  },
+);
 
-/** Whether the terminal is dark or light, from everything it reported so far. See `detectTerminalTheme()`. */
 export function getTerminalTheme(): TerminalTheme {
   return detectTerminalTheme(terminalColors, terminalColorScheme);
 }
 
-// ============================================================================
-// Global Theme Instance
-// ============================================================================
-
-// Use globalThis to share theme across module loaders (node + jiti in dev mode)
 const THEME_KEY = Symbol.for("@msa/coding-agent:theme");
 const THEME_KEY_OLD = Symbol.for("@mariozechner/pi-coding-agent:theme");
 
-// Export theme as a getter that reads from globalThis
-// This ensures all module instances (node, jiti) see the same theme
 export const theme: Theme = new Proxy({} as Theme, {
   get(_target, prop) {
     const t = (globalThis as Record<symbol, Theme>)[THEME_KEY];
-    if (!t) throw new Error("Theme not initialized. Call initTheme() first.");
+    if (t === undefined) throw new Error("Theme not initialized. Call initTheme() first.");
     return (t as unknown as Record<string | symbol, unknown>)[prop];
   },
 });
@@ -698,67 +633,72 @@ function setGlobalTheme(t: Theme): void {
 
 let currentThemeName: string | undefined;
 let themeWatcher: fs.FSWatcher | undefined;
-let themeReloadTimer: NodeJS.Timeout | undefined;
+let themeReloadTimer: Scheduled | undefined;
 let onThemeChangeCallback: (() => void) | undefined;
 const registeredThemes = new Map<string, Theme>();
 
 export function setRegisteredThemes(themes: Theme[]): void {
   registeredThemes.clear();
   for (const entry of themes) {
-    if (entry.name) {
+    if (entry.name !== undefined && entry.name !== "") {
       assertThemeNameIsValid(entry.name);
       registeredThemes.set(entry.name, entry);
     }
   }
 }
 
-export function initTheme(themeName?: string, enableWatcher: boolean = false): void {
-  const name = themeName ?? SYSTEM_THEME_NAME;
-  currentThemeName = name;
-  try {
-    setGlobalTheme(loadTheme(name));
-    if (enableWatcher) {
-      startThemeWatcher();
+export const initTheme: {
+  (enableWatcher?: boolean): (themeName?: string) => void;
+  (themeName?: string, enableWatcher?: boolean): void;
+} = dual(
+  (args) => typeof args[0] !== "boolean",
+  (themeName?: string, enableWatcher: boolean = false): void => {
+    const name = themeName ?? SYSTEM_THEME_NAME;
+    currentThemeName = name;
+    try {
+      setGlobalTheme(loadTheme(name));
+      if (enableWatcher) {
+        startThemeWatcher();
+      }
+    } catch {
+      currentThemeName = SYSTEM_THEME_NAME;
+      setGlobalTheme(loadTheme(SYSTEM_THEME_NAME));
     }
-  } catch {
-    // Theme is invalid - fall back to the system theme silently
-    currentThemeName = SYSTEM_THEME_NAME;
-    setGlobalTheme(loadTheme(SYSTEM_THEME_NAME));
-    // Don't start watcher for fallback theme
-  }
-}
+  },
+);
 
-export function setTheme(
-  name: string,
-  enableWatcher: boolean = false,
-): { success: boolean; error?: string } {
-  currentThemeName = name;
-  try {
-    setGlobalTheme(loadTheme(name));
-    if (enableWatcher) {
-      startThemeWatcher();
+export const setTheme: {
+  (enableWatcher?: boolean): (name: string) => { success: boolean; error?: string };
+  (name: string, enableWatcher?: boolean): { success: boolean; error?: string };
+} = dual(
+  (args) => typeof args[0] === "string",
+  (name: string, enableWatcher: boolean = false): { success: boolean; error?: string } => {
+    currentThemeName = name;
+    try {
+      setGlobalTheme(loadTheme(name));
+      if (enableWatcher) {
+        startThemeWatcher();
+      }
+      if (onThemeChangeCallback !== undefined) {
+        onThemeChangeCallback();
+      }
+      return { success: true };
+    } catch (error) {
+      currentThemeName = SYSTEM_THEME_NAME;
+      setGlobalTheme(loadTheme(SYSTEM_THEME_NAME));
+      return {
+        success: false,
+        error: toErrorMessage(error),
+      };
     }
-    if (onThemeChangeCallback) {
-      onThemeChangeCallback();
-    }
-    return { success: true };
-  } catch (error) {
-    // Theme is invalid - fall back to the system theme
-    currentThemeName = SYSTEM_THEME_NAME;
-    setGlobalTheme(loadTheme(SYSTEM_THEME_NAME));
-    // Don't start watcher for fallback theme
-    return {
-      success: false,
-      error: toErrorMessage(error),
-    };
-  }
-}
+  },
+);
 
 export function setThemeInstance(themeInstance: Theme): void {
   setGlobalTheme(themeInstance);
   currentThemeName = "<in-memory>";
-  stopThemeWatcher(); // Can't watch a direct instance
-  if (onThemeChangeCallback) {
+  stopThemeWatcher();
+  if (onThemeChangeCallback !== undefined) {
     onThemeChangeCallback();
   }
 }
@@ -770,9 +710,9 @@ export function onThemeChange(callback: () => void): void {
 function startThemeWatcher(): void {
   stopThemeWatcher();
 
-  // Only watch if it's a custom theme (not built-in)
   if (
-    !currentThemeName ||
+    currentThemeName === undefined ||
+    currentThemeName === "" ||
     currentThemeName === "dark" ||
     currentThemeName === "light" ||
     currentThemeName === SYSTEM_THEME_NAME
@@ -783,45 +723,52 @@ function startThemeWatcher(): void {
   const customThemesDir = getCustomThemesDir();
   const watchedThemeName = currentThemeName;
   const watchedFileName = `${watchedThemeName}.json`;
-  const themeFile = path.join(customThemesDir, watchedFileName);
+  const themeFile = join(customThemesDir, watchedFileName);
 
-  // Only watch if the file exists
   if (!fs.existsSync(themeFile)) {
     return;
   }
 
+  const scheduleReload = startThemeWatcherScheduleReload(watchedThemeName, themeFile);
+
+  startThemeWatcherPart2(customThemesDir, watchedThemeName, scheduleReload, watchedFileName);
+}
+
+function startThemeWatcherScheduleReload(watchedThemeName: string, themeFile: string): () => void {
   const scheduleReload = () => {
-    if (themeReloadTimer) {
-      clearTimeout(themeReloadTimer);
+    if (themeReloadTimer !== undefined) {
+      themeReloadTimer.cancel();
     }
-    themeReloadTimer = setTimeout(() => {
+    themeReloadTimer = schedule(() => {
       themeReloadTimer = undefined;
 
-      // Ignore stale timers after switching themes or stopping the watcher
       if (currentThemeName !== watchedThemeName) {
         return;
       }
 
-      // Keep the last successfully loaded theme active if the file is temporarily missing
       if (!fs.existsSync(themeFile)) {
         return;
       }
 
       try {
-        // Reload the theme from disk and refresh the registry cache
         const reloadedTheme = loadThemeFromPath(themeFile);
         registeredThemes.set(watchedThemeName, reloadedTheme);
         setGlobalTheme(reloadedTheme);
-        // Notify callback (to invalidate UI)
-        if (onThemeChangeCallback) {
+        if (onThemeChangeCallback !== undefined) {
           onThemeChangeCallback();
         }
-      } catch {
-        // Ignore errors (file might be in invalid state while being edited)
-      }
+      } catch {}
     }, 100);
   };
+  return scheduleReload;
+}
 
+function startThemeWatcherPart2(
+  customThemesDir: string,
+  watchedThemeName: string,
+  scheduleReload: () => void,
+  watchedFileName: string,
+): void {
   themeWatcher =
     watchWithErrorHandler(
       customThemesDir,
@@ -829,7 +776,7 @@ function startThemeWatcher(): void {
         if (currentThemeName !== watchedThemeName) {
           return;
         }
-        if (!filename) {
+        if (filename === null || filename === "") {
           scheduleReload();
           return;
         }
@@ -846,22 +793,14 @@ function startThemeWatcher(): void {
 }
 
 export function stopThemeWatcher(): void {
-  if (themeReloadTimer) {
-    clearTimeout(themeReloadTimer);
+  if (themeReloadTimer !== undefined) {
+    themeReloadTimer.cancel();
     themeReloadTimer = undefined;
   }
   closeWatcher(themeWatcher);
   themeWatcher = undefined;
 }
 
-// ============================================================================
-// HTML Export Helpers
-// ============================================================================
-
-/**
- * Get resolved theme colors as CSS-compatible hex strings.
- * Used by HTML export to generate CSS custom properties.
- */
 export function getResolvedThemeColors(themeName?: string): Record<string, string> {
   const colors = loadTheme(themeName ?? currentThemeName ?? SYSTEM_THEME_NAME).colors;
   return Object.fromEntries(
@@ -869,17 +808,10 @@ export function getResolvedThemeColors(themeName?: string): Record<string, strin
   );
 }
 
-/**
- * Check if a theme is a "light" theme (for CSS that needs light/dark variants).
- */
 export function isLightTheme(themeName?: string): boolean {
   return loadTheme(themeName ?? currentThemeName ?? SYSTEM_THEME_NAME).appearance === "light";
 }
 
-/**
- * Get explicit export colors from theme JSON, if specified.
- * Returns undefined for each color that isn't explicitly set.
- */
 export function getThemeExportColors(themeName?: string): {
   pageBg?: string | undefined;
   cardBg?: string | undefined;
@@ -890,16 +822,15 @@ export function getThemeExportColors(themeName?: string): {
   try {
     const themeJson = loadThemeJson(name);
     const exportSection = themeJson.export;
-    if (!exportSection) return {};
+    if (exportSection === undefined) return {};
 
     const vars = themeJson.vars ?? {};
-    // Export colors end up in CSS, which understands hex and oklch() values directly but not okhsl().
     const resolve = (value: ColorValue | undefined): string | undefined => {
       if (value === undefined) return undefined;
       const resolved = resolveVarRefs(value, vars);
       if (typeof resolved === "number") return colorToHex(indexedColor(resolved));
       if (resolved === "") return undefined;
-      if (/^okhsl\(/i.test(resolved)) return colorToHex(parseColor(resolved));
+      if (/^okhsl\(/iu.test(resolved)) return colorToHex(parseColor(resolved));
       return resolved;
     };
 
@@ -912,10 +843,6 @@ export function getThemeExportColors(themeName?: string): {
     return {};
   }
 }
-
-// ============================================================================
-// TUI Helpers
-// ============================================================================
 
 type CliHighlightTheme = Record<string, (s: string) => string>;
 
@@ -954,24 +881,19 @@ function buildCliHighlightTheme(t: Theme): CliHighlightTheme {
 }
 
 function getCliHighlightTheme(t: Theme): CliHighlightTheme {
-  if (cachedHighlightThemeFor !== t || !cachedCliHighlightTheme) {
+  if (cachedHighlightThemeFor !== t || cachedCliHighlightTheme === undefined) {
     cachedHighlightThemeFor = t;
     cachedCliHighlightTheme = buildCliHighlightTheme(t);
   }
   return cachedCliHighlightTheme;
 }
 
-/**
- * Highlight code with syntax coloring based on file extension or language.
- * Returns array of highlighted lines.
- */
-export function highlightCode(code: string, lang?: string): string[] {
-  // Validate language before highlighting to avoid stderr spam from cli-highlight
-  const validLang = lang && supportsLanguage(lang) ? lang : undefined;
-  // Skip highlighting when no valid language is specified. cli-highlight's
-  // auto-detection is unreliable and can misidentify prose as AppleScript,
-  // LiveCodeServer, etc., coloring random English words as keywords.
-  if (!validLang) {
+export const highlightCode: {
+  (lang: string | undefined): (code: string) => string[];
+  (code: string, lang: string | undefined): string[];
+} = dual(2, (code: string, lang: string | undefined): string[] => {
+  const validLang = lang !== undefined && lang !== "" && supportsLanguage(lang) ? lang : undefined;
+  if (validLang === undefined || validLang === "") {
     return code.split("\n").map((line) => theme.fg("mdCodeBlock", line));
   }
   const opts = {
@@ -984,14 +906,11 @@ export function highlightCode(code: string, lang?: string): string[] {
   } catch {
     return code.split("\n");
   }
-}
+});
 
-/**
- * Get language identifier from file path extension.
- */
 export function getLanguageFromPath(filePath: string): string | undefined {
   const ext = filePath.split(".").pop()?.toLowerCase();
-  if (!ext) return undefined;
+  if (ext === undefined || ext === "") return undefined;
 
   const extToLang: Record<string, string> = {
     ts: "typescript",
@@ -1074,12 +993,9 @@ export function getMarkdownTheme(): MarkdownTheme {
     underline: (text: string) => theme.underline(text),
     strikethrough: (text: string) => theme.strikethrough(text),
     highlightCode: (code: string, lang?: string): string[] => {
-      // Validate language before highlighting to avoid stderr spam from cli-highlight
-      const validLang = lang && supportsLanguage(lang) ? lang : undefined;
-      // Skip highlighting when no valid language is specified. cli-highlight's
-      // auto-detection is unreliable and can misidentify prose as AppleScript,
-      // LiveCodeServer, etc., coloring random English words as keywords.
-      if (!validLang) {
+      const validLang =
+        lang !== undefined && lang !== "" && supportsLanguage(lang) ? lang : undefined;
+      if (validLang === undefined || validLang === "") {
         return code.split("\n").map((line) => theme.fg("mdCodeBlock", line));
       }
       const opts = {

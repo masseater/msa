@@ -22,7 +22,6 @@ function defineThemeTokens<const T extends ThemeTokenDescriptors>(tokens: T): T 
   return tokens;
 }
 
-/** Theme token metadata in the same order used by theme files and the published JSON Schema. */
 export const THEME_TOKENS = defineThemeTokens({
   accent: {
     slot: "foreground",

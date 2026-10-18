@@ -1,12 +1,4 @@
-/**
- * Theme JSON validation, kept out of `theme.ts` on purpose.
- *
- * Validating user-authored theme files needs typebox, which costs ~17 MB of module graph to import.
- * Palette lookup does not, so a presentation that only uses built-in themes should never pay for it.
- * `main.ts` installs this validator before runtime resource loading; other consumers can opt in with
- * `setThemeJsonValidator()`. Built-in themes do not need validation.
- */
-
+import { dual } from "effect/Function";
 import { type Static, type TProperties, Type } from "typebox";
 import { Compile } from "typebox/compile";
 
@@ -25,7 +17,7 @@ function colorValue(description?: string) {
         description: "256-color palette index (0-255)",
       }),
     ],
-    description ? { description } : {},
+    description !== undefined && description !== "" ? { description } : {},
   );
 }
 
@@ -96,8 +88,10 @@ const compiledThemeSchema = Compile(ThemeJsonSchema);
 
 export type ValidatedThemeJson = Static<typeof ThemeJsonSchema>;
 
-/** Validate one theme document, throwing a message that names the offending tokens. */
-export function validateThemeJson(label: string, json: unknown): ValidatedThemeJson {
+export const validateThemeJson: {
+  (json: unknown): (label: string) => ValidatedThemeJson;
+  (label: string, json: unknown): ValidatedThemeJson;
+} = dual(2, (label: string, json: unknown): ValidatedThemeJson => {
   if (
     typeof json === "object" &&
     json !== null &&
@@ -147,4 +141,4 @@ export function validateThemeJson(label: string, json: unknown): ValidatedThemeJ
   }
 
   return json as ValidatedThemeJson;
-}
+});
