@@ -2861,7 +2861,9 @@ export class AgentSession {
 
   private _runCondition(command: string, cwd: string): Promise<boolean> {
     const { promise, resolve } = Promise.withResolvers<boolean>();
-    execFile("/bin/sh", ["-c", command], { cwd, timeout: 60_000 }, (error) => resolve(error === null));
+    execFile("/bin/sh", ["-c", command], { cwd, timeout: 60_000 }, (error) =>
+      resolve(error === null),
+    );
     return promise;
   }
 

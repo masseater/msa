@@ -323,11 +323,7 @@ export class FooterComponent implements Component {
     const tasks = viewHelpers.describeTaskCounts(this.session.orchestrator?.snapshot.tasks ?? []);
     if (tasks) {
       lines.push(
-        truncateToWidth(
-          `${tasks}  ${theme.fg("dim", "/tasks")}`,
-          width,
-          theme.fg("dim", "..."),
-        ),
+        truncateToWidth(`${tasks}  ${theme.fg("dim", "/tasks")}`, width, theme.fg("dim", "...")),
       );
     }
 

@@ -189,8 +189,6 @@ import { createMermaidMarkdownTransformer } from "./components/mermaid.ts";
 import { ModelSelectorComponent } from "./components/model-selector.ts";
 import { ScopedModelsSelectorComponent } from "./components/scoped-models-selector.ts";
 import { SessionSelectorComponent } from "./components/session-selector.ts";
-import { createTaskReportRenderer, viewHelpers } from "./components/tasks-view-helpers.ts";
-import { TasksView } from "./components/tasks-view.ts";
 import { SettingsSelectorComponent } from "./components/settings-selector.ts";
 import { SkillInvocationMessageComponent } from "./components/skill-invocation-message.ts";
 import {
@@ -201,6 +199,8 @@ import {
   type StatusIndicator,
   WorkingStatusIndicator,
 } from "./components/status-indicator.ts";
+import { createTaskReportRenderer, viewHelpers } from "./components/tasks-view-helpers.ts";
+import { TasksView } from "./components/tasks-view.ts";
 import { ThemedText } from "./components/themed-text.ts";
 import { ThinkingSelectorComponent } from "./components/thinking-selector.ts";
 import { ToolExecutionComponent } from "./components/tool-execution.ts";

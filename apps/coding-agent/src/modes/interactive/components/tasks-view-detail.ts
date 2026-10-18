@@ -102,7 +102,9 @@ function listHints(showFinished: boolean, selected: TaskSnapshot | undefined): s
     keyHint("app.orchestrator.message", "message"),
     keyHint("app.orchestrator.note", "note"),
     keyHint("app.orchestrator.toggleFinished", showFinished ? "hide finished" : "show finished"),
-    selected !== undefined && stoppable(selected) ? keyHint("app.orchestrator.stop", "stop") : undefined,
+    selected !== undefined && stoppable(selected)
+      ? keyHint("app.orchestrator.stop", "stop")
+      : undefined,
     selected === undefined ? undefined : keyHint("app.orchestrator.priority", "priority"),
     keyHint("app.orchestrator.model", "model"),
     keyHint("tui.select.cancel", "close"),

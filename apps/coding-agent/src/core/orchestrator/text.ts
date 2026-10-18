@@ -21,4 +21,3 @@ export function firstLine(text: string | undefined): string {
   const line = (text ?? "").split("\n").find((candidate) => candidate.trim().length > 0);
   return line?.trim() ?? "";
 }
-

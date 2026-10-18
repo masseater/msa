@@ -132,25 +132,25 @@ On native Windows, `app.suspend` has no default because Windows terminals do not
 
 ### Sessions
 
-| Keybinding id                   | Default          | Description                                        |
-| ------------------------------- | ---------------- | -------------------------------------------------- |
-| `app.session.new`               | None             | Start a new session (`/clear`)                     |
-| `app.session.tree`              | None             | Open session tree navigator (`/rewind`)            |
-| `app.session.fork`              | None             | Fork current session (`/fork`)                     |
-| `app.session.resume`            | None             | Open session resume picker (`/resume`)             |
-| `app.session.togglePath`        | `ctrl+p`         | Toggle path display                                |
-| `app.session.toggleSort`        | `ctrl+s`         | Toggle sort mode                                   |
-| `app.session.toggleNamedFilter` | `ctrl+n`         | Toggle named-only filter                           |
-| `app.session.rename`            | `ctrl+r`         | Rename session                                     |
-| `app.session.delete`            | `ctrl+d`         | Delete session                                     |
-| `app.session.deleteNoninvasive` | `ctrl+backspace` | Delete session when query is empty                 |
-| `app.orchestrator.message`      | `n`              | Send a message to the selected task in `/sessions`  |
-| `app.orchestrator.note`         | `b`              | Send a shared note to the selected task's round     |
-| `app.orchestrator.priority`     | `p`              | Change the selected task's priority                 |
-| `app.orchestrator.toggleFinished` | `c`            | Show or hide finished tasks                         |
-| `app.orchestrator.rerun`        | `r`              | Rerun the selected task in a new session            |
-| `app.orchestrator.stop`         | `s`              | Stop the selected task                              |
-| `app.orchestrator.model`        | `m`              | Switch the selected task's model                    |
+| Keybinding id                     | Default          | Description                                        |
+| --------------------------------- | ---------------- | -------------------------------------------------- |
+| `app.session.new`                 | None             | Start a new session (`/clear`)                     |
+| `app.session.tree`                | None             | Open session tree navigator (`/rewind`)            |
+| `app.session.fork`                | None             | Fork current session (`/fork`)                     |
+| `app.session.resume`              | None             | Open session resume picker (`/resume`)             |
+| `app.session.togglePath`          | `ctrl+p`         | Toggle path display                                |
+| `app.session.toggleSort`          | `ctrl+s`         | Toggle sort mode                                   |
+| `app.session.toggleNamedFilter`   | `ctrl+n`         | Toggle named-only filter                           |
+| `app.session.rename`              | `ctrl+r`         | Rename session                                     |
+| `app.session.delete`              | `ctrl+d`         | Delete session                                     |
+| `app.session.deleteNoninvasive`   | `ctrl+backspace` | Delete session when query is empty                 |
+| `app.orchestrator.message`        | `n`              | Send a message to the selected task in `/sessions` |
+| `app.orchestrator.note`           | `b`              | Send a shared note to the selected task's round    |
+| `app.orchestrator.priority`       | `p`              | Change the selected task's priority                |
+| `app.orchestrator.toggleFinished` | `c`              | Show or hide finished tasks                        |
+| `app.orchestrator.rerun`          | `r`              | Rerun the selected task in a new session           |
+| `app.orchestrator.stop`           | `s`              | Stop the selected task                             |
+| `app.orchestrator.model`          | `m`              | Switch the selected task's model                   |
 
 ### Models and Thinking
 

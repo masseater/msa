@@ -990,9 +990,7 @@ export class SettingsManager {
   getOrchestratorDatabasePath(): string {
     const configured = this.settings.orchestrator?.database?.trim();
     const agentDir = this.settingsPaths.global ? dirname(this.settingsPaths.global) : getAgentDir();
-    return configured
-      ? resolvePath(configured, agentDir)
-      : join(agentDir, "orchestrator.db");
+    return configured ? resolvePath(configured, agentDir) : join(agentDir, "orchestrator.db");
   }
 
   getRetryEnabled(): boolean {

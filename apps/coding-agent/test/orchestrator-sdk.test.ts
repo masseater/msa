@@ -16,7 +16,9 @@ const tempDir = `${tmpdir()}/msa-orchestrator-sdk-${process.pid}`;
 const runtime = ManagedRuntime.make(NodeServices.layer);
 
 afterAll(() =>
-  runtime.runPromise(FileSystem.FileSystem.use((fs) => fs.remove(tempDir, { recursive: true, force: true }))),
+  runtime.runPromise(
+    FileSystem.FileSystem.use((fs) => fs.remove(tempDir, { recursive: true, force: true })),
+  ),
 );
 
 function registerModel(
@@ -45,7 +47,9 @@ function registerModel(
 function createHarness() {
   return Effect.gen(function* () {
     yield* Effect.promise(() =>
-      runtime.runPromise(FileSystem.FileSystem.use((fs) => fs.makeDirectory(tempDir, { recursive: true }))),
+      runtime.runPromise(
+        FileSystem.FileSystem.use((fs) => fs.makeDirectory(tempDir, { recursive: true })),
+      ),
     );
     const sessionDir = `${tempDir}/sessions`;
     const faux = registerFauxProvider();

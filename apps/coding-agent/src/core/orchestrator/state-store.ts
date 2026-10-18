@@ -20,12 +20,15 @@ export const stateStore = { storedMaxConcurrent, storeMaxConcurrent };
 
 function recoverRunning(database: DatabaseSync, project: string, now: number): void {
   database
-    .prepare("UPDATE sessions SET status = 'stopped', updated_at = ? WHERE project = ? AND status = 'running'")
+    .prepare(
+      "UPDATE sessions SET status = 'stopped', updated_at = ? WHERE project = ? AND status = 'running'",
+    )
     .run(now, project);
   database
-    .prepare("UPDATE tasks SET status = 'waiting', updated_at = ? WHERE project = ? AND status = 'running'")
+    .prepare(
+      "UPDATE tasks SET status = 'waiting', updated_at = ? WHERE project = ? AND status = 'running'",
+    )
     .run(now, project);
 }
-
 
 export const recovery = { recoverRunning };
