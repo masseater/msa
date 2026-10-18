@@ -20,11 +20,6 @@ export type {
 } from "./api/openai-codex-responses.ts";
 export type { OpenAICompletionsOptions } from "./api/openai-completions.ts";
 export type { OpenAIResponsesOptions } from "./api/openai-responses.ts";
-export type {
-  MsaMessagesEvent,
-  MsaMessagesOptions,
-  MsaMessagesRewriteImpact,
-} from "./api/msa-messages.ts";
 export * from "./auth/context.ts";
 export * from "./auth/credential-store.ts";
 export * from "./auth/helpers.ts";

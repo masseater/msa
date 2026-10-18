@@ -34,7 +34,6 @@ This table covers providers with a single primary API-key variable. Providers th
 | OpenAI              | `OPENAI_API_KEY`     |
 | OpenRouter          | `OPENROUTER_API_KEY` |
 | OpenCode Zen and Go | `OPENCODE_API_KEY`   |
-| Radius              | `RADIUS_API_KEY`     |
 
 Anthropic also recognizes `ANTHROPIC_OAUTH_TOKEN` as an API credential and `ANTHROPIC_AUTH_TOKEN` as bearer authentication.
 
@@ -72,18 +71,6 @@ A stored API-key credential can include an `env` object. Its values take priorit
   }
 }
 ```
-
-### Radius
-
-Radius is a service crafted for msa by the builders of msa, Earendil Works. It provides a customizable AI gateway with organization-level controls and analytics built in, and artifacts for sharing what you create with msa.
-
-To get started, run `/login radius` in msa. This adds Radius as a provider, and its models appear in `/model` like any other provider's.
-
-Radius also has an MCP server, so msa can manage Radius for you.
-
-Radius is currently in early alpha and evolving quickly. See [radius.earendil.com](https://radius.earendil.com) for more.
-
-Radius authentication uses its gateway catalog and caches refreshed model metadata for later offline startup. A custom Radius gateway configured in `models.json` uses its own catalog rather than inheriting the public `radius.pi.dev` catalog.
 
 ### OpenRouter
 

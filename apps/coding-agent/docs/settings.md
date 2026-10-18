@@ -61,10 +61,9 @@ CLI tool options override this setting for one invocation. `--tools` with only `
 
 ## Sessions and context
 
-| Setting                   | Type                           | Default                 | Description                                                                                                                                                                                                 |
-| ------------------------- | ------------------------------ | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `sessionDir`              | string                         | Agent session directory | Session storage directory. Relative paths resolve from the working directory. `MSA_CODING_AGENT_SESSION_DIR` and `--session-dir` override this setting.                                                     |
-| `sessionShareDestination` | `"auto" \| "gist" \| "radius"` | `"auto"`                | Destination used by `/share`. `auto` uses Radius when authenticated and otherwise creates a GitHub gist. `gist` always uses a gist. `radius` requires Radius authentication and never falls back to a gist. |
+| Setting      | Type   | Default                 | Description                                                                                                                                             |
+| ------------ | ------ | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `sessionDir` | string | Agent session directory | Session storage directory. Relative paths resolve from the working directory. `MSA_CODING_AGENT_SESSION_DIR` and `--session-dir` override this setting. |
 
 ### Compaction
 

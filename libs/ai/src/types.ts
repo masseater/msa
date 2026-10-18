@@ -2,7 +2,6 @@ import type { TelemetryContext } from "@msa/telemetry";
 
 import type { AnthropicOptions } from "./api/anthropic-messages.ts";
 import type { GoogleOptions } from "./api/google-generative-ai.ts";
-import type { MsaMessagesOptions } from "./api/msa-messages.ts";
 import type { OpenAICodexResponsesOptions } from "./api/openai-codex-responses.ts";
 import type { OpenAICompletionsOptions } from "./api/openai-completions.ts";
 import type { OpenAIResponsesOptions } from "./api/openai-responses.ts";
@@ -55,8 +54,7 @@ export type KnownApi =
   | "openai-responses"
   | "openai-codex-responses"
   | "anthropic-messages"
-  | "google-generative-ai"
-  | "msa-messages";
+  | "google-generative-ai";
 
 export type Api = KnownApi | (string & {});
 
@@ -72,7 +70,6 @@ export type KnownProvider =
   | "anthropic"
   | "openai"
   | "openai-codex"
-  | "radius"
   | "openrouter"
   | "opencode"
   | "opencode-go";
@@ -235,7 +232,6 @@ export interface ApiOptionsMap {
   "openai-responses": OpenAIResponsesOptions;
   "openai-codex-responses": OpenAICodexResponsesOptions;
   "google-generative-ai": GoogleOptions;
-  "msa-messages": MsaMessagesOptions;
 }
 
 /**

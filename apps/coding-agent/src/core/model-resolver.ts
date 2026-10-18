@@ -22,7 +22,6 @@ export const defaultModelPerProvider: Partial<Record<KnownProvider, string>> = {
   anthropic: "claude-opus-4-8",
   openai: "gpt-5.5",
   "openai-codex": "gpt-6.1-sol",
-  radius: "balanced",
   openrouter: "moonshotai/kimi-k2.6",
   opencode: "kimi-k2.6",
   "opencode-go": "kimi-k3",

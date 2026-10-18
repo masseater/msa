@@ -7,7 +7,6 @@ import { OPENAI_CODEX_CLASSIFIER_MODELS, OPENAI_CODEX_IMAGE_MODELS, OPENAI_CODEX
 import { OPENCODE_CLASSIFIER_MODELS, OPENCODE_IMAGE_MODELS, OPENCODE_MODELS } from "./providers/opencode.models.ts";
 import { OPENCODE_GO_CLASSIFIER_MODELS, OPENCODE_GO_IMAGE_MODELS, OPENCODE_GO_MODELS } from "./providers/opencode-go.models.ts";
 import { OPENROUTER_CLASSIFIER_MODELS, OPENROUTER_IMAGE_MODELS, OPENROUTER_MODELS } from "./providers/openrouter.models.ts";
-import { RADIUS_CLASSIFIER_MODELS, RADIUS_IMAGE_MODELS, RADIUS_MODELS } from "./providers/radius.models.ts";
 
 export const MODELS: {
 	readonly "anthropic": typeof ANTHROPIC_MODELS;
@@ -16,7 +15,6 @@ export const MODELS: {
 	readonly "opencode": typeof OPENCODE_MODELS;
 	readonly "opencode-go": typeof OPENCODE_GO_MODELS;
 	readonly "openrouter": typeof OPENROUTER_MODELS;
-	readonly "radius": typeof RADIUS_MODELS;
 } = {
 	"anthropic": ANTHROPIC_MODELS,
 	"openai": OPENAI_MODELS,
@@ -24,7 +22,6 @@ export const MODELS: {
 	"opencode": OPENCODE_MODELS,
 	"opencode-go": OPENCODE_GO_MODELS,
 	"openrouter": OPENROUTER_MODELS,
-	"radius": RADIUS_MODELS,
 };
 
 export const IMAGE_MODELS: {
@@ -34,7 +31,6 @@ export const IMAGE_MODELS: {
 	readonly "opencode": typeof OPENCODE_IMAGE_MODELS;
 	readonly "opencode-go": typeof OPENCODE_GO_IMAGE_MODELS;
 	readonly "openrouter": typeof OPENROUTER_IMAGE_MODELS;
-	readonly "radius": typeof RADIUS_IMAGE_MODELS;
 } = {
 	"anthropic": ANTHROPIC_IMAGE_MODELS,
 	"openai": OPENAI_IMAGE_MODELS,
@@ -42,7 +38,6 @@ export const IMAGE_MODELS: {
 	"opencode": OPENCODE_IMAGE_MODELS,
 	"opencode-go": OPENCODE_GO_IMAGE_MODELS,
 	"openrouter": OPENROUTER_IMAGE_MODELS,
-	"radius": RADIUS_IMAGE_MODELS,
 };
 
 export const CLASSIFIER_MODELS: {
@@ -52,7 +47,6 @@ export const CLASSIFIER_MODELS: {
 	readonly "opencode": typeof OPENCODE_CLASSIFIER_MODELS;
 	readonly "opencode-go": typeof OPENCODE_GO_CLASSIFIER_MODELS;
 	readonly "openrouter": typeof OPENROUTER_CLASSIFIER_MODELS;
-	readonly "radius": typeof RADIUS_CLASSIFIER_MODELS;
 } = {
 	"anthropic": ANTHROPIC_CLASSIFIER_MODELS,
 	"openai": OPENAI_CLASSIFIER_MODELS,
@@ -60,5 +54,4 @@ export const CLASSIFIER_MODELS: {
 	"opencode": OPENCODE_CLASSIFIER_MODELS,
 	"opencode-go": OPENCODE_GO_CLASSIFIER_MODELS,
 	"openrouter": OPENROUTER_CLASSIFIER_MODELS,
-	"radius": RADIUS_CLASSIFIER_MODELS,
 };

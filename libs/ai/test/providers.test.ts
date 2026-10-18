@@ -69,10 +69,6 @@ describe("builtin providers", () => {
       expect(list.length).toBeGreaterThan(0);
       expect(list.every((m) => m.provider === provider.id)).toBe(true);
     }
-    expect(getBuiltinModel("radius", "balanced")).toMatchObject({
-      api: "msa-messages",
-      provider: "radius",
-    });
 
     return Promise.resolve();
   });

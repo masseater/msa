@@ -440,7 +440,7 @@ ${chalk.bold("Examples:")}
   ${APP_NAME} --tools +codemode
 
   # Codemode with only the tools of one MCP server
-  ${APP_NAME} --tools read,bash,codemode,'mcp__radius__*'
+  ${APP_NAME} --tools read,bash,codemode,'mcp__github__*'
 
   # Disable one tool while keeping the rest available
   ${APP_NAME} --exclude-tools ask_question

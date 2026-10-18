@@ -71,10 +71,10 @@ export const BUILTIN_SLASH_COMMANDS: ReadonlyArray<BuiltinSlashCommand> = [
   { name: "copy", description: "Copy last agent message to clipboard" },
   { name: "export", description: "Export session (HTML default, or specify path: .html/.jsonl)" },
   { name: "import", description: "Import and resume a session from a JSONL file" },
-  { name: "share", description: "Share session via a Radius artifact or a GitHub gist" },
+  { name: "share", description: "Share session via a GitHub gist" },
   {
     name: "bug",
-    description: "Report a bug to the msa developers",
+    description: "Export a bug report as a zip archive",
     argumentHint: "<description>",
     aliases: ["feedback"],
   },

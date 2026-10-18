@@ -30,10 +30,6 @@
               "type": "string",
               "minLength": 1
             },
-            "oauth": {
-              "type": "string",
-              "const": "radius"
-            },
             "headers": {
               "type": "object",
               "patternProperties": {
