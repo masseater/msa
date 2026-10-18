@@ -102,7 +102,7 @@ const RETRYABLE_PROVIDER_ERROR_PATTERN = buildProviderErrorPattern([
   "try your request again",
   "please retry your request",
 
-  // gRPC based providers (e.g. NVIDIA NIM)
+  // gRPC based providers
   "ResourceExhausted",
 
   // Sign in with ChatGPT: usage or user data temporarily unavailable. Usage

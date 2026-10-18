@@ -550,7 +550,7 @@ export class SettingsSelectorComponent extends Container {
       {
         id: "install-telemetry",
         label: "Provider attribution",
-        description: "Send attribution headers to OpenRouter, NVIDIA NIM, and Cloudflare",
+        description: "Send attribution headers to OpenRouter and Cloudflare",
         currentValue: config.enableInstallTelemetry ? "true" : "false",
         values: ["true", "false"],
       },

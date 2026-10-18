@@ -176,16 +176,6 @@ describe("builtin providers", () => {
   it("enables mid-conversation system messages only for verified models", () => {
     const models = builtinModels();
     const supported = [
-      ["moonshotai", "kimi-k2.6"],
-      ["moonshotai", "kimi-k2.7-code"],
-      ["moonshotai", "kimi-k2.7-code-highspeed"],
-      ["moonshotai", "kimi-k3"],
-      ["moonshotai-cn", "kimi-k2.6"],
-      ["moonshotai-cn", "kimi-k2.7-code"],
-      ["moonshotai-cn", "kimi-k2.7-code-highspeed"],
-      ["moonshotai-cn", "kimi-k3"],
-      ["fireworks", "accounts/fireworks/models/kimi-k3"],
-      ["fireworks", "accounts/fireworks/routers/kimi-k3-fast"],
       ["openai", "gpt-5.4"],
       ["openai", "gpt-5.5"],
       ["openai", "gpt-6-astra"],
@@ -198,18 +188,15 @@ describe("builtin providers", () => {
       ["opencode", "claude-opus-5"],
       ["opencode", "kimi-k3"],
       ["opencode-go", "kimi-k3"],
-      ["deepseek", "deepseek-v4-pro"],
       ["openrouter", "openai/gpt-5.6-terra"],
     ] as const;
     const unsupported = [
-      ["fireworks", "accounts/fireworks/models/nemotron-3-ultra-nvfp4"],
       ["openai", "gpt-4.1"],
       ["openai", "gpt-5.2"],
       ["anthropic", "claude-sonnet-4-5"],
       ["google", "gemini-2.5-pro"],
       ["opencode", "gpt-5.2"],
       ["opencode", "claude-sonnet-4-5"],
-      ["deepseek", "deepseek-flash"],
       ["openrouter", "anthropic/claude-opus-5"],
       ["openrouter", "moonshotai/kimi-k3"],
       ["openrouter", "openai/gpt-5.6-terra:batch"],
@@ -243,19 +230,11 @@ describe("builtin providers", () => {
     expect(models.getModel("anthropic", "claude-opus-5")?.compat).toMatchObject({
       supportsMidConvoToolChanges: true,
     });
-    // Kimi-style tool-bearing system messages survive Moonshot and OpenCode but not OpenRouter.
-    for (const provider of ["moonshotai", "moonshotai-cn", "opencode", "opencode-go"] as const) {
+    // Kimi-style tool-bearing system messages survive OpenCode but not OpenRouter.
+    for (const provider of ["opencode", "opencode-go"] as const) {
       expect(models.getModel(provider, "kimi-k3")?.compat, provider).toMatchObject({
         supportsMidConvoToolAdditions: true,
       });
-    }
-    for (const provider of ["moonshotai", "moonshotai-cn"] as const) {
-      for (const modelId of ["kimi-k2.6", "kimi-k2.7-code", "kimi-k2.7-code-highspeed"] as const) {
-        expect(
-          models.getModel(provider, modelId)?.compat,
-          `${provider}/${modelId}`,
-        ).not.toHaveProperty("supportsMidConvoToolAdditions");
-      }
     }
     expect(models.getModel("openrouter", "moonshotai/kimi-k3")?.compat).not.toHaveProperty(
       "supportsMidConvoToolAdditions",
@@ -263,18 +242,6 @@ describe("builtin providers", () => {
     expect(models.getModel("openrouter", "openai/gpt-5.6-terra")?.compat).not.toHaveProperty(
       "supportsMidConvoToolAdditions",
     );
-  });
-
-  it("uses official Kimi K3 pricing for Moonshot providers", () => {
-    const models = builtinModels();
-    for (const provider of ["moonshotai", "moonshotai-cn"]) {
-      expect(models.getModel(provider, "kimi-k3")?.cost).toEqual({
-        input: 3,
-        output: 15,
-        cacheRead: 0.3,
-        cacheWrite: 0,
-      });
-    }
   });
 
   it("uses API-equivalent implied pricing for Kimi Coding subscription models", () => {
