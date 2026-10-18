@@ -186,6 +186,23 @@ export default defineConfig({
       },
       {
         files: [
+          "apps/coding-agent/test/session-manager/file-operations.test.ts",
+          "apps/coding-agent/test/suite/agent-session-boundaries.test.ts",
+          "apps/coding-agent/test/suite/agent-session-codemode.test.ts",
+          "apps/coding-agent/test/suite/agent-session-compaction.test.ts",
+          "apps/coding-agent/test/suite/agent-session-mcp-oauth.test.ts",
+          "apps/coding-agent/test/suite/agent-session-mcp.test.ts",
+          "apps/coding-agent/test/suite/agent-session-prompt.test.ts",
+          "apps/coding-agent/test/suite/agent-session-runtime.test.ts",
+          "apps/coding-agent/test/utilities.ts",
+        ],
+        rules: {
+          "eslint/max-lines": "off",
+          "import/max-dependencies": "off",
+        },
+      },
+      {
+        files: [
           "apps/coding-agent/test/suite/regressions/2860-replaced-session-context.test.ts",
           "apps/coding-agent/test/suite/regressions/3592-no-builtin-tools-keeps-extension-tools.test.ts",
           "apps/coding-agent/test/suite/regressions/4167-thinking-toggle-pending-tool-render.test.ts",
