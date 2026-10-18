@@ -154,6 +154,7 @@ describe("package commands", () => {
   it("toggles built-in extensions in config global mode", () =>
     runTest(
       Effect.gen(function* () {
+        vi.stubEnv("HOME", tempDir);
         const settingsManager = SettingsManager.fromStorage(new InMemorySettingsStorage(), {
           projectTrusted: true,
         });
@@ -191,6 +192,7 @@ describe("package commands", () => {
   it("cycles project built-in extension overrides in config local mode", () =>
     runTest(
       Effect.gen(function* () {
+        vi.stubEnv("HOME", tempDir);
         const storage = new InMemorySettingsStorage();
         storage.withLock("global", () => toJsonTextSync({ extensions: ["-builtin:mcp"] }));
         const settingsManager = SettingsManager.fromStorage(storage, { projectTrusted: true });
