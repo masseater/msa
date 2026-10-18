@@ -93,12 +93,13 @@ const loadReport = (reportPath: string): Effect.Effect<LoadedReport | undefined>
 function selectCase(task: EvalTask, loaded: LoadedReport): SelectedCase {
   const identity = taskIdentity(task);
   const errored: SelectedCase = { kind: "done", observation: { ...identity, outcome: "errored" } };
-  const reportedFullName = `${task.evalSet} ${task.caseId}`;
+  const reportsTask = (fullName: string): boolean =>
+    fullName === task.caseId || fullName.endsWith(` ${task.caseId}`);
   const assertions = loaded.rawReport.testResults.flatMap(
     ({ assertionResults }) => assertionResults,
   );
   const assertion = assertions.length === 1 ? assertions[0] : undefined;
-  if (assertion === undefined || assertion.fullName !== reportedFullName) return errored;
+  if (assertion === undefined || !reportsTask(assertion.fullName)) return errored;
   const statusOutcome = classifyCaseStatus(assertion.status);
   if (statusOutcome === "skipped" || statusOutcome === "pending") {
     return { kind: "done", observation: { ...identity, outcome: statusOutcome } };
@@ -106,7 +107,7 @@ function selectCase(task: EvalTask, loaded: LoadedReport): SelectedCase {
   const caseResult = loaded.workspace.cases.length === 1 ? loaded.workspace.cases[0] : undefined;
   if (
     caseResult === undefined ||
-    caseResult.fullName !== reportedFullName ||
+    !reportsTask(caseResult.fullName) ||
     caseResult.status !== assertion.status
   ) {
     return errored;

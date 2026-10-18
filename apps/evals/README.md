@@ -70,7 +70,7 @@ npm run eval:docs -w apps/evals -- -t "adds the model"
 
 The runner:
 
-1. Mounts the repository ephemerally for a Docker build, packs the current workspace packages using the repository's consumer-install machinery, then creates separate `without_docs` and `with_docs` images from the staged runtime.
+1. Builds the workspace in an ephemeral Docker stage, installs the coding-agent runtime, then creates separate `without_docs` and `with_docs` images from the staged runtime.
 2. Discovers the selected cases in both images and requires identical cohorts.
 3. Plans every `(case, variant, model, runNumber)` arm before execution.
 4. Runs each arm in a fresh container. A failed or missing arm is recorded and the planned cohort continues.
@@ -85,7 +85,7 @@ Repetition order alternates by run number to reduce order bias.
 
 `with_docs` includes those files and uses the unchanged default prompt.
 
-Both variants install the same local workspace tarballs. Existing npm overrides ensure coding-agent's internal msa dependencies also come from the current repository rather than the registry. Documentation and source files from internal dependency packages are removed symmetrically so they cannot act as alternate instructions. Startup validates the image allowlist and verifies that the installed coding-agent package resolves from `dist/`. Eval definitions, evaluator helpers, fixtures, and Vitest configuration are root-owned and unreadable after the harness permanently drops to an unprivileged UID. Each run receives a new home, agent directory, workspace, session directory, and container filesystem.
+Both variants install the same workspace packages from the current repository. Documentation and source files from internal dependency packages are removed symmetrically so they cannot act as alternate instructions. Startup validates the image allowlist and verifies that the installed coding-agent package resolves from `dist/`. Eval definitions, evaluator helpers, fixtures, and Vitest configuration are root-owned and unreadable after the harness permanently drops to an unprivileged UID. Each run receives a new home, agent directory, workspace, session directory, and container filesystem.
 
 Documentation evals allow only `read`, `write`, `edit`, `grep`, `find`, and `ls` by default. They do not expose shell or web-search tools. Provider traffic still requires container network access, so Docker alone cannot prove that arbitrary code written by an agent never uses the network.
 
