@@ -1,18 +1,33 @@
-import type { ChildProcessByStdio } from "node:child_process";
 import { EventEmitter } from "node:events";
-import { PassThrough } from "node:stream";
 
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { waitForChildProcess } from "../../../src/utils/child-process.ts";
 
-function createChild(): ChildProcessByStdio<null, PassThrough, PassThrough> {
+class FakeStdout extends EventEmitter {
+  write(chunk: string): void {
+    this.emit("data", Buffer.from(chunk));
+  }
+
+  destroy(): void {
+    this.removeAllListeners();
+  }
+}
+
+interface FakeChild {
+  readonly stdout: FakeStdout;
+  readonly stderr: FakeStdout;
+  emit(event: "exit", code: number, signal: string | null): boolean;
+  on(event: "exit", listener: (code: number, signal: string | null) => void): void;
+}
+
+function createChild(): FakeChild {
   return Object.assign(new EventEmitter(), {
     stdin: null,
-    stdout: new PassThrough(),
-    stderr: new PassThrough(),
-  }) as unknown as ChildProcessByStdio<null, PassThrough, PassThrough>;
+    stdout: new FakeStdout(),
+    stderr: new FakeStdout(),
+  });
 }
 
 const capturesOutputEmittedAfterExitWhile = Effect.gen(function* () {
@@ -22,7 +37,9 @@ const capturesOutputEmittedAfterExitWhile = Effect.gen(function* () {
     output += chunk.toString();
   });
   let resolved = false;
-  const waiting = waitForChildProcess(child).then((exitCode) => {
+  const waiting = waitForChildProcess(
+    child as unknown as Parameters<typeof waitForChildProcess>[0],
+  ).then((exitCode) => {
     resolved = true;
     return exitCode;
   });
@@ -45,7 +62,9 @@ const capturesOutputEmittedAfterExitWhile = Effect.gen(function* () {
 const resolvesAfterTheGraceWhenA = Effect.gen(function* () {
   const child = createChild();
   let resolved = false;
-  const waiting = waitForChildProcess(child).then((exitCode) => {
+  const waiting = waitForChildProcess(
+    child as unknown as Parameters<typeof waitForChildProcess>[0],
+  ).then((exitCode) => {
     resolved = true;
     return exitCode;
   });

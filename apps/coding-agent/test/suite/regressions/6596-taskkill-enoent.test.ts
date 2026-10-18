@@ -1,7 +1,6 @@
-import type { ChildProcess } from "node:child_process";
 import { EventEmitter } from "node:events";
-import { join } from "node:path";
 
+import { joinPath } from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
@@ -34,7 +33,7 @@ afterEach(() => {
 });
 
 const usesSystem32TaskkillAndConsumesIts = () => {
-  const child = new EventEmitter() as ChildProcess;
+  const child = new EventEmitter();
   vi.stubEnv("SystemRoot", "C:\\CustomWindows");
   spawnMock.mockReturnValue(child);
 
@@ -47,7 +46,7 @@ const usesSystem32TaskkillAndConsumesIts = () => {
   }
 
   expect(spawnMock).toHaveBeenCalledWith(
-    join("C:\\CustomWindows", "System32", "taskkill.exe"),
+    joinPath("C:\\CustomWindows", "System32", "taskkill.exe"),
     ["/F", "/T", "/PID", "1234"],
     { detached: true, stdio: "ignore", windowsHide: true },
   );
