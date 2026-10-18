@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSyn
 import { homedir, tmpdir } from "node:os";
 import { pathToFileURL } from "node:url";
 
-import { joinPath } from "@msa/testing";
+import { joinPath, resolvePath } from "@msa/testing";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import {
@@ -11,7 +11,7 @@ import {
   isLocalPath,
   normalizePath,
   normalizeWindowsShellPath,
-  resolvePath,
+  resolvePath as resolvePathTo,
 } from "../src/utils/paths.ts";
 
 let tempDir: string;
@@ -90,14 +90,14 @@ describe("resolvePath", () => {
     const cwd = joinPath(tmpdir(), "msa-paths-cwd");
     expect(normalizePath("~")).toBe(homedir());
     expect(normalizePath("~/file.txt")).toBe(joinPath(homedir(), "file.txt"));
-    expect(resolvePath("~draft.md", cwd)).toBe(resolvePath(cwd, "~draft.md"));
+    expect(resolvePathTo("~draft.md", cwd)).toBe(resolvePath(cwd, "~draft.md"));
     expect(normalizePath("~draft.md")).toBe("~draft.md");
   });
 
   it("resolves relative paths against the base directory", () => {
     const cwd = joinPath(tmpdir(), "msa-paths-cwd");
-    expect(resolvePath("subdir/file.txt", cwd)).toBe(resolvePath(cwd, "subdir/file.txt"));
-    expect(resolvePath("subdir/file.txt", pathToFileURL(cwd).href)).toBe(
+    expect(resolvePathTo("subdir/file.txt", cwd)).toBe(resolvePath(cwd, "subdir/file.txt"));
+    expect(resolvePathTo("subdir/file.txt", pathToFileURL(cwd).href)).toBe(
       resolvePath(cwd, "subdir/file.txt"),
     );
   });
@@ -105,13 +105,13 @@ describe("resolvePath", () => {
   it("accepts file URLs", () => {
     const dir = createTempDir();
     const filePath = joinPath(dir, "file with spaces.txt");
-    expect(resolvePath(pathToFileURL(filePath).href, joinPath(dir, "base"))).toBe(
+    expect(resolvePathTo(pathToFileURL(filePath).href, joinPath(dir, "base"))).toBe(
       resolvePath(filePath),
     );
   });
 
   it("throws for invalid file URLs", () => {
-    expect(() => resolvePath("file:///%E0%A4%A")).toThrow();
+    expect(() => resolvePathTo("file:///%E0%A4%A")).toThrow();
   });
 
   it("preserves POSIX absolute paths with literal percent sequences", () => {
@@ -125,7 +125,7 @@ describe("resolvePath", () => {
       joinPath(dir, "foo%2Fbar"),
       joinPath(dir, "malformed%A.md"),
     ]) {
-      expect(resolvePath(filePath, joinPath(dir, "base"))).toBe(resolvePath(filePath));
+      expect(resolvePathTo(filePath, joinPath(dir, "base"))).toBe(resolvePath(filePath));
     }
   });
 
@@ -138,7 +138,7 @@ describe("resolvePath", () => {
     const filePath = joinPath(dir, "dir", "SKILL.md");
     const pathname = pathToFileURL(filePath).pathname;
     expect(pathname).toMatch(/^\/[A-Za-z]:/u);
-    expect(resolvePath(pathname, "E:\\project")).toBe(resolvePath(pathname));
+    expect(resolvePathTo(pathname, "E:\\project")).toBe(resolvePath(pathname));
   });
 });
 
@@ -167,7 +167,7 @@ describe("normalizeWindowsShellPath", () => {
 
   it.runIf(process.platform === "win32")("is applied by normal path handling on Windows", () => {
     expect(normalizePath("/c/Users/example")).toBe("C:\\Users\\example");
-    expect(resolvePath("/mnt/c/Users/example", "D:\\work")).toBe(resolvePath("C:/Users/example"));
+    expect(resolvePathTo("/mnt/c/Users/example", "D:\\work")).toBe(resolvePath("C:/Users/example"));
   });
 });
 
