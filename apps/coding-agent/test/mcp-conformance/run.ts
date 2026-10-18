@@ -14,6 +14,16 @@ import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 
+import { Effect } from "effect";
+
+const log = (message: string): void => {
+  Effect.runSync(Effect.logInfo(message));
+};
+
+const logError = (message: string): void => {
+  Effect.runSync(Effect.logError(message));
+};
+
 const CONFORMANCE_PACKAGE = "@modelcontextprotocol/conformance@0.2.0-alpha.11";
 
 const MODES = ["2025-03-26", "2025-06-18", "2025-11-25"] as const;
@@ -242,15 +252,15 @@ function evaluate(results: ScenarioResult[], baseline: Baseline): boolean {
     }
   }
   if (fixed.length > 0) {
-    console.log(
+    log(
       `\nFixed since the baseline (run with --update-baseline):\n${fixed.map((line) => `  ${line}`).join("\n")}`,
     );
   }
   if (regressions.length > 0) {
-    console.log(`\nRegressions:\n${regressions.map((line) => `  ${line}`).join("\n")}`);
+    log(`\nRegressions:\n${regressions.map((line) => `  ${line}`).join("\n")}`);
     return false;
   }
-  console.log("\nNo regressions against the baseline.");
+  log("\nNo regressions against the baseline.");
   return true;
 }
 
@@ -258,20 +268,18 @@ function printResults(results: ScenarioResult[]): void {
   for (const mode of MODES) {
     const modeResults = results.filter((result) => result.mode === mode);
     if (modeResults.length === 0) continue;
-    console.log(`\n${mode}`);
+    log(`\n${mode}`);
     for (const result of modeResults) {
       const statuses = [...result.checks.values()];
       const failed = statuses.filter((status) => status === "fail").length;
       const passed = statuses.length - failed;
-      console.log(
+      log(
         `  ${failed === 0 ? "pass" : "FAIL"} ${result.scenario} (${passed} passed, ${failed} failed)`,
       );
       for (const [id, status] of result.checks) {
         if (status !== "fail") continue;
         const message = result.messages.get(id)?.replace(/\s+/gu, " ").slice(0, 300);
-        console.log(
-          `         ${id}${message !== undefined && message !== "" ? `: ${message}` : ""}`,
-        );
+        log(`         ${id}${message !== undefined && message !== "" ? `: ${message}` : ""}`);
       }
     }
   }
@@ -289,7 +297,7 @@ async function main(): Promise<number> {
     },
   });
   if (values.help) {
-    console.log(`Usage: node apps/coding-agent/test/mcp-conformance/run.ts [options]
+    log(`Usage: node apps/coding-agent/test/mcp-conformance/run.ts [options]
 
 Options:
   --mode <version>     Only run this protocol version (repeatable): ${MODES.join(", ")}
@@ -300,19 +308,19 @@ Options:
     return 0;
   }
   if (process.platform === "win32") {
-    console.error("The conformance runner needs a POSIX shell.");
+    logError("The conformance runner needs a POSIX shell.");
     return 1;
   }
   const modes = values.mode ?? [...MODES];
   for (const mode of modes) {
     if (!(MODES as readonly string[]).includes(mode)) {
-      console.error(`Unsupported mode ${mode}. Supported: ${MODES.join(", ")}`);
+      logError(`Unsupported mode ${mode}. Supported: ${MODES.join(", ")}`);
       return 1;
     }
   }
   const partial = values.mode !== undefined || values.scenario !== undefined;
   if (values["update-baseline"] && partial) {
-    console.error("--update-baseline needs a full run, without --mode or --scenario.");
+    logError("--update-baseline needs a full run, without --mode or --scenario.");
     return 1;
   }
 
@@ -336,23 +344,23 @@ Options:
       }
     }
     if (results.length === 0) {
-      console.error("No scenarios matched.");
+      logError("No scenarios matched.");
       return 1;
     }
     printResults(results);
 
     if (values["update-baseline"]) {
       writeFileSync(baselinePath, `${JSON.stringify(toBaseline(results), null, "\t")}\n`);
-      console.log(`\nWrote ${baselinePath}`);
+      log(`\nWrote ${baselinePath}`);
       return 0;
     }
     const baseline = loadBaseline();
     if (baseline === undefined) {
-      console.error("\nNo baseline.json. Run with --update-baseline and review it.");
+      logError("\nNo baseline.json. Run with --update-baseline and review it.");
       return 1;
     }
     if (baseline.conformance !== CONFORMANCE_PACKAGE) {
-      console.error(
+      logError(
         `\nbaseline.json is for ${baseline.conformance}, not ${CONFORMANCE_PACKAGE}. Regenerate it.`,
       );
       return 1;
@@ -375,7 +383,7 @@ Options:
       : baseline;
     return evaluate(results, scoped) ? 0 : 1;
   } finally {
-    if (values["keep-results"]) console.log(`\nResults kept in ${workDir}`);
+    if (values["keep-results"]) log(`\nResults kept in ${workDir}`);
     else rmSync(workDir, { recursive: true, force: true });
   }
 }

@@ -2,6 +2,7 @@ import { writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 
 import { InMemoryAuthStorageBackend } from "../../src/core/auth-storage.ts";
+import { readEnv } from "../../src/core/process-env.ts";
 import type { McpHttpServerConfig, McpServerEntry } from "../../src/extensions/mcp/config.ts";
 import type { McpSignInPrompt } from "../../src/extensions/mcp/oauth.ts";
 import {
@@ -51,7 +52,7 @@ function errorMessage(error: unknown): string {
 }
 
 function readContext(): Record<string, unknown> {
-  const raw = process.env["MCP_CONFORMANCE_CONTEXT"];
+  const raw = readEnv("MCP_CONFORMANCE_CONTEXT");
   if (raw === undefined || raw === "") return {};
   const parsed: unknown = JSON.parse(raw);
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
@@ -167,8 +168,8 @@ async function run(serverUrl: string, scenario: string): Promise<void> {
 
 async function main(): Promise<number> {
   const serverUrl = process.argv.at(-1);
-  const scenario = process.env["MCP_CONFORMANCE_SCENARIO"];
-  const reportPath = process.env["MSA_MCP_CONFORMANCE_REPORT"];
+  const scenario = readEnv("MCP_CONFORMANCE_SCENARIO");
+  const reportPath = readEnv("MSA_MCP_CONFORMANCE_REPORT");
   let report: { success: boolean; error?: string };
   if (
     serverUrl === undefined ||
