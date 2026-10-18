@@ -1,7 +1,14 @@
 import { ModelThinkingLevelSchema } from "@msa/ai/providers/model-schema";
+import { Effect } from "effect";
 import { type Static, type TSchema, Type } from "typebox";
 
 import type { ToolDefinition } from "../extensions/types.ts";
+import {
+  type ForeignError,
+  fromPromise,
+  platformRuntime,
+  unwrapForeign,
+} from "../platform/index.ts";
 import { formatSessionList, type Orchestrator } from "./orchestrator.ts";
 
 export const ORCHESTRATOR_TOOL_NAMES = [
@@ -54,105 +61,129 @@ function text(value: string) {
 
 function tool<TParams extends TSchema>(
   definition: Omit<ToolDefinition<TParams, undefined>, "execute" | "defaultActive"> & {
-    run: (params: Static<TParams>) => Promise<string>;
+    run: (params: Static<TParams>) => Effect.Effect<string, ForeignError>;
   },
 ): ToolDefinition {
   const { run, ...rest } = definition;
   const typed: ToolDefinition<TParams, undefined> = {
     ...rest,
     defaultActive: false,
-    async execute(_toolCallId, params) {
-      return text(await run(params));
-    },
+    execute: (_toolCallId, params) =>
+      platformRuntime.runPromise(unwrapForeign(run(params).pipe(Effect.map(text)))),
   };
   return typed as ToolDefinition;
 }
+
+const startSession = (orchestrator: Orchestrator) =>
+  tool({
+    name: "start_session",
+    label: "start session",
+    description:
+      "Start a separate session with its own context window to do one piece of work. Sessions run in parallel; one whose dependencies have not completed waits for them. Its report arrives in this conversation when it finishes. Every round of sessions ends in a review session that depends on all of them, runs alone, and reviews and redesigns the whole.",
+    promptSnippet: "Start a separate session for a piece of work, declaring what it depends on",
+    promptGuidelines: [
+      "Answer simple questions yourself; send new work to sessions with start_session, one session per independent task.",
+      "Always set dependsOn when calling start_session: list the sessions whose results the work needs, and pass [] only for work that needs none.",
+      "Pick a model and thinkingLevel per session to match the work; omit them to use the configured worker defaults.",
+      "When the review session reports, act on its redesign: start the next round of sessions or tell the user the work is done.",
+    ],
+    parameters: startSchema,
+    run: (params) =>
+      fromPromise(() => orchestrator.start(params)).pipe(
+        Effect.map(({ session, review }) =>
+          [
+            `Started ${session.id} (${session.status}, round ${session.round}, model ${session.model}).`,
+            `Round ${review.round} ends in ${review.id}, which depends on ${review.dependsOn.join(", ") || "nothing yet"}.`,
+          ].join("\n"),
+        ),
+      ),
+  });
+
+const listSessions = (orchestrator: Orchestrator) =>
+  tool({
+    name: "list_sessions",
+    label: "list sessions",
+    description: "List the sessions of this conversation with status, model, and dependencies.",
+    promptSnippet: "List the sessions this conversation started",
+    parameters: Type.Object({}),
+    run: () =>
+      fromPromise(() => orchestrator.list()).pipe(Effect.map((nodes) => formatSessionList(nodes))),
+  });
+
+const readSession = (orchestrator: Orchestrator) =>
+  tool({
+    name: "read_session",
+    label: "read session",
+    description: "Read a session's full report, prompt, and transcript file.",
+    promptSnippet: "Read a session's full report",
+    parameters: idSchema,
+    run: ({ id }) =>
+      fromPromise(() => orchestrator.read(id)).pipe(
+        Effect.map((node) =>
+          [
+            formatSessionList([node]),
+            node.sessionFile !== undefined && node.sessionFile !== ""
+              ? `Transcript: ${node.sessionFile}`
+              : undefined,
+            `<prompt>\n${node.prompt}\n</prompt>`,
+            `<report>\n${node.report ?? ""}\n</report>`,
+          ]
+            .filter((part) => part !== undefined && part !== "")
+            .join("\n\n"),
+        ),
+      ),
+  });
+
+const sendToSession = (orchestrator: Orchestrator) =>
+  tool({
+    name: "send_to_session",
+    label: "send to session",
+    description:
+      "Send a message to a session: steers it while it runs, or reruns it after it finished, failed, or was stopped.",
+    promptSnippet: "Steer or rerun a session",
+    parameters: sendSchema,
+    run: ({ id, message }) =>
+      fromPromise(() => orchestrator.send(id, message)).pipe(
+        Effect.map((node) => formatSessionList([node])),
+      ),
+  });
+
+const setSessionModel = (orchestrator: Orchestrator) =>
+  tool({
+    name: "set_session_model",
+    label: "set session model",
+    description: "Switch the model and thinking level of a session, including one that is running.",
+    promptSnippet: "Switch a session's model",
+    parameters: setModelSchema,
+    run: ({ id, model, thinkingLevel }) =>
+      fromPromise(() => orchestrator.setModel(id, model, thinkingLevel)).pipe(
+        Effect.map((node) => `${node.id} now uses ${node.model} (thinking ${node.thinkingLevel}).`),
+      ),
+  });
+
+const stopSession = (orchestrator: Orchestrator) =>
+  tool({
+    name: "stop_session",
+    label: "stop session",
+    description:
+      "Stop a running or queued session. Sessions depending on it keep waiting until it is rerun or they are stopped.",
+    promptSnippet: "Stop a session",
+    parameters: idSchema,
+    run: ({ id }) =>
+      fromPromise(() => orchestrator.stop(id)).pipe(
+        Effect.map((node) => `${node.id} is ${node.status}.`),
+      ),
+  });
 
 export function createOrchestratorToolDefinitions(
   orchestrator: Orchestrator,
 ): Record<(typeof ORCHESTRATOR_TOOL_NAMES)[number], ToolDefinition> {
   return {
-    start_session: tool({
-      name: "start_session",
-      label: "start session",
-      description:
-        "Start a separate session with its own context window to do one piece of work. Sessions run in parallel; one whose dependencies have not completed waits for them. Its report arrives in this conversation when it finishes. Every round of sessions ends in a review session that depends on all of them, runs alone, and reviews and redesigns the whole.",
-      promptSnippet: "Start a separate session for a piece of work, declaring what it depends on",
-      promptGuidelines: [
-        "Answer simple questions yourself; send new work to sessions with start_session, one session per independent task.",
-        "Always set dependsOn when calling start_session: list the sessions whose results the work needs, and pass [] only for work that needs none.",
-        "Pick a model and thinkingLevel per session to match the work; omit them to use the configured worker defaults.",
-        "When the review session reports, act on its redesign: start the next round of sessions or tell the user the work is done.",
-      ],
-      parameters: startSchema,
-      run: async (params) => {
-        const { session, review } = await orchestrator.start(params);
-        return [
-          `Started ${session.id} (${session.status}, round ${session.round}, model ${session.model}).`,
-          `Round ${review.round} ends in ${review.id}, which depends on ${review.dependsOn.join(", ") || "nothing yet"}.`,
-        ].join("\n");
-      },
-    }),
-    list_sessions: tool({
-      name: "list_sessions",
-      label: "list sessions",
-      description: "List the sessions of this conversation with status, model, and dependencies.",
-      promptSnippet: "List the sessions this conversation started",
-      parameters: Type.Object({}),
-      run: async () => formatSessionList(await orchestrator.list()),
-    }),
-    read_session: tool({
-      name: "read_session",
-      label: "read session",
-      description: "Read a session's full report, prompt, and transcript file.",
-      promptSnippet: "Read a session's full report",
-      parameters: idSchema,
-      run: async ({ id }) => {
-        const node = await orchestrator.read(id);
-        return [
-          formatSessionList([node]),
-          node.sessionFile !== undefined && node.sessionFile !== ""
-            ? `Transcript: ${node.sessionFile}`
-            : undefined,
-          `<prompt>\n${node.prompt}\n</prompt>`,
-          `<report>\n${node.report ?? ""}\n</report>`,
-        ]
-          .filter(Boolean)
-          .join("\n\n");
-      },
-    }),
-    send_to_session: tool({
-      name: "send_to_session",
-      label: "send to session",
-      description:
-        "Send a message to a session: steers it while it runs, or reruns it after it finished, failed, or was stopped.",
-      promptSnippet: "Steer or rerun a session",
-      parameters: sendSchema,
-      run: async ({ id, message }) => formatSessionList([await orchestrator.send(id, message)]),
-    }),
-    set_session_model: tool({
-      name: "set_session_model",
-      label: "set session model",
-      description:
-        "Switch the model and thinking level of a session, including one that is running.",
-      promptSnippet: "Switch a session's model",
-      parameters: setModelSchema,
-      run: async ({ id, model, thinkingLevel }) => {
-        const node = await orchestrator.setModel(id, model, thinkingLevel);
-        return `${node.id} now uses ${node.model} (thinking ${node.thinkingLevel}).`;
-      },
-    }),
-    stop_session: tool({
-      name: "stop_session",
-      label: "stop session",
-      description:
-        "Stop a running or queued session. Sessions depending on it keep waiting until it is rerun or they are stopped.",
-      promptSnippet: "Stop a session",
-      parameters: idSchema,
-      run: async ({ id }) => {
-        const node = await orchestrator.stop(id);
-        return `${node.id} is ${node.status}.`;
-      },
-    }),
+    start_session: startSession(orchestrator),
+    list_sessions: listSessions(orchestrator),
+    read_session: readSession(orchestrator),
+    send_to_session: sendToSession(orchestrator),
+    set_session_model: setSessionModel(orchestrator),
+    stop_session: stopSession(orchestrator),
   };
 }

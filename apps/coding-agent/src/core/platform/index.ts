@@ -100,3 +100,8 @@ export const unwrapForeign = <A, E, R>(
         : Effect.fail(error as Exclude<E, ForeignError>),
     ),
   );
+
+export const randomHex = (byteCount: number): string =>
+  Array.from(globalThis.crypto.getRandomValues(new Uint8Array(byteCount)), (byte) =>
+    byte.toString(16).padStart(2, "0"),
+  ).join("");

@@ -1,6 +1,6 @@
 import { DatabaseSync, type StatementSync } from "node:sqlite";
 
-import { currentTimeMillis } from "../platform/index.ts";
+import { currentTimeMillis, randomHex } from "../platform/index.ts";
 import { type MemoryRow, toRecord } from "./store-row.ts";
 import {
   type MemoryRecord,
@@ -31,11 +31,6 @@ export {
   RRF_K,
 } from "./store-types.ts";
 export { cosineSimilarity, reciprocalRankFusion, segmentWords } from "./store-vectors.ts";
-
-const randomHex = (byteCount: number): string =>
-  Array.from(globalThis.crypto.getRandomValues(new Uint8Array(byteCount)), (byte) =>
-    byte.toString(16).padStart(2, "0"),
-  ).join("");
 
 export class MemoryStore {
   readonly databasePath: string;
