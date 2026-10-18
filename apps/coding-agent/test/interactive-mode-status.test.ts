@@ -20,7 +20,7 @@ import { initTheme } from "../src/modes/interactive/theme/theme.ts";
 
 function renderLastLine(container: Container, width = 120): string {
   const last = container.children[container.children.length - 1];
-  if (!last) return "";
+  if (!(last !== undefined)) return "";
   return last.render(width).join("\n");
 }
 

@@ -121,7 +121,11 @@ describe("readClipboardImage", () => {
         mocks.getImage.mockResolvedValue(bytes);
         expect(
           yield* awaited(readClipboardImage({ platform: "linux", env: { DISPLAY: ":0" } })),
-        ).toEqual(bytes?.length ? { bytes, mimeType: "image/png" } : null);
+        ).toEqual(
+          bytes?.length !== undefined && bytes?.length !== 0
+            ? { bytes, mimeType: "image/png" }
+            : null,
+        );
         expect(mocks.getNativeClipboard).toHaveBeenCalledExactlyOnceWith();
         expect(mocks.getImage).toHaveBeenCalledOnce();
         expect(mocks.command.mock.calls.map(([name]) => name)).toEqual(["xclip"]);
@@ -182,7 +186,8 @@ describe("readClipboardImage", () => {
                 const spawnOptions = options as { env?: NodeJS.ProcessEnv };
                 expect(spawnOptions.env?.["MSA_WSL_CLIPBOARD_IMAGE_PATH"]).toBeUndefined();
                 expect(args[2]).toContain("$path = 'C:\\Users\\O''Hare\\clip.png'");
-                if (!tmpFile) throw new Error("wslpath should be called before powershell.exe");
+                if (!(tmpFile !== undefined && tmpFile.length > 0))
+                  throw new Error("wslpath should be called before powershell.exe");
                 yield* writeBytesFile(tmpFile, png);
                 return yield* awaited(commandResult(Buffer.from("ok\n")));
               }
@@ -210,7 +215,9 @@ describe("readClipboardImage", () => {
           Effect.gen(function* () {
             mocks.getImage.mockResolvedValue(bytes);
             expect(yield* awaited(readClipboardImage({ platform, env: {} }))).toEqual(
-              bytes?.length ? { bytes, mimeType: "image/png" } : null,
+              bytes?.length !== undefined && bytes?.length !== 0
+                ? { bytes, mimeType: "image/png" }
+                : null,
             );
             expect(mocks.getImage).toHaveBeenCalledOnce();
             expect(mocks.command).not.toHaveBeenCalled();

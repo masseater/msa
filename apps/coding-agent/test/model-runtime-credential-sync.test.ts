@@ -38,11 +38,17 @@ function provider(
         login: () =>
           runTest(awaited(options.login?.() ?? { type: "api_key" as const, key: `${id}-key` })),
         check: ({ credential }) =>
-          runTest(awaited(credential ? { type: "api_key" as const, source: "stored" } : undefined)),
+          runTest(
+            awaited(
+              credential === undefined ? undefined : { type: "api_key" as const, source: "stored" },
+            ),
+          ),
         resolve: ({ credential }) =>
           runTest(
             awaited(
-              credential ? { auth: { apiKey: credential.key }, source: "stored" } : undefined,
+              credential === undefined
+                ? undefined
+                : { auth: { apiKey: credential.key }, source: "stored" },
             ),
           ),
       },
@@ -232,7 +238,7 @@ describe("ModelRuntime credential synchronization", () => {
         );
         runtime.registerNativeProvider(provider("target"));
         const unrelated = provider("unrelated");
-        if (unrelated.auth.apiKey) {
+        if (unrelated.auth.apiKey !== undefined) {
           unrelated.auth.apiKey.check = () =>
             effectRunPromise(
               Effect.gen(function* () {
@@ -275,7 +281,7 @@ describe("ModelRuntime credential synchronization", () => {
           markStarted = resolve;
         });
         const registered = provider("cancelled-availability");
-        if (registered.auth.apiKey) {
+        if (registered.auth.apiKey !== undefined) {
           registered.auth.apiKey.check = ({ credential }) =>
             effectRunPromise(
               Effect.gen(function* () {
@@ -284,7 +290,9 @@ describe("ModelRuntime credential synchronization", () => {
                   yield* awaited(new Promise<void>(() => {}));
                 }
                 return yield* awaited(
-                  credential ? { type: "api_key" as const, source: "stored" } : undefined,
+                  credential === undefined
+                    ? undefined
+                    : { type: "api_key" as const, source: "stored" },
                 );
               }),
             );
@@ -401,13 +409,15 @@ describe("ModelRuntime credential synchronization", () => {
           read: () => effectRunPromise(awaited(stored)),
           list: () =>
             effectRunPromise(
-              awaited(stored ? [{ providerId: "delayed-commit", type: stored.type }] : []),
+              awaited(
+                stored === undefined ? [] : [{ providerId: "delayed-commit", type: stored.type }],
+              ),
             ),
           modify: (_providerId, update) =>
             effectRunPromise(
               Effect.gen(function* () {
                 const next = yield* awaited(update(stored));
-                if (next) stored = next;
+                if (next !== undefined) stored = next;
                 markCommitted?.();
                 yield* awaited(mutationFinished);
                 return yield* awaited(stored);

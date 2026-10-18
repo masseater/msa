@@ -601,7 +601,7 @@ describe("Large session fixture", () => {
   });
 });
 
-describe.skipIf(!readEnv("ANTHROPIC_OAUTH_TOKEN"))("LLM summarization", () => {
+describe.skipIf((readEnv("ANTHROPIC_OAUTH_TOKEN")?.length ?? 0) === 0)("LLM summarization", () => {
   it(
     "should generate a compaction result for the large session",
     () =>

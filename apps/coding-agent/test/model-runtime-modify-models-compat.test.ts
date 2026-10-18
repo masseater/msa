@@ -79,7 +79,7 @@ describe("extension provider model lifecycle", () => {
               check: ({ credential }) =>
                 effectRunPromise(
                   awaited(
-                    credential?.key
+                    credential?.key !== undefined && credential?.key.length > 0
                       ? { type: "api_key" as const, source: "stored native key" }
                       : undefined,
                   ),
@@ -87,7 +87,7 @@ describe("extension provider model lifecycle", () => {
               resolve: ({ credential }) =>
                 effectRunPromise(
                   awaited(
-                    credential?.key
+                    credential?.key !== undefined && credential?.key.length > 0
                       ? {
                           auth: { apiKey: credential.key, baseUrl: "https://resolved.test/v1" },
                           source: "stored native key",

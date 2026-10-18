@@ -88,7 +88,7 @@ describe("ModelRuntime image generation", () => {
     return runTest(
       Effect.gen(function* () {
         let modelsPath: string | null = null;
-        if (modelsJson) {
+        if (modelsJson !== undefined) {
           const dir = mkdtempSync(joinPath(tmpdir(), "msa-images-"));
           tempDirs.push(dir);
           modelsPath = joinPath(dir, "models.json");
@@ -264,7 +264,7 @@ describe("ModelRuntime image generation", () => {
                 resolve: ({ credential }) =>
                   effectRunPromise(
                     awaited(
-                      credential?.key
+                      credential?.key !== undefined && credential?.key.length > 0
                         ? { auth: { apiKey: credential.key }, source: "stored" }
                         : undefined,
                     ),
@@ -337,7 +337,7 @@ describe("ModelRuntime image generation", () => {
                 resolve: ({ credential }) =>
                   effectRunPromise(
                     awaited(
-                      credential?.key
+                      credential?.key !== undefined && credential?.key.length > 0
                         ? { auth: { apiKey: credential.key }, source: "stored" }
                         : undefined,
                     ),

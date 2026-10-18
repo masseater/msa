@@ -17,7 +17,7 @@ import {
 let tempDir: string;
 
 afterEach(() => {
-  if (tempDir) {
+  if (tempDir.length > 0) {
     rmSync(tempDir, { recursive: true, force: true });
     tempDir = "";
   }

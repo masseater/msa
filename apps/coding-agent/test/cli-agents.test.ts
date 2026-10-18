@@ -340,7 +340,7 @@ describe("/accounts", () => {
         if (name === "accounts") registered = options as RegisteredCommand;
       },
     } as unknown as ExtensionAPI);
-    if (!registered) throw new Error("command not registered");
+    if (!(registered !== undefined)) throw new Error("command not registered");
     return registered;
   }
 
@@ -400,7 +400,7 @@ describe("opencode-free provider", () => {
         config = input;
       },
     } as unknown as ExtensionAPI);
-    if (!config) throw new Error("provider not registered");
+    if (!(config !== undefined)) throw new Error("provider not registered");
     return config;
   }
 

@@ -357,7 +357,8 @@ describe("resolveModelReference", () => {
         if (result.status !== "resolved") continue;
         expect(modelRef(result.model)).toBe(expected.model);
         expect(result.thinkingLevel).toBe(expected.thinkingLevel);
-        if (expected.warning) expect(result.warning).toContain(expected.warning);
+        if (expected.warning !== undefined && expected.warning.length > 0)
+          expect(result.warning).toContain(expected.warning);
         else expect(result.warning).toBeUndefined();
       }
     }
@@ -882,7 +883,7 @@ describe("default model selection", () => {
           tempDirs.push(tempDir);
 
           const settingsManager = SettingsManager.create(tempDir, tempDir);
-          if (options.persistedScope) {
+          if (options.persistedScope !== undefined && options.persistedScope.length > 0) {
             settingsManager.setEnabledModels(options.persistedScope);
           }
 

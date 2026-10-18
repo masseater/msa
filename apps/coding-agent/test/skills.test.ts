@@ -427,13 +427,13 @@ describe("skills", () => {
 
       for (const skill of second.skills) {
         const existing = skillMap.get(skill.name);
-        if (existing) {
+        if (existing === undefined) {
+          skillMap.set(skill.name, skill);
+        } else {
           collisionWarnings.push({
             skillPath: skill.filePath,
             message: `name collision: "${skill.name}" already loaded from ${existing.filePath}`,
           });
-        } else {
-          skillMap.set(skill.name, skill);
         }
       }
 

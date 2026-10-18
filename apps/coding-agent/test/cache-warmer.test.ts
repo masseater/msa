@@ -230,7 +230,7 @@ describe("cache warming", () => {
           run: object | undefined;
           refresh: (run: object) => Promise<void>;
         };
-        if (!internal.run) throw new Error("expected an active cache-warming run");
+        if (!(internal.run !== undefined)) throw new Error("expected an active cache-warming run");
         yield* awaited(internal.refresh(internal.run));
 
         expect(calls).toHaveLength(0);
@@ -264,7 +264,7 @@ describe("cache warming", () => {
           run: object | undefined;
           refresh: (run: object) => Promise<void>;
         };
-        if (!internal.run) throw new Error("expected an active cache-warming run");
+        if (!(internal.run !== undefined)) throw new Error("expected an active cache-warming run");
         yield* awaited(internal.refresh(internal.run));
 
         expect(calls).toHaveLength(0);

@@ -33,7 +33,7 @@ function createRunner(tools: AgentTool[], options: { sequential?: boolean } = {}
       runTest(
         Effect.gen(function* () {
           const tool = tools.find((candidate) => candidate.name === toolCall.name);
-          if (!tool) {
+          if (!(tool !== undefined)) {
             return yield* awaited({
               toolCall,
               result: {

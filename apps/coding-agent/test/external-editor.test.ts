@@ -43,7 +43,7 @@ function runExternalEditor(fixtureFlag?: "--fail" | "--empty"): Promise<{
       try {
         const result = yield* awaited(
           editInExternalEditor({
-            command: `${process.execPath} ${editorFixturePath} ${capturePath}${fixtureFlag ? ` ${fixtureFlag}` : ""}`,
+            command: `${process.execPath} ${editorFixturePath} ${capturePath}${fixtureFlag !== undefined && fixtureFlag.length > 0 ? ` ${fixtureFlag}` : ""}`,
             content: "original",
           }),
         );

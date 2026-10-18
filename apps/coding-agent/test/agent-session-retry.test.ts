@@ -57,10 +57,10 @@ describe("AgentSession retry", () => {
   );
 
   afterEach(() => {
-    if (session) {
+    if (session != null) {
       session.dispose();
     }
-    if (tempDir && existsSync(tempDir)) {
+    if (tempDir.length > 0 && existsSync(tempDir)) {
       rmSync(tempDir, { recursive: true });
     }
   });

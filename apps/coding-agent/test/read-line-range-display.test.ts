@@ -39,7 +39,11 @@ function loadHtmlViewer(html: string): HtmlViewer {
     /<script id="session-data" type="application\/json">([^<]+)<\/script>/u,
   )?.[1];
   const script = [...html.matchAll(/<script>([\s\S]*?)<\/script>/gu)].at(-1)?.[1];
-  if (!sessionData || !script) throw new Error("Missing exported session data or viewer script");
+  if (
+    !(sessionData !== undefined && sessionData.length > 0) ||
+    !(script !== undefined && script.length > 0)
+  )
+    throw new Error("Missing exported session data or viewer script");
   return runInNewContext(
     script.replace(
       "marked.use({",

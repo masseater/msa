@@ -116,7 +116,7 @@ function buildTree(entries: Array<SessionEntry>): SessionTreeNode[] {
       roots.push(node);
     } else {
       const parent = byId.get(node.entry.parentId);
-      if (parent) {
+      if (parent !== undefined) {
         parent.children.push(node);
       }
     }

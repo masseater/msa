@@ -149,7 +149,7 @@ describe("codemode worker admission", () => {
         const results = yield* awaited(
           Promise.all(Array.from({ length: 6 }, () => run("return 1"))),
         );
-        expect(results.filter((result) => !result.isError)).toHaveLength(2);
+        expect(results.filter((result) => !(result.isError === true))).toHaveLength(2);
         expect(results.filter((result) => result.isError)).toHaveLength(4);
         expect(terminations.size).toBe(2);
       }),

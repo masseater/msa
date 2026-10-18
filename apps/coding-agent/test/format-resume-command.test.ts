@@ -12,10 +12,10 @@ const tempDirs: string[] = [];
 const originalStdoutIsTTY = Object.getOwnPropertyDescriptor(process.stdout, "isTTY");
 
 afterEach(() => {
-  if (originalStdoutIsTTY) {
-    Object.defineProperty(process.stdout, "isTTY", originalStdoutIsTTY);
-  } else {
+  if (originalStdoutIsTTY === undefined) {
     Reflect.deleteProperty(process.stdout, "isTTY");
+  } else {
+    Object.defineProperty(process.stdout, "isTTY", originalStdoutIsTTY);
   }
 
   for (const dir of tempDirs.splice(0)) {

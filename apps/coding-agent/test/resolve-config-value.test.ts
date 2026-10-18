@@ -122,7 +122,8 @@ describe("resolveConfigValue", () => {
         "Hello, World!",
       );
     } finally {
-      if (platformDescriptor) Object.defineProperty(process, "platform", platformDescriptor);
+      if (platformDescriptor !== undefined)
+        Object.defineProperty(process, "platform", platformDescriptor);
     }
   });
 });

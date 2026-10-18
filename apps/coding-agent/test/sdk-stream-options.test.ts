@@ -35,7 +35,7 @@ describe("createAgentSession stream options", () => {
   });
 
   afterEach(() => {
-    if (tempDir) {
+    if (tempDir.length > 0) {
       rmSync(tempDir, { recursive: true, force: true });
     }
   });
@@ -99,7 +99,7 @@ describe("createAgentSession stream options", () => {
           cwd,
           agentDir,
           settingsManager,
-          extensionFactories: extensionFactory ? [extensionFactory] : [],
+          extensionFactories: extensionFactory === undefined ? [] : [extensionFactory],
         });
         yield* awaited(resourceLoader.reload());
 

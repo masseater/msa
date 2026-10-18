@@ -273,7 +273,7 @@ Project skill`,
           yield* makeDirectory(joinPath(agentDir, "themes"));
           yield* makeDirectory(joinPath(cwd, ".msa", "themes"));
           yield* writeTextFile(userThemePath, JSON.stringify(baseTheme, null, 2));
-          if (baseTheme.vars) {
+          if (baseTheme.vars !== undefined) {
             baseTheme.vars["accent"] = "#ff00ff";
           }
           yield* writeTextFile(projectThemePath, JSON.stringify(baseTheme, null, 2));

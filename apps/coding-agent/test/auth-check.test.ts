@@ -122,7 +122,8 @@ describe("auth check command", () => {
         });
         const oauthRuntime = yield* awaited(createRuntime(credentials));
         const oauth = oauthRuntime.getProvider("openai-codex")?.auth.oauth;
-        if (!oauth) throw new Error("OpenAI Codex OAuth provider is not registered");
+        if (!(oauth !== undefined))
+          throw new Error("OpenAI Codex OAuth provider is not registered");
         const refresh = vi.fn(oauth.refresh);
         oauth.refresh = refresh;
 
@@ -150,7 +151,8 @@ describe("auth check command", () => {
         });
         const runtime = yield* awaited(createRuntime(credentials));
         const oauth = runtime.getProvider("openai-codex")?.auth.oauth;
-        if (!oauth) throw new Error("OpenAI Codex OAuth provider is not registered");
+        if (!(oauth !== undefined))
+          throw new Error("OpenAI Codex OAuth provider is not registered");
         const refresh = vi.fn(() =>
           effectRunPromise(
             awaited({

@@ -827,7 +827,7 @@ describe("ToolExecutionComponent parity", () => {
       const collapsed = stripAnsi(component.render(120).join("\n"));
       expect(collapsed).toContain(scenario.compact);
       expect(collapsed).not.toContain(scenario.hidden);
-      if (scenario.absent) {
+      if (scenario.absent !== undefined && scenario.absent.length > 0) {
         expect(collapsed).not.toContain(scenario.absent);
       }
 

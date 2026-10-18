@@ -27,7 +27,7 @@ function setExecPath(value: string): void {
 }
 
 afterEach(() => {
-  if (execPathDescriptor) {
+  if (execPathDescriptor !== undefined) {
     Object.defineProperty(process, "execPath", execPathDescriptor);
   }
   if (originalPath === undefined) {
@@ -45,7 +45,7 @@ afterEach(() => {
   } else {
     process.argv[1] = originalArgv1;
   }
-  if (tempDir) {
+  if (tempDir !== undefined && tempDir.length > 0) {
     chmodSync(tempDir, 0o700);
     rmSync(tempDir, { recursive: true, force: true });
     tempDir = undefined;

@@ -111,7 +111,7 @@ describe("http dispatcher", () => {
         });
         yield* awaited(new Promise<void>((resolve) => origin.listen(0, "127.0.0.1", resolve)));
         const originAddress = origin.address();
-        if (!originAddress || typeof originAddress === "string") {
+        if (originAddress === null || typeof originAddress === "string") {
           throw new Error("Origin did not bind to a TCP port");
         }
 
@@ -137,7 +137,7 @@ describe("http dispatcher", () => {
         });
         yield* awaited(new Promise<void>((resolve) => proxy.listen(0, "127.0.0.1", resolve)));
         const proxyAddress = proxy.address();
-        if (!proxyAddress || typeof proxyAddress === "string") {
+        if (proxyAddress === null || typeof proxyAddress === "string") {
           throw new Error("Proxy did not bind to a TCP port");
         }
 

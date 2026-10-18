@@ -569,14 +569,14 @@ describe("MCP connections", () => {
               result: {
                 protocolVersion: LATEST_PROTOCOL_VERSION,
                 capabilities: {
-                  ...(options.noTools ? { prompts: {} } : { tools: {} }),
-                  ...(options.resources ? { resources: {} } : {}),
+                  ...(options.noTools === true ? { prompts: {} } : { tools: {} }),
+                  ...(options.resources === true ? { resources: {} } : {}),
                 },
                 serverInfo: { name: "fake", version: "1.0.0" },
               },
             }
           : message.method === "tools/list"
-            ? options.noTools
+            ? options.noTools === true
               ? {
                   jsonrpc: "2.0",
                   id: message.id,
@@ -597,7 +597,7 @@ describe("MCP connections", () => {
       queueMicrotask(() => void pair.server.send(response));
     });
     void pair.server.start();
-    if (options.expireFirstCall) {
+    if (options.expireFirstCall === true) {
       const send = pair.client.send.bind(pair.client);
 
       pair.client.send = async (message: JsonRpcMessage) => {
@@ -968,8 +968,8 @@ describe("MCP servers section", () => {
       name,
       config: {
         command: "x",
-        ...(description ? { description } : {}),
-        ...(exposure ? { exposure } : {}),
+        ...(description !== undefined && description.length > 0 ? { description } : {}),
+        ...(exposure !== undefined && exposure.length > 0 ? { exposure } : {}),
       },
       source: "test",
     },

@@ -171,7 +171,7 @@ describe("copyToClipboard", () => {
     "MSA_CLIPBOARD_OSC52=1 emits OSC 52 after a successful %s copy",
     async (platform, display) => {
       mocks.platform.mockReturnValue(platform);
-      if (display) vi.stubEnv("DISPLAY", display);
+      if (display !== undefined && display.length > 0) vi.stubEnv("DISPLAY", display);
       vi.stubEnv("MSA_CLIPBOARD_OSC52", "1");
       await copyToClipboard("hello");
       if (platform === "linux") {

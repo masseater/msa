@@ -32,8 +32,8 @@ describe("msa mcp", () => {
     return runTest(
       Effect.gen(function* () {
         const agentDir = dir ?? mkdtempSync(joinPath(tmpdir(), "msa-mcp-command-"));
-        if (!dir) dirs.push(agentDir);
-        if (servers)
+        if (!(dir !== undefined && dir.length > 0)) dirs.push(agentDir);
+        if (servers !== undefined)
           yield* writeTextFile(
             joinPath(agentDir, "mcp.json"),
             yield* toJsonText({ mcpServers: servers }),

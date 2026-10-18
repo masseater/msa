@@ -35,7 +35,7 @@ describe("tool renderer examples", () => {
   });
 
   afterEach(() => {
-    if (tempDir && existsSync(tempDir)) {
+    if (tempDir.length > 0 && existsSync(tempDir)) {
       rmSync(tempDir, { recursive: true, force: true });
     }
   });
@@ -53,7 +53,8 @@ describe("tool renderer examples", () => {
           noPromptTemplates: true,
           noThemes: true,
           noContextFiles: true,
-          additionalExtensionPaths: extensionPath ? [extensionPath] : [],
+          additionalExtensionPaths:
+            extensionPath !== undefined && extensionPath.length > 0 ? [extensionPath] : [],
         });
         yield* awaited(resourceLoader.reload());
         expect(resourceLoader.getExtensions().errors).toEqual([]);
@@ -109,7 +110,8 @@ describe("tool renderer examples", () => {
           getSessionState(joinPath(examplesDir, "minimal-mode.ts"), ["edit"]),
         );
         const editToolDefinition = minimalMode.editToolDefinition;
-        if (!editToolDefinition) throw new Error("minimal mode did not register the edit tool");
+        if (!(editToolDefinition !== undefined))
+          throw new Error("minimal mode did not register the edit tool");
         const { renderShell: _renderShell, ...defaultShellDefinition } = editToolDefinition;
 
         expect(renderEditTool(editToolDefinition, tempDir)).toEqual(

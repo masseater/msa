@@ -25,7 +25,7 @@ import { AuthStorage } from "../src/core/auth-storage.ts";
 import { SessionManager } from "../src/core/session-manager.ts";
 import { API_KEY } from "./utilities.ts";
 
-describe.skipIf(!API_KEY)("AgentSession forking", () => {
+describe.skipIf(!(API_KEY !== undefined && API_KEY.length > 0))("AgentSession forking", () => {
   let session: AgentSession;
   let runtimeHost: AgentSessionRuntime;
   let tempDir: string;
@@ -39,10 +39,10 @@ describe.skipIf(!API_KEY)("AgentSession forking", () => {
   afterEach(() =>
     runTest(
       Effect.gen(function* () {
-        if (runtimeHost) {
+        if (runtimeHost != null) {
           yield* awaited(runtimeHost.dispose());
         }
-        if (tempDir && (yield* pathExists(tempDir))) {
+        if (tempDir.length > 0 && (yield* pathExists(tempDir))) {
           yield* removePath(tempDir);
         }
       }),

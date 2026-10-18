@@ -26,7 +26,7 @@ import { createTestResourceLoader } from "./utilities.ts";
 
 const API_KEY = readEnv("ANTHROPIC_OAUTH_TOKEN") || readEnv("ANTHROPIC_API_KEY");
 
-describe.skipIf(!API_KEY)("Compaction extensions", () => {
+describe.skipIf(!(API_KEY !== undefined && API_KEY.length > 0))("Compaction extensions", () => {
   let session: AgentSession;
   let tempDir: string;
   let capturedEvents: SessionEvent[];
@@ -44,10 +44,10 @@ describe.skipIf(!API_KEY)("Compaction extensions", () => {
   afterEach(() =>
     runTest(
       Effect.sync(() => {
-        if (session) {
+        if (session != null) {
           session.dispose();
         }
-        if (tempDir && existsSync(tempDir)) {
+        if (tempDir.length > 0 && existsSync(tempDir)) {
           rmSync(tempDir, { recursive: true });
         }
       }),
@@ -67,7 +67,7 @@ describe.skipIf(!API_KEY)("Compaction extensions", () => {
         runTest(
           Effect.gen(function* () {
             capturedEvents.push(event);
-            if (onBeforeCompact) {
+            if (onBeforeCompact !== undefined) {
               return yield* awaited(onBeforeCompact(event));
             }
             return yield* awaited(undefined);
@@ -80,7 +80,7 @@ describe.skipIf(!API_KEY)("Compaction extensions", () => {
         runTest(
           Effect.gen(function* () {
             capturedEvents.push(event);
-            if (onCompact) {
+            if (onCompact !== undefined) {
               onCompact(event);
             }
             return yield* awaited(undefined);

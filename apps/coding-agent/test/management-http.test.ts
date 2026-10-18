@@ -31,7 +31,7 @@ describe("fetchWithRetry", () => {
         const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation((_input, init) =>
           effectRunPromise(
             Effect.gen(function* () {
-              if (init?.signal) signals.push(init.signal);
+              if (init?.signal !== undefined && init?.signal !== null) signals.push(init.signal);
               if (signals.length === 1) throw new Error("fetch failed");
               return yield* awaited(Response.json({ ok: true }));
             }),

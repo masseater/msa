@@ -15,13 +15,14 @@ const runPrefix = `test-${randomUUID()}`;
 const graphs: Array<[string, () => Promise<SessionGraph>]> = [
   ["memory", () => runTest(awaited(new MemorySessionGraph()))],
 ];
-if (readEnv("NEO4J_PASSWORD")) graphs.push(["neo4j", () => Neo4jSessionGraph.connect()]);
+if ((readEnv("NEO4J_PASSWORD")?.length ?? 0) > 0)
+  graphs.push(["neo4j", () => Neo4jSessionGraph.connect()]);
 
 afterAll(() =>
   runTest(
     Effect.gen(function* () {
       const password = readEnv("NEO4J_PASSWORD");
-      if (!password) return;
+      if (!(password !== undefined && password.length > 0)) return;
       const driver = neo4j.driver(
         readEnv("NEO4J_URI") ?? "bolt://localhost:7687",
         neo4j.auth.basic(readEnv("NEO4J_USERNAME") ?? "neo4j", password),

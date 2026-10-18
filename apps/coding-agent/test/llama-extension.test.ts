@@ -796,7 +796,7 @@ describe("llama.cpp extension", () => {
         const { url } = yield* awaited(
           listen((request, response) => {
             expect(request.headers.authorization).toBe("Bearer hf-secret");
-            if (request.url?.startsWith("/api/models?")) {
+            if (request.url?.startsWith("/api/models?") === true) {
               const requestUrl = new URL(request.url, "http://localhost");
               expect(requestUrl.searchParams.get("search")).toBe("qwen coder");
               expect(requestUrl.searchParams.get("filter")).toBe("gguf");
@@ -921,7 +921,7 @@ describe("llama.cpp extension", () => {
               }, 20);
               return;
             }
-            if (request.url?.startsWith("/models")) {
+            if (request.url?.startsWith("/models") === true) {
               json(response, {
                 data:
                   status === "missing"

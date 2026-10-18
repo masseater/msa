@@ -29,7 +29,7 @@ afterAll(() =>
   runTest(
     Effect.gen(function* () {
       yield* removePath(tempDir);
-      if (!password) return;
+      if (!(password !== undefined && password.length > 0)) return;
       const driver = neo4j.driver(
         readEnv("NEO4J_URI") ?? "bolt://localhost:7687",
         neo4j.auth.basic(readEnv("NEO4J_USERNAME") ?? "neo4j", password),
@@ -101,7 +101,7 @@ describe.runIf(password)("orchestrator workers", () => {
           timestamp: currentTimeMillis(),
         });
         const orchestrator = session.orchestrator;
-        if (!orchestrator) throw new Error("orchestrator missing");
+        if (!(orchestrator !== undefined)) throw new Error("orchestrator missing");
 
         const { session: started } = yield* awaited(
           orchestrator.start({

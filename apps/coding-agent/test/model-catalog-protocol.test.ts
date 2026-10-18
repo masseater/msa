@@ -72,7 +72,7 @@ function startCatalogServer(requests: string[]): Promise<Server> {
     requests.push(`${url.pathname}${url.search}`);
     const provider = /^\/api\/models\/providers\/([^/]+)$/u.exec(url.pathname)?.[1];
     const catalogRequest = parseModelCatalogRequest(url, request.headers["user-agent"]);
-    if (!provider) {
+    if (!(provider !== undefined && provider.length > 0)) {
       response.writeHead(404).end();
     } else if (catalogRequest.kind === "redirect") {
       response
@@ -85,12 +85,13 @@ function startCatalogServer(requests: string[]): Promise<Server> {
         parseModelCatalogIndex(objects.get(MODEL_CATALOG_INDEX_KEY)),
         catalogRequest.piVersion,
       );
-      const body = catalog
-        ? (objects.get(
-            getModelCatalogProviderKey(catalog.revision, provider, catalogRequest.representation),
-          ) ?? objects.get(getModelCatalogProviderKey(catalog.revision, provider, "legacy")))
-        : undefined;
-      if (!catalog || body === undefined) {
+      const body =
+        catalog === undefined
+          ? undefined
+          : (objects.get(
+              getModelCatalogProviderKey(catalog.revision, provider, catalogRequest.representation),
+            ) ?? objects.get(getModelCatalogProviderKey(catalog.revision, provider, "legacy")));
+      if (!(catalog !== undefined) || body === undefined) {
         response.writeHead(404).end();
       } else {
         response
@@ -128,7 +129,7 @@ describe("model catalog protocol with the current client", () => {
       Effect.gen(function* () {
         yield* awaited(
           new Promise<void>((resolve, reject) =>
-            server.close((error) => (error ? reject(error) : resolve())),
+            server.close((error) => (error === undefined ? resolve() : reject(error))),
           ),
         );
       }),
@@ -168,7 +169,7 @@ describe("model catalog protocol with the current client", () => {
             : mixedApiModel;
         const model = runtime.getModel("openrouter", modelId);
         expect(model).toMatchObject({ api: expectedModel.api, baseUrl: expectedModel.baseUrl });
-        if (!model) throw new Error(`Missing model: openrouter/${modelId}`);
+        if (!(model !== undefined)) throw new Error(`Missing model: openrouter/${modelId}`);
 
         let providerUrl: URL | undefined;
         const nativeFetch = globalThis.fetch;

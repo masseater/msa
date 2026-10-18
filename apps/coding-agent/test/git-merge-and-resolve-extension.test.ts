@@ -65,7 +65,7 @@ describe("git-merge-and-resolve example", () => {
   let tempDir: string;
 
   afterEach(() => {
-    if (tempDir) rmSync(tempDir, { recursive: true, force: true });
+    if (tempDir.length > 0) rmSync(tempDir, { recursive: true, force: true });
   });
 
   function createTempDir() {

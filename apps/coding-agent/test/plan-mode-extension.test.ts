@@ -88,7 +88,7 @@ function setup(
     return runTest(
       Effect.gen(function* () {
         const command = commands.get(name);
-        if (!command) throw new Error(`Missing command: ${name}`);
+        if (!(command !== undefined)) throw new Error(`Missing command: ${name}`);
         yield* awaited(command("", ctx));
       }),
     );
@@ -97,7 +97,7 @@ function setup(
   function triggerAgentEnd(text: string): Promise<void> {
     return runTest(
       Effect.gen(function* () {
-        if (!agentEndHandler) throw new Error("Missing agent_end handler");
+        if (!(agentEndHandler !== undefined)) throw new Error("Missing agent_end handler");
         yield* awaited(
           agentEndHandler(
             { type: "agent_end" as const, messages: [createAssistantMessage(text)] },

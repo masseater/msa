@@ -10,15 +10,15 @@ function authOptions(runtime: ModelRuntime, type?: AuthType) {
   return runtime
     .getProviders()
     .flatMap((provider) => [
-      ...(!type || type === "oauth"
-        ? provider.auth.oauth
-          ? [{ type: "oauth" as const, provider, method: provider.auth.oauth }]
-          : []
+      ...(!(type !== undefined && type.length > 0) || type === "oauth"
+        ? provider.auth.oauth === undefined
+          ? []
+          : [{ type: "oauth" as const, provider, method: provider.auth.oauth }]
         : []),
-      ...(!type || type === "api_key"
-        ? provider.auth.apiKey
-          ? [{ type: "api_key" as const, provider, method: provider.auth.apiKey }]
-          : []
+      ...(!(type !== undefined && type.length > 0) || type === "api_key"
+        ? provider.auth.apiKey === undefined
+          ? []
+          : [{ type: "api_key" as const, provider, method: provider.auth.apiKey }]
         : []),
     ]);
 }

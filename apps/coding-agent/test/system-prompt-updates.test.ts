@@ -365,7 +365,7 @@ describe("system prompt updates", () => {
           const head = harness.session.messages[0];
           if (head?.role !== "system") throw new Error("expected system message");
           const declaration = head.toolsAdded?.[0];
-          if (!declaration) throw new Error("expected tool declaration");
+          if (!(declaration !== undefined)) throw new Error("expected tool declaration");
           expect(Object.hasOwn(declaration, "constrainedSampling")).toBe(false);
           expect(Object.hasOwn(declaration, "execute")).toBe(false);
 

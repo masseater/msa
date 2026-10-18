@@ -22,7 +22,7 @@ describe("restoreSandboxEnv", () => {
 
     expect(process.env).toEqual(envBefore);
 
-    if (originalVersions) {
+    if (originalVersions !== undefined) {
       Object.defineProperty(process, "versions", originalVersions);
     }
   });
@@ -40,7 +40,7 @@ describe("restoreSandboxEnv", () => {
     expect(process.env).toEqual(envBefore);
     deleteEnv("RESTORE_SANDBOX_ENV_TEST");
 
-    if (originalVersions) {
+    if (originalVersions !== undefined) {
       Object.defineProperty(process, "versions", originalVersions);
     }
   });
@@ -69,7 +69,7 @@ describe("restoreSandboxEnv", () => {
     }
     Object.assign(process.env, envBackup);
 
-    if (originalVersions) {
+    if (originalVersions !== undefined) {
       Object.defineProperty(process, "versions", originalVersions);
     }
     readFileSync.mockReset();

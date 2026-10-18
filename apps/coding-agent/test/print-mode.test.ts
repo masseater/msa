@@ -40,7 +40,10 @@ function createAssistantMessage(options?: {
 }): AssistantMessage {
   return {
     role: "assistant",
-    content: options?.text ? [{ type: "text" as const, text: options.text }] : [],
+    content:
+      options?.text !== undefined && options?.text.length > 0
+        ? [{ type: "text" as const, text: options.text }]
+        : [],
     api: "openai-responses" as const,
     provider: "openai",
     model: "gpt-4o-mini",

@@ -51,7 +51,7 @@ describe("AgentSession dynamic provider registration", () => {
   });
 
   afterEach(() => {
-    if (tempDir && existsSync(tempDir)) {
+    if (tempDir.length > 0 && existsSync(tempDir)) {
       rmSync(tempDir, { recursive: true, force: true });
     }
   });

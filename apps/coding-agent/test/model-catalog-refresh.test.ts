@@ -72,7 +72,7 @@ describe("interactive model catalog refresh", () => {
         const refreshSignals: AbortSignal[] = [];
         const runtime = {
           refresh: vi.fn((options?: ModelsRefreshOptions) => {
-            if (options?.signal) refreshSignals.push(options.signal);
+            if (options?.signal !== undefined) refreshSignals.push(options.signal);
             return new Promise<ModelsRefreshResult>(() => {});
           }),
         };

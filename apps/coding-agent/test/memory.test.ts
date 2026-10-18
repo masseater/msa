@@ -76,7 +76,7 @@ function embeddingServer(responses: number[][]): Promise<{ baseUrl: string; inpu
         new Promise<void>((resolve) => server.listen(0, "127.0.0.1", () => resolve())),
       );
       const address = server.address();
-      if (!address || typeof address === "string") throw new Error("no port");
+      if (address === null || typeof address === "string") throw new Error("no port");
       return yield* awaited({ baseUrl: `http://127.0.0.1:${address.port}/v1`, inputs });
     }),
   );
@@ -524,7 +524,8 @@ describe("memory tool", () => {
           );
 
           const details = saved.details;
-          const id = details && typeof details["id"] === "string" ? details["id"] : "";
+          const id =
+            details !== undefined && typeof details["id"] === "string" ? details["id"] : "";
           const forget = yield* awaited(tool.execute("call-4", { action: "forget", id }));
           expect(forget.content[0]?.type === "text" ? forget.content[0].text : "").toContain(
             `Forgot memory ${id}`,

@@ -45,7 +45,7 @@ describe("createAgentSession provider attribution headers", () => {
     } else {
       writeEnv("MSA_TELEMETRY", originalTelemetryEnv);
     }
-    if (tempDir && existsSync(tempDir)) {
+    if (tempDir.length > 0 && existsSync(tempDir)) {
       rmSync(tempDir, { recursive: true, force: true });
     }
   });
@@ -125,7 +125,7 @@ describe("createAgentSession provider attribution headers", () => {
 
         const modelRuntime = getModelRuntime(modelRegistry);
         const sessionManager = SessionManager.inMemory(cwd);
-        if (options.sessionId) {
+        if (options.sessionId !== undefined && options.sessionId.length > 0) {
           sessionManager.newSession({ id: options.sessionId });
         }
 
@@ -144,7 +144,7 @@ describe("createAgentSession provider attribution headers", () => {
           const stream = yield* awaited(
             session.agent.streamFunction(model, normalizeContext({ messages: [] }), {
               sessionId: session.sessionId,
-              ...(options.requestHeaders ? { headers: options.requestHeaders } : {}),
+              ...(options.requestHeaders === undefined ? {} : { headers: options.requestHeaders }),
             }),
           );
           yield* awaited(stream.result());

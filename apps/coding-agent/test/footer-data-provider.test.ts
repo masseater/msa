@@ -18,8 +18,8 @@ vi.mock("child_process", () => ({
         setTimeout(
           () =>
             callback(
-              resolvedBranch ? null : new Error("detached"),
-              resolvedBranch ? `${resolvedBranch}\n` : "",
+              resolvedBranch.length > 0 ? null : new Error("detached"),
+              resolvedBranch.length > 0 ? `${resolvedBranch}\n` : "",
               "",
             ),
           0,
@@ -32,8 +32,8 @@ vi.mock("child_process", () => ({
   spawnSync: vi.fn((_command: string, args: readonly string[]) => {
     if (args[1] === "symbolic-ref") {
       return {
-        status: resolvedBranch ? 0 : 1,
-        stdout: resolvedBranch ? `${resolvedBranch}\n` : "",
+        status: resolvedBranch.length > 0 ? 0 : 1,
+        stdout: resolvedBranch.length > 0 ? `${resolvedBranch}\n` : "",
         stderr: "",
       };
     }
@@ -118,7 +118,7 @@ describe("FooterDataProvider reftable branch detection", () => {
 
   afterEach(() => {
     process.chdir(originalCwd);
-    if (tempDir && existsSync(tempDir)) {
+    if (tempDir.length > 0 && existsSync(tempDir)) {
       rmSync(tempDir, { recursive: true, force: true });
     }
   });

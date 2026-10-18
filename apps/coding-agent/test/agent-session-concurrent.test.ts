@@ -69,10 +69,10 @@ describe("AgentSession concurrent prompt guard", () => {
       Effect.sync(() => {
         delete (globalThis as typeof globalThis & { testExtensionApi?: unknown }).testExtensionApi;
         delete (globalThis as typeof globalThis & { testCommandRuns?: unknown }).testCommandRuns;
-        if (session) {
+        if (session != null) {
           session.dispose();
         }
-        if (tempDir && existsSync(tempDir)) {
+        if (tempDir.length > 0 && existsSync(tempDir)) {
           rmSync(tempDir, { recursive: true });
         }
       }),
@@ -100,7 +100,7 @@ describe("AgentSession concurrent prompt guard", () => {
             queueMicrotask(() => {
               stream.push({ type: "start" as const, partial: createAssistantMessage("") });
               const checkAbort = () => {
-                if (abortSignal?.aborted) {
+                if (abortSignal?.aborted === true) {
                   stream.push({
                     type: "error" as const,
                     reason: "aborted",
@@ -259,7 +259,7 @@ describe("AgentSession concurrent prompt guard", () => {
 
               stream.push({ type: "start" as const, partial: createAssistantMessage("") });
               const checkAbort = () => {
-                if (abortSignal?.aborted) {
+                if (abortSignal?.aborted === true) {
                   stream.push({
                     type: "error" as const,
                     reason: "aborted",

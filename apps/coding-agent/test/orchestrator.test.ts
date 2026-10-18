@@ -138,7 +138,7 @@ function setup(maxConcurrentSessions = 4) {
       const found = MODELS.find(
         (candidate) => `${candidate.provider}/${candidate.id}` === reference,
       );
-      if (!found) throw new Error(`"${reference}" is not an available model`);
+      if (!(found !== undefined)) throw new Error(`"${reference}" is not an available model`);
       return found;
     },
     defaults: () => ({

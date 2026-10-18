@@ -96,7 +96,8 @@ describe("credential print commands", () => {
           ),
         );
         const oauth = runtime.getProvider("openai-codex")?.auth.oauth;
-        if (!oauth) throw new Error("OpenAI Codex OAuth provider is not registered");
+        if (!(oauth !== undefined))
+          throw new Error("OpenAI Codex OAuth provider is not registered");
         oauth.refresh = refresh;
         const args = parseArgs(["--provider", "openai-codex"]);
 

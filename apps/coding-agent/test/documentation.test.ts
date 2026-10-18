@@ -17,7 +17,7 @@ interface NavigationGroup {
 const docsRoot = resolve(import.meta.dirname, "../docs");
 
 function requireObject(value: unknown, location: string): Record<string, unknown> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
+  if (!(value != null) || typeof value !== "object" || Array.isArray(value)) {
     throw new Error(`${location} must be an object`);
   }
   return value as Record<string, unknown>;
@@ -79,7 +79,8 @@ function readNavigationItem(rawItem: unknown, location: string): NavigationItem 
     );
   }
 
-  if (path !== undefined) return items ? { title, path, items } : { title, path };
+  if (path !== undefined)
+    return items !== undefined && items.length > 0 ? { title, path, items } : { title, path };
   if (items !== undefined) return { title, items };
   throw new Error(`${location} must have a path or items`);
 }
@@ -115,7 +116,7 @@ function navigationPaths(groups: NavigationGroup[]): string[] {
   const visit = (items: NavigationItem[]): void => {
     for (const item of items) {
       if ("path" in item) paths.push(item.path);
-      if (item.items) visit(item.items);
+      if (item.items !== undefined && item.items.length > 0) visit(item.items);
     }
   };
   for (const group of groups) visit(group.items);

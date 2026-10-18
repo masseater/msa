@@ -567,7 +567,7 @@ describe("createAgentSession with virtual models", () => {
         faux.setResponses([fauxAssistantMessage("ok"), fauxAssistantMessage("ok")]);
         const small = runtime.getModel("faux", "small")!;
         const large = runtime.getModel("faux", "large");
-        if (!large) throw new Error("faux/large is not registered");
+        if (!(large !== undefined)) throw new Error("faux/large is not registered");
         const sessionManager = SessionManager.inMemory(tempDir);
         const { session } = yield* awaited(
           createAgentSession({
