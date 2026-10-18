@@ -6,6 +6,8 @@ import {
   type Model,
   type SimpleStreamOptions,
 } from "@msa/ai";
+import { awaited, runTest, abortController } from "@msa/testing";
+import { DateTime, Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { generateBranchSummary } from "../src/core/compaction/index.ts";
@@ -29,7 +31,7 @@ const entries: SessionEntry[] = [
     type: "message",
     id: "branch-user",
     parentId: null,
-    timestamp: new Date(1).toISOString(),
+    timestamp: DateTime.formatIso(DateTime.makeUnsafe(1)),
     message: { role: "user", content: "Abandoned request", timestamp: 1 },
   },
 ];
@@ -45,100 +47,125 @@ function response(content: AssistantMessage["content"]): AssistantMessage {
 }
 
 describe("branch summarization", () => {
-  it("does not override tool choice for branch summaries", async () => {
-    let requestOptions: SimpleStreamOptions | undefined;
-    const streamFn: StreamFn = (_model, _context, options) => {
-      requestOptions = options;
-      const stream = createAssistantMessageEventStream();
-      queueMicrotask(() =>
-        stream.push({
-          type: "done",
-          reason: "stop",
-          message: response([{ type: "text", text: "summary" }]),
-        }),
-      );
-      return stream;
-    };
+  it("does not override tool choice for branch summaries", () =>
+    runTest(
+      Effect.gen(function* () {
+        let requestOptions: SimpleStreamOptions | undefined;
+        const streamFn: StreamFn = (_model, _context, options) => {
+          requestOptions = options;
+          const stream = createAssistantMessageEventStream();
+          queueMicrotask(() =>
+            stream.push({
+              type: "done",
+              reason: "stop",
+              message: response([{ type: "text", text: "summary" }]),
+            }),
+          );
+          return stream;
+        };
 
-    await generateBranchSummary(entries, {
-      model,
-      signal: new AbortController().signal,
-      streamFn,
-    });
+        yield* awaited(
+          generateBranchSummary(entries, {
+            model,
+            signal: abortController().signal,
+            streamFn,
+          }),
+        );
 
-    expect(requestOptions?.maxTokens).toBe(4096);
-    expect(requestOptions?.toolChoice).toBeUndefined();
-  });
+        expect(requestOptions?.maxTokens).toBe(4096);
+        expect(requestOptions?.toolChoice).toBeUndefined();
+      }),
+    ));
 
-  it("clamps the branch summary output cap to the model limit", async () => {
-    let requestOptions: SimpleStreamOptions | undefined;
-    const streamFn: StreamFn = (_model, _context, options) => {
-      requestOptions = options;
-      const stream = createAssistantMessageEventStream();
-      queueMicrotask(() =>
-        stream.push({
-          type: "done",
-          reason: "stop",
-          message: response([{ type: "text", text: "summary" }]),
-        }),
-      );
-      return stream;
-    };
+  it("clamps the branch summary output cap to the model limit", () =>
+    runTest(
+      Effect.gen(function* () {
+        let requestOptions: SimpleStreamOptions | undefined;
+        const streamFn: StreamFn = (_model, _context, options) => {
+          requestOptions = options;
+          const stream = createAssistantMessageEventStream();
+          queueMicrotask(() =>
+            stream.push({
+              type: "done",
+              reason: "stop",
+              message: response([{ type: "text", text: "summary" }]),
+            }),
+          );
+          return stream;
+        };
 
-    await generateBranchSummary(entries, {
-      model: { ...model, maxTokens: 1024 },
-      signal: new AbortController().signal,
-      streamFn,
-    });
+        yield* awaited(
+          generateBranchSummary(entries, {
+            model: { ...model, maxTokens: 1024 },
+            signal: abortController().signal,
+            streamFn,
+          }),
+        );
 
-    expect(requestOptions?.maxTokens).toBe(1024);
-  });
+        expect(requestOptions?.maxTokens).toBe(1024);
+      }),
+    ));
 
-  it("rejects tool calls from branch summaries", async () => {
-    const streamFn: StreamFn = () => {
-      const stream = createAssistantMessageEventStream();
-      queueMicrotask(() =>
-        stream.push({
-          type: "done",
-          reason: "toolUse",
-          message: response([
-            { type: "toolCall", id: "tool-call-1", name: "read", arguments: { path: "README.md" } },
-          ]),
-        }),
-      );
-      return stream;
-    };
+  it("rejects tool calls from branch summaries", () =>
+    runTest(
+      Effect.gen(function* () {
+        const streamFn: StreamFn = () => {
+          const stream = createAssistantMessageEventStream();
+          queueMicrotask(() =>
+            stream.push({
+              type: "done",
+              reason: "toolUse",
+              message: response([
+                {
+                  type: "toolCall",
+                  id: "tool-call-1",
+                  name: "read",
+                  arguments: { path: "README.md" },
+                },
+              ]),
+            }),
+          );
+          return stream;
+        };
 
-    const result = await generateBranchSummary(entries, {
-      model,
-      signal: new AbortController().signal,
-      streamFn,
-    });
+        const result = yield* awaited(
+          generateBranchSummary(entries, {
+            model,
+            signal: abortController().signal,
+            streamFn,
+          }),
+        );
 
-    expect(result.error).toBe("Branch summarization attempted to call a tool");
-  });
+        expect(result.error).toBe("Branch summarization attempted to call a tool");
+      }),
+    ));
 
-  it("rejects length-limited branch summaries", async () => {
-    const streamFn: StreamFn = () => {
-      const stream = createAssistantMessageEventStream();
-      queueMicrotask(() =>
-        stream.push({
-          type: "done",
-          reason: "length",
-          message: { ...response([{ type: "text", text: "partial" }]), stopReason: "length" },
-        }),
-      );
-      return stream;
-    };
+  it("rejects length-limited branch summaries", () =>
+    runTest(
+      Effect.gen(function* () {
+        const streamFn: StreamFn = () => {
+          const stream = createAssistantMessageEventStream();
+          queueMicrotask(() =>
+            stream.push({
+              type: "done",
+              reason: "length",
+              message: { ...response([{ type: "text", text: "partial" }]), stopReason: "length" },
+            }),
+          );
+          return stream;
+        };
 
-    const result = await generateBranchSummary(entries, {
-      model,
-      signal: new AbortController().signal,
-      streamFn,
-    });
+        const result = yield* awaited(
+          generateBranchSummary(entries, {
+            model,
+            signal: abortController().signal,
+            streamFn,
+          }),
+        );
 
-    expect(result.error).toBe(
-      "Branch summarization failed: generation hit the token cap and the summary is incomplete",
-    );
-  });
+        expect(result.error).toBe(
+          "Branch summarization failed: generation hit the token cap and the summary is incomplete",
+        );
+      }),
+    ));
 });
