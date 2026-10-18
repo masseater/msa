@@ -26,6 +26,26 @@ release. Add a tool name to select part of the graph. For example, run
 
 <!--VITE PLUS END-->
 
+## 手段の選び方
+
+強制・推奨・指示の手段は次の順で選ぶ。自作するときは、何を探して何が合わなかったかをコミットメッセージに残す。
+
+1. ライブラリ公式の統合手段（lint ルール、skill、plugin、CLI、diagnostics など）
+2. それを実現している既存のライブラリやツール
+3. 方針を提言しているブログ・issue・discussion
+4. 自作
+
+検査を通すために設定を無効化・簡易化したり、閾値を下げたり、抑止ディレクティブを使ったりしない。数値の設定はツールの既定値を保ち、既定値で検査が機能しないときだけ公式の指針で設定する。
+
+## 文書
+
+手書きの文章はルートの AGENTS.md・README.md に限り、コードを読めば分かることは書かない。「なぜ」はコミットメッセージに書く。
+
+## 作業の完了
+
+- 作業の完了は `vp run verify` が通ることである。
+- ユーザーと対話するセッションを始めたら、引数なしの `/loop` を起動する。
+
 ## コマンド
 
 - pnpm は直接呼ばない。install・add・remove は `vp install`・`vp add`・`vp remove`、script は `vp run <script>`、binary は `vp exec <bin>`。`vp` が持たないサブコマンドだけ `vp pm <subcommand>` を使う。
