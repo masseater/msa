@@ -49,6 +49,7 @@
     "test": "node --test --test-reporter=dot --test-reporter-destination=stdout test/*.test.ts"
   },
   "dependencies": {
+    "@ansi-tools/parser": "catalog:",
     "@effect/platform-node": "catalog:",
     "culori": "catalog:",
     "effect": "catalog:stack",

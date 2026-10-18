@@ -164,6 +164,9 @@ settings:
 
 catalogs:
   default:
+    '@ansi-tools/parser':
+      specifier: 1.1.0
+      version: 1.1.0
     '@anthropic-ai/claude-agent-sdk':
       specifier: 0.3.300
       version: 0.3.300
@@ -835,6 +838,9 @@ importers:
 
   libs/tui:
     dependencies:
+      '@ansi-tools/parser':
+        specifier: 'catalog:'
+        version: 1.1.0
       '@effect/platform-node':
         specifier: 'catalog:'
         version: 4.0.2(effect@4.0.2)(redis@6.3.0)
@@ -862,6 +868,9 @@ importers:
         version: 6.0.0
 
 packages:
+
+  '@ansi-tools/parser@1.1.0':
+    resolution: {integrity: sha512-jPLW4AF9KkhinubLrc5yQt8aE3cbXQ7qzVCffmrCEDCe0XnRmW7/QmljKItg9G6j7/LeJ++xT5bQFgZLny7HnQ==}
 
   '@anthropic-ai/claude-agent-sdk-darwin-arm64@0.3.300':
     resolution: {integrity: sha512-+pFKo4x5S6j4v+UTVZZFiLoJO7PMLVPNhIUBalk/RvMhcaN33Ubgk4aRAZpJmkxCcGMN6rWCevYhgT0nXkqytg==}
@@ -4156,6 +4165,8 @@ packages:
     resolution: {integrity: sha512-g8W2D2kU6a8untc053fX1uVBKzM7yqAxW/3zwk83+6RyF2+SKOuV+c0wBDhUwzV1PaGapmZH+rmcUzPf+3CGwg==}
 
 snapshots:
+
+  '@ansi-tools/parser@1.1.0': {}
 
   '@anthropic-ai/claude-agent-sdk-darwin-arm64@0.3.300':
     optional: true

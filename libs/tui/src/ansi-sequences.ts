@@ -1,12 +1,10 @@
+import { ESC_CODE, type TOKEN, TOKEN_TYPES, tokenizer } from "@ansi-tools/parser";
 import { dual } from "effect/Function";
 
-export const ESC = "\u001b";
-export const BEL = "\u0007";
-export const ST = `${ESC}\\`;
-export const CSI = `${ESC}[`;
-export const OSC = `${ESC}]`;
-export const DCS = `${ESC}P`;
-export const APC = `${ESC}_`;
+export const CSI = `${ESC_CODE}[`;
+const OSC = `${ESC_CODE}]`;
+const DCS = `${ESC_CODE}P`;
+const APC = `${ESC_CODE}_`;
 
 export type EscapeKind = "csi" | "osc" | "dcs" | "apc";
 
@@ -18,13 +16,6 @@ export interface EscapeSequence {
   terminator: string;
 }
 
-const kindByIntroducer = new Map<string, EscapeKind>([
-  ["[", "csi"],
-  ["]", "osc"],
-  ["P", "dcs"],
-  ["_", "apc"],
-]);
-
 const introducerByKind: Record<EscapeKind, string> = {
   csi: CSI,
   osc: OSC,
@@ -32,71 +23,66 @@ const introducerByKind: Record<EscapeKind, string> = {
   apc: APC,
 };
 
+const kindByIntroducer = new Map<string, EscapeKind>([
+  [CSI, "csi"],
+  [OSC, "osc"],
+  [DCS, "dcs"],
+  [APC, "apc"],
+]);
+
 export const introducerOf = (kind: EscapeKind): string => introducerByKind[kind];
 
-const isFinalByte = (code: number): boolean => code >= 0x40 && code <= 0x7e;
+type Segment = string | EscapeSequence;
 
-function scanCsi(text: string, start: number): EscapeSequence | null {
-  for (let index = start; index < text.length; index++) {
-    const code = text.charCodeAt(index);
-    if (isFinalByte(code)) {
-      return {
-        kind: "csi",
-        raw: text.slice(start - CSI.length, index + 1),
-        body: text.slice(start, index),
-        final: text[index] ?? "",
-        terminator: text[index] ?? "",
-      };
+function toSegment(introducer: TOKEN, data: readonly TOKEN[], final: TOKEN | undefined): Segment {
+  const body = data.map((token) => token.raw).join("");
+  const raw = `${introducer.raw}${body}${final?.raw ?? ""}`;
+  const kind = kindByIntroducer.get(introducer.raw);
+  if (kind === undefined || final === undefined) return raw;
+  return {
+    kind,
+    raw,
+    body,
+    final: kind === "csi" ? final.raw : "",
+    terminator: final.raw,
+  };
+}
+
+function* segments(text: string): Generator<Segment> {
+  let introducer: TOKEN | undefined;
+  let data: TOKEN[] = [];
+  for (const token of tokenizer(text)) {
+    if (introducer !== undefined) {
+      if (token.type === TOKEN_TYPES.DATA) {
+        data.push(token);
+        continue;
+      }
+      const final = token.type === TOKEN_TYPES.FINAL ? token : undefined;
+      yield toSegment(introducer, data, final);
+      introducer = undefined;
+      if (final !== undefined) continue;
     }
+    if (token.type === TOKEN_TYPES.INTRODUCER) {
+      introducer = token;
+      data = [];
+      continue;
+    }
+    yield token.raw;
   }
-  return null;
+  if (introducer !== undefined) yield toSegment(introducer, data, undefined);
 }
-
-function scanString(text: string, start: number, kind: EscapeKind): EscapeSequence | null {
-  for (let index = start; index < text.length; index++) {
-    const terminator = text[index] === BEL ? BEL : text.startsWith(ST, index) ? ST : undefined;
-    if (terminator === undefined) continue;
-    return {
-      kind,
-      raw: text.slice(start - 2, index + terminator.length),
-      body: text.slice(start, index),
-      final: "",
-      terminator,
-    };
-  }
-  return null;
-}
-
-export const scanEscapeSequence: {
-  (text: string, position: number): EscapeSequence | null;
-  (position: number): (text: string) => EscapeSequence | null;
-} = dual(2, (text: string, position: number): EscapeSequence | null => {
-  if (text[position] !== ESC) return null;
-  const introducer = text[position + 1];
-  const kind = introducer === undefined ? undefined : kindByIntroducer.get(introducer);
-  if (kind === undefined) return null;
-  const start = position + 2;
-  return kind === "csi" ? scanCsi(text, start) : scanString(text, start, kind);
-});
 
 export function parseEscapeSequence(text: string): EscapeSequence | null {
-  const sequence = scanEscapeSequence(text, 0);
-  return sequence !== null && sequence.raw.length === text.length ? sequence : null;
+  const first = segments(text).next();
+  if (first.done === true || typeof first.value === "string") return null;
+  return first.value.raw.length === text.length ? first.value : null;
 }
 
 export function escapeSequences(text: string): EscapeSequence[] {
-  const sequences: EscapeSequence[] = [];
-  let index = text.indexOf(ESC);
-  while (index !== -1) {
-    const sequence = scanEscapeSequence(text, index);
-    if (sequence === null) {
-      index = text.indexOf(ESC, index + 1);
-      continue;
-    }
-    sequences.push(sequence);
-    index = text.indexOf(ESC, index + sequence.raw.length);
-  }
-  return sequences;
+  if (!text.includes(ESC_CODE)) return [];
+  return Array.from(segments(text)).filter(
+    (segment): segment is EscapeSequence => typeof segment !== "string",
+  );
 }
 
 const isStyleBody = (body: string): boolean => {
@@ -109,22 +95,32 @@ const isStyleBody = (body: string): boolean => {
 export const isStyleSequence = (sequence: EscapeSequence): boolean =>
   sequence.kind === "csi" && sequence.final === "m" && isStyleBody(sequence.body);
 
-function stripMatching(text: string, keep: (sequence: EscapeSequence) => boolean): string {
-  if (!text.includes(ESC)) return text;
+export const replaceEscapeSequences: {
+  (text: string, replacer: (sequence: EscapeSequence) => string): string;
+  (replacer: (sequence: EscapeSequence) => string): (text: string) => string;
+} = dual(2, (text: string, replacer: (sequence: EscapeSequence) => string): string => {
+  if (!text.includes(ESC_CODE)) return text;
   let result = "";
-  let position = 0;
-  while (position < text.length) {
-    const sequence = scanEscapeSequence(text, position);
-    if (sequence === null) {
-      result += text[position];
-      position += 1;
-      continue;
-    }
-    if (keep(sequence)) result += sequence.raw;
-    position += sequence.raw.length;
+  for (const segment of segments(text)) {
+    result += typeof segment === "string" ? segment : replacer(segment);
   }
   return result;
-}
+});
+
+const stripMatching = (text: string, keep: (sequence: EscapeSequence) => boolean): string =>
+  replaceEscapeSequences(text, (sequence) => (keep(sequence) ? sequence.raw : ""));
+
+export const leadingSequencesLength: {
+  (text: string, accept: (sequence: EscapeSequence) => boolean): number;
+  (accept: (sequence: EscapeSequence) => boolean): (text: string) => number;
+} = dual(2, (text: string, accept: (sequence: EscapeSequence) => boolean): number => {
+  let position = 0;
+  for (const segment of segments(text)) {
+    if (typeof segment === "string" || !accept(segment)) break;
+    position += segment.raw.length;
+  }
+  return position;
+});
 
 const OSC133_ZONE_BODY = /^133;[ABC]$/u;
 
@@ -134,10 +130,9 @@ const isOsc133Zone = (sequence: EscapeSequence): boolean =>
 export const stripOsc133ZonePrefix = (line: string): string =>
   line.slice(leadingSequencesLength(line, isOsc133Zone));
 
-export const startsWithOsc133PromptStart = (line: string): boolean => {
-  const sequence = scanEscapeSequence(line, 0);
-  return sequence !== null && sequence.kind === "osc" && sequence.body === "133;A";
-};
+export const startsWithOsc133PromptStart = (line: string): boolean =>
+  leadingSequencesLength(line, (sequence) => sequence.kind === "osc" && sequence.body === "133;A") >
+  0;
 
 export interface EscapeMatch {
   final: string;
@@ -166,39 +161,6 @@ export function matchStringSequence(request: {
   const groups = request.body.exec(sequence.body);
   return groups === null ? null : { final: sequence.terminator, groups };
 }
-
-export const replaceEscapeSequences: {
-  (text: string, replacer: (sequence: EscapeSequence) => string): string;
-  (replacer: (sequence: EscapeSequence) => string): (text: string) => string;
-} = dual(2, (text: string, replacer: (sequence: EscapeSequence) => string): string => {
-  if (!text.includes(ESC)) return text;
-  let result = "";
-  let position = 0;
-  while (position < text.length) {
-    const sequence = scanEscapeSequence(text, position);
-    if (sequence === null) {
-      result += text[position];
-      position += 1;
-      continue;
-    }
-    result += replacer(sequence);
-    position += sequence.raw.length;
-  }
-  return result;
-});
-
-export const leadingSequencesLength: {
-  (text: string, accept: (sequence: EscapeSequence) => boolean): number;
-  (accept: (sequence: EscapeSequence) => boolean): (text: string) => number;
-} = dual(2, (text: string, accept: (sequence: EscapeSequence) => boolean): number => {
-  let position = 0;
-  while (position < text.length) {
-    const sequence = scanEscapeSequence(text, position);
-    if (sequence === null || !accept(sequence)) break;
-    position += sequence.raw.length;
-  }
-  return position;
-});
 
 export const isControlCharacter = (character: string): boolean => {
   const code = character.codePointAt(0) ?? 0;
