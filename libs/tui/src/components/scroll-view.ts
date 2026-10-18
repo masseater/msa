@@ -1,5 +1,6 @@
+import { type CancelDelay, runAfter } from "../delay.ts";
 import { LAYOUT_NODE, type ScrollLayoutNode } from "../layout-node.ts";
-import { type Component, Container } from "../tui.ts";
+import { type Component, Container } from "../tui-component.ts";
 
 export type ScrollViewScrollbar = "hidden" | "auto" | "always";
 
@@ -15,7 +16,6 @@ export interface ScrollViewOptions {
 }
 
 export interface ScrollViewScrollToOptions {
-  /** Keep follow-end disabled even when the target is the current content end. */
   disableFollow?: boolean;
 }
 
@@ -36,7 +36,7 @@ export class ScrollView extends Container {
   private requestRenderCallback: (() => void) | undefined;
   private transientScrollbarVisible = false;
   private scrollbarActive = false;
-  private scrollbarHideTimer: NodeJS.Timeout | undefined;
+  private cancelScrollbarHide: CancelDelay | undefined;
 
   constructor(component: Component, options: ScrollViewOptions = {}) {
     super();
@@ -99,24 +99,23 @@ export class ScrollView extends Container {
   private markScrollbarActivity(): void {
     if (this.scrollbar !== "auto" || this.contentHeight <= this.currentViewportHeight) return;
     this.transientScrollbarVisible = true;
-    if (this.scrollbarHideTimer) {
-      clearTimeout(this.scrollbarHideTimer);
-      this.scrollbarHideTimer = undefined;
+    if (this.cancelScrollbarHide !== undefined) {
+      this.cancelScrollbarHide();
+      this.cancelScrollbarHide = undefined;
     }
     if (this.scrollbarActive) return;
-    this.scrollbarHideTimer = setTimeout(() => {
-      this.scrollbarHideTimer = undefined;
+    this.cancelScrollbarHide = runAfter(this.scrollbarHideDelayMs, () => {
+      this.cancelScrollbarHide = undefined;
       this.transientScrollbarVisible = false;
       this.requestRenderCallback?.();
-    }, this.scrollbarHideDelayMs);
-    this.scrollbarHideTimer.unref();
+    });
   }
 
   private hideTransientScrollbar(): void {
     this.transientScrollbarVisible = false;
-    if (!this.scrollbarHideTimer) return;
-    clearTimeout(this.scrollbarHideTimer);
-    this.scrollbarHideTimer = undefined;
+    if (this.cancelScrollbarHide === undefined) return;
+    this.cancelScrollbarHide();
+    this.cancelScrollbarHide = undefined;
   }
 
   setScrollbarActive(active: boolean): void {

@@ -30,21 +30,21 @@ const decodeContextEntry = (line: string) => decodeEntry(line);
 
 const contextTokens = (usage: ContextUsage | undefined): number | null => {
   if (usage === undefined) return null;
-  const totalTokens = Number(usage.totalTokens ?? 0);
+  const totalTokens = Number(usage["totalTokens"] ?? 0);
   if (Number.isFinite(totalTokens) && totalTokens > 0) return totalTokens;
   const value =
-    Number(usage.input ?? 0) +
-    Number(usage.output ?? 0) +
-    Number(usage.cacheRead ?? 0) +
-    Number(usage.cacheWrite ?? 0);
+    Number(usage["input"] ?? 0) +
+    Number(usage["output"] ?? 0) +
+    Number(usage["cacheRead"] ?? 0) +
+    Number(usage["cacheWrite"] ?? 0);
   return Number.isFinite(value) && value > 0 ? value : null;
 };
 
 const bashCommandsOf = (content: ContextMessage["content"]): ReadonlyArray<string> => {
   if (content === undefined || Predicate.isString(content)) return [];
   return content.flatMap((block) => {
-    if (block.type !== "toolCall" || block.name !== "bash") return [];
-    const args = block.arguments;
+    if (block["type"] !== "toolCall" || block["name"] !== "bash") return [];
+    const args = block["arguments"];
     const command = Predicate.hasProperty("command")(args) ? args.command : undefined;
     return Predicate.isString(command) && command !== "" ? [command] : [];
   });

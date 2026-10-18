@@ -71,9 +71,8 @@ const httpsProxyAgentNamedExportPlugin = (repoRoot: string): Plugin => ({
   },
 });
 
-const commonBuildOptions = (repoRoot: string): BuildOptions => ({
+const unbannedBuildOptions = (repoRoot: string): BuildOptions => ({
   absWorkingDir: repoRoot,
-  banner: BANNER,
   bundle: true,
   define: { MSA_BUNDLED_NODE: "true" },
   external: ["@silvia-odwyer/photon-node"],
@@ -90,4 +89,9 @@ const commonBuildOptions = (repoRoot: string): BuildOptions => ({
   tsconfigRaw: { compilerOptions: {} },
 });
 
-export { ALLOWED_EXTERNAL_PACKAGES, commonBuildOptions };
+const commonBuildOptions = (repoRoot: string): BuildOptions => ({
+  ...unbannedBuildOptions(repoRoot),
+  banner: BANNER,
+});
+
+export { ALLOWED_EXTERNAL_PACKAGES, commonBuildOptions, unbannedBuildOptions };

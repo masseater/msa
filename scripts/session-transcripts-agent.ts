@@ -114,8 +114,10 @@ const runSubagent = (options: {
       Effect.gen(function* () {
         const failure: unknown = cause;
         const message =
-          Predicate.isObject(failure) && "message" in failure && Predicate.isString(failure.message)
-            ? failure.message
+          Predicate.isObject(failure) &&
+          "message" in failure &&
+          Predicate.isString(failure["message"])
+            ? failure["message"]
             : String(cause);
         yield* Console.error(styleText("red", `  Failed to spawn msa: ${message}`));
         return false;

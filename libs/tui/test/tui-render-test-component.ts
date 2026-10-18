@@ -1,4 +1,4 @@
-import { type Component } from "../src/tui.ts";
+import { type Component } from "../src/tui-component.ts";
 
 export class TestComponent implements Component {
   lines: string[] = [];

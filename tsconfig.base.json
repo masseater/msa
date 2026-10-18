@@ -29,6 +29,37 @@
     "resolveJsonModule": true,
     "allowImportingTsExtensions": true,
     "rewriteRelativeImportExtensions": true,
-    "types": ["node"]
+    "types": ["node"],
+    "plugins": [
+      {
+        "name": "@effect/language-service",
+        "allowedUnstableApis": [
+          "@effect/platform-node-shared/NodeChildProcessSpawner#layer",
+          "@effect/platform-node/NodeCrypto#layer",
+          "@effect/platform-node/NodeFileSystem#layer",
+          "@effect/platform-node/NodeHttpClient#layerUndici",
+          "@effect/platform-node/NodeHttpServer#layerTest",
+          "@effect/platform-node/NodePath#layer",
+          "@effect/platform-node/NodeRuntime#runMain",
+          "@effect/platform-node/NodeServices#layer",
+          "effect/Crypto#Crypto",
+          "effect/FileSystem#FileSystem",
+          "effect/Path#Path",
+          "effect/PlatformError#PlatformError",
+          "effect/http/HttpClient#execute",
+          "effect/http/HttpClientRequest#fromWeb",
+          "effect/http/HttpEffect#fromWebHandler",
+          "effect/http/HttpServer#HttpServer",
+          "effect/http/HttpServer#serve",
+          "effect/http/HttpServerRequest#HttpServerRequest",
+          "effect/http/HttpServerResponse#empty",
+          "effect/http/HttpServerResponse#text",
+          "effect/net/NetAddress#isInetAddress",
+          "effect/net/NetAddress#isUnixPathAddress",
+          "effect/process/ChildProcess#make",
+          "effect/process/ChildProcessSpawner#ChildProcessSpawner"
+        ]
+      }
+    ]
   }
 }

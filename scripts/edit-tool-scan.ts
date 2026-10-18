@@ -65,7 +65,7 @@ const textContentOf = (content: Message["content"]): string => {
   if (Predicate.isString(content)) return content;
   return content
     .flatMap((block) =>
-      block.type === "text" && Predicate.isString(block.text) ? [block.text] : [],
+      block["type"] === "text" && Predicate.isString(block["text"]) ? [block["text"]] : [],
     )
     .join("\n");
 };
@@ -104,12 +104,12 @@ const editCallRecords = (options: {
   const provider = message.provider ?? "[unknown]";
   const model = message.model ?? "[unknown]";
   return content.flatMap((block) => {
-    if (block.type !== "toolCall" || block.name !== "edit") return [];
+    if (block["type"] !== "toolCall" || block["name"] !== "edit") return [];
     return [
       {
         sessionFile,
         assistantEntryId: entry.id,
-        toolCallId: Predicate.isString(block.id) ? block.id : "",
+        toolCallId: Predicate.isString(block["id"]) ? block["id"] : "",
         timestamp: entry.timestamp,
         api: message.api ?? null,
         provider,
@@ -120,7 +120,7 @@ const editCallRecords = (options: {
         errorText: "",
         resultSummary: "",
         matchedResult: false,
-        ...analyzeEditArguments({ args: block.arguments, host }),
+        ...analyzeEditArguments({ args: block["arguments"], host }),
       },
     ];
   });

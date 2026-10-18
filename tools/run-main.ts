@@ -10,7 +10,6 @@ export const runMainWith: {
     const main = Effect.scoped(
       Effect.flatMap(Layer.build(layer), (services) => Effect.provideContext(program, services)),
     );
-    // oxlint-disable-next-line effecttsgo/unstable-api-usage -- v4 platform runtime is pre-GA
     NodeRuntime.runMain(main);
   },
 );

@@ -1,137 +1,114 @@
-import { getWordSegmenter, isWhitespaceChar, PUNCTUATION_REGEX } from "./utils.ts";
+import { dual } from "effect/Function";
+
+import { isWhitespaceChar, PUNCTUATION_REGEX } from "./text-boundaries.ts";
+import { getWordSegmenter } from "./utils.ts";
 
 const wordSegmenter = getWordSegmenter();
 
-/**
- * Options for word navigation functions.
- * When omitted, uses the default Intl.Segmenter word segmentation.
- */
 export interface WordNavigationOptions {
-  /** Custom segmenter returning word segments for the given text. */
   segment?: (text: string) => Iterable<Intl.SegmentData>;
-  /** Predicate identifying atomic segments that should be treated as single units (e.g. paste markers). */
   isAtomicSegment?: (segment: string) => boolean;
 }
 
-/**
- * Find the cursor position after moving one word backward from `cursor` in `text`.
- * Skips trailing whitespace, then stops at the next word/punctuation boundary.
- *
- * Pure function - does not mutate any state.
- *
- * @param {string} text - The text to move in.
- * @param {number} cursor - The cursor index.
- * @param {WordNavigationOptions} options - Word boundary options.
- * @returns {number} The new cursor index.
- */
-export function findWordBackward(
-  text: string,
-  cursor: number,
-  options?: WordNavigationOptions,
-): number {
-  if (cursor <= 0) return 0;
+export const findWordBackward: {
+  (text: string, cursor: number, options?: WordNavigationOptions): number;
+  (cursor: number, options?: WordNavigationOptions): (text: string) => number;
+} = dual(
+  (args) => typeof args[0] === "string",
+  (text: string, cursor: number, options?: WordNavigationOptions): number => {
+    if (cursor <= 0) return 0;
 
-  const textBeforeCursor = text.slice(0, cursor);
-  const segmentFn = options?.segment;
-  const isAtomic = options?.isAtomicSegment;
-  const segments = segmentFn
-    ? [...segmentFn(textBeforeCursor)]
-    : [...wordSegmenter.segment(textBeforeCursor)];
-  let newCursor = cursor;
+    const textBeforeCursor = text.slice(0, cursor);
+    const segmentFn = options?.segment;
+    const isAtomic = options?.isAtomicSegment;
+    const segments =
+      segmentFn === undefined
+        ? [...wordSegmenter.segment(textBeforeCursor)]
+        : [...segmentFn(textBeforeCursor)];
+    let newCursor = cursor;
 
-  // Skip trailing whitespace
-  while (
-    segments.length > 0 &&
-    !isAtomic?.(segments[segments.length - 1]?.segment || "") &&
-    isWhitespaceChar(segments[segments.length - 1]?.segment || "")
-  ) {
-    newCursor -= segments.pop()?.segment.length || 0;
-  }
-
-  if (segments.length === 0) return newCursor;
-
-  const last = segments[segments.length - 1]!;
-
-  if (isAtomic?.(last.segment)) {
-    // Skip one atomic segment.
-    newCursor -= last.segment.length;
-  } else if (last.isWordLike) {
-    // Skip inside one word-like segment, preserving ASCII punctuation boundaries.
-    const segment = last.segment;
-    const matches = [...segment.matchAll(new RegExp(PUNCTUATION_REGEX, "gu"))];
-    if (matches.length <= 0) {
-      newCursor -= segment.length;
-    } else {
-      const lastMatch = matches[matches.length - 1]!;
-      newCursor -= segment.length - (lastMatch.index + lastMatch[0].length);
-    }
-  } else {
-    // Skip non-word non-whitespace run (punctuation)
     while (
       segments.length > 0 &&
-      !isAtomic?.(segments[segments.length - 1]?.segment || "") &&
-      !segments[segments.length - 1]?.isWordLike &&
-      !isWhitespaceChar(segments[segments.length - 1]?.segment || "")
+      isAtomic?.(segments[segments.length - 1]?.segment || "") !== true &&
+      isWhitespaceChar(segments[segments.length - 1]?.segment || "")
     ) {
       newCursor -= segments.pop()?.segment.length || 0;
     }
-  }
 
-  return newCursor;
-}
+    if (segments.length === 0) return newCursor;
 
-/**
- * Find the cursor position after moving one word forward from `cursor` in `text`.
- * Skips leading whitespace, then stops at the next word/punctuation boundary.
- *
- * Pure function - does not mutate any state.
- *
- * @param {string} text - The text to move in.
- * @param {number} cursor - The cursor index.
- * @param {WordNavigationOptions} options - Word boundary options.
- * @returns {number} The new cursor index.
- */
-export function findWordForward(
-  text: string,
-  cursor: number,
-  options?: WordNavigationOptions,
-): number {
-  if (cursor >= text.length) return text.length;
+    const last = segments[segments.length - 1]!;
 
-  const textAfterCursor = text.slice(cursor);
-  const segmentFn = options?.segment;
-  const isAtomic = options?.isAtomicSegment;
-  const segments = segmentFn ? segmentFn(textAfterCursor) : wordSegmenter.segment(textAfterCursor);
-  const iterator = segments[Symbol.iterator]();
-  let next = iterator.next();
-  let newCursor = cursor;
+    if (isAtomic?.(last.segment) === true) {
+      newCursor -= last.segment.length;
+    } else if (last.isWordLike === true) {
+      const segment = last.segment;
+      const matches = [...segment.matchAll(new RegExp(PUNCTUATION_REGEX, "gu"))];
+      if (matches.length <= 0) {
+        newCursor -= segment.length;
+      } else {
+        const lastMatch = matches[matches.length - 1]!;
+        newCursor -= segment.length - (lastMatch.index + lastMatch[0].length);
+      }
+    } else {
+      while (
+        segments.length > 0 &&
+        isAtomic?.(segments[segments.length - 1]?.segment || "") !== true &&
+        segments[segments.length - 1]?.isWordLike !== true &&
+        !isWhitespaceChar(segments[segments.length - 1]?.segment || "")
+      ) {
+        newCursor -= segments.pop()?.segment.length || 0;
+      }
+    }
 
-  // Skip leading whitespace
-  while (!next.done && !isAtomic?.(next.value.segment) && isWhitespaceChar(next.value.segment)) {
-    newCursor += next.value.segment.length;
-    next = iterator.next();
-  }
+    return newCursor;
+  },
+);
 
-  if (next.done) return newCursor;
+export const findWordForward: {
+  (text: string, cursor: number, options?: WordNavigationOptions): number;
+  (cursor: number, options?: WordNavigationOptions): (text: string) => number;
+} = dual(
+  (args) => typeof args[0] === "string",
+  (text: string, cursor: number, options?: WordNavigationOptions): number => {
+    if (cursor >= text.length) return text.length;
 
-  if (isAtomic?.(next.value.segment)) {
-    // Skip one atomic segment.
-    newCursor += next.value.segment.length;
-  } else if (next.value.isWordLike) {
-    // Skip inside one word-like segment, preserving ASCII punctuation boundaries.
-    newCursor += PUNCTUATION_REGEX.exec(next.value.segment)?.index ?? next.value.segment.length;
-  } else {
-    // Skip non-word non-whitespace run (punctuation)
+    const textAfterCursor = text.slice(cursor);
+    const segmentFn = options?.segment;
+    const isAtomic = options?.isAtomicSegment;
+    const segments =
+      segmentFn === undefined ? wordSegmenter.segment(textAfterCursor) : segmentFn(textAfterCursor);
+    const iterator = segments[Symbol.iterator]();
+    let next = iterator.next();
+    let newCursor = cursor;
+
     while (
-      !next.done &&
-      !isAtomic?.(next.value.segment) &&
-      !next.value.isWordLike &&
-      !isWhitespaceChar(next.value.segment)
+      next.done !== true &&
+      isAtomic?.(next.value.segment) !== true &&
+      isWhitespaceChar(next.value.segment)
     ) {
       newCursor += next.value.segment.length;
       next = iterator.next();
     }
-  }
 
-  return newCursor;
-}
+    if (next.done === true) return newCursor;
+
+    if (isAtomic?.(next.value.segment) === true) {
+      newCursor += next.value.segment.length;
+    } else if (next.value.isWordLike === true) {
+      newCursor += PUNCTUATION_REGEX.exec(next.value.segment)?.index ?? next.value.segment.length;
+    } else {
+      while (
+        next.done !== true &&
+        isAtomic?.(next.value.segment) !== true &&
+        next.value.isWordLike !== true &&
+        !isWhitespaceChar(next.value.segment)
+      ) {
+        newCursor += next.value.segment.length;
+        next = iterator.next();
+      }
+    }
+
+    return newCursor;
+  },
+);

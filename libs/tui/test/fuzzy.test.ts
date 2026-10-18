@@ -18,7 +18,6 @@ describe("fuzzyMatch", () => {
   it("exact match has good score", () => {
     const result = fuzzyMatch("test", "test");
     assert.strictEqual(result.matches, true);
-    // Should be negative due to consecutive bonuses
     assert.ok(result.score < 0);
   });
 
@@ -83,7 +82,6 @@ describe("fuzzyFilter", () => {
     const items = ["a_p_p", "app", "application"];
     const result = fuzzyFilter(items, "app", (x: string) => x);
 
-    // "app" should be first (exact consecutive match at start)
     assert.strictEqual(result[0], "app");
   });
 

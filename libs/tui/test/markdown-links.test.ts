@@ -1,8 +1,9 @@
 import assert from "node:assert";
 import { afterEach, describe, it } from "node:test";
 
+import { stripHyperlinkSequences, stripStyleSequences } from "../src/ansi-sequences.ts";
 import { Markdown } from "../src/components/markdown.ts";
-import { resetCapabilitiesCache, setCapabilities } from "../src/terminal-image.ts";
+import { resetCapabilitiesCache, setCapabilities } from "../src/terminal-capabilities.ts";
 import { stripAnsi } from "./markdown-helpers.ts";
 import { defaultMarkdownTheme } from "./test-themes.ts";
 
@@ -53,10 +54,7 @@ describe("Markdown component", () => {
         joined.includes("\x1b]8;;https://example.com\x1b\\"),
         "Should contain OSC 8 hyperlink",
       );
-      // URL should not also appear as raw parenthetical text
-      const rawPlain = lines.map((line) =>
-        line.replace(/\x1b\]8;;[^\x1b]*\x1b\\/gu, "").replace(/\x1b\[[0-9;]*m/gu, ""),
-      );
+      const rawPlain = lines.map((line) => stripStyleSequences(stripHyperlinkSequences(line)));
       assert.ok(
         !rawPlain.join("").includes("(https://example.com)"),
         "URL should not appear twice",
@@ -68,8 +66,6 @@ describe("Markdown component", () => {
 describe("Markdown component", () => {
   describe("HTML-like tags in text", () => {
     it("should render content with HTML-like tags as text", () => {
-      // When the model emits something like <thinking>content</thinking> in regular text,
-      // marked might treat it as HTML and hide the content
       const markdown = new Markdown(
         "This is text with <thinking>hidden content</thinking> that should be visible",
         0,
@@ -78,10 +74,9 @@ describe("Markdown component", () => {
       );
 
       const lines = markdown.render(80);
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, ""));
+      const plainLines = lines.map((line) => stripStyleSequences(line));
       const joinedPlain = plainLines.join(" ");
 
-      // The content inside the tags should be visible
       assert.ok(
         joinedPlain.includes("hidden content") || joinedPlain.includes("<thinking>"),
         "Should render HTML-like tags or their content as text, not hide them",
@@ -97,10 +92,9 @@ describe("Markdown component", () => {
       );
 
       const lines = markdown.render(80);
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, ""));
+      const plainLines = lines.map((line) => stripStyleSequences(line));
       const joinedPlain = plainLines.join("\n");
 
-      // HTML in code blocks should be visible
       assert.ok(
         joinedPlain.includes("<div>") && joinedPlain.includes("</div>"),
         "Should render HTML in code blocks",

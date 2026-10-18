@@ -1,6 +1,7 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
 
+import { parseEscapeSequence } from "../src/ansi-sequences.ts";
 import { formatProgramStatus, isProgramStatusReply } from "../src/program-status.ts";
 
 function decodeMessage(sequence: string): string | undefined {
@@ -8,7 +9,6 @@ function decodeMessage(sequence: string): string | undefined {
   return message === undefined ? undefined : Buffer.from(message, "base64").toString("utf8");
 }
 
-// #10607
 describe("formatProgramStatus", () => {
   it("encodes state, app, kind, and a base64 message", () => {
     assert.equal(
@@ -28,7 +28,8 @@ describe("formatProgramStatus", () => {
       formatProgramStatus({ state: "working", app: "my app", kind: "auth", message: " \n " }),
       "\x1b]7501;state=working\x1b\\",
     );
-    assert.match(formatProgramStatus({ state: "idle", app: "a".repeat(32) }), /:app=a{32}\x1b/u);
+    const padded = formatProgramStatus({ state: "idle", app: "a".repeat(32) });
+    assert.equal(parseEscapeSequence(padded)?.body, `7501;state=idle:app=${"a".repeat(32)}`);
     assert.doesNotMatch(formatProgramStatus({ state: "idle", app: "a".repeat(33) }), /app=/u);
   });
 

@@ -1,6 +1,8 @@
 import assert from "node:assert";
 import { afterEach, beforeEach, describe, it } from "node:test";
 
+import { Effect } from "effect";
+
 import { StdinBuffer } from "../src/stdin-buffer.ts";
 import { wait } from "./stdin-buffer-helpers.ts";
 
@@ -10,14 +12,12 @@ describe("StdinBuffer", () => {
   beforeEach(() => {
     buffer = new StdinBuffer({ timeout: 10 });
 
-    // Collect emitted sequences
     emittedSequences = [];
     buffer.on("data", (sequence) => {
       emittedSequences.push(sequence);
     });
   });
   afterEach(() => buffer.destroy());
-  // Helper to process data through the buffer
   function processInput(data: string | Buffer): void {
     buffer.process(data);
   }
@@ -26,13 +26,11 @@ describe("StdinBuffer", () => {
     beforeEach(() => {
       buffer = new StdinBuffer({ timeout: 10 });
 
-      // Collect emitted sequences
       emittedSequences = [];
       buffer.on("data", (sequence) => {
         emittedSequences.push(sequence);
       });
 
-      // Collect paste events
       emittedPaste = [];
       buffer.on("paste", (data) => {
         emittedPaste.push(data);
@@ -53,14 +51,12 @@ describe("StdinBuffer", () => {
   beforeEach(() => {
     buffer = new StdinBuffer({ timeout: 10 });
 
-    // Collect emitted sequences
     emittedSequences = [];
     buffer.on("data", (sequence) => {
       emittedSequences.push(sequence);
     });
   });
   afterEach(() => buffer.destroy());
-  // Helper to process data through the buffer
   function processInput(data: string | Buffer): void {
     buffer.process(data);
   }
@@ -69,13 +65,11 @@ describe("StdinBuffer", () => {
     beforeEach(() => {
       buffer = new StdinBuffer({ timeout: 10 });
 
-      // Collect emitted sequences
       emittedSequences = [];
       buffer.on("data", (sequence) => {
         emittedSequences.push(sequence);
       });
 
-      // Collect paste events
       emittedPaste = [];
       buffer.on("paste", (data) => {
         emittedPaste.push(data);
@@ -96,14 +90,12 @@ describe("StdinBuffer", () => {
   beforeEach(() => {
     buffer = new StdinBuffer({ timeout: 10 });
 
-    // Collect emitted sequences
     emittedSequences = [];
     buffer.on("data", (sequence) => {
       emittedSequences.push(sequence);
     });
   });
   afterEach(() => buffer.destroy());
-  // Helper to process data through the buffer
   function processInput(data: string | Buffer): void {
     buffer.process(data);
   }
@@ -116,15 +108,16 @@ describe("StdinBuffer", () => {
       assert.strictEqual(buffer.getBuffer(), "");
     });
 
-    it("should clear pending timeouts on destroy", async () => {
-      processInput("\x1b[<35");
-      buffer.destroy();
+    it("should clear pending timeouts on destroy", () =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          processInput("\x1b[<35");
+          buffer.destroy();
 
-      // Wait longer than timeout
-      await wait(15);
+          yield* wait(15);
 
-      // Should not have emitted anything
-      assert.deepStrictEqual(emittedSequences, []);
-    });
+          assert.deepStrictEqual(emittedSequences, []);
+        }),
+      ));
   });
 });

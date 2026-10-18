@@ -1,6 +1,7 @@
 import { getKeybindings } from "../keybindings.ts";
-import type { Component, TuiMouseEvent, TuiMouseEventResult } from "../tui.ts";
-import { truncateToWidth, visibleWidth } from "../utils.ts";
+import { truncateToWidth } from "../text-truncate.ts";
+import type { Component, TuiMouseEvent, TuiMouseEventResult } from "../tui-component.ts";
+import { visibleWidth } from "../utils.ts";
 
 const DEFAULT_PRIMARY_COLUMN_WIDTH = 32;
 const PRIMARY_COLUMN_GAP = 2;
@@ -68,7 +69,6 @@ export class SelectList implements Component {
     this.filteredItems = this.items.filter((item) =>
       item.value.toLowerCase().startsWith(filter.toLowerCase()),
     );
-    // Reset selection when filter changes
     this.selectedIndex = 0;
   }
 
@@ -76,14 +76,11 @@ export class SelectList implements Component {
     this.selectedIndex = Math.max(0, Math.min(index, this.filteredItems.length - 1));
   }
 
-  invalidate(): void {
-    // No cached state to invalidate currently
-  }
+  invalidate(): void {}
 
   render(width: number): string[] {
     const lines: string[] = [];
 
-    // If no items match filter, show message
     if (this.filteredItems.length === 0) {
       lines.push(this.theme.noMatch("  No matching commands"));
       return lines;
@@ -91,27 +88,24 @@ export class SelectList implements Component {
 
     const primaryColumnWidth = this.getPrimaryColumnWidth();
 
-    // Calculate visible range with scrolling
     const { startIndex, endIndex } = this.getVisibleRange();
 
-    // Render visible items
     for (let i = startIndex; i < endIndex; i++) {
       const item = this.filteredItems[i];
-      if (!item) continue;
+      if (item === undefined) continue;
 
       const isSelected = i === this.selectedIndex;
-      const descriptionSingleLine = item.description
-        ? normalizeToSingleLine(item.description)
-        : undefined;
+      const descriptionSingleLine =
+        item.description !== undefined && item.description !== ""
+          ? normalizeToSingleLine(item.description)
+          : undefined;
       lines.push(
         this.renderItem(item, isSelected, width, descriptionSingleLine, primaryColumnWidth),
       );
     }
 
-    // Add scroll indicators if needed
     if (startIndex > 0 || endIndex < this.filteredItems.length) {
       const scrollText = `  (${this.selectedIndex + 1}/${this.filteredItems.length})`;
-      // Truncate if too long for terminal
       lines.push(this.theme.scrollInfo(truncateToWidth(scrollText, width - 2, "")));
     }
 
@@ -120,7 +114,7 @@ export class SelectList implements Component {
 
   handleMouse(event: TuiMouseEvent): TuiMouseEventResult | undefined {
     if (this.filteredItems.length === 0) return undefined;
-    if (event.type === "wheel" && event.wheelDelta) {
+    if (event.type === "wheel" && event.wheelDelta !== undefined && event.wheelDelta !== 0) {
       const delta = event.wheelDelta < 0 ? -1 : 1;
       const previousIndex = this.selectedIndex;
       this.selectedIndex = Math.max(
@@ -130,7 +124,6 @@ export class SelectList implements Component {
       if (this.selectedIndex !== previousIndex) this.notifySelectionChange();
       return { handled: true, render: this.selectedIndex !== previousIndex };
     }
-    // Hover must not change selection: the visible range is centered on it.
     if (event.button !== "left" || (event.type !== "press" && event.type !== "click"))
       return undefined;
     const { startIndex, endIndex } = this.getVisibleRange();
@@ -152,7 +145,7 @@ export class SelectList implements Component {
       this.selectedIndex = clickedIndex;
       if (changed) this.notifySelectionChange();
       const selectedItem = this.filteredItems[this.selectedIndex];
-      if (selectedItem) this.onSelect?.(selectedItem);
+      if (selectedItem !== undefined) this.onSelect?.(selectedItem);
       return { handled: true };
     }
     return undefined;
@@ -160,28 +153,21 @@ export class SelectList implements Component {
 
   handleInput(keyData: string): void {
     const kb = getKeybindings();
-    // Up arrow - wrap to bottom when at top
     if (kb.matches(keyData, "tui.select.up")) {
       this.selectedIndex =
         this.selectedIndex === 0 ? this.filteredItems.length - 1 : this.selectedIndex - 1;
       this.notifySelectionChange();
-    }
-    // Down arrow - wrap to top when at bottom
-    else if (kb.matches(keyData, "tui.select.down")) {
+    } else if (kb.matches(keyData, "tui.select.down")) {
       this.selectedIndex =
         this.selectedIndex === this.filteredItems.length - 1 ? 0 : this.selectedIndex + 1;
       this.notifySelectionChange();
-    }
-    // Enter
-    else if (kb.matches(keyData, "tui.select.confirm")) {
+    } else if (kb.matches(keyData, "tui.select.confirm")) {
       const selectedItem = this.filteredItems[this.selectedIndex];
-      if (selectedItem && this.onSelect) {
+      if (selectedItem !== undefined && this.onSelect !== undefined) {
         this.onSelect(selectedItem);
       }
-    }
-    // Escape or Ctrl+C
-    else if (kb.matches(keyData, "tui.select.cancel")) {
-      if (this.onCancel) {
+    } else if (kb.matches(keyData, "tui.select.cancel")) {
+      if (this.onCancel !== undefined) {
         this.onCancel();
       }
     }
@@ -211,7 +197,7 @@ export class SelectList implements Component {
     const prefix = isSelected ? "→ " : "  ";
     const prefixWidth = visibleWidth(prefix);
 
-    if (descriptionSingleLine && width > 40) {
+    if (descriptionSingleLine !== undefined && descriptionSingleLine !== "" && width > 40) {
       const effectivePrimaryColumnWidth = Math.max(
         1,
         Math.min(primaryColumnWidth, width - prefixWidth - 4),
@@ -226,7 +212,6 @@ export class SelectList implements Component {
       const truncatedValueWidth = visibleWidth(truncatedValue);
       const spacing = " ".repeat(Math.max(1, effectivePrimaryColumnWidth - truncatedValueWidth));
       const descriptionStart = prefixWidth + truncatedValueWidth + spacing.length;
-      // -2 for safety
       const remainingWidth = width - descriptionStart - 2;
 
       if (remainingWidth > MIN_DESCRIPTION_WIDTH) {
@@ -251,9 +236,11 @@ export class SelectList implements Component {
 
   private getPrimaryColumnWidth(): number {
     const { min, max } = this.getPrimaryColumnBounds();
-    const widestPrimary = this.filteredItems.reduce((widest, item) => {
-      return Math.max(widest, visibleWidth(this.getDisplayValue(item)) + PRIMARY_COLUMN_GAP);
-    }, 0);
+    const widestPrimary = this.filteredItems.reduce(
+      (widest, item) =>
+        Math.max(widest, visibleWidth(this.getDisplayValue(item)) + PRIMARY_COLUMN_GAP),
+      0,
+    );
 
     return clamp(widestPrimary, min, max);
   }
@@ -281,15 +268,16 @@ export class SelectList implements Component {
     columnWidth: number,
   ): string {
     const displayValue = this.getDisplayValue(item);
-    const truncatedValue = this.layout.truncatePrimary
-      ? this.layout.truncatePrimary({
-          text: displayValue,
-          maxWidth,
-          columnWidth,
-          item,
-          isSelected,
-        })
-      : truncateToWidth(displayValue, maxWidth, "");
+    const truncatedValue =
+      this.layout.truncatePrimary === undefined
+        ? truncateToWidth(displayValue, maxWidth, "")
+        : this.layout.truncatePrimary({
+            text: displayValue,
+            maxWidth,
+            columnWidth,
+            item,
+            isSelected,
+          });
 
     return truncateToWidth(truncatedValue, maxWidth, "");
   }
@@ -300,7 +288,7 @@ export class SelectList implements Component {
 
   private notifySelectionChange(): void {
     const selectedItem = this.filteredItems[this.selectedIndex];
-    if (selectedItem && this.onSelectionChange) {
+    if (selectedItem !== undefined && this.onSelectionChange !== undefined) {
       this.onSelectionChange(selectedItem);
     }
   }

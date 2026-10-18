@@ -1,10 +1,12 @@
+import { dual } from "effect/Function";
+
 import {
   LAYOUT_NODE,
   type LayoutViewport,
   type StackLayoutEntry,
   type StackLayoutNode,
 } from "../layout-node.ts";
-import { type Component, Container } from "../tui.ts";
+import { type Component, Container } from "../tui-component.ts";
 
 export interface StackEntryOptions {
   basis?: number | "auto";
@@ -86,12 +88,12 @@ export abstract class Stack extends Container {
   }
 }
 
-export function visibleStackEntries(
-  entries: readonly StackLayoutEntry[],
-  viewport: LayoutViewport,
-): StackLayoutEntry[] {
-  return entries.filter((entry) => entry.visible?.(viewport) ?? true);
-}
+export const visibleStackEntries: {
+  (entries: readonly StackLayoutEntry[], viewport: LayoutViewport): StackLayoutEntry[];
+  (viewport: LayoutViewport): (entries: readonly StackLayoutEntry[]) => StackLayoutEntry[];
+} = dual(2, (entries: readonly StackLayoutEntry[], viewport: LayoutViewport): StackLayoutEntry[] =>
+  entries.filter((entry) => entry.visible?.(viewport) ?? true),
+);
 
 function clampSize(size: number, entry: StackLayoutEntry): number {
   const min = Math.max(0, Math.floor(entry.minSize ?? 0));
@@ -119,12 +121,12 @@ function distribute(
       });
     if (candidates.length === 0) return;
 
-    const totalWeight = candidates.reduce((sum, { entry, index }) => {
-      return (
+    const totalWeight = candidates.reduce(
+      (sum, { entry, index }) =>
         sum +
-        (mode === "grow" ? (entry.grow ?? 0) : (entry.shrink ?? 1) * Math.max(1, sizes[index]!))
-      );
-    }, 0);
+        (mode === "grow" ? (entry.grow ?? 0) : (entry.shrink ?? 1) * Math.max(1, sizes[index]!)),
+      0,
+    );
     let distributed = 0;
     for (const { entry, index } of candidates) {
       if (remaining <= 0) break;
@@ -145,28 +147,43 @@ function distribute(
   }
 }
 
-export function allocateStackSizes(
-  entries: readonly StackLayoutEntry[],
-  intrinsicSizes: readonly number[],
-  availableSize: number | undefined,
-  gap: number,
-): number[] {
-  const sizes = entries.map((entry, index) =>
-    clampSize(
-      entry.basis === undefined || entry.basis === "auto"
-        ? (intrinsicSizes[index] ?? 0)
-        : entry.basis,
-      entry,
-    ),
-  );
-  if (availableSize === undefined) return sizes;
+export const allocateStackSizes: {
+  (
+    entries: readonly StackLayoutEntry[],
+    intrinsicSizes: readonly number[],
+    availableSize: number | undefined,
+    gap: number,
+  ): number[];
+  (
+    intrinsicSizes: readonly number[],
+    availableSize: number | undefined,
+    gap: number,
+  ): (entries: readonly StackLayoutEntry[]) => number[];
+} = dual(
+  4,
+  (
+    entries: readonly StackLayoutEntry[],
+    intrinsicSizes: readonly number[],
+    availableSize: number | undefined,
+    gap: number,
+  ): number[] => {
+    const sizes = entries.map((entry, index) =>
+      clampSize(
+        entry.basis === undefined || entry.basis === "auto"
+          ? (intrinsicSizes[index] ?? 0)
+          : entry.basis,
+        entry,
+      ),
+    );
+    if (availableSize === undefined) return sizes;
 
-  const contentSize = Math.max(
-    0,
-    Math.floor(availableSize) - Math.max(0, entries.length - 1) * gap,
-  );
-  const total = sizes.reduce((sum, size) => sum + size, 0);
-  if (total < contentSize) distribute(sizes, entries, contentSize - total, "grow");
-  else if (total > contentSize) distribute(sizes, entries, total - contentSize, "shrink");
-  return sizes;
-}
+    const contentSize = Math.max(
+      0,
+      Math.floor(availableSize) - Math.max(0, entries.length - 1) * gap,
+    );
+    const total = sizes.reduce((sum, size) => sum + size, 0);
+    if (total < contentSize) distribute(sizes, entries, contentSize - total, "grow");
+    else if (total > contentSize) distribute(sizes, entries, total - contentSize, "shrink");
+    return sizes;
+  },
+);

@@ -4,8 +4,9 @@ import * as path from "node:path";
 import { type AutocompleteProvider, CombinedAutocompleteProvider } from "@msa/tui";
 import { beforeAll, describe, expect, test, vi } from "vite-plus/test";
 
+import { type Component, Container, type Focusable } from "../../../libs/tui/src/tui-component.ts";
+import type { TUI } from "../../../libs/tui/src/tui-interface.ts";
 import { TuiMainScreen } from "../../../libs/tui/src/tui-main-screen.ts";
-import { type Component, Container, type Focusable, type TUI } from "../../../libs/tui/src/tui.ts";
 import { VirtualTerminal } from "../../../libs/tui/test/virtual-terminal.ts";
 import type { AutocompleteProviderFactory } from "../src/core/extensions/types.ts";
 import type { QuietStartup } from "../src/core/settings-manager.ts";

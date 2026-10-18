@@ -1,0 +1,209 @@
+import assert from "node:assert";
+import { describe, it } from "node:test";
+
+import { Effect } from "effect";
+
+import type { AutocompleteProvider, AutocompleteSuggestions } from "../src/autocomplete.ts";
+import { Editor } from "../src/components/editor.ts";
+import { applyCompletion, createTestTUI, flushAutocomplete, typeText } from "./editor-helpers.ts";
+import { defaultEditorTheme } from "./test-themes.ts";
+
+describe("Editor component", () => {
+  describe("Autocomplete", () => {
+    debouncesAutocompleteWhileTyping();
+    debouncesAutocompleteWhileTyping2();
+    debouncesCustomTriggerCharactersAutocompleteWhile();
+    resetsCustomTriggerCharactersProviderChanges();
+    abortsActiveAutocompleteTypingContinues();
+  });
+});
+
+function debouncesAutocompleteWhileTyping(): void {
+  it("debounces @ autocomplete while typing", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const editor = new Editor(createTestTUI(), defaultEditorTheme);
+        let suggestionCalls = 0;
+
+        const mockProvider: AutocompleteProvider = {
+          getSuggestions: (lines, _cursorLine, cursorCol) => {
+            suggestionCalls += 1;
+            const text = (lines[0] || "").slice(0, cursorCol);
+            return Promise.resolve({
+              items: [{ value: "@main.ts", label: "main.ts" }],
+              prefix: text,
+            });
+          },
+          applyCompletion,
+        };
+
+        editor.setAutocompleteProvider(mockProvider);
+
+        typeText(editor, "@mai");
+
+        assert.strictEqual(suggestionCalls, 0);
+        assert.strictEqual(editor.isShowingAutocomplete(), false);
+
+        yield* Effect.sleep(50);
+        yield* flushAutocomplete;
+
+        assert.strictEqual(suggestionCalls, 1);
+        assert.strictEqual(editor.isShowingAutocomplete(), true);
+      }),
+    ));
+}
+
+function debouncesAutocompleteWhileTyping2(): void {
+  it("debounces # autocomplete while typing", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const editor = new Editor(createTestTUI(), defaultEditorTheme);
+        let suggestionCalls = 0;
+
+        const mockProvider: AutocompleteProvider = {
+          getSuggestions: (lines, _cursorLine, cursorCol) => {
+            suggestionCalls += 1;
+            const text = (lines[0] || "").slice(0, cursorCol);
+            return Promise.resolve({
+              items: [{ value: "#2983", label: "#2983" }],
+              prefix: text,
+            });
+          },
+          applyCompletion,
+        };
+
+        editor.setAutocompleteProvider(mockProvider);
+
+        typeText(editor, "#298");
+
+        assert.strictEqual(suggestionCalls, 0);
+        assert.strictEqual(editor.isShowingAutocomplete(), false);
+
+        yield* Effect.sleep(50);
+        yield* flushAutocomplete;
+
+        assert.strictEqual(suggestionCalls, 1);
+        assert.strictEqual(editor.isShowingAutocomplete(), true);
+      }),
+    ));
+}
+
+function debouncesCustomTriggerCharactersAutocompleteWhile(): void {
+  it("debounces custom triggerCharacters autocomplete while typing", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const editor = new Editor(createTestTUI(), defaultEditorTheme);
+        let suggestionCalls = 0;
+
+        editor.setAutocompleteProvider({
+          triggerCharacters: ["$"],
+          getSuggestions: (lines, _cursorLine, cursorCol) => {
+            suggestionCalls += 1;
+            const prefix = (lines[0] || "").slice(0, cursorCol);
+            return Promise.resolve({
+              items: [{ value: "$skill-name", label: "skill-name" }],
+              prefix,
+            });
+          },
+          applyCompletion,
+        });
+
+        typeText(editor, "$sk");
+
+        assert.strictEqual(suggestionCalls, 0);
+        yield* Effect.sleep(50);
+        yield* flushAutocomplete;
+
+        assert.strictEqual(suggestionCalls, 1);
+        assert.strictEqual(editor.isShowingAutocomplete(), true);
+      }),
+    ));
+}
+
+function resetsCustomTriggerCharactersProviderChanges(): void {
+  it("resets custom triggerCharacters when provider changes", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const editor = new Editor(createTestTUI(), defaultEditorTheme);
+        let suggestionCalls = 0;
+
+        editor.setAutocompleteProvider({
+          triggerCharacters: ["$"],
+          getSuggestions: () =>
+            Promise.resolve({
+              items: [{ value: "$skill-name", label: "skill-name" }],
+              prefix: "$",
+            }),
+          applyCompletion,
+        });
+        editor.setAutocompleteProvider({
+          getSuggestions: () => {
+            suggestionCalls += 1;
+            return Promise.resolve({
+              items: [{ value: "$skill-name", label: "skill-name" }],
+              prefix: "$",
+            });
+          },
+          applyCompletion,
+        });
+
+        editor.handleInput("$");
+        editor.handleInput("s");
+        yield* Effect.sleep(50);
+        yield* flushAutocomplete;
+
+        assert.strictEqual(suggestionCalls, 0);
+        assert.strictEqual(editor.isShowingAutocomplete(), false);
+      }),
+    ));
+}
+
+function abortsActiveAutocompleteTypingContinues(): void {
+  it("aborts active @ autocomplete when typing continues", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const editor = new Editor(createTestTUI(), defaultEditorTheme);
+        let aborts = 0;
+
+        const mockProvider = abortableProvider(() => {
+          aborts += 1;
+        });
+
+        editor.setAutocompleteProvider(mockProvider);
+
+        typeText(editor, "@mai");
+        yield* Effect.sleep(250);
+        editor.handleInput("n");
+        yield* Effect.sleep(50);
+
+        assert.strictEqual(aborts, 1);
+      }),
+    ));
+}
+
+function abortableProvider(onAbort: () => void): AutocompleteProvider {
+  return {
+    getSuggestions: (_lines, _cursorLine, _cursorCol, options) =>
+      Effect.runPromise(
+        Effect.sleep(500).pipe(
+          Effect.as<AutocompleteSuggestions | null>({
+            items: [{ value: "@main.ts", label: "main.ts" }],
+            prefix: "@main",
+          }),
+          Effect.race(
+            Effect.callback<null>((resume) => {
+              options.signal.addEventListener(
+                "abort",
+                () => {
+                  onAbort();
+                  resume(Effect.succeed(null));
+                },
+                { once: true },
+              );
+            }),
+          ),
+        ),
+      ),
+    applyCompletion,
+  };
+}

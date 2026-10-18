@@ -1,7 +1,4 @@
-// Core TUI interfaces and classes
-
 export { Marked, type Token, type Tokens } from "marked";
-// Autocomplete support
 export {
   type AutocompleteItem,
   type AutocompleteProvider,
@@ -9,16 +6,14 @@ export {
   CombinedAutocompleteProvider,
   type SlashCommand,
 } from "./autocomplete.ts";
-// Colors and styling
+export { backgroundAnsi, foregroundAnsi, styleText, styleTextWithAnsi } from "./color-ansi.ts";
 export {
-  backgroundAnsi,
   type Color,
   type ColorMixSpace,
   colorToHex,
   colorToOkhsl,
   colorToOklch,
   colorToRgb,
-  foregroundAnsi,
   type IndexedColor,
   indexedColor,
   mixColors,
@@ -30,13 +25,10 @@ export {
   parseColor,
   type RgbColorValue,
   rgbColor,
-  styleText,
-  styleTextWithAnsi,
   type TerminalColorMode,
   type TextAttributes,
   type TextStyle,
 } from "./colors.ts";
-// Components
 export { Box } from "./components/box.ts";
 export { CancellableLoader } from "./components/cancellable-loader.ts";
 export { Editor, type EditorOptions, type EditorTheme } from "./components/editor.ts";
@@ -85,24 +77,22 @@ export {
   type StackOptions,
   VStack,
 } from "./components/v-stack.ts";
-// Editor component interface (for custom editors)
 export type { EditorComponent } from "./editor-component.ts";
-// Fuzzy matching
 export { type FuzzyMatch, fuzzyFilter, fuzzyMatch } from "./fuzzy.ts";
-// Keybindings
 export {
-  getKeybindings,
   type Keybinding,
-  type KeybindingConflict,
   type KeybindingDefinition,
   type KeybindingDefinitions,
   type Keybindings,
   type KeybindingsConfig,
+  TUI_KEYBINDINGS,
+} from "./keybinding-definitions.ts";
+export {
+  getKeybindings,
+  type KeybindingConflict,
   KeybindingsManager,
   setKeybindings,
-  TUI_KEYBINDINGS,
 } from "./keybindings.ts";
-// Keyboard input handling
 export {
   decodeKittyPrintable,
   isKeyRelease,
@@ -115,53 +105,54 @@ export {
   parseKey,
   setKittyProtocolActive,
 } from "./keys.ts";
-// LaTeX rendering
 export { type RenderLatexOptions, renderLatex } from "./latex.ts";
-// Native platform integration
 export { getNativeClipboard, type NativeClipboard } from "./native-platform.ts";
 export { oklabToOkhslLightness } from "./oklab.ts";
-// Program status reporting (OSC 7501)
 export { formatProgramStatus, type ProgramStatus } from "./program-status.ts";
-// Input buffering for batch splitting
 export { StdinBuffer, type StdinBufferEventMap, type StdinBufferOptions } from "./stdin-buffer.ts";
-// Terminal interface and implementations
-export { isAppleTerminalSession, ProcessTerminal, type Terminal } from "./terminal.ts";
-// Terminal colors
+export { isAppleTerminalSession, type Terminal } from "./terminal-protocol.ts";
+export { ProcessTerminal } from "./terminal.ts";
 export {
   parseTerminalColorSchemeReport,
   type RgbColor,
   type TerminalColorScheme,
   type TerminalColors,
 } from "./terminal-colors.ts";
-// Terminal image support
 export {
   allocateImageId,
-  type CellDimensions,
-  calculateImageRows,
   deleteAllKittyImages,
   deleteKittyImage,
-  detectCapabilities,
-  encodeITerm2,
   encodeKitty,
+} from "./terminal-image-kitty.ts";
+export { primeTerminalCapabilities } from "./terminal-capabilities-probe.ts";
+export {
+  type CellDimensions,
+  detectCapabilities,
   getCapabilities,
   getCellDimensions,
-  getGifDimensions,
-  getImageDimensions,
-  getJpegDimensions,
-  getPngDimensions,
   getTerminalColorMode,
-  getWebpDimensions,
-  hyperlink,
-  type ImageDimensions,
   type ImageProtocol,
-  type ImageRenderOptions,
-  imageFallback,
-  renderImage,
   resetCapabilitiesCache,
   setCapabilities,
   setCapabilityOverrides,
   setCellDimensions,
   type TerminalCapabilities,
+} from "./terminal-capabilities.ts";
+export {
+  calculateImageRows,
+  getGifDimensions,
+  getImageDimensions,
+  getJpegDimensions,
+  getPngDimensions,
+  getWebpDimensions,
+  type ImageDimensions,
+} from "./terminal-image-size.ts";
+export {
+  encodeITerm2,
+  hyperlink,
+  type ImageRenderOptions,
+  imageFallback,
+  renderImage,
 } from "./terminal-image.ts";
 export {
   type Component,
@@ -170,35 +161,34 @@ export {
   compositeTuiLine,
   type Focusable,
   isFocusable,
-  isViewportTUI,
-  type OverlayAnchor,
-  type OverlayBounds,
-  type OverlayHandle,
-  type OverlayMargin,
-  type OverlayOptions,
-  type OverlayUnfocusOptions,
   renderFakeCursor,
-  type SizeValue,
-  type TUI,
-  type TuiInputListener,
-  type TuiInputListenerResult,
-  type TuiMode,
   type TuiMouseButton,
   type TuiMouseEvent,
   type TuiMouseEventResult,
   type TuiMouseEventType,
+} from "./tui-component.ts";
+export {
+  isViewportTUI,
+  type OverlayBounds,
+  type OverlayHandle,
+  type OverlayUnfocusOptions,
+  type TUI,
+  type TuiInputListener,
+  type TuiInputListenerResult,
+  type TuiMode,
   type TuiStopOptions,
   type ViewportTUI,
-} from "./tui.ts";
+} from "./tui-interface.ts";
+export {
+  type OverlayAnchor,
+  type OverlayMargin,
+  type OverlayOptions,
+  type SizeValue,
+} from "./tui-overlay-layout.ts";
 export { TuiAltScreen, type TuiAltScreenOptions } from "./tui-alt-screen.ts";
 export { TuiMainScreen, type TuiMainScreenRenderState } from "./tui-main-screen.ts";
-// Utilities
-export {
-  getOsc8LinkAtColumn,
-  sliceByColumn,
-  stripTerminalSequences,
-  truncateToWidth,
-  visibleWidth,
-  wrapTextWithAnsi,
-} from "./utils.ts";
+export { getOsc8LinkAtColumn, sliceByColumn } from "./text-slice.ts";
+export { stripTerminalSequences, visibleWidth } from "./utils.ts";
+export { truncateToWidth } from "./text-truncate.ts";
+export { wrapTextWithAnsi } from "./text-wrap.ts";
 export type { WheelScrollLines } from "./wheel-scroll.ts";

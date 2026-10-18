@@ -67,7 +67,10 @@ interface HostShape {
   readonly lines: (path: string) => Stream.Stream<string>;
   readonly makeDirectory: (path: string) => Effect.Effect<void>;
   readonly makeTempDirectory: (prefix: string) => Effect.Effect<string>;
-  readonly readDirectory: (path: string) => Effect.Effect<ReadonlyArray<string>>;
+  readonly readDirectory: (
+    path: string,
+    options?: { readonly recursive?: boolean },
+  ) => Effect.Effect<ReadonlyArray<string>>;
   readonly readText: (path: string) => Effect.Effect<string>;
   readonly relative: (from: string, to: string) => string;
   readonly remove: (path: string) => Effect.Effect<void>;
@@ -83,27 +86,28 @@ class Host extends Context.Service<Host, HostShape>()("msa-monorepo/scripts/host
 
 const outputOption = (mode: OutputMode | undefined) => ({ stream: mode ?? "pipe" });
 
+const stdinOption = (mode: CommandOptions["stdin"], input: Queue.Queue<string, Cause.Done>) =>
+  mode === "pipe"
+    ? { stream: Stream.fromQueue(input).pipe(Stream.encodeText), endOnDone: true }
+    : { stream: mode ?? "ignore" };
+
+const processOptions = (options: CommandOptions, input: Queue.Queue<string, Cause.Done>) => ({
+  cwd: options.cwd,
+  env: options.env === undefined ? undefined : { ...options.env },
+  extendEnv: options.extendEnv ?? true,
+  shell: options.shell ?? false,
+  stdin: stdinOption(options.stdin, input),
+  stdout: outputOption(options.stdout),
+  stderr: outputOption(options.stderr),
+});
+
 const makeSpawn = Effect.gen(function* () {
-  // oxlint-disable-next-line effecttsgo/unstable-api-usage -- ChildProcess/FileSystem/Path (effect/unstable) are the only Effect platform APIs
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
   return (options: CommandOptions): Effect.Effect<RunningCommand, never, Scope.Scope> =>
     Effect.gen(function* () {
       const input = yield* Queue.unbounded<string, Cause.Done>();
-      const stdin =
-        options.stdin === "pipe"
-          ? { stream: Stream.fromQueue(input).pipe(Stream.encodeText), endOnDone: true }
-          : { stream: options.stdin ?? "ignore" };
       const handle = yield* spawner.spawn(
-        // oxlint-disable-next-line effecttsgo/unstable-api-usage -- ChildProcess/FileSystem/Path (effect/unstable) are the only Effect platform APIs
-        ChildProcess.make(options.command, options.args, {
-          cwd: options.cwd,
-          env: options.env === undefined ? undefined : { ...options.env },
-          extendEnv: options.extendEnv ?? true,
-          shell: options.shell ?? false,
-          stdin,
-          stdout: outputOption(options.stdout),
-          stderr: outputOption(options.stderr),
-        }),
+        ChildProcess.make(options.command, options.args, processOptions(options, input)),
       );
       return {
         endInput: Queue.end(input).pipe(Effect.asVoid),
@@ -119,7 +123,6 @@ const makeSpawn = Effect.gen(function* () {
 });
 
 const makeFiles = Effect.gen(function* () {
-  // oxlint-disable-next-line effecttsgo/unstable-api-usage -- ChildProcess/FileSystem/Path (effect/unstable) are the only Effect platform APIs
   const fs = yield* FileSystem.FileSystem;
   return {
     chmod: (target: string, mode: number) => fs.chmod(target, mode).pipe(Effect.orDie),
@@ -129,7 +132,8 @@ const makeFiles = Effect.gen(function* () {
     makeDirectory: (target: string) =>
       fs.makeDirectory(target, { recursive: true }).pipe(Effect.orDie),
     makeTempDirectory: (prefix: string) => fs.makeTempDirectory({ prefix }).pipe(Effect.orDie),
-    readDirectory: (target: string) => fs.readDirectory(target).pipe(Effect.orDie),
+    readDirectory: (target: string, options?: { readonly recursive?: boolean }) =>
+      fs.readDirectory(target, options).pipe(Effect.orDie),
     readText: (target: string) => fs.readFileString(target).pipe(Effect.orDie),
     remove: (target: string) =>
       fs.remove(target, { recursive: true, force: true }).pipe(Effect.orDie),
@@ -150,7 +154,6 @@ const makeFiles = Effect.gen(function* () {
 });
 
 const makePaths = Effect.gen(function* () {
-  // oxlint-disable-next-line effecttsgo/unstable-api-usage -- ChildProcess/FileSystem/Path (effect/unstable) are the only Effect platform APIs
   const path = yield* Path.Path;
   return {
     basename: (target: string, suffix?: string) => path.basename(target, suffix),
@@ -181,9 +184,7 @@ const hostLayer: Layer.Layer<Host> = Layer.effect(
       );
     return Host.of({ ...(yield* makeFiles), ...(yield* makePaths), run, spawn });
   }),
-)
-  // oxlint-disable-next-line effecttsgo/unstable-api-usage -- ChildProcess/FileSystem/Path (effect/unstable) are the only Effect platform APIs
-  .pipe(Layer.provide(NodeServices.layer));
+).pipe(Layer.provide(NodeServices.layer));
 
 const scriptLayer = Layer.mergeAll(hostLayer, DateTime.layerCurrentZoneLocal);
 

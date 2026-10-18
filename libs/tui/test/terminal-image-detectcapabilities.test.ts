@@ -1,7 +1,8 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
 
-import { detectCapabilities, encodeITerm2 } from "../src/terminal-image.ts";
+import { detectCapabilities } from "../src/terminal-capabilities.ts";
+import { encodeITerm2 } from "../src/terminal-image.ts";
 import { withEnv } from "./terminal-image-helpers.ts";
 
 describe("detectCapabilities", () => {
@@ -42,7 +43,6 @@ describe("detectCapabilities", () => {
 });
 
 describe("detectCapabilities", () => {
-  // #10573
   it("enables hyperlinks and Kitty images for Herdr", () => {
     withEnv(
       {

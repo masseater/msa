@@ -123,8 +123,8 @@ const createBashStats = (): BashCommandStats => ({ calls: 0, estimatedTokens: 0,
 const estimateTokenCount = (text: string): number => Math.ceil(text.length / 4);
 
 const blockText = (block: Block): string => {
-  if (block.type === "text" && Predicate.isString(block.text)) return block.text;
-  if (block.type === "image" && Predicate.isString(block.data)) return block.data;
+  if (block["type"] === "text" && Predicate.isString(block["text"])) return block["text"];
+  if (block["type"] === "image" && Predicate.isString(block["data"])) return block["data"];
   return JSON.stringify(block);
 };
 
@@ -136,7 +136,7 @@ const contentText = (content: MessageContent | undefined): string => {
 
 const getBashCommand = (args: unknown): string | undefined => {
   if (!Predicate.isObject(args) || !("command" in args)) return undefined;
-  const command: unknown = args.command;
+  const command: unknown = args["command"];
   return Predicate.isString(command) ? command : undefined;
 };
 
@@ -169,15 +169,15 @@ const bucketLabels = (): ReadonlyArray<string> =>
 const recordToolCalls = (aggregate: Aggregate, content: ReadonlyArray<Block>): void => {
   for (const block of content) {
     if (
-      block.type !== "toolCall" ||
-      !Predicate.isString(block.name) ||
-      !Predicate.isString(block.id)
+      block["type"] !== "toolCall" ||
+      !Predicate.isString(block["name"]) ||
+      !Predicate.isString(block["id"])
     ) {
       continue;
     }
-    getStats(aggregate.tools, block.name, createToolStats).calls += 1;
-    const bashCommand = block.name === "bash" ? getBashCommand(block.arguments) : undefined;
-    aggregate.callsById.set(block.id, { bashCommand, toolName: block.name });
+    getStats(aggregate.tools, block["name"], createToolStats).calls += 1;
+    const bashCommand = block["name"] === "bash" ? getBashCommand(block["arguments"]) : undefined;
+    aggregate.callsById.set(block["id"], { bashCommand, toolName: block["name"] });
     if (bashCommand !== undefined) {
       getStats(aggregate.bashCommands, commandKey(bashCommand), createBashStats).calls += 1;
     }

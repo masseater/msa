@@ -1,15 +1,15 @@
-import type { Component } from "../tui.ts";
-import { truncateToWidth } from "../utils.ts";
+import { type CancelDelay, runAfter } from "../delay.ts";
+import { truncateToWidth } from "../text-truncate.ts";
+import type { Component } from "../tui-component.ts";
 
 const DEFAULT_DURATION_MS = 1000;
 
 interface FlashEntry {
   id: number;
   message: string;
-  timer: NodeJS.Timeout;
+  cancel: CancelDelay;
 }
 
-/** Transient messages composited by the alternate-screen renderer. */
 export class AltScreenFlashContainer implements Component {
   private readonly entries: FlashEntry[] = [];
   private nextId = 0;
@@ -21,22 +21,18 @@ export class AltScreenFlashContainer implements Component {
 
   flash(message: string, durationMs = DEFAULT_DURATION_MS): void {
     const id = this.nextId++;
-    const timer = setTimeout(
-      () => {
-        const index = this.entries.findIndex((entry) => entry.id === id);
-        if (index === -1) return;
-        this.entries.splice(index, 1);
-        this.requestRender();
-      },
-      Math.max(0, durationMs),
-    );
-    timer.unref();
-    this.entries.push({ id, message, timer });
+    const cancel = runAfter(Math.max(0, durationMs), () => {
+      const index = this.entries.findIndex((entry) => entry.id === id);
+      if (index === -1) return;
+      this.entries.splice(index, 1);
+      this.requestRender();
+    });
+    this.entries.push({ id, message, cancel });
     this.requestRender();
   }
 
   dispose(): void {
-    for (const entry of this.entries) clearTimeout(entry.timer);
+    for (const entry of this.entries) entry.cancel();
     this.entries.length = 0;
   }
 

@@ -18,6 +18,7 @@ const codemodeIsolatedEntryForbids: ReadonlyArray<string> = [
   "codemode/src/index.ts",
   "runtime/host.ts",
   "runtime/worker.ts",
+  "runtime/worker-main.ts",
   "codemode/src/wasm.ts",
 ];
 

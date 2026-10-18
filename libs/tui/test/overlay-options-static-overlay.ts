@@ -1,4 +1,4 @@
-import type { Component } from "../src/tui.ts";
+import type { Component } from "../src/tui-component.ts";
 
 export class StaticOverlay implements Component {
   private lines: string[];
@@ -10,7 +10,6 @@ export class StaticOverlay implements Component {
   }
 
   render(width: number): string[] {
-    // Store the width we were asked to render at for verification
     this.requestedWidth = width;
     return this.lines;
   }

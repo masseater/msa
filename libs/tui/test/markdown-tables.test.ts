@@ -1,226 +1,280 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
 
-import { Markdown, type MarkdownTheme } from "../src/components/markdown.ts";
-import { resetCapabilitiesCache, setCapabilities } from "../src/terminal-image.ts";
-import { TuiMainScreen } from "../src/tui-main-screen.ts";
-import type { TUI } from "../src/tui.ts";
-import { getCell } from "./markdown-helpers.ts";
+import { stripStyleSequences } from "../src/ansi-sequences.ts";
+import { Markdown } from "../src/components/markdown.ts";
+import { resetCapabilitiesCache, setCapabilities } from "../src/terminal-capabilities.ts";
 import { defaultMarkdownTheme } from "./test-themes.ts";
-import { VirtualTerminal } from "./virtual-terminal.ts";
 
 describe("Markdown component", () => {
   describe("Tables", () => {
-    it("should render table with alignment", () => {
-      const markdown = new Markdown(
-        `| Left | Center | Right |
-| :--- | :---: | ---: |
-| A | B | C |
-| Long text | Middle | End |`,
-        0,
-        0,
-        defaultMarkdownTheme,
+    shouldRenderTableAlignment();
+    shouldHandleTablesVaryingColumn();
+    shouldWrapTableCellsTable();
+    shouldWrapLongCellContent();
+    shouldWrapLongUnbrokenTokens();
+    shouldWrapStyledInlineCode();
+    shouldHandleExtremelyNarrowWidth();
+    shouldRenderTableCorrectlyFits();
+    shouldRespectPaddingXCalculatingTable();
+    shouldNotAddTrailingBlank();
+  });
+});
+
+function shouldRenderTableAlignment(): void {
+  it("should render table with alignment", () => {
+    const markdown = new Markdown(
+      `| Left | Center | Right |
+  | :--- | :---: | ---: |
+  | A | B | C |
+  | Long text | Middle | End |`,
+      0,
+      0,
+      defaultMarkdownTheme,
+    );
+
+    const lines = markdown.render(80);
+    const plainLines = lines.map((line) => stripStyleSequences(line));
+
+    assert.ok(plainLines.some((line) => line.includes("Left")));
+    assert.ok(plainLines.some((line) => line.includes("Center")));
+    assert.ok(plainLines.some((line) => line.includes("Right")));
+    assert.ok(plainLines.some((line) => line.includes("Long text")));
+  });
+}
+
+function shouldHandleTablesVaryingColumn(): void {
+  it("should handle tables with varying column widths", () => {
+    const markdown = new Markdown(
+      `| Short | Very long column header |
+  | --- | --- |
+  | A | This is a much longer cell content |
+  | B | Short |`,
+      0,
+      0,
+      defaultMarkdownTheme,
+    );
+
+    const lines = markdown.render(80);
+
+    assert.ok(lines.length > 0);
+
+    const plainLines = lines.map((line) => stripStyleSequences(line));
+    assert.ok(plainLines.some((line) => line.includes("Very long column header")));
+    assert.ok(plainLines.some((line) => line.includes("This is a much longer cell content")));
+  });
+}
+
+function shouldWrapTableCellsTable(): void {
+  it("should wrap table cells when table exceeds available width", () => {
+    const markdown = new Markdown(
+      `| Command | Description | Example |
+  | --- | --- | --- |
+  | npm install | Install all dependencies | npm install |
+  | npm run build | Build the project | npm run build |`,
+      0,
+      0,
+      defaultMarkdownTheme,
+    );
+
+    const lines = markdown.render(50);
+    const plainLines = lines.map((line) => stripStyleSequences(line).trimEnd());
+
+    for (const line of plainLines) {
+      assert.ok(line.length <= 50, `Line exceeds width 50: "${line}" (length: ${line.length})`);
+    }
+
+    const allText = plainLines.join(" ");
+    assert.ok(allText.includes("Command"), "Should contain 'Command'");
+    assert.ok(allText.includes("Description"), "Should contain 'Description'");
+    assert.ok(allText.includes("npm install"), "Should contain 'npm install'");
+    assert.ok(allText.includes("Install"), "Should contain 'Install'");
+  });
+}
+
+function shouldWrapLongCellContent(): void {
+  it("should wrap long cell content to multiple lines", () => {
+    const markdown = new Markdown(
+      `| Header |
+  | --- |
+  | This is a very long cell content that should wrap |`,
+      0,
+      0,
+      defaultMarkdownTheme,
+    );
+
+    const lines = markdown.render(25);
+    const plainLines = lines.map((line) => stripStyleSequences(line).trimEnd());
+
+    const dataRows = plainLines.filter((line) => line.startsWith("│") && !line.includes("─"));
+    assert.ok(dataRows.length > 2, `Expected wrapped rows, got ${dataRows.length} rows`);
+
+    const allText = plainLines.join(" ");
+    assert.ok(allText.includes("very long"), "Should preserve 'very long'");
+    assert.ok(allText.includes("cell content"), "Should preserve 'cell content'");
+    assert.ok(allText.includes("should wrap"), "Should preserve 'should wrap'");
+  });
+}
+
+function shouldWrapLongUnbrokenTokens(): void {
+  it("should wrap long unbroken tokens inside table cells (not only at line start)", () => {
+    setCapabilities({ images: null, trueColor: false, hyperlinks: false });
+    const url = "https://example.com/this/is/a/very/long/url/that/should/wrap";
+    const markdown = new Markdown(
+      `| Value |
+  | --- |
+  | prefix ${url} |`,
+      0,
+      0,
+      defaultMarkdownTheme,
+    );
+
+    const width = 30;
+    const lines = markdown.render(width);
+    resetCapabilitiesCache();
+    const plainLines = lines.map((line) => stripStyleSequences(line).trimEnd());
+
+    for (const line of plainLines) {
+      assert.ok(
+        line.length <= width,
+        `Line exceeds width ${width}: "${line}" (length: ${line.length})`,
       );
+    }
 
-      const lines = markdown.render(80);
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, ""));
+    const tableLines = plainLines.filter((line) => line.startsWith("│"));
+    assert.ok(tableLines.length > 0, "Expected table rows to render");
+    for (const line of tableLines) {
+      const borderCount = line.split("│").length - 1;
+      assert.strictEqual(borderCount, 2, `Expected 2 borders, got ${borderCount}: "${line}"`);
+    }
 
-      // Check headers
-      assert.ok(plainLines.some((line) => line.includes("Left")));
-      assert.ok(plainLines.some((line) => line.includes("Center")));
-      assert.ok(plainLines.some((line) => line.includes("Right")));
-      // Check content
-      assert.ok(plainLines.some((line) => line.includes("Long text")));
-    });
+    const extracted = plainLines.join("").replace(/[│├┤─\s]/gu, "");
+    assert.ok(extracted.includes("prefix"), "Should preserve 'prefix'");
+    assert.ok(extracted.includes(url), "Should preserve URL");
   });
-});
+}
 
-describe("Markdown component", () => {
-  describe("Tables", () => {
-    it("should handle tables with varying column widths", () => {
-      const markdown = new Markdown(
-        `| Short | Very long column header |
-| --- | --- |
-| A | This is a much longer cell content |
-| B | Short |`,
-        0,
-        0,
-        defaultMarkdownTheme,
+function shouldWrapStyledInlineCode(): void {
+  it("should wrap styled inline code inside table cells without breaking borders", () => {
+    const markdown = new Markdown(
+      `| Code |
+  | --- |
+  | \`averyveryveryverylongidentifier\` |`,
+      0,
+      0,
+      defaultMarkdownTheme,
+    );
+
+    const width = 20;
+    const lines = markdown.render(width);
+    const joinedOutput = lines.join("\n");
+    assert.ok(joinedOutput.includes("\x1b[33m"), "Inline code should be styled (yellow)");
+
+    const plainLines = lines.map((line) => stripStyleSequences(line).trimEnd());
+    for (const line of plainLines) {
+      assert.ok(
+        line.length <= width,
+        `Line exceeds width ${width}: "${line}" (length: ${line.length})`,
       );
+    }
 
-      const lines = markdown.render(80);
-
-      // Should render without errors
-      assert.ok(lines.length > 0);
-
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, ""));
-      assert.ok(plainLines.some((line) => line.includes("Very long column header")));
-      assert.ok(plainLines.some((line) => line.includes("This is a much longer cell content")));
-    });
-  });
-});
-
-describe("Markdown component", () => {
-  describe("Tables", () => {
-    it("should wrap table cells when table exceeds available width", () => {
-      const markdown = new Markdown(
-        `| Command | Description | Example |
-| --- | --- | --- |
-| npm install | Install all dependencies | npm install |
-| npm run build | Build the project | npm run build |`,
-        0,
-        0,
-        defaultMarkdownTheme,
-      );
-
-      // Render at narrow width that forces wrapping
-      const lines = markdown.render(50);
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, "").trimEnd());
-
-      // All lines should fit within width
-      for (const line of plainLines) {
-        assert.ok(line.length <= 50, `Line exceeds width 50: "${line}" (length: ${line.length})`);
-      }
-
-      // Content should still be present (possibly wrapped across lines)
-      const allText = plainLines.join(" ");
-      assert.ok(allText.includes("Command"), "Should contain 'Command'");
-      assert.ok(allText.includes("Description"), "Should contain 'Description'");
-      assert.ok(allText.includes("npm install"), "Should contain 'npm install'");
-      assert.ok(allText.includes("Install"), "Should contain 'Install'");
-    });
-  });
-});
-
-describe("Markdown component", () => {
-  describe("Tables", () => {
-    tablesCases2();
-  });
-});
-
-function tablesCases2(): void {
-  it("should not leak wrapped link styles into table borders or plain cells", async () => {
-    const source = `| Link | Plain |
-| --- | --- |
-| [**one two three four five six**](https://example.com) | normal text |`;
-
-    try {
-      for await (const hyperlinks of [true, false]) {
-        setCapabilities({ images: null, trueColor: false, hyperlinks });
-        const terminal = new VirtualTerminal(24, 16);
-        const tui: TUI = new TuiMainScreen(terminal);
-        tui.addChild(new Markdown(source, 0, 0, defaultMarkdownTheme));
-        tui.start();
-
-        try {
-          await terminal.waitForRender();
-          const viewport = terminal.getViewport();
-          const row = viewport.findIndex((line) => line.includes("one") && line.includes("norm"));
-          assert.notStrictEqual(row, -1, `Missing wrapped table row: ${JSON.stringify(viewport)}`);
-          const line = viewport[row];
-          assert.ok(line !== undefined);
-          const linkCol = line.indexOf("one");
-          const separatorCol = line.indexOf("│", linkCol);
-          const plainCol = line.indexOf("norm");
-          assert.ok(linkCol >= 0 && separatorCol > linkCol && plainCol > separatorCol);
-          assert.strictEqual(getCell(terminal, row, linkCol).isFgDefault(), false);
-          assert.strictEqual(getCell(terminal, row, separatorCol).isFgDefault(), true);
-          assert.strictEqual(getCell(terminal, row, plainCol).isFgDefault(), true);
-          assert.notStrictEqual(getCell(terminal, row, linkCol).isBold(), 0);
-          assert.strictEqual(getCell(terminal, row, separatorCol).isBold(), 0);
-          assert.strictEqual(getCell(terminal, row, plainCol).isBold(), 0);
-
-          if (!hyperlinks) {
-            const urlRow = viewport.findIndex((viewportLine) => viewportLine.includes("https"));
-            assert.notStrictEqual(
-              urlRow,
-              -1,
-              `Missing fallback URL row: ${JSON.stringify(viewport)}`,
-            );
-            const urlLine = viewport[urlRow];
-            assert.ok(urlLine !== undefined);
-            const urlCol = urlLine.indexOf("https");
-            const urlSeparatorCol = urlLine.indexOf("│", urlCol);
-            const urlBorderCol = urlLine.lastIndexOf("│");
-            assert.ok(urlCol >= 0 && urlSeparatorCol > urlCol && urlBorderCol > urlSeparatorCol);
-            assert.notStrictEqual(getCell(terminal, urlRow, urlCol).isDim(), 0);
-            assert.strictEqual(getCell(terminal, urlRow, urlSeparatorCol).isDim(), 0);
-            assert.strictEqual(getCell(terminal, urlRow, urlBorderCol).isDim(), 0);
-          }
-        } finally {
-          tui.stop();
-        }
-      }
-    } finally {
-      resetCapabilitiesCache();
+    const tableLines = plainLines.filter((line) => line.startsWith("│"));
+    for (const line of tableLines) {
+      const borderCount = line.split("│").length - 1;
+      assert.strictEqual(borderCount, 2, `Expected 2 borders, got ${borderCount}: "${line}"`);
     }
   });
 }
 
-describe("Markdown component", () => {
-  describe("Tables", () => {
-    tablesCases3();
-  });
-});
+function shouldHandleExtremelyNarrowWidth(): void {
+  it("should handle extremely narrow width gracefully", () => {
+    const markdown = new Markdown(
+      `| A | B | C |
+  | --- | --- | --- |
+  | 1 | 2 | 3 |`,
+      0,
+      0,
+      defaultMarkdownTheme,
+    );
 
-function tablesCases3(): void {
-  it("should restore the enclosing style after a wrapped table link", async () => {
-    const quoteColor = 0x123456;
-    const theme: MarkdownTheme = {
-      ...defaultMarkdownTheme,
-      // Use a basic wrapper that does not automatically reopen itself after nested resets.
-      quote: (text) => `\x1b[38;2;18;52;86m${text}\x1b[39m`,
-      link: (text) => `\x1b[38;2;129;162;190m${text}\x1b[39m`,
-    };
-    const source = `> | Link | Plain |
-> | --- | --- |
-> | [one two three four five six](https://example.com) | normal text |`;
+    const lines = markdown.render(15);
+    const plainLines = lines.map((line) => stripStyleSequences(line).trimEnd());
 
-    setCapabilities({ images: null, trueColor: true, hyperlinks: true });
-    const terminal = new VirtualTerminal(28, 10);
-    const tui: TUI = new TuiMainScreen(terminal);
-    tui.addChild(new Markdown(source, 0, 0, theme));
-    tui.start();
+    assert.ok(lines.length > 0, "Should produce output");
 
-    try {
-      await terminal.waitForRender();
-      const viewport = terminal.getViewport();
-      const row = viewport.findIndex((line) => line.includes("one") && line.includes("normal"));
-      assert.notStrictEqual(
-        row,
-        -1,
-        `Missing wrapped blockquote table row: ${JSON.stringify(viewport)}`,
-      );
-      const line = viewport[row];
-      assert.ok(line !== undefined);
-      const linkCol = line.indexOf("one");
-      const separatorCol = line.indexOf("│", linkCol);
-      const plainCol = line.indexOf("normal");
-      assert.ok(linkCol >= 0 && separatorCol > linkCol && plainCol > separatorCol);
-
-      assert.notStrictEqual(getCell(terminal, row, linkCol).getFgColor(), quoteColor);
-      assert.strictEqual(getCell(terminal, row, separatorCol).getFgColor(), quoteColor);
-      assert.strictEqual(getCell(terminal, row, plainCol).getFgColor(), quoteColor);
-
-      const finalRow = viewport.findIndex((line) => line.includes("five six"));
-      assert.notStrictEqual(
-        finalRow,
-        -1,
-        `Missing final wrapped link row: ${JSON.stringify(viewport)}`,
-      );
-      const finalLine = viewport[finalRow];
-      assert.ok(finalLine !== undefined);
-      const finalLinkCol = finalLine.indexOf("five six");
-      const finalSeparatorCol = finalLine.indexOf("│", finalLinkCol);
-      const finalBorderCol = finalLine.lastIndexOf("│");
-      assert.ok(
-        finalLinkCol >= 0 && finalSeparatorCol > finalLinkCol && finalBorderCol > finalSeparatorCol,
-      );
-      assert.strictEqual(getCell(terminal, finalRow, finalSeparatorCol).getFgColor(), quoteColor);
-      assert.strictEqual(getCell(terminal, finalRow, finalBorderCol).getFgColor(), quoteColor);
-    } finally {
-      tui.stop();
-      resetCapabilitiesCache();
+    for (const line of plainLines) {
+      assert.ok(line.length <= 15, `Line exceeds width 15: "${line}" (length: ${line.length})`);
     }
+  });
+}
+
+function shouldRenderTableCorrectlyFits(): void {
+  it("should render table correctly when it fits naturally", () => {
+    const markdown = new Markdown(
+      `| A | B |
+  | --- | --- |
+  | 1 | 2 |`,
+      0,
+      0,
+      defaultMarkdownTheme,
+    );
+
+    const lines = markdown.render(80);
+    const plainLines = lines.map((line) => stripStyleSequences(line).trimEnd());
+
+    const headerLine = plainLines.find((line) => line.includes("A") && line.includes("B"));
+    assert.ok(headerLine, "Should have header row");
+    assert.ok(headerLine?.includes("│"), "Header should have borders");
+
+    const separatorLine = plainLines.find((line) => line.includes("├") && line.includes("┼"));
+    assert.ok(separatorLine, "Should have separator row");
+
+    const dataLine = plainLines.find((line) => line.includes("1") && line.includes("2"));
+    assert.ok(dataLine, "Should have data row");
+  });
+}
+
+function shouldRespectPaddingXCalculatingTable(): void {
+  it("should respect paddingX when calculating table width", () => {
+    const markdown = new Markdown(
+      `| Column One | Column Two |
+  | --- | --- |
+  | Data 1 | Data 2 |`,
+      2,
+      0,
+      defaultMarkdownTheme,
+    );
+
+    const lines = markdown.render(40);
+    const plainLines = lines.map((line) => stripStyleSequences(line).trimEnd());
+
+    for (const line of plainLines) {
+      assert.ok(line.length <= 40, `Line exceeds width 40: "${line}" (length: ${line.length})`);
+    }
+
+    const tableRow = plainLines.find((line) => line.includes("│"));
+    assert.ok(tableRow?.startsWith("  "), "Table should have left padding");
+  });
+}
+
+function shouldNotAddTrailingBlank(): void {
+  it("should not add a trailing blank line when table is the last rendered block", () => {
+    const markdown = new Markdown(
+      `| Name |
+  | --- |
+  | Alice |`,
+      0,
+      0,
+      defaultMarkdownTheme,
+    );
+
+    const lines = markdown.render(80);
+    const plainLines = lines.map((line) => stripStyleSequences(line).trimEnd());
+
+    assert.notStrictEqual(
+      plainLines.at(-1),
+      "",
+      `Expected table to end without a blank line: ${JSON.stringify(plainLines)}`,
+    );
   });
 }

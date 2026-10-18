@@ -24,7 +24,7 @@
     "native/clipboard.h",
     "native/win32/prebuilds/**/*.node",
     "native/win32/src/**/*.c",
-    "native/win32/build.mjs",
+    "native/win32/build*.ts",
     "native/win32/README.md",
     "native/darwin/prebuilds/**/*.node",
     "native/darwin/src/**/*.m",
@@ -45,15 +45,18 @@
     "build": "tsc -p tsconfig.build.json",
     "build:native:darwin": "native/darwin/build.sh",
     "build:native:linux": "native/linux/build.sh",
-    "build:native:win32": "node native/win32/build.mjs",
+    "build:native:win32": "node native/win32/build.ts",
     "test": "node --test --test-reporter=dot --test-reporter-destination=stdout test/*.test.ts"
   },
   "dependencies": {
+    "@effect/platform-node": "catalog:",
+    "culori": "catalog:",
     "effect": "catalog:stack",
     "get-east-asian-width": "catalog:",
     "marked": "catalog:"
   },
   "devDependencies": {
+    "@types/culori": "catalog:",
     "@xterm/headless": "catalog:",
     "chalk": "catalog:"
   },

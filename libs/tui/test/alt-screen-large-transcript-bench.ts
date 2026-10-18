@@ -1,31 +1,14 @@
-/**
- * Alternate-screen large-transcript benchmark.
- *
- * Mirrors the fullscreen transcript shape used by the coding agent:
- *
- * ScrollView
- * └── document Container
- *     ├── header Container
- *     ├── resources Container
- *     └── chat Container
- *         └── 2,500 alternating user/assistant Markdown components
- *
- * Measures warm steady frames, one-line scrolling, streaming updates to the
- * final assistant message, and width changes that invalidate Markdown caches.
- *
- * Run from the repository root:
- *   node --experimental-strip-types libs/tui/test/alt-screen-large-transcript-bench.ts
- */
-
 import { performance } from "node:perf_hooks";
+
+import { Console, Effect } from "effect";
 
 import { Markdown, type MarkdownTheme } from "../src/components/markdown.ts";
 import { ScrollView } from "../src/components/scroll-view.ts";
 import { Text } from "../src/components/text.ts";
 import { VStack } from "../src/components/v-stack.ts";
-import type { Terminal } from "../src/terminal.ts";
+import type { Terminal } from "../src/terminal-protocol.ts";
 import { TuiAltScreen } from "../src/tui-alt-screen.ts";
-import { Container } from "../src/tui.ts";
+import { Container } from "../src/tui-component.ts";
 
 const COLUMNS = 80;
 const ROWS = 50;
@@ -55,7 +38,9 @@ class NullTerminal implements Terminal {
 
   start(_onInput: (data: string) => void, _onResize: () => void): void {}
   stop(): void {}
-  async drainInput(): Promise<void> {}
+  drainInput(): Promise<void> {
+    return Effect.runPromise(Effect.sync(() => {}));
+  }
   write(_data: string): void {}
   get kittyProtocolActive(): boolean {
     return false;
@@ -121,7 +106,7 @@ for (let index = 0; index < COMPONENT_COUNT; index++) {
   chat.addChild(markdown);
   if (index === COMPONENT_COUNT - 1) streamingMarkdown = markdown;
 }
-if (!streamingMarkdown)
+if (streamingMarkdown === undefined)
   throw new Error("Benchmark requires at least one assistant Markdown component");
 
 const document = new Container();
@@ -152,11 +137,15 @@ function measure(name: string, frames: number, beforeFrame: (frame: number) => v
     tui.renderNow();
   }
   const millisecondsPerFrame = (performance.now() - start) / frames;
-  console.log(`${name}: ${millisecondsPerFrame.toFixed(3)} ms/frame (${frames} frames)`);
+  Effect.runSync(
+    Console.log(`${name}: ${millisecondsPerFrame.toFixed(3)} ms/frame (${frames} frames)`),
+  );
 }
 
-console.log(
-  `components=${COMPONENT_COUNT} lines=${totalLines} viewport=${terminal.columns}x${terminal.rows}`,
+Effect.runSync(
+  Console.log(
+    `components=${COMPONENT_COUNT} lines=${totalLines} viewport=${terminal.columns}x${terminal.rows}`,
+  ),
 );
 measure("steady", 200, () => {});
 transcript.scrollTo(Math.floor(totalLines / 2));

@@ -5,7 +5,7 @@ import {
   normalizeAppleTerminalInput,
   normalizeNativeShiftEnterInput,
   resolveEscapeTimeoutMs,
-} from "../src/terminal.ts";
+} from "../src/terminal-protocol.ts";
 import { setupNegotiation, withOverride, working } from "./terminal-helpers.ts";
 
 describe("resolveEscapeTimeoutMs", () => {
@@ -137,7 +137,6 @@ describe("ProcessTerminal Kitty keyboard protocol negotiation", () => {
       harness.send("\x1b[?62;4;52c");
       assert.equal(harness.getInput(), undefined);
 
-      // The TUI's color query uses DA1 as its own sentinel.
       harness.send("\x1b[?62;4;52c");
       assert.equal(harness.getInput(), "\x1b[?62;4;52c");
     } finally {

@@ -8,8 +8,9 @@
 import { createInterface } from "node:readline";
 
 import { type ImageContent, modelsAreEqual } from "@msa/ai";
-import { setCapabilityOverrides } from "@msa/tui";
+import { primeTerminalCapabilities, setCapabilityOverrides } from "@msa/tui";
 import chalk from "chalk";
+import { Effect } from "effect";
 
 import { type Args, type Mode, normalizeSessionName, parseArgs, printHelp } from "./cli/args.ts";
 import {
@@ -966,6 +967,7 @@ export async function main(args: string[], options?: MainOptions) {
   const { services, session, modelFallbackMessage } = runtime;
   const { settingsManager, modelRuntime, resourceLoader } = services;
   setCapabilityOverrides(settingsManager.getTerminalCapabilityOverrides());
+  if (appMode === "interactive") await Effect.runPromise(primeTerminalCapabilities);
   applyHttpProxySettings(settingsManager.getGlobalSettings().httpProxy);
   configureHttpDispatcher(settingsManager.getHttpIdleTimeoutMs());
 

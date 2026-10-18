@@ -9,11 +9,8 @@ const text = `hello ${marker} world`;
 
 const isAtomic = (s: string) => s === marker;
 
-// The functions slice text before calling segment(), so we map each expected
-// substring to its pre-split segments.
 const segmentMap = new Map<string, Intl.SegmentData[]>([
   [
-    // full text (not used but for clarity)
     text,
     [
       { segment: "hello", index: 0, input: text, isWordLike: true },
@@ -24,7 +21,6 @@ const segmentMap = new Map<string, Intl.SegmentData[]>([
     ],
   ],
   [
-    // backward from end: slice(0, 31) = full text
     text.slice(0, text.length),
     [
       { segment: "hello", index: 0, input: text, isWordLike: true },
@@ -35,7 +31,6 @@ const segmentMap = new Map<string, Intl.SegmentData[]>([
     ],
   ],
   [
-    // backward from 26: slice(0, 26) = "hello [paste #1 +5 lines] "
     text.slice(0, 26),
     [
       { segment: "hello", index: 0, input: text, isWordLike: true },
@@ -45,7 +40,6 @@ const segmentMap = new Map<string, Intl.SegmentData[]>([
     ],
   ],
   [
-    // forward from 6: slice(6) = "[paste #1 +5 lines] world"
     text.slice(6),
     [
       { segment: marker, index: 0, input: text, isWordLike: true },
@@ -62,56 +56,54 @@ const opts = {
 
 describe("findWordBackward", () => {
   it("basic words: hello world", () => {
-    const text = "hello world";
-    assert.strictEqual(findWordBackward(text, 11), 6);
-    assert.strictEqual(findWordBackward(text, 6), 0);
+    const input = "hello world";
+    assert.strictEqual(findWordBackward(input, 11), 6);
+    assert.strictEqual(findWordBackward(input, 6), 0);
   });
 
   it("dotted: foo.bar", () => {
-    const text = "foo.bar";
-    assert.strictEqual(findWordBackward(text, 7), 4);
-    assert.strictEqual(findWordBackward(text, 4), 3);
-    assert.strictEqual(findWordBackward(text, 3), 0);
+    const input = "foo.bar";
+    assert.strictEqual(findWordBackward(input, 7), 4);
+    assert.strictEqual(findWordBackward(input, 4), 3);
+    assert.strictEqual(findWordBackward(input, 3), 0);
   });
 
   it("colon: foo:bar", () => {
-    const text = "foo:bar";
-    assert.strictEqual(findWordBackward(text, 7), 4);
-    assert.strictEqual(findWordBackward(text, 4), 3);
-    assert.strictEqual(findWordBackward(text, 3), 0);
+    const input = "foo:bar";
+    assert.strictEqual(findWordBackward(input, 7), 4);
+    assert.strictEqual(findWordBackward(input, 4), 3);
+    assert.strictEqual(findWordBackward(input, 3), 0);
   });
 
   it("path: path/to/file", () => {
-    const text = "path/to/file";
-    assert.strictEqual(findWordBackward(text, 12), 8);
-    assert.strictEqual(findWordBackward(text, 8), 7);
-    // "/to" is one word-like segment with "/" as punctuation boundary
-    assert.strictEqual(findWordBackward(text, 7), 5);
-    assert.strictEqual(findWordBackward(text, 5), 4);
-    assert.strictEqual(findWordBackward(text, 4), 0);
+    const input = "path/to/file";
+    assert.strictEqual(findWordBackward(input, 12), 8);
+    assert.strictEqual(findWordBackward(input, 8), 7);
+    assert.strictEqual(findWordBackward(input, 7), 5);
+    assert.strictEqual(findWordBackward(input, 5), 4);
+    assert.strictEqual(findWordBackward(input, 4), 0);
   });
 
   it("CJK mixed", () => {
-    const text = "你好世界 test";
-    assert.strictEqual(findWordBackward(text, text.length), 5);
-    // Intl.Segmenter treats each CJK char as a separate word-like segment
-    assert.strictEqual(findWordBackward(text, 5), 2);
-    assert.strictEqual(findWordBackward(text, 2), 0);
+    const input = "你好世界 test";
+    assert.strictEqual(findWordBackward(input, input.length), 5);
+    assert.strictEqual(findWordBackward(input, 5), 2);
+    assert.strictEqual(findWordBackward(input, 2), 0);
   });
 
   it("whitespace at boundaries", () => {
-    const text = "  hello  ";
-    assert.strictEqual(findWordBackward(text, 9), 2);
-    assert.strictEqual(findWordBackward(text, 2), 0);
+    const input = "  hello  ";
+    assert.strictEqual(findWordBackward(input, 9), 2);
+    assert.strictEqual(findWordBackward(input, 2), 0);
   });
 });
 
 describe("findWordBackward", () => {
   it("punctuation run: foo...bar", () => {
-    const text = "foo...bar";
-    assert.strictEqual(findWordBackward(text, 9), 6);
-    assert.strictEqual(findWordBackward(text, 6), 3);
-    assert.strictEqual(findWordBackward(text, 3), 0);
+    const input = "foo...bar";
+    assert.strictEqual(findWordBackward(input, 9), 6);
+    assert.strictEqual(findWordBackward(input, 6), 3);
+    assert.strictEqual(findWordBackward(input, 3), 0);
   });
 
   it("cursor at 0 returns 0", () => {
@@ -121,62 +113,61 @@ describe("findWordBackward", () => {
 
 describe("findWordForward", () => {
   it("basic words: hello world", () => {
-    const text = "hello world";
-    assert.strictEqual(findWordForward(text, 0), 5);
-    assert.strictEqual(findWordForward(text, 5), 11);
+    const input = "hello world";
+    assert.strictEqual(findWordForward(input, 0), 5);
+    assert.strictEqual(findWordForward(input, 5), 11);
   });
 
   it("dotted: foo.bar", () => {
-    const text = "foo.bar";
-    assert.strictEqual(findWordForward(text, 0), 3);
-    assert.strictEqual(findWordForward(text, 3), 4);
-    assert.strictEqual(findWordForward(text, 4), 7);
+    const input = "foo.bar";
+    assert.strictEqual(findWordForward(input, 0), 3);
+    assert.strictEqual(findWordForward(input, 3), 4);
+    assert.strictEqual(findWordForward(input, 4), 7);
   });
 
   it("colon: foo:bar", () => {
-    const text = "foo:bar";
-    assert.strictEqual(findWordForward(text, 0), 3);
-    assert.strictEqual(findWordForward(text, 3), 4);
-    assert.strictEqual(findWordForward(text, 4), 7);
+    const input = "foo:bar";
+    assert.strictEqual(findWordForward(input, 0), 3);
+    assert.strictEqual(findWordForward(input, 3), 4);
+    assert.strictEqual(findWordForward(input, 4), 7);
   });
 
   it("path: path/to/file", () => {
-    const text = "path/to/file";
-    assert.strictEqual(findWordForward(text, 0), 4);
-    assert.strictEqual(findWordForward(text, 4), 5);
-    assert.strictEqual(findWordForward(text, 5), 7);
-    assert.strictEqual(findWordForward(text, 7), 8);
-    assert.strictEqual(findWordForward(text, 8), 12);
+    const input = "path/to/file";
+    assert.strictEqual(findWordForward(input, 0), 4);
+    assert.strictEqual(findWordForward(input, 4), 5);
+    assert.strictEqual(findWordForward(input, 5), 7);
+    assert.strictEqual(findWordForward(input, 7), 8);
+    assert.strictEqual(findWordForward(input, 8), 12);
   });
 
   it("CJK mixed", () => {
-    const text = "你好世界 test";
-    const firstEnd = findWordForward(text, 0);
+    const input = "你好世界 test";
+    const firstEnd = findWordForward(input, 0);
     assert.ok(firstEnd > 0);
     assert.ok(firstEnd <= 4);
-    // Walk to end
     let pos = 0;
-    while (pos < text.length) {
-      const next = findWordForward(text, pos);
+    while (pos < input.length) {
+      const next = findWordForward(input, pos);
       if (next === pos) break;
       pos = next;
     }
-    assert.strictEqual(pos, text.length);
+    assert.strictEqual(pos, input.length);
   });
 });
 
 describe("findWordForward", () => {
   it("whitespace at boundaries", () => {
-    const text = "  hello  ";
-    assert.strictEqual(findWordForward(text, 0), 7);
-    assert.strictEqual(findWordForward(text, 7), 9);
+    const input = "  hello  ";
+    assert.strictEqual(findWordForward(input, 0), 7);
+    assert.strictEqual(findWordForward(input, 7), 9);
   });
 
   it("punctuation run: foo...bar", () => {
-    const text = "foo...bar";
-    assert.strictEqual(findWordForward(text, 0), 3);
-    assert.strictEqual(findWordForward(text, 3), 6);
-    assert.strictEqual(findWordForward(text, 6), 9);
+    const input = "foo...bar";
+    assert.strictEqual(findWordForward(input, 0), 3);
+    assert.strictEqual(findWordForward(input, 3), 6);
+    assert.strictEqual(findWordForward(input, 6), 9);
   });
 
   it("cursor at end returns end", () => {

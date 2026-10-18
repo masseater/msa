@@ -1,22 +1,10 @@
-/** Lines moved per mouse-wheel event, or `"auto"` to accelerate fast wheel spins. */
 export type WheelScrollLines = number | "auto";
 
-// Several events closer than this belong to one physical notch (Ghostty emits them ~4 ms apart)
-// or come from a high-resolution source. They move one line each and do not accelerate.
 const BURST_GAP_MS = 5;
-// A pause longer than this ends a scroll gesture.
 const GESTURE_GAP_MS = 200;
-// Average event gap that maps to one line per event. Faster events scale up proportionally.
 const REFERENCE_GAP_MS = 100;
 const MAX_AUTO_LINES = 6;
 
-/**
- * Local macOS terminals receive wheel and trackpad deltas that the OS has already accelerated,
- * and they emit one event per line. Other platforms, and SSH sessions where the client platform
- * is unknown, usually send one event per wheel notch.
- *
- * @returns {boolean} Whether wheel deltas arrive already accelerated.
- */
 function terminalAcceleratesWheel(): boolean {
   const env = process.env;
   return (
@@ -27,13 +15,6 @@ function terminalAcceleratesWheel(): boolean {
   );
 }
 
-/**
- * Converts wheel events into line counts.
- *
- * In `"auto"` mode on terminals that do not accelerate wheel input, the count follows event
- * velocity: an isolated notch moves one line, while a fast spin moves up to six lines per event.
- * For example, notches 100 ms apart move 1 line each, 50 ms apart move 2, and 20 ms apart move 5.
- */
 export class WheelScrollAccelerator {
   private lines: WheelScrollLines;
   private readonly accelerate: boolean;
@@ -52,13 +33,6 @@ export class WheelScrollAccelerator {
     this.reset();
   }
 
-  /**
-   * Return the positive line count for a wheel event in `direction` at time `now` (milliseconds).
-   *
-   * @param {-1 | 1} direction - -1 for up, 1 for down.
-   * @param {number} now - Event time in milliseconds.
-   * @returns {number} The line count.
-   */
   next(direction: -1 | 1, now: number): number {
     if (this.lines !== "auto")
       return Number.isFinite(this.lines) ? Math.max(1, Math.floor(this.lines)) : 1;

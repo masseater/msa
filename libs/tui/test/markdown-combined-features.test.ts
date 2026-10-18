@@ -1,6 +1,7 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
 
+import { stripStyleSequences } from "../src/ansi-sequences.ts";
 import { Markdown } from "../src/components/markdown.ts";
 import { stripAnsi } from "./markdown-helpers.ts";
 import { defaultMarkdownTheme } from "./test-themes.ts";
@@ -24,14 +25,11 @@ describe("Markdown component", () => {
       );
 
       const lines = markdown.render(80);
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, ""));
+      const plainLines = lines.map((line) => stripStyleSequences(line));
 
-      // Check heading
       assert.ok(plainLines.some((line) => line.includes("Test Document")));
-      // Check list
       assert.ok(plainLines.some((line) => line.includes("- Item 1")));
       assert.ok(plainLines.some((line) => line.includes("    - Nested item")));
-      // Check table
       assert.ok(plainLines.some((line) => line.includes("Col1")));
       assert.ok(plainLines.some((line) => line.includes("│")));
     });

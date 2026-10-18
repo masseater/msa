@@ -1,24 +1,20 @@
-import type { TUI } from "../tui.ts";
+import { type CancelDelay, runEvery } from "../delay.ts";
+import type { TUI } from "../tui-interface.ts";
 import { Text } from "./text.ts";
 
 export interface LoaderIndicatorOptions {
-  /** Animation frames. Use an empty array to hide the indicator. */
   frames?: string[];
-  /** Frame interval in milliseconds for animated indicators. */
   intervalMs?: number;
 }
 
 const DEFAULT_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 const DEFAULT_INTERVAL_MS = 80;
 
-/**
- * Loader component that updates with an optional spinning animation.
- */
 export class Loader extends Text {
   private frames = [...DEFAULT_FRAMES];
   private intervalMs = DEFAULT_INTERVAL_MS;
   private currentFrame = 0;
-  private intervalId: NodeJS.Timeout | null = null;
+  private cancelAnimation: CancelDelay | null = null;
   private ui: TUI | null = null;
   private renderIndicatorVerbatim = false;
   private spinnerColorFn: (str: string) => string;
@@ -50,9 +46,9 @@ export class Loader extends Text {
   }
 
   stop(): void {
-    if (this.intervalId) {
-      clearInterval(this.intervalId);
-      this.intervalId = null;
+    if (this.cancelAnimation !== null) {
+      this.cancelAnimation();
+      this.cancelAnimation = null;
     }
   }
 
@@ -70,7 +66,7 @@ export class Loader extends Text {
     this.renderIndicatorVerbatim = indicator !== undefined;
     this.frames = indicator?.frames === undefined ? [...DEFAULT_FRAMES] : [...indicator.frames];
     this.intervalMs =
-      indicator?.intervalMs && indicator.intervalMs > 0
+      indicator?.intervalMs !== undefined && indicator.intervalMs > 0
         ? indicator.intervalMs
         : DEFAULT_INTERVAL_MS;
     this.currentFrame = 0;
@@ -82,10 +78,10 @@ export class Loader extends Text {
     if (this.frames.length <= 1) {
       return;
     }
-    this.intervalId = setInterval(() => {
+    this.cancelAnimation = runEvery(this.intervalMs, () => {
       this.currentFrame = (this.currentFrame + 1) % this.frames.length;
       this.updateDisplay();
-    }, this.intervalMs);
+    });
   }
 
   protected getRenderedIndicator(): string {
@@ -97,7 +93,7 @@ export class Loader extends Text {
     const renderedFrame = this.getRenderedIndicator();
     const indicator = renderedFrame.length > 0 ? `${renderedFrame} ` : "";
     this.setText(`${indicator}${this.messageColorFn(this.message)}`);
-    if (this.ui) {
+    if (this.ui !== null) {
       this.ui.requestRender();
     }
   }

@@ -1,8 +1,7 @@
 import { SelectList } from "../src/components/select-list.ts";
-import { Container } from "../src/tui.ts";
+import { Container } from "../src/tui-component.ts";
 import { selectTheme } from "./mouse-components-helpers.ts";
 
-/** A settings submenu that routes keys to its nested list, like the coding agent's theme submenu. */
 export class SubmenuHost extends Container {
   readonly list = new SelectList(
     [

@@ -4,11 +4,10 @@ import {
   type TuiMouseDispatchResult,
   type TuiMouseEvent,
   type TuiMouseEventResult,
-} from "../tui.ts";
+} from "../tui-component.ts";
 
 export type MouseRegionHandler = (event: TuiMouseEvent) => TuiMouseEventResult | undefined;
 
-/** Adds mouse handling to an existing component without changing its rendering. */
 export class MouseRegion implements Component {
   private readonly child: Component;
   private readonly onMouse: MouseRegionHandler;

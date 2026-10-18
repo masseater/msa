@@ -1,7 +1,10 @@
 #!/usr/bin/env node
-// oxlint-disable-next-line import/no-unassigned-import -- sandbox 環境のセットアップを副作用で読み込む
-import "./sandbox-env-setup.ts";
-// oxlint-disable-next-line import/no-unassigned-import -- runtime のセットアップを副作用で読み込む
-import "./runtime-setup.ts";
-// oxlint-disable-next-line import/no-unassigned-import -- CLI 本体（副作用で実行される）
-import "../cli.ts";
+import { restoreSandboxEnv } from "./restore-sandbox-env.ts";
+
+restoreSandboxEnv();
+const { setupBunRuntime } = await import("./runtime-setup.ts");
+setupBunRuntime();
+const { setupCli } = await import("../cli/setup.ts");
+const { main } = await import("../main.ts");
+setupCli();
+main(process.argv.slice(2));

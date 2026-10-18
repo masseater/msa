@@ -1,18 +1,13 @@
-import type { Component } from "../tui.ts";
-import { applyBackgroundToLine, flattenLines, visibleWidth, wrapTextWithAnsi } from "../utils.ts";
+import { applyBackgroundToLine, wrapTextWithAnsi } from "../text-wrap.ts";
+import type { Component } from "../tui-component.ts";
+import { flattenLines, visibleWidth } from "../utils.ts";
 
-/**
- * Text component - displays multi-line text with word wrapping
- */
 export class Text implements Component {
   private text: string;
-  // Left/right padding
   private paddingX: number;
-  // Top/bottom padding
   private paddingY: number;
   private customBgFn?: ((text: string) => string) | undefined;
 
-  // Cache for rendered output
   private cachedText?: string | undefined;
   private cachedWidth?: number | undefined;
   private cachedLines?: string[] | undefined;
@@ -54,14 +49,52 @@ export class Text implements Component {
     this.cachedLines = undefined;
   }
 
+  private renderContentLines(width: number): string[] {
+    const normalizedText = this.text.replace(/\t/gu, "   ");
+
+    const paddingX = Math.min(this.paddingX, Math.max(0, Math.floor((width - 1) / 2)));
+    const contentWidth = Math.max(1, width - paddingX * 2);
+
+    const margin = " ".repeat(paddingX);
+    const contentLines: string[] = [];
+
+    for (const line of wrapTextWithAnsi(normalizedText, contentWidth)) {
+      const lineWithMargins = margin + line + margin;
+
+      if (this.customBgFn === undefined) {
+        const paddingNeeded = Math.max(0, width - visibleWidth(lineWithMargins));
+        contentLines.push(lineWithMargins + " ".repeat(paddingNeeded));
+      } else {
+        contentLines.push(applyBackgroundToLine(lineWithMargins, width, this.customBgFn));
+      }
+    }
+
+    return contentLines;
+  }
+
+  private renderEmptyLines(width: number): string[] {
+    const emptyLine = " ".repeat(width);
+    const emptyLines: string[] = [];
+    for (let i = 0; i < this.paddingY; i++) {
+      const line =
+        this.customBgFn === undefined
+          ? emptyLine
+          : applyBackgroundToLine(emptyLine, width, this.customBgFn);
+      emptyLines.push(line);
+    }
+    return emptyLines;
+  }
+
   render(width: number): string[] {
-    // Check cache
-    if (this.cachedLines && this.cachedText === this.text && this.cachedWidth === width) {
+    if (
+      this.cachedLines !== undefined &&
+      this.cachedText === this.text &&
+      this.cachedWidth === width
+    ) {
       return this.cachedLines;
     }
 
-    // Don't render anything if there's no actual text
-    if (!this.text || this.text.trim() === "") {
+    if (this.text === "" || this.text.trim() === "") {
       const result: string[] = [];
       this.cachedText = this.text;
       this.cachedWidth = width;
@@ -69,50 +102,12 @@ export class Text implements Component {
       return result;
     }
 
-    // Replace tabs with 3 spaces
-    const normalizedText = this.text.replace(/\t/gu, "   ");
-
-    // Reduce margins when necessary so content and padding fit within the available width.
-    const paddingX = Math.min(this.paddingX, Math.max(0, Math.floor((width - 1) / 2)));
-    const contentWidth = Math.max(1, width - paddingX * 2);
-
-    // Wrap text (this preserves ANSI codes but does NOT pad)
-    const wrappedLines = wrapTextWithAnsi(normalizedText, contentWidth);
-
-    // Add margins and background to each line
-    const leftMargin = " ".repeat(paddingX);
-    const rightMargin = " ".repeat(paddingX);
-    const contentLines: string[] = [];
-
-    for (const line of wrappedLines) {
-      // Add margins
-      const lineWithMargins = leftMargin + line + rightMargin;
-
-      // Apply background if specified (this also pads to full width)
-      if (this.customBgFn) {
-        contentLines.push(applyBackgroundToLine(lineWithMargins, width, this.customBgFn));
-      } else {
-        // No background - just pad to width with spaces
-        const visibleLen = visibleWidth(lineWithMargins);
-        const paddingNeeded = Math.max(0, width - visibleLen);
-        contentLines.push(lineWithMargins + " ".repeat(paddingNeeded));
-      }
-    }
-
-    // Add top/bottom padding (empty lines)
-    const emptyLine = " ".repeat(width);
-    const emptyLines: string[] = [];
-    for (let i = 0; i < this.paddingY; i++) {
-      const line = this.customBgFn
-        ? applyBackgroundToLine(emptyLine, width, this.customBgFn)
-        : emptyLine;
-      emptyLines.push(line);
-    }
+    const contentLines = this.renderContentLines(width);
+    const emptyLines = this.renderEmptyLines(width);
 
     const result = [...emptyLines, ...contentLines, ...emptyLines];
     flattenLines(result);
 
-    // Update cache
     this.cachedText = this.text;
     this.cachedWidth = width;
     this.cachedLines = result;

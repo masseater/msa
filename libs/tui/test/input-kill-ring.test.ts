@@ -5,213 +5,273 @@ import { Input } from "../src/components/input.ts";
 
 describe("Input component", () => {
   describe("Kill ring", () => {
-    it("Alt+Y cycles through kill ring after Ctrl+Y", () => {
-      const input = new Input();
-
-      // Create kill ring with multiple entries
-      input.setValue("first");
-      // Ctrl+E
-      input.handleInput("\x05");
-      // Ctrl+W - deletes "first"
-      input.handleInput("\x17");
-      input.setValue("second");
-      // Ctrl+E
-      input.handleInput("\x05");
-      // Ctrl+W - deletes "second"
-      input.handleInput("\x17");
-      input.setValue("third");
-      // Ctrl+E
-      input.handleInput("\x05");
-      // Ctrl+W - deletes "third"
-      input.handleInput("\x17");
-
-      assert.strictEqual(input.getValue(), "");
-
-      // Ctrl+Y - yanks "third"
-      input.handleInput("\x19");
-      assert.strictEqual(input.getValue(), "third");
-
-      // Alt+Y - cycles to "second"
-      input.handleInput("\x1by");
-      assert.strictEqual(input.getValue(), "second");
-
-      // Alt+Y - cycles to "first"
-      input.handleInput("\x1by");
-      assert.strictEqual(input.getValue(), "first");
-
-      // Alt+Y - cycles back to "third"
-      input.handleInput("\x1by");
-      assert.strictEqual(input.getValue(), "third");
-    });
+    backwardDeletionsPrependForwardDeletions();
+    altDPreservesASCIIPunctuation();
+    altDHandlesUnicodeWord();
+    handlesYankMiddleText();
+    handlesYankPopMiddleText();
+    altYCyclesThroughKill();
+    altYDoesNothingIf();
+    consecutiveCtrlWAccumulatesInto();
+    nonDeleteActionsBreakKill();
+    nonYankActionsBreakAlt();
+    killRingRotationPersistsAfter();
   });
 });
 
-describe("Input component", () => {
-  describe("Kill ring", () => {
-    it("Alt+Y does nothing if not preceded by yank", () => {
-      const input = new Input();
+function backwardDeletionsPrependForwardDeletions(): void {
+  it("backward deletions prepend, forward deletions append during accumulation", () => {
+    const input = new Input();
 
-      input.setValue("test");
-      // Ctrl+E
-      input.handleInput("\x05");
-      // Ctrl+W - deletes "test"
-      input.handleInput("\x17");
-      input.setValue("other");
-      // Ctrl+E
-      input.handleInput("\x05");
+    input.setValue("prefix|suffix");
+    input.handleInput("\x01");
+    for (let i = 0; i < 6; i++) input.handleInput("\x1b[C");
 
-      // Type something to break the yank chain
-      input.handleInput("x");
-      assert.strictEqual(input.getValue(), "otherx");
+    input.handleInput("\x0b");
+    assert.strictEqual(input.getValue(), "prefix");
 
-      // Alt+Y - should do nothing
-      input.handleInput("\x1by");
-      assert.strictEqual(input.getValue(), "otherx");
-    });
-
-    it("Alt+Y does nothing if kill ring has one entry", () => {
-      const input = new Input();
-
-      input.setValue("only");
-      // Ctrl+E
-      input.handleInput("\x05");
-      // Ctrl+W - deletes "only"
-      input.handleInput("\x17");
-
-      // Ctrl+Y - yanks "only"
-      input.handleInput("\x19");
-      assert.strictEqual(input.getValue(), "only");
-
-      // Alt+Y - should do nothing
-      input.handleInput("\x1by");
-      assert.strictEqual(input.getValue(), "only");
-    });
+    input.handleInput("\x19");
+    assert.strictEqual(input.getValue(), "prefix|suffix");
   });
-});
+  it("Alt+D deletes word forward and saves to kill ring", () => {
+    const input = new Input();
 
-describe("Input component", () => {
-  describe("Kill ring", () => {
-    it("consecutive Ctrl+W accumulates into one kill ring entry", () => {
-      const input = new Input();
+    input.setValue("hello world test");
+    input.handleInput("\x01");
 
-      input.setValue("one two three");
-      // Ctrl+E
-      input.handleInput("\x05");
-      // Ctrl+W - deletes "three"
-      input.handleInput("\x17");
-      // Ctrl+W - deletes "two "
-      input.handleInput("\x17");
-      // Ctrl+W - deletes "one "
-      input.handleInput("\x17");
+    input.handleInput("\x1bd");
+    assert.strictEqual(input.getValue(), " world test");
 
-      assert.strictEqual(input.getValue(), "");
+    input.handleInput("\x1bd");
+    assert.strictEqual(input.getValue(), " test");
 
-      // Ctrl+Y
-      input.handleInput("\x19");
-      assert.strictEqual(input.getValue(), "one two three");
-    });
+    input.handleInput("\x19");
+    assert.strictEqual(input.getValue(), "hello world test");
   });
-});
+}
 
-describe("Input component", () => {
-  describe("Kill ring", () => {
-    it("non-delete actions break kill accumulation", () => {
-      const input = new Input();
+function altDPreservesASCIIPunctuation(): void {
+  it("Alt+D preserves ASCII punctuation boundaries", () => {
+    const input = new Input();
 
-      input.setValue("foo bar baz");
-      // Ctrl+E
-      input.handleInput("\x05");
-      // Ctrl+W - deletes "baz"
-      input.handleInput("\x17");
-      assert.strictEqual(input.getValue(), "foo bar ");
-
-      // Typing breaks accumulation
-      input.handleInput("x");
-      assert.strictEqual(input.getValue(), "foo bar x");
-
-      // Ctrl+W - deletes "x" (separate entry)
-      input.handleInput("\x17");
-      assert.strictEqual(input.getValue(), "foo bar ");
-
-      // Ctrl+Y - most recent is "x"
-      input.handleInput("\x19");
-      assert.strictEqual(input.getValue(), "foo bar x");
-
-      // Alt+Y - cycle to "baz"
-      input.handleInput("\x1by");
-      assert.strictEqual(input.getValue(), "foo bar baz");
-    });
+    input.setValue("foo.bar baz");
+    input.handleInput("\x01");
+    input.handleInput("\x1bd");
+    assert.strictEqual(input.getValue(), ".bar baz");
+    input.handleInput("\x1bd");
+    assert.strictEqual(input.getValue(), "bar baz");
+    input.handleInput("\x1bd");
+    assert.strictEqual(input.getValue(), " baz");
   });
-});
+}
 
-describe("Input component", () => {
-  describe("Kill ring", () => {
-    it("non-yank actions break Alt+Y chain", () => {
-      const input = new Input();
+function altDHandlesUnicodeWord(): void {
+  it("Alt+D handles Unicode word boundaries", () => {
+    const input = new Input();
 
-      input.setValue("first");
-      // Ctrl+E
-      input.handleInput("\x05");
-      // Ctrl+W
-      input.handleInput("\x17");
-      input.setValue("second");
-      // Ctrl+E
-      input.handleInput("\x05");
-      // Ctrl+W
-      input.handleInput("\x17");
-      input.setValue("");
-
-      // Ctrl+Y - yanks "second"
-      input.handleInput("\x19");
-      assert.strictEqual(input.getValue(), "second");
-
-      // Breaks yank chain
-      input.handleInput("x");
-      assert.strictEqual(input.getValue(), "secondx");
-
-      // Alt+Y - should do nothing
-      input.handleInput("\x1by");
-      assert.strictEqual(input.getValue(), "secondx");
-    });
+    input.setValue("你好世界。你好，世界");
+    input.handleInput("\x01");
+    input.handleInput("\x1bd");
+    assert.strictEqual(input.getValue(), "世界。你好，世界");
+    input.handleInput("\x1bd");
+    assert.strictEqual(input.getValue(), "。你好，世界");
+    input.handleInput("\x1bd");
+    assert.strictEqual(input.getValue(), "你好，世界");
+    input.handleInput("\x1bd");
+    assert.strictEqual(input.getValue(), "，世界");
+    input.handleInput("\x1bd");
+    assert.strictEqual(input.getValue(), "世界");
+    input.handleInput("\x1bd");
+    assert.strictEqual(input.getValue(), "");
   });
-});
+}
 
-describe("Input component", () => {
-  describe("Kill ring", () => {
-    it("kill ring rotation persists after cycling", () => {
-      const input = new Input();
+function handlesYankMiddleText(): void {
+  it("handles yank in middle of text", () => {
+    const input = new Input();
 
-      input.setValue("first");
-      // Ctrl+E
-      input.handleInput("\x05");
-      // deletes "first"
-      input.handleInput("\x17");
-      input.setValue("second");
-      // Ctrl+E
-      input.handleInput("\x05");
-      // deletes "second"
-      input.handleInput("\x17");
-      input.setValue("third");
-      // Ctrl+E
-      input.handleInput("\x05");
-      // deletes "third"
-      input.handleInput("\x17");
-      input.setValue("");
+    input.setValue("word");
+    input.handleInput("\x05");
+    input.handleInput("\x17");
+    input.setValue("hello world");
+    input.handleInput("\x01");
+    for (let i = 0; i < 6; i++) input.handleInput("\x1b[C");
 
-      // Ctrl+Y - yanks "third"
-      input.handleInput("\x19");
-      // Alt+Y - cycles to "second"
-      input.handleInput("\x1by");
-      assert.strictEqual(input.getValue(), "second");
-
-      // Break chain and start fresh
-      input.handleInput("x");
-      input.setValue("");
-
-      // New yank should get "second" (now at end after rotation)
-      // Ctrl+Y
-      input.handleInput("\x19");
-      assert.strictEqual(input.getValue(), "second");
-    });
+    input.handleInput("\x19");
+    assert.strictEqual(input.getValue(), "hello wordworld");
   });
-});
+}
+
+function handlesYankPopMiddleText(): void {
+  it("handles yank-pop in middle of text", () => {
+    const input = new Input();
+
+    input.setValue("FIRST");
+    input.handleInput("\x05");
+    input.handleInput("\x17");
+    input.setValue("SECOND");
+    input.handleInput("\x05");
+    input.handleInput("\x17");
+
+    input.setValue("hello world");
+    input.handleInput("\x01");
+    for (let i = 0; i < 6; i++) input.handleInput("\x1b[C");
+
+    input.handleInput("\x19");
+    assert.strictEqual(input.getValue(), "hello SECONDworld");
+
+    input.handleInput("\x1by");
+    assert.strictEqual(input.getValue(), "hello FIRSTworld");
+  });
+}
+
+function altYCyclesThroughKill(): void {
+  it("Alt+Y cycles through kill ring after Ctrl+Y", () => {
+    const input = new Input();
+
+    input.setValue("first");
+    input.handleInput("\x05");
+    input.handleInput("\x17");
+    input.setValue("second");
+    input.handleInput("\x05");
+    input.handleInput("\x17");
+    input.setValue("third");
+    input.handleInput("\x05");
+    input.handleInput("\x17");
+
+    assert.strictEqual(input.getValue(), "");
+
+    input.handleInput("\x19");
+    assert.strictEqual(input.getValue(), "third");
+
+    input.handleInput("\x1by");
+    assert.strictEqual(input.getValue(), "second");
+
+    input.handleInput("\x1by");
+    assert.strictEqual(input.getValue(), "first");
+
+    input.handleInput("\x1by");
+    assert.strictEqual(input.getValue(), "third");
+  });
+}
+
+function altYDoesNothingIf(): void {
+  it("Alt+Y does nothing if not preceded by yank", () => {
+    const input = new Input();
+
+    input.setValue("test");
+    input.handleInput("\x05");
+    input.handleInput("\x17");
+    input.setValue("other");
+    input.handleInput("\x05");
+
+    input.handleInput("x");
+    assert.strictEqual(input.getValue(), "otherx");
+
+    input.handleInput("\x1by");
+    assert.strictEqual(input.getValue(), "otherx");
+  });
+  it("Alt+Y does nothing if kill ring has one entry", () => {
+    const input = new Input();
+
+    input.setValue("only");
+    input.handleInput("\x05");
+    input.handleInput("\x17");
+
+    input.handleInput("\x19");
+    assert.strictEqual(input.getValue(), "only");
+
+    input.handleInput("\x1by");
+    assert.strictEqual(input.getValue(), "only");
+  });
+}
+
+function consecutiveCtrlWAccumulatesInto(): void {
+  it("consecutive Ctrl+W accumulates into one kill ring entry", () => {
+    const input = new Input();
+
+    input.setValue("one two three");
+    input.handleInput("\x05");
+    input.handleInput("\x17");
+    input.handleInput("\x17");
+    input.handleInput("\x17");
+
+    assert.strictEqual(input.getValue(), "");
+
+    input.handleInput("\x19");
+    assert.strictEqual(input.getValue(), "one two three");
+  });
+}
+
+function nonDeleteActionsBreakKill(): void {
+  it("non-delete actions break kill accumulation", () => {
+    const input = new Input();
+
+    input.setValue("foo bar baz");
+    input.handleInput("\x05");
+    input.handleInput("\x17");
+    assert.strictEqual(input.getValue(), "foo bar ");
+
+    input.handleInput("x");
+    assert.strictEqual(input.getValue(), "foo bar x");
+
+    input.handleInput("\x17");
+    assert.strictEqual(input.getValue(), "foo bar ");
+
+    input.handleInput("\x19");
+    assert.strictEqual(input.getValue(), "foo bar x");
+
+    input.handleInput("\x1by");
+    assert.strictEqual(input.getValue(), "foo bar baz");
+  });
+}
+
+function nonYankActionsBreakAlt(): void {
+  it("non-yank actions break Alt+Y chain", () => {
+    const input = new Input();
+
+    input.setValue("first");
+    input.handleInput("\x05");
+    input.handleInput("\x17");
+    input.setValue("second");
+    input.handleInput("\x05");
+    input.handleInput("\x17");
+    input.setValue("");
+
+    input.handleInput("\x19");
+    assert.strictEqual(input.getValue(), "second");
+
+    input.handleInput("x");
+    assert.strictEqual(input.getValue(), "secondx");
+
+    input.handleInput("\x1by");
+    assert.strictEqual(input.getValue(), "secondx");
+  });
+}
+
+function killRingRotationPersistsAfter(): void {
+  it("kill ring rotation persists after cycling", () => {
+    const input = new Input();
+
+    input.setValue("first");
+    input.handleInput("\x05");
+    input.handleInput("\x17");
+    input.setValue("second");
+    input.handleInput("\x05");
+    input.handleInput("\x17");
+    input.setValue("third");
+    input.handleInput("\x05");
+    input.handleInput("\x17");
+    input.setValue("");
+
+    input.handleInput("\x19");
+    input.handleInput("\x1by");
+    assert.strictEqual(input.getValue(), "second");
+
+    input.handleInput("x");
+    input.setValue("");
+
+    input.handleInput("\x19");
+    assert.strictEqual(input.getValue(), "second");
+  });
+}

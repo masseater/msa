@@ -4,7 +4,7 @@ export type { ModifierKey } from "./native-platform.ts";
 
 export function isNativeModifierPressed(key: ModifierKey): boolean {
   const helper = getNativePlatformHelper();
-  if (!helper?.isModifierPressed) return false;
+  if (helper?.isModifierPressed === undefined) return false;
   try {
     return helper.isModifierPressed(key) === true;
   } catch {

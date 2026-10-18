@@ -1,6 +1,7 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
 
+import { escapeSequences, stripStyleSequences } from "../src/ansi-sequences.ts";
 import {
   colorToHex,
   colorToOkhsl,
@@ -37,7 +38,6 @@ describe("colors", () => {
   });
 
   it("parses OKHSL colors and round-trips them", () => {
-    // Full saturation at the red cusp is pure sRGB red.
     assert.deepStrictEqual(parseColor("okhsl(29.23 100% 56.8%)"), rgbColor(255, 0, 0));
     assert.deepStrictEqual(parseColor("OKHSL(250deg 60% 55%)"), okhslColor(250, 0.6, 0.55));
     assert.throws(() => parseColor("okhsl(250 160% 55%)"), /s must be between 0 and 1/u);
@@ -56,9 +56,10 @@ describe("colors", () => {
       ),
       "\x1b[38;2;18;52;86m\x1b[48;5;9m\x1b[1m\x1b[3mReady\x1b[23m\x1b[22m\x1b[49m\x1b[39m",
     );
-    assert.match(
-      styleText("Ready", { fg: rgbColor(18, 52, 86) }, "256color"),
-      /^\x1b\[38;5;\d+mReady\x1b\[39m$/u,
-    );
+    const styled = styleText("Ready", { fg: rgbColor(18, 52, 86) }, "256color");
+    const [open, close] = escapeSequences(styled);
+    assert.match(open?.body ?? "", /^38;5;\d+$/u);
+    assert.equal(close?.body, "39");
+    assert.equal(stripStyleSequences(styled), "Ready");
   });
 });

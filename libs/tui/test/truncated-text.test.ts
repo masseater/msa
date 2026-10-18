@@ -3,10 +3,10 @@ import { describe, it } from "node:test";
 
 import { Chalk } from "chalk";
 
+import { stripStyleSequences } from "../src/ansi-sequences.ts";
 import { TruncatedText } from "../src/components/truncated-text.ts";
 import { visibleWidth } from "../src/utils.ts";
 
-// Force full color in CI so ANSI assertions are deterministic
 const chalk = new Chalk({ level: 3 });
 
 describe("TruncatedText component", () => {
@@ -14,12 +14,10 @@ describe("TruncatedText component", () => {
     const text = new TruncatedText("Hello world", 1, 0);
     const lines = text.render(50);
 
-    // Should have exactly one content line (no vertical padding)
     assert.strictEqual(lines.length, 1);
     const [line] = lines;
     assert.ok(line !== undefined);
 
-    // Line should be exactly 50 visible characters
     const visibleLen = visibleWidth(line);
     assert.strictEqual(visibleLen, 50);
   });
@@ -28,10 +26,8 @@ describe("TruncatedText component", () => {
     const text = new TruncatedText("Hello", 0, 2);
     const lines = text.render(40);
 
-    // Should have 2 padding lines + 1 content line + 2 padding lines = 5 total
     assert.strictEqual(lines.length, 5);
 
-    // All lines should be exactly 40 characters
     for (const line of lines) {
       assert.strictEqual(visibleWidth(line), 40);
     }
@@ -49,11 +45,9 @@ describe("TruncatedText component", () => {
     const [line] = lines;
     assert.ok(line !== undefined);
 
-    // Should be exactly 30 characters
     assert.strictEqual(visibleWidth(line), 30);
 
-    // Should contain ellipsis
-    const stripped = line.replace(/\x1b\[[0-9;]*m/gu, "");
+    const stripped = stripStyleSequences(line);
     assert.ok(stripped.includes("..."));
   });
 
@@ -66,10 +60,8 @@ describe("TruncatedText component", () => {
     const [line] = lines;
     assert.ok(line !== undefined);
 
-    // Should be exactly 40 visible characters (ANSI codes don't count)
     assert.strictEqual(visibleWidth(line), 40);
 
-    // Should preserve the color codes
     assert.ok(line.includes("\x1b["));
   });
 });
@@ -84,16 +76,12 @@ describe("TruncatedText component", () => {
     const [line] = lines;
     assert.ok(line !== undefined);
 
-    // Should be exactly 20 visible characters
     assert.strictEqual(visibleWidth(line), 20);
 
-    // Should contain reset code before ellipsis
     assert.ok(line.includes("\x1b[0m..."));
   });
 
   it("handles text that fits exactly", () => {
-    // With paddingX=1, available width is 30-2=28
-    // "Hello world" is 11 chars, fits comfortably
     const text = new TruncatedText("Hello world", 1, 0);
     const lines = text.render(30);
 
@@ -102,8 +90,7 @@ describe("TruncatedText component", () => {
     assert.ok(line !== undefined);
     assert.strictEqual(visibleWidth(line), 30);
 
-    // Should NOT contain ellipsis
-    const stripped = line.replace(/\x1b\[[0-9;]*m/gu, "");
+    const stripped = stripStyleSequences(line);
     assert.ok(!stripped.includes("..."));
   });
 
@@ -129,8 +116,7 @@ describe("TruncatedText component", () => {
     assert.ok(line !== undefined);
     assert.strictEqual(visibleWidth(line), 40);
 
-    // Should only contain "First line"
-    const stripped = line.replace(/\x1b\[[0-9;]*m/gu, "").trim();
+    const stripped = stripStyleSequences(line).trim();
     assert.ok(stripped.includes("First line"));
     assert.ok(!stripped.includes("Second line"));
     assert.ok(!stripped.includes("Third line"));
@@ -146,8 +132,7 @@ describe("TruncatedText component", () => {
     assert.ok(line !== undefined);
     assert.strictEqual(visibleWidth(line), 25);
 
-    // Should contain ellipsis and not second line
-    const stripped = line.replace(/\x1b\[[0-9;]*m/gu, "");
+    const stripped = stripStyleSequences(line);
     assert.ok(stripped.includes("..."));
     assert.ok(!stripped.includes("Second line"));
   });

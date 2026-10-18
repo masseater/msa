@@ -1,3 +1,6 @@
+import { dual } from "effect/Function";
+
+import { overrideEnv } from "../src/env.ts";
 import { setKittyProtocolActive } from "../src/keys.ts";
 import { ProcessTerminal } from "../src/terminal.ts";
 
@@ -64,14 +67,14 @@ export const working = "\x1b]7501;state=working:app=msa\x1b\\";
 
 export const clear = "\x1b]7501;state=clear\x1b\\";
 
-export function withOverride(value: string | undefined, fn: () => void): void {
-  const previous = process.env["MSA_PROGRAM_STATUS"];
-  if (value === undefined) delete process.env["MSA_PROGRAM_STATUS"];
-  else process.env["MSA_PROGRAM_STATUS"] = value;
+export const withOverride: {
+  (value: string | undefined, fn: () => void): void;
+  (fn: () => void): (value: string | undefined) => void;
+} = dual(2, (value: string | undefined, fn: () => void): void => {
+  const restore = overrideEnv({ MSA_PROGRAM_STATUS: value });
   try {
     fn();
   } finally {
-    if (previous === undefined) delete process.env["MSA_PROGRAM_STATUS"];
-    else process.env["MSA_PROGRAM_STATUS"] = previous;
+    restore();
   }
-}
+});

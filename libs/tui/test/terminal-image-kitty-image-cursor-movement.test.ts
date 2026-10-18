@@ -1,9 +1,14 @@
 import assert from "node:assert";
 import { homedir } from "node:os";
-import { join } from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
 
 import { Image } from "../src/components/image.ts";
+import { pathOperations } from "../src/platform.ts";
+import {
+  resetCapabilitiesCache,
+  setCapabilities,
+  setCellDimensions,
+} from "../src/terminal-capabilities.ts";
 import {
   cropKittyImageLine,
   deleteAllKittyImages,
@@ -14,12 +19,11 @@ import {
   getKittyImagePlacement,
   getKittyImagePlacementRows,
   registerKittyImageMetadata,
-  renderImage,
-  resetCapabilitiesCache,
-  setCapabilities,
-  setCellDimensions,
-} from "../src/terminal-image.ts";
+} from "../src/terminal-image-kitty.ts";
+import { renderImage } from "../src/terminal-image.ts";
 import { visibleWidth } from "../src/utils.ts";
+
+const { join } = pathOperations;
 
 describe("Kitty image cursor movement", () => {
   it("can request no terminal-side cursor movement", () => {

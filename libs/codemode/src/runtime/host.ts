@@ -10,14 +10,10 @@ import { loadWasm } from "./inline.ts";
 import { errorMessage } from "./prelude-source.ts";
 import type { VmChannel, VmEvents, VmLauncher, WorkerData } from "./protocol.ts";
 import { CodemodeSandboxBase } from "./sandbox-base.ts";
-const runtime = ManagedRuntime.make(
-  // oxlint-disable-next-line effecttsgo/unstable-api-usage -- FileSystem (effect/unstable) is the only Effect API for reading files
-  NodeFileSystem.layer,
-);
+const runtime = ManagedRuntime.make(NodeFileSystem.layer);
 
 const readFileBytes = (path: string): Promise<Uint8Array> =>
   runtime.runPromise(
-    // oxlint-disable-next-line effecttsgo/unstable-api-usage -- FileSystem (effect/unstable) is the only Effect API for reading files
     FileSystem.FileSystem.use((fs) => fs.readFile(path)).pipe(
       Effect.mapError((error) => error.cause ?? error),
     ),

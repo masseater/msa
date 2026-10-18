@@ -1,9 +1,11 @@
 import assert from "node:assert";
-import { dirname, join, resolve } from "node:path";
 import { describe, it } from "node:test";
 import { pathToFileURL } from "node:url";
 
 import { getNativeModuleCandidates } from "../src/native-module-path.ts";
+import { pathOperations } from "../src/platform.ts";
+
+const { dirname, join, resolve } = pathOperations;
 
 describe("getNativeModuleCandidates", () => {
   it("resolves native helpers from the installed TUI package when the module is bundled elsewhere", () => {

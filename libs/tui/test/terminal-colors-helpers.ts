@@ -1,11 +1,10 @@
+import { Effect } from "effect";
+
 import { type TUI, TuiMainScreen } from "../src/index.ts";
 import { InputRecorder } from "./terminal-colors-input-recorder.ts";
 import { TestTerminal } from "./terminal-colors-test-terminal.ts";
 
-export const wait = (ms: number) =>
-  new Promise<void>((resolve) => {
-    setTimeout(resolve, ms);
-  });
+export const wait = (ms: number): Effect.Effect<void> => Effect.sleep(ms);
 
 export const PALETTE_REPLIES = Array.from(
   { length: 16 },

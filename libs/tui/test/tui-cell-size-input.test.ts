@@ -1,13 +1,15 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
 
+import { overrideEnv } from "../src/env.ts";
 import {
   getCellDimensions,
   resetCapabilitiesCache,
   setCellDimensions,
-} from "../src/terminal-image.ts";
+} from "../src/terminal-capabilities.ts";
+import type { Component } from "../src/tui-component.ts";
+import type { TUI } from "../src/tui-interface.ts";
 import { TuiMainScreen } from "../src/tui-main-screen.ts";
-import type { Component, TUI } from "../src/tui.ts";
 import { VirtualTerminal } from "./virtual-terminal.ts";
 
 class InputRecorder implements Component {
@@ -25,24 +27,17 @@ class InputRecorder implements Component {
 }
 
 function withImageTerminal<T>(fn: () => T): T {
-  const prevTermProgram = process.env["TERM_PROGRAM"];
-  const prevTerm = process.env["TERM"];
-  const prevGhosttyResourcesDir = process.env["GHOSTTY_RESOURCES_DIR"];
-
-  process.env["TERM_PROGRAM"] = "ghostty";
-  delete process.env["TERM"];
-  delete process.env["GHOSTTY_RESOURCES_DIR"];
+  const restoreEnv = overrideEnv({
+    TERM_PROGRAM: "ghostty",
+    TERM: undefined,
+    GHOSTTY_RESOURCES_DIR: undefined,
+  });
   resetCapabilitiesCache();
 
   try {
     return fn();
   } finally {
-    if (prevTermProgram === undefined) delete process.env["TERM_PROGRAM"];
-    else process.env["TERM_PROGRAM"] = prevTermProgram;
-    if (prevTerm === undefined) delete process.env["TERM"];
-    else process.env["TERM"] = prevTerm;
-    if (prevGhosttyResourcesDir === undefined) delete process.env["GHOSTTY_RESOURCES_DIR"];
-    else process.env["GHOSTTY_RESOURCES_DIR"] = prevGhosttyResourcesDir;
+    restoreEnv();
     resetCapabilitiesCache();
   }
 }

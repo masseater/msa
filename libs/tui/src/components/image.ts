@@ -1,39 +1,30 @@
 import {
-  allocateImageId,
   getCapabilities,
   getCellDimensions,
+  type ImageProtocol,
+} from "../terminal-capabilities.ts";
+import { allocateImageId } from "../terminal-image-kitty.ts";
+import {
   getImageDimensions,
   getPngDimensions,
   type ImageDimensions,
-  imageFallback,
-  renderImage,
-} from "../terminal-image.ts";
-import type { Component } from "../tui.ts";
-import { truncateToWidth } from "../utils.ts";
+} from "../terminal-image-size.ts";
+import { imageFallback, renderImage, type RenderedImage } from "../terminal-image.ts";
+import { truncateToWidth } from "../text-truncate.ts";
+import type { Component } from "../tui-component.ts";
 
-/**
- * Converts base64 image data to base64 PNG data, or returns null if it cannot.
- * Called synchronously during rendering.
- */
 export type ImageTranscoder = (base64Data: string, mimeType: string) => string | null;
 
 let imageTranscoder: ImageTranscoder | undefined;
-// Backstop for callers that recreate Image instances. Keyed by source data, least recently used first.
 const pngCache = new Map<string, string | null>();
 
-/**
- * Register the converter used for non-PNG images on Kitty-protocol terminals, which only accept PNG.
- * Without one, such images render as text fallbacks.
- *
- * @param {ImageTranscoder | undefined} transcoder - The converter, or undefined to remove it.
- */
 export function setImageTranscoder(transcoder: ImageTranscoder | undefined): void {
   imageTranscoder = transcoder;
   pngCache.clear();
 }
 
 function toPng(base64Data: string, mimeType: string): string | null {
-  if (!imageTranscoder) return null;
+  if (imageTranscoder === undefined) return null;
   const cached = pngCache.get(base64Data);
   const png = cached === undefined ? imageTranscoder(base64Data, mimeType) : cached;
   pngCache.delete(base64Data);
@@ -50,7 +41,6 @@ export interface ImageOptions {
   maxWidthCells?: number;
   maxHeightCells?: number;
   filename?: string;
-  /** Kitty image ID. If provided, reuses this ID (for animations/updates). */
   imageId?: number;
 }
 
@@ -61,7 +51,6 @@ export class Image implements Component {
   private theme: ImageTheme;
   private options: ImageOptions;
   private imageId?: number | undefined;
-  /** Converted PNG data for Kitty. Failures are not stored so a later transcoder can retry. */
   private pngData?: string | undefined;
 
   private cachedLines?: string[] | undefined;
@@ -83,11 +72,6 @@ export class Image implements Component {
     this.imageId = options.imageId;
   }
 
-  /**
-   * Get the Kitty image ID used by this image (if any).
-   *
-   * @returns {number | undefined} The image ID, or undefined.
-   */
   getImageId(): number | undefined {
     return this.imageId;
   }
@@ -97,11 +81,31 @@ export class Image implements Component {
     this.cachedWidth = undefined;
   }
 
-  render(width: number): string[] {
-    if (this.cachedLines && this.cachedWidth === width) {
-      return this.cachedLines;
+  private renderFallbackLines(width: number): string[] {
+    const fallback = imageFallback(this.mimeType, this.dimensions, this.options.filename);
+    return [truncateToWidth(this.theme.fallbackColor(fallback), width)];
+  }
+
+  private renderSequenceLines(result: RenderedImage, protocol: ImageProtocol): string[] {
+    if (result.imageId !== undefined && result.imageId !== 0) {
+      this.imageId = result.imageId;
     }
 
+    const blankLines: string[] = [];
+    for (let i = 0; i < result.rows - 1; i++) {
+      blankLines.push("");
+    }
+
+    if (protocol === "kitty") {
+      return [result.sequence, ...blankLines];
+    }
+
+    const rowOffset = result.rows - 1;
+    const moveUp = rowOffset > 0 ? `\x1b[${rowOffset}A` : "";
+    return [...blankLines, moveUp + result.sequence];
+  }
+
+  private renderImageLines(width: number): string[] {
     const maxWidth = Math.max(1, Math.min(width - 2, this.options.maxWidthCells ?? 60));
     const cellDimensions = getCellDimensions();
     const defaultMaxHeight = Math.max(
@@ -116,58 +120,34 @@ export class Image implements Component {
     if (caps.images === "kitty" && this.mimeType !== "image/png") {
       this.pngData ??= toPng(this.base64Data, this.mimeType) ?? undefined;
       data = this.pngData ?? null;
-      // Conversion may apply EXIF rotation, so prefer the PNG's own dimensions.
-      if (data) dimensions = getPngDimensions(data) ?? dimensions;
+      if (data !== null && data !== "") dimensions = getPngDimensions(data) ?? dimensions;
     }
-    let lines: string[];
 
-    if (caps.images && data) {
-      if (caps.images === "kitty" && this.imageId === undefined) {
-        this.imageId = allocateImageId();
-      }
-      const result = renderImage(data, dimensions, {
-        maxWidthCells: maxWidth,
-        maxHeightCells: maxHeight,
-        imageId: this.imageId,
-        moveCursor: false,
-      });
-
-      if (result) {
-        // Store the image ID for later cleanup
-        if (result.imageId) {
-          this.imageId = result.imageId;
-        }
-
-        if (caps.images === "kitty") {
-          // For Kitty: C=1 prevents cursor movement.
-          // Don't need the cursor movement.
-          lines = [result.sequence];
-
-          // Return `rows` lines so TUI accounts for image height.
-          for (let i = 0; i < result.rows - 1; i++) {
-            lines.push("");
-          }
-        } else {
-          // Return `rows` lines so TUI accounts for image height.
-          // First (rows-1) lines are empty and cleared before the image is drawn.
-          // Last line: move cursor back up, draw the image, then move back down
-          // so TUI cursor accounting stays inside the scroll area.
-          lines = [];
-          for (let i = 0; i < result.rows - 1; i++) {
-            lines.push("");
-          }
-          const rowOffset = result.rows - 1;
-          const moveUp = rowOffset > 0 ? `\x1b[${rowOffset}A` : "";
-          lines.push(moveUp + result.sequence);
-        }
-      } else {
-        const fallback = imageFallback(this.mimeType, this.dimensions, this.options.filename);
-        lines = [truncateToWidth(this.theme.fallbackColor(fallback), width)];
-      }
-    } else {
-      const fallback = imageFallback(this.mimeType, this.dimensions, this.options.filename);
-      lines = [truncateToWidth(this.theme.fallbackColor(fallback), width)];
+    if (caps.images === null || data === null || data === "") {
+      return this.renderFallbackLines(width);
     }
+
+    if (caps.images === "kitty" && this.imageId === undefined) {
+      this.imageId = allocateImageId();
+    }
+    const result = renderImage(data, dimensions, {
+      maxWidthCells: maxWidth,
+      maxHeightCells: maxHeight,
+      imageId: this.imageId,
+      moveCursor: false,
+    });
+
+    return result === null
+      ? this.renderFallbackLines(width)
+      : this.renderSequenceLines(result, caps.images);
+  }
+
+  render(width: number): string[] {
+    if (this.cachedLines !== undefined && this.cachedWidth === width) {
+      return this.cachedLines;
+    }
+
+    const lines = this.renderImageLines(width);
 
     this.cachedLines = lines;
     this.cachedWidth = width;

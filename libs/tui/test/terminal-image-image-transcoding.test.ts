@@ -3,11 +3,11 @@ import { afterEach, beforeEach, describe, it } from "node:test";
 
 import { Image, setImageTranscoder } from "../src/components/image.ts";
 import {
-  hyperlink,
   resetCapabilitiesCache,
   setCapabilities,
   setCellDimensions,
-} from "../src/terminal-image.ts";
+} from "../src/terminal-capabilities.ts";
+import { hyperlink } from "../src/terminal-image.ts";
 import { jpeg, png, render } from "./terminal-image-helpers.ts";
 
 describe("Image transcoding", () => {
@@ -30,7 +30,6 @@ describe("Image transcoding", () => {
     setImageTranscoder(transcode);
     const lines = render(jpeg, "image/jpeg");
     assert.ok(lines[0]?.includes("f=100") && lines[0]?.includes(`;${png}\x1b\\`));
-    // 40x10 PNG at 18 columns: 5 rows, not the 18 rows of the 20x20 source dimensions.
     assert.strictEqual(lines.length, 5);
   });
 
@@ -66,12 +65,9 @@ describe("Image transcoding", () => {
     setImageTranscoder(transcode);
     const image = new Image(jpeg, "image/jpeg", { fallbackColor: (value) => value });
     image.render(80);
-    // New instance hits the shared cache.
     render(jpeg, "image/jpeg");
-    // Evicts the shared entry.
     for (let i = 0; i < 40; i++) render(`other-${i}`, "image/jpeg");
     image.invalidate();
-    // Instance keeps its own PNG.
     image.render(40);
     assert.strictEqual(calls.filter((data) => data === jpeg).length, 1);
   });
