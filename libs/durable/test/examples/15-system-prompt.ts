@@ -6,16 +6,15 @@ import { fauxAssistantMessage, fauxProvider } from "@msa/ai/providers/faux";
 import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 
 import { NodeExecutionEnv } from "../../src/env/node.ts";
+import { createRegistry, Harness } from "../../src/harness/index.ts";
 import {
   type Conversation,
-  createRegistry,
   defineExtension,
-  Harness,
-  MemoryStorage,
   SystemEntry,
   section,
   wrapSection,
 } from "../../src/index.ts";
+import { MemoryStorage } from "../../src/storage/memory.ts";
 
 const context = BACKGROUND_CONTEXT;
 const faux = fauxProvider();

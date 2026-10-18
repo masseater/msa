@@ -10,11 +10,9 @@ import type {
 import { createModels, Type } from "@msa/ai";
 import {
   type AnyTask,
-  createRegistry,
   defineExtension,
   defineTool,
   type Extension,
-  Harness,
   type HooksOf,
   hook,
   type PromptSection,
@@ -23,6 +21,7 @@ import {
   section,
   type ToolRegistration,
 } from "@msa/durable";
+import { createRegistry, Harness } from "@msa/durable/harness";
 
 import { context } from "./session-support.ts";
 

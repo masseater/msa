@@ -2,7 +2,8 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { createSession, defineTask, type TaskId } from "@msa/durable";
+import { defineTask, type TaskId } from "@msa/durable";
+import { createSession } from "@msa/durable/session";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";

@@ -1,5 +1,6 @@
 import type { Context } from "@msa/chord";
-import { defineTask, LiveDoc, StorageRequestError, type TaskId, watchEvents } from "@msa/durable";
+import { defineTask, LiveDoc, StorageRequestError, type TaskId } from "@msa/durable";
+import { watchEvents } from "@msa/durable/harness";
 import { describe, expect, it } from "vite-plus/test";
 
 import {

@@ -4,7 +4,8 @@ import { BACKGROUND_CONTEXT as context } from "@msa/chord/context";
 import { Type } from "typebox";
 
 import { NodeExecutionEnv } from "../src/env/node.ts";
-import { createRegistry, defineTool, Harness, LiveDoc, type Conversation } from "../src/index.ts";
+import { createRegistry, Harness } from "../src/harness/index.ts";
+import { defineTool, LiveDoc, type Conversation } from "../src/index.ts";
 import { createBashTool } from "../src/tools/index.ts";
 import { addTool } from "./harness-support.ts";
 import { makeTempFile, removeDir, type TempFile, tempPath } from "./temp-support.ts";

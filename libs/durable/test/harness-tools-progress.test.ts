@@ -1,12 +1,6 @@
-import {
-  AgentDoc,
-  defineExtension,
-  GenerationTask,
-  hook,
-  LiveDoc,
-  MemoryStorage,
-  section,
-} from "@msa/durable";
+import { AgentDoc, defineExtension, hook, LiveDoc, section } from "@msa/durable";
+import { GenerationTask } from "@msa/durable/harness";
+import { MemoryStorage } from "@msa/durable/storage/memory";
 import { describe, expect, it } from "vite-plus/test";
 
 import { allEntries, chatSetup, openChat } from "./chat-support.ts";

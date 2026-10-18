@@ -1,5 +1,6 @@
 import type { JsonValue } from "@msa/chord";
-import { AssistantEntry, type TaskId, ToolTask, type ToolTaskInput } from "@msa/durable";
+import { AssistantEntry, type TaskId, type ToolTaskInput } from "@msa/durable";
+import { ToolTask } from "@msa/durable/harness";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";

@@ -5,14 +5,9 @@ import { createModels } from "@msa/ai/models";
 //   node --conditions=source --experimental-strip-types test/examples/10-registry-reload.ts
 import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 
-import {
-  createRegistry,
-  defineExtension,
-  defineTool,
-  Harness,
-  MemoryStorage,
-  wrapTool,
-} from "../../src/index.ts";
+import { createRegistry, Harness } from "../../src/harness/index.ts";
+import { defineExtension, defineTool, wrapTool } from "../../src/index.ts";
+import { MemoryStorage } from "../../src/storage/memory.ts";
 
 const context = BACKGROUND_CONTEXT;
 

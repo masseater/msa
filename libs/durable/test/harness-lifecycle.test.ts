@@ -1,15 +1,8 @@
 import { createModels, fauxAssistantMessage, fauxText, fauxToolCall, Type } from "@msa/ai";
 import type { Context, JsonValue } from "@msa/chord";
-import {
-  type ConversationId,
-  createRegistry,
-  defineTool,
-  GenerationTask,
-  Harness,
-  MemoryStorage,
-  type Storage,
-  type TaskId,
-} from "@msa/durable";
+import { type ConversationId, defineTool, type Storage, type TaskId } from "@msa/durable";
+import { createRegistry, GenerationTask, Harness } from "@msa/durable/harness";
+import { MemoryStorage } from "@msa/durable/storage/memory";
 import { describe, expect, it } from "vite-plus/test";
 
 import { chatSetup, openChat } from "./chat-support.ts";

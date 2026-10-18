@@ -13,14 +13,8 @@ import { fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall } from "@msa
 import { openaiProvider } from "@msa/ai/providers/openai";
 import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 
-import {
-  type AgentEvent,
-  type ConversationId,
-  createRegistry,
-  Harness,
-  LiveDoc,
-  watchEvents,
-} from "../../src/index.ts";
+import { createRegistry, Harness, watchEvents } from "../../src/harness/index.ts";
+import { type AgentEvent, type ConversationId, LiveDoc } from "../../src/index.ts";
 import { openNodeSqliteStorage } from "../../src/storage/sqlite/node.ts";
 import { makeTempDir, removeDir } from "../temp-support.ts";
 import { Subagents, textOf, SubagentTools } from "./subagent-background-tools.ts";

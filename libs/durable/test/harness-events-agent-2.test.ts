@@ -7,11 +7,11 @@ import {
   defineTool,
   LiveDoc,
   type LiveState,
-  MemoryStorage,
   type SnapshotEvent,
   UsageDoc,
-  watchEvents,
 } from "@msa/durable";
+import { watchEvents } from "@msa/durable/harness";
+import { MemoryStorage } from "@msa/durable/storage/memory";
 import { describe, expect, it } from "vite-plus/test";
 
 import { chatSetup, openChat, waitFor } from "./chat-support.ts";

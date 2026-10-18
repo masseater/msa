@@ -3,14 +3,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import type { Context, JsonValue } from "@msa/chord";
-import {
-  createRegistry,
-  defineTask,
-  MemoryStorage,
-  type Task,
-  type TaskId,
-  type TaskRuntime,
-} from "@msa/durable";
+import { defineTask, type Task, type TaskId, type TaskRuntime } from "@msa/durable";
+import { createRegistry } from "@msa/durable/harness";
+import { MemoryStorage } from "@msa/durable/storage/memory";
 
 import { addTask } from "./harness-support.ts";
 import { context, flush } from "./session-support.ts";

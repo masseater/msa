@@ -4,7 +4,8 @@ import {
   fauxAssistantMessage,
   fauxText,
 } from "@msa/ai";
-import { type Conversation, type Harness, LiveDoc, MemoryStorage } from "@msa/durable";
+import { type Conversation, type Harness, LiveDoc } from "@msa/durable";
+import { MemoryStorage } from "@msa/durable/storage/memory";
 import { describe, expect, it } from "vite-plus/test";
 
 import { allEntries, chatSetup, openChat, waitFor } from "./chat-support.ts";

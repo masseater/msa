@@ -1,6 +1,8 @@
 import { rm } from "node:fs/promises";
 
-import { createRegistry, defineTask, MemoryStorage, type TaskId } from "@msa/durable";
+import { defineTask, type TaskId } from "@msa/durable";
+import { createRegistry } from "@msa/durable/harness";
+import { MemoryStorage } from "@msa/durable/storage/memory";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { addTask } from "./harness-support.ts";

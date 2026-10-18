@@ -9,7 +9,8 @@ import {
   type MutableModels,
 } from "@msa/ai";
 import { CodemodeSandbox } from "@msa/codemode";
-import { MemoryStorage, ToolResultEntry, UsageDoc } from "@msa/durable";
+import { ToolResultEntry, UsageDoc } from "@msa/durable";
+import { MemoryStorage } from "@msa/durable/storage/memory";
 
 import { createCodemodeExtension } from "../src/codemode/codemode.ts";
 import type { ExecutionEnv } from "../src/env/index.ts";

@@ -1,4 +1,5 @@
-import { ToolResultEntry, ToolTask } from "@msa/durable";
+import { ToolResultEntry } from "@msa/durable";
+import { ToolTask } from "@msa/durable/harness";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { CodemodeRunDoc } from "../src/codemode/codemode.ts";

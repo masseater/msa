@@ -31,6 +31,18 @@
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     },
+    "./harness": {
+      "source": "./src/harness/index.ts",
+      "types": "./dist/harness/index.d.ts",
+      "import": "./dist/harness/index.js",
+      "default": "./dist/harness/index.js"
+    },
+    "./session": {
+      "source": "./src/session/index.ts",
+      "types": "./dist/session/index.d.ts",
+      "import": "./dist/session/index.js",
+      "default": "./dist/session/index.js"
+    },
     "./env": {
       "source": "./src/env/index.ts",
       "types": "./dist/env/index.d.ts",

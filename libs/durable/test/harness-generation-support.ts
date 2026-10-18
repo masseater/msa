@@ -2,11 +2,11 @@ import { fauxAssistantMessage, type Models } from "@msa/ai";
 import {
   type CommitPublication,
   type Conversation,
-  Harness,
   LiveDoc,
   type LiveState,
   type TaskId,
 } from "@msa/durable";
+import { Harness } from "@msa/durable/harness";
 
 import { waitFor } from "./chat-support.ts";
 import { context } from "./session-support.ts";

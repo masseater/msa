@@ -4,13 +4,9 @@ import {
   type Message,
   type SimpleStreamOptions,
 } from "@msa/ai";
-import {
-  AssistantEntry,
-  Harness,
-  type HarnessSettings,
-  MemoryStorage,
-  ProviderDoc,
-} from "@msa/durable";
+import { AssistantEntry, type HarnessSettings, ProviderDoc } from "@msa/durable";
+import { Harness } from "@msa/durable/harness";
+import { MemoryStorage } from "@msa/durable/storage/memory";
 import { describe, expect, it } from "vite-plus/test";
 
 import {

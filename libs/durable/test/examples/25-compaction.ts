@@ -6,14 +6,9 @@ import { fauxAssistantMessage, fauxProvider } from "@msa/ai/providers/faux";
 //   node --conditions=source --experimental-strip-types test/examples/25-compaction.ts
 import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 
-import {
-  CompactionEntry,
-  type Conversation,
-  createRegistry,
-  Harness,
-  LiveDoc,
-  MemoryStorage,
-} from "../../src/index.ts";
+import { createRegistry, Harness } from "../../src/harness/index.ts";
+import { CompactionEntry, type Conversation, LiveDoc } from "../../src/index.ts";
+import { MemoryStorage } from "../../src/storage/memory.ts";
 
 const context = BACKGROUND_CONTEXT;
 

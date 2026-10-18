@@ -15,8 +15,8 @@ import { createModels } from "@msa/ai/models";
 import { fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall } from "@msa/ai/providers/faux";
 import { BACKGROUND_CONTEXT as context } from "@msa/chord/context";
 
+import { Harness } from "../src/harness/index.ts";
 import {
-  Harness,
   type Storage,
   type StorageWrite,
   ToolResultEntry,

@@ -4,7 +4,7 @@ import { Effect } from "effect";
 
 import { boundConversation } from "./harness-bound.ts";
 import { withdrawQueuedInputs } from "./inbox.ts";
-import { settleSchedulerOutcome } from "./live.ts";
+import { settleSchedulerOutcome } from "./live-settle.ts";
 import { TaskScheduler, type TaskSchedulerOptions } from "./scheduler.ts";
 import type {
   Agent,

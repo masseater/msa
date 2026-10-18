@@ -4,9 +4,9 @@ import {
   type Harness,
   LiveDoc,
   type NestedToolExecutionResult,
-  ToolTask,
   type ToolTaskInput,
 } from "@msa/durable";
+import { ToolTask } from "@msa/durable/harness";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { chatSetup } from "./chat-support.ts";

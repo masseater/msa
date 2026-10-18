@@ -5,7 +5,8 @@ import { createModels } from "@msa/ai/models";
 //   node --conditions=source --experimental-strip-types test/examples/09-context.ts
 import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 
-import { createRegistry, Harness, MemoryStorage } from "../../src/index.ts";
+import { createRegistry, Harness } from "../../src/harness/index.ts";
+import { MemoryStorage } from "../../src/storage/memory.ts";
 
 const context = BACKGROUND_CONTEXT;
 const harness = await Harness.open(

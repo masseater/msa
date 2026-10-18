@@ -1,13 +1,6 @@
 import { type AssistantMessage } from "@msa/ai";
-import {
-  AgentDoc,
-  defineExtension,
-  defineTask,
-  GenerationTask,
-  hook,
-  ToolResultEntry,
-  ToolTask,
-} from "@msa/durable";
+import { AgentDoc, defineExtension, defineTask, hook, ToolResultEntry } from "@msa/durable";
+import { GenerationTask, ToolTask } from "@msa/durable/harness";
 import { describe, expect, it } from "vite-plus/test";
 
 import { allEntries, chatSetup } from "./chat-support.ts";

@@ -5,15 +5,9 @@ import { createModels } from "@msa/ai/models";
 //   node --conditions=source --experimental-strip-types test/examples/06-harness.ts
 import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 
-import {
-  AgentDoc,
-  createRegistry,
-  defineDoc,
-  defineExtension,
-  defineTool,
-  Harness,
-  MemoryStorage,
-} from "../../src/index.ts";
+import { createRegistry, Harness } from "../../src/harness/index.ts";
+import { AgentDoc, defineDoc, defineExtension, defineTool } from "../../src/index.ts";
+import { MemoryStorage } from "../../src/storage/memory.ts";
 
 const context = BACKGROUND_CONTEXT;
 

@@ -10,15 +10,8 @@ import { fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall } from "@msa
 import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 
 import { NodeExecutionEnv } from "../../src/env/node.ts";
-import {
-  AssistantEntry,
-  createRegistry,
-  defineExtension,
-  Harness,
-  hook,
-  ToolResultEntry,
-  ToolTask,
-} from "../../src/index.ts";
+import { createRegistry, Harness, ToolTask } from "../../src/harness/index.ts";
+import { AssistantEntry, defineExtension, hook, ToolResultEntry } from "../../src/index.ts";
 import { openNodeJsonlStorage } from "../../src/storage/jsonl/node.ts";
 import { type BashToolInput, CodingTools } from "../../src/tools/index.ts";
 import { makeTempDir, writeTempFile, readTempFile } from "../temp-support.ts";

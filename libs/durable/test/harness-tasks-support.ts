@@ -1,11 +1,6 @@
 import type { Context } from "@msa/chord";
-import {
-  type Conversation,
-  defineTask,
-  MemoryStorage,
-  type TaskId,
-  type TaskRuntime,
-} from "@msa/durable";
+import { type Conversation, defineTask, type TaskId, type TaskRuntime } from "@msa/durable";
+import { MemoryStorage } from "@msa/durable/storage/memory";
 
 import { context } from "./session-support.ts";
 import { abortMarked, abortedWith, completed, openTasks } from "./task-support.ts";

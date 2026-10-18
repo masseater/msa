@@ -1,13 +1,8 @@
 import { rm } from "node:fs/promises";
 
 import { fauxAssistantMessage } from "@msa/ai";
-import {
-  type AgentEvent,
-  type CompactionResult,
-  type TaskId,
-  UsageDoc,
-  watchEvents,
-} from "@msa/durable";
+import { type AgentEvent, type CompactionResult, type TaskId, UsageDoc } from "@msa/durable";
+import { watchEvents } from "@msa/durable/harness";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { openChat, waitFor } from "./chat-support.ts";

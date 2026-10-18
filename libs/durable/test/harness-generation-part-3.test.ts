@@ -1,4 +1,6 @@
-import { createRegistry, Harness, MemoryStorage, type RegistrySnapshot } from "@msa/durable";
+import type { RegistrySnapshot } from "@msa/durable";
+import { createRegistry, Harness } from "@msa/durable/harness";
+import { MemoryStorage } from "@msa/durable/storage/memory";
 import { describe, expect, it } from "vite-plus/test";
 
 import { chatSetup } from "./chat-support.ts";

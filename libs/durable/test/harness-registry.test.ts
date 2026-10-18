@@ -1,15 +1,12 @@
 import {
   type AgentState,
-  CompactionTask,
-  createRegistry,
   defineExtension,
   defineTask,
-  GenerationTask,
   section,
-  ToolTask,
   wrapSection,
   wrapTool,
 } from "@msa/durable";
+import { CompactionTask, createRegistry, GenerationTask, ToolTask } from "@msa/durable/harness";
 import { describe, expect, it } from "vite-plus/test";
 
 import { resolveSettings } from "../src/harness/agent.ts";

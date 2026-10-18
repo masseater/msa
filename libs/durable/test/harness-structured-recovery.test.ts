@@ -1,14 +1,9 @@
 import { rm } from "node:fs/promises";
 
 import { fauxAssistantMessage, fauxText, type ToolResultMessage, Type } from "@msa/ai";
-import {
-  createSession,
-  defineTool,
-  LiveDoc,
-  MemoryStorage,
-  type TaskId,
-  ToolResultEntry,
-} from "@msa/durable";
+import { defineTool, LiveDoc, type TaskId, ToolResultEntry } from "@msa/durable";
+import { createSession } from "@msa/durable/session";
+import { MemoryStorage } from "@msa/durable/storage/memory";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";

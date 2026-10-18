@@ -1,4 +1,5 @@
-import { defineDoc, MemoryStorage, type TaskId } from "@msa/durable";
+import { defineDoc, type TaskId } from "@msa/durable";
+import { MemoryStorage } from "@msa/durable/storage/memory";
 import { describe, expect, it } from "vite-plus/test";
 
 import { start, oneStep } from "./harness-lifecycle-support.ts";

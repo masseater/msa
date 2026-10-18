@@ -1,5 +1,6 @@
 import { CodemodeSandbox } from "@msa/codemode";
-import { ToolResultEntry, ToolTask, type ToolTaskInput } from "@msa/durable";
+import { ToolResultEntry, type ToolTaskInput } from "@msa/durable";
+import { ToolTask } from "@msa/durable/harness";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import {

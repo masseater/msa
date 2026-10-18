@@ -1,4 +1,5 @@
-import { defineDoc, Harness } from "@msa/durable";
+import { defineDoc } from "@msa/durable";
+import { Harness } from "@msa/durable/harness";
 import { describe, expect, it } from "vite-plus/test";
 
 import type { SessionImpl } from "../src/session/session.ts";

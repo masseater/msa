@@ -1,4 +1,5 @@
-import { defineDoc, LiveDoc, MemoryStorage } from "@msa/durable";
+import { defineDoc, LiveDoc } from "@msa/durable";
+import { MemoryStorage } from "@msa/durable/storage/memory";
 import { describe, expect, it } from "vite-plus/test";
 
 import { chatSetup, openChat } from "./chat-support.ts";

@@ -1,11 +1,6 @@
 import { fauxAssistantMessage, fauxText, fauxToolCall, Type } from "@msa/ai";
-import {
-  type ConversationId,
-  configure,
-  defineTool,
-  MemoryStorage,
-  type TaskId,
-} from "@msa/durable";
+import { type ConversationId, configure, defineTool, type TaskId } from "@msa/durable";
+import { MemoryStorage } from "@msa/durable/storage/memory";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";

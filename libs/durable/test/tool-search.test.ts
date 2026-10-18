@@ -6,9 +6,9 @@ import {
   defineTool,
   type EntryRecord,
   type JsonObject,
-  MemoryStorage,
   type ToolRegistration,
 } from "@msa/durable";
+import { MemoryStorage } from "@msa/durable/storage/memory";
 import { describe, expect, it } from "vite-plus/test";
 
 import { createToolSearchExtension } from "../src/tool-search/index.ts";

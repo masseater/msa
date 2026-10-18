@@ -3,12 +3,11 @@ import { rm } from "node:fs/promises";
 import {
   type AgentEvent,
   LiveDoc,
-  MemoryStorage,
   type NestedToolExecutionResult,
-  ToolTask,
   type ToolTaskInput,
-  watchEvents,
 } from "@msa/durable";
+import { ToolTask, watchEvents } from "@msa/durable/harness";
+import { MemoryStorage } from "@msa/durable/storage/memory";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { chatSetup, openChat } from "./chat-support.ts";

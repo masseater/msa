@@ -1,12 +1,7 @@
 import { fauxAssistantMessage, fauxText, fauxToolCall, Type } from "@msa/ai";
-import {
-  type AgentEvent,
-  type ConversationId,
-  defineDoc,
-  defineTool,
-  MemoryStorage,
-  watchEvents,
-} from "@msa/durable";
+import { type AgentEvent, type ConversationId, defineDoc, defineTool } from "@msa/durable";
+import { watchEvents } from "@msa/durable/harness";
+import { MemoryStorage } from "@msa/durable/storage/memory";
 import { describe, expect, it } from "vite-plus/test";
 
 import { chatSetup, openChat } from "./chat-support.ts";

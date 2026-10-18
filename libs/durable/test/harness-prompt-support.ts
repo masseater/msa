@@ -1,4 +1,5 @@
-import { type Conversation, type EntryId, MemoryStorage } from "@msa/durable";
+import type { Conversation, EntryId } from "@msa/durable";
+import { MemoryStorage } from "@msa/durable/storage/memory";
 
 import { openHarness, user } from "./harness-support.ts";
 import { context } from "./session-support.ts";

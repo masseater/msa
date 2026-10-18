@@ -1,14 +1,9 @@
 import { runInNewContext } from "node:vm";
 
 import { createModels } from "@msa/ai";
-import {
-  createRegistry,
-  defineExtension,
-  defineTask,
-  Harness,
-  LiveDoc,
-  MemoryStorage,
-} from "@msa/durable";
+import { defineExtension, defineTask, LiveDoc } from "@msa/durable";
+import { createRegistry, Harness } from "@msa/durable/harness";
+import { MemoryStorage } from "@msa/durable/storage/memory";
 import { describe, expect, it } from "vite-plus/test";
 
 import { safeNow } from "../src/harness/harness.ts";

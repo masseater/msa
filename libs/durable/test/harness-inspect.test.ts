@@ -1,4 +1,5 @@
-import { defineTask, MemoryStorage, type TaskId, type TaskInspection } from "@msa/durable";
+import { defineTask, type TaskId, type TaskInspection } from "@msa/durable";
+import { MemoryStorage } from "@msa/durable/storage/memory";
 import { describe, expect, it } from "vite-plus/test";
 
 import { chatSetup, openChat, unanswered, waitFor } from "./chat-support.ts";

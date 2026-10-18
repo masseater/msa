@@ -1,4 +1,5 @@
-import { defineExtension, MemoryStorage, ToolResultEntry } from "@msa/durable";
+import { defineExtension, ToolResultEntry } from "@msa/durable";
+import { MemoryStorage } from "@msa/durable/storage/memory";
 import { describe, expect, it } from "vite-plus/test";
 
 import { NodeExecutionEnv } from "../src/env/node.ts";

@@ -3,8 +3,9 @@ import { join } from "node:path";
 
 import { BACKGROUND_CONTEXT as context } from "@msa/chord/context";
 
-import { MemoryStorage, type Storage } from "../src/index.ts";
+import type { Storage } from "../src/index.ts";
 import { openNodeJsonlStorage } from "../src/storage/jsonl/node.ts";
+import { MemoryStorage } from "../src/storage/memory.ts";
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
 
 export type Backend = "memory" | "sqlite" | "jsonl";

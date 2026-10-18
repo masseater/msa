@@ -1,4 +1,5 @@
-import { defineTask, MemoryStorage } from "@msa/durable";
+import { defineTask } from "@msa/durable";
+import { MemoryStorage } from "@msa/durable/storage/memory";
 import { describe, expect, it } from "vite-plus/test";
 
 import { family } from "./harness-task-graph-support.ts";

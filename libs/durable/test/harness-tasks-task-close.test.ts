@@ -1,11 +1,7 @@
 import { createModels } from "@msa/ai";
-import {
-  createRegistry,
-  defineTask,
-  Harness,
-  MemoryStorage,
-  type RegistryReader,
-} from "@msa/durable";
+import { defineTask, type RegistryReader } from "@msa/durable";
+import { createRegistry, Harness } from "@msa/durable/harness";
+import { MemoryStorage } from "@msa/durable/storage/memory";
 import { describe, expect, it } from "vite-plus/test";
 
 import { addTask } from "./harness-support.ts";

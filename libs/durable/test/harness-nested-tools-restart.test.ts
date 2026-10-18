@@ -1,15 +1,8 @@
 import { rm } from "node:fs/promises";
 
 import type { Context } from "@msa/chord";
-import {
-  type AgentEvent,
-  defineExtension,
-  defineTask,
-  type Harness,
-  LiveDoc,
-  ToolTask,
-  watchEvents,
-} from "@msa/durable";
+import { type AgentEvent, defineExtension, defineTask, type Harness, LiveDoc } from "@msa/durable";
+import { ToolTask, watchEvents } from "@msa/durable/harness";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { allEntries, chatSetup } from "./chat-support.ts";

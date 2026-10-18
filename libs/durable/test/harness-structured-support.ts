@@ -11,7 +11,6 @@ import {
   defineTool,
   type Harness,
   type JoinPolicy,
-  MemoryStorage,
   type NextTaskState,
   type Registry,
   type Storage,
@@ -20,8 +19,9 @@ import {
   type TaskRuntime,
   type ToolRegistration,
   type Tx,
-  watchEvents,
 } from "@msa/durable";
+import { watchEvents } from "@msa/durable/harness";
+import { MemoryStorage } from "@msa/durable/storage/memory";
 
 import { waitFor } from "./chat-support.ts";
 import { context } from "./session-support.ts";

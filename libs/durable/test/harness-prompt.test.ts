@@ -1,7 +1,6 @@
 import { type SystemMessage } from "@msa/ai";
 import {
   type Conversation,
-  createRegistry,
   defineExtension,
   type EntryId,
   type PromptInput,
@@ -10,6 +9,7 @@ import {
   type ToolRegistration,
   wrapSection,
 } from "@msa/durable";
+import { createRegistry } from "@msa/durable/harness";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 

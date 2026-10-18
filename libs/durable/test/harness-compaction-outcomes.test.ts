@@ -4,12 +4,11 @@ import { fauxAssistantMessage, fauxToolCall, Type } from "@msa/ai";
 import {
   type AgentEvent,
   type CompactionResult,
-  CompactionTask,
   defineTool,
   ProviderDoc,
   type TaskId,
-  watchEvents,
 } from "@msa/durable";
+import { CompactionTask, watchEvents } from "@msa/durable/harness";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { toolsNamed, waitFor } from "./chat-support.ts";

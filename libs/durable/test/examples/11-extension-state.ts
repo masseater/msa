@@ -6,15 +6,9 @@ import { fauxAssistantMessage, fauxProvider, fauxToolCall } from "@msa/ai/provid
 //   node --conditions=source --experimental-strip-types test/examples/11-extension-state.ts
 import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 
-import {
-  createRegistry,
-  defineDoc,
-  defineExtension,
-  defineTool,
-  Harness,
-  MemoryStorage,
-  section,
-} from "../../src/index.ts";
+import { createRegistry, Harness } from "../../src/harness/index.ts";
+import { defineDoc, defineExtension, defineTool, section } from "../../src/index.ts";
+import { MemoryStorage } from "../../src/storage/memory.ts";
 
 const context = BACKGROUND_CONTEXT;
 

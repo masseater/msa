@@ -1,4 +1,5 @@
-import { defineDoc, type HarnessSettings, MemoryStorage } from "@msa/durable";
+import { defineDoc, type HarnessSettings } from "@msa/durable";
+import { MemoryStorage } from "@msa/durable/storage/memory";
 import { describe, expect, it, onTestFinished } from "vite-plus/test";
 
 import { SessionImpl, setDefaultDocumentRetention } from "../src/session/session.ts";

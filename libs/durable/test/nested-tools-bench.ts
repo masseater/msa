@@ -15,12 +15,11 @@ import { fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall } from "@msa
 import { BACKGROUND_CONTEXT as context } from "@msa/chord/context";
 import { Type } from "typebox";
 
+import { createRegistry, Harness } from "../src/harness/index.ts";
 import {
   type Conversation,
-  createRegistry,
   defineExtension,
   defineTool,
-  Harness,
   type StorageWrite,
   ToolResultEntry,
 } from "../src/index.ts";

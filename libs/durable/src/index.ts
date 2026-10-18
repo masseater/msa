@@ -15,12 +15,11 @@ export {
   DEFAULT_COMPACTION_POLICY,
   DEFAULT_PROGRESS_POLICY,
   DEFAULT_RETRY_POLICY,
-} from "./harness/agent.ts";
-export {
-  type CompactionCheckpoint,
-  type CompactionInput,
-  CompactionTask,
-  type SummaryRequest,
+} from "./harness/agent-state.ts";
+export type {
+  CompactionCheckpoint,
+  CompactionInput,
+  SummaryRequest,
 } from "./harness/compaction.ts";
 export {
   defineExtension,
@@ -30,21 +29,18 @@ export {
   wrapSection,
   wrapTool,
 } from "./harness/define.ts";
-export {
-  type AgentEvent,
-  type AgentEventStream,
-  type MessageChange,
-  type SnapshotEvent,
-  type ToolEventCall,
-  watchEvents,
+export type {
+  AgentEvent,
+  AgentEventStream,
+  MessageChange,
+  SnapshotEvent,
+  ToolEventCall,
 } from "./harness/events.ts";
-export {
-  type GenerationCheckpoint,
-  type GenerationInput,
-  type GenerationResult,
-  GenerationTask,
+export type {
+  GenerationCheckpoint,
+  GenerationInput,
+  GenerationResult,
 } from "./harness/generation.ts";
-export { Harness } from "./harness/harness.ts";
 export { InboxDoc, type InboxItem, type InboxState } from "./harness/inbox.ts";
 export {
   type CompactionFailure,
@@ -56,20 +52,18 @@ export {
   type ToolSlot,
 } from "./harness/live.ts";
 export { ProviderDoc, type ProviderState } from "./harness/provider.ts";
-export { createRegistry } from "./harness/registry.ts";
 export type {
   TaskGraph,
   TaskGraphNode,
   TaskGraphState,
   TaskGraphWatch,
 } from "./harness/task-graph.ts";
-export {
-  NestedCallDoc,
-  type NestedCallState,
-  ToolTask,
-  type ToolTaskCheckpoint,
-  type ToolTaskInput,
-  type ToolTaskResult,
+export { NestedCallDoc } from "./harness/tool-types.ts";
+export type {
+  NestedCallState,
+  ToolTaskCheckpoint,
+  ToolTaskInput,
+  ToolTaskResult,
 } from "./harness/tool.ts";
 export type {
   Agent,
@@ -129,8 +123,6 @@ export type {
 } from "./harness/types.ts";
 export { UsageDoc, type UsageState } from "./harness/usage.ts";
 export type { ConversationView } from "./harness/view.ts";
-export { createSession } from "./session/create-session.ts";
-export { MemoryStorage } from "./storage/memory.ts";
 export { defineTask } from "./tasks.ts";
 export type {
   CheckpointInfo,
@@ -214,4 +206,6 @@ export type {
   WatchEnd,
   WatchHandle,
 } from "./types.ts";
-export { ROOT_CONVERSATION_ID } from "./types.ts";
+export { ROOT_CONVERSATION_ID } from "./types/ids.ts";
+export type { Harness } from "./harness/harness.ts";
+export type { MemoryStorage } from "./storage/memory.ts";

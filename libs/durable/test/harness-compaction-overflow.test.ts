@@ -1,7 +1,8 @@
 import { rm } from "node:fs/promises";
 
 import { fauxAssistantMessage, fauxToolCall, type Message, Type } from "@msa/ai";
-import { type CompactionResult, CompactionTask, defineTool, type TaskId } from "@msa/durable";
+import { type CompactionResult, defineTool, type TaskId } from "@msa/durable";
+import { CompactionTask } from "@msa/durable/harness";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { allEntries, chatSetup, toolsNamed } from "./chat-support.ts";

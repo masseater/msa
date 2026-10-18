@@ -3,12 +3,12 @@ import { join } from "node:path";
 import { fauxAssistantMessage } from "@msa/ai";
 import {
   ConversationBusy,
-  GenerationTask,
   LiveDoc,
   type SubmissionId,
   type SubmissionRecord,
   UserEntry,
 } from "@msa/durable";
+import { GenerationTask } from "@msa/durable/harness";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";

@@ -8,17 +8,16 @@ import {
   type RegisterFauxProviderOptions,
 } from "@msa/ai";
 import type { Context } from "@msa/chord";
-import {
-  type Conversation,
-  createRegistry,
-  type EntryRecord,
-  Harness,
-  type HarnessOptions,
-  type HarnessSettings,
-  type Registry,
-  type Storage,
-  type ToolRegistration,
+import type {
+  Conversation,
+  EntryRecord,
+  HarnessOptions,
+  HarnessSettings,
+  Registry,
+  Storage,
+  ToolRegistration,
 } from "@msa/durable";
+import { createRegistry, Harness } from "@msa/durable/harness";
 
 import type { ExecutionEnv } from "../src/env/index.ts";
 import { context } from "./session-support.ts";

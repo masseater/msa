@@ -3,7 +3,8 @@
 //   node --conditions=source --experimental-strip-types test/examples/00-conversation.ts
 import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 
-import { createSession, MemoryStorage } from "../../src/index.ts";
+import { createSession } from "../../src/session/index.ts";
+import { MemoryStorage } from "../../src/storage/memory.ts";
 
 // MemoryStorage keeps everything in memory; other storage backends keep it on disk.
 const session = createSession(new MemoryStorage());

@@ -8,12 +8,12 @@ import {
 } from "@msa/ai";
 import {
   defineTool,
-  MemoryStorage,
   type NestedToolExecutionResult,
   type ToolExecutionResult,
   type ToolRegistration,
   ToolResultEntry,
 } from "@msa/durable";
+import { MemoryStorage } from "@msa/durable/storage/memory";
 
 import { allEntries, type ChatSetup, openChat } from "./chat-support.ts";
 import { addTool } from "./harness-support.ts";

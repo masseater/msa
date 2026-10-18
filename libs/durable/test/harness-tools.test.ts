@@ -1,5 +1,6 @@
 import { type FauxResponseStep, type SystemMessage } from "@msa/ai";
-import { type Conversation, LiveDoc, ToolResultEntry, ToolTask } from "@msa/durable";
+import { type Conversation, LiveDoc, ToolResultEntry } from "@msa/durable";
+import { ToolTask } from "@msa/durable/harness";
 import { describe, expect, it } from "vite-plus/test";
 
 import { allEntries, chatSetup } from "./chat-support.ts";

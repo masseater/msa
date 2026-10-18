@@ -3,8 +3,8 @@ import { randomBytes } from "node:crypto";
 import type { ImageContent } from "@msa/ai";
 import { Type } from "typebox";
 
+import { createRegistry } from "../src/harness/index.ts";
 import {
-  createRegistry,
   defineExtension,
   defineTool,
   type JsonObject,

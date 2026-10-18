@@ -1,5 +1,6 @@
 import { type AssistantMessage, fauxAssistantMessage } from "@msa/ai";
-import { AssistantEntry, defineExtension, MemoryStorage, wrapSection } from "@msa/durable";
+import { AssistantEntry, defineExtension, wrapSection } from "@msa/durable";
+import { MemoryStorage } from "@msa/durable/storage/memory";
 import { describe, expect, it } from "vite-plus/test";
 
 import { allEntries, chatSetup, openChat, textOf, unanswered } from "./chat-support.ts";

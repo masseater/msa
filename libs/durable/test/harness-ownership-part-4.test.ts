@@ -7,10 +7,10 @@ import {
   configure,
   defineTool,
   LiveDoc,
-  MemoryStorage,
   type Submission,
   type TaskId,
 } from "@msa/durable";
+import { MemoryStorage } from "@msa/durable/storage/memory";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { chatSetup, openChat } from "./chat-support.ts";

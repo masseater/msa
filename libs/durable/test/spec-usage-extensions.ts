@@ -6,12 +6,11 @@ import {
   defineTask,
   defineTool,
   type EntryId,
-  GenerationTask,
   hook,
   section,
-  ToolTask,
   wrapTool,
 } from "@msa/durable";
+import { GenerationTask, ToolTask } from "@msa/durable/harness";
 
 import { createBashTool } from "../src/tools/index.ts";
 import type { SpecNames } from "./spec-usage-names.ts";

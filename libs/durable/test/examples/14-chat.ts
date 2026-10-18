@@ -5,14 +5,9 @@ import { fauxAssistantMessage, fauxProvider } from "@msa/ai/providers/faux";
 //   node --conditions=source --experimental-strip-types test/examples/14-chat.ts
 import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 
-import {
-  AssistantEntry,
-  createRegistry,
-  defineExtension,
-  Harness,
-  MemoryStorage,
-  section,
-} from "../../src/index.ts";
+import { createRegistry, Harness } from "../../src/harness/index.ts";
+import { AssistantEntry, defineExtension, section } from "../../src/index.ts";
+import { MemoryStorage } from "../../src/storage/memory.ts";
 
 const context = BACKGROUND_CONTEXT;
 

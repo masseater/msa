@@ -1,15 +1,14 @@
 import { createModels } from "@msa/ai";
 import {
   type AnyTask,
-  createRegistry,
   defineExtension,
-  Harness,
   type HarnessSettings,
   type Registry,
   type RegistryReader,
   type Storage,
   type TaskId,
 } from "@msa/durable";
+import { createRegistry, Harness } from "@msa/durable/harness";
 
 import { context, flush } from "./session-support.ts";
 

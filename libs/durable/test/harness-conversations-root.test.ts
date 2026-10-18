@@ -4,15 +4,14 @@ import { createModels } from "@msa/ai";
 import {
   AgentDoc,
   configure,
-  createRegistry,
-  createSession,
   defineExtension,
   defineTask,
-  Harness,
   LiveDoc,
-  MemoryStorage,
   ProviderDoc,
 } from "@msa/durable";
+import { createRegistry, Harness } from "@msa/durable/harness";
+import { createSession } from "@msa/durable/session";
+import { MemoryStorage } from "@msa/durable/storage/memory";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { directories, append, UUID_V7, NoteDoc } from "./harness-conversations-support.ts";

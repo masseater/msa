@@ -1,14 +1,9 @@
 import { rm } from "node:fs/promises";
 
 import { Type } from "@msa/ai";
-import {
-  createRegistry,
-  defineDoc,
-  defineTask,
-  defineTool,
-  MemoryStorage,
-  type Registry,
-} from "@msa/durable";
+import { defineDoc, defineTask, defineTool, type Registry } from "@msa/durable";
+import { createRegistry } from "@msa/durable/harness";
+import { MemoryStorage } from "@msa/durable/storage/memory";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";

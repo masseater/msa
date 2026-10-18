@@ -1,12 +1,7 @@
 import { rm } from "node:fs/promises";
 
-import {
-  type AgentEvent,
-  type CompactionResult,
-  CompactionTask,
-  type TaskId,
-  watchEvents,
-} from "@msa/durable";
+import type { AgentEvent, CompactionResult, TaskId } from "@msa/durable";
+import { CompactionTask, watchEvents } from "@msa/durable/harness";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { allEntries, waitFor } from "./chat-support.ts";

@@ -1,14 +1,7 @@
 import { type FauxResponseStep, fauxAssistantMessage, fauxText } from "@msa/ai";
-import {
-  configure,
-  defineTask,
-  GenerationTask,
-  type Harness,
-  LiveDoc,
-  MemoryStorage,
-  type SubmissionId,
-  ToolTask,
-} from "@msa/durable";
+import { configure, defineTask, type Harness, LiveDoc, type SubmissionId } from "@msa/durable";
+import { GenerationTask, ToolTask } from "@msa/durable/harness";
+import { MemoryStorage } from "@msa/durable/storage/memory";
 import { describe, expect, it } from "vite-plus/test";
 
 import { NodeExecutionEnv } from "../src/env/node.ts";

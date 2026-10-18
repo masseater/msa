@@ -14,7 +14,8 @@ import { CodemodeSandbox } from "@msa/codemode";
 import { Type } from "typebox";
 
 import { createCodemodeTool } from "../src/codemode/codemode.ts";
-import { createRegistry, defineExtension, defineTool, Harness } from "../src/index.ts";
+import { createRegistry, Harness } from "../src/harness/index.ts";
+import { defineExtension, defineTool } from "../src/index.ts";
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
 import { makeTempDir, removeDir } from "./temp-support.ts";
 

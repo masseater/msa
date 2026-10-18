@@ -10,12 +10,12 @@ import {
   defineTool,
   type EntryRecord,
   type Harness,
-  MemoryStorage,
   type NestedToolExecutionResult,
   type ToolRegistration,
   ToolResultEntry,
-  ToolTask,
 } from "@msa/durable";
+import { ToolTask } from "@msa/durable/harness";
+import { MemoryStorage } from "@msa/durable/storage/memory";
 
 import { allEntries, type ChatSetup, openChat } from "./chat-support.ts";
 import { context } from "./session-support.ts";

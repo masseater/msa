@@ -1,18 +1,18 @@
 import type { Context } from "@msa/chord";
 import { BACKGROUND_CONTEXT } from "@msa/chord/context";
-import {
-  type CommitPublication,
-  type ConversationId,
-  type DocumentAddress,
-  type DocumentCommitChange,
-  type DocumentId,
-  type DocumentPoint,
-  type DocumentRecord,
-  type Id,
-  MemoryStorage,
-  type Seq,
-  type StorageWrite,
+import type {
+  CommitPublication,
+  ConversationId,
+  DocumentAddress,
+  DocumentCommitChange,
+  DocumentId,
+  DocumentPoint,
+  DocumentRecord,
+  Id,
+  Seq,
+  StorageWrite,
 } from "@msa/durable";
+import { MemoryStorage } from "@msa/durable/storage/memory";
 
 import { SessionImpl } from "../src/session/session.ts";
 

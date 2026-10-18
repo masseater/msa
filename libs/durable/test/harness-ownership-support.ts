@@ -5,10 +5,10 @@ import {
   defineTask,
   type Harness,
   LiveDoc,
-  MemoryStorage,
   type Storage,
   type TaskId,
 } from "@msa/durable";
+import { MemoryStorage } from "@msa/durable/storage/memory";
 import { vi } from "vite-plus/test";
 
 import { context } from "./session-support.ts";

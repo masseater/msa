@@ -4,14 +4,14 @@ import { fauxAssistantMessage, fauxText, Type } from "@msa/ai";
 import {
   type AgentEvent,
   type ConversationId,
-  createSession,
   defineTool,
-  GenerationTask,
   type Harness,
   LiveDoc,
-  MemoryStorage,
   type TaskId,
 } from "@msa/durable";
+import { GenerationTask } from "@msa/durable/harness";
+import { createSession } from "@msa/durable/session";
+import { MemoryStorage } from "@msa/durable/storage/memory";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";

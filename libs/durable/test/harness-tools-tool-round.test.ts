@@ -1,4 +1,5 @@
-import { type Conversation, ToolResultEntry, ToolTask } from "@msa/durable";
+import { type Conversation, ToolResultEntry } from "@msa/durable";
+import { ToolTask } from "@msa/durable/harness";
 import { describe, expect, it } from "vite-plus/test";
 
 import { type ChatSetup, chatSetup } from "./chat-support.ts";

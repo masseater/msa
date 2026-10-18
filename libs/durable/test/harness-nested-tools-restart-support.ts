@@ -18,9 +18,9 @@ import {
   type TaskId,
   type ToolRegistration,
   ToolResultEntry,
-  ToolTask,
   type ToolTaskInput,
 } from "@msa/durable";
+import { ToolTask } from "@msa/durable/harness";
 
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
 import { allEntries, type ChatSetup, openChat } from "./chat-support.ts";

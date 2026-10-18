@@ -1,4 +1,6 @@
-import { defineTask, LiveDoc, MemoryStorage, ToolTask } from "@msa/durable";
+import { defineTask, LiveDoc } from "@msa/durable";
+import { ToolTask } from "@msa/durable/harness";
+import { MemoryStorage } from "@msa/durable/storage/memory";
 import { describe, expect, it } from "vite-plus/test";
 
 import { allEntries, chatSetup, openChat } from "./chat-support.ts";

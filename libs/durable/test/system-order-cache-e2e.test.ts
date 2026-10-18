@@ -8,16 +8,9 @@ import {
   uuidv7,
 } from "@msa/ai";
 import { builtinModels } from "@msa/ai/providers/all";
-import {
-  AssistantEntry,
-  createRegistry,
-  defineExtension,
-  defineTool,
-  GenerationTask,
-  Harness,
-  hook,
-  MemoryStorage,
-} from "@msa/durable";
+import { AssistantEntry, defineExtension, defineTool, hook } from "@msa/durable";
+import { createRegistry, GenerationTask, Harness } from "@msa/durable/harness";
+import { MemoryStorage } from "@msa/durable/storage/memory";
 import { describe, expect, it } from "vite-plus/test";
 
 import { streamSimple as streamSimpleAnthropic } from "../../ai/src/api/anthropic-messages.ts";

@@ -5,14 +5,9 @@ import {
   type Usage,
 } from "@msa/ai";
 import type { Op } from "@msa/chord/delta";
-import {
-  InboxDoc,
-  type InboxState,
-  LiveDoc,
-  MemoryStorage,
-  ToolTask,
-  UsageDoc,
-} from "@msa/durable";
+import { InboxDoc, type InboxState, LiveDoc, UsageDoc } from "@msa/durable";
+import { ToolTask } from "@msa/durable/harness";
+import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 

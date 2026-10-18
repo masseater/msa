@@ -1,7 +1,9 @@
 import { rm } from "node:fs/promises";
 
 import { type Message } from "@msa/ai";
-import { CompactionTask, type EntryRecord, MemoryStorage, UsageDoc } from "@msa/durable";
+import { type EntryRecord, UsageDoc } from "@msa/durable";
+import { CompactionTask } from "@msa/durable/harness";
+import { MemoryStorage } from "@msa/durable/storage/memory";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { chatSetup, openChat, waitFor } from "./chat-support.ts";

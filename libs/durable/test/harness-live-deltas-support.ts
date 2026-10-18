@@ -5,10 +5,10 @@ import {
   type Harness,
   LiveDoc,
   type LiveState,
-  MemoryStorage,
   type ToolExecutionApi,
   type ToolRegistration,
 } from "@msa/durable";
+import { MemoryStorage } from "@msa/durable/storage/memory";
 
 import { chatSetup, openChat, waitFor } from "./chat-support.ts";
 import { addTool } from "./harness-support.ts";

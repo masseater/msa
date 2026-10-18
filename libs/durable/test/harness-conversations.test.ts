@@ -8,10 +8,10 @@ import {
   type ConversationId,
   defineEntry,
   LiveDoc,
-  MemoryStorage,
   ProviderDoc,
   ROOT_CONVERSATION_ID,
 } from "@msa/durable";
+import { MemoryStorage } from "@msa/durable/storage/memory";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";

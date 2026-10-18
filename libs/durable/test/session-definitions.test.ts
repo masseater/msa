@@ -1,7 +1,6 @@
 import type { Draft } from "@msa/chord";
 import {
   type ConversationId,
-  createSession,
   type DocumentState,
   type DocumentWatch,
   defineDoc,
@@ -9,13 +8,14 @@ import {
   defineEntry,
   type EntryId,
   type EntryRecord,
-  MemoryStorage,
   ROOT_CONVERSATION_ID,
   type Session,
   type TaskId,
   type Tx,
   type TypedEntry,
 } from "@msa/durable";
+import { createSession } from "@msa/durable/session";
+import { MemoryStorage } from "@msa/durable/storage/memory";
 import { describe, expect, expectTypeOf, it } from "vite-plus/test";
 
 import { idFromNumber } from "../src/ids.ts";

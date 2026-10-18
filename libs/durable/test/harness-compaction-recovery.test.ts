@@ -1,6 +1,7 @@
 import { rm } from "node:fs/promises";
 
-import { CompactionTask, UsageDoc } from "@msa/durable";
+import { UsageDoc } from "@msa/durable";
+import { CompactionTask } from "@msa/durable/harness";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { allEntries, waitFor } from "./chat-support.ts";

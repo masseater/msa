@@ -5,11 +5,11 @@ import {
   type AgentEvent,
   defineTool,
   LiveDoc,
-  MemoryStorage,
   type NestedToolExecutionResult,
   UsageDoc,
-  watchEvents,
 } from "@msa/durable";
+import { watchEvents } from "@msa/durable/harness";
+import { MemoryStorage } from "@msa/durable/storage/memory";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { allEntries, chatSetup, openChat } from "./chat-support.ts";

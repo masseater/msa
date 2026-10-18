@@ -5,15 +5,9 @@ import { openaiProvider } from "@msa/ai/providers/openai";
 //   node --conditions=source --experimental-strip-types test/examples/16-real-model.ts
 import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 
-import {
-  AssistantEntry,
-  createRegistry,
-  defineExtension,
-  Harness,
-  LiveDoc,
-  MemoryStorage,
-  section,
-} from "../../src/index.ts";
+import { createRegistry, Harness } from "../../src/harness/index.ts";
+import { AssistantEntry, defineExtension, LiveDoc, section } from "../../src/index.ts";
+import { MemoryStorage } from "../../src/storage/memory.ts";
 
 const context = BACKGROUND_CONTEXT;
 

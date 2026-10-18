@@ -7,16 +7,9 @@ import { fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall } from "@msa
 //   node --conditions=source --experimental-strip-types test/examples/21-late-join.ts
 import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 
-import {
-  type AgentEvent,
-  createRegistry,
-  defineExtension,
-  defineTool,
-  Harness,
-  type LiveState,
-  MemoryStorage,
-  watchEvents,
-} from "../../src/index.ts";
+import { createRegistry, Harness, watchEvents } from "../../src/harness/index.ts";
+import { type AgentEvent, defineExtension, defineTool, type LiveState } from "../../src/index.ts";
+import { MemoryStorage } from "../../src/storage/memory.ts";
 
 const context = BACKGROUND_CONTEXT;
 const pause = (ms: number) =>

@@ -3,13 +3,9 @@
 //   node --conditions=source --experimental-strip-types test/examples/03-owned-conversations.ts
 import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 
-import {
-  type ConversationId,
-  createSession,
-  defineDoc,
-  defineTask,
-  MemoryStorage,
-} from "../../src/index.ts";
+import { type ConversationId, defineDoc, defineTask } from "../../src/index.ts";
+import { createSession } from "../../src/session/index.ts";
+import { MemoryStorage } from "../../src/storage/memory.ts";
 
 const context = BACKGROUND_CONTEXT;
 const session = createSession(new MemoryStorage());

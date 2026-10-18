@@ -1,5 +1,6 @@
 import { Type } from "@msa/ai";
-import { defineTool, MemoryStorage, type NestedToolExecutionResult } from "@msa/durable";
+import { defineTool, type NestedToolExecutionResult } from "@msa/durable";
+import { MemoryStorage } from "@msa/durable/storage/memory";
 import { describe, expect, it } from "vite-plus/test";
 
 import { NodeExecutionEnv } from "../src/env/node.ts";

@@ -1,15 +1,14 @@
 import type { Draft } from "@msa/chord";
 import {
   configure,
-  createRegistry,
   defineDoc,
-  Harness,
   type HarnessSettings,
   LiveDoc,
   type LiveState,
   type TaskId,
   type Tx,
 } from "@msa/durable";
+import { createRegistry, Harness } from "@msa/durable/harness";
 
 import { CodingTools, type createEditTool, type createReadTool } from "../src/tools/index.ts";
 import type {

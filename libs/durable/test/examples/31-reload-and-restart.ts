@@ -11,13 +11,8 @@ import { createModels } from "@msa/ai/models";
 import { fauxAssistantMessage, fauxProvider, fauxToolCall } from "@msa/ai/providers/faux";
 import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 
-import {
-  createRegistry,
-  defineExtension,
-  defineTool,
-  Harness,
-  ToolResultEntry,
-} from "../../src/index.ts";
+import { createRegistry, Harness } from "../../src/harness/index.ts";
+import { defineExtension, defineTool, ToolResultEntry } from "../../src/index.ts";
 import { openNodeSqliteStorage } from "../../src/storage/sqlite/node.ts";
 
 const context = BACKGROUND_CONTEXT;

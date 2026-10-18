@@ -1,11 +1,11 @@
 import { withAbortSignal } from "@msa/chord/context";
 import {
   LiveDoc,
-  MemoryStorage,
   type NestedToolExecutionResult,
   type ToolTaskInput,
   type ToolTaskResult,
 } from "@msa/durable";
+import { MemoryStorage } from "@msa/durable/storage/memory";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";

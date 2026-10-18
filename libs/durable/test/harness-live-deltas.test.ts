@@ -1,6 +1,7 @@
 import { fauxAssistantMessage, fauxText, fauxToolCall, Type } from "@msa/ai";
 import type { Op } from "@msa/chord/delta";
-import { defineTool, MemoryStorage } from "@msa/durable";
+import { defineTool } from "@msa/durable";
+import { MemoryStorage } from "@msa/durable/storage/memory";
 import { describe, expect, it } from "vite-plus/test";
 
 import { chatSetup, openChat } from "./chat-support.ts";

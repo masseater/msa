@@ -1,7 +1,9 @@
 import { rm } from "node:fs/promises";
 
 import { type FauxResponseStep } from "@msa/ai";
-import { defineDoc, GenerationTask, LiveDoc, MemoryStorage, ResetEntry } from "@msa/durable";
+import { defineDoc, LiveDoc, ResetEntry } from "@msa/durable";
+import { GenerationTask } from "@msa/durable/harness";
+import { MemoryStorage } from "@msa/durable/storage/memory";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { allEntries, chatSetup, openChat, textOf } from "./chat-support.ts";

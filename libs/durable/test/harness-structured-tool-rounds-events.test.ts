@@ -2,7 +2,8 @@ import { rm } from "node:fs/promises";
 
 import { fauxAssistantMessage, fauxText, Type } from "@msa/ai";
 import type { JsonValue } from "@msa/chord";
-import { defineTool, LiveDoc, MemoryStorage } from "@msa/durable";
+import { defineTool, LiveDoc } from "@msa/durable";
+import { MemoryStorage } from "@msa/durable/storage/memory";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { chatSetup, openChat, waitFor } from "./chat-support.ts";

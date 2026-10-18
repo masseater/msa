@@ -1,11 +1,6 @@
 import { type AssistantMessage, fauxAssistantMessage, fauxText, fauxToolCall } from "@msa/ai";
-import {
-  type Harness,
-  type TaskId,
-  ToolResultEntry,
-  ToolTask,
-  type ToolTaskInput,
-} from "@msa/durable";
+import { type Harness, type TaskId, ToolResultEntry, type ToolTaskInput } from "@msa/durable";
+import { ToolTask } from "@msa/durable/harness";
 import { expect } from "vite-plus/test";
 
 import { type CodemodeToolDetails } from "../src/codemode/codemode.ts";

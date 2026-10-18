@@ -1,4 +1,5 @@
-import { createRegistry, defineExtension, GenerationTask, hook, ToolTask } from "@msa/durable";
+import { defineExtension, hook } from "@msa/durable";
+import { createRegistry, GenerationTask, ToolTask } from "@msa/durable/harness";
 import { describe, expect, it } from "vite-plus/test";
 
 import { agentHooks } from "../src/harness/agent.ts";

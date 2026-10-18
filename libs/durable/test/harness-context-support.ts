@@ -2,16 +2,15 @@ import { createModels, type Message } from "@msa/ai";
 import type { Context } from "@msa/chord";
 import {
   type ContextView,
-  createRegistry,
   defineTask,
   type EntryDraft,
   type EntryRecord,
-  Harness,
   type HarnessSettings,
-  MemoryStorage,
   type Storage,
   type TaskRuntime,
 } from "@msa/durable";
+import { createRegistry, Harness } from "@msa/durable/harness";
+import { MemoryStorage } from "@msa/durable/storage/memory";
 import { expect } from "vite-plus/test";
 
 import { addTask, assistant, openHarness, user } from "./harness-support.ts";

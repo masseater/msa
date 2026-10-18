@@ -1,6 +1,7 @@
 import { rm } from "node:fs/promises";
 
-import { GenerationTask, LiveDoc, ToolTask } from "@msa/durable";
+import { LiveDoc } from "@msa/durable";
+import { GenerationTask, ToolTask } from "@msa/durable/harness";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { NodeExecutionEnv } from "../src/env/node.ts";

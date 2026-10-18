@@ -1,7 +1,8 @@
 import { type AssistantMessage, fauxAssistantMessage, fauxText, Type } from "@msa/ai";
 import { CodemodeSandbox } from "@msa/codemode";
 import { CODEMODE_SOURCE_GRAMMAR } from "@msa/codemode/source";
-import { defineTool, MemoryStorage, type ToolRegistration } from "@msa/durable";
+import { defineTool, type ToolRegistration } from "@msa/durable";
+import { MemoryStorage } from "@msa/durable/storage/memory";
 import { describe, expect, it } from "vite-plus/test";
 
 import { createCodemodeExtension } from "../src/codemode/codemode.ts";

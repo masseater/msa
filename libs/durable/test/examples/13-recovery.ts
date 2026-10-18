@@ -8,7 +8,8 @@ import { join } from "node:path";
 import { createModels } from "@msa/ai/models";
 import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 
-import { createRegistry, defineExtension, defineTask, Harness } from "../../src/index.ts";
+import { createRegistry, Harness } from "../../src/harness/index.ts";
+import { defineExtension, defineTask } from "../../src/index.ts";
 import { openNodeSqliteStorage } from "../../src/storage/sqlite/node.ts";
 
 const context = BACKGROUND_CONTEXT;

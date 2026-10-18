@@ -6,10 +6,10 @@ import {
   type ConversationId,
   defineTask,
   type EntryId,
-  MemoryStorage,
   type TaskGraph,
   type TaskId,
 } from "@msa/durable";
+import { MemoryStorage } from "@msa/durable/storage/memory";
 import { describe, expect, it } from "vite-plus/test";
 
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";

@@ -1,12 +1,7 @@
 import { fauxAssistantMessage, type Message, type Models, type SystemMessage } from "@msa/ai";
-import {
-  type Conversation,
-  defineDoc,
-  GenerationTask,
-  LiveDoc,
-  MemoryStorage,
-  UserEntry,
-} from "@msa/durable";
+import { type Conversation, defineDoc, LiveDoc, UserEntry } from "@msa/durable";
+import { GenerationTask } from "@msa/durable/harness";
+import { MemoryStorage } from "@msa/durable/storage/memory";
 import { describe, expect, it } from "vite-plus/test";
 
 import { resolveSettings } from "../src/harness/agent.ts";

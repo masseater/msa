@@ -12,15 +12,9 @@ import { fauxAssistantMessage, fauxProvider, fauxToolCall } from "@msa/ai/provid
 import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 
 import { NodeExecutionEnv } from "../../src/env/node.ts";
-import {
-  createRegistry,
-  defineDoc,
-  defineExtension,
-  defineTool,
-  Harness,
-  MemoryStorage,
-  section,
-} from "../../src/index.ts";
+import { createRegistry, Harness } from "../../src/harness/index.ts";
+import { defineDoc, defineExtension, defineTool, section } from "../../src/index.ts";
+import { MemoryStorage } from "../../src/storage/memory.ts";
 import { CodingTools, createReadTool } from "../../src/tools/index.ts";
 
 const context = BACKGROUND_CONTEXT;

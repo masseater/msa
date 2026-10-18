@@ -9,12 +9,11 @@ import { join } from "node:path";
 import { createModels } from "@msa/ai/models";
 import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 
+import { createRegistry, Harness } from "../../src/harness/index.ts";
 import {
   type Conversation,
-  createRegistry,
   defineExtension,
   defineTask,
-  Harness,
   type TaskGraph,
   type TaskGraphNode,
   type TaskId,

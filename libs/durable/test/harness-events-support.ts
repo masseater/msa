@@ -1,11 +1,6 @@
 import { type AssistantMessage } from "@msa/ai";
-import {
-  type AgentEvent,
-  type Conversation,
-  type Harness,
-  type MessageChange,
-  watchEvents,
-} from "@msa/durable";
+import type { AgentEvent, Conversation, Harness, MessageChange } from "@msa/durable";
+import { watchEvents } from "@msa/durable/harness";
 
 import { context } from "./session-support.ts";
 

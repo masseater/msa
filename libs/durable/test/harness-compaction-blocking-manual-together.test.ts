@@ -1,7 +1,8 @@
 import { rm } from "node:fs/promises";
 
 import { type AssistantMessage, fauxAssistantMessage } from "@msa/ai";
-import { type AgentEvent, CompactionTask, LiveDoc, UsageDoc, watchEvents } from "@msa/durable";
+import { type AgentEvent, LiveDoc, UsageDoc } from "@msa/durable";
+import { CompactionTask, watchEvents } from "@msa/durable/harness";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";

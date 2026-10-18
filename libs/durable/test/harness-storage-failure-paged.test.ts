@@ -1,5 +1,5 @@
 import type { Context } from "@msa/chord";
-import { MemoryStorage } from "@msa/durable";
+import { MemoryStorage } from "@msa/durable/storage/memory";
 import { describe, expect, it } from "vite-plus/test";
 
 import { started } from "./harness-storage-failure-support.ts";

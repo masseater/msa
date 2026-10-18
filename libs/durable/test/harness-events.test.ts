@@ -6,13 +6,9 @@ import {
   fauxToolCall,
   Type,
 } from "@msa/ai";
-import {
-  type AgentEvent,
-  defineTool,
-  type LiveState,
-  MemoryStorage,
-  watchEvents,
-} from "@msa/durable";
+import { type AgentEvent, defineTool, type LiveState } from "@msa/durable";
+import { watchEvents } from "@msa/durable/harness";
+import { MemoryStorage } from "@msa/durable/storage/memory";
 import { describe, expect, it } from "vite-plus/test";
 
 import { type ChatSetup, chatSetup, openChat, textOf, waitFor } from "./chat-support.ts";

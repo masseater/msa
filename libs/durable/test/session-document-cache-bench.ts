@@ -12,12 +12,11 @@ import { join } from "node:path";
 import { createModels } from "@msa/ai/models";
 import { BACKGROUND_CONTEXT as context } from "@msa/chord/context";
 
+import { createRegistry, Harness } from "../src/harness/index.ts";
 import {
   type ConversationId,
-  createRegistry,
   defineExtension,
   defineTask,
-  Harness,
   LiveDoc,
   UsageDoc,
 } from "../src/index.ts";

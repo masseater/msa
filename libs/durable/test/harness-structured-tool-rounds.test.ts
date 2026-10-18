@@ -4,14 +4,13 @@ import { fauxAssistantMessage, fauxText, type Models, type ToolResultMessage, Ty
 import {
   type AgentEvent,
   defineTool,
-  GenerationTask,
   type Harness,
   LiveDoc,
-  MemoryStorage,
   type TaskId,
   ToolResultEntry,
-  watchEvents,
 } from "@msa/durable";
+import { GenerationTask, watchEvents } from "@msa/durable/harness";
+import { MemoryStorage } from "@msa/durable/storage/memory";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { allEntries, chatSetup, openChat, waitFor } from "./chat-support.ts";

@@ -13,16 +13,10 @@ import { openaiProvider } from "@msa/ai/providers/openai";
 import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 
 import { NodeExecutionEnv } from "../../src/env/node.ts";
-import {
-  createRegistry,
-  defineExtension,
-  Harness,
-  MemoryStorage,
-  type Storage,
-  section,
-  watchEvents,
-} from "../../src/index.ts";
+import { createRegistry, Harness, watchEvents } from "../../src/harness/index.ts";
+import { defineExtension, type Storage, section } from "../../src/index.ts";
 import { openNodeJsonlStorage } from "../../src/storage/jsonl/node.ts";
+import { MemoryStorage } from "../../src/storage/memory.ts";
 import { openNodeSqliteStorage } from "../../src/storage/sqlite/node.ts";
 import { createBashTool, createReadTool } from "../../src/tools/index.ts";
 import { makeTempDir, tempPath } from "../temp-support.ts";

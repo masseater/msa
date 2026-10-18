@@ -1,12 +1,7 @@
 import { fauxAssistantMessage, fauxText, fauxToolCall, Type } from "@msa/ai";
 import type { Op } from "@msa/chord/delta";
-import {
-  type CommitPublication,
-  defineTool,
-  LiveDoc,
-  type LiveState,
-  MemoryStorage,
-} from "@msa/durable";
+import { type CommitPublication, defineTool, LiveDoc, type LiveState } from "@msa/durable";
+import { MemoryStorage } from "@msa/durable/storage/memory";
 import { describe, expect, it } from "vite-plus/test";
 
 import { chatSetup, openChat, waitFor } from "./chat-support.ts";

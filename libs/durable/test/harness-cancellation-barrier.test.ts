@@ -1,11 +1,7 @@
 import type { Context } from "@msa/chord";
-import {
-  createSession,
-  defineTask,
-  MemoryStorage,
-  type StorageWrite,
-  type TaskId,
-} from "@msa/durable";
+import { defineTask, type StorageWrite, type TaskId } from "@msa/durable";
+import { createSession } from "@msa/durable/session";
+import { MemoryStorage } from "@msa/durable/storage/memory";
 import { describe, expect, it } from "vite-plus/test";
 
 import { context, flush } from "./session-support.ts";

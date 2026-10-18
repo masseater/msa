@@ -1,5 +1,6 @@
 import { fauxAssistantMessage } from "@msa/ai";
-import { LiveDoc, MemoryStorage } from "@msa/durable";
+import { LiveDoc } from "@msa/durable";
+import { MemoryStorage } from "@msa/durable/storage/memory";
 import { describe, expect, it } from "vite-plus/test";
 
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";

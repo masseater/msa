@@ -1,11 +1,6 @@
-import {
-  type AgentEvent,
-  ConversationBusy,
-  LiveDoc,
-  MemoryStorage,
-  type SubmissionDraft,
-  watchEvents,
-} from "@msa/durable";
+import { type AgentEvent, ConversationBusy, LiveDoc, type SubmissionDraft } from "@msa/durable";
+import { watchEvents } from "@msa/durable/harness";
+import { MemoryStorage } from "@msa/durable/storage/memory";
 import { describe, expect, it } from "vite-plus/test";
 
 import { allEntries, chatSetup, openChat, textOf, waitFor } from "./chat-support.ts";

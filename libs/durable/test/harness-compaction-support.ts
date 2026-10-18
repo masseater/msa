@@ -14,10 +14,10 @@ import {
   type Conversation,
   type Harness,
   LiveDoc,
-  MemoryStorage,
   type TaskId,
   UsageDoc,
 } from "@msa/durable";
+import { MemoryStorage } from "@msa/durable/storage/memory";
 import { expect } from "vite-plus/test";
 
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";

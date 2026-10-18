@@ -1,6 +1,8 @@
 import { Type } from "@msa/ai";
 import type { JsonValue } from "@msa/chord";
-import { defineTool, MemoryStorage, type NestedToolExecutionResult, ToolTask } from "@msa/durable";
+import { defineTool, type NestedToolExecutionResult } from "@msa/durable";
+import { ToolTask } from "@msa/durable/harness";
+import { MemoryStorage } from "@msa/durable/storage/memory";
 import { describe, expect, it } from "vite-plus/test";
 
 import { chatSetup, openChat } from "./chat-support.ts";

@@ -1,12 +1,7 @@
 import { createModels, type Message } from "@msa/ai";
-import {
-  createRegistry,
-  defineTask,
-  type EntryRecord,
-  Harness,
-  MemoryStorage,
-  type Storage,
-} from "@msa/durable";
+import { defineTask, type EntryRecord, type Storage } from "@msa/durable";
+import { createRegistry, Harness } from "@msa/durable/harness";
+import { MemoryStorage } from "@msa/durable/storage/memory";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { countingSetup, runInRoot, ABORTED, DONE, probeTask } from "./harness-context-support.ts";

@@ -1,13 +1,8 @@
 import { createModels } from "@msa/ai";
 import type { Context } from "@msa/chord";
-import {
-  createRegistry,
-  defineExtension,
-  defineTask,
-  Harness,
-  LiveDoc,
-  MemoryStorage,
-} from "@msa/durable";
+import { defineExtension, defineTask, LiveDoc } from "@msa/durable";
+import { createRegistry, Harness } from "@msa/durable/harness";
+import { MemoryStorage } from "@msa/durable/storage/memory";
 import { describe, expect, it } from "vite-plus/test";
 
 import { conversationViews } from "../src/harness/view.ts";

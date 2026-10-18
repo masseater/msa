@@ -14,13 +14,12 @@ import { createModels } from "@msa/ai/models";
 import { BACKGROUND_CONTEXT as context } from "@msa/chord/context";
 
 import { SCHEDULER_INDEX_SIZES } from "../src/harness/harness.ts";
+import { createRegistry, Harness } from "../src/harness/index.ts";
 import {
   type Conversation,
   type ConversationId,
-  createRegistry,
   defineExtension,
   defineTask,
-  Harness,
   type TaskId,
 } from "../src/index.ts";
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";

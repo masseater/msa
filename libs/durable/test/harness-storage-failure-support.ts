@@ -1,4 +1,6 @@
-import { defineTask, Harness, type Id, MemoryStorage, type TaskId } from "@msa/durable";
+import { defineTask, type Id, type TaskId } from "@msa/durable";
+import { Harness } from "@msa/durable/harness";
+import { MemoryStorage } from "@msa/durable/storage/memory";
 
 import { ControlledStorage, context } from "./session-support.ts";
 import { aborted, deferred, openTasks } from "./task-support.ts";

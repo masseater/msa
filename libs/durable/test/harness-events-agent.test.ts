@@ -7,7 +7,8 @@ import {
   fauxToolCall,
   Type,
 } from "@msa/ai";
-import { defineTool, type Harness, LiveDoc, type LiveState, MemoryStorage } from "@msa/durable";
+import { defineTool, type Harness, LiveDoc, type LiveState } from "@msa/durable";
+import { MemoryStorage } from "@msa/durable/storage/memory";
 import { describe, expect, it } from "vite-plus/test";
 
 import { chatSetup, openChat, waitFor } from "./chat-support.ts";

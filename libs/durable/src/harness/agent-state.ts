@@ -1,8 +1,9 @@
-import { copyJson, type Draft } from "@msa/chord";
+import type { Draft } from "@msa/chord";
+import { copyJson } from "@msa/chord/json";
 import { Effect, Function } from "effect";
 
 import { defineDoc } from "../documents.ts";
-import { documentRetention } from "../session/session.ts";
+import { documentRetention } from "../session/session-state.ts";
 import type {
   AgentChange,
   AgentState,
