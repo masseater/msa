@@ -10,7 +10,7 @@ import {
 } from "fs";
 import { join, resolve } from "path";
 
-import { Effect } from "effect";
+import { Effect, ManagedRuntime } from "effect";
 
 import {
   CLOUDFLARE_AI_GATEWAY_ANTHROPIC_BASE_URL,
@@ -59,6 +59,9 @@ import {
   type OpenRouterCatalog,
   type OpenRouterModelListItem,
 } from "./openrouter-catalog.ts";
+import { scriptFilesLayer } from "./script-files.ts";
+
+const scriptRuntime = ManagedRuntime.make(scriptFilesLayer);
 
 const orZero = (value: number | undefined): number =>
   value === undefined || Number.isNaN(value) ? 0 : value;
@@ -3265,7 +3268,7 @@ async function generateModels() {
     `${JSON.stringify(value, null, generatorOptions.pretty ? 2 : undefined)}\n`;
   const writeJson = (path: string, value: unknown) => writeFileSync(path, serializeJson(value));
   const generatedDataProviderIds = generatorOptions.dataOnly
-    ? readModelDataProviderIds(packageRoot)
+    ? await scriptRuntime.runPromise(readModelDataProviderIds(packageRoot))
     : sortedProviderIds;
   const missingProviderIds = generatedDataProviderIds.filter(
     (providerId) => jsonAllProviders[providerId] === undefined,
@@ -3281,7 +3284,9 @@ async function generateModels() {
     if (providerModels === undefined) {
       throw new Error(`Cannot hydrate missing providers: ${providerId}`);
     }
-    const { groups, structure } = groupProviderModelData(providerId, providerModels);
+    const { groups, structure } = await Effect.runPromise(
+      groupProviderModelData(providerId, providerModels),
+    );
     generatedDataProviders[providerId] = groups;
     modelDataStructure[providerId] = structure;
   }
@@ -3306,9 +3311,11 @@ async function generateModels() {
       }
       writeJson(
         join(stagedDataDir, MODEL_DATA_MANIFEST_FILE),
-        createModelDataManifest(modelDataStructure, fileContents, generatedAt),
+        await Effect.runPromise(
+          createModelDataManifest(modelDataStructure, fileContents, generatedAt),
+        ),
       );
-      validateModelDataDirectory(modelDataStructure, stagedDataDir);
+      await scriptRuntime.runPromise(validateModelDataDirectory(modelDataStructure, stagedDataDir));
 
       if (!generatorOptions.dataOnly) {
         const previousShardContents = new Map(
@@ -3395,7 +3402,7 @@ async function generateModels() {
       if (hadPreviousData) renameSync(dataDir, previousDataDir);
       try {
         renameSync(stagedDataDir, dataDir);
-        validateGeneratedModelData(packageRoot);
+        await scriptRuntime.runPromise(validateGeneratedModelData(packageRoot));
       } catch (error) {
         rmSync(dataDir, { recursive: true, force: true });
         if (hadPreviousData && existsSync(previousDataDir)) renameSync(previousDataDir, dataDir);

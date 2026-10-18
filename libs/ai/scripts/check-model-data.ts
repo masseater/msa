@@ -1,17 +1,16 @@
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
-
-import { Console, Effect } from "effect";
+import { Console, Effect, ManagedRuntime } from "effect";
 
 import { validateGeneratedModelData } from "./model-data.ts";
+import { ScriptFiles, scriptFilesLayer } from "./script-files.ts";
 
-const packageRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
-
-Effect.runFork(
-  Effect.sync(() => validateGeneratedModelData(packageRoot)).pipe(
-    Effect.andThen(Console.log("Generated model data is valid.")),
-    Effect.catchDefect((error) =>
-      Console.error(error instanceof Error ? error.message : String(error)).pipe(
+ManagedRuntime.make(scriptFilesLayer).runFork(
+  Effect.gen(function* () {
+    const files = yield* ScriptFiles;
+    yield* validateGeneratedModelData(files.join(import.meta.dirname, ".."));
+    yield* Console.log("Generated model data is valid.");
+  }).pipe(
+    Effect.catchTag(["ModelDataError", "ScriptFileError"], (error) =>
+      Console.error(error.message).pipe(
         Effect.andThen(
           Console.error(
             "\nModel data is missing or stale. Run `vp run hydrate:model-data` from the repository root.",

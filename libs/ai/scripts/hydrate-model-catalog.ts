@@ -1,22 +1,33 @@
-import { mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { Effect, ManagedRuntime } from "effect";
 
+import { decodeJson, encodeJson } from "../src/utils/json-codec.ts";
+import { isRecord } from "./model-data-checks.ts";
 import {
   createModelDataManifest,
   groupProviderModelData,
+  ModelDataError,
   MODEL_DATA_MANIFEST_FILE,
   type ModelCatalogEntry,
   type ModelDataStructure,
   readModelDataProviderIds,
   validateModelDataDirectory,
 } from "./model-data.ts";
+import { ScriptFiles, scriptFilesLayer } from "./script-files.ts";
 
 type CatalogEntry = ModelCatalogEntry & Record<string, unknown>;
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+export interface HydrateModelCatalogRequest {
+  readonly packageRoot: string;
+  readonly catalogPath: string;
+  readonly validateOnly?: boolean | undefined;
 }
+
+interface HydratedCatalog {
+  readonly files: Readonly<Record<string, string>>;
+  readonly structure: ModelDataStructure;
+}
+
+const fail = (message: string) => Effect.fail(new ModelDataError({ message }));
 
 function isCatalogEntry(value: unknown): value is CatalogEntry {
   return (
@@ -28,59 +39,98 @@ function isCatalogEntry(value: unknown): value is CatalogEntry {
   );
 }
 
-export function hydrateModelCatalog(
-  packageRoot: string,
-  catalogPath: string,
-  options: { validateOnly?: boolean } = {},
-): void {
-  const catalog: unknown = JSON.parse(readFileSync(catalogPath, "utf8"));
-  if (!isRecord(catalog)) throw new Error("Model catalog must be an object");
+const readCatalog = Effect.fn("readCatalog")(function* (catalogPath: string) {
+  const files = yield* ScriptFiles;
+  const catalog = yield* files.readText(catalogPath).pipe(
+    Effect.flatMap(decodeJson),
+    Effect.mapError((error) => new ModelDataError({ message: error.message })),
+  );
+  if (!isRecord(catalog)) return yield* fail("Model catalog must be an object");
+  return catalog;
+});
 
+const providerEntries = Effect.fn("providerEntries")(function* (
+  catalog: Record<string, unknown>,
+  provider: string,
+) {
+  const models = catalog[provider];
+  if (models === undefined) return yield* fail(`Model catalog is missing provider: ${provider}`);
+  if (!Array.isArray(models) || models.length === 0)
+    return yield* fail(`Model catalog has no typed model list for provider: ${provider}`);
+  if (!models.every(isCatalogEntry))
+    return yield* fail(`Model catalog has an invalid entry for provider ${provider}`);
+  return models;
+});
+
+const groupCatalog = Effect.fn("groupCatalog")(function* (
+  packageRoot: string,
+  catalog: Record<string, unknown>,
+) {
   const files: Record<string, string> = {};
   const structure: ModelDataStructure = {};
-  for (const provider of readModelDataProviderIds(packageRoot)) {
-    const models = catalog[provider];
-    if (models === undefined) throw new Error(`Model catalog is missing provider: ${provider}`);
-    if (!Array.isArray(models) || models.length === 0) {
-      throw new Error(`Model catalog has no typed model list for provider: ${provider}`);
-    }
-    const entries: CatalogEntry[] = [];
-    for (const model of models) {
-      if (!isCatalogEntry(model))
-        throw new Error(`Model catalog has an invalid entry for provider ${provider}`);
-      entries.push(model);
-    }
-    const grouped = groupProviderModelData(provider, entries);
+  for (const provider of yield* readModelDataProviderIds(packageRoot)) {
+    const grouped = yield* groupProviderModelData(
+      provider,
+      yield* providerEntries(catalog, provider),
+    );
     structure[provider] = grouped.structure;
-    files[`${provider}.json`] = `${JSON.stringify(grouped.groups)}\n`;
+    files[`${provider}.json`] = `${yield* encodeJson(grouped.groups)}\n`;
   }
+  return { files, structure } satisfies HydratedCatalog;
+});
 
-  const manifest = createModelDataManifest(structure, files, "1970-01-01T00:00:00.000Z");
-  const providersDir = join(packageRoot, "src", "providers");
-  const stagingRoot = mkdtempSync(join(providersDir, ".model-hydration-"));
-  const stagedData = join(stagingRoot, "data");
-  try {
-    mkdirSync(stagedData);
-    for (const [name, content] of Object.entries(files))
-      writeFileSync(join(stagedData, name), content);
-    writeFileSync(join(stagedData, MODEL_DATA_MANIFEST_FILE), `${JSON.stringify(manifest)}\n`);
-    validateModelDataDirectory(structure, stagedData);
-    if (options.validateOnly === true) return;
-    const dataDir = join(providersDir, "data");
-    rmSync(dataDir, { recursive: true, force: true });
-    renameSync(stagedData, dataDir);
-  } finally {
-    rmSync(stagingRoot, { recursive: true, force: true });
-  }
-}
-
-const [, scriptPath, catalogPath, ...extraArgs] = process.argv;
-if (
-  scriptPath !== undefined &&
-  scriptPath !== "" &&
-  import.meta.url === pathToFileURL(resolve(scriptPath)).href
+const stageCatalog = Effect.fn("stageCatalog")(function* (
+  { files: contents, structure }: HydratedCatalog,
+  stagedData: string,
 ) {
+  const files = yield* ScriptFiles;
+  yield* files.makeDirectory(stagedData);
+  for (const [name, content] of Object.entries(contents))
+    yield* files.writeText({ path: files.join(stagedData, name), content });
+  const manifest = yield* createModelDataManifest(structure, contents, "1970-01-01T00:00:00.000Z");
+  yield* files.writeText({
+    path: files.join(stagedData, MODEL_DATA_MANIFEST_FILE),
+    content: `${yield* encodeJson(manifest)}\n`,
+  });
+  yield* validateModelDataDirectory(structure, stagedData);
+});
+
+export const hydrateModelCatalog = Effect.fn("hydrateModelCatalog")(function* ({
+  packageRoot,
+  catalogPath,
+  validateOnly = false,
+}: HydrateModelCatalogRequest) {
+  const files = yield* ScriptFiles;
+  const hydrated = yield* groupCatalog(packageRoot, yield* readCatalog(catalogPath));
+  const providersDir = files.join(packageRoot, "src", "providers");
+  const stagingRoot = yield* files.makeTempDirectory({
+    directory: providersDir,
+    prefix: ".model-hydration-",
+  });
+  const stagedData = files.join(stagingRoot, "data");
+  yield* Effect.ensuring(
+    Effect.gen(function* () {
+      yield* stageCatalog(hydrated, stagedData);
+      if (validateOnly) return;
+      const dataDir = files.join(providersDir, "data");
+      yield* files.remove(dataDir);
+      yield* files.rename({ from: stagedData, to: dataDir });
+    }),
+    Effect.ignore(files.remove(stagingRoot)),
+  );
+});
+
+if (import.meta.main) {
+  const [catalogPath, ...extraArgs] = process.argv.slice(2);
   if (catalogPath === undefined || extraArgs.length > 0)
     throw new Error("Usage: node hydrate-model-catalog.ts <models.all.json>");
-  hydrateModelCatalog(join(dirname(fileURLToPath(import.meta.url)), ".."), resolve(catalogPath));
+  ManagedRuntime.make(scriptFilesLayer).runFork(
+    Effect.gen(function* () {
+      const files = yield* ScriptFiles;
+      yield* hydrateModelCatalog({
+        packageRoot: files.join(import.meta.dirname, ".."),
+        catalogPath: files.resolve(catalogPath),
+      });
+    }),
+  );
 }
