@@ -1,17 +1,25 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { fauxAssistantMessage, fauxToolCall, registerFauxProvider } from "@msa/ai/compat";
-import { basenameOf, currentTimeMillis, gate, joinPath, nowIso, toJsonText } from "@msa/testing";
+import {
+  basenameOf,
+  currentTimeMillis,
+  deferredPromise,
+  gate,
+  joinPath,
+  nowIso,
+  toJsonText,
+} from "@msa/testing";
 import { Effect, FileSystem, ManagedRuntime } from "effect";
 import { Type } from "typebox";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import {
+  AgentSessionRuntime,
   type CreateAgentSessionRuntimeFactory,
   createAgentSessionFromServices,
   createAgentSessionRuntime,
   createAgentSessionServices,
 } from "../../src/core/agent-session-runtime.ts";
-import { AgentSessionRuntime } from "../../src/core/agent-session-runtime.ts";
 import { AgentSession } from "../../src/core/agent-session.ts";
 import { AuthStorage } from "../../src/core/auth-storage.ts";
 import { SessionManager } from "../../src/core/session-manager.ts";
@@ -208,13 +216,14 @@ const settlesTheActiveResponseBeforeSession = Effect.gen(function* () {
         label: "Block",
         description: "Blocks until aborted",
         parameters: Type.Object({}),
-        execute: (_toolCallId, _params, signal) =>
-          new Promise<AgentToolResult<unknown>>((resolve) => {
-            toolStartedPromise.release();
-            signal?.addEventListener("abort", () =>
-              resolve({ content: [{ type: "text", text: "tool aborted" }], details: {} }),
-            );
-          }),
+        execute: (_toolCallId, _params, signal) => {
+          const aborted = deferredPromise<AgentToolResult<unknown>>();
+          toolStartedPromise.release();
+          signal?.addEventListener("abort", () =>
+            aborted.resolve({ content: [{ type: "text", text: "tool aborted" }], details: {} }),
+          );
+          return aborted.promise;
+        },
       });
     }),
   );

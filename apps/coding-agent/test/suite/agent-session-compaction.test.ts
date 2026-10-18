@@ -10,7 +10,7 @@ import {
   type SimpleStreamOptions,
   type TranscriptContext,
 } from "@msa/ai";
-import { currentTimeMillis, gate, toJsonText } from "@msa/testing";
+import { currentTimeMillis, deferredPromise, gate, toJsonText } from "@msa/testing";
 import { Effect } from "effect";
 import { Type } from "typebox";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
@@ -115,16 +115,14 @@ function createAbortableCompactionHarness(): Promise<{
           settings: { compaction: { keepRecentTokens: 1 } },
           extensionFactories: [
             (msa) => {
-              msa.on(
-                "session_before_compact",
-                (event) =>
-                  new Promise<{ cancel: true }>((resolve) => {
-                    event.signal.addEventListener("abort", () => resolve({ cancel: true }), {
-                      once: true,
-                    });
-                    compactionStarted.release();
-                  }),
-              );
+              msa.on("session_before_compact", (event) => {
+                const cancelled = deferredPromise<{ cancel: true }>();
+                event.signal.addEventListener("abort", () => cancelled.resolve({ cancel: true }), {
+                  once: true,
+                });
+                compactionStarted.release();
+                return cancelled.promise;
+              });
             },
           ],
         }),

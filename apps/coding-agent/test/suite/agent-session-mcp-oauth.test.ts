@@ -4,7 +4,8 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import { fauxAssistantMessage, fauxToolCall } from "@msa/ai";
 import type { ToolResultMessage } from "@msa/ai/compat";
 import { currentTimeMillis, joinPath, toJsonText } from "@msa/testing";
-import { Effect, FileSystem, ManagedRuntime } from "effect";
+import { Effect, FileSystem, Layer, ManagedRuntime } from "effect";
+import { FetchHttpClient, HttpClient } from "effect/http";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { InMemoryAuthStorageBackend } from "../../src/core/auth-storage.ts";
@@ -38,6 +39,7 @@ function setup(browser: "follow" | "paste", oauth?: McpOAuthConfig) {
       };
       const notifications: string[] = [];
       const opened: URL[] = [];
+      const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
       let redirectLocation: Promise<string> | undefined;
       const harness: Harness = yield* Effect.promise(() =>
         createHarness({
@@ -48,13 +50,9 @@ function setup(browser: "follow" | "paste", oauth?: McpOAuthConfig) {
               credentials: new McpOAuthCredentialStore(backend),
               openUrl: (url) => {
                 opened.push(new URL(url));
-                if (browser === "follow") {
-                  void fetch(url);
-                } else {
-                  redirectLocation = fetch(url, { redirect: "manual" }).then(
-                    (response) => response.headers.get("location") ?? "",
-                  );
-                }
+                redirectLocation = oauthRuntime.runPromise(
+                  visitAuthorizationUrl(new URL(url), browser),
+                );
               },
             }),
           ],
@@ -69,9 +67,15 @@ function setup(browser: "follow" | "paste", oauth?: McpOAuthConfig) {
             input: (_title, _placeholder, opts) =>
               browser === "paste"
                 ? Promise.resolve(redirectLocation)
-                : new Promise((resolve) =>
-                    opts?.signal?.addEventListener("abort", () => resolve(undefined), {
-                      once: true,
+                : runPromise(
+                    Effect.callback<string | undefined>((resume) => {
+                      if (opts?.signal?.aborted === true) {
+                        resume(NO_REDIRECT);
+                        return undefined;
+                      }
+                      const onAbort = () => resume(NO_REDIRECT);
+                      opts?.signal?.addEventListener("abort", onAbort, { once: true });
+                      return Effect.sync(() => opts?.signal?.removeEventListener("abort", onAbort));
                     }),
                   ),
           }),
@@ -205,13 +209,12 @@ const closesTheSessionWithoutRefreshingAn = Effect.gen(function* () {
 
 function freePort(): Promise<number> {
   return Effect.runPromise(
-    Effect.promise(() => {
-      return new Promise<number>((resolve) => {
-        const probe = createServer().listen(0, "127.0.0.1", () => {
-          const address = probe.address() as AddressInfo;
-          probe.close(() => resolve(address.port));
-        });
+    Effect.callback<number>((resume) => {
+      const probe = createServer().listen(0, "127.0.0.1", () => {
+        const address = probe.address() as AddressInfo;
+        probe.close(() => resume(Effect.succeed(address.port)));
       });
+      return Effect.sync(() => probe.close());
     }),
   );
 }
@@ -328,7 +331,9 @@ const usesCredentialsFromMsaMcpLogin = Effect.gen(function* () {
       cwd: agentDir,
       agentDir,
       credentials: new McpOAuthCredentialStore(backend),
-      openUrl: (url) => void fetch(url),
+      openUrl: (url) => {
+        oauthRuntime.runPromise(visitAuthorizationUrl(new URL(url), "follow"));
+      },
       log: (line) => output.push(line),
       error: (line) => output.push(line),
     }),
@@ -338,6 +343,28 @@ const usesCredentialsFromMsaMcpLogin = Effect.gen(function* () {
 
   expect(getMessageText(yield* Effect.promise(() => callWhoami(harness)))).toBe("token access-1");
 });
+
+const NO_REDIRECT: Effect.Effect<string | undefined> = Effect.as(Effect.void, undefined);
+
+const oauthRuntime = ManagedRuntime.make(
+  Layer.provide(
+    FetchHttpClient.layer,
+    Layer.succeed(FetchHttpClient.RequestInit, { redirect: "manual" }),
+  ),
+);
+
+const visitAuthorizationUrl = (url: URL, browser: "follow" | "paste") =>
+  Effect.gen(function* () {
+    const client = yield* HttpClient.HttpClient;
+    const response = yield* client.get(url).pipe(Effect.orDie);
+    const location = response.headers["location"] ?? "";
+    if (browser === "follow" && response.status >= 300 && location !== "") {
+      const next = new URL(location, url);
+      const followed = yield* client.get(next).pipe(Effect.orDie);
+      yield* followed.text.pipe(Effect.orDie);
+    }
+    return location;
+  });
 
 describe("AgentSession MCP OAuth", () => {
   afterEach(() =>

@@ -2,7 +2,7 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import { Agent } from "@msa/agent-core";
 import { getModel, streamSimple } from "@msa/ai/compat";
 import { currentTimeMillis, joinPath } from "@msa/testing";
-import { Config, Effect, FileSystem, ManagedRuntime, Option } from "effect";
+import { Config, Effect, FileSystem, Function, ManagedRuntime, Option } from "effect";
 
 import { AgentSession } from "../src/core/agent-session.ts";
 import { AuthStorage } from "../src/core/auth-storage.ts";
@@ -90,11 +90,11 @@ export interface CreateTestExtensionsResultInput {
 
 type TestExtensionInput = InlineExtension | CreateTestExtensionsResultInput;
 
-export function createTestExtensionsResult(
+const createTestExtensionsResultImpl = (
   inputs: TestExtensionInput[],
   cwd = process.cwd(),
-): Promise<LoadExtensionsResult> {
-  return Effect.runPromise(
+): Promise<LoadExtensionsResult> =>
+  Effect.runPromise(
     Effect.gen(function* () {
       const runtime = createExtensionRuntime();
       const eventBus = createEventBus();
@@ -126,7 +126,14 @@ export function createTestExtensionsResult(
       };
     }),
   );
-}
+
+export const createTestExtensionsResult: {
+  (cwd?: string): (inputs: TestExtensionInput[]) => Promise<LoadExtensionsResult>;
+  (inputs: TestExtensionInput[], cwd?: string): Promise<LoadExtensionsResult>;
+} = Function.dual(
+  (args) => args.length >= 2 || Array.isArray(args[0]),
+  createTestExtensionsResultImpl,
+);
 
 export interface CreateTestResourceLoaderOptions {
   extensionsResult?: LoadExtensionsResult;
@@ -209,32 +216,4 @@ export function createTestSession(options: TestSessionOptions = {}): Promise<Tes
       return { session, sessionManager, tempDir, cleanup };
     }),
   );
-}
-
-export function buildTestTree(
-  session: SessionManager,
-  structure: {
-    messages: Array<{ role: "user" | "assistant"; text: string; branchFrom?: string }>;
-  },
-): Map<string, string> {
-  const ids = new Map<string, string>();
-
-  for (const msg of structure.messages) {
-    if (msg.branchFrom !== undefined && msg.branchFrom !== "") {
-      const branchFromId = ids.get(msg.branchFrom);
-      if (branchFromId === undefined || branchFromId === "") {
-        throw new Error(`Cannot branch from unknown entry: ${msg.branchFrom}`);
-      }
-      session.branch(branchFromId);
-    }
-
-    const id =
-      msg.role === "user"
-        ? session.appendMessage(userMsg(msg.text))
-        : session.appendMessage(assistantMsg(msg.text));
-
-    ids.set(msg.text, id);
-  }
-
-  return ids;
 }

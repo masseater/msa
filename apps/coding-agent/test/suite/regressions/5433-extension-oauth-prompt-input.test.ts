@@ -1,4 +1,8 @@
 import { setKeybindings, type TUI } from "@msa/tui";
+const APC_SEQUENCE = new RegExp(
+  `${String.fromCharCode(27)}_[^${String.fromCharCode(7)}]*${String.fromCharCode(7)}`,
+  "gu",
+);
 import { Effect } from "effect";
 import { beforeAll, beforeEach, describe, expect, test, vi } from "vite-plus/test";
 
@@ -21,12 +25,7 @@ function createDialog(): LoginDialogComponent {
 }
 
 function renderDialog(dialog: LoginDialogComponent): string[] {
-  return stripAnsi(
-    dialog
-      .render(120)
-      .join("\n")
-      .replace(/\u001B_[^\u0007]*\u0007/gu, ""),
-  )
+  return stripAnsi(dialog.render(120).join("\n").replace(APC_SEQUENCE, ""))
     .split("\n")
     .map((line) => line.trimEnd());
 }

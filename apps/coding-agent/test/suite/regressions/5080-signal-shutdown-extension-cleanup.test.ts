@@ -1,7 +1,7 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { joinPath } from "@msa/testing";
 import chalk from "chalk";
-import { Cause, Effect, Exit, FileSystem, ManagedRuntime } from "effect";
+import { Cause, Data, Effect, Exit, FileSystem, ManagedRuntime } from "effect";
 import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 
 import { APP_NAME } from "../../../src/config.ts";
@@ -29,13 +29,9 @@ const interactiveModePrototype = InteractiveMode.prototype as unknown;
 const tempDirs: string[] = [];
 const originalStdoutIsTTY = Object.getOwnPropertyDescriptor(process.stdout, "isTTY");
 
-class ProcessExitError extends Error {
-  readonly code: number | undefined;
-  constructor(code?: number) {
-    super(`process.exit(${code})`);
-    this.code = code;
-  }
-}
+class ProcessExitError extends Data.TaggedError("ProcessExitError")<{
+  readonly code?: number;
+}> {}
 
 function createSessionManager(options: { sessionFile?: string } = {}): SessionManager {
   return {
@@ -108,14 +104,12 @@ function callShutdown(context: ShutdownThis, options?: { fromSignal?: boolean })
     Effect.gen(function* () {
       {
         const tryExit4 = yield* Effect.exit(
-          Effect.gen(function* () {
-            yield* Effect.promise(() =>
-              (interactiveModePrototype as InteractiveModePrototypeWithShutdown).shutdown.call(
-                context,
-                options,
-              ),
-            );
-          }),
+          Effect.promise(() =>
+            (interactiveModePrototype as InteractiveModePrototypeWithShutdown).shutdown.call(
+              context,
+              options,
+            ),
+          ),
         );
         if (Exit.isFailure(tryExit4)) {
           const error = Cause.squash(tryExit4.cause);
@@ -128,7 +122,7 @@ function callShutdown(context: ShutdownThis, options?: { fromSignal?: boolean })
 
 const signalTriggeredShutdownEmitsSessionShutdown = Effect.gen(function* () {
   vi.spyOn(process, "exit").mockImplementation((() => {
-    throw new ProcessExitError();
+    throw new ProcessExitError({});
   }) as typeof process.exit);
   const order: string[] = [];
   const context = createContext(order);
@@ -141,7 +135,7 @@ const signalTriggeredShutdownEmitsSessionShutdown = Effect.gen(function* () {
 
 const interactiveQuitStopsTheTuiBefore = Effect.gen(function* () {
   vi.spyOn(process, "exit").mockImplementation((() => {
-    throw new ProcessExitError();
+    throw new ProcessExitError({});
   }) as typeof process.exit);
   const order: string[] = [];
   const context = createContext(order);
@@ -153,7 +147,7 @@ const interactiveQuitStopsTheTuiBefore = Effect.gen(function* () {
 
 const interactiveQuitPrintsAResumeHint = Effect.gen(function* () {
   vi.spyOn(process, "exit").mockImplementation((() => {
-    throw new ProcessExitError();
+    throw new ProcessExitError({});
   }) as typeof process.exit);
   const stdoutWrite = vi
     .spyOn(process.stdout, "write")
@@ -175,7 +169,7 @@ const interactiveQuitPrintsAResumeHint = Effect.gen(function* () {
 
 const signalTriggeredShutdownDoesNotPrint = Effect.gen(function* () {
   vi.spyOn(process, "exit").mockImplementation((() => {
-    throw new ProcessExitError();
+    throw new ProcessExitError({});
   }) as typeof process.exit);
   const stdoutWrite = vi
     .spyOn(process.stdout, "write")
@@ -196,7 +190,7 @@ const signalTriggeredShutdownDoesNotPrint = Effect.gen(function* () {
 
 const reEntrantShutdownIsANo = Effect.gen(function* () {
   vi.spyOn(process, "exit").mockImplementation((() => {
-    throw new ProcessExitError();
+    throw new ProcessExitError({});
   }) as typeof process.exit);
   const order: string[] = [];
   const context = createContext(order);
@@ -287,7 +281,7 @@ let context: HandlerContext | undefined;
 
 function setup(): HandlerContext {
   vi.spyOn(process, "exit").mockImplementation(((code?: number) => {
-    throw new ProcessExitError(code);
+    throw new ProcessExitError(code === undefined ? {} : { code });
   }) as typeof process.exit);
   vi.spyOn(console, "error").mockImplementation(() => {});
   context = createHandlerContext();

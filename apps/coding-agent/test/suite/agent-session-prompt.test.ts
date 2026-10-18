@@ -7,7 +7,7 @@ import {
   type Model,
   type TranscriptContext,
 } from "@msa/ai";
-import { gate, joinPath, toJsonText } from "@msa/testing";
+import { deferredPromise, gate, joinPath, toJsonText } from "@msa/testing";
 import { Effect, FileSystem, ManagedRuntime } from "effect";
 import { Type } from "typebox";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
@@ -410,10 +410,7 @@ const dispatchesExtensionCommandsWithoutConsumingA = Effect.gen(function* () {
 const extensionSendusermessageCanOptIntoExtension = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
   let extensionApi: ExtensionAPI | undefined;
-  let resolveCommandRun: (args: string) => void = () => {};
-  const commandRun = new Promise<string>((resolve) => {
-    resolveCommandRun = resolve;
-  });
+  const commandRun = deferredPromise<string>();
   const harness = yield* Effect.promise(() =>
     createHarness({
       extensionFactories: [
@@ -424,7 +421,7 @@ const extensionSendusermessageCanOptIntoExtension = Effect.gen(function* () {
             handler: (args) =>
               runPromise(
                 Effect.sync(() => {
-                  resolveCommandRun(args);
+                  commandRun.resolve(args);
                 }),
               ),
           });
@@ -437,7 +434,7 @@ const extensionSendusermessageCanOptIntoExtension = Effect.gen(function* () {
 
   extensionApi?.sendUserMessage("/testcmd hello world", { expandPromptTemplates: true });
 
-  yield* Effect.promise(() => expect(commandRun).resolves.toBe("hello world"));
+  yield* Effect.promise(() => expect(commandRun.promise).resolves.toBe("hello world"));
   expect(harness.session.messages).toEqual([]);
   expect(harness.getPendingResponseCount()).toBe(0);
 });
@@ -482,10 +479,7 @@ const doesNotReportStreamingbehaviorToInput = Effect.gen(function* () {
 
 const reportsStreamingbehaviorToInputHandlersWhile = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-  let releaseToolExecution: (() => void) | undefined;
-  const toolRelease = new Promise<void>((resolve) => {
-    releaseToolExecution = resolve;
-  });
+  const toolRelease = gate();
   const inputEvents: InputEvent[] = [];
   const waitTool: AgentTool = {
     name: "wait",
@@ -521,14 +515,15 @@ const reportsStreamingbehaviorToInputHandlersWhile = Effect.gen(function* () {
     fauxAssistantMessage("done"),
   ]);
 
-  const sawToolStart = new Promise<void>((resolve) => {
+  const sawToolStart = gate();
+  {
     const unsubscribe = harness.session.subscribe((event) => {
       if (event.type === "tool_execution_start") {
         unsubscribe();
-        resolve();
+        sawToolStart.release();
       }
     });
-  });
+  }
 
   const promptPromise = harness.session.prompt("start");
   yield* Effect.promise(() => sawToolStart);
@@ -536,16 +531,13 @@ const reportsStreamingbehaviorToInputHandlersWhile = Effect.gen(function* () {
 
   expect(inputEvents.map((event) => event.streamingBehavior)).toEqual([undefined, "followUp"]);
 
-  releaseToolExecution?.();
+  toolRelease.release();
   yield* Effect.promise(() => promptPromise);
 });
 
 const throwsWhenPromptedDuringStreamingWithout = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-  let releaseToolExecution: (() => void) | undefined;
-  const toolRelease = new Promise<void>((resolve) => {
-    releaseToolExecution = resolve;
-  });
+  const toolRelease = gate();
   const waitTool: AgentTool = {
     name: "wait",
     label: "Wait",
@@ -569,14 +561,15 @@ const throwsWhenPromptedDuringStreamingWithout = Effect.gen(function* () {
     fauxAssistantMessage("done"),
   ]);
 
-  const sawToolStart = new Promise<void>((resolve) => {
+  const sawToolStart = gate();
+  {
     const unsubscribe = harness.session.subscribe((event) => {
       if (event.type === "tool_execution_start") {
         unsubscribe();
-        resolve();
+        sawToolStart.release();
       }
     });
-  });
+  }
 
   const promptPromise = harness.session.prompt("start");
   yield* Effect.promise(() => sawToolStart);
@@ -587,7 +580,7 @@ const throwsWhenPromptedDuringStreamingWithout = Effect.gen(function* () {
     ),
   );
 
-  releaseToolExecution?.();
+  toolRelease.release();
   yield* Effect.promise(() => promptPromise);
 });
 
@@ -725,12 +718,9 @@ const queuesACustomMessageSentWhile = Effect.gen(function* () {
               Effect.gen(function* () {
                 if (event.messageType !== "custom" || event.message.customType !== "first") return;
                 handlerStarted.resolve();
-                yield* Effect.promise(
-                  () =>
-                    new Promise<void>((resolve) => {
-                      releaseHandler = resolve;
-                    }),
-                );
+                const handlerGate = gate();
+                releaseHandler = () => handlerGate.release();
+                yield* Effect.promise(() => handlerGate);
               }),
             ),
           );
@@ -813,12 +803,9 @@ const abortsARunWhenAbortIs = Effect.gen(function* () {
             runPromise(
               Effect.gen(function* () {
                 handlerStarted.resolve();
-                yield* Effect.promise(
-                  () =>
-                    new Promise<void>((resolve) => {
-                      releaseHandler = resolve;
-                    }),
-                );
+                const handlerGate = gate();
+                releaseHandler = () => handlerGate.release();
+                yield* Effect.promise(() => handlerGate);
               }),
             ),
           );

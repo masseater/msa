@@ -10,7 +10,7 @@ import type {
 } from "@msa/ai/compat";
 import { registerFauxProvider, streamSimple } from "@msa/ai/compat";
 import { joinPath, toJsonText } from "@msa/testing";
-import { Effect, FileSystem, ManagedRuntime } from "effect";
+import { Effect, FileSystem, Function, ManagedRuntime } from "effect";
 
 import { AgentSession, type AgentSessionEvent } from "../../src/core/agent-session.ts";
 import { AuthStorage } from "../../src/core/auth-storage.ts";
@@ -38,7 +38,12 @@ const fs = runtime.runSync(FileSystem.FileSystem.useSync((service) => service));
 type MessageTextPart = { type: "text"; text: string };
 
 export function getMessageText(message: unknown): string {
-  if (!message || typeof message !== "object" || !("content" in message)) {
+  if (
+    message === undefined ||
+    message === null ||
+    typeof message !== "object" ||
+    !("content" in message)
+  ) {
     return "";
   }
   const content = (message as { content?: string | Array<{ type: string; text?: string }> })
@@ -67,14 +72,17 @@ export function getAssistantTexts(harness: Harness): string[] {
     .map((message) => getMessageText(message));
 }
 
-export function getToolResult(harness: Harness, toolName: string): ToolResultMessage {
+export const getToolResult: {
+  (harness: Harness, toolName: string): ToolResultMessage;
+  (toolName: string): (harness: Harness) => ToolResultMessage;
+} = Function.dual(2, (harness: Harness, toolName: string): ToolResultMessage => {
   const result = harness.session.messages.findLast(
     (message): message is ToolResultMessage =>
       message.role === "toolResult" && message.toolName === toolName,
   );
   if (result === undefined) throw new Error(`No ${toolName} tool result`);
   return result;
-}
+});
 
 export function createTestUiContext(
   overrides: Partial<ExtensionUIContext> = {},

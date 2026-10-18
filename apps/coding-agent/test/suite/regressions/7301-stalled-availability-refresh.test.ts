@@ -1,4 +1,5 @@
 import type { Models } from "@msa/ai";
+import { deferredPromise } from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
@@ -21,13 +22,12 @@ interface StalledCredentialList {
 }
 
 function createDeferred(): Deferred {
-  let resolvePromise = () => {};
-  let rejectPromise = (_error: Error) => {};
-  const promise = new Promise<void>((resolve, reject) => {
-    resolvePromise = resolve;
-    rejectPromise = reject;
-  });
-  return { promise, resolve: resolvePromise, reject: rejectPromise };
+  const deferred = deferredPromise<void>();
+  return {
+    promise: deferred.promise,
+    resolve: () => deferred.resolve(undefined),
+    reject: (error) => deferred.reject(error),
+  };
 }
 
 function stallNextCredentialList(harness: Harness): StalledCredentialList {

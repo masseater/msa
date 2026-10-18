@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { fromJsonText, joinPath, toJsonText } from "@msa/testing";
-import { Effect, FileSystem, ManagedRuntime } from "effect";
+import { Cause, Effect, Exit, FileSystem, ManagedRuntime } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
 const runtime = ManagedRuntime.make(NodeServices.layer);
@@ -57,19 +57,21 @@ process.exit(0);
       );
 
       let stderr = "";
-      let exitCode: number;
-      try {
-        execFileSync(process.execPath, [scriptPath], {
-          timeout: 10000,
-          encoding: "utf-8",
-          env: { ...process.env, MSA_CODING_AGENT_DIR: agentDir },
-          stdio: ["pipe", "pipe", "pipe"],
-        });
-        exitCode = 0;
-      } catch (err: unknown) {
-        const e = err as { status: number; stderr: string };
-        stderr = e.stderr ?? "";
-        exitCode = e.status ?? 1;
+      let exitCode = 0;
+      const childExit = yield* Effect.exit(
+        Effect.try(() =>
+          execFileSync(process.execPath, [scriptPath], {
+            timeout: 10000,
+            encoding: "utf-8",
+            env: { ...process.env, MSA_CODING_AGENT_DIR: agentDir },
+            stdio: ["pipe", "pipe", "pipe"],
+          }),
+        ),
+      );
+      if (Exit.isFailure(childExit)) {
+        const failure = Cause.squash(childExit.cause) as { status?: number; stderr?: string };
+        stderr = failure.stderr ?? "";
+        exitCode = failure.status ?? 1;
       }
 
       expect(exitCode, `Child crashed (exit ${exitCode}). stderr: ${stderr.trim()}`).toBe(0);

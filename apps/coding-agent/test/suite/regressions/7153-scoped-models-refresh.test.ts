@@ -1,4 +1,5 @@
 import type { Api, Model, ModelsRefreshResult } from "@msa/ai";
+import { deferredPromise } from "@msa/testing";
 import { setKeybindings, type TUI } from "@msa/tui";
 import { Effect } from "effect";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite-plus/test";
@@ -22,13 +23,12 @@ function openSelector(harness: Harness, initialModels: readonly Model<Api>[]) {
   let dispose: (() => void) | undefined;
   const done = vi.fn();
   vi.spyOn(harness.session.modelRuntime, "getAvailableSnapshot").mockImplementation(() => snapshot);
-  vi.spyOn(harness.session.modelRuntime, "refresh").mockImplementation(
-    (options) =>
-      new Promise((resolve) => {
-        refreshSignal = options?.signal;
-        finishRefresh = resolve;
-      }),
-  );
+  vi.spyOn(harness.session.modelRuntime, "refresh").mockImplementation((options) => {
+    const refresh = deferredPromise<ModelsRefreshResult>();
+    refreshSignal = options?.signal;
+    finishRefresh = (value) => refresh.resolve(value);
+    return refresh.promise;
+  });
   const context = {
     session: harness.session,
     settingsManager: harness.settingsManager,

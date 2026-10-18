@@ -1,6 +1,6 @@
 import type { AgentTool, AgentToolResult } from "@msa/agent-core";
 import { fauxAssistantMessage, fauxToolCall } from "@msa/ai";
-import { gate } from "@msa/testing";
+import { deferredPromise, gate } from "@msa/testing";
 import { Effect } from "effect";
 import { Type } from "typebox";
 import { afterEach, describe, expect, it } from "vite-plus/test";
@@ -23,15 +23,16 @@ const doesNotAppendTheAbortedTurn = Effect.gen(function* () {
     label: "Block",
     description: "Wait until aborted",
     parameters: Type.Object({}),
-    execute: (_toolCallId, _params, signal) =>
-      new Promise<AgentToolResult<unknown>>((resolve) => {
-        toolStarted.release();
-        signal?.addEventListener(
-          "abort",
-          () => resolve({ content: [{ type: "text", text: "tool aborted" }], details: {} }),
-          { once: true },
-        );
-      }),
+    execute: (_toolCallId, _params, signal) => {
+      const aborted = deferredPromise<AgentToolResult<unknown>>();
+      toolStarted.release();
+      signal?.addEventListener(
+        "abort",
+        () => aborted.resolve({ content: [{ type: "text", text: "tool aborted" }], details: {} }),
+        { once: true },
+      );
+      return aborted.promise;
+    },
   };
   const harness = yield* Effect.promise(() => createHarness({ tools: [blockingTool] }));
   const services: AgentSessionServices = {

@@ -136,7 +136,10 @@ function createFakeServer(
     const send = () =>
       void pair.server.send({ jsonrpc: "2.0", id: request.id, result: respond(request) });
     if (request.method !== "initialize" || initializeDelayMs === 0) queueMicrotask(send);
-    else if (Number.isFinite(initializeDelayMs)) setTimeout(send, initializeDelayMs);
+    else if (Number.isFinite(initializeDelayMs))
+      Effect.runFork(
+        Effect.sleep(`${initializeDelayMs} millis`).pipe(Effect.andThen(Effect.sync(send))),
+      );
   });
   return pair;
 }

@@ -1,5 +1,5 @@
 import type { CredentialStore } from "@msa/ai";
-import { Effect } from "effect";
+import { Effect, Function } from "effect";
 
 import { ModelRegistry } from "../src/core/model-registry.ts";
 import { ModelRuntime } from "../src/core/model-runtime.ts";
@@ -13,11 +13,11 @@ function wrap(runtime: ModelRuntime): ModelRegistry {
   return registry;
 }
 
-export function createModelRegistry(
+const createModelRegistryImpl = (
   credentials: CredentialStore,
   modelsPath?: string,
-): Promise<ModelRegistry> {
-  return Effect.runPromise(
+): Promise<ModelRegistry> =>
+  Effect.runPromise(
     Effect.gen(function* () {
       return wrap(
         yield* Effect.promise(() =>
@@ -31,7 +31,14 @@ export function createModelRegistry(
       );
     }),
   );
-}
+
+export const createModelRegistry: {
+  (modelsPath?: string): (credentials: CredentialStore) => Promise<ModelRegistry>;
+  (credentials: CredentialStore, modelsPath?: string): Promise<ModelRegistry>;
+} = Function.dual(
+  (args) => args.length >= 2 || typeof args[0] !== "string",
+  createModelRegistryImpl,
+);
 
 export function createInMemoryModelRegistry(credentials: CredentialStore): Promise<ModelRegistry> {
   return Effect.runPromise(

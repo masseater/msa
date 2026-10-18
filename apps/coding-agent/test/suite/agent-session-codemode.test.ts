@@ -773,26 +773,25 @@ const loadsTheValuesWrittenOnThe = Effect.gen(function* () {
   expect(resultText(yield* Effect.promise(() => run(harness, increment)))).toBe("1");
 });
 
-const foldsStoreEntriesFromTheRoot = () =>
-  Effect.gen(function* () {
-    let counter = 0;
-    const entry = (data: unknown, customType = CODEMODE_STORE_ENTRY_TYPE): CustomEntry => ({
-      type: "custom",
-      customType,
-      data,
-      id: `entry-${++counter}`,
-      parentId: null,
-      timestamp: nowIso(),
-    });
-    expect(
-      readCodemodeStore([
-        entry({ set: { a: 1, b: { c: 2 } }, delete: [] }),
-        entry({ set: { a: 3 }, delete: ["b"] }),
-        entry({ set: { z: 1 } }),
-        entry({ set: { other: 1 }, delete: [] }, "other-extension"),
-      ]),
-    ).toEqual({ a: 3 });
+const foldsStoreEntriesFromTheRoot = () => {
+  let counter = 0;
+  const entry = (data: unknown, customType = CODEMODE_STORE_ENTRY_TYPE): CustomEntry => ({
+    type: "custom",
+    customType,
+    data,
+    id: `entry-${++counter}`,
+    parentId: null,
+    timestamp: nowIso(),
   });
+  expect(
+    readCodemodeStore([
+      entry({ set: { a: 1, b: { c: 2 } }, delete: [] }),
+      entry({ set: { a: 3 }, delete: ["b"] }),
+      entry({ set: { z: 1 } }),
+      entry({ set: { other: 1 }, delete: [] }, "other-extension"),
+    ]),
+  ).toEqual({ a: 3 });
+};
 
 describe("codemode options and store", () => {
   afterEach(() => {

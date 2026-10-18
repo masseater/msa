@@ -1,7 +1,13 @@
 import { constants as bufferConstants } from "buffer";
 
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { currentTimeMillis, fromJsonText, joinPath, toJsonText } from "@msa/testing";
+import {
+  abortController,
+  currentTimeMillis,
+  fromJsonText,
+  joinPath,
+  toJsonText,
+} from "@msa/testing";
 import { Effect, FileSystem, ManagedRuntime } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
@@ -416,7 +422,7 @@ const scopesCurrentFolderApisByCwd = Effect.gen(function* () {
 const rejectsACancelledSessionListing = Effect.gen(function* () {
   createPersistedSession(projectA, "from A");
   createPersistedSession(projectB, "from B");
-  const controller = new AbortController();
+  const controller = abortController();
   const listing = SessionManager.listAll(
     tempDir4,
     (_loaded, _total, partialSessions) => {

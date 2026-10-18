@@ -1,7 +1,7 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { fauxAssistantMessage, registerFauxProvider } from "@msa/ai/compat";
 import { joinPath } from "@msa/testing";
-import { Effect, FileSystem, ManagedRuntime } from "effect";
+import { Effect, Exit, FileSystem, ManagedRuntime } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import {
@@ -228,16 +228,14 @@ const rebindsBeforeWithsessionTargetsTheReplacement = Effect.gen(function* () {
                         Effect.gen(function* () {
                           events.push(`with:${currentInstance}`);
                           replacementSessionFile = replacedCtx.sessionManager.getSessionFile();
-                          try {
-                            oldCtx?.sessionManager.getSessionFile();
-                          } catch {
-                            staleCtxThrows = true;
-                          }
-                          try {
-                            oldPi?.sendUserMessage("stale message");
-                          } catch {
-                            staleMsaThrows = true;
-                          }
+                          const staleCtxExit = yield* Effect.exit(
+                            Effect.sync(() => oldCtx?.sessionManager.getSessionFile()),
+                          );
+                          if (Exit.isFailure(staleCtxExit)) staleCtxThrows = true;
+                          const staleMsaExit = yield* Effect.exit(
+                            Effect.sync(() => oldPi?.sendUserMessage("stale message")),
+                          );
+                          if (Exit.isFailure(staleMsaExit)) staleMsaThrows = true;
                           yield* Effect.promise(() =>
                             replacedCtx.sendUserMessage("Hello from the new session!"),
                           );

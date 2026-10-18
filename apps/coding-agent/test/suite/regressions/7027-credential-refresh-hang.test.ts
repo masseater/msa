@@ -1,5 +1,5 @@
 import type { Api, Model, Provider } from "@msa/ai";
-import { gate } from "@msa/testing";
+import { deferredPromise, gate } from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
@@ -71,7 +71,7 @@ const doesNotHoldLoginBehindAn = Effect.gen(function* () {
         Effect.gen(function* () {
           if (!allowNetwork) return;
           networkStarted.release();
-          yield* Effect.promise(() => new Promise<void>(() => {}));
+          return yield* Effect.never;
         }),
       ),
     stream: () => {
@@ -115,18 +115,15 @@ const completesInteractiveLoginBeforeItsBounded = Effect.gen(function* () {
   harness = yield* Effect.promise(() => createHarness());
   vi.useFakeTimers();
   const runtime = harness.session.modelRuntime;
-  vi.spyOn(runtime, "refresh").mockImplementation(
-    (options) =>
-      new Promise((resolve) => {
-        options?.signal?.addEventListener(
-          "abort",
-          () => resolve({ aborted: true, errors: new Map() }),
-          {
-            once: true,
-          },
-        );
-      }),
-  );
+  vi.spyOn(runtime, "refresh").mockImplementation((options) => {
+    const refresh = deferredPromise<{ aborted: boolean; errors: Map<string, string> }>();
+    options?.signal?.addEventListener(
+      "abort",
+      () => refresh.resolve({ aborted: true, errors: new Map() }),
+      { once: true },
+    );
+    return refresh.promise as unknown as ReturnType<typeof runtime.refresh>;
+  });
   const showWarning = vi.fn();
   const context = {
     session: harness.session,
@@ -179,19 +176,16 @@ function startLogin() {
         .spyOn(session.modelRuntime, "getAvailableSnapshot")
         .mockReturnValue([]);
       let finishRefresh = () => {};
-      vi.spyOn(session.modelRuntime, "refresh").mockImplementation(
-        (options) =>
-          new Promise((resolve) => {
-            finishRefresh = () => resolve({ aborted: false, errors: new Map() });
-            options?.signal?.addEventListener(
-              "abort",
-              () => resolve({ aborted: true, errors: new Map() }),
-              {
-                once: true,
-              },
-            );
-          }),
-      );
+      vi.spyOn(session.modelRuntime, "refresh").mockImplementation((options) => {
+        const refresh = deferredPromise<{ aborted: boolean; errors: Map<string, string> }>();
+        finishRefresh = () => refresh.resolve({ aborted: false, errors: new Map() });
+        options?.signal?.addEventListener(
+          "abort",
+          () => refresh.resolve({ aborted: true, errors: new Map() }),
+          { once: true },
+        );
+        return refresh.promise as unknown as ReturnType<typeof session.modelRuntime.refresh>;
+      });
       const setModel = vi.spyOn(session, "setModel").mockResolvedValue();
       const context = {
         session,

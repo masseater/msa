@@ -1,3 +1,4 @@
+import { neverPromise } from "@msa/testing";
 import { Container } from "@msa/tui";
 import { Effect } from "effect";
 import { beforeAll, describe, expect, it, vi } from "vite-plus/test";
@@ -35,7 +36,7 @@ const rendersStartupDiagnosticsInsideTheTranscript = Effect.gen(function* () {
       session: harness.session,
       checkForPackageUpdates: vi.fn().mockResolvedValue([]),
       checkTmuxKeyboardSetup: vi.fn().mockResolvedValue(undefined),
-      getUserInput: vi.fn(() => new Promise<string>(() => {})),
+      getUserInput: vi.fn(() => neverPromise<string>()),
     };
     const run = (
       InteractiveMode.prototype as unknown as { run(this: typeof context): Promise<void> }

@@ -14,12 +14,13 @@ function getTextOutput(result: { content?: Array<{ type: string; text?: string }
 
 const ignoresOutputCallbacksAfterBashOperations = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+  let late: (() => void) | undefined;
   const operations: BashOperations = {
     exec: (_command, _cwd, { onData }) =>
       runPromise(
         Effect.sync(() => {
           onData(Buffer.from("before\n", "utf-8"));
-          setTimeout(() => onData(Buffer.from("late\n", "utf-8")), 0);
+          late = () => onData(Buffer.from("late\n", "utf-8"));
           return { exitCode: 0 };
         }),
       ),
@@ -29,6 +30,7 @@ const ignoresOutputCallbacksAfterBashOperations = Effect.gen(function* () {
   const result = yield* Effect.promise(() =>
     bash.execute("test-call-late-output", { command: "late-output" }),
   );
+  late?.();
   yield* Effect.sleep(20);
 
   expect(getTextOutput(result).trim()).toBe("before");

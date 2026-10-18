@@ -88,7 +88,9 @@ export class MemorySessionGraph implements SessionGraph {
     return [...this.nodes.values()]
       .filter((node) => node.project === project)
       .toSorted((a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id))
-      .map((node) => ({ ...node, dependsOn: (this.edges.get(node.id) ?? []).toSorted() }));
+      .map((node) =>
+        Object.assign({}, node, { dependsOn: (this.edges.get(node.id) ?? []).toSorted() }),
+      );
   }
 
   private withDependencies(id: string): SessionNodeWithDependencies | undefined {

@@ -2,7 +2,7 @@ import { Buffer } from "node:buffer";
 
 import type { AgentTool } from "@msa/agent-core";
 import { fauxAssistantMessage, fauxToolCall } from "@msa/ai";
-import { gate } from "@msa/testing";
+import { deferredPromise, gate } from "@msa/testing";
 import { Effect } from "effect";
 import { Type } from "typebox";
 import { afterEach, describe, expect, it } from "vite-plus/test";
@@ -21,13 +21,14 @@ interface ControlledBashInvocation {
 
 function createControlledBashOperations(invocations: ControlledBashInvocation[]): BashOperations {
   return {
-    exec: (_command, _cwd, options) =>
-      new Promise<{ exitCode: number | null }>((resolve) => {
-        invocations.push({
-          signal: options.signal,
-          finish: () => resolve({ exitCode: 0 }),
-        });
-      }),
+    exec: (_command, _cwd, options) => {
+      const execution = deferredPromise<{ exitCode: number | null }>();
+      invocations.push({
+        signal: options.signal,
+        finish: () => execution.resolve({ exitCode: 0 }),
+      });
+      return execution.promise;
+    },
   };
 }
 
@@ -125,16 +126,17 @@ const cancelsRunningBashCommandsWithAbortbash = Effect.gen(function* () {
   const harness = yield* Effect.promise(() => createHarness());
   harnesses.push(harness);
   const operations: BashOperations = {
-    exec: (_command, _cwd, options) =>
-      new Promise<{ exitCode: number | null }>((_resolve, reject) => {
-        options.signal?.addEventListener(
-          "abort",
-          () => {
-            reject(new Error("aborted"));
-          },
-          { once: true },
-        );
-      }),
+    exec: (_command, _cwd, options) => {
+      const execution = deferredPromise<{ exitCode: number | null }>();
+      options.signal?.addEventListener(
+        "abort",
+        () => {
+          execution.reject(new Error("aborted"));
+        },
+        { once: true },
+      );
+      return execution.promise;
+    },
   };
 
   const bashPromise = harness.session.executeBash("sleep", undefined, { operations });

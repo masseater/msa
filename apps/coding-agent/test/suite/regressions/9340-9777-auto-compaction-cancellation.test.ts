@@ -1,5 +1,5 @@
 import { type AssistantMessage, fauxAssistantMessage } from "@msa/ai";
-import { gate } from "@msa/testing";
+import { deferredPromise, gate } from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
@@ -93,14 +93,10 @@ const cancelsSummarizationAuthentication = Effect.gen(function* () {
         authSignal = options?.signal;
         authStarted.release();
         if (authSignal === undefined) throw new Error("Missing auth abort signal");
-        return yield* Effect.promise(
-          () =>
-            new Promise<never>((_resolve, reject) => {
-              authSignal?.addEventListener("abort", () => reject(authSignal?.reason), {
-                once: true,
-              });
-            }),
-        );
+        const aborted = deferredPromise<never>();
+        const signal = authSignal;
+        signal.addEventListener("abort", () => aborted.reject(signal.reason), { once: true });
+        return yield* Effect.promise(() => aborted.promise);
       }),
     ),
   );

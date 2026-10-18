@@ -120,7 +120,7 @@ export function startOAuthMcpServer(
             }
             switch (url.pathname) {
               case "/mcp":
-                return handleMcp(request, response);
+                return yield* Effect.promise(() => handleMcp(request, response));
               case "/.well-known/oauth-protected-resource/mcp":
                 return json(response, 200, {
                   resource: `${origin}/mcp`,
@@ -193,9 +193,9 @@ export function startOAuthMcpServer(
           response.writeHead(500).end(String(error));
         });
       });
-      yield* Effect.promise(
-        () => new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve)),
-      );
+      yield* Effect.callback<void>((resume) => {
+        server.listen(0, "127.0.0.1", () => resume(Effect.void));
+      });
       const address = server.address();
       if (address === null || address === "" || typeof address === "string")
         throw new Error("test server did not bind to TCP");
@@ -217,10 +217,12 @@ export function startOAuthMcpServer(
 
         expireAccessTokens: () => validTokens.clear(),
         close: () =>
-          new Promise<void>((resolve) => {
-            server.closeAllConnections();
-            server.close(() => resolve());
-          }),
+          runPromise(
+            Effect.callback<void>((resume) => {
+              server.closeAllConnections();
+              server.close(() => resume(Effect.void));
+            }),
+          ),
       };
     }),
   );

@@ -59,16 +59,14 @@ const rejectsAnRpcPromptWhileManual = Effect.gen(function* () {
   let promptError: unknown;
   try {
     const tryExit6 = yield* Effect.exit(
-      Effect.gen(function* () {
-        yield* Effect.promise(() =>
-          harness.session.prompt("PROBE-7150", {
-            source: "rpc",
-            preflightResult: (result) => {
-              preflightResult = result;
-            },
-          }),
-        );
-      }),
+      Effect.promise(() =>
+        harness.session.prompt("PROBE-7150", {
+          source: "rpc",
+          preflightResult: (result) => {
+            preflightResult = result;
+          },
+        }),
+      ),
     );
     if (Exit.isFailure(tryExit6)) {
       const error = Cause.squash(tryExit6.cause);

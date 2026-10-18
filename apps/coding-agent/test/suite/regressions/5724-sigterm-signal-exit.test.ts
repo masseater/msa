@@ -1,5 +1,5 @@
 import { gate } from "@msa/testing";
-import { Cause, Effect, Exit } from "effect";
+import { Cause, Data, Effect, Exit } from "effect";
 import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 
 import { InteractiveMode } from "../../../src/modes/interactive/interactive-mode.ts";
@@ -19,7 +19,7 @@ type InteractiveModePrototypeWithShutdown = {
 
 const interactiveModePrototype = InteractiveMode.prototype as unknown;
 
-class ProcessExitError extends Error {}
+class ProcessExitError extends Data.TaggedError("ProcessExitError")<{}> {}
 
 function deferred(): { promise: Promise<void>; resolve: () => void } {
   const promise = gate();
@@ -34,14 +34,12 @@ function callShutdown(context: ShutdownThis, options?: { fromSignal?: boolean })
     Effect.gen(function* () {
       {
         const tryExit5 = yield* Effect.exit(
-          Effect.gen(function* () {
-            yield* Effect.promise(() =>
-              (interactiveModePrototype as InteractiveModePrototypeWithShutdown).shutdown.call(
-                context,
-                options,
-              ),
-            );
-          }),
+          Effect.promise(() =>
+            (interactiveModePrototype as InteractiveModePrototypeWithShutdown).shutdown.call(
+              context,
+              options,
+            ),
+          ),
         );
         if (Exit.isFailure(tryExit5)) {
           const error = Cause.squash(tryExit5.cause);

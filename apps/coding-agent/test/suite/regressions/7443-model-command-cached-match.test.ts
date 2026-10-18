@@ -1,4 +1,5 @@
 import type { Api, Model } from "@msa/ai";
+import { neverPromise } from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
@@ -18,7 +19,7 @@ const matchesTheAvailabilitySnapshotWithoutStarting = Effect.gen(function* () {
   );
   const refresh = vi
     .spyOn(harness.session.modelRuntime, "refresh")
-    .mockImplementation(() => new Promise(() => {}));
+    .mockImplementation(() => neverPromise());
   const context = { session: harness.session, showStatus: vi.fn(), showWarning: vi.fn() };
 
   const model = yield* Effect.promise(() =>
