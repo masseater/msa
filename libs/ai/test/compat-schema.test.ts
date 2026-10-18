@@ -5,10 +5,12 @@ import { describe, expect, expectTypeOf, it } from "vite-plus/test";
 import {
   AnthropicMessagesCompatSchema,
   BedrockCompatSchema,
-  OpenAICompletionsCompatSchema,
-  OpenAIResponsesCompatSchema,
   ProviderCompatSchema,
 } from "../src/providers/compat-schema.ts";
+import {
+  OpenAICompletionsCompatSchema,
+  OpenAIResponsesCompatSchema,
+} from "../src/providers/openai-compat-schema.ts";
 
 type ProviderCompat = Static<typeof ProviderCompatSchema>;
 
