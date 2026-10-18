@@ -1,5 +1,5 @@
-import { readFileSync, rmSync } from "node:fs";
-
+import { awaited, runTest, readBytesFile, removePath } from "@msa/testing";
+import { Effect } from "effect";
 import { beforeEach, describe, expect, test, vi } from "vite-plus/test";
 
 import { InteractiveMode } from "../src/modes/interactive/interactive-mode.ts";
@@ -25,133 +25,148 @@ vi.mock("../src/utils/clipboard-image.ts", () => ({
 
 beforeEach(() => vi.resetAllMocks());
 
-test("Finder file paths take precedence over their icon image", async () => {
-  const filePaths = ["/tmp/screenshot.png", "/tmp/My Photos/photo.png"];
-  mocks.readClipboardFilePaths.mockResolvedValue(filePaths);
-  mocks.readClipboardImage.mockResolvedValue({
-    bytes: new Uint8Array([0x89, 0x50, 0x4e, 0x47]),
-    mimeType: "image/png",
-  });
-  mocks.readClipboardText.mockResolvedValue(null);
-  const insertTextAtCursor = vi.fn<(text: string) => void>();
-  const context = {
-    editor: { insertTextAtCursor },
-    showError: vi.fn(),
-    ui: { requestRender: vi.fn() },
-    settingsManager: { getClipboardImageCommand: () => undefined },
-  };
-  const prototype = InteractiveMode.prototype as unknown as {
-    handleClipboardPaste(this: typeof context): Promise<void>;
-  };
+test("Finder file paths take precedence over their icon image", () =>
+  runTest(
+    Effect.gen(function* () {
+      const filePaths = ["/tmp/screenshot.png", "/tmp/My Photos/photo.png"];
+      mocks.readClipboardFilePaths.mockResolvedValue(filePaths);
+      mocks.readClipboardImage.mockResolvedValue({
+        bytes: new Uint8Array([0x89, 0x50, 0x4e, 0x47]),
+        mimeType: "image/png",
+      });
+      mocks.readClipboardText.mockResolvedValue(null);
+      const insertTextAtCursor = vi.fn<(text: string) => void>();
+      const context = {
+        editor: { insertTextAtCursor },
+        showError: vi.fn(),
+        ui: { requestRender: vi.fn() },
+        settingsManager: { getClipboardImageCommand: () => undefined },
+      };
+      const prototype = InteractiveMode.prototype as unknown as {
+        handleClipboardPaste(this: typeof context): Promise<void>;
+      };
 
-  await prototype.handleClipboardPaste.call(context);
-  expect(insertTextAtCursor).toHaveBeenCalledExactlyOnceWith(filePaths.join("\n"));
-  expect(mocks.readClipboardImage).not.toHaveBeenCalled();
-});
+      yield* awaited(prototype.handleClipboardPaste.call(context));
+      expect(insertTextAtCursor).toHaveBeenCalledExactlyOnceWith(filePaths.join("\n"));
+      expect(mocks.readClipboardImage).not.toHaveBeenCalled();
+    }),
+  ));
 
-test("clipboard file paths containing terminal control characters are rejected", async () => {
-  const insertTextAtCursor = vi.fn<(text: string) => void>();
-  const showError = vi.fn<(message: string) => void>();
-  mocks.readClipboardFilePaths.mockResolvedValue(["/tmp/photo\x1b]0;unsafe\x07.png"]);
-  const context = {
-    editor: { insertTextAtCursor },
-    showError,
-    ui: { requestRender: vi.fn() },
-    settingsManager: { getClipboardImageCommand: () => undefined },
-  };
-  const prototype = InteractiveMode.prototype as unknown as {
-    handleClipboardPaste(this: typeof context): Promise<void>;
-  };
+test("clipboard file paths containing terminal control characters are rejected", () =>
+  runTest(
+    Effect.gen(function* () {
+      const insertTextAtCursor = vi.fn<(text: string) => void>();
+      const showError = vi.fn<(message: string) => void>();
+      mocks.readClipboardFilePaths.mockResolvedValue(["/tmp/photo\x1b]0;unsafe\x07.png"]);
+      const context = {
+        editor: { insertTextAtCursor },
+        showError,
+        ui: { requestRender: vi.fn() },
+        settingsManager: { getClipboardImageCommand: () => undefined },
+      };
+      const prototype = InteractiveMode.prototype as unknown as {
+        handleClipboardPaste(this: typeof context): Promise<void>;
+      };
 
-  await prototype.handleClipboardPaste.call(context);
+      yield* awaited(prototype.handleClipboardPaste.call(context));
 
-  expect(insertTextAtCursor).not.toHaveBeenCalled();
-  expect(mocks.readClipboardImage).not.toHaveBeenCalled();
-  expect(showError).toHaveBeenCalledExactlyOnceWith(
-    "Failed to paste from clipboard: Clipboard file path contains control characters",
-  );
-});
+      expect(insertTextAtCursor).not.toHaveBeenCalled();
+      expect(mocks.readClipboardImage).not.toHaveBeenCalled();
+      expect(showError).toHaveBeenCalledExactlyOnceWith(
+        "Failed to paste from clipboard: Clipboard file path contains control characters",
+      );
+    }),
+  ));
 
-test("native file-path errors are shown without falling through to the icon image", async () => {
-  const showError = vi.fn<(message: string) => void>();
-  mocks.readClipboardFilePaths.mockRejectedValue(new Error("Native clipboard file read failed"));
-  const context = {
-    editor: { insertTextAtCursor: vi.fn() },
-    showError,
-    ui: { requestRender: vi.fn() },
-    settingsManager: { getClipboardImageCommand: () => undefined },
-  };
-  const prototype = InteractiveMode.prototype as unknown as {
-    handleClipboardPaste(this: typeof context): Promise<void>;
-  };
+test("native file-path errors are shown without falling through to the icon image", () =>
+  runTest(
+    Effect.gen(function* () {
+      const showError = vi.fn<(message: string) => void>();
+      mocks.readClipboardFilePaths.mockRejectedValue(
+        new Error("Native clipboard file read failed"),
+      );
+      const context = {
+        editor: { insertTextAtCursor: vi.fn() },
+        showError,
+        ui: { requestRender: vi.fn() },
+        settingsManager: { getClipboardImageCommand: () => undefined },
+      };
+      const prototype = InteractiveMode.prototype as unknown as {
+        handleClipboardPaste(this: typeof context): Promise<void>;
+      };
 
-  await prototype.handleClipboardPaste.call(context);
+      yield* awaited(prototype.handleClipboardPaste.call(context));
 
-  expect(context.editor.insertTextAtCursor).not.toHaveBeenCalled();
-  expect(mocks.readClipboardImage).not.toHaveBeenCalled();
-  expect(showError).toHaveBeenCalledExactlyOnceWith(
-    "Failed to paste from clipboard: Native clipboard file read failed",
-  );
-});
+      expect(context.editor.insertTextAtCursor).not.toHaveBeenCalled();
+      expect(mocks.readClipboardImage).not.toHaveBeenCalled();
+      expect(showError).toHaveBeenCalledExactlyOnceWith(
+        "Failed to paste from clipboard: Native clipboard file read failed",
+      );
+    }),
+  ));
 
 test.each([
   ["punctuation", "Review:", 7],
   ["Unicode text", "確認", 2],
-])(
-  "clipboard file paths are separated from preceding %s",
-  async (_description, editorText, cursorCol) => {
-    const insertTextAtCursor = vi.fn<(text: string) => void>();
-    mocks.readClipboardFilePaths.mockResolvedValue(["/tmp/photo.png"]);
-    const context = {
-      editor: {
-        getCursor: () => ({ line: 0, col: cursorCol }),
-        getText: () => editorText,
-        insertTextAtCursor,
-      },
-      showError: vi.fn(),
-      ui: { requestRender: vi.fn() },
-      settingsManager: { getClipboardImageCommand: () => undefined },
-    };
-    const prototype = InteractiveMode.prototype as unknown as {
-      handleClipboardPaste(this: typeof context): Promise<void>;
-    };
+])("clipboard file paths are separated from preceding %s", (_description, editorText, cursorCol) =>
+  runTest(
+    Effect.gen(function* () {
+      const insertTextAtCursor = vi.fn<(text: string) => void>();
+      mocks.readClipboardFilePaths.mockResolvedValue(["/tmp/photo.png"]);
+      const context = {
+        editor: {
+          getCursor: () => ({ line: 0, col: cursorCol }),
+          getText: () => editorText,
+          insertTextAtCursor,
+        },
+        showError: vi.fn(),
+        ui: { requestRender: vi.fn() },
+        settingsManager: { getClipboardImageCommand: () => undefined },
+      };
+      const prototype = InteractiveMode.prototype as unknown as {
+        handleClipboardPaste(this: typeof context): Promise<void>;
+      };
 
-    await prototype.handleClipboardPaste.call(context);
+      yield* awaited(prototype.handleClipboardPaste.call(context));
 
-    expect(insertTextAtCursor).toHaveBeenCalledExactlyOnceWith(" /tmp/photo.png");
-    expect(mocks.readClipboardImage).not.toHaveBeenCalled();
-  },
+      expect(insertTextAtCursor).toHaveBeenCalledExactlyOnceWith(" /tmp/photo.png");
+      expect(mocks.readClipboardImage).not.toHaveBeenCalled();
+    }),
+  ),
 );
 
-test("bash mode shell-quotes file paths and inserts them as arguments", async () => {
-  const insertTextAtCursor = vi.fn<(text: string) => void>();
-  mocks.readClipboardFilePaths.mockResolvedValue([
-    "/tmp/My Photos/photo.png",
-    "/tmp/$(touch hacked).png",
-    "/tmp/plain.png",
-  ]);
-  const context = {
-    editor: {
-      getCursor: () => ({ line: 0, col: 3 }),
-      getText: () => "catDEST",
-      insertTextAtCursor,
-    },
-    isBashMode: true,
-    showError: vi.fn(),
-    ui: { requestRender: vi.fn() },
-    settingsManager: { getClipboardImageCommand: () => undefined },
-  };
-  const prototype = InteractiveMode.prototype as unknown as {
-    handleClipboardPaste(this: typeof context): Promise<void>;
-  };
+test("bash mode shell-quotes file paths and inserts them as arguments", () =>
+  runTest(
+    Effect.gen(function* () {
+      const insertTextAtCursor = vi.fn<(text: string) => void>();
+      mocks.readClipboardFilePaths.mockResolvedValue([
+        "/tmp/My Photos/photo.png",
+        "/tmp/$(touch hacked).png",
+        "/tmp/plain.png",
+      ]);
+      const context = {
+        editor: {
+          getCursor: () => ({ line: 0, col: 3 }),
+          getText: () => "catDEST",
+          insertTextAtCursor,
+        },
+        isBashMode: true,
+        showError: vi.fn(),
+        ui: { requestRender: vi.fn() },
+        settingsManager: { getClipboardImageCommand: () => undefined },
+      };
+      const prototype = InteractiveMode.prototype as unknown as {
+        handleClipboardPaste(this: typeof context): Promise<void>;
+      };
 
-  await prototype.handleClipboardPaste.call(context);
+      yield* awaited(prototype.handleClipboardPaste.call(context));
 
-  expect(insertTextAtCursor).toHaveBeenCalledExactlyOnceWith(
-    " '/tmp/My Photos/photo.png' '/tmp/$(touch hacked).png' /tmp/plain.png ",
-  );
-  expect(mocks.readClipboardImage).not.toHaveBeenCalled();
-});
+      expect(insertTextAtCursor).toHaveBeenCalledExactlyOnceWith(
+        " '/tmp/My Photos/photo.png' '/tmp/$(touch hacked).png' /tmp/plain.png ",
+      );
+      expect(mocks.readClipboardImage).not.toHaveBeenCalled();
+    }),
+  ));
 
 describe("with clipboardImageCommand", () => {
   function pasteContext() {
@@ -173,36 +188,42 @@ describe("with clipboardImageCommand", () => {
       }
     ).handleClipboardPaste.call(context);
 
-  test("inserts the command's image and ignores the local clipboard", async () => {
-    mocks.readClipboardImageFromCommand.mockResolvedValue({
-      bytes: new Uint8Array([0x89, 0x50, 0x4e, 0x47]),
-      mimeType: "image/png",
-    });
-    const context = pasteContext();
+  test("inserts the command's image and ignores the local clipboard", () =>
+    runTest(
+      Effect.gen(function* () {
+        mocks.readClipboardImageFromCommand.mockResolvedValue({
+          bytes: new Uint8Array([0x89, 0x50, 0x4e, 0x47]),
+          mimeType: "image/png",
+        });
+        const context = pasteContext();
 
-    await paste(context);
+        yield* awaited(paste(context));
 
-    expect(mocks.readClipboardImageFromCommand).toHaveBeenCalledWith("remote-clipboard");
-    const inserted = context.editor.insertTextAtCursor.mock.calls[0]?.[0] ?? "";
-    expect(inserted).toMatch(/msa-clipboard-.*\.png$/);
-    expect([...readFileSync(inserted)]).toEqual([0x89, 0x50, 0x4e, 0x47]);
-    rmSync(inserted);
-    expect(mocks.readClipboardFilePaths).not.toHaveBeenCalled();
-    expect(mocks.readClipboardImage).not.toHaveBeenCalled();
-    expect(mocks.readClipboardText).not.toHaveBeenCalled();
-  });
+        expect(mocks.readClipboardImageFromCommand).toHaveBeenCalledWith("remote-clipboard");
+        const inserted = context.editor.insertTextAtCursor.mock.calls[0]?.[0] ?? "";
+        expect(inserted).toMatch(/msa-clipboard-.*\.png$/u);
+        expect([...(yield* readBytesFile(inserted))]).toEqual([0x89, 0x50, 0x4e, 0x47]);
+        yield* removePath(inserted);
+        expect(mocks.readClipboardFilePaths).not.toHaveBeenCalled();
+        expect(mocks.readClipboardImage).not.toHaveBeenCalled();
+        expect(mocks.readClipboardText).not.toHaveBeenCalled();
+      }),
+    ));
 
-  test("says when the clipboard has no image, and when the command fails", async () => {
-    const empty = pasteContext();
-    mocks.readClipboardImageFromCommand.mockResolvedValue(null);
-    await paste(empty);
-    expect(empty.showStatus).toHaveBeenLastCalledWith("No image in the clipboard");
-    expect(empty.editor.insertTextAtCursor).not.toHaveBeenCalled();
+  test("says when the clipboard has no image, and when the command fails", () =>
+    runTest(
+      Effect.gen(function* () {
+        const empty = pasteContext();
+        mocks.readClipboardImageFromCommand.mockResolvedValue(null);
+        yield* awaited(paste(empty));
+        expect(empty.showStatus).toHaveBeenLastCalledWith("No image in the clipboard");
+        expect(empty.editor.insertTextAtCursor).not.toHaveBeenCalled();
 
-    const failed = pasteContext();
-    mocks.readClipboardImageFromCommand.mockResolvedValue(undefined);
-    await paste(failed);
-    expect(failed.showError).toHaveBeenCalledOnce();
-    expect(mocks.readClipboardText).not.toHaveBeenCalled();
-  });
+        const failed = pasteContext();
+        mocks.readClipboardImageFromCommand.mockResolvedValue(undefined);
+        yield* awaited(paste(failed));
+        expect(failed.showError).toHaveBeenCalledOnce();
+        expect(mocks.readClipboardText).not.toHaveBeenCalled();
+      }),
+    ));
 });
