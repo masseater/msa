@@ -1,156 +1,25 @@
-import { constants } from "fs";
-import { access, readFile } from "fs/promises";
-
-import * as Diff from "diff";
+import { Effect, FileSystem, Predicate, Result } from "effect";
+import { dual } from "effect/Function";
 
 import { toErrorMessage } from "../../utils/errors.ts";
 import { splitBom } from "../../utils/text.ts";
+import { platformRuntime } from "../platform/index.ts";
+import { type EditDiffResult, generateDiffString } from "./diff-format.ts";
+import {
+  applyReplacements,
+  applyReplacementsPreservingUnchangedLines,
+  type MatchedEdit,
+} from "./edit-replacements.ts";
+import {
+  detectLineEnding,
+  normalizeForFuzzyMatch,
+  normalizeToLF,
+  restoreLineEndings,
+} from "./edit-text.ts";
 import { resolveToCwd } from "./path-utils.ts";
 
-export function detectLineEnding(content: string): "\r\n" | "\n" {
-  const crlfIdx = content.indexOf("\r\n");
-  const lfIdx = content.indexOf("\n");
-  if (lfIdx === -1) return "\n";
-  if (crlfIdx === -1) return "\n";
-  return crlfIdx < lfIdx ? "\r\n" : "\n";
-}
-
-export function normalizeToLF(text: string): string {
-  return text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
-}
-
-export function restoreLineEndings(text: string, ending: "\r\n" | "\n"): string {
-  return ending === "\r\n" ? text.replace(/\n/g, "\r\n") : text;
-}
-
-export function normalizeForFuzzyMatch(text: string): string {
-  return text
-    .normalize("NFKC")
-    .split("\n")
-    .map((line) => line.trimEnd())
-    .join("\n")
-    .replace(/[\u2018\u2019\u201A\u201B]/g, "'")
-    .replace(/[\u201C\u201D\u201E\u201F]/g, '"')
-    .replace(/[\u2010\u2011\u2012\u2013\u2014\u2015\u2212]/g, "-")
-    .replace(/[\u00A0\u2002-\u200A\u202F\u205F\u3000]/g, " ");
-}
-
-function splitLinesWithEndings(content: string): string[] {
-  return content.match(/[^\n]*\n|[^\n]+/g) ?? [];
-}
-
-interface LineSpan {
-  start: number;
-  end: number;
-}
-
-interface MatchedEdit {
-  editIndex: number;
-  matchIndex: number;
-  matchLength: number;
-  newText: string;
-}
-
-type TextReplacement = Pick<MatchedEdit, "matchIndex" | "matchLength" | "newText">;
-
-function getLineSpans(content: string): LineSpan[] {
-  let offset = 0;
-  return splitLinesWithEndings(content).map((line) => {
-    const span = { start: offset, end: offset + line.length };
-    offset = span.end;
-    return span;
-  });
-}
-
-function getReplacementLineRange(lines: LineSpan[], replacement: TextReplacement) {
-  const replacementStart = replacement.matchIndex;
-  const replacementEnd = replacement.matchIndex + replacement.matchLength;
-
-  let startLine = -1;
-  for (const [i, line] of lines.entries()) {
-    if (replacementStart >= line.start && replacementStart < line.end) {
-      startLine = i;
-      break;
-    }
-  }
-  if (startLine === -1) {
-    throw new Error("Replacement range is outside the base content.");
-  }
-
-  let endLine = startLine;
-  while (true) {
-    const line = lines[endLine];
-    if (line === undefined) {
-      throw new Error("Replacement range is outside the base content.");
-    }
-    if (line.end >= replacementEnd) break;
-    endLine++;
-  }
-
-  return { startLine, endLine: endLine + 1 };
-}
-
-function applyReplacements(content: string, replacements: TextReplacement[], offset = 0): string {
-  let result = content;
-  for (const replacement of replacements.toReversed()) {
-    const matchIndex = replacement.matchIndex - offset;
-    result =
-      result.substring(0, matchIndex) +
-      replacement.newText +
-      result.substring(matchIndex + replacement.matchLength);
-  }
-  return result;
-}
-
-export function applyReplacementsPreservingUnchangedLines(
-  originalContent: string,
-  baseContent: string,
-  replacements: TextReplacement[],
-): string {
-  const originalLines = splitLinesWithEndings(originalContent);
-  const baseLines = getLineSpans(baseContent);
-  if (originalLines.length !== baseLines.length) {
-    throw new Error(
-      "Cannot preserve unchanged lines because the base content has a different line count.",
-    );
-  }
-
-  const groups: Array<{ startLine: number; endLine: number; replacements: TextReplacement[] }> = [];
-  const sortedReplacements = [...replacements].sort((a, b) => a.matchIndex - b.matchIndex);
-  for (const replacement of sortedReplacements) {
-    const range = getReplacementLineRange(baseLines, replacement);
-    const current = groups[groups.length - 1];
-    if (current !== undefined && range.startLine < current.endLine) {
-      current.endLine = Math.max(current.endLine, range.endLine);
-      current.replacements.push(replacement);
-      continue;
-    }
-    groups.push({ ...range, replacements: [replacement] });
-  }
-
-  let originalLineIndex = 0;
-  let result = "";
-  for (const group of groups) {
-    result += originalLines.slice(originalLineIndex, group.startLine).join("");
-
-    const groupStartLine = baseLines[group.startLine];
-    const groupEndLine = baseLines[group.endLine - 1];
-    if (groupStartLine === undefined || groupEndLine === undefined) {
-      throw new Error("Replacement range is outside the base content.");
-    }
-    const groupStartOffset = groupStartLine.start;
-    const groupEndOffset = groupEndLine.end;
-    result += applyReplacements(
-      baseContent.slice(groupStartOffset, groupEndOffset),
-      group.replacements,
-      groupStartOffset,
-    );
-    originalLineIndex = group.endLine;
-  }
-  result += originalLines.slice(originalLineIndex).join("");
-
-  return result;
-}
+export { type EditDiffResult, generateDiffString, generateUnifiedPatch } from "./diff-format.ts";
+export { detectLineEnding, normalizeToLF, restoreLineEndings };
 
 export interface FuzzyMatchResult {
   found: boolean;
@@ -170,7 +39,10 @@ export interface AppliedEditsResult {
   newContent: string;
 }
 
-export function fuzzyFindText(content: string, oldText: string): FuzzyMatchResult {
+export const fuzzyFindText: {
+  (oldText: string): (content: string) => FuzzyMatchResult;
+  (content: string, oldText: string): FuzzyMatchResult;
+} = dual(2, (content: string, oldText: string): FuzzyMatchResult => {
   const exactIndex = content.indexOf(oldText);
   if (exactIndex !== -1) {
     return {
@@ -203,7 +75,7 @@ export function fuzzyFindText(content: string, oldText: string): FuzzyMatchResul
     usedFuzzyMatch: true,
     contentForReplacement: fuzzyContent,
   };
-}
+});
 
 function countOccurrences(content: string, oldText: string): number {
   const fuzzyContent = normalizeForFuzzyMatch(content);
@@ -211,7 +83,13 @@ function countOccurrences(content: string, oldText: string): number {
   return fuzzyContent.split(fuzzyOldText).length - 1;
 }
 
-function getNotFoundError(path: string, editIndex: number, totalEdits: number): Error {
+interface EditLocation {
+  path: string;
+  editIndex: number;
+  totalEdits: number;
+}
+
+function getNotFoundError({ path, editIndex, totalEdits }: EditLocation): Error {
   if (totalEdits === 1) {
     return new Error(
       `Could not find the exact text in ${path}. The old text must match exactly including all whitespace and newlines.`,
@@ -222,12 +100,8 @@ function getNotFoundError(path: string, editIndex: number, totalEdits: number): 
   );
 }
 
-function getDuplicateError(
-  path: string,
-  editIndex: number,
-  totalEdits: number,
-  occurrences: number,
-): Error {
+function getDuplicateError(location: EditLocation, occurrences: number): Error {
+  const { path, editIndex, totalEdits } = location;
   if (totalEdits === 1) {
     return new Error(
       `Found ${occurrences} occurrences of the text in ${path}. The text must be unique. Please provide more context to make it unique.`,
@@ -238,7 +112,7 @@ function getDuplicateError(
   );
 }
 
-function getEmptyOldTextError(path: string, editIndex: number, totalEdits: number): Error {
+function getEmptyOldTextError({ path, editIndex, totalEdits }: EditLocation): Error {
   if (totalEdits === 1) {
     return new Error(`oldText must not be empty in ${path}.`);
   }
@@ -254,7 +128,39 @@ function getNoChangeError(path: string, totalEdits: number): Error {
   return new Error(`No changes made to ${path}. The replacements produced identical content.`);
 }
 
-export function applyEditsToNormalizedContent(
+function matchEdits(
+  replacementBaseContent: string,
+  normalizedEdits: Edit[],
+  path: string,
+): MatchedEdit[] {
+  const totalEdits = normalizedEdits.length;
+  return normalizedEdits.map((edit, editIndex) => {
+    const location = { path, editIndex, totalEdits };
+    const matchResult = fuzzyFindText(replacementBaseContent, edit.oldText);
+    if (!matchResult.found) throw getNotFoundError(location);
+    const occurrences = countOccurrences(replacementBaseContent, edit.oldText);
+    if (occurrences > 1) throw getDuplicateError(location, occurrences);
+    return {
+      editIndex,
+      matchIndex: matchResult.index,
+      matchLength: matchResult.matchLength,
+      newText: edit.newText,
+    };
+  });
+}
+
+function assertDisjoint(sortedEdits: MatchedEdit[], path: string): void {
+  for (const [i, current] of sortedEdits.entries()) {
+    const previous = sortedEdits[i - 1];
+    if (previous !== undefined && previous.matchIndex + previous.matchLength > current.matchIndex) {
+      throw new Error(
+        `edits[${previous.editIndex}] and edits[${current.editIndex}] overlap in ${path}. Merge them into one edit or target disjoint regions.`,
+      );
+    }
+  }
+}
+
+function applyEditsImpl(
   normalizedContent: string,
   edits: Edit[],
   path: string,
@@ -266,243 +172,79 @@ export function applyEditsToNormalizedContent(
 
   for (const [i, edit] of normalizedEdits.entries()) {
     if (edit.oldText.length === 0) {
-      throw getEmptyOldTextError(path, i, normalizedEdits.length);
+      throw getEmptyOldTextError({ path, editIndex: i, totalEdits: normalizedEdits.length });
     }
   }
 
-  const initialMatches = normalizedEdits.map((edit) =>
-    fuzzyFindText(normalizedContent, edit.oldText),
+  const usedFuzzyMatch = normalizedEdits.some(
+    (edit) => fuzzyFindText(normalizedContent, edit.oldText).usedFuzzyMatch,
   );
-  const usedFuzzyMatch = initialMatches.some((match) => match.usedFuzzyMatch);
   const replacementBaseContent = usedFuzzyMatch
     ? normalizeForFuzzyMatch(normalizedContent)
     : normalizedContent;
 
-  const matchedEdits: MatchedEdit[] = [];
-  for (const [i, edit] of normalizedEdits.entries()) {
-    const matchResult = fuzzyFindText(replacementBaseContent, edit.oldText);
-    if (!matchResult.found) {
-      throw getNotFoundError(path, i, normalizedEdits.length);
-    }
-
-    const occurrences = countOccurrences(replacementBaseContent, edit.oldText);
-    if (occurrences > 1) {
-      throw getDuplicateError(path, i, normalizedEdits.length, occurrences);
-    }
-
-    matchedEdits.push({
-      editIndex: i,
-      matchIndex: matchResult.index,
-      matchLength: matchResult.matchLength,
-      newText: edit.newText,
-    });
-  }
-
+  const matchedEdits = matchEdits(replacementBaseContent, normalizedEdits, path);
   matchedEdits.sort((a, b) => a.matchIndex - b.matchIndex);
-  for (const [i, current] of matchedEdits.entries()) {
-    const previous = matchedEdits[i - 1];
-    if (previous === undefined) continue;
-    if (previous.matchIndex + previous.matchLength > current.matchIndex) {
-      throw new Error(
-        `edits[${previous.editIndex}] and edits[${current.editIndex}] overlap in ${path}. Merge them into one edit or target disjoint regions.`,
-      );
-    }
-  }
+  assertDisjoint(matchedEdits, path);
 
-  const baseContent = normalizedContent;
   const newContent = usedFuzzyMatch
-    ? applyReplacementsPreservingUnchangedLines(
-        normalizedContent,
-        replacementBaseContent,
-        matchedEdits,
-      )
-    : applyReplacements(replacementBaseContent, matchedEdits);
+    ? applyReplacementsPreservingUnchangedLines({
+        originalContent: normalizedContent,
+        baseContent: replacementBaseContent,
+        replacements: matchedEdits,
+      })
+    : applyReplacements({ content: replacementBaseContent, replacements: matchedEdits });
 
-  if (baseContent === newContent) {
+  if (normalizedContent === newContent) {
     throw getNoChangeError(path, normalizedEdits.length);
   }
-
-  return { baseContent, newContent };
+  return { baseContent: normalizedContent, newContent };
 }
 
-export function generateUnifiedPatch(
-  path: string,
-  oldContent: string,
-  newContent: string,
-  contextLines = 4,
-): string {
-  return Diff.createTwoFilesPatch(path, path, oldContent, newContent, undefined, undefined, {
-    context: contextLines,
-    headerOptions: Diff.FILE_HEADERS_ONLY,
-  });
-}
-
-export function generateDiffString(
-  oldContent: string,
-  newContent: string,
-  contextLines = 4,
-): { diff: string; firstChangedLine: number | undefined } {
-  const parts = Diff.diffLines(oldContent, newContent);
-  const output: string[] = [];
-
-  const oldLines = oldContent.split("\n");
-  const newLines = newContent.split("\n");
-  const maxLineNum = Math.max(oldLines.length, newLines.length);
-  const lineNumWidth = String(maxLineNum).length;
-
-  let oldLineNum = 1;
-  let newLineNum = 1;
-  let lastWasChange = false;
-  let firstChangedLine: number | undefined;
-
-  for (const [i, part] of parts.entries()) {
-    const raw = part.value.split("\n");
-    if (raw[raw.length - 1] === "") {
-      raw.pop();
-    }
-
-    if (part.added || part.removed) {
-      if (firstChangedLine === undefined) {
-        firstChangedLine = newLineNum;
-      }
-
-      for (const line of raw) {
-        if (part.added) {
-          const lineNum = String(newLineNum).padStart(lineNumWidth, " ");
-          output.push(`+${lineNum} ${line}`);
-          newLineNum++;
-        } else {
-          const lineNum = String(oldLineNum).padStart(lineNumWidth, " ");
-          output.push(`-${lineNum} ${line}`);
-          oldLineNum++;
-        }
-      }
-      lastWasChange = true;
-    } else {
-      const nextPart = parts[i + 1];
-      const nextPartIsChange = nextPart !== undefined && (nextPart.added || nextPart.removed);
-      const hasLeadingChange = lastWasChange;
-      const hasTrailingChange = nextPartIsChange;
-
-      if (hasLeadingChange && hasTrailingChange) {
-        if (raw.length <= contextLines * 2) {
-          for (const line of raw) {
-            const lineNum = String(oldLineNum).padStart(lineNumWidth, " ");
-            output.push(` ${lineNum} ${line}`);
-            oldLineNum++;
-            newLineNum++;
-          }
-        } else {
-          const leadingLines = raw.slice(0, contextLines);
-          const trailingLines = raw.slice(raw.length - contextLines);
-          const skippedLines = raw.length - leadingLines.length - trailingLines.length;
-
-          for (const line of leadingLines) {
-            const lineNum = String(oldLineNum).padStart(lineNumWidth, " ");
-            output.push(` ${lineNum} ${line}`);
-            oldLineNum++;
-            newLineNum++;
-          }
-
-          output.push(` ${"".padStart(lineNumWidth, " ")} ...`);
-          oldLineNum += skippedLines;
-          newLineNum += skippedLines;
-
-          for (const line of trailingLines) {
-            const lineNum = String(oldLineNum).padStart(lineNumWidth, " ");
-            output.push(` ${lineNum} ${line}`);
-            oldLineNum++;
-            newLineNum++;
-          }
-        }
-      } else if (hasLeadingChange) {
-        const shownLines = raw.slice(0, contextLines);
-        const skippedLines = raw.length - shownLines.length;
-
-        for (const line of shownLines) {
-          const lineNum = String(oldLineNum).padStart(lineNumWidth, " ");
-          output.push(` ${lineNum} ${line}`);
-          oldLineNum++;
-          newLineNum++;
-        }
-
-        if (skippedLines > 0) {
-          output.push(` ${"".padStart(lineNumWidth, " ")} ...`);
-          oldLineNum += skippedLines;
-          newLineNum += skippedLines;
-        }
-      } else if (hasTrailingChange) {
-        const skippedLines = Math.max(0, raw.length - contextLines);
-        if (skippedLines > 0) {
-          output.push(` ${"".padStart(lineNumWidth, " ")} ...`);
-          oldLineNum += skippedLines;
-          newLineNum += skippedLines;
-        }
-
-        for (const line of raw.slice(skippedLines)) {
-          const lineNum = String(oldLineNum).padStart(lineNumWidth, " ");
-          output.push(` ${lineNum} ${line}`);
-          oldLineNum++;
-          newLineNum++;
-        }
-      } else {
-        oldLineNum += raw.length;
-        newLineNum += raw.length;
-      }
-
-      lastWasChange = false;
-    }
-  }
-
-  return { diff: output.join("\n"), firstChangedLine };
-}
-
-export interface EditDiffResult {
-  diff: string;
-  firstChangedLine: number | undefined;
-}
+export const applyEditsToNormalizedContent: {
+  (edits: Edit[], path: string): (normalizedContent: string) => AppliedEditsResult;
+  (normalizedContent: string, edits: Edit[], path: string): AppliedEditsResult;
+} = dual((args) => typeof args[0] === "string", applyEditsImpl);
 
 export interface EditDiffError {
   error: string;
 }
 
-export async function computeEditsDiff(
-  path: string,
-  edits: Edit[],
-  cwd: string,
-): Promise<EditDiffResult | EditDiffError> {
+const causeOf = (error: unknown): unknown =>
+  Predicate.hasProperty(error, "cause") && error.cause !== undefined ? error.cause : error;
+
+const failureMessage = (error: unknown): string => toErrorMessage(causeOf(error));
+
+const describeAccessError = (error: unknown): string => {
+  const cause = causeOf(error);
+  return cause instanceof Error && "code" in cause ? `Error code: ${cause.code}` : String(cause);
+};
+
+const diffFromContent = (rawContent: string, edits: Edit[], path: string): EditDiffResult => {
+  const { text: content } = splitBom(rawContent);
+  const { baseContent, newContent } = applyEditsImpl(normalizeToLF(content), edits, path);
+  return generateDiffString(baseContent, newContent);
+};
+
+const computeDiffEffect = (path: string, edits: Edit[], cwd: string) => {
   const absolutePath = resolveToCwd(path, cwd);
-
-  try {
-    try {
-      await access(absolutePath, constants.R_OK);
-    } catch (error: unknown) {
-      const errorMessage =
-        error instanceof Error && "code" in error ? `Error code: ${error.code}` : String(error);
-      return { error: `Could not edit file: ${path}. ${errorMessage}.` };
+  return Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const access = yield* Effect.result(fs.access(absolutePath, { readable: true }));
+    if (Result.isFailure(access)) {
+      const error = `Could not edit file: ${path}. ${describeAccessError(access.failure)}.`;
+      return { error };
     }
+    const rawContent = yield* fs.readFileString(absolutePath, "utf-8");
+    return yield* Effect.try(() => diffFromContent(rawContent, edits, path));
+  }).pipe(Effect.catch((error) => Effect.succeed({ error: failureMessage(error) })));
+};
 
-    const rawContent = await readFile(absolutePath, "utf-8");
-
-    const { text: content } = splitBom(rawContent);
-    const normalizedContent = normalizeToLF(content);
-    const { baseContent, newContent } = applyEditsToNormalizedContent(
-      normalizedContent,
-      edits,
-      path,
-    );
-
-    return generateDiffString(baseContent, newContent);
-  } catch (err) {
-    return { error: toErrorMessage(err) };
-  }
-}
-
-export async function computeEditDiff(
-  path: string,
-  oldText: string,
-  newText: string,
-  cwd: string,
-): Promise<EditDiffResult | EditDiffError> {
-  return computeEditsDiff(path, [{ oldText, newText }], cwd);
-}
+export const computeEditsDiff: {
+  (edits: Edit[], cwd: string): (path: string) => Promise<EditDiffResult | EditDiffError>;
+  (path: string, edits: Edit[], cwd: string): Promise<EditDiffResult | EditDiffError>;
+} = dual(
+  (args) => typeof args[0] === "string",
+  (path: string, edits: Edit[], cwd: string): Promise<EditDiffResult | EditDiffError> =>
+    platformRuntime.runPromise(computeDiffEffect(path, edits, cwd)),
+);

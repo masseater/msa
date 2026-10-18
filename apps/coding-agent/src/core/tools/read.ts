@@ -1,228 +1,136 @@
-import { constants } from "fs";
-import { access as fsAccess, readFile as fsReadFile } from "fs/promises";
-
 import type { AgentTool } from "@msa/agent-core";
-import type { Api, ImageContent, Model, ModelImageResizeOptions, TextContent } from "@msa/ai";
-import { type Static, Type } from "typebox";
+import { Effect, FileSystem } from "effect";
 
-import { processImage } from "../../utils/image-process.ts";
 import { detectSupportedImageMimeTypeFromFile } from "../../utils/mime.ts";
 import type { ExtensionContext, ToolDefinition } from "../extensions/types.ts";
-import { resolveReadPathAsync } from "./path-utils.ts";
-import { readRenderers } from "./renderers/read.ts";
-import { wrapToolDefinition } from "./tool-definition-wrapper.ts";
 import {
-  DEFAULT_MAX_BYTES,
-  DEFAULT_MAX_LINES,
-  formatSize,
-  type TruncationResult,
-  truncateHead,
-} from "./truncate.ts";
+  abortedBy,
+  fromPromise,
+  nonEmptyOr,
+  platformRuntime,
+  rethrowCause,
+  unwrapForeign,
+} from "../platform/index.ts";
+import { resolveReadPathAsync } from "./path-utils.ts";
+import {
+  readDescription,
+  readImageContent,
+  type ReadOperations,
+  readOutputSchema,
+  readSchema,
+  readTextContent,
+  type ReadToolDetails,
+  type ReadToolOptions,
+  readToolSystemPromptContribution,
+  toReadOutput,
+} from "./read-content.ts";
+import { readRenderers } from "./renderers/read.ts";
+import { type CwdFactory, cwdFactory, wrapToolDefinition } from "./tool-definition-wrapper.ts";
 
-const readSchema = Type.Object({
-  path: Type.String({ description: "Path to the file to read (relative or absolute)" }),
-  offset: Type.Optional(
-    Type.Number({ description: "Line number to start reading from (1-indexed)" }),
-  ),
-  limit: Type.Optional(Type.Number({ description: "Maximum number of lines to read" })),
-});
-
-export const readToolSystemPromptContribution = {
-  snippet: "Read file contents",
-  guidelines: ["Use read to examine files instead of cat or sed."],
-} as const;
-
-export type ReadToolInput = Static<typeof readSchema>;
-
-const readOutputSchema = Type.Union([
-  Type.String(),
-  Type.Object({
-    type: Type.Literal("image"),
-    data: Type.String(),
-    mimeType: Type.String(),
-    note: Type.String(),
-  }),
-]);
-
-export type ReadToolOutput = Static<typeof readOutputSchema>;
-
-export interface ReadToolDetails {
-  truncation?: TruncationResult;
-}
-
-export interface ReadOperations {
-  readFile: (absolutePath: string) => Promise<Buffer>;
-  access: (absolutePath: string) => Promise<void>;
-  detectImageMimeType?: (absolutePath: string) => Promise<string | null | undefined>;
-}
+export {
+  type ReadOperations,
+  type ReadToolDetails,
+  type ReadToolInput,
+  type ReadToolOptions,
+  type ReadToolOutput,
+  readToolSystemPromptContribution,
+} from "./read-content.ts";
 
 const defaultReadOperations: ReadOperations = {
-  readFile: (path) => fsReadFile(path),
-  access: (path) => fsAccess(path, constants.R_OK),
+  readFile: (path) =>
+    platformRuntime.runPromise(
+      rethrowCause(
+        FileSystem.FileSystem.use((fs) => fs.readFile(path)).pipe(
+          Effect.map((bytes) => Buffer.from(bytes)),
+        ),
+      ),
+    ),
+  access: (path) =>
+    platformRuntime.runPromise(
+      rethrowCause(FileSystem.FileSystem.use((fs) => fs.access(path, { readable: true }))),
+    ),
   detectImageMimeType: detectSupportedImageMimeTypeFromFile,
 };
 
-export interface ReadToolOptions {
-  autoResizeImages?: boolean;
-  resizeOptions?: ModelImageResizeOptions;
-  operations?: ReadOperations;
+interface ReadRequest {
+  ops: ReadOperations;
+  options: ReadToolOptions | undefined;
+  cwd: string;
+  path: string;
+  offset: number | undefined;
+  limit: number | undefined;
+  ctx: ExtensionContext | undefined;
 }
 
-function toReadOutput(content: (TextContent | ImageContent)[]): ReadToolOutput {
-  const text = content.find((block) => block.type === "text")?.text ?? "";
-  const image = content.find((block) => block.type === "image");
-  return image === undefined
-    ? text
-    : { type: "image", data: image.data, mimeType: image.mimeType, note: text };
-}
-
-function getNonVisionImageNote(model: Model<Api> | undefined): string | undefined {
-  if (model === undefined || model.input.includes("image")) {
-    return undefined;
+const readFileTool = Effect.fn("read")(function* (request: ReadRequest) {
+  const { ops, options, ctx } = request;
+  const absolutePath = yield* fromPromise(() =>
+    resolveReadPathAsync(request.path, nonEmptyOr(ctx?.cwd, request.cwd)),
+  );
+  yield* fromPromise(() => ops.access(absolutePath));
+  const mimeType = yield* fromPromise(() => ops.detectImageMimeType?.(absolutePath));
+  if (mimeType !== undefined && mimeType !== null && mimeType !== "") {
+    const content = yield* readImageContent({
+      ops,
+      absolutePath,
+      mimeType,
+      autoResizeImages: options?.autoResizeImages ?? true,
+      resizeOptions: ctx?.model?.inputLimits?.images?.resize ?? options?.resizeOptions,
+      model: ctx?.model,
+    });
+    return { content, details: undefined as ReadToolDetails | undefined };
   }
-  return "[Current model does not support images. The image will be omitted from this request.]";
-}
+  const buffer = yield* fromPromise(() => ops.readFile(absolutePath));
+  return yield* readTextContent({
+    buffer,
+    path: request.path,
+    offset: request.offset,
+    limit: request.limit,
+  });
+});
 
-export function createReadToolDefinition(
+const createReadToolDefinitionImpl = (
   cwd: string,
   options?: ReadToolOptions,
-): ToolDefinition<typeof readSchema, ReadToolDetails | undefined> {
-  const autoResizeImages = options?.autoResizeImages ?? true;
-  const fallbackResizeOptions = options?.resizeOptions;
+): ToolDefinition<typeof readSchema, ReadToolDetails | undefined> => {
   const ops = options?.operations ?? defaultReadOperations;
   return {
     name: "read",
     label: "read",
-    description: `Read the contents of a file. Supports text files and images (jpg, png, gif, webp, bmp). Images are sent as attachments. For text files, output is truncated to ${DEFAULT_MAX_LINES} lines or ${DEFAULT_MAX_BYTES / 1024}KB (whichever is hit first). Use offset/limit for large files. When you need the full file, continue with offset until complete.`,
+    description: readDescription,
     promptSnippet: readToolSystemPromptContribution.snippet,
     promptGuidelines: [...readToolSystemPromptContribution.guidelines],
     parameters: readSchema,
     outputSchema: readOutputSchema,
     constrainedSampling: { type: "json_schema", strict: "prefer" },
-    async execute(
+    execute: (
       _toolCallId,
       { path, offset, limit }: { path: string; offset?: number; limit?: number },
       signal?: AbortSignal,
       _onUpdate?,
       ctx?: ExtensionContext,
-    ) {
-      return new Promise<{
-        content: (TextContent | ImageContent)[];
-        details: ReadToolDetails | undefined;
-      }>((resolve, reject) => {
-        if (signal?.aborted === true) {
-          reject(new Error("Operation aborted"));
-          return;
-        }
-        let aborted = false;
-        const onAbort = () => {
-          aborted = true;
-          reject(new Error("Operation aborted"));
-        };
-        signal?.addEventListener("abort", onAbort, { once: true });
-
-        (async () => {
-          try {
-            const absolutePath = await resolveReadPathAsync(path, ctx?.cwd || cwd);
-            if (aborted) return;
-            await ops.access(absolutePath);
-            if (aborted) return;
-            const mimeType =
-              ops.detectImageMimeType === undefined
-                ? undefined
-                : await ops.detectImageMimeType(absolutePath);
-            let content: (TextContent | ImageContent)[];
-            let details: ReadToolDetails | undefined;
-            const nonVisionImageNote = getNonVisionImageNote(ctx?.model);
-            if (mimeType !== undefined && mimeType !== null && mimeType !== "") {
-              const buffer = await ops.readFile(absolutePath);
-              const processed = await processImage(buffer, mimeType, {
-                autoResizeImages,
-                resizeOptions: ctx?.model?.inputLimits?.images?.resize ?? fallbackResizeOptions,
-              });
-              if (!processed.ok) {
-                let textNote = `Read image file [${mimeType}]\n${processed.message}`;
-                if (nonVisionImageNote !== undefined && nonVisionImageNote !== "")
-                  textNote += `\n${nonVisionImageNote}`;
-                content = [{ type: "text", text: textNote }];
-              } else {
-                let textNote = `Read image file [${processed.mimeType}]`;
-                if (processed.hints.length > 0) textNote += `\n${processed.hints.join("\n")}`;
-                if (nonVisionImageNote !== undefined && nonVisionImageNote !== "")
-                  textNote += `\n${nonVisionImageNote}`;
-                content = [
-                  { type: "text", text: textNote },
-                  { type: "image", data: processed.data, mimeType: processed.mimeType },
-                ];
-              }
-            } else {
-              const buffer = await ops.readFile(absolutePath);
-              const textContent = buffer.toString("utf-8");
-              const allLines = textContent.split("\n");
-              const totalFileLines = allLines.length;
-              const startLine = offset !== undefined && offset !== 0 ? Math.max(0, offset - 1) : 0;
-              const startLineDisplay = startLine + 1;
-              const firstLine = allLines[startLine];
-              if (firstLine === undefined) {
-                throw new Error(
-                  `Offset ${offset} is beyond end of file (${allLines.length} lines total)`,
-                );
-              }
-              let selectedContent: string;
-              let userLimitedLines: number | undefined;
-              if (limit !== undefined) {
-                const endLine = Math.min(startLine + limit, allLines.length);
-                selectedContent = allLines.slice(startLine, endLine).join("\n");
-                userLimitedLines = endLine - startLine;
-              } else {
-                selectedContent = allLines.slice(startLine).join("\n");
-              }
-              const truncation = truncateHead(selectedContent);
-              let outputText: string;
-              if (truncation.firstLineExceedsLimit) {
-                const firstLineSize = formatSize(Buffer.byteLength(firstLine, "utf-8"));
-                outputText = `[Line ${startLineDisplay} is ${firstLineSize}, exceeds ${formatSize(DEFAULT_MAX_BYTES)} limit. Use bash: sed -n '${startLineDisplay}p' ${path} | head -c ${DEFAULT_MAX_BYTES}]`;
-                details = { truncation };
-              } else if (truncation.truncated) {
-                const endLineDisplay = startLineDisplay + truncation.outputLines - 1;
-                const nextOffset = endLineDisplay + 1;
-                outputText = truncation.content;
-                if (truncation.truncatedBy === "lines") {
-                  outputText += `\n\n[Showing lines ${startLineDisplay}-${endLineDisplay} of ${totalFileLines}. Use offset=${nextOffset} to continue.]`;
-                } else {
-                  outputText += `\n\n[Showing lines ${startLineDisplay}-${endLineDisplay} of ${totalFileLines} (${formatSize(DEFAULT_MAX_BYTES)} limit). Use offset=${nextOffset} to continue.]`;
-                }
-                details = { truncation };
-              } else if (
-                userLimitedLines !== undefined &&
-                startLine + userLimitedLines < allLines.length
-              ) {
-                const remaining = allLines.length - (startLine + userLimitedLines);
-                const nextOffset = startLine + userLimitedLines + 1;
-                outputText = `${truncation.content}\n\n[${remaining} more lines in file. Use offset=${nextOffset} to continue.]`;
-              } else {
-                outputText = truncation.content;
-              }
-              content = [{ type: "text", text: outputText }];
-            }
-
-            if (aborted) return;
-            signal?.removeEventListener("abort", onAbort);
-            resolve({ content, details });
-          } catch (error: any) {
-            signal?.removeEventListener("abort", onAbort);
-            if (!aborted) reject(error);
-          }
-        })();
-      }).then((result) => ({ ...result, structuredContent: toReadOutput(result.content) }));
-    },
+    ) =>
+      platformRuntime.runPromise(
+        unwrapForeign(
+          readFileTool({ ops, options, cwd, path, offset, limit, ctx }).pipe(
+            abortedBy(signal),
+            Effect.map((result) => ({
+              content: result.content,
+              details: result.details,
+              structuredContent: toReadOutput(result.content),
+            })),
+          ),
+        ),
+      ),
     ...readRenderers,
   };
-}
+};
 
-export function createReadTool(
-  cwd: string,
-  options?: ReadToolOptions,
-): AgentTool<typeof readSchema> {
-  return wrapToolDefinition(createReadToolDefinition(cwd, options));
-}
+export const createReadToolDefinition: CwdFactory<
+  ReadToolOptions,
+  ToolDefinition<typeof readSchema, ReadToolDetails | undefined>
+> = cwdFactory(createReadToolDefinitionImpl);
+
+export const createReadTool: CwdFactory<ReadToolOptions, AgentTool<typeof readSchema>> = cwdFactory(
+  (cwd, options) => wrapToolDefinition(createReadToolDefinitionImpl(cwd, options)),
+);
