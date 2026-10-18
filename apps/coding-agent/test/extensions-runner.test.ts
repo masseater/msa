@@ -1,14 +1,12 @@
-import * as fs from "node:fs";
-import * as os from "node:os";
-
 import {
-  awaited,
-  runTest,
   abortController,
-  writeTextFile,
-  makeDirectory,
+  awaited,
   joinPath,
+  makeDirectory,
+  makeTempDir,
   removePath,
+  runTest,
+  writeTextFile,
 } from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
@@ -46,7 +44,7 @@ describe("ExtensionRunner", () => {
   beforeEach(() =>
     runTest(
       Effect.gen(function* () {
-        tempDir = fs.mkdtempSync(joinPath(os.tmpdir(), "msa-runner-test-"));
+        tempDir = yield* makeTempDir("msa-runner-test-");
         extensionsDir = joinPath(tempDir, "extensions");
         yield* makeDirectory(extensionsDir);
         sessionManager = SessionManager.inMemory();

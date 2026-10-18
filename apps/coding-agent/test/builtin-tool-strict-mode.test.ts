@@ -1,8 +1,5 @@
-import { mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
-
 import { getModel } from "@msa/ai/compat";
-import { awaited, runTest, writeTextFile, removePath, joinPath } from "@msa/testing";
+import { awaited, joinPath, makeTempDir, removePath, runTest, writeTextFile } from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
@@ -63,7 +60,7 @@ describe("strict built-in tools", () => {
     ({ activeTools }) =>
       runTest(
         Effect.gen(function* () {
-          const cwd = mkdtempSync(joinPath(tmpdir(), "msa-non-strict-tools-"));
+          const cwd = yield* makeTempDir("msa-non-strict-tools-");
           const agentDir = joinPath(cwd, "agent");
           const settingsManager = SettingsManager.inMemory({ defaultTools: activeTools });
           const resourceLoader = new DefaultResourceLoader({

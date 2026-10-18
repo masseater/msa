@@ -1,25 +1,24 @@
-import * as fs from "node:fs";
-import * as os from "node:os";
 import { fileURLToPath } from "node:url";
 
 import {
   awaited,
+  basenameOf,
+  dirnameOf,
+  joinPath,
+  makeDirectory,
+  makeTempDir,
+  removePath,
+  resolvePath,
   runTest,
   toJsonText,
   writeTextFile,
-  makeDirectory,
-  joinPath,
-  dirnameOf,
-  basenameOf,
-  resolvePath,
-  removePath,
 } from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
 import { discoverAndLoadExtensions } from "../src/core/extensions/loader.ts";
 
-const __dirname = dirnameOf(fileURLToPath(import.meta.url));
+const currentDir = dirnameOf(fileURLToPath(import.meta.url));
 
 describe("extensions discovery", () => {
   let tempDir: string;
@@ -28,7 +27,7 @@ describe("extensions discovery", () => {
   beforeEach(() =>
     runTest(
       Effect.gen(function* () {
-        tempDir = fs.mkdtempSync(joinPath(os.tmpdir(), "msa-ext-test-"));
+        tempDir = yield* makeTempDir("msa-ext-test-");
         extensionsDir = joinPath(tempDir, "extensions");
         yield* makeDirectory(extensionsDir);
       }),
@@ -491,7 +490,7 @@ describe("extensions discovery", () => {
   it("resolves dependencies from extension's own node_modules", () =>
     runTest(
       Effect.gen(function* () {
-        const extPath = resolvePath(__dirname, "../examples/extensions/with-deps");
+        const extPath = resolvePath(currentDir, "../examples/extensions/with-deps");
 
         const result = yield* awaited(discoverAndLoadExtensions([extPath], tempDir, tempDir));
 

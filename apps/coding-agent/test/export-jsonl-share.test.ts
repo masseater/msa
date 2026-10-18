@@ -1,16 +1,14 @@
-import { mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
-
 import type { AssistantMessage, ToolResultMessage } from "@msa/ai/compat";
 import { getModel } from "@msa/ai/compat";
 import {
   awaited,
-  runTest,
   currentTimeMillis,
-  readTextFile,
-  writeTextFile,
   joinPath,
+  makeTempDir,
+  readTextFile,
   removePath,
+  runTest,
+  writeTextFile,
 } from "@msa/testing";
 import { Effect } from "effect";
 import { Type } from "typebox";
@@ -42,7 +40,7 @@ describe("JSONL share export", () => {
       Effect.gen(function* () {
         const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-        const tempDir = mkdtempSync(joinPath(tmpdir(), "msa-jsonl-share-"));
+        const tempDir = yield* makeTempDir("msa-jsonl-share-");
         tempDirs.push(tempDir);
         const sessionManager = SessionManager.inMemory(tempDir);
         const { session } = yield* awaited(
