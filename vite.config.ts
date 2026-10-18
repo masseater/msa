@@ -185,6 +185,24 @@ export default defineConfig({
         },
       },
       {
+        files: [
+          "apps/coding-agent/test/suite/regressions/2860-replaced-session-context.test.ts",
+          "apps/coding-agent/test/suite/regressions/3592-no-builtin-tools-keeps-extension-tools.test.ts",
+          "apps/coding-agent/test/suite/regressions/4167-thinking-toggle-pending-tool-render.test.ts",
+          "apps/coding-agent/test/suite/regressions/5080-signal-shutdown-extension-cleanup.test.ts",
+          "apps/coding-agent/test/suite/regressions/5596-missing-theme-export.test.ts",
+          "apps/coding-agent/test/suite/regressions/5943-session-start-notify.test.ts",
+          "apps/coding-agent/test/suite/regressions/6999-models-json-hot-reload.test.ts",
+          "apps/coding-agent/test/suite/regressions/7153-scoped-models-refresh.test.ts",
+          "apps/coding-agent/test/suite/regressions/9068-user-bash-fail-closed.test.ts",
+          "apps/coding-agent/test/suite/virtual-models.test.ts",
+        ],
+        rules: {
+          "eslint/max-lines": "off",
+          "import/max-dependencies": "off",
+        },
+      },
+      {
         files: ["tools/**", "lint.config.ts", "syncpack.config.ts", "vite.config.ts"],
         rules: {
           "no-comments/disallowComments": [
