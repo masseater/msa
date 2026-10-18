@@ -1,4 +1,5 @@
 import { CustomEditor, type ExtensionAPI } from "@msa/coding-agent";
+import { Effect, type Fiber } from "effect";
 
 const COLORS: [number, number, number][] = [
   [233, 137, 115],
@@ -35,7 +36,7 @@ function colorize(text: string, shinePos: number): string {
 }
 
 class RainbowEditor extends CustomEditor {
-  private animationTimer?: ReturnType<typeof setInterval> | undefined;
+  private animationFiber?: Fiber.Fiber<never> | undefined;
   private frame = 0;
 
   private hasUltrathink(): boolean {
@@ -43,18 +44,20 @@ class RainbowEditor extends CustomEditor {
   }
 
   private startAnimation(): void {
-    if (this.animationTimer !== undefined) return;
-    this.animationTimer = setInterval(() => {
-      this.frame++;
-      this.tui.requestRender();
-    }, 60);
+    if (this.animationFiber !== undefined) return;
+    this.animationFiber = Effect.runFork(
+      Effect.forever(
+        Effect.sync(() => {
+          this.frame++;
+          this.tui.requestRender();
+        }).pipe(Effect.andThen(Effect.sleep(60))),
+      ),
+    );
   }
 
   private stopAnimation(): void {
-    if (this.animationTimer !== undefined) {
-      clearInterval(this.animationTimer);
-      this.animationTimer = undefined;
-    }
+    this.animationFiber?.interruptUnsafe();
+    this.animationFiber = undefined;
   }
 
   override handleInput(data: string): void {
