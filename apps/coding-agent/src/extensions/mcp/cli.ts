@@ -1,4 +1,3 @@
-import { existsSync } from "node:fs";
 import { createInterface } from "node:readline/promises";
 
 import chalk from "chalk";
@@ -12,6 +11,7 @@ import { writeError, writeLog } from "../../core/platform.ts";
 import { ProjectTrustStore } from "../../core/trust-manager.ts";
 import { toErrorMessage } from "../../utils/errors.ts";
 import { callbackPromise } from "../../utils/interop.ts";
+import { exists } from "../../utils/node-fs.ts";
 import { openBrowser } from "../../utils/open-browser.ts";
 import {
   addMcpServerConfig,
@@ -206,7 +206,7 @@ export function runMcpCommand(args: string[], options: McpCommandOptions): Promi
         projectTrusted,
       });
       const untrustedNote =
-        !projectTrusted && existsSync(projectConfig)
+        !projectTrusted && (yield* awaited(exists(projectConfig)))
           ? `${projectConfig} is ignored because the project is not trusted. Start ${APP_NAME} in the project to trust it.`
           : undefined;
       const credentials = options.credentials ?? new McpOAuthCredentialStore();

@@ -1,7 +1,9 @@
-import { copyFileSync, existsSync, mkdirSync, renameSync, rmSync } from "node:fs";
+import * as Effect from "effect/Effect";
 
+import { awaited, awaiting } from "../core/awaiting.ts";
 import { basename, dirname, join, randomUuid, relative, resolve } from "../core/platform-node.ts";
 import { nowMs } from "../core/platform.ts";
+import { copyFile, exists, makeDirectory, remove, rename } from "./node-fs.ts";
 import { getCwdRelativePath } from "./paths.ts";
 import { toNamespacedPath } from "./platform-extra.ts";
 
@@ -49,36 +51,32 @@ function getLoadedSharedObjectsInPackageDir(packageDir: string): string[] {
   return loadedFiles;
 }
 
-export function cleanupWindowsSelfUpdateQuarantine(packageDir: string): void {
+export function cleanupWindowsSelfUpdateQuarantine(packageDir: string): Promise<void> {
   const quarantineRoot = getQuarantineRoot(packageDir);
   if (quarantineRoot === undefined || quarantineRoot === "") {
-    return;
+    return Effect.runPromise(Effect.void);
   }
-  try {
-    rmSync(quarantineRoot, { recursive: true, force: true });
-  } catch {}
+  return remove({ path: quarantineRoot, recursive: true, force: true }).catch(() => undefined);
 }
 
-export function quarantineWindowsNativeDependencies(packageDir: string): void {
+export function quarantineWindowsNativeDependencies(packageDir: string): Promise<void> {
   const resolvedPackageDir = normalizePath(packageDir);
   const quarantineRoot = getQuarantineRoot(resolvedPackageDir);
   if (quarantineRoot === undefined || quarantineRoot === "") {
-    return;
+    return Effect.runPromise(Effect.void);
   }
 
   const loadedFiles = getLoadedSharedObjectsInPackageDir(resolvedPackageDir);
-  if (loadedFiles.length === 0) {
-    return;
-  }
-
   const quarantineRunDir = join(quarantineRoot, `${nowMs()}-${process.pid}-${randomUuid()}`);
-  for (const loadedFile of loadedFiles) {
-    if (!existsSync(loadedFile)) {
-      continue;
-    }
-    const quarantinePath = join(quarantineRunDir, relative(resolvedPackageDir, loadedFile));
-    mkdirSync(dirname(quarantinePath), { recursive: true });
-    renameSync(loadedFile, quarantinePath);
-    copyFileSync(quarantinePath, loadedFile);
-  }
+  return Effect.runPromise(
+    awaiting(function* () {
+      for (const loadedFile of loadedFiles) {
+        if (!(yield* awaited(exists(loadedFile)))) continue;
+        const quarantinePath = join(quarantineRunDir, relative(resolvedPackageDir, loadedFile));
+        yield* awaited(makeDirectory({ path: dirname(quarantinePath) }));
+        yield* awaited(rename({ from: loadedFile, to: quarantinePath }));
+        yield* awaited(copyFile({ from: quarantinePath, to: loadedFile }));
+      }
+    }),
+  );
 }

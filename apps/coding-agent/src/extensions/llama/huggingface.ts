@@ -1,4 +1,3 @@
-import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 
 import * as Effect from "effect/Effect";
@@ -6,6 +5,7 @@ import * as Effect from "effect/Effect";
 import { awaited, awaiting, awaitingWith } from "../../core/awaiting.ts";
 import { join } from "../../core/platform-node.ts";
 import { fetchResponse } from "../../utils/interop.ts";
+import { readText } from "../../utils/node-fs.ts";
 
 const DEFAULT_HUGGING_FACE_URL = "https://huggingface.co";
 const QUANTIZATION_PATTERN =
@@ -43,7 +43,7 @@ function readToken(path: string): Promise<string | undefined> {
   return Effect.runPromise(
     awaiting(function* () {
       try {
-        const token = (yield* awaited(readFile(path, "utf8"))).trim();
+        const token = (yield* awaited(readText(path))).trim();
         return token || undefined;
       } catch {
         return undefined;

@@ -1,8 +1,4 @@
-import { open } from "node:fs/promises";
-
-import * as Effect from "effect/Effect";
-
-import { awaited, awaiting } from "../core/awaiting.ts";
+import { readHead } from "./node-fs.ts";
 
 const IMAGE_TYPE_SNIFF_BYTES = 4100;
 const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
@@ -27,17 +23,8 @@ export function detectSupportedImageMimeType(buffer: Uint8Array): string | null 
 }
 
 export function detectSupportedImageMimeTypeFromFile(filePath: string): Promise<string | null> {
-  return Effect.runPromise(
-    awaiting(function* () {
-      const fileHandle = yield* awaited(open(filePath, "r"));
-      try {
-        const buffer = Buffer.alloc(IMAGE_TYPE_SNIFF_BYTES);
-        const { bytesRead } = yield* awaited(fileHandle.read(buffer, 0, IMAGE_TYPE_SNIFF_BYTES, 0));
-        return detectSupportedImageMimeType(buffer.subarray(0, bytesRead));
-      } finally {
-        yield* awaited(fileHandle.close());
-      }
-    }),
+  return readHead({ path: filePath, length: IMAGE_TYPE_SNIFF_BYTES }).then(
+    detectSupportedImageMimeType,
   );
 }
 

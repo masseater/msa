@@ -1,7 +1,7 @@
-import { writeFile } from "node:fs/promises";
 import { crc32, deflateRawSync } from "node:zlib";
 
 import { nowMs, toDate } from "../core/platform.ts";
+import { writeFile } from "./node-fs.ts";
 
 interface ZipEntry {
   name: string;
@@ -72,5 +72,5 @@ function createZipArchive(entries: readonly ZipEntry[]): Buffer {
 }
 
 export function writeZipArchive(filePath: string, entries: readonly ZipEntry[]): Promise<void> {
-  return writeFile(filePath, createZipArchive(entries));
+  return writeFile({ path: filePath, data: createZipArchive(entries) });
 }

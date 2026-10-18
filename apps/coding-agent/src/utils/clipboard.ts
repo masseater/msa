@@ -1,4 +1,3 @@
-import { unlinkSync, writeFileSync } from "node:fs";
 import { platform, tmpdir } from "node:os";
 
 import { getNativeClipboard } from "@msa/tui";
@@ -8,6 +7,7 @@ import { awaited, awaiting } from "../core/awaiting.ts";
 import { join, randomUuid } from "../core/platform-node.ts";
 import { readEnv } from "../core/platform.ts";
 import { runClipboardCommand } from "./clipboard-command.ts";
+import { remove, writeFile } from "./node-fs.ts";
 import { isWSL } from "./wsl.ts";
 
 const MAX_OSC52_ENCODED_LENGTH = 100_000;
@@ -35,7 +35,7 @@ function copyViaWindowsClipboard(text: string): Promise<boolean> {
     awaiting(function* () {
       const tmpFile = join(tmpdir(), `msa-wsl-clip-${randomUuid()}.txt`);
       try {
-        writeFileSync(tmpFile, text, { encoding: "utf8", mode: 0o600 });
+        yield* awaited(writeFile({ path: tmpFile, data: text, mode: 0o600 }));
         const winPath = (yield* awaited(
           runClipboardCommand("wslpath", ["-w", tmpFile], { timeoutMs: 1000 }),
         ))
@@ -53,7 +53,7 @@ function copyViaWindowsClipboard(text: string): Promise<boolean> {
         return false;
       } finally {
         try {
-          unlinkSync(tmpFile);
+          yield* awaited(remove({ path: tmpFile, force: true }));
         } catch {}
       }
     }),
@@ -143,7 +143,7 @@ export function copyToClipboard(text: string): Promise<void> {
         }
       }
       let osc52Emitted = false;
-      if (!copied && p === "linux" && isWSL(env)) {
+      if (!copied && p === "linux" && (yield* awaited(isWSL(env)))) {
         if (env["WT_SESSION"] !== undefined && env["WT_SESSION"] !== "")
           osc52Emitted = emitOsc52(text);
         copied = osc52Emitted || (yield* awaited(copyViaWindowsClipboard(text)));

@@ -536,14 +536,18 @@ function runSelfUpdate(command: SelfUpdateCommand): Promise<void> {
   );
 }
 
-function prepareWindowsNpmSelfUpdate(): void {
+function prepareWindowsNpmSelfUpdate(): Promise<void> {
   if (process.platform !== "win32") {
-    return;
+    return Effect.runPromise(Effect.void);
   }
 
   const packageDir = getPackageDir();
-  cleanupWindowsSelfUpdateQuarantine(packageDir);
-  quarantineWindowsNativeDependencies(packageDir);
+  return Effect.runPromise(
+    awaiting(function* () {
+      yield* awaited(cleanupWindowsSelfUpdateQuarantine(packageDir));
+      yield* awaited(quarantineWindowsNativeDependencies(packageDir));
+    }),
+  );
 }
 
 export interface PackageCommandRuntimeOptions {
@@ -937,7 +941,7 @@ export function handlePackageCommand(
               }
               try {
                 if (installMethod === "npm") {
-                  prepareWindowsNpmSelfUpdate();
+                  yield* awaited(prepareWindowsNpmSelfUpdate());
                 }
                 yield* awaited(runSelfUpdate(selfUpdateCommand));
               } catch (error: unknown) {

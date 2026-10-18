@@ -1,11 +1,11 @@
 import { createWriteStream, type WriteStream } from "node:fs";
-import { writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 
 import * as Effect from "effect/Effect";
 
 import { awaited, awaiting } from "../core/awaiting.ts";
 import { join } from "../core/platform-node.ts";
+import { writeFile } from "./node-fs.ts";
 import { randomHex } from "./platform-extra.ts";
 
 const OUTPUT_FILE_MODE = 0o600;
@@ -23,7 +23,7 @@ export function writeOutputFile(
     awaiting(function* () {
       const path = createOutputFilePath(prefix, extension);
 
-      yield* awaited(writeFile(path, data, { mode: OUTPUT_FILE_MODE, flag: "wx" }));
+      yield* awaited(writeFile({ path, data, mode: OUTPUT_FILE_MODE, flag: "wx" }));
       return path;
     }),
   );

@@ -1,5 +1,3 @@
-import { access, readFile, stat } from "node:fs/promises";
-
 import type { ImageContent } from "@msa/ai";
 import chalk from "chalk";
 import * as Effect from "effect/Effect";
@@ -11,6 +9,7 @@ import { resolveReadPath } from "../core/tools/path-utils.ts";
 import { toErrorMessage } from "../utils/errors.ts";
 import { processImage } from "../utils/image-process.ts";
 import { detectSupportedImageMimeTypeFromFile } from "../utils/mime.ts";
+import { access, fileSize, readFile, readText } from "../utils/node-fs.ts";
 import { stripBom } from "../utils/text.ts";
 
 export interface ProcessedFiles {
@@ -42,8 +41,8 @@ export function processFileArguments(
           process.exit(1);
         }
 
-        const stats = yield* awaited(stat(absolutePath));
-        if (stats.size === 0) {
+        const size = yield* awaited(fileSize(absolutePath));
+        if (size === 0) {
           continue;
         }
 
@@ -72,7 +71,7 @@ export function processFileArguments(
           }
         } else {
           try {
-            const content = stripBom(yield* awaited(readFile(absolutePath, "utf-8")));
+            const content = stripBom(yield* awaited(readText(absolutePath)));
             text += `<file name="${absolutePath}">\n${content}\n</file>\n`;
           } catch (error: unknown) {
             const message = toErrorMessage(error);

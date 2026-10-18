@@ -689,7 +689,7 @@ export function main(args: string[], options?: MainOptions) {
       }
 
       if (process.platform === "win32") {
-        cleanupWindowsSelfUpdateQuarantine(getPackageDir());
+        yield* awaited(cleanupWindowsSelfUpdateQuarantine(getPackageDir()));
       }
 
       const cwd = process.cwd();

@@ -1,5 +1,3 @@
-import { mkdirSync } from "node:fs";
-
 import { oauthErrorHtml, oauthSuccessHtml } from "@msa/ai/utils/oauth-page";
 import { type AuthProvider, type McpFetch, toPromise } from "@msa/mcp";
 import {
@@ -28,6 +26,7 @@ import { awaited, awaiting, awaitingWith } from "../../core/awaiting.ts";
 import { mcpNamespace } from "../../core/mcp-servers.ts";
 import { join, sha256Hex } from "../../core/platform-node.ts";
 import { nowMs } from "../../core/platform.ts";
+import { makeDirectory } from "../../utils/node-fs.ts";
 
 const CALLBACK_HOST = "127.0.0.1";
 const CALLBACK_PATH = "/callback";
@@ -156,7 +155,8 @@ export class McpOAuthCredentialStore {
     return Effect.runPromise(
       awaitingWith(function* () {
         if (this.lockDir === undefined || this.lockDir === "") return yield* awaited(fn());
-        mkdirSync(this.lockDir, { recursive: true, mode: 0o700 });
+        const lockDir = this.lockDir;
+        yield* awaited(makeDirectory({ path: lockDir, mode: 0o700 }));
         const hash = sha256Hex(key).slice(0, 16);
         const release = yield* awaited(
           lockfile.lock(join(this.lockDir, `mcp-auth-refresh-${hash}`), {

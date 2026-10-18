@@ -1,4 +1,3 @@
-import { readFileSync, unlinkSync } from "fs";
 import { tmpdir } from "os";
 
 import { getNativeClipboard } from "@msa/tui";
@@ -8,6 +7,7 @@ import { awaited, awaiting } from "../core/awaiting.ts";
 import { join, randomUuid } from "../core/platform-node.ts";
 import { runClipboardCommand } from "./clipboard-command.ts";
 import { detectSupportedImageMimeType } from "./mime.ts";
+import { readFile, remove } from "./node-fs.ts";
 import { loadPhoton } from "./photon.ts";
 import { isWSL } from "./wsl.ts";
 
@@ -164,7 +164,7 @@ function readClipboardImageViaPowerShell(): Promise<ClipboardImage | null> {
           return null;
         }
 
-        const bytes = readFileSync(tmpFile);
+        const bytes = yield* awaited(readFile(tmpFile));
         if (bytes.length === 0) {
           return null;
         }
@@ -174,7 +174,7 @@ function readClipboardImageViaPowerShell(): Promise<ClipboardImage | null> {
         return null;
       } finally {
         try {
-          unlinkSync(tmpFile);
+          yield* awaited(remove({ path: tmpFile, force: true }));
         } catch {}
       }
     }),
@@ -268,7 +268,7 @@ export function readClipboardImage(options?: {
       let image: ClipboardImage | null | undefined;
 
       if (platform === "linux") {
-        const wsl = isWSL(env);
+        const wsl = yield* awaited(isWSL(env));
         if (isWaylandSession(env) || wsl) {
           image = yield* awaited(readClipboardImageViaWlPaste());
         }
