@@ -1,14 +1,12 @@
 import { Container, hyperlink, Text, type TUI } from "@msa/tui";
+import { Effect } from "effect";
 
+import { awaited, awaitingWith } from "../../../core/awaiting.ts";
 import { copyToClipboard } from "../../../utils/clipboard.ts";
 import { toErrorMessage } from "../../../utils/errors.ts";
 import { theme } from "../theme/theme.ts";
 import { keyHint } from "./keybinding-hints.ts";
 
-/**
- * A sign-in URL with a click hint and a copy hint. Hosts call `copy()` when `app.message.copy` is
- * pressed, since a long URL wraps and often cannot be selected or clicked as a whole (SSH, tmux).
- */
 export class AuthUrlComponent extends Container {
   readonly url: string;
   private readonly tui: TUI;
@@ -32,12 +30,16 @@ export class AuthUrlComponent extends Container {
     this.tui.requestRender();
   }
 
-  async copy(): Promise<void> {
-    try {
-      await copyToClipboard(this.url);
-      this.setHint(theme.fg("success", "Copied URL to clipboard"));
-    } catch (error) {
-      this.setHint(theme.fg("error", toErrorMessage(error)));
-    }
+  copy(): Promise<void> {
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        try {
+          yield* awaited(copyToClipboard(this.url));
+          this.setHint(theme.fg("success", "Copied URL to clipboard"));
+        } catch (error) {
+          this.setHint(theme.fg("error", toErrorMessage(error)));
+        }
+      }, this),
+    );
   }
 }

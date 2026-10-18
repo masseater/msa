@@ -1,12 +1,10 @@
-/**
- * Armin says hi! A fun easter egg with animated XBM art.
- */
-
 import type { Component, TUI } from "@msa/tui";
+import { dual } from "effect/Function";
 
+import { randomUnit, type Scheduled } from "../../../core/platform.ts";
+import { every } from "../../interval.ts";
 import { theme } from "../theme/theme.ts";
 
-// XBM image: 31x36 pixels, LSB first, 1=background, 0=foreground
 export const ARMIN_WIDTH = 31;
 export const ARMIN_HEIGHT = 36;
 const WIDTH = ARMIN_WIDTH;
@@ -24,21 +22,22 @@ const BITS = [
 ];
 
 const BYTES_PER_ROW = Math.ceil(WIDTH / 8);
-const DISPLAY_HEIGHT = Math.ceil(HEIGHT / 2); // Half-block rendering
+const DISPLAY_HEIGHT = Math.ceil(HEIGHT / 2);
 
 type Effect = "typewriter" | "scanline" | "rain" | "fade" | "crt" | "glitch" | "dissolve";
 
 const EFFECTS: Effect[] = ["typewriter", "scanline", "rain", "fade", "crt", "glitch", "dissolve"];
 
-// Get pixel at (x, y): true = foreground, false = background
-export function isArminPixel(x: number, y: number): boolean {
+export const isArminPixel: {
+  (y: number): (x: number) => boolean;
+  (x: number, y: number): boolean;
+} = dual(2, (x: number, y: number): boolean => {
   if (y >= HEIGHT) return false;
   const byteIndex = y * BYTES_PER_ROW + Math.floor(x / 8);
   const bitIndex = x % 8;
   return (((BITS[byteIndex] ?? 0) >> bitIndex) & 1) === 0;
-}
+});
 
-// Get the character for a cell (2 vertical pixels packed)
 function getChar(x: number, row: number): string {
   const upper = isArminPixel(x, row * 2);
   const lower = isArminPixel(x, row * 2 + 1);
@@ -49,9 +48,8 @@ function getChar(x: number, row: number): string {
 }
 
 function shuffle<T>(items: T[]): void {
-  // Fisher-Yates shuffle
   for (let i = items.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
+    const j = Math.floor(randomUnit() * (i + 1));
     const a = items[i];
     const b = items[j];
     if (a === undefined || b === undefined) continue;
@@ -60,7 +58,6 @@ function shuffle<T>(items: T[]): void {
   }
 }
 
-// Build the final image grid
 function buildFinalGrid(): string[][] {
   const grid: string[][] = [];
   for (let row = 0; row < DISPLAY_HEIGHT; row++) {
@@ -75,7 +72,7 @@ function buildFinalGrid(): string[][] {
 
 export class ArminComponent implements Component {
   private ui: TUI;
-  private interval: ReturnType<typeof setInterval> | null = null;
+  private interval: Scheduled | null = null;
   private effect: Effect;
   private finalGrid: string[][];
   private currentGrid: string[][];
@@ -87,7 +84,7 @@ export class ArminComponent implements Component {
 
   constructor(ui: TUI) {
     this.ui = ui;
-    this.effect = EFFECTS[Math.floor(Math.random() * EFFECTS.length)] ?? "typewriter";
+    this.effect = EFFECTS[Math.floor(randomUnit() * EFFECTS.length)] ?? "typewriter";
     this.finalGrid = buildFinalGrid();
     this.currentGrid = this.createEmptyGrid();
 
@@ -108,13 +105,11 @@ export class ArminComponent implements Component {
     const availableWidth = width - padding;
 
     this.cachedLines = this.currentGrid.map((row) => {
-      // Clip row to available width before applying color
       const clipped = row.slice(0, availableWidth).join("");
       const padRight = Math.max(0, width - padding - clipped.length);
       return ` ${theme.fg("accent", clipped)}${" ".repeat(padRight)}`;
     });
 
-    // Add "ARMIN SAYS HI" at the end
     const message = "ARMIN SAYS HI";
     const msgPadRight = Math.max(0, width - padding - message.length);
     this.cachedLines.push(` ${theme.fg("accent", message)}${" ".repeat(msgPadRight)}`);
@@ -138,16 +133,14 @@ export class ArminComponent implements Component {
         this.effectState = { row: 0 };
         break;
       case "rain":
-        // Track falling position for each column
         this.effectState = {
           drops: Array.from({ length: WIDTH }, () => ({
-            y: -Math.floor(Math.random() * DISPLAY_HEIGHT * 2),
+            y: -Math.floor(randomUnit() * DISPLAY_HEIGHT * 2),
             settled: 0,
           })),
         };
         break;
       case "fade": {
-        // Shuffle all pixel positions
         const positions: [number, number][] = [];
         for (let row = 0; row < DISPLAY_HEIGHT; row++) {
           for (let x = 0; x < WIDTH; x++) {
@@ -165,14 +158,12 @@ export class ArminComponent implements Component {
         this.effectState = { phase: 0, glitchFrames: 8 };
         break;
       case "dissolve": {
-        // Start with random noise
         this.currentGrid = Array.from({ length: DISPLAY_HEIGHT }, () =>
           Array.from({ length: WIDTH }, () => {
             const chars = [" ", "░", "▒", "▓", "█", "▀", "▄"];
-            return chars[Math.floor(Math.random() * chars.length)] ?? " ";
+            return chars[Math.floor(randomUnit() * chars.length)] ?? " ";
           }),
         );
-        // Shuffle positions for gradual resolve
         const dissolvePositions: [number, number][] = [];
         for (let row = 0; row < DISPLAY_HEIGHT; row++) {
           for (let x = 0; x < WIDTH; x++) {
@@ -188,7 +179,7 @@ export class ArminComponent implements Component {
 
   private startAnimation(): void {
     const fps = this.effect === "glitch" ? 60 : 30;
-    this.interval = setInterval(() => {
+    this.interval = every(() => {
       const done = this.tickEffect();
       this.updateDisplay();
       this.ui.requestRender();
@@ -199,8 +190,8 @@ export class ArminComponent implements Component {
   }
 
   private stopAnimation(): void {
-    if (this.interval) {
-      clearInterval(this.interval);
+    if (this.interval !== null) {
+      this.interval.cancel();
       this.interval = null;
     }
   }
@@ -244,7 +235,6 @@ export class ArminComponent implements Component {
     const state = this.effectState as { row: number };
     if (state.row >= DISPLAY_HEIGHT) return true;
 
-    // Copy row
     for (let x = 0; x < WIDTH; x++) {
       this.copyCell(state.row, x);
     }
@@ -261,19 +251,16 @@ export class ArminComponent implements Component {
     this.currentGrid = this.createEmptyGrid();
 
     for (const [x, drop] of state.drops.entries()) {
-      // Draw settled pixels
       for (let row = DISPLAY_HEIGHT - 1; row >= DISPLAY_HEIGHT - drop.settled; row--) {
         if (row >= 0) {
           this.copyCell(row, x);
         }
       }
 
-      // Check if this column is done
       if (drop.settled >= DISPLAY_HEIGHT) continue;
 
       allSettled = false;
 
-      // Find the target row for this column (lowest non-space pixel)
       let targetRow = -1;
       for (let row = DISPLAY_HEIGHT - 1 - drop.settled; row >= 0; row--) {
         if (this.finalGrid[row]?.[x] !== " ") {
@@ -282,17 +269,13 @@ export class ArminComponent implements Component {
         }
       }
 
-      // Move drop down
       drop.y++;
 
-      // Draw falling drop
       if (drop.y >= 0 && drop.y < DISPLAY_HEIGHT) {
         if (targetRow >= 0 && drop.y >= targetRow) {
-          // Settle
           drop.settled = DISPLAY_HEIGHT - targetRow;
-          drop.y = -Math.floor(Math.random() * 5) - 1;
+          drop.y = -Math.floor(randomUnit() * 5) - 1;
         } else {
-          // Still falling
           this.setCell(drop.y, x, "▓");
         }
       }
@@ -321,7 +304,6 @@ export class ArminComponent implements Component {
 
     this.currentGrid = this.createEmptyGrid();
 
-    // Draw from middle expanding outward
     const top = midRow - state.expansion;
     const bottom = midRow + state.expansion;
 
@@ -339,20 +321,17 @@ export class ArminComponent implements Component {
     const state = this.effectState as { phase: number; glitchFrames: number };
 
     if (state.phase < state.glitchFrames) {
-      // Glitch phase: show corrupted version
       this.currentGrid = this.finalGrid.map((row) => {
-        const offset = Math.floor(Math.random() * 7) - 3;
+        const offset = Math.floor(randomUnit() * 7) - 3;
         const glitchRow = [...row];
 
-        // Random horizontal offset
-        if (Math.random() < 0.3) {
+        if (randomUnit() < 0.3) {
           const shifted = glitchRow.slice(offset).concat(glitchRow.slice(0, offset));
           return shifted.slice(0, WIDTH);
         }
 
-        // Random vertical swap
-        if (Math.random() < 0.2) {
-          const swapRow = Math.floor(Math.random() * DISPLAY_HEIGHT);
+        if (randomUnit() < 0.2) {
+          const swapRow = Math.floor(randomUnit() * DISPLAY_HEIGHT);
           return [...(this.finalGrid[swapRow] ?? row)];
         }
 
@@ -362,7 +341,6 @@ export class ArminComponent implements Component {
       return false;
     }
 
-    // Final frame: show clean image
     this.currentGrid = this.finalGrid.map((row) => [...row]);
     return true;
   }

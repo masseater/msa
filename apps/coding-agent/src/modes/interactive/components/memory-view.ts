@@ -1,8 +1,3 @@
-/**
- * `/memory`: the memories msa keeps, grouped by scope, with one memory in detail, where the user
- * searches, adds, and forgets.
- */
-
 import {
   type Component,
   type Focusable,
@@ -13,17 +8,17 @@ import {
   visibleWidth,
   wrapTextWithAnsi,
 } from "@msa/tui";
+import { Effect } from "effect";
 
+import { awaited, awaitingWith } from "../../../core/awaiting.ts";
 import { formatAge, type MemoryService } from "../../../core/memory/memory.ts";
 import type { MemoryKind, MemoryRecord } from "../../../core/memory/store.ts";
 import { toErrorMessage } from "../../../utils/errors.ts";
 import { theme } from "../theme/theme.ts";
 import { rawKeyHint } from "./keybinding-hints.ts";
 
-/** Memories the view lists at once; enough to browse by hand, small enough to redraw fast. */
 const LIST_LIMIT = 200;
 
-/** Results a `/memory` search shows. */
 const SEARCH_LIMIT = 50;
 
 const KIND_GLYPH: Record<MemoryKind, string> = {
@@ -55,18 +50,12 @@ function firstLine(text: string): string {
 export interface MemoryViewOptions {
   service: MemoryService;
   onClose: () => void;
-  /** Asks the user to confirm forgetting a memory. Without it, `d` forgets right away. */
   confirm?: (message: string) => Promise<boolean>;
   onError: (message: string) => void;
   requestRender: () => void;
-  /** Rows the view may use, so long lists scroll instead of pushing the editor away. */
   maxHeight: () => number;
 }
 
-/**
- * A list of the stored memories, one memory in detail, and a search and add input. The list shows
- * what msa remembers at a glance; the keys forget, search, and add without leaving the screen.
- */
 export class MemoryView implements Component, Focusable {
   private readonly options: MemoryViewOptions;
   private records: MemoryRecord[];
@@ -77,7 +66,7 @@ export class MemoryView implements Component, Focusable {
   private inputMode: "search" | "add" | undefined;
   private readonly searchInput = new Input({ prompt: "› ", placeholder: "Search memories" });
   private readonly addInput = new Input({ prompt: "› ", placeholder: "Memory to remember" });
-  private _focused = false;
+  private focusedState = false;
 
   constructor(options: MemoryViewOptions) {
     this.options = options;
@@ -93,18 +82,17 @@ export class MemoryView implements Component, Focusable {
   }
 
   get focused(): boolean {
-    return this._focused;
+    return this.focusedState;
   }
 
   set focused(value: boolean) {
-    this._focused = value;
+    this.focusedState = value;
     this.searchInput.focused = value && this.inputMode === "search";
     this.addInput.focused = value && this.inputMode === "add";
   }
 
   invalidate(): void {}
 
-  /** Project memories first, then global ones, both newest first. */
   private rows(): MemoryRecord[] {
     return [
       ...this.records.filter((record) => record.scope === "project"),
@@ -122,8 +110,12 @@ export class MemoryView implements Component, Focusable {
 
   render(width: number): string[] {
     const rows = this.rows();
-    const open = this.openId ? rows.find((record) => record.id === this.openId) : undefined;
-    const lines = open ? this.renderDetail(open, width) : this.renderList(rows, width);
+    const open =
+      this.openId !== undefined && this.openId !== ""
+        ? rows.find((record) => record.id === this.openId)
+        : undefined;
+    const lines =
+      open === undefined ? this.renderList(rows, width) : this.renderDetail(open, width);
     const max = Math.max(8, this.options.maxHeight());
     const hints = lines.pop() ?? "";
     return [...lines.slice(0, max - 1), hints];
@@ -149,19 +141,48 @@ export class MemoryView implements Component, Focusable {
   }
 
   private renderList(rows: readonly MemoryRecord[], width: number): string[] {
+    const renderListLinesResult = MemoryView.renderListLines(this, width, rows);
+    if (renderListLinesResult.done) return renderListLinesResult.value;
+    const lines = renderListLinesResult.value;
+    if (this.inputMode === "add") {
+      lines.push(...this.addInput.render(width));
+      lines.push(` ${rawKeyHint("enter", "save")}  ${rawKeyHint("esc", "cancel")}`);
+      return lines;
+    }
+    const selected = this.selected(rows);
+    lines.push(
+      ` ${[
+        rawKeyHint("↑↓", "select"),
+        rawKeyHint("enter", "open"),
+        rawKeyHint("/", "search"),
+        rawKeyHint("a", "add"),
+        selected === undefined ? undefined : rawKeyHint("d", "forget"),
+        rawKeyHint("esc", "close"),
+      ]
+        .filter(Boolean)
+        .join("  ")}`,
+    );
+    return lines;
+  }
+
+  private static renderListLines(
+    self: MemoryView,
+    width: number,
+    rows: readonly MemoryRecord[],
+  ): { done: true; value: string[] } | { done: false; value: string[] } {
     const right =
-      this.query === undefined ? this.describeCounts() : theme.fg("dim", `search: ${this.query}`);
-    const lines = this.header("Memory", right, width);
-    if (this.busy && rows.length === 0) {
+      self.query === undefined ? self.describeCounts() : theme.fg("dim", `search: ${self.query}`);
+    const lines = self.header("Memory", right, width);
+    if (self.busy && rows.length === 0) {
       lines.push("", ` ${theme.fg("muted", "searching…")}`, "");
     } else if (rows.length === 0) {
       lines.push(
         "",
-        ` ${theme.fg("muted", this.query === undefined ? "No memories stored yet." : "No matching memories.")}`,
+        ` ${theme.fg("muted", self.query === undefined ? "No memories stored yet." : "No matching memories.")}`,
         "",
       );
     } else {
-      const selected = this.selected(rows);
+      const selected = self.selected(rows);
       let group: string | undefined;
       for (const record of rows) {
         const label = record.scope === "project" ? `Project (${record.project ?? "?"})` : "Global";
@@ -181,30 +202,12 @@ export class MemoryView implements Component, Focusable {
       }
       lines.push("");
     }
-    if (this.inputMode === "search") {
-      lines.push(...this.searchInput.render(width));
+    if (self.inputMode === "search") {
+      lines.push(...self.searchInput.render(width));
       lines.push(` ${rawKeyHint("enter", "search")}  ${rawKeyHint("esc", "cancel")}`);
-      return lines;
+      return { done: true, value: lines };
     }
-    if (this.inputMode === "add") {
-      lines.push(...this.addInput.render(width));
-      lines.push(` ${rawKeyHint("enter", "save")}  ${rawKeyHint("esc", "cancel")}`);
-      return lines;
-    }
-    const selected = this.selected(rows);
-    lines.push(
-      ` ${[
-        rawKeyHint("↑↓", "select"),
-        rawKeyHint("enter", "open"),
-        rawKeyHint("/", "search"),
-        rawKeyHint("a", "add"),
-        selected ? rawKeyHint("d", "forget") : undefined,
-        rawKeyHint("esc", "close"),
-      ]
-        .filter(Boolean)
-        .join("  ")}`,
-    );
-    return lines;
+    return { done: false, value: lines };
   }
 
   private renderDetail(record: MemoryRecord, width: number): string[] {
@@ -234,7 +237,7 @@ export class MemoryView implements Component, Focusable {
     );
     detail(
       "recalled",
-      `${record.useCount} ${record.useCount === 1 ? "time" : "times"}${record.lastUsedAt ? ` · last ${formatAge(record.lastUsedAt)}` : ""}`,
+      `${record.useCount} ${record.useCount === 1 ? "time" : "times"}${record.lastUsedAt !== null && record.lastUsedAt !== 0 ? ` · last ${formatAge(record.lastUsedAt)}` : ""}`,
     );
     detail("embedding", record.embeddingModel ?? "none (keyword search only)");
     lines.push("");
@@ -250,28 +253,41 @@ export class MemoryView implements Component, Focusable {
     }
     const kb = getKeybindings();
     const rows = this.rows();
-    const selected = this.openId
-      ? rows.find((record) => record.id === this.openId)
-      : this.selected(rows);
+    const selected =
+      this.openId !== undefined && this.openId !== ""
+        ? rows.find((record) => record.id === this.openId)
+        : this.selected(rows);
     if (kb.matches(data, "tui.select.cancel")) {
-      if (this.openId) this.openId = undefined;
-      else if (this.query !== undefined) {
+      if (this.openId !== undefined && this.openId !== "") this.openId = undefined;
+      else if (this.query === undefined) {
+        this.options.onClose();
+      } else {
         this.query = undefined;
         this.selectedId = undefined;
         this.reload();
-      } else this.options.onClose();
-    } else if (!this.openId && kb.matches(data, "tui.select.up")) {
+      }
+    } else if (
+      (this.openId === undefined || this.openId === "") &&
+      kb.matches(data, "tui.select.up")
+    ) {
       this.move(rows, -1);
-    } else if (!this.openId && kb.matches(data, "tui.select.down")) {
+    } else if (
+      (this.openId === undefined || this.openId === "") &&
+      kb.matches(data, "tui.select.down")
+    ) {
       this.move(rows, 1);
-    } else if (kb.matches(data, "tui.select.confirm") && selected && !this.openId) {
+    } else if (
+      kb.matches(data, "tui.select.confirm") &&
+      selected !== undefined &&
+      (this.openId === undefined || this.openId === "")
+    ) {
       this.openId = selected.id;
-    } else if (matchesKey(data, "/") && !this.openId) {
+    } else if (matchesKey(data, "/") && (this.openId === undefined || this.openId === "")) {
       this.startInput("search");
-    } else if (matchesKey(data, "a") && !this.openId) {
+    } else if (matchesKey(data, "a") && (this.openId === undefined || this.openId === "")) {
       this.startInput("add");
-    } else if (matchesKey(data, "d") && selected) {
-      void this.forget(selected);
+    } else if (matchesKey(data, "d") && selected !== undefined) {
+      void Effect.runFork(this.forget(selected));
     }
     this.options.requestRender();
   }
@@ -286,7 +302,7 @@ export class MemoryView implements Component, Focusable {
     this.inputMode = mode;
     const input = this.activeInput();
     input.setValue("");
-    input.focused = this._focused;
+    input.focused = this.focusedState;
   }
 
   private stopInput(): void {
@@ -300,48 +316,57 @@ export class MemoryView implements Component, Focusable {
     const mode = this.inputMode;
     const text = value.trim();
     this.stopInput();
-    if (!mode || !text) return;
+    if (mode === undefined || text === "") return;
     if (mode === "add") {
       this.busy = true;
-      void this.options.service
-        .save({ content: text })
-        .then(() => {
-          this.busy = false;
-          this.reload();
-          this.selectedId = undefined;
-        })
-        .catch((error: unknown) => {
-          this.busy = false;
-          this.options.onError(toErrorMessage(error));
-        })
-        .finally(() => this.options.requestRender());
+      Effect.runFork(
+        awaitingWith(function* () {
+          try {
+            yield* awaited(this.options.service.save({ content: text }));
+            this.busy = false;
+            this.reload();
+            this.selectedId = undefined;
+          } catch (error: unknown) {
+            this.busy = false;
+            this.options.onError(toErrorMessage(error));
+          } finally {
+            this.options.requestRender();
+          }
+        }, this),
+      );
       return;
     }
     this.busy = true;
     this.query = text;
-    void this.options.service
-      .search(text, SEARCH_LIMIT)
-      .then((scores) => {
-        this.busy = false;
-        this.records = scores.map((scored) => scored.record);
-        this.selectedId = undefined;
-      })
-      .catch((error: unknown) => {
-        this.busy = false;
-        this.options.onError(toErrorMessage(error));
-      })
-      .finally(() => this.options.requestRender());
+    Effect.runFork(
+      awaitingWith(function* () {
+        try {
+          const scores = yield* awaited(this.options.service.search(text, SEARCH_LIMIT));
+          this.busy = false;
+          this.records = scores.map((scored) => scored.record);
+          this.selectedId = undefined;
+        } catch (error: unknown) {
+          this.busy = false;
+          this.options.onError(toErrorMessage(error));
+        } finally {
+          this.options.requestRender();
+        }
+      }, this),
+    );
   }
 
-  private async forget(record: MemoryRecord): Promise<void> {
-    const confirmed = this.options.confirm
-      ? await this.options.confirm(`Forget "${firstLine(record.content)}"?`)
-      : true;
-    if (!confirmed) return;
-    this.options.service.forget(record.id);
-    if (this.openId === record.id) this.openId = undefined;
-    this.selectedId = undefined;
-    this.reload();
-    this.options.requestRender();
+  private forget(record: MemoryRecord): Effect.Effect<void> {
+    return awaitingWith(function* () {
+      const confirmed =
+        this.options.confirm === undefined
+          ? true
+          : yield* awaited(this.options.confirm(`Forget "${firstLine(record.content)}"?`));
+      if (!confirmed) return;
+      this.options.service.forget(record.id);
+      if (this.openId === record.id) this.openId = undefined;
+      this.selectedId = undefined;
+      this.reload();
+      this.options.requestRender();
+    }, this);
   }
 }

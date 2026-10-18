@@ -1,4 +1,3 @@
-// UI Components for extensions
 export { ArminComponent } from "./armin.ts";
 export { AssistantMessageComponent } from "./assistant-message.ts";
 export { BashExecutionComponent } from "./bash-execution.ts";

@@ -8,6 +8,7 @@ import {
   Spacer,
   TruncatedText,
 } from "@msa/tui";
+import { dual } from "effect/Function";
 
 import { theme } from "../theme/theme.ts";
 import { DynamicBorder } from "./dynamic-border.ts";
@@ -18,54 +19,49 @@ export type AuthSelectorProvider = {
   authType: "oauth" | "api_key";
   method?: ApiKeyAuth | OAuthAuth | undefined;
   status?: AuthCheck | undefined;
-  /**
-   * Whether the provider's OAuth sign-in is backed by a subscription. `false` labels it as an account;
-   * unset keeps the "subscription" label.
-   */
   subscription?: boolean | undefined;
 };
 
-export function formatAuthSelectorProviderType(
-  authType: AuthSelectorProvider["authType"],
-  subscription?: boolean,
-): string {
-  if (authType === "api_key") return "API key";
-  return subscription === false ? "account" : "subscription";
-}
+export const formatAuthSelectorProviderType: {
+  (subscription?: boolean): (authType: AuthSelectorProvider["authType"]) => string;
+  (authType: AuthSelectorProvider["authType"], subscription?: boolean): string;
+} = dual(
+  (args) => typeof args[0] === "string",
+  (authType: AuthSelectorProvider["authType"], subscription?: boolean): string => {
+    if (authType === "api_key") return "API key";
+    return subscription === false ? "account" : "subscription";
+  },
+);
 
-/** Themed suffix describing whether and how a login option is configured, for example " ✓ configured". */
 export function formatAuthSelectorProviderStatus(provider: AuthSelectorProvider): string {
-  if (!provider.status) return theme.fg("muted", " • not configured");
+  if (provider.status === undefined) return theme.fg("muted", " • not configured");
   if (provider.status.type !== provider.authType) {
     const label = `${formatAuthSelectorProviderType(provider.status.type, provider.subscription)} configured`;
     return theme.fg("muted", " • ") + theme.fg("warning", label);
   }
   if (
-    !provider.status.source ||
+    provider.status.source === undefined ||
+    provider.status.source === "" ||
     provider.status.source === "OAuth" ||
     provider.status.source === "stored credential"
   ) {
     return theme.fg("success", " ✓ configured");
   }
-  const source = /^[A-Z][A-Z0-9_]*(?:, [A-Z][A-Z0-9_]*)*$/.test(provider.status.source)
+  const source = /^[A-Z][A-Z0-9_]*(?:, [A-Z][A-Z0-9_]*)*$/u.test(provider.status.source)
     ? `env: ${provider.status.source}`
     : provider.status.source;
   return theme.fg("success", ` ✓ ${source}`);
 }
 
-/**
- * Component that renders an auth provider selector
- */
 export class OAuthSelectorComponent extends Container implements Focusable {
   private searchInput: Input;
 
-  // Focusable implementation - propagate to search input for IME cursor positioning
-  private _focused = false;
+  private focusedState = false;
   get focused(): boolean {
-    return this._focused;
+    return this.focusedState;
   }
   set focused(value: boolean) {
-    this._focused = value;
+    this.focusedState = value;
     this.searchInput.focused = value;
   }
 
@@ -97,50 +93,46 @@ export class OAuthSelectorComponent extends Container implements Focusable {
     this.onSelectCallback = onSelect;
     this.onCancelCallback = onCancel;
 
-    // Add top border
     this.addChild(new DynamicBorder());
     this.addChild(new Spacer(1));
 
-    // Add title
     const title = mode === "login" ? "Select provider to configure:" : "Select provider to logout:";
     this.addChild(new TruncatedText(theme.fg("accent", theme.bold(title)), 1, 0));
     this.addChild(new Spacer(1));
 
     this.searchInput = new Input();
-    if (initialSearchInput) {
+    if (initialSearchInput !== undefined && initialSearchInput !== "") {
       this.searchInput.setValue(initialSearchInput);
     }
     this.searchInput.onSubmit = () => {
       const selectedProvider = this.filteredProviders[this.selectedIndex];
-      if (selectedProvider) {
+      if (selectedProvider !== undefined) {
         this.onSelectCallback(selectedProvider.id, selectedProvider.authType);
       }
     };
     this.addChild(this.searchInput);
     this.addChild(new Spacer(1));
 
-    // Create list container
     this.listContainer = new Container();
     this.addChild(this.listContainer);
 
     this.addChild(new Spacer(1));
 
-    // Add bottom border
     this.addChild(new DynamicBorder());
 
-    // Initial render
     this.filterProviders(initialSearchInput ?? "");
   }
 
   private filterProviders(query: string): void {
-    this.filteredProviders = query
-      ? fuzzyFilter(
-          this.allProviders,
-          query,
-          (provider) =>
-            `${provider.name} ${provider.id} ${provider.authType} ${provider.method?.name ?? ""}`,
-        )
-      : this.allProviders;
+    this.filteredProviders =
+      query === ""
+        ? this.allProviders
+        : fuzzyFilter(
+            this.allProviders,
+            query,
+            (provider) =>
+              `${provider.name} ${provider.id} ${provider.authType} ${provider.method?.name ?? ""}`,
+          );
     this.selectedIndex = Math.max(
       0,
       Math.min(this.selectedIndex, Math.max(0, this.filteredProviders.length - 1)),
@@ -149,43 +141,7 @@ export class OAuthSelectorComponent extends Container implements Focusable {
   }
 
   private updateList(): void {
-    this.listContainer.clear();
-
-    const maxVisible = 8;
-    const startIndex = Math.max(
-      0,
-      Math.min(
-        this.selectedIndex - Math.floor(maxVisible / 2),
-        this.filteredProviders.length - maxVisible,
-      ),
-    );
-    const endIndex = Math.min(startIndex + maxVisible, this.filteredProviders.length);
-
-    for (let i = startIndex; i < endIndex; i++) {
-      const provider = this.filteredProviders[i];
-      if (!provider) continue;
-
-      const isSelected = i === this.selectedIndex;
-
-      const statusIndicator = formatAuthSelectorProviderStatus(provider);
-      const authTypeLabel = this.showAuthTypeLabels
-        ? theme.fg(
-            "muted",
-            ` [${formatAuthSelectorProviderType(provider.authType, provider.subscription)}]`,
-          )
-        : "";
-      let line = "";
-      if (isSelected) {
-        const prefix = theme.fg("accent", "→ ");
-        const text = theme.fg("accent", provider.name);
-        line = prefix + text + authTypeLabel + statusIndicator;
-      } else {
-        const text = `  ${theme.fg("text", provider.name)}`;
-        line = text + authTypeLabel + statusIndicator;
-      }
-
-      this.listContainer.addChild(new TruncatedText(line, 1, 0));
-    }
+    const { startIndex, endIndex } = OAuthSelectorComponent.updateListStartIndex(this);
 
     if (startIndex > 0 || endIndex < this.filteredProviders.length) {
       const scrollInfo = theme.fg(
@@ -195,7 +151,6 @@ export class OAuthSelectorComponent extends Container implements Focusable {
       this.listContainer.addChild(new TruncatedText(scrollInfo, 1, 0));
     }
 
-    // Show "no providers" if empty
     if (this.filteredProviders.length === 0) {
       const message =
         this.allProviders.length === 0
@@ -207,33 +162,68 @@ export class OAuthSelectorComponent extends Container implements Focusable {
     }
   }
 
+  private static updateListStartIndex(self: OAuthSelectorComponent): {
+    startIndex: number;
+    endIndex: number;
+  } {
+    self.listContainer.clear();
+
+    const maxVisible = 8;
+    const startIndex = Math.max(
+      0,
+      Math.min(
+        self.selectedIndex - Math.floor(maxVisible / 2),
+        self.filteredProviders.length - maxVisible,
+      ),
+    );
+    const endIndex = Math.min(startIndex + maxVisible, self.filteredProviders.length);
+
+    for (let i = startIndex; i < endIndex; i++) {
+      const provider = self.filteredProviders[i];
+      if (provider === undefined) continue;
+
+      const isSelected = i === self.selectedIndex;
+
+      const statusIndicator = formatAuthSelectorProviderStatus(provider);
+      const authTypeLabel = self.showAuthTypeLabels
+        ? theme.fg(
+            "muted",
+            ` [${formatAuthSelectorProviderType(provider.authType, provider.subscription)}]`,
+          )
+        : "";
+      let line: string;
+      if (isSelected) {
+        const prefix = theme.fg("accent", "→ ");
+        const text = theme.fg("accent", provider.name);
+        line = prefix + text + authTypeLabel + statusIndicator;
+      } else {
+        const text = `  ${theme.fg("text", provider.name)}`;
+        line = text + authTypeLabel + statusIndicator;
+      }
+
+      self.listContainer.addChild(new TruncatedText(line, 1, 0));
+    }
+    return { startIndex, endIndex };
+  }
+
   handleInput(keyData: string): void {
     const kb = getKeybindings();
-    // Up arrow
     if (kb.matches(keyData, "tui.select.up")) {
       if (this.filteredProviders.length === 0) return;
       this.selectedIndex = Math.max(0, this.selectedIndex - 1);
       this.updateList();
-    }
-    // Down arrow
-    else if (kb.matches(keyData, "tui.select.down")) {
+    } else if (kb.matches(keyData, "tui.select.down")) {
       if (this.filteredProviders.length === 0) return;
       this.selectedIndex = Math.min(this.filteredProviders.length - 1, this.selectedIndex + 1);
       this.updateList();
-    }
-    // Enter
-    else if (kb.matches(keyData, "tui.select.confirm")) {
+    } else if (kb.matches(keyData, "tui.select.confirm")) {
       const selectedProvider = this.filteredProviders[this.selectedIndex];
-      if (selectedProvider) {
+      if (selectedProvider !== undefined) {
         this.onSelectCallback(selectedProvider.id, selectedProvider.authType);
       }
-    }
-    // Escape or Ctrl+C
-    else if (kb.matches(keyData, "tui.select.cancel")) {
+    } else if (kb.matches(keyData, "tui.select.cancel")) {
       this.onCancelCallback();
-    }
-    // Pass everything else to search input
-    else {
+    } else {
       this.searchInput.handleInput(keyData);
       this.filterProviders(this.searchInput.getValue());
     }

@@ -1,7 +1,3 @@
-/**
- * Simple text input component for extensions.
- */
-
 import { Container, type Focusable, getKeybindings, Input, Spacer, Text, type TUI } from "@msa/tui";
 
 import { theme } from "../theme/theme.ts";
@@ -24,13 +20,12 @@ export class ExtensionInputComponent extends Container implements Focusable {
   private baseTitle: string;
   private countdown: CountdownTimer | undefined;
 
-  // Focusable implementation - propagate to input for IME cursor positioning
-  private _focused = false;
+  private focusedState = false;
   get focused(): boolean {
-    return this._focused;
+    return this.focusedState;
   }
   set focused(value: boolean) {
-    this._focused = value;
+    this.focusedState = value;
     this.input.focused = value;
   }
 
@@ -52,13 +47,18 @@ export class ExtensionInputComponent extends Container implements Focusable {
 
     this.titleText = new Text(theme.fg("accent", title), 1, 0);
     this.addChild(this.titleText);
-    if (opts?.description) {
+    if (opts?.description !== undefined && opts?.description !== "") {
       this.addChild(new Spacer(1));
       this.addChild(new Text(theme.fg("text", opts.description), 1, 0));
     }
     this.addChild(new Spacer(1));
 
-    if (opts?.timeout && opts.timeout > 0 && opts.tui) {
+    if (
+      opts?.timeout !== undefined &&
+      opts?.timeout !== 0 &&
+      opts.timeout > 0 &&
+      opts.tui !== undefined
+    ) {
       this.countdown = new CountdownTimer(
         opts.timeout,
         opts.tui,
@@ -68,18 +68,26 @@ export class ExtensionInputComponent extends Container implements Focusable {
     }
 
     this.input = new Input();
-    if (opts?.initialValue) this.input.setValue(opts.initialValue);
-    this.addChild(this.input);
+    ExtensionInputComponent.buildPart1(this, opts);
     this.addChild(new Spacer(1));
-    this.addChild(
+    this.addChild(new DynamicBorder());
+  }
+
+  private static buildPart1(
+    self: ExtensionInputComponent,
+    opts: ExtensionInputOptions | undefined,
+  ): void {
+    if (opts?.initialValue !== undefined && opts?.initialValue !== "")
+      self.input.setValue(opts.initialValue);
+    self.addChild(self.input);
+    self.addChild(new Spacer(1));
+    self.addChild(
       new Text(
         `${keyHint("tui.select.confirm", "submit")}  ${keyHint("tui.select.cancel", "cancel")}`,
         1,
         0,
       ),
     );
-    this.addChild(new Spacer(1));
-    this.addChild(new DynamicBorder());
   }
 
   handleInput(keyData: string): void {

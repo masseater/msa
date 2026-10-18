@@ -31,9 +31,6 @@ const LEVEL_DESCRIPTIONS: Record<ThinkingLevel, string> = {
   max: "Maximum reasoning",
 };
 
-/**
- * Component that renders a thinking level selector with borders
- */
 export class ThinkingSelectorComponent extends Container implements Focusable {
   private searchInput: Input;
   private selectList: SelectList;
@@ -42,14 +39,14 @@ export class ThinkingSelectorComponent extends Container implements Focusable {
   private onSelect: (level: ThinkingLevel) => void;
   private onCancel: () => void;
   private onSelectAsDefault?: ((level: ThinkingLevel) => void) | undefined;
-  private _focused = false;
+  private focusedState = false;
 
   get focused(): boolean {
-    return this._focused;
+    return this.focusedState;
   }
 
   set focused(value: boolean) {
-    this._focused = value;
+    this.focusedState = value;
     this.searchInput.focused = value;
   }
 
@@ -75,7 +72,6 @@ export class ThinkingSelectorComponent extends Container implements Focusable {
           : LEVEL_DESCRIPTIONS[level],
     }));
 
-    // Add top border
     this.addChild(new DynamicBorder());
     this.addChild(new Spacer(1));
     this.addChild(new Text("Thinking Level", 0, 0));
@@ -90,12 +86,17 @@ export class ThinkingSelectorComponent extends Container implements Focusable {
     this.addChild(this.searchInput);
     this.addChild(new Spacer(1));
 
-    // Create selector
     this.selectList = this.buildSelectList(this.allItems, currentLevel);
     this.selectListChildIndex = this.children.length;
-    this.addChild(this.selectList);
-    this.addChild(new Spacer(1));
-    this.addChild(
+    ThinkingSelectorComponent.buildPart1(this);
+
+    this.addChild(new DynamicBorder());
+  }
+
+  private static buildPart1(self: ThinkingSelectorComponent): void {
+    self.addChild(self.selectList);
+    self.addChild(new Spacer(1));
+    self.addChild(
       new Text(
         theme.fg(
           "dim",
@@ -105,9 +106,6 @@ export class ThinkingSelectorComponent extends Container implements Focusable {
         0,
       ),
     );
-
-    // Add bottom border
-    this.addChild(new DynamicBorder());
   }
 
   private buildSelectList(items: SelectItem[], preselect?: ThinkingLevel): SelectList {
@@ -127,9 +125,10 @@ export class ThinkingSelectorComponent extends Container implements Focusable {
   }
 
   private applyFilter(query: string): void {
-    const filtered = query
-      ? fuzzyFilter(this.allItems, query, (item) => `${item.value} ${item.description ?? ""}`)
-      : this.allItems;
+    const filtered =
+      query === ""
+        ? this.allItems
+        : fuzzyFilter(this.allItems, query, (item) => `${item.value} ${item.description ?? ""}`);
     const selectedValue = this.selectList.getSelectedItem()?.value as ThinkingLevel | undefined;
     const newList = this.buildSelectList(filtered, selectedValue);
     this.children[this.selectListChildIndex] = newList;
@@ -138,9 +137,9 @@ export class ThinkingSelectorComponent extends Container implements Focusable {
 
   handleInput(keyData: string): void {
     const kb = getKeybindings();
-    if (kb.matches(keyData, "app.thinking.save") && this.onSelectAsDefault) {
+    if (kb.matches(keyData, "app.thinking.save") && this.onSelectAsDefault !== undefined) {
       const item = this.selectList.getSelectedItem();
-      if (item) this.onSelectAsDefault(item.value as ThinkingLevel);
+      if (item !== null) this.onSelectAsDefault(item.value as ThinkingLevel);
       return;
     }
 

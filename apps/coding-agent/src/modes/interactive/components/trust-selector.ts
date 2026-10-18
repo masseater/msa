@@ -80,7 +80,11 @@ export class TrustSelectorComponent extends Container {
     this.listContainer = new Container();
     this.addChild(this.listContainer);
     this.addChild(new Spacer(1));
-    this.addChild(
+    TrustSelectorComponent.buildPart1(this);
+  }
+
+  private static buildPart1(self: TrustSelectorComponent): void {
+    self.addChild(
       new Text(
         rawKeyHint("↑↓", "navigate") +
           "  " +
@@ -91,10 +95,10 @@ export class TrustSelectorComponent extends Container {
         0,
       ),
     );
-    this.addChild(new Spacer(1));
-    this.addChild(new DynamicBorder());
+    self.addChild(new Spacer(1));
+    self.addChild(new DynamicBorder());
 
-    this.updateList();
+    self.updateList();
   }
 
   private isSavedOption(option: ProjectTrustOption): boolean {
@@ -109,7 +113,7 @@ export class TrustSelectorComponent extends Container {
     this.listContainer.clear();
     for (let i = 0; i < this.trustOptions.length; i++) {
       const option = this.trustOptions[i];
-      if (!option) {
+      if (option === undefined) {
         continue;
       }
 
@@ -132,7 +136,7 @@ export class TrustSelectorComponent extends Container {
       this.updateList();
     } else if (kb.matches(keyData, "tui.select.confirm") || keyData === "\n") {
       const selected = this.trustOptions[this.selectedIndex];
-      if (selected) {
+      if (selected !== undefined) {
         this.onSelectCallback({ trusted: selected.trusted, updates: selected.updates });
       }
     } else if (kb.matches(keyData, "tui.select.cancel")) {

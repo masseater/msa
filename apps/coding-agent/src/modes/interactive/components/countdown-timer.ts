@@ -1,11 +1,10 @@
-/**
- * Reusable countdown timer for dialog components.
- */
-
 import type { TUI } from "@msa/tui";
 
+import { type Scheduled } from "../../../core/platform.ts";
+import { every } from "../../interval.ts";
+
 export class CountdownTimer {
-  private intervalId: ReturnType<typeof setInterval> | undefined;
+  private intervalId: Scheduled | undefined;
   private remainingSeconds: number;
   private tui: TUI | undefined;
   private onTick: (seconds: number) => void;
@@ -23,7 +22,7 @@ export class CountdownTimer {
     this.remainingSeconds = Math.ceil(timeoutMs / 1000);
     this.onTick(this.remainingSeconds);
 
-    this.intervalId = setInterval(() => {
+    this.intervalId = every(() => {
       this.remainingSeconds--;
       this.onTick(this.remainingSeconds);
       this.tui?.requestRender();
@@ -36,8 +35,8 @@ export class CountdownTimer {
   }
 
   dispose(): void {
-    if (this.intervalId) {
-      clearInterval(this.intervalId);
+    if (this.intervalId !== undefined) {
+      this.intervalId.cancel();
       this.intervalId = undefined;
     }
   }

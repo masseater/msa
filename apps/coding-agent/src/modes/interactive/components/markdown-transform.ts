@@ -1,16 +1,36 @@
+import { dual } from "effect/Function";
+
 import type {
   MarkdownTransformContext,
   MarkdownTransformer,
 } from "../../../core/extensions/types.ts";
 
-export function createMarkdownTransform(
-  messageType: MarkdownTransformContext["messageType"],
-  isStreaming: boolean,
-  transformers: readonly MarkdownTransformer[],
-): (markdown: string, availableWidth: number) => string {
-  return (markdown, availableWidth) =>
-    applyMarkdownTransformers(markdown, { messageType, isStreaming, availableWidth }, transformers);
-}
+export const createMarkdownTransform: {
+  (
+    isStreaming: boolean,
+    transformers: readonly MarkdownTransformer[],
+  ): (
+    messageType: MarkdownTransformContext["messageType"],
+  ) => (markdown: string, availableWidth: number) => string;
+  (
+    messageType: MarkdownTransformContext["messageType"],
+    isStreaming: boolean,
+    transformers: readonly MarkdownTransformer[],
+  ): (markdown: string, availableWidth: number) => string;
+} = dual(
+  3,
+  (
+    messageType: MarkdownTransformContext["messageType"],
+    isStreaming: boolean,
+    transformers: readonly MarkdownTransformer[],
+  ): ((markdown: string, availableWidth: number) => string) =>
+    (markdown, availableWidth) =>
+      applyMarkdownTransformers(
+        markdown,
+        { messageType, isStreaming, availableWidth },
+        transformers,
+      ),
+);
 
 function applyMarkdownTransformers(
   markdown: string,
@@ -24,9 +44,7 @@ function applyMarkdownTransformers(
       if (typeof transformed === "string") {
         transformedMarkdown = transformed;
       }
-    } catch {
-      // Keep the current Markdown and continue with the next transformer.
-    }
+    } catch {}
   }
   return transformedMarkdown;
 }
