@@ -1,8 +1,4 @@
-// oxlint-disable-next-line effecttsgo/node-builtin-import -- node:sqlite has no Effect counterpart
-import { mkdirSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
-
-import { parentDir } from "./text.ts";
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS tasks (
@@ -94,7 +90,6 @@ CREATE TABLE IF NOT EXISTS orchestrator_state (
 `;
 
 function openDatabase(path: string): DatabaseSync {
-  if (path !== ":memory:") mkdirSync(parentDir(path), { recursive: true });
   const database = new DatabaseSync(path, { timeout: 5_000 });
   database.exec("PRAGMA journal_mode = WAL");
   database.exec("PRAGMA synchronous = NORMAL");

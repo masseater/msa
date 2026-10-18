@@ -1,14 +1,9 @@
-// oxlint-disable-next-line effecttsgo/node-builtin-import -- the condition is a user shell command
-import { execFile } from "node:child_process";
-
 import { Effect } from "effect";
 
-function runCondition(command: string, cwd: string): Effect.Effect<boolean> {
-  return Effect.callback<boolean>((resume) => {
-    execFile("/bin/sh", ["-c", command], { cwd, timeout: 60_000 }, (error) => {
-      resume(Effect.succeed(error === null));
-    });
-  });
+import type { Runtime } from "./runtime.ts";
+
+function runCondition(runtime: Runtime, command: string, cwd: string): Effect.Effect<boolean> {
+  return Effect.promise(() => runtime.options.runCondition(command, cwd));
 }
 
 export const conditions = { runCondition };

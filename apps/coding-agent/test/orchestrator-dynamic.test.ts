@@ -1,7 +1,3 @@
-// oxlint-disable-next-line effecttsgo/node-builtin-import -- the test writes a condition marker file
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-
 import { Effect } from "effect";
 import { expect, it } from "vite-plus/test";
 
@@ -73,26 +69,28 @@ it("changes the concurrency limit while tasks wait", () =>
 it("waits for an external command to exit 0 before starting a task", () =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const dir = `${tmpdir()}/msa-orchestrator-${process.pid}`;
-      mkdirSync(dir, { recursive: true });
-      const { orchestrator, workers } = setup({ pollIntervalMs: 5 });
+      let checks = 0;
+      const { orchestrator, workers } = setup({
+        pollIntervalMs: 5,
+        runCondition: () => {
+          checks += 1;
+          return Promise.resolve(checks >= 20);
+        },
+      });
       try {
         const task = yield* create(orchestrator, {
           title: "merge",
           prompt: "after the merge",
-          cwd: dir,
-          condition: `test -f ${dir}/ready`,
+          cwd: "/tmp",
+          condition: "check-external-state",
         });
         expect(task.status).toBe("waiting");
-        yield* Effect.sleep(40);
+        yield* Effect.sleep(20);
         expect(workers).toHaveLength(0);
-
-        writeFileSync(`${dir}/ready`, "");
         yield* waitFor(() => workers.length === 1);
         expect(workers[0]?.prompts[0]).toContain("after the merge");
       } finally {
         yield* Effect.promise(() => orchestrator.dispose());
-        rmSync(dir, { recursive: true, force: true });
       }
     }),
   ));

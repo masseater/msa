@@ -41,7 +41,7 @@ function pollEffect(runtime: Runtime): Effect.Effect<void, OrchestratorError> {
     const now = yield* nowMillis;
     for (const task of store.tasksWithCondition(runtime.database, runtime.options.project)) {
       if (task.condition === null) continue;
-      const met = yield* conditions.runCondition(task.condition, task.cwd);
+      const met = yield* conditions.runCondition(runtime, task.condition, task.cwd);
       if (met) {
         yield* Effect.sync(() =>
           store.updateTask(runtime.database, task.id, { condition: null }, now),

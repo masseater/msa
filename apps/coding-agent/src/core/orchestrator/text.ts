@@ -22,7 +22,3 @@ export function firstLine(text: string | undefined): string {
   return line?.trim() ?? "";
 }
 
-export function parentDir(path: string): string {
-  const index = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
-  return index <= 0 ? "." : path.slice(0, index);
-}

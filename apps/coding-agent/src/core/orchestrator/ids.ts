@@ -1,6 +1,6 @@
-// oxlint-disable-next-line effecttsgo/node-builtin-import -- ids are generated inside synchronous SQLite transactions
-import { randomUUID } from "node:crypto";
+let counter = 0;
 
 export function newId(prefix: string): string {
-  return `${prefix}-${randomUUID().slice(0, 8)}`;
+  counter += 1;
+  return `${prefix}-${Math.floor(performance.timeOrigin).toString(36)}-${counter.toString(36)}`;
 }

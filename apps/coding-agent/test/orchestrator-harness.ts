@@ -101,6 +101,7 @@ export class FakeWorker implements WorkerSession {
 export interface HarnessOptions {
   maxConcurrent?: number;
   pollIntervalMs?: number | null;
+  runCondition?: (command: string, cwd: string) => Promise<boolean>;
 }
 
 function setup(options: HarnessOptions = {}) {
@@ -111,6 +112,7 @@ function setup(options: HarnessOptions = {}) {
     cwd: "/repo",
     databasePath: ":memory:",
     pollIntervalMs: options.pollIntervalMs ?? null,
+    runCondition: options.runCondition ?? (() => Promise.resolve(true)),
     createWorker: (workerOptions) => {
       const worker = new FakeWorker(workerOptions, workers.length);
       workers.push(worker);

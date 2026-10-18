@@ -46,5 +46,6 @@ export interface OrchestratorOptions {
   resolveModel: (reference: string) => Model<any>;
   defaults: () => OrchestratorDefaults;
   report: (text: string, details: OrchestratorReport) => void;
+  runCondition: (command: string, cwd: string) => Promise<boolean>;
   pollIntervalMs?: number | null;
 }
