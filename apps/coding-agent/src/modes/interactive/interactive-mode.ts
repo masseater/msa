@@ -189,7 +189,6 @@ import { createMermaidMarkdownTransformer } from "./components/mermaid.ts";
 import { ModelSelectorComponent } from "./components/model-selector.ts";
 import { ScopedModelsSelectorComponent } from "./components/scoped-models-selector.ts";
 import { SessionSelectorComponent } from "./components/session-selector.ts";
-import { createSessionReportRenderer, SessionsView } from "./components/sessions-view.ts";
 import { SettingsSelectorComponent } from "./components/settings-selector.ts";
 import { SkillInvocationMessageComponent } from "./components/skill-invocation-message.ts";
 import {
@@ -200,6 +199,8 @@ import {
   type StatusIndicator,
   WorkingStatusIndicator,
 } from "./components/status-indicator.ts";
+import { createTaskReportRenderer, viewHelpers } from "./components/tasks-view-helpers.ts";
+import { TasksView } from "./components/tasks-view.ts";
 import { ThemedText } from "./components/themed-text.ts";
 import { ThinkingSelectorComponent } from "./components/thinking-selector.ts";
 import { ToolExecutionComponent } from "./components/tool-execution.ts";
@@ -407,6 +408,7 @@ export class InteractiveMode {
   private fdPath: string | undefined;
   private editorContainer: Container;
   private readonly editorSlot: EditorSlot;
+  private readonly tasksViewState = viewHelpers.createTasksViewState();
   private readonly loginFlow: LoginFlow;
   private footer: FooterComponent;
   private footerContainer: Container;
@@ -1498,7 +1500,7 @@ export class InteractiveMode {
     }
     this.footer.setSession(this.session);
     this.updateGoalTicker();
-    if (this.session.getActiveToolNames().includes("start_session")) {
+    if (this.session.getActiveToolNames().includes("create_task")) {
       void this.session.orchestrator?.refresh();
     }
     this.footer.setAutoCompactEnabled(this.session.autoCompactionEnabled);
@@ -2543,8 +2545,8 @@ export class InteractiveMode {
       this.editor.setText("");
       return true;
     }
-    if (text === "/sessions") {
-      this.showSessionsView();
+    if (text === "/tasks" || text === "/sessions") {
+      this.showTasksView();
       this.editor.setText("");
       return true;
     }
@@ -3272,7 +3274,7 @@ export class InteractiveMode {
         if (message.display) {
           const renderer =
             message.customType === ORCHESTRATOR_REPORT_MESSAGE_TYPE
-              ? (createSessionReportRenderer(this.session.orchestrator) as MessageRenderer)
+              ? (createTaskReportRenderer(this.session.orchestrator) as MessageRenderer)
               : this.session.extensionRunner.getMessageRenderer(message.customType);
           const component = new CustomMessageComponent(
             message,
@@ -5078,26 +5080,27 @@ export class InteractiveMode {
     });
   }
 
-  private showSessionsView(initialId?: string): void {
+  private showTasksView(initialId?: string): void {
     const orchestrator = this.session.orchestrator;
-    if (!orchestrator || !this.session.getActiveToolNames().includes("start_session")) {
+    if (!orchestrator || !this.session.getActiveToolNames().includes("create_task")) {
       this.showStatus(`Requires ${APP_NAME} --orchestrator`);
       return;
     }
     void orchestrator.refresh();
     this.editorSlot.showSelector((done) => {
       const tick = setInterval(() => this.ui.requestRender(), 1000);
-      const view = new SessionsView(
+      const view = new TasksView(
         {
           orchestrator,
           onClose: () => {
             done();
             this.ui.requestRender();
           },
-          onPickModel: (id) => this.showSessionModelSelector(id),
+          onPickModel: (id) => this.showTaskModelSelector(id),
           onError: (message) => this.showError(message),
           requestRender: () => this.ui.requestRender(),
           maxHeight: () => this.ui.terminal.rows - 4,
+          state: this.tasksViewState,
         },
         initialId,
       );
@@ -5127,13 +5130,13 @@ export class InteractiveMode {
     });
   }
 
-  private showSessionModelSelector(id: string): void {
+  private showTaskModelSelector(id: string): void {
     const orchestrator = this.session.orchestrator;
     if (!orchestrator) return;
     this.editorSlot.showSelector((done) => {
       const back = () => {
         done();
-        this.showSessionsView(id);
+        this.showTasksView(id);
       };
       const selector = new ModelSelectorComponent(
         this.ui,

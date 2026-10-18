@@ -13,6 +13,7 @@
  * Modes use this class and add their own I/O layer on top.
  */
 
+import { execFile } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { basename, dirname } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
@@ -145,7 +146,6 @@ import { ModelRegistry } from "./model-registry.ts";
 import { resolveModelReference } from "./model-resolver.ts";
 import type { ModelRuntime } from "./model-runtime.ts";
 import { NestedToolCallRunner } from "./nested-tool-calls.ts";
-import { Neo4jSessionGraph } from "./orchestrator/neo4j-graph.ts";
 import {
   type CreateWorkerOptions,
   ORCHESTRATOR_REPORT_MESSAGE_TYPE,
@@ -631,10 +631,11 @@ export class AgentSession {
       ? new Orchestrator({
           project: this.sessionManager.getSessionId(),
           cwd: this._cwd,
-          connectGraph: () => Neo4jSessionGraph.connect(),
+          databasePath: this.settingsManager.getOrchestratorDatabasePath(),
           createWorker: createWorkerSession,
           resolveModel: (reference) => this._resolveOrchestratorModel(reference),
           defaults: () => this._orchestratorDefaults(),
+          runCondition: (command, cwd) => this._runCondition(command, cwd),
           report: (text, details) =>
             void this.sendCustomMessage(
               {
@@ -2856,6 +2857,14 @@ export class AgentSession {
     );
     if (result.status !== "resolved") throw new Error(`"${reference}" is not an available model`);
     return result.model;
+  }
+
+  private _runCondition(command: string, cwd: string): Promise<boolean> {
+    const { promise, resolve } = Promise.withResolvers<boolean>();
+    execFile("/bin/sh", ["-c", command], { cwd, timeout: 60_000 }, (error) =>
+      resolve(error === null),
+    );
+    return promise;
   }
 
   private _orchestratorDefaults(): OrchestratorDefaults {
