@@ -1,8 +1,8 @@
-import { posix, win32 } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { dual } from "effect/Function";
 
+import { posixPath, win32Path } from "./platform.ts";
 import { nodePlatform, type RemoteInfo } from "./remote-info.ts";
 
 const DRIVE_RELATIVE = /^([a-zA-Z]:)(?![\\/])/u;
@@ -16,7 +16,7 @@ function fromFileUrl(path: string, windows: boolean): string {
 }
 
 function expandHome(path: string, info: RemoteInfo, windows: boolean): string {
-  const paths = windows ? win32 : posix;
+  const paths = windows ? win32Path : posixPath;
   if (path === "~") return info.home;
   if (path.startsWith("~/") || (windows && path.startsWith("~\\"))) {
     return paths.join(info.home, path.slice(2));
@@ -34,7 +34,7 @@ function resolveOtherDrive(normalized: string, cwd: string, info: RemoteInfo): s
   if (base.slice(0, 2).toLowerCase() !== drive.toLowerCase() && base[2] === "\\") {
     base = `${drive}\\`;
   }
-  return win32.resolve(base, normalized);
+  return win32Path.resolve(base, normalized);
 }
 
 export const resolveRemotePath: {
@@ -42,7 +42,7 @@ export const resolveRemotePath: {
   (path: string, info: RemoteInfo, cwd: string): string;
 } = dual(3, (path: string, info: RemoteInfo, cwd: string): string => {
   const windows = nodePlatform(info).platform === "win32";
-  const paths = windows ? win32 : posix;
+  const paths = windows ? win32Path : posixPath;
   const normalized = expandHome(path, info, windows);
   if (paths.isAbsolute(normalized)) return paths.resolve(normalized);
   if (windows) {

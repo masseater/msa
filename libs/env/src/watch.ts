@@ -17,14 +17,6 @@ const RECONNECT_MAX_MS = 30_000;
 const asError = (error: unknown): Error =>
   error instanceof Error ? error : new Error(String(error));
 
-function unrefTimer(delay: number, fire: () => void): () => void {
-  const timer = setTimeout(fire, delay);
-  timer.unref();
-  return () => {
-    clearTimeout(timer);
-  };
-}
-
 export class RemoteWatcher implements FileWatcher {
   readonly #connection: Connection;
   readonly #targets: readonly WatchTarget[];
@@ -147,14 +139,14 @@ export class RemoteWatcher implements FileWatcher {
   }
 
   #sleep(delay: number): Effect.Effect<void> {
-    return Effect.callback<void>((resume) => {
-      const cancel = unrefTimer(delay, () => {
-        resume(Effect.void);
-      });
+    return Effect.suspend(() => {
+      const woken = Deferred.makeUnsafe<void>();
       this.#wake = () => {
-        cancel();
-        resume(Effect.void);
+        Deferred.doneUnsafe(woken, Exit.void);
       };
+      return Deferred.await(woken).pipe(
+        Effect.timeoutOrElse({ duration: delay, orElse: () => Effect.void }),
+      );
     });
   }
 

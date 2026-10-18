@@ -1,11 +1,10 @@
-import { posix } from "node:path";
-
 import { FileError, type FileInfo, type Result } from "@msa/durable/env";
 import { Effect } from "effect";
 
 import { type Connection, RemoteError } from "./connection.ts";
 import { toFileError } from "./errors.ts";
 import { openDir, type PathRequest, remoteRequest, run, runFileOp } from "./file-op.ts";
+import { posixPath } from "./platform.ts";
 import { type RemoteDirEntry, remoteFileInfo, remotePath, toInfo } from "./remote-path.ts";
 
 export const fileInfoAt = (request: PathRequest): Promise<Result<FileInfo, FileError>> => {
@@ -56,7 +55,7 @@ export const listDirAt = (request: PathRequest): Promise<Result<FileInfo[], File
         Effect.gen(function* () {
           const entries = yield* readAllEntries({ connection, resolved });
           const paths = yield* remotePath(connection);
-          if (paths === posix) sortRaw(entries);
+          if (paths === posixPath) sortRaw(entries);
           const infos: FileInfo[] = [];
           for (const entry of entries) {
             if (signal?.aborted === true) {

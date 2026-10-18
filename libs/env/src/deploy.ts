@@ -1,13 +1,10 @@
-import { createHash } from "node:crypto";
-import { existsSync } from "node:fs";
-import { readFile } from "node:fs/promises";
-import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
 import { type DetectFailure, normalizeArch, type RemotePlatform, SetupError } from "./detect.ts";
+import { fileExists, localPath, readBytes, sha256Hex } from "./platform.ts";
 import { powershell, runSsh } from "./run-ssh.ts";
 import type { SshTarget } from "./ssh-args.ts";
 
@@ -17,7 +14,12 @@ const packageRoot = fileURLToPath(new URL("..", import.meta.url));
 
 export function packagedDaemon(remote: Pick<RemotePlatform, "platform" | "arch">): string {
   const name = `msa-env-${remote.platform}-${remote.arch}`;
-  return join(packageRoot, "bin", name, remote.platform === "windows" ? "msa-env.exe" : "msa-env");
+  return localPath.join(
+    packageRoot,
+    "bin",
+    name,
+    remote.platform === "windows" ? "msa-env.exe" : "msa-env",
+  );
 }
 
 export function localDaemon(): string {
@@ -55,7 +57,7 @@ interface Deployment {
   readonly remote: RemotePlatform;
   readonly file: string;
   readonly sha256: string;
-  readonly bytes: Buffer;
+  readonly bytes: Uint8Array;
 }
 
 const checkDaemon = ({
@@ -117,7 +119,9 @@ const posixUpload = ({ file, sha256 }: Deployment): string =>
 const upload = (deployment: Deployment): Effect.Effect<string, DetectFailure> => {
   const { target, remote, file, bytes } = deployment;
   if (remote.platform === "windows") {
-    const lines = bytes.toString("base64").replaceAll(/.{1,76}/gu, "$&\n");
+    const lines = Buffer.from(bytes)
+      .toString("base64")
+      .replaceAll(/.{1,76}/gu, "$&\n");
     return runSsh({
       target,
       command: windowsUpload(deployment),
@@ -145,13 +149,13 @@ export const deployDaemonEffect = ({
   binary,
 }: DaemonDeployment): Effect.Effect<string, DetectFailure> =>
   Effect.gen(function* () {
-    if (!existsSync(binary)) {
+    if (!(yield* fileExists(binary))) {
       return yield* new SetupError(
         `No msa-env daemon for ${remote.platform}-${remote.arch} at ${binary}`,
       );
     }
-    const bytes = yield* Effect.promise(() => readFile(binary));
-    const sha256 = createHash("sha256").update(bytes).digest("hex");
+    const bytes = yield* readBytes(binary);
+    const sha256 = yield* sha256Hex(bytes);
     const deployment: Deployment = {
       target,
       remote,

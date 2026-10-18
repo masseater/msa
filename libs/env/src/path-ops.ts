@@ -1,5 +1,3 @@
-import { randomUUID } from "node:crypto";
-
 import type { Context } from "@msa/chord";
 import {
   type FileError,
@@ -21,6 +19,7 @@ import {
   runFileOp,
 } from "./file-op.ts";
 import { listFilesOver } from "./list-files.ts";
+import { randomUuid } from "./platform.ts";
 import { remotePath } from "./remote-path.ts";
 
 export interface ListFilesRequest extends PathRequest {
@@ -114,7 +113,7 @@ export const createTempFileIn = (request: TempFileRequest): Promise<Result<strin
         const paths = yield* remotePath(connection);
         filePath = paths.join(
           dir.value,
-          `${request.prefix ?? ""}${randomUUID()}${request.suffix ?? ""}`,
+          `${request.prefix ?? ""}${yield* randomUuid}${request.suffix ?? ""}`,
         );
         yield* remoteRequest({
           connection,
