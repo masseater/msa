@@ -1,4 +1,4 @@
-import { awaited, runTest } from "@msa/testing";
+import { deferredPromise, awaited, runTest } from "@msa/testing";
 import type { TerminalColors, TUI } from "@msa/tui";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
@@ -64,7 +64,7 @@ function createController(
   });
 }
 
-const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+const flush = () => Effect.sleep(0);
 
 afterEach(() => {
   setTerminalColors({});
@@ -86,7 +86,7 @@ describe("InteractiveThemeController", () => {
         expect(theme.name).toBe("light");
         expect(controller.getThemeSelection()).toBe("light");
         controller.applyFromSettings();
-        yield* awaited(flush());
+        yield* flush();
 
         expect(queryTerminalColors).toHaveBeenCalledOnce();
         expect(setTheme).not.toHaveBeenCalled();
@@ -98,21 +98,17 @@ describe("InteractiveThemeController", () => {
     runTest(
       Effect.gen(function* () {
         const { ui, queryTerminalColors } = createUi();
-        let answer: (colors: TerminalColors) => void = () => {};
-        queryTerminalColors.mockReturnValue(
-          new Promise((resolve) => {
-            answer = resolve;
-          }),
-        );
+        const answer = deferredPromise<TerminalColors>();
+        queryTerminalColors.mockReturnValue(answer.promise);
         const controller = createController(ui, () => SettingsManager.inMemory());
         controller.applyFromSettings();
 
         expect(theme.name).toBe("system");
         expect(theme.getFgAnsi("error")).toBe("\x1b[39m");
 
-        answer(DARK);
+        answer.resolve(DARK);
         yield* awaited(controller.waitForTerminalColors());
-        expect(theme.getFgAnsi("error")).toMatch(/^\x1b\[38;/u);
+        expect(theme.getFgAnsi("error").startsWith("\x1b[38;")).toBe(true);
       }),
     ));
 
@@ -133,7 +129,7 @@ describe("InteractiveThemeController", () => {
         );
         const controller = createController(ui, () => SettingsManager.inMemory());
         controller.applyFromSettings();
-        yield* awaited(flush());
+        yield* flush();
         expect(theme.getFgAnsi("error")).toBe("\x1b[38;5;1m");
 
         lateReply(DARK);
@@ -154,13 +150,13 @@ describe("InteractiveThemeController", () => {
         const controller = createController(ui, () => SettingsManager.inMemory(), "light/dark");
         controller.applyFromSettings();
         expect(setTerminalColorSchemeNotifications).toHaveBeenCalledWith(true);
-        yield* awaited(flush());
+        yield* flush();
         expect(theme.name).toBe("light");
 
         queryTerminalColors.mockResolvedValue(DARK);
 
         emitTerminalColorScheme("light");
-        yield* awaited(flush());
+        yield* flush();
         expect(theme.name).toBe("dark");
       }),
     ));
@@ -172,7 +168,7 @@ describe("InteractiveThemeController", () => {
         const { ui, emitTerminalColorScheme } = createUi();
         const controller = createController(ui, () => SettingsManager.inMemory());
         controller.applyFromSettings();
-        yield* awaited(flush());
+        yield* flush();
         expect(theme.appearance).toBe("dark");
 
         emitTerminalColorScheme("light");
@@ -193,7 +189,7 @@ describe("InteractiveThemeController", () => {
             Effect.gen(function* () {
               queryTerminalColors.mockResolvedValue(colors);
               controller.applyFromSettings();
-              yield* awaited(flush());
+              yield* flush();
             }),
           );
 
@@ -214,7 +210,7 @@ describe("InteractiveThemeController", () => {
           SettingsManager.inMemory({ theme: "light/dark" }),
         );
         controller.applyFromSettings();
-        yield* awaited(flush());
+        yield* flush();
 
         controller.dispose();
 
@@ -236,7 +232,7 @@ describe("InteractiveThemeController", () => {
         expect(controller.setThemeName("dark")).toEqual({ success: true });
         manager = secondManager;
         controller.applyFromSettings();
-        yield* awaited(flush());
+        yield* flush();
 
         expect(controller.getThemeSelection()).toBe("dark");
         expect(theme.name).toBe("dark");
