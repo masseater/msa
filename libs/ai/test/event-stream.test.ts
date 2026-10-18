@@ -2,8 +2,9 @@ import { Clock, Effect, Stream } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import type { AssistantMessage } from "../src/types.ts";
+import { EventStream } from "../src/utils/async-event-stream.ts";
 import { currentTimeMillis } from "../src/utils/clock.ts";
-import { AssistantMessageEventStream, EventStream } from "../src/utils/event-stream.ts";
+import { AssistantMessageEventStream } from "../src/utils/event-stream.ts";
 
 describe("EventStream", () => {
   it("drains buffered events in order and ignores events pushed after completion", () =>

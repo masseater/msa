@@ -5,7 +5,9 @@ import { Value } from "typebox/value";
 
 import type { Tool, ToolCall } from "../types.ts";
 
-const validatorCache = new WeakMap<object, ReturnType<typeof Compile>>();
+type SchemaValidator = ReturnType<typeof Compile>;
+
+const validatorCache = new WeakMap<object, SchemaValidator>();
 const TYPEBOX_KIND = Symbol.for("TypeBox.Kind");
 
 interface JsonSchemaObject {
@@ -20,240 +22,166 @@ interface JsonSchemaObject {
 }
 
 function getSchemaTypes(schema: JsonSchemaObject): string[] {
-  if (typeof schema.type === "string") {
-    return [schema.type];
-  }
-  if (Array.isArray(schema.type)) {
-    return schema.type.filter((type): type is string => typeof type === "string");
-  }
-  return [];
+  if (typeof schema.type === "string") return [schema.type];
+  if (!Array.isArray(schema.type)) return [];
+  return schema.type.filter((type): type is string => typeof type === "string");
 }
+
+const isJsonObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const JSON_TYPE_CHECKS: Readonly<Record<string, (value: unknown) => boolean>> = {
+  number: (value) => typeof value === "number",
+  integer: (value) => typeof value === "number" && Number.isInteger(value),
+  boolean: (value) => typeof value === "boolean",
+  string: (value) => typeof value === "string",
+  null: (value) => value === null,
+  array: Array.isArray,
+  object: isJsonObject,
+};
 
 function matchesJsonType(value: unknown, type: string): boolean {
-  switch (type) {
-    case "number":
-      return typeof value === "number";
-    case "integer":
-      return typeof value === "number" && Number.isInteger(value);
-    case "boolean":
-      return typeof value === "boolean";
-    case "string":
-      return typeof value === "string";
-    case "null":
-      return value === null;
-    case "array":
-      return Array.isArray(value);
-    case "object":
-      return typeof value === "object" && value !== null && !Array.isArray(value);
-    default:
-      return false;
+  return Object.hasOwn(JSON_TYPE_CHECKS, type) && JSON_TYPE_CHECKS[type]!(value);
+}
+
+function getValidator(schema: object): SchemaValidator {
+  const cached = validatorCache.get(schema);
+  if (cached !== undefined) return cached;
+  const validator = Compile(schema as Tool["parameters"]);
+  validatorCache.set(schema, validator);
+  return validator;
+}
+
+function subSchemaAccepts(schema: JsonSchemaObject, value: unknown): boolean {
+  try {
+    return getValidator(schema).Check(value);
+  } catch {
+    return false;
   }
 }
 
-function getSubSchemaValidator(schema: JsonSchemaObject): ReturnType<typeof Compile> | undefined {
-  try {
-    return getValidator(schema as Tool["parameters"]);
-  } catch {
-    return undefined;
+function coerceNumeric(value: unknown, accepts: (parsed: number) => boolean): unknown {
+  if (value === null) return 0;
+  if (typeof value === "string" && value.trim() !== "") {
+    const parsed = Number(value);
+    if (accepts(parsed)) return parsed;
   }
+  if (typeof value === "boolean") return value ? 1 : 0;
+  return value;
 }
+
+const BOOLEAN_STRINGS: Readonly<Record<string, boolean>> = { true: true, false: false };
+const BOOLEAN_NUMBERS: Readonly<Record<number, boolean>> = { 1: true, 0: false };
+
+function coerceBoolean(value: unknown): unknown {
+  if (value === null) return false;
+  if (typeof value === "string" && Object.hasOwn(BOOLEAN_STRINGS, value)) {
+    return BOOLEAN_STRINGS[value];
+  }
+  if (typeof value === "number" && Object.hasOwn(BOOLEAN_NUMBERS, value)) {
+    return BOOLEAN_NUMBERS[value];
+  }
+  return value;
+}
+
+function coerceString(value: unknown): unknown {
+  if (value === null) return "";
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  return value;
+}
+
+const PRIMITIVE_COERCIONS: Readonly<Record<string, (value: unknown) => unknown>> = {
+  number: (value) => coerceNumeric(value, Number.isFinite),
+  integer: (value) => coerceNumeric(value, Number.isInteger),
+  boolean: coerceBoolean,
+  string: coerceString,
+  null: (value) => (value === "" || value === 0 || value === false ? null : value),
+};
 
 function coercePrimitiveByType(value: unknown, type: string): unknown {
-  switch (type) {
-    case "number": {
-      if (value === null) {
-        return 0;
-      }
-      if (typeof value === "string" && value.trim() !== "") {
-        const parsed = Number(value);
-        if (Number.isFinite(parsed)) {
-          return parsed;
-        }
-      }
-      if (typeof value === "boolean") {
-        return value ? 1 : 0;
-      }
-      return value;
-    }
-    case "integer": {
-      if (value === null) {
-        return 0;
-      }
-      if (typeof value === "string" && value.trim() !== "") {
-        const parsed = Number(value);
-        if (Number.isInteger(parsed)) {
-          return parsed;
-        }
-      }
-      if (typeof value === "boolean") {
-        return value ? 1 : 0;
-      }
-      return value;
-    }
-    case "boolean": {
-      if (value === null) {
-        return false;
-      }
-      if (typeof value === "string") {
-        if (value === "true") {
-          return true;
-        }
-        if (value === "false") {
-          return false;
-        }
-      }
-      if (typeof value === "number") {
-        if (value === 1) {
-          return true;
-        }
-        if (value === 0) {
-          return false;
-        }
-      }
-      return value;
-    }
-    case "string": {
-      if (value === null) {
-        return "";
-      }
-      if (typeof value === "number" || typeof value === "boolean") {
-        return String(value);
-      }
-      return value;
-    }
-    case "null": {
-      if (value === "" || value === 0 || value === false) {
-        return null;
-      }
-      return value;
-    }
-    default:
-      return value;
-  }
+  return Object.hasOwn(PRIMITIVE_COERCIONS, type) ? PRIMITIVE_COERCIONS[type]!(value) : value;
 }
 
 function applySchemaObjectCoercion(value: Record<string, unknown>, schema: JsonSchemaObject): void {
-  const properties = schema.properties;
-  const definedKeys = new Set<string>(properties === undefined ? [] : Object.keys(properties));
-
-  if (properties !== undefined) {
-    for (const [key, propertySchema] of Object.entries(properties)) {
-      if (!(key in value)) {
-        continue;
-      }
-      value[key] = coerceWithJsonSchema(value[key], propertySchema);
-    }
+  const properties = schema.properties ?? {};
+  for (const [key, propertySchema] of Object.entries(properties)) {
+    if (key in value) value[key] = coerceWithJsonSchema(value[key], propertySchema);
   }
-
-  if (
-    schema.additionalProperties !== undefined &&
-    schema.additionalProperties !== false &&
-    typeof schema.additionalProperties === "object"
-  ) {
-    for (const [key, propertyValue] of Object.entries(value)) {
-      if (definedKeys.has(key)) {
-        continue;
-      }
-      value[key] = coerceWithJsonSchema(propertyValue, schema.additionalProperties);
+  const additional = schema.additionalProperties;
+  if (typeof additional !== "object") return;
+  for (const [key, propertyValue] of Object.entries(value)) {
+    if (!Object.hasOwn(properties, key)) {
+      value[key] = coerceWithJsonSchema(propertyValue, additional);
     }
   }
 }
 
 function applySchemaArrayCoercion(value: unknown[], schema: JsonSchemaObject): void {
-  if (Array.isArray(schema.items)) {
-    for (let index = 0; index < value.length; index++) {
-      const itemSchema = schema.items[index];
-      if (itemSchema === undefined) {
-        continue;
-      }
-      value[index] = coerceWithJsonSchema(value[index], itemSchema);
-    }
-    return;
-  }
-
-  if (schema.items !== undefined && typeof schema.items === "object") {
-    for (let index = 0; index < value.length; index++) {
-      value[index] = coerceWithJsonSchema(value[index], schema.items);
-    }
+  const { items } = schema;
+  if (items === undefined) return;
+  for (let index = 0; index < value.length; index++) {
+    const itemSchema = Array.isArray(items) ? items[index] : items;
+    if (itemSchema !== undefined) value[index] = coerceWithJsonSchema(value[index], itemSchema);
   }
 }
 
 function coerceWithUnionSchema(value: unknown, schemas: JsonSchemaObject[]): unknown {
+  if (schemas.some((schema) => subSchemaAccepts(schema, value))) return value;
   for (const schema of schemas) {
-    const validator = getSubSchemaValidator(schema);
-    if (validator?.Check(value) === true) {
-      return value;
-    }
+    const coerced = coerceWithJsonSchema(structuredClone(value), schema);
+    if (subSchemaAccepts(schema, coerced)) return coerced;
   }
+  return value;
+}
 
-  for (const schema of schemas) {
-    const candidate = structuredClone(value);
-    const coerced = coerceWithJsonSchema(candidate, schema);
-    const validator = getSubSchemaValidator(schema);
-    if (validator?.Check(coerced) === true) {
-      return coerced;
-    }
+function coerceToSchemaTypes(value: unknown, schemaTypes: readonly string[]): unknown {
+  const matchesUnionMember =
+    schemaTypes.length > 1 && schemaTypes.some((schemaType) => matchesJsonType(value, schemaType));
+  if (matchesUnionMember) return value;
+  for (const schemaType of schemaTypes) {
+    const candidate = coercePrimitiveByType(value, schemaType);
+    if (candidate !== value) return candidate;
   }
   return value;
 }
 
 function coerceWithJsonSchema(value: unknown, schema: JsonSchemaObject): unknown {
   let nextValue = value;
-
-  if (Array.isArray(schema.allOf)) {
-    for (const nested of schema.allOf) {
-      nextValue = coerceWithJsonSchema(nextValue, nested);
-    }
-  }
-
-  if (Array.isArray(schema.anyOf)) {
-    nextValue = coerceWithUnionSchema(nextValue, schema.anyOf);
-  }
-
-  if (Array.isArray(schema.oneOf)) {
-    nextValue = coerceWithUnionSchema(nextValue, schema.oneOf);
-  }
+  for (const nested of Array.isArray(schema.allOf) ? schema.allOf : [])
+    nextValue = coerceWithJsonSchema(nextValue, nested);
+  if (Array.isArray(schema.anyOf)) nextValue = coerceWithUnionSchema(nextValue, schema.anyOf);
+  if (Array.isArray(schema.oneOf)) nextValue = coerceWithUnionSchema(nextValue, schema.oneOf);
 
   const schemaTypes = getSchemaTypes(schema);
-  const matchesUnionMember =
-    schemaTypes.length > 1 &&
-    schemaTypes.some((schemaType) => matchesJsonType(nextValue, schemaType));
-  if (schemaTypes.length > 0 && !matchesUnionMember) {
-    for (const schemaType of schemaTypes) {
-      const candidate = coercePrimitiveByType(nextValue, schemaType);
-      if (candidate !== nextValue) {
-        nextValue = candidate;
-        break;
-      }
-    }
+  nextValue = coerceToSchemaTypes(nextValue, schemaTypes);
+  if (schemaTypes.includes("object") && isJsonObject(nextValue)) {
+    applySchemaObjectCoercion(nextValue, schema);
   }
-
-  if (
-    schemaTypes.includes("object") &&
-    typeof nextValue === "object" &&
-    nextValue !== null &&
-    !Array.isArray(nextValue)
-  ) {
-    applySchemaObjectCoercion(nextValue as Record<string, unknown>, schema);
-  }
-
   if (schemaTypes.includes("array") && Array.isArray(nextValue)) {
     applySchemaArrayCoercion(nextValue, schema);
   }
-
   return nextValue;
+}
+
+function isDroppableNull(value: unknown, propertySchema: JsonSchemaObject): boolean {
+  if (value !== null || typeof (propertySchema as { $ref?: unknown }).$ref === "string") {
+    return false;
+  }
+  try {
+    return !getValidator(propertySchema).Check(null);
+  } catch {
+    return false;
+  }
 }
 
 function normalizeOptionalNulls(value: unknown, schema: JsonSchemaObject): void {
   if (Array.isArray(value)) {
-    if (Array.isArray(schema.items)) {
-      for (let index = 0; index < value.length; index++) {
-        const itemSchema = schema.items[index];
-        if (itemSchema !== undefined) normalizeOptionalNulls(value[index], itemSchema);
-      }
-    } else if (schema.items !== undefined) {
-      for (const item of value) normalizeOptionalNulls(item, schema.items);
-    }
+    const { items } = schema;
+    if (items === undefined) return;
+    value.forEach((item, index) => {
+      const itemSchema = Array.isArray(items) ? items[index] : items;
+      if (itemSchema !== undefined) normalizeOptionalNulls(item, itemSchema);
+    });
     return;
   }
   if (typeof value !== "object" || value === null || schema.properties === undefined) return;
@@ -262,12 +190,7 @@ function normalizeOptionalNulls(value: unknown, schema: JsonSchemaObject): void 
   const required = new Set(schema.required ?? []);
   for (const [key, propertySchema] of Object.entries(schema.properties)) {
     if (!(key in object)) continue;
-    if (
-      object[key] === null &&
-      !required.has(key) &&
-      typeof (propertySchema as { $ref?: unknown }).$ref !== "string" &&
-      getSubSchemaValidator(propertySchema)?.Check(null) === false
-    ) {
+    if (!required.has(key) && isDroppableNull(object[key], propertySchema)) {
       delete object[key];
     } else {
       normalizeOptionalNulls(object[key], propertySchema);
@@ -275,29 +198,14 @@ function normalizeOptionalNulls(value: unknown, schema: JsonSchemaObject): void 
   }
 }
 
-function getValidator(schema: Tool["parameters"]): ReturnType<typeof Compile> {
-  const key = schema as object;
-  const cached = validatorCache.get(key);
-  if (cached !== undefined) {
-    return cached;
-  }
-  const validator = Compile(schema);
-  validatorCache.set(key, validator);
-  return validator;
-}
-
 function formatValidationPath(error: TLocalizedValidationError): string {
-  if (error.keyword === "required") {
-    const requiredProperties = (error.params as { requiredProperties?: string[] })
-      .requiredProperties;
-    const requiredProperty = requiredProperties?.[0];
-    if (requiredProperty !== undefined && requiredProperty !== "") {
-      const basePath = error.instancePath.replace(/^\//u, "").replace(/\//gu, ".");
-      return basePath === "" ? requiredProperty : `${basePath}.${requiredProperty}`;
-    }
-  }
   const path = error.instancePath.replace(/^\//u, "").replace(/\//gu, ".");
-  return path || "root";
+  const requiredProperty =
+    error.keyword === "required"
+      ? (error.params as { requiredProperties?: string[] }).requiredProperties?.[0]
+      : undefined;
+  if (requiredProperty === undefined || requiredProperty === "") return path || "root";
+  return path === "" ? requiredProperty : `${path}.${requiredProperty}`;
 }
 
 export const validateToolCall: {
