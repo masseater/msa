@@ -12,10 +12,6 @@ export function collectSettingsDiagnostics(
   }));
 }
 
-/**
- * Remove duplicate type/message diagnostics while preserving their first occurrence.
- * Startup and runtime settings managers can report the same file error.
- */
 export function deduplicateDiagnostics(
   diagnostics: readonly AgentSessionRuntimeDiagnostic[],
 ): AgentSessionRuntimeDiagnostic[] {

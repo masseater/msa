@@ -1,13 +1,3 @@
-/**
- * Tool calls that a tool makes while it runs (`ctx.executeTool()`), for example from codemode
- * scripts. The agent loop does not know about them: the session runs each one through the agent's
- * tool pipeline (`runToolCall`) with its own hooks, emits `tool_execution_*` events with
- * `parentToolCallId`, and records the calls and their usage on the model-issued call's tool result
- * message.
- *
- * Nothing here runs until a tool calls `ctx.executeTool()`.
- */
-
 import type {
   AgentTool,
   AgentToolCall,
@@ -25,11 +15,6 @@ import type {
 
 import { combineUsage } from "./usage-totals.ts";
 
-/**
- * Limits of the nested-call record on a tool result: arguments
- * over the per-call or total size are omitted, calls beyond the count are dropped, and the record
- * is marked incomplete when any of that happens.
- */
 export const NESTED_CALL_LIMITS = {
   maxCalls: 256,
   maxArgumentBytesPerCall: 8 * 1024,
@@ -39,27 +24,18 @@ export const NESTED_CALL_LIMITS = {
 
 const encoder = new TextEncoder();
 
-/** What the nested calls of one model-issued tool call leave on its tool result message. */
 export interface NestedCallSummary {
-  /** Becomes `nestedCalls`. Undefined when no nested call was made. */
   calls: NestedToolCalls | undefined;
-  /** Summed `usage` of the nested results, added to the message's `usage`. */
   usage: Usage | undefined;
 }
 
-/**
- * Collects the nested calls of one model-issued tool call, including calls made by nested tools.
- * The snapshot becomes `nestedCalls` on the tool result message.
- */
 export class NestedCallRecorder {
   private readonly calls: NestedToolCallRecord[] = [];
   private readonly startedAt = new Map<NestedToolCallRecord, number>();
   private complete = true;
   private argumentBytes = 0;
-  /** Summed usage of every nested result, including calls dropped from the record. */
   private usage: Usage | undefined;
 
-  /** Record a call as it starts. Returns undefined when the call is dropped. */
   start(toolCall: AgentToolCall): NestedToolCallRecord | undefined {
     if (this.calls.length >= NESTED_CALL_LIMITS.maxCalls) {
       this.complete = false;
@@ -105,7 +81,6 @@ export class NestedCallRecorder {
     return this.usage;
   }
 
-  /** Copy of the record so far, or undefined when no nested call was made. */
   snapshot(): NestedToolCalls | undefined {
     if (this.calls.length === 0 && this.complete) return undefined;
     const calls = this.calls.map((call) => ({ ...call }));
@@ -117,13 +92,10 @@ export class NestedCallRecorder {
 }
 
 export interface NestedToolCallOptions {
-  /** Defaults to the calling tool's signal. */
   signal?: AbortSignal | undefined;
-  /** Receives partial results of the nested tool, in addition to `tool_execution_update` events. */
   onUpdate?: AgentToolUpdateCallback | undefined;
 }
 
-/** `tool_execution_*` events of nested calls. */
 export type NestedToolExecutionEvent =
   | {
       type: "tool_execution_start";
@@ -151,11 +123,8 @@ export type NestedToolExecutionEvent =
     };
 
 export interface NestedToolCallHost {
-  /** Tools nested calls resolve against. */
   getTools(): readonly AgentTool[];
-  /** Whether every nested call runs exclusively, as when the agent executes tool calls sequentially. */
   isSequential(): boolean;
-  /** Run the call through the tool pipeline, with hooks that report `parentToolCallId`. */
   runToolCall(
     toolCall: AgentToolCall,
     parentToolCallId: string,
@@ -165,11 +134,9 @@ export interface NestedToolCallHost {
   emit(event: NestedToolExecutionEvent): Promise<void>;
 }
 
-/** Calls below one model-issued call share its recorder. */
 interface CallScope {
   recorder: NestedCallRecorder;
   nextId: number;
-  /** Set inside a call that holds the exclusive queue, so its own nested calls do not wait on it. */
   holdsQueue: boolean;
 }
 
@@ -182,19 +149,13 @@ function textOf(result: AgentToolResult<unknown>): string {
 
 export class NestedToolCallRunner {
   private readonly host: NestedToolCallHost;
-  /** Scopes by the id of the calling tool call. */
   private readonly scopes = new Map<string, CallScope>();
-  /** Serializes nested calls that must not run concurrently. */
   private queueTail: Promise<void> = Promise.resolve();
 
   constructor(host: NestedToolCallHost) {
     this.host = host;
   }
 
-  /**
-   * Run `name` on behalf of the call `callerId`. The nested call gets the id `<callerId>/<n>`.
-   * Never rejects for tool failures: they come back as `isError: true`.
-   */
   async execute(
     callerId: string,
     name: string,
@@ -262,7 +223,6 @@ export class NestedToolCallRunner {
     }
 
     scope.recorder.finish(record, outcome.isError, textOf(outcome.result));
-    // Nested results are not persisted, so their usage is only counted through the recorder.
     if (outcome.result.usage) scope.recorder.addUsage(outcome.result.usage);
     await this.host.emit({
       type: "tool_execution_end",
@@ -276,7 +236,6 @@ export class NestedToolCallRunner {
     return outcome;
   }
 
-  /** Remove and return the record of the nested calls a model-issued call made. */
   takeRecord(toolCallId: string): NestedCallSummary | undefined {
     const scope = this.scopes.get(toolCallId);
     this.scopes.delete(toolCallId);

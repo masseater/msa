@@ -1,18 +1,10 @@
-/**
- * Runs treg (https://treg.to) routed jobs through the official `treg` CLI, which tries web vendors
- * in order until one answers. The CLI owns sign-in (`treg login`, or `TREG_TOKEN`), and
- * `treg --json call` prints one `{result, _treg}` line per call.
- */
-
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 
 import { spawnProcess, spawnProcessSync, waitForChildProcess } from "../utils/child-process.ts";
 import { findExecutableOnPath } from "../utils/shell.ts";
 
-/** TinyFish answers web search and page reads for free; treg falls back to paid vendors after it. */
 const PREFERRED_VENDOR = "tinyfish";
-/** Caps what one call may spend walking paid vendors after a miss. treg's own default is $1. */
 const MAX_COST_USD = "0.05";
 
 const CliEnvelope = Schema.fromJsonString(
@@ -41,7 +33,6 @@ export interface TregRun {
 export type TregRunner = (args: string[], signal?: AbortSignal) => Promise<TregRun>;
 
 export interface TregOptions {
-  /** Runs the `treg` CLI with these arguments. */
   run: TregRunner;
 }
 
@@ -70,7 +61,6 @@ function spawnRunner(command: string): TregRunner {
 
 const CliConfig = Schema.fromJsonString(Schema.Struct({ logged_in: Schema.Boolean }));
 
-/** Whether the CLI has a login to call with: `TREG_TOKEN`, or what `treg config` reports. */
 function isSignedIn(command: string, env: NodeJS.ProcessEnv): boolean {
   if (env["TREG_TOKEN"]?.trim()) return true;
   const { stdout } = spawnProcessSync(command, ["config"], {
@@ -84,10 +74,8 @@ function isSignedIn(command: string, env: NodeJS.ProcessEnv): boolean {
   });
 }
 
-/** Where to get the CLI when it is not installed. */
 export const TREG_INSTALL_COMMAND = "curl -fsSL https://treg.to/install.sh | sh";
 
-/** The installed `treg` CLI and whether it has a login to call with. */
 export function findTregCli(
   find: (executable: string) => string | null = findExecutableOnPath,
   env: NodeJS.ProcessEnv = process.env,
@@ -96,7 +84,6 @@ export function findTregCli(
   return command ? { command, signedIn: isSignedIn(command, env) } : undefined;
 }
 
-/** The installed and signed-in `treg` CLI, or undefined when the web tools are unavailable. */
 export function findTreg(
   find: (executable: string) => string | null = findExecutableOnPath,
   env: NodeJS.ProcessEnv = process.env,
@@ -107,14 +94,9 @@ export function findTreg(
 
 export interface TregSignInPage {
   url: string;
-  /** The code the sign-in page shows, for the user to check it matches. */
   code?: string;
 }
 
-/**
- * Run `treg login`, which opens the browser sign-in page itself and waits until the user approves
- * it there. `onPage` receives the page as the CLI prints it, for showing when no browser opens.
- */
 export async function loginTreg(
   command: string,
   onPage: (page: TregSignInPage) => void,
@@ -153,7 +135,6 @@ export async function loginTreg(
   }
 }
 
-/** Run `treg logout`, which clears the login `treg login` stored on this machine. */
 export async function logoutTreg(command: string): Promise<void> {
   const child = spawnProcess(command, ["logout"], {
     stdio: ["ignore", "ignore", "pipe"],
@@ -173,7 +154,6 @@ function describeFailure(status: number, body: unknown): string {
   return status === 401 ? `${message}. Sign in with \`treg login\` or set TREG_TOKEN.` : message;
 }
 
-/** Run a treg routed job such as `treg.web.search` and return its normalized `output`. */
 export async function callTreg(
   options: TregOptions,
   job: string,
@@ -216,7 +196,6 @@ export async function callTreg(
   return tregResult;
 }
 
-/** A string field of a vendor's row, trying the names vendors use for it in order. */
 export function pickString(row: unknown, ...keys: string[]): string | undefined {
   if (typeof row !== "object" || row === null) return undefined;
   for (const key of keys) {
@@ -226,7 +205,6 @@ export function pickString(row: unknown, ...keys: string[]): string | undefined 
   return undefined;
 }
 
-/** The rows of an output field, which treg leaves null on a miss. */
 export function rows(output: Readonly<Record<string, unknown>>, key: string): unknown[] {
   const value = output[key];
   return Array.isArray(value) ? value : [];

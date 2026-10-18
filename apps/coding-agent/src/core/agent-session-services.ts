@@ -22,25 +22,11 @@ import {
 import type { SessionManager } from "./session-manager.ts";
 import { SettingsManager } from "./settings-manager.ts";
 
-/**
- * Non-fatal issues collected while creating services or sessions.
- *
- * Runtime creation returns diagnostics to the caller instead of printing or
- * exiting. The app layer decides whether warnings should be shown and whether
- * errors should abort startup.
- */
 export interface AgentSessionRuntimeDiagnostic {
   type: "info" | "warning" | "error";
   message: string;
 }
 
-/**
- * Inputs for creating cwd-bound runtime services.
- *
- * These services are recreated whenever the effective session cwd changes.
- * CLI-provided resource paths should be resolved to absolute paths before they
- * reach this function, so later cwd switches do not reinterpret them.
- */
 export interface CreateAgentSessionServicesOptions {
   cwd: string;
   agentDir?: string | undefined;
@@ -55,12 +41,6 @@ export interface CreateAgentSessionServicesOptions {
   resourceLoaderReloadOptions?: ResourceLoaderReloadOptions | undefined;
 }
 
-/**
- * Inputs for creating an AgentSession from already-created services.
- *
- * Use this after services exist and any cwd-bound model/tool/session options
- * have been resolved against those services.
- */
 export interface CreateAgentSessionFromServicesOptions {
   services: AgentSessionServices;
   sessionManager: SessionManager;
@@ -77,12 +57,6 @@ export interface CreateAgentSessionFromServicesOptions {
   orchestrator?: boolean | undefined;
 }
 
-/**
- * Coherent cwd-bound runtime services for one effective session cwd.
- *
- * This is infrastructure only. The AgentSession itself is created separately so
- * session options can be resolved against these services first.
- */
 export interface AgentSessionServices {
   cwd: string;
   agentDir: string;
@@ -140,11 +114,6 @@ function applyExtensionFlagValues(
   return diagnostics;
 }
 
-/**
- * Create cwd-bound runtime services.
- *
- * Returns services plus diagnostics. It does not create an AgentSession.
- */
 export async function createAgentSessionServices(
   options: CreateAgentSessionServicesOptions,
 ): Promise<AgentSessionServices> {
@@ -220,13 +189,6 @@ export async function createAgentSessionServices(
   };
 }
 
-/**
- * Create an AgentSession from previously created services.
- *
- * This keeps session creation separate from service creation so callers can
- * resolve model, thinking, tools, and other session inputs against the target
- * cwd before constructing the session.
- */
 export async function createAgentSessionFromServices(
   options: CreateAgentSessionFromServicesOptions,
 ): Promise<CreateAgentSessionResult> {

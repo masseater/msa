@@ -110,27 +110,21 @@ interface ModelRuntimeSnapshot {
 }
 
 export interface CreateModelRuntimeOptions {
-  /** Credential storage. Defaults to the file at authPath. */
   credentials?: CredentialStore | undefined;
   authPath?: string | undefined;
   modelsPath?: string | null | undefined;
   modelsStore?: ModelsStore | undefined;
   modelsStorePath?: string | undefined;
-  /** Allow create() to refresh model catalogs over the network. Defaults to false. */
   allowModelNetwork?: boolean | undefined;
-  /** Timeout for the create-time network model refresh. */
   modelRefreshTimeoutMs?: number | undefined;
   catalogBaseUrl?: string | undefined;
-  /** Optional caller cancellation for initial cache restoration and availability checks. */
   signal?: AbortSignal | undefined;
-  /** Skip initial catalog and availability refresh. Static models remain available. */
   refreshOnCreate?: boolean | undefined;
 }
 
 export interface ModelRuntimeAuthOverrides extends AuthOperationOptions {
   apiKey?: string | undefined;
   env?: Record<string, string> | undefined;
-  /** Require this much remaining OAuth-token validity; defaults to five minutes. */
   minOAuthValidityMs?: number | undefined;
 }
 
@@ -140,7 +134,6 @@ export type CredentialSynchronizationOperation =
   | "setRuntimeApiKey"
   | "removeRuntimeApiKey";
 
-/** Credentials changed successfully, but the local model/auth snapshot could not be synchronized. */
 export class CredentialSynchronizationError extends Error {
   readonly providerId: string;
   readonly operation: CredentialSynchronizationOperation;
@@ -179,14 +172,12 @@ function mergeHeaders(
   return merged;
 }
 
-/** Configured msa-ai Models collection used by coding-agent and SDK consumers. */
 export class ModelRuntime implements Models {
   private readonly models: MutableModels;
   private readonly credentials: RuntimeCredentials;
   private readonly builtins: ReadonlyMap<string, Provider>;
   private readonly nativeExtensionProviders = new Map<string, Provider>();
   private readonly extensionProviders = new Map<string, ProviderConfigInput>();
-  /** Virtual models by provider id, then model id. */
   private readonly virtualModels = new Map<string, Map<string, RegisteredVirtualModel>>();
   private readonly compositionErrors = new Map<string, string>();
   private readonly modelsPath: string | undefined;
@@ -241,7 +232,6 @@ export class ModelRuntime implements Models {
         : new InMemoryCodingAgentModelsStore());
     const builtinModelDataGeneratedAt = builtinProviderCatalog.getBuiltinModelDataGeneratedAt();
     const providers = builtinProviderCatalog.builtinProviders().map((provider) => {
-      // OpenRouter narrows the catalog to the models, limits and prices of the user's key.
       if (provider.id === "openrouter") {
         return withPersonalizedCatalog(
           provider,
@@ -294,7 +284,6 @@ export class ModelRuntime implements Models {
     ]);
   }
 
-  /** Returns the provider without virtual models, or undefined when only virtual models define it. */
   private recomposeProvider(providerId: string): Provider | undefined {
     const provider = this.composeProvider(providerId);
     const virtualModels = [...(this.virtualModels.get(providerId)?.values() ?? [])].map(
@@ -307,12 +296,10 @@ export class ModelRuntime implements Models {
     return provider;
   }
 
-  /** The provider without virtual models, or undefined when nothing defines it. */
   private composeProvider(providerId: string): Provider | undefined {
     const base = this.nativeExtensionProviders.get(providerId) ?? this.builtins.get(providerId);
     const extension = this.extensionProviders.get(providerId);
     if (!this.config.getProvider(providerId) && !extension) {
-      // No overlays: use the builtin untouched so its auth/login/stream behavior is exact.
       this.compositionErrors.delete(providerId);
       return base;
     }
@@ -359,7 +346,6 @@ export class ModelRuntime implements Models {
       this.credentials.list({ signal }),
     ]);
     if (seq !== this.availabilityRefreshSeq) {
-      // A superseded pass settles with the pass that replaced it, so its caller reads a current snapshot.
       const latest = this.latestAvailabilityRefresh;
       if (latest && latest.seq > seq) await latest.pass;
       return;
@@ -401,7 +387,6 @@ export class ModelRuntime implements Models {
     providerId: string,
     signal: AbortSignal,
   ): Promise<void> {
-    // Invalidate any full availability pass that started before this credential change.
     ++this.availabilityRefreshSeq;
     const providerSeq = (this.providerAvailabilitySeq.get(providerId) ?? 0) + 1;
     this.providerAvailabilitySeq.set(providerId, providerSeq);
@@ -562,7 +547,6 @@ export class ModelRuntime implements Models {
     return this.nativeExtensionProviders.get(providerId);
   }
 
-  /** @internal Compatibility fallback for ModelRegistry when provider auth is unconfigured. */
   getCompatibilityRequestConfig(model: Model<Api>): CompatibilityRequestConfig {
     return resolveCompatibilityRequestConfig(
       model,
@@ -788,8 +772,6 @@ export class ModelRuntime implements Models {
   ): AssistantMessageEventStream {
     const transcript = normalizeContext(context);
     if (isVirtualModel(model)) {
-      // Requests outside the agent loop are routed here. Callers sized them before routing, so
-      // cap the output budget to the routed model.
       return lazyStream(model, async () => {
         const route = await this.resolveModel(model, transcript.messages, {
           reason: "direct",
@@ -800,8 +782,6 @@ export class ModelRuntime implements Models {
         const maxTokens =
           options?.maxTokens && limit > 0 ? Math.min(options.maxTokens, limit) : options?.maxTokens;
         const reasoning = route.thinkingLevel === "off" ? undefined : route.thinkingLevel;
-        // Caller credentials were resolved for the virtual model's provider. Another provider
-        // resolves its own, so they are not sent to the wrong vendor.
         const { apiKey, headers, env, ...rest } = options ?? {};
         const auth = route.model.provider === model.provider ? { apiKey, headers, env } : {};
         return this.streamSimple(route.model, context, { ...rest, ...auth, maxTokens, reasoning });
@@ -964,8 +944,6 @@ export class ModelRuntime implements Models {
       ...options,
       allowNetwork: options.allowNetwork ?? this.modelNetworkEnabled,
     };
-    // Published msa-ai builds before ModelsStore returned void and accepted a provider ID.
-    // The fallback keeps source-mode CLI tests working without rebuilding workspace dependencies.
     const result = ((await this.models.refresh(refreshOptions)) as
       | ModelsRefreshResult
       | undefined) ?? {
@@ -989,9 +967,7 @@ export class ModelRuntime implements Models {
     } else {
       try {
         await this.queueAvailabilityRefresh(options.signal);
-      } catch {
-        // Availability errors are recorded by the latest pass; refreshed models remain usable.
-      }
+      } catch {}
     }
     return { aborted: result.aborted || (options.signal?.aborted ?? false), errors };
   }
@@ -1010,11 +986,6 @@ export class ModelRuntime implements Models {
     void this.refresh({ allowNetwork: false });
   }
 
-  /**
-   * Mark a newly registered provider as configured when it has a stored credential or a configured
-   * API key. Availability checks run asynchronously, and callers such as initial model selection
-   * read the snapshot before they finish. The next availability pass replaces this entry.
-   */
   private markProvisionallyConfigured(
     providerId: string,
     configuredStatus: AuthStatus | undefined,
@@ -1023,7 +994,6 @@ export class ModelRuntime implements Models {
     if (!this.snapshot.storedProviders.has(providerId) && !configuredStatus?.configured) return;
     const configuredProviders = new Set(this.snapshot.configuredProviders).add(providerId);
     const auth = new Map(this.snapshot.auth);
-    // Never clobber a real check result.
     if (!auth.get(providerId)) auth.set(providerId, { type, source: "configured provider" });
     this.snapshot = {
       ...this.snapshot,
@@ -1034,8 +1004,6 @@ export class ModelRuntime implements Models {
   }
 
   registerProvider(providerId: string, config: ProviderConfigInput): void {
-    // Validate the incoming registration on its own, like the legacy registry:
-    // a broken re-registration must throw without touching the stored config.
     validateExtensionProvider(
       providerId,
       this.builtins.get(providerId),
@@ -1043,8 +1011,6 @@ export class ModelRuntime implements Models {
       config,
     );
     this.nativeExtensionProviders.delete(providerId);
-    // Re-registration merges defined values over the previous registration and
-    // preserves undefined ones, matching the legacy ModelRegistry contract.
     const previous = this.extensionProviders.get(providerId);
     const effective: ProviderConfigInput = { ...previous };
     for (const [key, value] of Object.entries(config)) {
@@ -1069,11 +1035,6 @@ export class ModelRuntime implements Models {
     void this.refresh({ allowNetwork: false });
   }
 
-  /**
-   * Register a virtual model under `definition.provider`, which may also list physical models or
-   * several virtual models. Re-registering the same provider and id replaces the virtual model.
-   * Throws when the id belongs to a physical model of that provider.
-   */
   registerVirtualModel(definition: VirtualModelDefinition): void {
     const { provider: providerId, id } = definition;
     if (!providerId.trim() || !id.trim())
@@ -1089,8 +1050,6 @@ export class ModelRuntime implements Models {
     });
     this.virtualModels.set(providerId, models);
     if (!this.recomposeProvider(providerId) && !this.snapshot.configuredProviders.has(providerId)) {
-      // A provider of only virtual models needs no credentials. Mark it configured now: session
-      // restore checks auth before the refresh below lands.
       const auth = new Map(this.snapshot.auth).set(providerId, {
         type: "api_key",
         source: "virtual",
@@ -1111,15 +1070,6 @@ export class ModelRuntime implements Models {
     void this.refresh({ allowNetwork: false });
   }
 
-  /**
-   * Ask a virtual model's router for the model and thinking level of one request. The router must
-   * return a physical catalog model whose provider has credentials; the thinking level is clamped
-   * to that model. Throws when routing fails.
-   *
-   * `previous` reports the latest successful response in `messages`. A retry passes the failed
-   * response as `options.failed`; `messages` no longer contains it. `options.state` is the router
-   * state stored by the caller, which also stores the returned state.
-   */
   async resolveModel(
     model: Model<Api>,
     messages: readonly Message[],
@@ -1137,7 +1087,6 @@ export class ModelRuntime implements Models {
     const { failed, ...request } = options;
     const latest = findLatestResponse(messages);
     const previousModel = latest && this.getPhysicalModel(latest.provider, latest.model);
-    // A failed routing attempt names the virtual model; there is no physical request to report.
     const failedModel = failed && this.getPhysicalModel(failed.provider, failed.model);
     const route = await virtual.route({
       ...request,
@@ -1159,7 +1108,6 @@ export class ModelRuntime implements Models {
     };
   }
 
-  /** A catalog chat model that is not virtual. */
   getPhysicalModel(providerId: string, modelId: string): Model<Api> | undefined {
     const model = this.models.getModel(providerId, modelId);
     return model && !isVirtualModel(model) ? model : undefined;

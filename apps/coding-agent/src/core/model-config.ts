@@ -1,5 +1,3 @@
-/** Immutable, credential-blind models.json snapshot. */
-
 import { readFile } from "node:fs/promises";
 
 import { ProviderCompatSchema } from "@msa/ai/providers/compat-schema";
@@ -113,7 +111,6 @@ function deepFreeze<T>(value: T): T {
   return Object.freeze(value);
 }
 
-/** One immutable load of models.json. */
 export class ModelConfig {
   private readonly providers: ReadonlyMap<string, ModelsJsonProvider>;
   private readonly error: string | undefined;

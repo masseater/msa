@@ -42,10 +42,6 @@ export type ResolvedRequestAuth =
   | { ok: false; error: string };
 export { clearApiKeyCache } from "./provider-composer.ts";
 
-/**
- * Synchronous compatibility facade exposed to extensions.
- * Coding-agent internals use ModelRuntime directly.
- */
 export class ModelRegistry {
   private readonly runtime: ModelRuntime;
 
@@ -53,7 +49,6 @@ export class ModelRegistry {
     this.runtime = runtime;
   }
 
-  /** Reload models.json asynchronously. Await before making synchronous registry reads. */
   refresh(options?: ModelsRefreshOptions): Promise<ModelsRefreshResult> {
     return this.runtime.refresh(options);
   }
@@ -74,7 +69,6 @@ export class ModelRegistry {
     return this.runtime.getModel(provider, modelId);
   }
 
-  /** Find a model of a non-chat type, e.g. `findOfType("classifier", "openrouter", "~typesafe/jev-latest")`. */
   findOfType<TType extends ModelType>(
     type: TType,
     provider: string,
@@ -130,7 +124,6 @@ export class ModelRegistry {
     return this.runtime.getProvider(provider);
   }
 
-  /** Stream through the configured provider with request-time authentication. */
   stream<TApi extends Api>(
     model: Model<TApi>,
     context: Context,
@@ -139,7 +132,6 @@ export class ModelRegistry {
     return this.runtime.stream(model, context, options);
   }
 
-  /** Stream with provider-neutral options and request-time authentication. */
   streamSimple(
     model: Model<Api>,
     context: Context,
@@ -156,7 +148,6 @@ export class ModelRegistry {
     return this.runtime.complete(model, context, options);
   }
 
-  /** Every known model of a type (chat, image, classifier), optionally for one provider. */
   getModelsOfType<TType extends ModelType>(
     type: TType,
     provider?: string,
@@ -164,7 +155,6 @@ export class ModelRegistry {
     return this.runtime.getModelsOfType(type, provider);
   }
 
-  /** Models of a type whose provider has working credentials. */
   getAvailableOfType<TType extends ModelType>(
     type: TType,
     provider?: string,
@@ -181,7 +171,6 @@ export class ModelRegistry {
     return this.runtime.getModelOfType(type, provider, modelId);
   }
 
-  /** Classify structured state with request-time authentication. Never rejects. */
   classify(
     model: ClassifierModel<ClassifierApi>,
     context: ClassifierContext,
@@ -190,7 +179,6 @@ export class ModelRegistry {
     return this.runtime.classify(model, context, options);
   }
 
-  /** Generate images with request-time authentication. Never rejects. */
   generateImages(
     model: ImageModel<ImageApi>,
     context: ImagesContext,

@@ -1,13 +1,7 @@
-/**
- * Resolve configuration values that may be shell commands, environment variables, or literals.
- * Used by auth-storage.ts and model-registry.ts.
- */
-
 import { execSync, spawnSync } from "child_process";
 
 import { getShellConfig } from "../utils/shell.ts";
 
-// Cache for shell command results (persists for process lifetime)
 const commandResultCache = new Map<string, string | undefined>();
 const ENV_VAR_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const ENV_VAR_NAME_PREFIX_RE = /^[A-Za-z_][A-Za-z0-9_]*/;
@@ -145,13 +139,6 @@ export function isConfigValueConfigured(config: string, env?: Record<string, str
   return getMissingConfigValueEnvVarNames(config, env).length === 0;
 }
 
-/**
- * Resolve a config value (API key, header value, etc.) to an actual value.
- * - If starts with "!", executes the rest as a shell command and uses stdout (cached)
- * - Interpolates "$ENV_VAR" or "${ENV_VAR}" references with the named environment variable
- * - In non-command values, "$$" escapes a literal "$" and "$!" escapes a literal "!"
- * - Otherwise treats the value as a literal
- */
 export function resolveConfigValue(
   config: string,
   env?: Record<string, string>,
@@ -233,9 +220,6 @@ function executeCommand(commandConfig: string): string | undefined {
   return result;
 }
 
-/**
- * Resolve all header values using the same resolution logic as API keys.
- */
 export function resolveConfigValueUncached(
   config: string,
   env?: Record<string, string>,
@@ -281,9 +265,6 @@ export function resolveConfigValueOrThrow(
   throw new Error(`Failed to resolve ${description}`);
 }
 
-/**
- * Resolve all header values using the same resolution logic as API keys.
- */
 export function resolveHeaders(
   headers: Record<string, string> | undefined,
   env?: Record<string, string>,
@@ -312,7 +293,6 @@ export function resolveHeadersOrThrow(
   return Object.keys(resolved).length > 0 ? resolved : undefined;
 }
 
-/** Clear the config value command cache. Exported for testing. */
 export function clearConfigValueCache(): void {
   commandResultCache.clear();
 }

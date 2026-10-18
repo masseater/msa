@@ -1,11 +1,3 @@
-/**
- * Bash command execution with streaming support and cancellation.
- *
- * This module provides a unified bash execution implementation used by:
- * - AgentSession.executeBash() for interactive and RPC modes
- * - Direct calls from modes that need bash execution
- */
-
 import type { WriteStream } from "node:fs";
 import { finished } from "node:stream/promises";
 
@@ -15,38 +7,19 @@ import { sanitizeBinaryOutput } from "../utils/shell.ts";
 import type { BashOperations } from "./tools/bash.ts";
 import { DEFAULT_MAX_BYTES, truncateTail } from "./tools/truncate.ts";
 
-// ============================================================================
-// Types
-// ============================================================================
-
 export interface BashExecutorOptions {
-  /** Callback for streaming output chunks (already sanitized) */
   onChunk?: (chunk: string) => void;
-  /** AbortSignal for cancellation */
   signal?: AbortSignal;
 }
 
 export interface BashResult {
-  /** Combined stdout + stderr output (sanitized, possibly truncated) */
   output: string;
-  /** Process exit code (undefined if killed/cancelled) */
   exitCode: number | undefined;
-  /** Whether the command was cancelled via signal */
   cancelled: boolean;
-  /** Whether the output was truncated */
   truncated: boolean;
-  /** Path to temp file containing full output (if output exceeded truncation threshold) */
   fullOutputPath?: string | undefined;
 }
 
-// ============================================================================
-// Implementation
-// ============================================================================
-
-/**
- * Execute a bash command using custom BashOperations.
- * Used for remote execution (SSH, containers, etc.).
- */
 export async function executeBashWithOperations(
   command: string,
   cwd: string,
@@ -72,17 +45,14 @@ export async function executeBashWithOperations(
   };
 
   const decoder = new TextDecoder();
-  // Unfinished escape sequence at the end of the previous chunk, completed by the next chunk.
   let pendingAnsi = "";
 
   const appendText = (rawText: string) => {
-    // Sanitize: strip ANSI, replace binary garbage, normalize newlines
     const text = sanitizeBinaryOutput(stripAnsi(rawText)).replace(/\r/g, "");
     if (!text) {
       return;
     }
 
-    // Start writing to temp file if exceeds threshold
     if (totalBytes > DEFAULT_MAX_BYTES) {
       ensureTempFile();
     }
@@ -91,7 +61,6 @@ export async function executeBashWithOperations(
       tempFileStream.write(text);
     }
 
-    // Keep rolling buffer
     outputChunks.push(text);
     outputBytes += text.length;
     while (outputBytes > maxOutputBytes && outputChunks.length > 1) {
@@ -99,7 +68,6 @@ export async function executeBashWithOperations(
       outputBytes -= removed.length;
     }
 
-    // Stream to callback
     if (options?.onChunk) {
       options.onChunk(text);
     }
@@ -124,7 +92,6 @@ export async function executeBashWithOperations(
   try {
     ({ exitCode } = await operations.exec(command, cwd, { onData, signal: options?.signal }));
   } catch (err) {
-    // An aborted command still returns the output it produced so far
     if (!options?.signal?.aborted) {
       tempFileStream?.end();
       throw err;
@@ -137,7 +104,6 @@ export async function executeBashWithOperations(
   if (truncationResult.truncated) {
     ensureTempFile();
   }
-  // Callers read the full output file as soon as this returns.
   if (tempFileStream) await finished(tempFileStream.end());
   const cancelled = options?.signal?.aborted ?? false;
 

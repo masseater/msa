@@ -15,12 +15,6 @@ import { getMsaUserAgent } from "../utils/user-agent.ts";
 const DEFAULT_CATALOG_BASE_URL = "https://pi.dev";
 const REMOTE_CATALOG_ATTEMPT_TIMEOUT_MS = 4_000;
 export const REMOTE_CATALOG_REFRESH_INTERVAL_MS = 4 * 60 * 60 * 1000;
-/**
- * Model types this client can consume. Sent as `?types=` so the catalog server
- * returns the full-type shard instead of the chat-only one served to clients
- * that predate model types. A server that ignores the parameter still returns
- * the chat-only shard, which this client handles unchanged.
- */
 export const REMOTE_CATALOG_MODEL_TYPES: readonly ModelType[] = ["chat", "image", "classifier"];
 
 function isSupportedModelType(model: { type?: unknown }): boolean {
@@ -61,7 +55,6 @@ function parseCatalog(providerId: string, value: unknown): AnyModel[] {
     .map((model) => ({ ...model, provider: providerId }) as AnyModel);
 }
 
-/** Read a successful pi.dev catalog response. A missing or invalid Last-Modified header is 0. */
 async function readCatalog(
   providerId: string,
   response: Response,
@@ -75,7 +68,6 @@ async function readCatalog(
   };
 }
 
-/** Whether a pi.dev catalog is newer than the model data shipped with msa. */
 function isNewer(lastModified: number | undefined, localGeneratedAt: number | undefined): boolean {
   return (
     localGeneratedAt === undefined ||
@@ -112,13 +104,11 @@ function requestCatalog(
   );
 }
 
-/** Replaces the catalog with a credential-specific model list. */
 export type PersonalizeCatalog = (
   catalog: readonly AnyModel[],
   context: RefreshModelsContext,
 ) => Promise<readonly AnyModel[]>;
 
-/** Add a persisted pi.dev catalog overlay to a static built-in provider. */
 export function withRemoteCatalog(
   provider: Provider,
   catalogBaseUrl: string = DEFAULT_CATALOG_BASE_URL,
@@ -150,9 +140,6 @@ export function withRemoteCatalog(
         return;
       }
       if (!context.allowNetwork || context.signal.aborted) return;
-      // Skip the request if pi.dev was checked less than REMOTE_CATALOG_REFRESH_INTERVAL_MS ago.
-      // An entry without lastModified (saved by an older msa, or after a failed first request) is
-      // always refetched: remoteModels() ignores it, so waiting would leave the overlay empty.
       if (
         !context.force &&
         stored?.checkedAt !== undefined &&
@@ -162,14 +149,10 @@ export function withRemoteCatalog(
         return;
       }
 
-      // Only revalidate when a cached body backs the validator, so a 304 can never
-      // leave the overlay empty.
       const validator = stored && stored.models.length > 0 ? stored.etag : undefined;
       const response = await requestCatalog(provider.id, catalogBaseUrl, context.signal, validator);
       if (context.signal.aborted) return;
       const checkedAt = Date.now();
-      // Unchanged: dynamicModels already holds the stored overlay, so only the
-      // freshness window moves.
       if (response.status === 304 && stored) {
         await context.publish({ persist: { ...stored, checkedAt } });
         return;
@@ -180,8 +163,6 @@ export function withRemoteCatalog(
         return;
       }
       if (!response.ok) {
-        // Transient failure: the cached body and its validator stay valid, so keep the
-        // etag and let the next refresh revalidate instead of downloading the catalog.
         await context.publish({ persist: { ...(stored ?? { models: [] }), checkedAt } });
         throw new Error(`Model catalog request failed for ${provider.id}: ${response.status}`);
       }
@@ -199,14 +180,6 @@ export function withRemoteCatalog(
   };
 }
 
-/**
- * Like `withRemoteCatalog`, but on each network refresh the catalog (built-in models plus a newer
- * pi.dev catalog) is passed through `personalize` and the result is saved. The saved entry holds
- * the personalized list, not the pi.dev catalog, and replaces the catalog, including offline.
- * The refresh interval and etag revalidation are skipped. An empty list (nothing saved yet, or an
- * empty catalog saved by an older msa after a failed or missing pi.dev catalog) falls back to the
- * built-in models.
- */
 export function withPersonalizedCatalog(
   provider: Provider,
   personalize: PersonalizeCatalog,

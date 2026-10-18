@@ -13,30 +13,16 @@ import type { ModelRuntime } from "./model-runtime.ts";
 import type { SessionEntry, SessionManager, UsageEntry } from "./session-manager.ts";
 import type { CacheWarmingMode } from "./settings-manager.ts";
 
-/** Streaming warming never continues past this long after the real request that started it. */
 const MAX_WARMING_AGE_MS = 60 * 60_000;
-/** Idle warming uses a shorter horizon because continuation estimates become less reliable with age. */
 const MAX_IDLE_WARMING_AGE_MS = 30 * 60_000;
-/** A refresh is sent only when it is expected to save at least this many dollars. */
 const CACHE_WARMING_MINIMUM_EXPECTED_SAVINGS = 0.05;
-/**
- * Chance that a real request arrives before the cache entry expires while the
- * agent sits idle. Measured from our own usage; per-session estimates were not
- * better than this constant.
- */
 const IDLE_CONTINUATION_PROBABILITY = 0.15;
 
-/** Refresh at 90% of the TTL while preserving at least ten seconds of margin. */
 export function getCacheWarmingDelayMs(ttlMs: number): number | undefined {
   if (ttlMs <= 10_000) return undefined;
   return Math.max(1, Math.floor(Math.min(ttlMs * 0.9, ttlMs - 10_000)));
 }
 
-/**
- * Lifetime of the prompt cache entry a request writes, from the model's
- * `promptCache` tier for the retention the request used. Undefined when the
- * model has no lifetime for that tier or caching is off.
- */
 export function getPromptCacheTtlMs(
   model: Model<Api>,
   options: SimpleStreamOptions | undefined,
@@ -49,19 +35,11 @@ export function getPromptCacheTtlMs(
   return seconds === undefined ? undefined : seconds * 1000;
 }
 
-/**
- * Whether replaying the request with a one-token output cap leaves its cache
- * entry untouched. Anthropic's budget-based thinking (Claude models without
- * adaptive thinking) derives `budget_tokens` from `max_tokens`; the replay
- * would get a different budget, which Anthropic keys the message cache on,
- * and the model could still think for thousands of tokens.
- */
 export function isReplayable(model: Model<Api>, options: SimpleStreamOptions | undefined): boolean {
   if (!options?.reasoning || model.api !== "anthropic-messages") return true;
   return (model as Model<"anthropic-messages">).compat?.forceAdaptiveThinking === true;
 }
 
-/** Prompt size of the most recent real request on the branch, as reported by the provider. */
 function lastPromptTokens(entries: SessionEntry[]): number {
   for (let index = entries.length - 1; index >= 0; index--) {
     const entry = entries[index];
@@ -91,28 +69,16 @@ function price(
 
 export type CacheWarmingAction = "warm" | "stop";
 
-/** Inputs and outcome of one warm-or-stop decision, as shown by `/status`. */
 export interface CacheWarmingDecision {
-  /** "streaming" while the agent run that sent the request is still active. */
   phase: "streaming" | "idle";
-  /** Price of this refresh: a cache read of the prompt plus one output token. */
   warmCost: number;
-  /** Extra price of the next real request if the cache entry is lost. */
   missCost: number;
-  /** Estimated chance that a real request arrives before the entry expires. */
   continuationProbability: number;
-  /** `continuationProbability * missCost - warmCost`. */
   expectedSavings: number;
-  /** False when the prompt size or the model's prices are unknown. */
   economicsAvailable: boolean;
-  /** msa's decision: "warm" when `expectedSavings` is at least $0.05. */
   action: CacheWarmingAction;
 }
 
-/**
- * Fired before each refresh with msa's decision filled in. Everything else an
- * extension might want (model, idle state, context size) is on the context.
- */
 export interface CacheWarmingDecisionEvent extends Pick<
   CacheWarmingDecision,
   "warmCost" | "missCost" | "continuationProbability" | "action"
@@ -121,23 +87,17 @@ export interface CacheWarmingDecisionEvent extends Pick<
 }
 
 export interface CacheWarmingDecisionEventResult {
-  /** Override whether this refresh is sent. "stop" ends warming until the next real request. */
   action?: CacheWarmingAction;
 }
 
 export interface CacheWarmingStatus {
-  /** "scheduled": a refresh timer is armed; "refreshing": a warm request is in flight. */
   state: "inactive" | "scheduled" | "refreshing";
-  /** Why nothing is scheduled. */
   reason?: string;
   nextWarmAt?: number;
-  /** The pending decision, or the decision that stopped warming. */
   decision?: CacheWarmingDecision;
-  /** True when an extension changed `decision.action`. */
   extensionOverride?: boolean;
 }
 
-/** The request whose prompt cache entry should be kept warm, exactly as it was sent. */
 export interface CacheWarmRequest {
   model: Model<Api>;
   context: Context;
@@ -145,35 +105,25 @@ export interface CacheWarmRequest {
 }
 
 interface ActiveRun extends CacheWarmRequest {
-  /** False once the session's model or messages no longer match the request. */
   isCurrent: () => boolean;
   ttlMs: number;
   delayMs: number;
-  /** Latest safe time to send this refresh, leaving half the original expiry margin. */
   refreshDeadlineAt: number;
   startedAt: number;
   controller: AbortController;
   phase: "streaming" | "idle";
   nextWarmAt: number;
-  /** Set while a refresh that an extension forced is in flight. */
   extensionOverride: boolean;
   timer?: ReturnType<typeof setTimeout> | undefined;
 }
 
-/**
- * Keeps one prompt cache entry alive by re-sending its request with a
- * one-token output cap before the entry expires. `start` replaces any
- * previous run; warm requests never extend the fixed safety windows.
- */
 export class CacheWarmer {
   private run?: ActiveRun | undefined;
   private inactive: CacheWarmingStatus;
   private readonly models: Pick<ModelRuntime, "streamSimple">;
   private readonly sessionManager: Pick<SessionManager, "appendUsage" | "getBranch">;
   private readonly getMode: () => CacheWarmingMode;
-  /** Lets extensions override `event.action`; failures fall back to msa's decision. */
   private readonly decide: (event: CacheWarmingDecisionEvent) => Promise<CacheWarmingAction>;
-  /** Called with the persisted usage entry after each successful refresh. */
   onWarmed?: ((entry: UsageEntry) => void) | undefined;
 
   constructor(
@@ -208,7 +158,6 @@ export class CacheWarmer {
     };
   }
 
-  /** Keep the prompt cache entry written by `request` warm while `isCurrent` holds. */
   start(request: CacheWarmRequest, isCurrent: () => boolean): void {
     this.clearRun();
     const mode = this.getMode();
@@ -263,7 +212,6 @@ export class CacheWarmer {
     }
   }
 
-  /** Reconcile an active run after the persisted warming mode changes. */
   onModeChanged(): void {
     const run = this.run;
     if (!run) return;
@@ -294,9 +242,6 @@ export class CacheWarmer {
   private schedule(run: ActiveRun): void {
     run.extensionOverride = false;
     run.nextWarmAt = Date.now() + run.delayMs;
-    // A timer can run late after sleep or event-loop blockage. Keep half of
-    // the planned pre-expiry margin for that delay and request dispatch; a
-    // late refresh is likely a full-price cache write, not a cache warm.
     run.refreshDeadlineAt = run.nextWarmAt + Math.floor((run.ttlMs - run.delayMs) / 2);
     const deadline =
       run.startedAt + (run.phase === "idle" ? MAX_IDLE_WARMING_AGE_MS : MAX_WARMING_AGE_MS);
@@ -327,9 +272,7 @@ export class CacheWarmer {
         continuationProbability,
         action,
       });
-    } catch {
-      // Extension failures fall back to msa's own decision.
-    }
+    } catch {}
     if (!this.validateRun(run) || this.refreshDeadlineMissed(run)) return;
     const extensionOverride = action !== decision.action;
     if (action === "stop") {
@@ -363,9 +306,7 @@ export class CacheWarmer {
         );
         this.onWarmed?.(entry);
       }
-    } catch {
-      // Cache warming is best-effort and must not affect the active agent run.
-    }
+    } catch {}
     if (this.run === run) this.schedule(run);
   }
 
@@ -446,11 +387,8 @@ function formatCacheWarmingDecisionTime(nextWarmAt: number | undefined, now: num
   return `Decision in ${parts.join(" ")}`;
 }
 
-/** One-line status for `/status`. */
 export function formatCacheWarmingStatus(status: CacheWarmingStatus, now = Date.now()): string {
   const decision = status.decision;
-  // A decision is attached once msa (or an extension) acted on it; "inactive"
-  // without one never got that far.
   if (
     !decision ||
     (status.state === "inactive" && !decision.economicsAvailable && !status.extensionOverride)
@@ -465,7 +403,6 @@ export function formatCacheWarmingStatus(status: CacheWarmingStatus, now = Date.
   return `${formatCacheWarmingDecisionTime(status.nextWarmAt, now)} (${details})`;
 }
 
-/** One-line transcript text for persisted cache-warming usage. */
 export function formatCacheWarmingUsage(entry: UsageEntry): string {
   const note = entry.note ? ` (${entry.note})` : "";
   const cost = entry.usage.cost.total.toFixed(6).replace(/(\.\d{3}\d*?)0+$/, "$1");

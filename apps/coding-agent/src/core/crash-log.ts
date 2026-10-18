@@ -72,7 +72,6 @@ function stackContainsPath(
   return false;
 }
 
-/** Find loaded extensions with source files in a stack trace. */
 export function findExtensionStackMatches(
   stack: string | undefined,
   extensions: readonly ExtensionStackMetadata[],
@@ -127,7 +126,6 @@ export function findExtensionStackMatches(
   return matches;
 }
 
-/** Best-effort persistence for callers that are already crashing. */
 export function recordCrash(
   crash: {
     kind: CrashRecord["kind"];
@@ -155,7 +153,6 @@ export function recordCrash(
   }
 }
 
-/** Return the newest recent crash, marking pending records as announced. */
 export function takeUnnotifiedCrash(
   path = crashLogPath(),
   now = Date.now(),
@@ -170,16 +167,12 @@ export function takeUnnotifiedCrash(
       records.map((record) => (record.notified ? record : { ...record, notified: true })),
       path,
     );
-  } catch {
-    // Showing the notice again is harmless.
-  }
+  } catch {}
   return crash;
 }
 
 export function clearCrashLog(path = crashLogPath()): void {
   try {
     rmSync(path, { force: true });
-  } catch {
-    // The records can be attached again if cleanup fails.
-  }
+  } catch {}
 }

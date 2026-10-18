@@ -168,9 +168,7 @@ function acquireTrustLockSync(path: string): () => void {
       }
       lastError = error;
       const start = Date.now();
-      while (Date.now() - start < delayMs) {
-        // Sleep synchronously to avoid changing trust store callers to async.
-      }
+      while (Date.now() - start < delayMs) {}
     }
   }
 
@@ -189,13 +187,6 @@ function withTrustFileLock<T>(path: string, fn: () => T): T {
   }
 }
 
-/**
- * Returns true when cwd has project-local resources that must be gated by
- * project trust: trust-requiring entries under cwd/.msa, or .agents/skills in
- * cwd or one of its ancestors. Returns false when no such project resources
- * exist. The user/global ~/.agents/skills directory is always treated as a
- * trusted user resource and is ignored here, even when cwd is $HOME.
- */
 export function hasTrustRequiringProjectResources(cwd: string): boolean {
   const homeDir = canonicalizePath(resolvePath(process.env["HOME"] || homedir()));
   const userAgentsSkillsDir = join(homeDir, ".agents", "skills");

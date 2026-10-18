@@ -1,12 +1,3 @@
-/**
- * `/goal`: keep a session running across turns until a completion condition holds.
- *
- * After every run that would otherwise settle, a separate evaluator model reads the transcript
- * and answers not_met / met / impossible. not_met continues the run with the evaluator's reason
- * as guidance; met and impossible end the goal. The goal lives in session entries so a resumed
- * session restores an unfinished one.
- */
-
 import { setTimeout as delay } from "node:timers/promises";
 
 import type { AgentMessage } from "@msa/agent-core";
@@ -20,9 +11,7 @@ import type { SessionEntry } from "./session-manager.ts";
 export const GOAL_ENTRY_TYPE = "msa.goal";
 export const GOAL_CONTINUE_MESSAGE_TYPE = "msa.goal.continue";
 export const MAX_GOAL_CONDITION_LENGTH = 4000;
-/** Consecutive evaluated turns without a tool call before the loop hands control back. */
 export const GOAL_NO_PROGRESS_TURN_LIMIT = 3;
-/** Consecutive failed turns (after the session's own retries) before the loop pauses. */
 export const GOAL_ERROR_TURN_LIMIT = 3;
 const RATE_LIMIT_BASE_DELAY_MS = 60_000;
 const RATE_LIMIT_MAX_DELAY_MS = 15 * 60_000;
@@ -37,7 +26,6 @@ export type GoalCommand =
   | { kind: "clear" }
   | { kind: "set"; condition: string };
 
-/** Parse `/goal [condition|clear]`, or return undefined when `text` is not a `/goal` command. */
 export function parseGoalCommand(text: string): GoalCommand | undefined {
   const match = /^\/goal(?:\s+([\s\S]*))?$/.exec(text.trim());
   if (!match) return undefined;
@@ -54,7 +42,6 @@ export interface GoalEvaluation {
   reason: string;
 }
 
-/** Data of a `msa.goal` custom entry. */
 export type GoalEntryData =
   | { event: "set"; condition: string }
   | { event: "evaluated"; condition: string; reason: string; turn: number }
@@ -89,7 +76,6 @@ export function isGoalEntryData(value: unknown): value is GoalEntryData {
   );
 }
 
-/** The condition of the goal that was still active at the end of `branch`. */
 export function findActiveGoalCondition(branch: readonly SessionEntry[]): string | undefined {
   for (let i = branch.length - 1; i >= 0; i--) {
     const entry = branch[i]!;
@@ -105,7 +91,6 @@ export type GoalErrorKind = "fatal" | "rate_limit" | "transient";
 
 const FATAL_ERROR_PATTERN = new RegExp(
   [
-    // Authentication
     "\\b401\\b",
     "\\b403\\b",
     "unauthori[sz]ed",
@@ -114,7 +99,6 @@ const FATAL_ERROR_PATTERN = new RegExp(
     "invalid x-api-key",
     "permission.?denied",
     "forbidden",
-    // Credits and quota
     "credit",
     "insufficient_quota",
     "quota exceeded",
@@ -122,7 +106,6 @@ const FATAL_ERROR_PATTERN = new RegExp(
     "billing",
     "usage.?limit",
     "available balance",
-    // Model availability
     "\\b404\\b",
     "not_found_error",
     "model.{0,40}(?:not found|does not exist|not available|not supported|unavailable)",
@@ -132,10 +115,6 @@ const FATAL_ERROR_PATTERN = new RegExp(
 );
 const RATE_LIMIT_PATTERN = /rate.?limit|too many requests|\b429\b|ResourceExhausted/i;
 
-/**
- * How a goal reacts to a run that ended in an error the session could not recover from itself.
- * Context overflow reaches here only after compaction failed to resolve it.
- */
 export function classifyGoalError(
   message: AssistantMessage,
   contextOverflow: boolean,
@@ -153,10 +132,6 @@ function price(model: Model<Api>): number {
   return model.cost.input + model.cost.output;
 }
 
-/**
- * The default evaluator: the strongest small-tier model of the working model's provider that
- * costs no more than the working model, or the working model when its provider has none.
- */
 export function pickEvaluatorModel(
   current: Model<Api>,
   available: readonly Model<Api>[],
@@ -250,7 +225,6 @@ function formatTokenCount(tokens: number): string {
 
 export type GoalTone = "accent" | "muted" | "success" | "error" | "warning";
 
-/** The transcript line for a `msa.goal` entry, or undefined for any other entry. */
 export function describeGoalEntry(
   entry: SessionEntry,
 ): { tone: GoalTone; text: string } | undefined {
@@ -283,7 +257,6 @@ export function describeGoalEntry(
   }
 }
 
-/** The answer to `/goal` without arguments, one string per line. */
 export function describeGoalStatus(goal: GoalSnapshot | undefined, now: number): string[] {
   if (!goal) return ["No active goal"];
   const lines = [
@@ -297,7 +270,6 @@ export function describeGoalStatus(goal: GoalSnapshot | undefined, now: number):
   return lines;
 }
 
-/** The active goal indicator, such as `◎ /goal active · 3m 2s · 4 turns`. */
 export function describeGoalIndicator(goal: GoalSnapshot, now: number): string {
   const parts = ["◎ /goal active", formatGoalDuration(now - goal.startedAt)];
   if (goal.turns > 0) parts.push(turnCount(goal.turns));
@@ -308,24 +280,19 @@ export function describeGoalIndicator(goal: GoalSnapshot, now: number): string {
 export interface GoalSnapshot {
   condition: string;
   startedAt: number;
-  /** Evaluated turns since the goal was set or restored. */
   turns: number;
-  /** Tokens the session used since the goal was set or restored, evaluator included. */
   tokens: number;
   lastEvaluation?: GoalEvaluation;
   evaluating: boolean;
 }
 
-/** What a goal needs from its session. */
 export interface GoalHost {
   messages(): AgentMessage[];
   totalTokens(): number;
   lastAssistant(): AssistantMessage | undefined;
   isContextOverflow(message: AssistantMessage): boolean;
-  /** Ask the evaluator model and return its text. */
   evaluate(prompt: string, signal: AbortSignal): Promise<string>;
   record(data: GoalEntryData): void;
-  /** Queue a message that the next turn starts from. */
   queueContinue(text: string): void;
   changed(): void;
 }
@@ -366,7 +333,6 @@ export class GoalLoop {
     };
   }
 
-  /** Set the goal, replacing any active one. */
   set(condition: string): void {
     const trimmed = condition.trim();
     if (!trimmed) throw new Error("Goal condition is empty");
@@ -381,7 +347,6 @@ export class GoalLoop {
     this.host.changed();
   }
 
-  /** Clear the active goal. Returns false when there was none. */
   clear(): boolean {
     const goal = this.active;
     if (!goal) return false;
@@ -393,7 +358,6 @@ export class GoalLoop {
     if (this.active) this.active.toolUsed = true;
   }
 
-  /** A run started from outside the loop: the guards that handed control back start over. */
   resetGuards(): void {
     if (!this.active) return;
     this.active.idleTurns = 0;
@@ -405,10 +369,6 @@ export class GoalLoop {
     this.abortController?.abort();
   }
 
-  /**
-   * Called when a run would settle. Returns true when a continuation was queued and the run
-   * should go on.
-   */
   async afterRun(): Promise<boolean> {
     const goal = this.active;
     if (!goal) return false;

@@ -117,16 +117,10 @@ function mergeExtensionWarnings(
 
 type BuiltinExtension = Exclude<InlineExtension, ExtensionFactory>;
 
-/** Built-in extensions supply the code of `builtin:<name>` extension paths (see `InlineExtension`). */
 export function isBuiltinExtension(input: InlineExtension): input is BuiltinExtension {
   return typeof input !== "function" && input.builtin === true;
 }
 
-/**
- * Leave out replaceable extensions (see `InlineExtension`) that share a tool, command, or flag name
- * with another extension. For example, a third-party MCP extension that registers `/mcp` replaces
- * the built-in MCP extension instead of both connecting the same servers.
- */
 function omitReplacedExtensions(
   extensions: Extension[],
   warnings?: Array<{ path: string; warning: string }>,
@@ -215,28 +209,13 @@ function loadContextFileFromDir(dir: string): { path: string; content: string } 
   return null;
 }
 
-/**
- * The main repo's context file that a nested linked worktree's own copy shadows: both
- * occupy the same logical repository scope, so loading both applies that context twice. Returns
- * undefined when nothing is shadowed, leaving normal ancestor inheritance alone.
- *
- * Returned canonicalized (realpath), because `git worktree add` writes the `.git`
- * file's `gitdir:` target in realpath form while cwd may still be symlinked
- * (macOS `/tmp` -> `/private/tmp`).
- */
 function findShadowedContextFile(cwd: string): string | undefined {
   const gitPaths = findGitPaths(cwd);
   if (!gitPaths) return undefined;
   const commonGitDir = canonicalizePath(gitPaths.commonGitDir);
   const worktreeRoot = canonicalizePath(gitPaths.repoDir);
   const mainRepoRoot = dirname(commonGitDir);
-  // False for an ordinary repo, where the two are the same dir, and for a sibling
-  // worktree (`git worktree add ../feat`), whose main repo is not an ancestor.
   if (!worktreeRoot.startsWith(`${mainRepoRoot}${sep}`)) return undefined;
-  // dirname of the common git dir is the main worktree root only when that dir is
-  // itself checked out from the same repo. In a bare layout (`proj/.bare` +
-  // `proj/main`) it is just the directory holding `.bare`, which tracks nothing; a
-  // submodule's gitdir has no `commondir`, so it lands under `.git/modules`.
   if (canonicalizePath(join(mainRepoRoot, ".git")) !== commonGitDir) return undefined;
   const worktreeContextFile = loadContextFileFromDir(worktreeRoot);
   return worktreeContextFile ? join(mainRepoRoot, basename(worktreeContextFile.path)) : undefined;
@@ -265,8 +244,6 @@ export function loadProjectContextFiles(options: {
 
   while (true) {
     const contextFile = loadContextFileFromDir(currentDir);
-    // Compare the directory's real path, not the file's: a worktree AGENTS.md that
-    // symlinks to the main repo's file resolves to the shadowed path itself.
     const isShadowed =
       shadowedContextFile !== undefined &&
       contextFile !== null &&
@@ -297,7 +274,6 @@ export interface DefaultResourceLoaderOptions {
   additionalThemePaths?: string[] | undefined;
   extensionFactories?: InlineExtension[] | undefined;
   noExtensions?: boolean | undefined;
-  /** Built-in extensions not to load, by name (such as `mcp`), even when settings or `-e` enable them. */
   disabledBuiltinExtensions?: string[] | undefined;
   noSkills?: boolean | undefined;
   noPromptTemplates?: boolean | undefined;
@@ -375,7 +351,6 @@ export class DefaultResourceLoader implements ResourceLoader {
   private lastThemePaths: string[];
   private loaded: boolean;
 
-  /** A loader with the same options and nothing loaded yet, for another session of this process. */
   fork(): DefaultResourceLoader {
     return new DefaultResourceLoader(this.options);
   }
@@ -515,8 +490,6 @@ export class DefaultResourceLoader implements ResourceLoader {
   }
 
   async loadProjectTrustExtensions(): Promise<LoadExtensionsResult> {
-    // Force untrusted project settings for the bootstrap pass. This keeps project-local
-    // extensions/packages out while still loading user/global and temporary CLI extensions.
     this.settingsManager.setProjectTrusted(false);
     await this.settingsManager.reload();
     return this.loadCurrentExtensionSet({ includeInlineFactories: true });
@@ -538,7 +511,6 @@ export class DefaultResourceLoader implements ResourceLoader {
       this.settingsManager.setProjectTrusted(projectTrusted);
     }
 
-    // reload() preserves SettingsManager.projectTrusted and reloads settings for that trust state.
     await this.settingsManager.reload();
     const resolvedPaths = await this.packageManager.resolve();
     const cliExtensionPaths = await this.packageManager.resolveExtensionSources(
@@ -547,7 +519,6 @@ export class DefaultResourceLoader implements ResourceLoader {
         temporary: true,
       },
     );
-    // Kept on the instance so post-reload passes (extendResources) can still resolve package metadata.
     this.resourceMetadataByPath = new Map();
     const metadataByPath = this.resourceMetadataByPath;
 
@@ -555,7 +526,6 @@ export class DefaultResourceLoader implements ResourceLoader {
     this.extensionPromptSourceInfos = new Map();
     this.extensionThemeSourceInfos = new Map();
 
-    // Helper to extract enabled paths and store metadata
     const getEnabledResources = (resources: ResolvedResource[]): ResolvedResource[] => {
       for (const r of resources) {
         if (!metadataByPath.has(r.path)) {
@@ -576,7 +546,6 @@ export class DefaultResourceLoader implements ResourceLoader {
       this.mapSkillPath(resource, metadataByPath),
     );
 
-    // Add CLI paths metadata
     for (const r of cliExtensionPaths.extensions) {
       if (!metadataByPath.has(r.path)) {
         metadataByPath.set(r.path, { source: "cli", scope: "temporary", origin: "top-level" });
@@ -734,8 +703,6 @@ export class DefaultResourceLoader implements ResourceLoader {
     const cliEnabledExtensions = cliExtensionPaths.extensions
       .filter((r) => r.enabled)
       .map((r) => r.path);
-    // Built-in extensions wait for the final pass: project settings can disable them, and a loaded
-    // extension cannot be unloaded.
     const extensionPaths = (
       this.noExtensions
         ? cliEnabledExtensions
@@ -772,7 +739,6 @@ export class DefaultResourceLoader implements ResourceLoader {
       : resolvePath(path, this.cwd, { normalizeUnicodeSpaces: true });
   }
 
-  /** Load extension paths: files from disk and `builtin:<name>` paths from the built-in extensions. */
   private async loadExtensionPaths(
     paths: string[],
     runtime?: ExtensionRuntime,
@@ -815,7 +781,6 @@ export class DefaultResourceLoader implements ResourceLoader {
     extensionPaths: string[],
     preTrustExtensions: LoadExtensionsResult | undefined,
   ): Promise<LoadExtensionsResult> {
-    // Without a pre-trust pass nothing is preloaded, and inline extensions load here.
     const preloaded = preTrustExtensions?.extensions ?? [];
     const preloadedByPath = new Map(
       preloaded
@@ -866,8 +831,6 @@ export class DefaultResourceLoader implements ResourceLoader {
   }
 
   private addExtensionConflictDiagnostics(extensionsResult: LoadExtensionsResult): void {
-    // Detect extension conflicts (tools, commands, flags with same names from different extensions)
-    // Keep all extensions loaded. Conflicts are reported as diagnostics, and precedence is handled by load order.
     const conflicts = this.detectExtensionConflicts(extensionsResult.extensions);
     for (const conflict of conflicts) {
       extensionsResult.errors.push({ path: conflict.path, error: conflict.message });
@@ -988,7 +951,6 @@ export class DefaultResourceLoader implements ResourceLoader {
     if (this.noThemes && themePaths.length === 0) {
       themesResult = { themes: [], diagnostics: [] };
     } else {
-      // Theme construction only needs trueColor, so skip the unrelated tmux hyperlink probe.
       const colorMode = getTerminalColorMode({
         ...detectCapabilities(() => false),
         ...this.settingsManager.getTerminalCapabilityOverrides(),
@@ -1383,12 +1345,10 @@ export class DefaultResourceLoader implements ResourceLoader {
   ): Array<{ path: string; message: string }> {
     const conflicts: Array<{ path: string; message: string }> = [];
 
-    // Track which extension registered each tool and flag
     const toolOwners = new Map<string, string>();
     const flagOwners = new Map<string, string>();
 
     for (const ext of extensions) {
-      // Check tools
       for (const toolName of ext.tools.keys()) {
         const existingOwner = toolOwners.get(toolName);
         if (existingOwner && existingOwner !== ext.path) {
@@ -1401,7 +1361,6 @@ export class DefaultResourceLoader implements ResourceLoader {
         }
       }
 
-      // Check flags
       for (const flagName of ext.flags.keys()) {
         const existingOwner = flagOwners.get(flagName);
         if (existingOwner && existingOwner !== ext.path) {

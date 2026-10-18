@@ -1,39 +1,20 @@
-/**
- * System prompt construction and project context loading
- */
-
 import { getSystemMessageText } from "@msa/ai";
 
 import { getDocsPath, getExamplesPath, getReadmePath } from "../config.ts";
 import { formatSkillsForPrompt, type Skill } from "./skills.ts";
 
 export interface BuildSystemPromptOptions {
-  /** Custom system prompt (replaces the default prefix). */
   customPrompt?: string | undefined;
-  /** Exact full prompt replacement set by a before_agent_start handler. */
   forceSystemPrompt?: string | undefined;
-  /** Tools to include in prompt. Default: [read, bash, edit, write]. */
   selectedTools?: string[] | undefined;
-  /**
-   * Selected tools whose declarations requests leave out (`prepareLoadout` hidden declarations).
-   * They are reachable only through another tool, so the tool list and rules leave them out too.
-   */
   hiddenTools?: string[] | undefined;
-  /** Optional one-line tool snippets keyed by tool name. */
   toolSnippets?: Record<string, string> | undefined;
-  /** Guideline bullets contributed by each tool, keyed by tool name. */
   toolGuidelines?: Record<string, string[]> | undefined;
-  /** Additional guideline bullets appended to the default system prompt rules. */
   promptGuidelines?: string[] | undefined;
-  /** Text appended from user configuration before project context, skills, and cwd. */
   appendSystemPrompt?: string | undefined;
-  /** Additional XML-wrapped prompt sections keyed by tag name. */
   sections?: Record<string, string> | undefined;
-  /** Working directory. */
   cwd: string;
-  /** Pre-loaded context files. */
   contextFiles?: Array<{ path: string; content: string }> | undefined;
-  /** Pre-loaded skills. */
   skills?: Skill[] | undefined;
 }
 
@@ -49,15 +30,9 @@ export type NormalizedBuildSystemPromptOptions = BuildSystemPromptOptions & {
   skills: Skill[];
 };
 
-/**
- * Ordered system prompt sections, keyed by name. `preamble` is untagged text; every other
- * section is wrapped in a tag of the same name so the model can match later updates to it.
- * These become `SystemMessage.sections` in the transcript.
- */
 export type SystemPromptSections = Record<string, string>;
 
 const SYSTEM_PROMPT_SECTION_NAME = /^[a-z][a-z0-9_-]*$/;
-/** Normalize prompt input into the mutable, collection-complete shape exposed to extensions. */
 export function normalizeBuildSystemPromptOptions(
   input: BuildSystemPromptOptions,
 ): NormalizedBuildSystemPromptOptions {
@@ -133,7 +108,6 @@ function buildRules(
   return rules.map((rule) => `- ${rule}`).join("\n");
 }
 
-/** Build the ordered, independently replaceable sections of the structured system prompt. */
 export function buildSystemPromptSections(input: BuildSystemPromptOptions): SystemPromptSections {
   const options = normalizeBuildSystemPromptOptions(input);
   const {
@@ -185,7 +159,6 @@ export function buildSystemPromptSections(input: BuildSystemPromptOptions): Syst
   if (appendSystemPrompt) promptSections["addendum"] = appendSystemPrompt;
   if (contextFiles.length > 0)
     promptSections["project_context"] = renderProjectContext(contextFiles);
-  // A hidden reader is still reachable through another tool, so skills stay but the hint names no tool.
   const readers = ["read", "bash"] as const;
   const skillFileReadTool =
     readers.find((tool) => declaredTools.includes(tool)) ??
@@ -206,10 +179,6 @@ export function buildSystemPromptSections(input: BuildSystemPromptOptions): Syst
   return sections;
 }
 
-/**
- * The complete prompt state for `input`. A forced prompt is opaque and lives in `content`
- * with no sections; otherwise `content` is empty and the structured sections carry the prompt.
- */
 export function buildSystemPromptState(input: BuildSystemPromptOptions): {
   content: string;
   sections?: SystemPromptSections;
@@ -218,16 +187,10 @@ export function buildSystemPromptState(input: BuildSystemPromptOptions): {
   return { content: "", sections: buildSystemPromptSections(input) };
 }
 
-/** Build the system prompt text, rendered exactly as the transcript's system message replays it. */
 export function buildSystemPrompt(input: BuildSystemPromptOptions): string {
   return getSystemMessageText({ role: "system", ...buildSystemPromptState(input), timestamp: 0 });
 }
 
-/**
- * Diff the sections the model currently has (replayed from the transcript, so never null)
- * against the desired ones. Returns a `SystemMessage.sections` patch, or undefined when
- * nothing changed.
- */
 export function diffSystemPromptSections(
   previous: Record<string, string | null>,
   current: SystemPromptSections,

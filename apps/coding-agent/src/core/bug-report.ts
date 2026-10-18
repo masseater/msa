@@ -30,7 +30,6 @@ function isSensitiveKey(key: string): boolean {
   return SENSITIVE_KEY.test(key.replace(/([a-z0-9])([A-Z])/g, "$1_$2"));
 }
 
-/** Strip credentials and secret-looking query parameters from a URL. */
 export function redactUrl(value: string): string {
   const nested = /^([a-z][a-z0-9+.-]*:)([a-z][a-z0-9+.-]*:\/\/.*)$/i.exec(value);
   const [, scheme, inner] = nested ?? [];
@@ -55,7 +54,6 @@ export function redactUrl(value: string): string {
   }
 }
 
-/** Copy a JSON value while removing values that may contain credentials. */
 export function redactJsonValue(value: unknown): unknown {
   if (value === undefined) return undefined;
   return JSON.parse(
@@ -93,7 +91,6 @@ function collectEnvironment() {
       ),
       ci: Boolean(process.env["CI"]),
     },
-    // Names help diagnose configuration; values never leave the machine.
     piEnvironmentVariables: Object.keys(process.env)
       .filter((name) => name.startsWith("MSA_"))
       .sort(),
@@ -191,7 +188,6 @@ export function collectBugReportMetadata(options: CollectBugReportMetadataOption
   };
 }
 
-/** Collect failed assistant turns without collecting conversation content. */
 export function collectBugReportDiagnostics(
   sessionManager: ReadonlySessionManager,
   crashes: readonly CrashRecord[] = [],
@@ -260,7 +256,6 @@ interface BugReportFile {
   data: string;
 }
 
-/** Files written to the zip export. */
 function bugReportFiles(bundle: BugReportBundle): BugReportFile[] {
   const files: BugReportFile[] = [
     {
@@ -347,7 +342,6 @@ interface GenerateBugReportSummaryOptions {
   sessionId?: string;
 }
 
-/** Ask the session model for a report when the user does not share the transcript. */
 export async function generateBugReportSummary(
   options: GenerateBugReportSummaryOptions,
 ): Promise<string> {

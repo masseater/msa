@@ -1,7 +1,3 @@
-/**
- * Model resolution, scoping, and initial selection
- */
-
 import type { ThinkingLevel } from "@msa/agent-core";
 import {
   type Api,
@@ -17,7 +13,6 @@ import { isValidThinkingLevel } from "../cli/args.ts";
 import { DEFAULT_THINKING_LEVEL } from "./defaults.ts";
 import type { ModelRuntime } from "./model-runtime.ts";
 
-/** Default chat model IDs for providers with built-in chat models. */
 export const defaultModelPerProvider: Partial<Record<KnownProvider, string>> = {
   anthropic: "claude-opus-4-8",
   openai: "gpt-5.5",
@@ -29,30 +24,13 @@ export const defaultModelPerProvider: Partial<Record<KnownProvider, string>> = {
 
 export interface ScopedModel {
   model: Model<Api>;
-  /** Thinking level if explicitly specified in pattern (e.g., "model:high"), undefined otherwise */
   thinkingLevel?: ThinkingLevel | undefined;
 }
 
-/*
- * Model reference resolution. Candidates are collected before a provider is chosen, so catalog order
- * never decides the provider and an ambiguous match is reported instead of falling through to a
- * weaker one.
- */
-
 export interface ModelReferenceRequest {
-  /** Bare model id or `provider/id`, optionally followed by `:<thinking>`. */
   text: string;
-  /** Only consider models from this provider. */
   provider?: string | undefined;
-  /**
-   * A trailing `:<suffix>` is only considered when the full text matches no model, since ids such as
-   * OpenRouter's `qwen/qwen3-coder:exacto` contain colons.
-   * - `none`: the suffix stays part of the id
-   * - `strict`: a valid thinking level is parsed; any other suffix stays part of the id
-   * - `lenient`: like `strict`, but an invalid suffix is dropped with a warning
-   */
   thinkingSuffix: "none" | "strict" | "lenient";
-  /** Match id and name substrings when no exact match exists. */
   fuzzy: boolean;
 }
 
@@ -72,16 +50,13 @@ export type ModelReferenceResult =
     }
   | {
       status: "not-found";
-      /** Set when a provider is explicit or named by a `provider/` prefix, for building a custom model id. */
       target?: ModelReferenceTarget;
     };
 
 export interface ModelReferenceTarget {
   provider: string;
   providerModels: [Model<Api>, ...Model<Api>[]];
-  /** Text after the provider prefix as typed, including any `:<suffix>`. */
   modelText: string;
-  /** `modelText` without a valid thinking suffix (unless `thinkingSuffix` is `none`). */
   modelId: string;
   thinkingLevel?: ThinkingLevel | undefined;
 }
@@ -110,10 +85,6 @@ function splitProviderPrefix(
   return provider ? { provider, modelText } : undefined;
 }
 
-/**
- * `usable` only breaks ties between providers, so a unique match resolves even without credentials
- * (`--api-key` first-time setup).
- */
 export function resolveModelReference(
   request: ModelReferenceRequest,
   models: readonly Model<Api>[],
@@ -148,7 +119,6 @@ export function resolveModelReference(
   };
 }
 
-/** Exact `provider/id` or bare id lookup without thinking suffixes or fuzzy matching. */
 export function findExactModelReferenceMatch(
   modelReference: string,
   models: readonly Model<Api>[],
@@ -180,10 +150,8 @@ function resolveText(
   if (thinking) {
     const inner = resolveText(thinking.base, request, pool, usable);
     if (inner.status === "not-found") return inner;
-    // Only use this thinking level if no warning from inner recursion
     return { ...inner, thinkingLevel: inner.warning ? undefined : thinking.thinkingLevel };
   }
-  // Keep an invalid suffix as part of the id and fail, rather than resolve a different model
   if (request.thinkingSuffix === "strict") return { status: "not-found" };
   const colonIndex = text.lastIndexOf(":");
   if (colonIndex === -1) return { status: "not-found" };
@@ -198,13 +166,6 @@ function resolveText(
   };
 }
 
-/**
- * `provider/rest` is only a hint: the whole text may also be a model id on another provider, such as
- * gateway id `zai/glm-5` or commandcode id `xiaomi/mimo-v2.6-pro`. The named provider wins when usable,
- * since that is what the syntax usually means; otherwise a sole usable raw match wins, since the named
- * provider could not serve the request. An unusable named match is still preferred over unusable raw
- * matches, so `--api-key` can set up the named provider.
- */
 function selectReference(
   text: string,
   pool: readonly Model<Api>[],
@@ -218,7 +179,6 @@ function selectReference(
   if (split) {
     const providerModels = pool.filter((model) => model.provider === split.provider);
     const lowerModelText = split.modelText.toLowerCase();
-    // The provider's own literal id (OpenRouter's `openrouter/free`) beats its fuzzy matches
     named =
       providerModels.find((model) => model.id.toLowerCase() === lowerModelText) ??
       raw.find((model) => model.provider === split.provider) ??
@@ -258,7 +218,6 @@ function selectFuzzy(
   const pool = usableMatches.length > 0 ? usableMatches : matches;
   const best = bestFuzzyMatch(pool);
   if (!best) return undefined;
-  // The same id on several providers would otherwise be decided by catalog order
   const tied = pool.filter((model) => model.id === best.id);
   if (new Set(tied.map((model) => model.provider)).size === 1)
     return { status: "resolved", model: best };
@@ -269,7 +228,6 @@ function selectFuzzy(
   };
 }
 
-/** Prefer aliases (`claude-sonnet-4-5`) over dated versions (`claude-sonnet-4-5-20250929`), then the latest. */
 function bestFuzzyMatch(matches: readonly Model<Api>[]): Model<Api> | undefined {
   const aliases = matches.filter((model) => isAlias(model.id));
   return [...(aliases.length > 0 ? aliases : matches)].sort((a, b) => b.id.localeCompare(a.id))[0];
@@ -307,12 +265,6 @@ export interface ResolveModelScopeResult {
   diagnostics: ModelScopeDiagnostic[];
 }
 
-/**
- * Resolve scope patterns (`--models`, `enabledModels`) to models with optional thinking levels.
- *
- * Every model in `models` is usable, so credentials cannot choose between providers offering the same
- * id. All of them are added, with a warning so the user can pick one with `provider/id`.
- */
 export function resolveModelScopeFromModels(
   patterns: string[],
   models: readonly Model<Api>[],
@@ -344,14 +296,11 @@ export function resolveModelScopeFromModels(
   };
 
   for (const pattern of patterns) {
-    // Check if pattern contains glob characters
     if (pattern.includes("*") || pattern.includes("?") || pattern.includes("[")) {
-      // Extract optional thinking level suffix (e.g., "provider/*:high")
       const thinking = splitThinkingSuffix(pattern);
       const globPattern = thinking?.base ?? pattern;
       const thinkingLevel = thinking?.thinkingLevel;
 
-      // Ids such as `bracketed-model[1m]` are not globs
       const exact = resolveModelReference(
         { text: globPattern, thinkingSuffix: "none", fuzzy: false },
         models,
@@ -363,8 +312,6 @@ export function resolveModelScopeFromModels(
         matches = exact.candidates;
         ambiguous(pattern, matches);
       } else {
-        // Match against "provider/modelId" format OR just model ID
-        // This allows "*sonnet*" to match without requiring "anthropic/*sonnet*"
         matches = models.filter(
           (m) =>
             minimatch(`${m.provider}/${m.id}`, globPattern, { nocase: true }) ||
@@ -429,29 +376,13 @@ export interface ResolveCliModelResult {
   model: Model<Api> | undefined;
   thinkingLevel?: ThinkingLevel | undefined;
   warning: string | undefined;
-  /**
-   * Error message suitable for CLI display.
-   * When set, model will be undefined.
-   */
   error: string | undefined;
 }
 
-/**
- * Resolve a single model from CLI flags.
- *
- * Supports:
- * - --provider <provider> --model <pattern>
- * - --model <provider>/<pattern>
- * - Fuzzy matching (same rules as model scoping: exact id, then partial id/name)
- *
- * Note: This does not apply the thinking level by itself, but it may *parse* and
- * return a thinking level from "<pattern>:<thinking>" so the caller can apply it.
- */
 export function resolveCliModel(options: {
   cliProvider?: string | undefined;
   cliModel?: string | undefined;
   cliThinking?: ThinkingLevel | undefined;
-  /** `--api-key` was supplied for the selected provider. */
   inlineApiKey?: boolean | undefined;
   modelRuntime: ModelRuntime;
 }): ResolveCliModelResult {
@@ -461,8 +392,6 @@ export function resolveCliModel(options: {
     return { model: undefined, warning: undefined, error: undefined };
   }
 
-  // Important: use *all* models here, not just models with pre-configured auth.
-  // This allows "--api-key" to be used for first-time setup.
   const models = [...modelRuntime.getModels()];
   if (models.length === 0) {
     return {
@@ -486,7 +415,6 @@ export function resolveCliModel(options: {
   const result = resolveModelReference(
     { text: cliModel, provider, thinkingSuffix: "strict", fuzzy: true },
     models,
-    // An inline key goes to whichever provider is selected, so stored credentials must not choose it
     inlineApiKey ? () => false : (providerId) => modelRuntime.hasConfiguredAuth(providerId),
   );
   if (result.status === "resolved") {
@@ -523,9 +451,6 @@ export function resolveCliModel(options: {
     };
   }
 
-  // Use the thinking level suffix only when --thinking is not explicitly provided; otherwise it
-  // stays part of the custom model id.
-  // e.g. "zai-org/GLM-5.1-FP8:high" → modelId="zai-org/GLM-5.1-FP8", fallbackThinking="high"
   const modelId = cliThinking ? target.modelText : target.modelId;
   const fallbackThinking = cliThinking ? undefined : target.thinkingLevel;
   const fallbackModel = buildFallbackModel(target.providerModels, modelId);
@@ -547,12 +472,6 @@ export interface InitialModelResult {
   fallbackMessage: string | undefined;
 }
 
-/**
- * Find the initial model to use based on priority:
- * 1. First model from scoped models (if not continuing/resuming)
- * 2. Saved default from settings
- * 3. First available model with valid API key
- */
 export async function findInitialModel(options: {
   scopedModels: ScopedModel[];
   isContinuing: boolean;
@@ -575,7 +494,6 @@ export async function findInitialModel(options: {
   let model: Model<Api> | undefined;
   let thinkingLevel: ThinkingLevel = DEFAULT_THINKING_LEVEL;
 
-  // 1. Use first model from scoped models (skip if continuing/resuming)
   const scopedModel = scopedModels[0];
   if (scopedModel !== undefined && !isContinuing) {
     const perModel = modelThinkingLevels?.[`${scopedModel.model.provider}/${scopedModel.model.id}`];
@@ -587,7 +505,6 @@ export async function findInitialModel(options: {
     };
   }
 
-  // 2. Try saved default from settings if auth is configured.
   if (defaultProvider && defaultModelId) {
     const found = modelRuntime.getModel(defaultProvider, defaultModelId);
     if (found && modelRuntime.hasConfiguredAuth(found.provider)) {
@@ -602,11 +519,9 @@ export async function findInitialModel(options: {
     }
   }
 
-  // 3. Try first available model with valid API key
   const availableModels = [...modelRuntime.getAvailableSnapshot()];
 
   if (availableModels.length > 0) {
-    // Try to find a default model from known providers
     for (const provider of Object.keys(defaultModelPerProvider) as KnownProvider[]) {
       const defaultId = defaultModelPerProvider[provider];
       const match = availableModels.find((m) => m.provider === provider && m.id === defaultId);
@@ -615,7 +530,6 @@ export async function findInitialModel(options: {
       }
     }
 
-    // If no default found, use first available
     return {
       model: availableModels[0],
       thinkingLevel: DEFAULT_THINKING_LEVEL,
@@ -623,13 +537,9 @@ export async function findInitialModel(options: {
     };
   }
 
-  // 4. No model found
   return { model: undefined, thinkingLevel: DEFAULT_THINKING_LEVEL, fallbackMessage: undefined };
 }
 
-/**
- * Restore model from session, with fallback to available models
- */
 export async function restoreModelFromSession(
   savedProvider: string,
   savedModelId: string,
@@ -639,7 +549,6 @@ export async function restoreModelFromSession(
 ): Promise<{ model: Model<Api> | undefined; fallbackMessage: string | undefined }> {
   const restoredModel = modelRuntime.getModel(savedProvider, savedModelId);
 
-  // Check if restored model exists and still has auth configured
   const hasConfiguredAuth = restoredModel
     ? modelRuntime.hasConfiguredAuth(restoredModel.provider)
     : false;
@@ -651,7 +560,6 @@ export async function restoreModelFromSession(
     return { model: restoredModel, fallbackMessage: undefined };
   }
 
-  // Model not found or no API key - fall back
   const reason = !restoredModel ? "model no longer exists" : "no auth configured";
 
   if (shouldPrintMessages) {
@@ -662,7 +570,6 @@ export async function restoreModelFromSession(
     );
   }
 
-  // If we already have a model, use it as fallback
   if (currentModel) {
     if (shouldPrintMessages) {
       console.log(chalk.dim(`Falling back to: ${currentModel.provider}/${currentModel.id}`));
@@ -673,12 +580,10 @@ export async function restoreModelFromSession(
     };
   }
 
-  // Try to find any available model
   const availableModels = [...modelRuntime.getAvailableSnapshot()];
 
   const firstAvailableModel = availableModels[0];
   if (firstAvailableModel !== undefined) {
-    // Try to find a default model from known providers
     let fallbackModel: Model<Api> | undefined;
     for (const provider of Object.keys(defaultModelPerProvider) as KnownProvider[]) {
       const defaultId = defaultModelPerProvider[provider];
@@ -689,7 +594,6 @@ export async function restoreModelFromSession(
       }
     }
 
-    // If no default found, use first available
     if (!fallbackModel) {
       fallbackModel = firstAvailableModel;
     }
@@ -704,6 +608,5 @@ export async function restoreModelFromSession(
     };
   }
 
-  // No models available
   return { model: undefined, fallbackMessage: undefined };
 }

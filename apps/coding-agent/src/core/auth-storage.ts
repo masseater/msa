@@ -1,8 +1,3 @@
-/**
- * CredentialStore implementation backed by auth.json.
- * Provider auth orchestration belongs to ModelRuntime and msa-ai Models.
- */
-
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { dirname, join } from "path";
 import { setTimeout as sleep } from "timers/promises";
@@ -19,9 +14,6 @@ import { isCommandConfigValue, resolveConfigValue } from "./resolve-config-value
 
 type AuthStorageData = Record<string, Credential>;
 
-// On Windows, a just-removed lock directory can stay "delete pending" while another process
-// (antivirus, indexer, another msa checking the lock) still has it open. mkdir then fails with
-// EPERM until that handle closes. Retry this briefly so real permission errors still fail fast.
 const MAX_EPERM_RETRIES = 5;
 
 function getRetryableLockErrorCode(error: unknown): "ELOCKED" | "EPERM" | undefined {
@@ -36,7 +28,6 @@ type LockResult<T> = {
   next?: string;
 };
 
-// The mode applies only on creation so administrator-managed modes and ACLs remain intact.
 const AUTH_FILE_WRITE_OPTIONS = { encoding: "utf-8", mode: 0o600 } as const;
 
 type AuthFileReload = {
@@ -90,9 +81,7 @@ export class FileAuthStorageBackend implements AuthStorageBackend {
       } catch (error) {
         if (!getRetryableLockErrorCode(error) || attempt === maxAttempts) throw error;
         const start = Date.now();
-        while (Date.now() - start < delayMs) {
-          // Sleep synchronously to avoid changing callers to async.
-        }
+        while (Date.now() - start < delayMs) {}
       }
     }
   }
@@ -141,7 +130,6 @@ export class FileAuthStorageBackend implements AuthStorageBackend {
         const code = getRetryableLockErrorCode(error);
         const remainingMs = deadline - Date.now();
         if (!code || remainingMs <= 0) throw error;
-        // The 30s deadline is for waiting on another holder; cap EPERM retries separately.
         if (code === "EPERM" && ++epermRetries > MAX_EPERM_RETRIES) throw error;
         const baseDelayMs = Math.min(10 * 2 ** retry, maxDelayMs / 2);
         retry++;
@@ -196,9 +184,7 @@ export class FileAuthStorageBackend implements AuthStorageBackend {
       if (release) {
         try {
           await release();
-        } catch {
-          // Ignore unlock errors when lock is compromised.
-        }
+        } catch {}
       }
     }
   }
@@ -325,9 +311,6 @@ export class InMemoryAuthStorageBackend implements AuthStorageBackend {
   }
 }
 
-/**
- * Credential storage backed by a JSON file.
- */
 export class AuthStorage implements CredentialStore {
   private storage: AuthStorageBackend;
   private authPath: string | undefined;
@@ -377,9 +360,6 @@ export class AuthStorage implements CredentialStore {
     this.readState.revision = revision;
   }
 
-  /**
-   * Reload credentials from storage.
-   */
   reload(): void {
     let content: string | undefined;
     let revision: string | undefined;
@@ -390,9 +370,7 @@ export class AuthStorage implements CredentialStore {
         return { result: undefined };
       });
       this.updateReadState(this.parseStorageData(content), revision);
-    } catch {
-      // Preserve the last valid in-memory snapshot.
-    }
+    } catch {}
   }
 
   private async reloadFromStorageAsync(options?: AuthOperationOptions): Promise<AuthStorageData> {
@@ -487,7 +465,6 @@ export class AuthStorage implements CredentialStore {
     this.updateReadState(latestData);
   }
 
-  /** List credential metadata without resolving configured key values. */
   async list(options?: AuthOperationOptions): Promise<readonly CredentialInfo[]> {
     const entries = Object.entries(await this.readLatestData(options));
     options?.signal?.throwIfAborted();
@@ -495,10 +472,6 @@ export class AuthStorage implements CredentialStore {
   }
 }
 
-/**
- * One-off synchronous read of a stored credential from an auth.json file,
- * without instantiating a store or resolving configured key values.
- */
 export function readStoredCredential(
   providerId: string,
   authPath: string = join(getAgentDir(), "auth.json"),

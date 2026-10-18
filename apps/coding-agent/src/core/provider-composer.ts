@@ -45,9 +45,7 @@ import {
 
 export interface ExtensionOAuthConfig {
   name: string;
-  /** Whether access through this auth method is backed by a provider subscription. */
   isSubscription?: boolean;
-  /** @deprecated Retained for extension source compatibility; ignored by canonical auth flows. */
   usesCallbackServer?: boolean;
   login(callbacks: OAuthLoginCallbacks): Promise<OAuthCredentials>;
   refreshToken(credentials: OAuthCredentials, signal: AbortSignal): Promise<OAuthCredentials>;
@@ -96,7 +94,6 @@ export type ProviderModelConfig =
   | ProviderImageModelConfig
   | ProviderClassifierModelConfig;
 
-/** Input type for the extension registerProvider API. */
 export interface ProviderConfigInput {
   name?: string;
   baseUrl?: string;
@@ -466,7 +463,6 @@ function composeApiKeyAuth(
   const inherited = base?.auth.apiKey;
   const rawKey = configuredApiKey(config, extension);
   const oauth = extension?.oauth ?? base?.auth.oauth;
-  // OAuth-only providers get no fabricated API-key login method.
   if (!inherited && rawKey === undefined && oauth) return undefined;
   const rawHeaders = configuredHeaders(config, extension);
   const authHeader = extension?.authHeader ?? config?.authHeader ?? false;
@@ -561,8 +557,6 @@ function rawModelHeaders(
   config: ModelsJsonProvider | undefined,
   extension: ProviderConfigInput | undefined,
 ): Record<string, string> | undefined {
-  // models.json definitions and overrides are chat-only. Extension definitions
-  // are matched by operation and id so colliding models cannot share headers.
   const chatDefinition = isModelType(model, "chat")
     ? config?.models?.find((entry) => entry.id === model.id)
     : undefined;
@@ -593,7 +587,6 @@ export function validateExtensionProvider(
   );
 }
 
-/** Compose built-in, models.json, and extension layers without reading credentials. */
 export function composeModelProvider(
   providerId: string,
   base: Provider | undefined,
@@ -607,8 +600,6 @@ export function composeModelProvider(
     extension && refreshedExtensionModels
       ? { ...extension, models: refreshedExtensionModels }
       : extension;
-  // models.json modelOverrides are the topmost user-config layer: they apply once,
-  // after custom-model upserts, extension model replacement, and legacy OAuth projection.
   const getAllModels = (): AnyModel[] => {
     let models = applyExtension(
       providerId,
@@ -616,7 +607,6 @@ export function composeModelProvider(
       currentExtension(),
     );
     if (extensionOAuthCredential && extension?.oauth?.modifyModels) {
-      // The extension hook is chat-only; other model types pass through untouched.
       models = [
         ...extension.oauth.modifyModels(
           models.filter((model) => isModelType(model, "chat")),
@@ -630,7 +620,6 @@ export function composeModelProvider(
       return override && isModelType(model, "chat") ? applyModelOverride(model, override) : model;
     });
   };
-  // Validate eagerly so registration/reload reports structural errors immediately.
   getAllModels();
   const apiKey = composeApiKeyAuth(providerId, base, config, extension);
   const oauth = composeOAuthAuth(providerId, base, config, extension);
@@ -681,7 +670,6 @@ export function composeModelProvider(
             await context.publish({
               update: () => {
                 if (refreshed) {
-                  // Validate before publishing the new synchronous list.
                   applyExtension(
                     providerId,
                     applyModelsJson(providerId, getAllProviderModels(base), config),
