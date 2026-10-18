@@ -51,6 +51,7 @@ describe.each(graphs)("%s session graph", (_name, connect) => {
       cwd: "/tmp",
       round: 1,
       createdAt: order++,
+      pendingMessages: [],
       ...patch,
     });
     const id = (name: string) => `${project}-${name}`;

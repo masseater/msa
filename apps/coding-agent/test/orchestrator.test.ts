@@ -212,6 +212,33 @@ describe("Orchestrator", () => {
     );
   });
 
+  it("keeps a message to a waiting session and adds it to the prompt when it starts", async () => {
+    const { orchestrator, workers, settled } = setup();
+    const a = await orchestrator.start(task("a"));
+    const b = await orchestrator.start(task("b", [a.session.id]));
+
+    const queued = await orchestrator.send(b.session.id, "also update the docs");
+    expect(queued.status).toBe("queued");
+    expect(queued.pendingMessages).toEqual(["also update the docs"]);
+
+    at(workers, 0).complete("a done");
+    await settled(1);
+    expect(at(workers, 1).prompts[0]).toContain("do b");
+    expect(at(workers, 1).prompts[0]).toContain("also update the docs");
+    expect(await orchestrator.read(b.session.id)).toMatchObject({ pendingMessages: [] });
+  });
+
+  it("keeps messages to a waiting review and adds them to its prompt", async () => {
+    const { orchestrator, workers, settled } = setup();
+    const a = await orchestrator.start(task("a"));
+    await orchestrator.send(a.review.id, "focus on the public API");
+
+    at(workers, 0).complete("a done");
+    await settled(1);
+    expect(at(workers, 1).prompts[0]).toContain("focus on the public API");
+    expect(await orchestrator.read(a.review.id)).toMatchObject({ pendingMessages: [] });
+  });
+
   it("waits for dependencies and passes their reports on", async () => {
     const { orchestrator, workers, settled } = setup();
     const a = await orchestrator.start(task("a"));

@@ -306,6 +306,8 @@ export class SessionsView implements Component, Focusable {
         .map((id) => byId.get(id))
         .filter((dependency) => dependency && dependency.status !== "completed")
         .map((dependency) => dependency?.title);
+      const queued = node.pendingMessages.at(-1);
+      if (queued) return `queued message: ${firstLine(queued)}`;
       return waiting.length > 0 ? `after ${waiting.join(", ")}` : "starting";
     }
     if (node.status === "running") {
@@ -383,9 +385,14 @@ export class SessionsView implements Component, Focusable {
     } else {
       lines.push(
         ` ${[
-          node.status === "queued"
-            ? undefined
-            : keyHint("tui.select.confirm", node.status === "running" ? "steer" : "rerun"),
+          keyHint(
+            "tui.select.confirm",
+            node.status === "running"
+              ? "steer"
+              : node.status === "queued"
+                ? "queue message"
+                : "rerun",
+          ),
           keyHint("app.orchestrator.start", "start after this"),
           stoppable(node) ? keyHint("app.orchestrator.stop", "stop") : undefined,
           keyHint("app.orchestrator.model", "model"),
@@ -435,8 +442,7 @@ export class SessionsView implements Component, Focusable {
       this.move(rows, 1);
     } else if (kb.matches(data, "tui.select.confirm") && selected) {
       if (!this.openId) this.openId = selected.id;
-      else if (selected.status !== "queued")
-        this.startComposing({ kind: "message", id: selected.id });
+      else this.startComposing({ kind: "message", id: selected.id });
     } else if (kb.matches(data, "app.orchestrator.start")) {
       this.startComposing(
         this.openId && selected

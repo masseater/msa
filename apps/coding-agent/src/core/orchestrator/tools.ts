@@ -104,7 +104,7 @@ export function createOrchestratorToolDefinitions(
     read_session: tool({
       name: "read_session",
       label: "read session",
-      description: "Read a session's full report, prompt, and transcript file.",
+      description: "Read a session's full report, prompt, queued messages, and transcript file.",
       promptSnippet: "Read a session's full report",
       parameters: idSchema,
       run: async ({ id }) => {
@@ -112,6 +112,9 @@ export function createOrchestratorToolDefinitions(
         return [
           formatSessionList([node]),
           node.sessionFile ? `Transcript: ${node.sessionFile}` : undefined,
+          node.pendingMessages.length > 0
+            ? `<queued-messages>\n${node.pendingMessages.join("\n---\n")}\n</queued-messages>`
+            : undefined,
           `<prompt>\n${node.prompt}\n</prompt>`,
           `<report>\n${node.report ?? ""}\n</report>`,
         ]
@@ -123,8 +126,8 @@ export function createOrchestratorToolDefinitions(
       name: "send_to_session",
       label: "send to session",
       description:
-        "Send a message to a session: steers it while it runs, or reruns it after it finished, failed, or was stopped.",
-      promptSnippet: "Steer or rerun a session",
+        "Send a message to a session: steers it while it runs, queues it for a session that has not started yet, or reruns it after it finished, failed, or was stopped.",
+      promptSnippet: "Steer, queue a message for, or rerun a session",
       parameters: sendSchema,
       run: async ({ id, message }) => formatSessionList([await orchestrator.send(id, message)]),
     }),

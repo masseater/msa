@@ -31,6 +31,7 @@ function node(
     round: 1,
     createdAt: 0,
     dependsOn: [],
+    pendingMessages: [],
     ...patch,
   };
 }
@@ -118,6 +119,18 @@ describe("SessionsView", () => {
     expect(orchestrator.send).toHaveBeenCalledWith("notes", "try again");
     view.handleInput(ESC);
     expect(screen().join("\n")).toContain("Failed");
+  });
+
+  it("queues a message for a waiting session instead of refusing it", () => {
+    const { view, orchestrator, screen } = setup();
+    view.handleInput(DOWN);
+    view.handleInput(DOWN);
+    view.handleInput(ENTER);
+    expect(screen().join("\n")).toContain("queue message");
+    view.handleInput(ENTER);
+    for (const key of "use the cache") view.handleInput(key);
+    view.handleInput(ENTER);
+    expect(orchestrator.send).toHaveBeenCalledWith("readme", "use the cache");
   });
 
   it("starts a session for a task the user types, independent from the list", async () => {

@@ -21,6 +21,8 @@ export interface SessionNode {
   createdAt: number;
   sessionFile?: string;
   report?: string;
+  /** Messages sent while the session waited; they join the prompt when it starts. */
+  pendingMessages: string[];
 }
 
 export interface SessionNodeWithDependencies extends SessionNode {
@@ -28,7 +30,7 @@ export interface SessionNodeWithDependencies extends SessionNode {
 }
 
 export type SessionNodePatch = {
-  [K in "status" | "model" | "thinkingLevel" | "sessionFile" | "report"]?:
+  [K in "status" | "model" | "thinkingLevel" | "sessionFile" | "report" | "pendingMessages"]?:
     | SessionNode[K]
     | undefined;
 };

@@ -24,6 +24,7 @@ const NODE_FIELDS = [
   "createdAt",
   "sessionFile",
   "report",
+  "pendingMessages",
 ] as const satisfies readonly (keyof SessionNode)[];
 
 function definedProperties(value: object): Record<string, unknown> {

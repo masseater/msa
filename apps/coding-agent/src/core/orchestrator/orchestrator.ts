@@ -94,7 +94,19 @@ function truncate(text: string, limit = REPORT_LIMIT): string {
 
 function describeNode(node: SessionNodeWithDependencies): string {
   const dependsOn = node.dependsOn.length > 0 ? node.dependsOn.join(", ") : "-";
-  return `${node.id} [${node.kind}, round ${node.round}] ${node.status} — ${node.title} (model ${node.model}, thinking ${node.thinkingLevel}; depends on ${dependsOn})`;
+  const pending =
+    node.pendingMessages.length > 0
+      ? `; ${node.pendingMessages.length} message(s) queued for its start`
+      : "";
+  return `${node.id} [${node.kind}, round ${node.round}] ${node.status} — ${node.title} (model ${node.model}, thinking ${node.thinkingLevel}; depends on ${dependsOn}${pending})`;
+}
+
+function pendingBlock(messages: readonly string[]): string {
+  if (messages.length === 0) return "";
+  return [
+    "Messages sent while this session was waiting:",
+    ...messages.map((message) => `<message>\n${message}\n</message>`),
+  ].join("\n\n");
 }
 
 export function formatSessionList(nodes: readonly SessionNodeWithDependencies[]): string {
@@ -102,13 +114,18 @@ export function formatSessionList(nodes: readonly SessionNodeWithDependencies[])
   return nodes.map(describeNode).join("\n");
 }
 
-function reviewPrompt(round: number, nodes: readonly SessionNodeWithDependencies[]): string {
+function reviewPrompt(
+  round: number,
+  nodes: readonly SessionNodeWithDependencies[],
+  pending: readonly string[],
+): string {
   const reports = nodes
     .filter((node) => node.kind === "task" && node.round === round)
     .map(
       (node) =>
         `<session id="${node.id}" title="${node.title}" status="${node.status}">\n${node.report ?? "(no report)"}\n</session>`,
     );
+  const messages = pendingBlock(pending);
   return [
     `You are the closing reviewer of round ${round} of an orchestrated project. Every session of the round has finished, and nothing else runs while you work.`,
     "Step back and review the work as a whole, not session by session: check the results against each other and against the original intent, read the code and files they changed, and find gaps, conflicts, duplicated work, and wrong assumptions.",
@@ -119,21 +136,29 @@ function reviewPrompt(round: number, nodes: readonly SessionNodeWithDependencies
     "</dependency-graph>",
     "",
     ...reports,
+    ...(messages ? ["", messages] : []),
   ].join("\n");
 }
 
 function taskPrompt(
   node: SessionNode,
   dependencies: readonly SessionNodeWithDependencies[],
+  pending: readonly string[],
 ): string {
-  if (dependencies.length === 0) return node.prompt;
-  const reports = dependencies.map(
-    (dependency) =>
-      `<session id="${dependency.id}" title="${dependency.title}">\n${dependency.report ?? "(no report)"}\n</session>`,
-  );
-  return [node.prompt, "", "Reports of the sessions this task depends on:", "", ...reports].join(
-    "\n",
-  );
+  const messages = pendingBlock(pending);
+  const reports =
+    dependencies.length === 0
+      ? []
+      : [
+          "",
+          "Reports of the sessions this task depends on:",
+          "",
+          ...dependencies.map(
+            (dependency) =>
+              `<session id="${dependency.id}" title="${dependency.title}">\n${dependency.report ?? "(no report)"}\n</session>`,
+          ),
+        ];
+  return [node.prompt, ...reports, ...(messages ? ["", messages] : [])].join("\n");
 }
 
 /**
@@ -277,6 +302,7 @@ export class Orchestrator {
           cwd,
           round,
           createdAt: Date.now(),
+          pendingMessages: [],
         },
         input.dependsOn,
       );
@@ -293,6 +319,7 @@ export class Orchestrator {
           cwd: this.options.cwd,
           round,
           createdAt: Date.now(),
+          pendingMessages: [],
         };
         await graph.add(reviewNode, []);
         review = { ...reviewNode, dependsOn: [] };
@@ -316,7 +343,9 @@ export class Orchestrator {
         return node;
       }
       if (node.status === "queued") {
-        throw new Error(`${id} is queued until its dependencies complete; it has not started yet.`);
+        await graph.update(id, { pendingMessages: [...node.pendingMessages, message] });
+        await this.schedule(graph);
+        return this.node(graph, id);
       }
       const nodes = await graph.list(this.options.project);
       if (nodes.some((other) => other.kind === "review" && other.status === "running")) {
@@ -414,13 +443,13 @@ export class Orchestrator {
       if (!node) continue;
       if (node.kind === "review") {
         if (running.length > 0 || started.length > 0) continue;
-        await this.run(graph, node, reviewPrompt(node.round, nodes));
+        await this.run(graph, node, reviewPrompt(node.round, nodes, node.pendingMessages));
         started.push(node.id);
         return started;
       }
       if (capacity <= 0) break;
       const dependencies = node.dependsOn.flatMap((dependencyId) => byId.get(dependencyId) ?? []);
-      await this.run(graph, node, taskPrompt(node, dependencies));
+      await this.run(graph, node, taskPrompt(node, dependencies, node.pendingMessages));
       started.push(node.id);
       capacity--;
     }
@@ -442,7 +471,11 @@ export class Orchestrator {
         for (const listener of this.listeners) listener();
       });
     }
-    await graph.update(node.id, { status: "running", sessionFile: worker.sessionFile });
+    await graph.update(node.id, {
+      status: "running",
+      sessionFile: worker.sessionFile,
+      pendingMessages: [],
+    });
     const session = worker;
     const run = ++this.runCount;
     this.runs.set(node.id, run);
