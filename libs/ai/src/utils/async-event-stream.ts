@@ -1,56 +1,25 @@
-import { Cause, Deferred, Effect, Exit, Queue } from "effect";
+import { createEventChannel, type EventChannel } from "./event-stream.ts";
 
 export class EventStream<T, R = T> implements AsyncIterable<T> {
-  protected done = false;
-  private readonly queue: Queue.Queue<T, Cause.Done>;
-  private readonly finalResult = Deferred.makeUnsafe<R>();
-  private finalResultPromise: Promise<R> | undefined;
-  private readonly isComplete: (event: T) => boolean;
-  private readonly extractResult: (event: T) => R;
+  readonly #channel: EventChannel<T, R>;
 
   constructor(isComplete: (event: T) => boolean, extractResult: (event: T) => R) {
-    this.isComplete = isComplete;
-    this.extractResult = extractResult;
-    this.queue = Effect.runSync(Queue.unbounded<T, Cause.Done>());
+    this.#channel = createEventChannel({ isComplete, extractResult });
   }
 
   push(event: T): void {
-    if (this.done) return;
-
-    const complete = this.isComplete(event);
-    if (complete) {
-      this.done = true;
-      Deferred.doneUnsafe(this.finalResult, Exit.succeed(this.extractResult(event)));
-    }
-    Queue.offerUnsafe(this.queue, event);
-    if (complete) Queue.endUnsafe(this.queue);
+    this.#channel.push(event);
   }
 
   end(result?: R): void {
-    this.done = true;
-    if (result !== undefined) {
-      Deferred.doneUnsafe(this.finalResult, Exit.succeed(result));
-    }
-    Queue.endUnsafe(this.queue);
+    this.#channel.end(result);
   }
 
   [Symbol.asyncIterator](): AsyncIterator<T> {
-    const { queue } = this;
-    return {
-      next: () =>
-        Effect.runPromise(
-          Queue.take(queue).pipe(
-            Effect.map((value): IteratorResult<T> => ({ value, done: false })),
-            Effect.catchIf(Cause.isDone, () =>
-              Effect.succeed<IteratorResult<T>>({ value: undefined, done: true }),
-            ),
-          ),
-        ),
-    };
+    return this.#channel[Symbol.asyncIterator]();
   }
 
   result(): Promise<R> {
-    this.finalResultPromise ??= Effect.runPromise(Deferred.await(this.finalResult));
-    return this.finalResultPromise;
+    return this.#channel.result();
   }
 }
