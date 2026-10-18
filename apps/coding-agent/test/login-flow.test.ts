@@ -58,7 +58,6 @@ describe("LoginFlow", () => {
       showWarning: () => {},
       showError,
       refreshAuthState: () => {},
-      reload: async () => {},
     });
 
     const login = flow.login("acme");

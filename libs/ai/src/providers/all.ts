@@ -21,13 +21,8 @@ import { openaiProvider } from "./openai.ts";
 import { opencodeGoProvider } from "./opencode-go.ts";
 import { opencodeProvider } from "./opencode.ts";
 import { openrouterProvider } from "./openrouter.ts";
-import { radiusProvider } from "./radius.ts";
 
-export { radiusProvider };
-
-/** Providers present in the generated catalog. `KnownProvider` additionally
- * includes purely dynamic providers (e.g. "radius") that have no static
- * catalog entry. */
+/** Providers present in the generated catalog. */
 export type BuiltinProvider = keyof typeof MODELS;
 
 type BuiltinChatModelId<TProvider extends BuiltinProvider> = keyof (typeof MODELS)[TProvider];
@@ -143,7 +138,6 @@ export function builtinProviders(): Provider[] {
     opencodeProvider(),
     opencodeGoProvider(),
     openrouterProvider(),
-    radiusProvider(),
   ];
 }
 

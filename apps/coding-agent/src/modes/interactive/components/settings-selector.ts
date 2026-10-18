@@ -24,7 +24,6 @@ import {
   type FullscreenExitOutput,
   type MermaidRenderingMode,
   type QuietStartup,
-  type SessionShareDestination,
   type TuiMode,
 } from "../../../core/settings-manager.ts";
 import {
@@ -76,7 +75,6 @@ export interface SettingsConfig {
   steeringMode: "all" | "one-at-a-time";
   followUpMode: "all" | "one-at-a-time";
   transport: Transport;
-  sessionShareDestination: SessionShareDestination;
   httpIdleTimeoutMs: number;
   cacheWarmingMode: CacheWarmingMode;
   thinkingLevel: ThinkingLevel;
@@ -117,7 +115,6 @@ export interface SettingsCallbacks {
   onSteeringModeChange: (mode: "all" | "one-at-a-time") => void;
   onFollowUpModeChange: (mode: "all" | "one-at-a-time") => void;
   onTransportChange: (transport: Transport) => void;
-  onSessionShareDestinationChange: (destination: SessionShareDestination) => void;
   onHttpIdleTimeoutMsChange: (timeoutMs: number) => void;
   onCacheWarmingModeChange: (mode: CacheWarmingMode) => void;
   onModelThinkingLevelChange: (provider: string, modelId: string, level: ThinkingLevel) => void;
@@ -487,14 +484,6 @@ export class SettingsSelectorComponent extends Container {
         description: "Preferred transport for providers that support multiple transports",
         currentValue: config.transport,
         values: ["sse", "websocket", "websocket-cached", "auto"],
-      },
-      {
-        id: "share-destination",
-        label: "Session share destination",
-        description:
-          "Where to upload sessions with /share (auto prefers Radius when authenticated, otherwise GitHub Gist)",
-        currentValue: config.sessionShareDestination,
-        values: ["auto", "gist", "radius"],
       },
       {
         id: "http-idle-timeout",
@@ -888,9 +877,6 @@ export class SettingsSelectorComponent extends Container {
             break;
           case "transport":
             callbacks.onTransportChange(newValue as Transport);
-            break;
-          case "share-destination":
-            callbacks.onSessionShareDestinationChange(newValue as SessionShareDestination);
             break;
           case "http-idle-timeout": {
             const choice = HTTP_IDLE_TIMEOUT_CHOICES.find((item) => item.label === newValue);

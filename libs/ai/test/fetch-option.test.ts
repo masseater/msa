@@ -2,7 +2,6 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { streamSimple as streamAnthropic } from "../src/api/anthropic-messages.ts";
 import { streamSimple as streamGoogleGenerativeAI } from "../src/api/google-generative-ai.ts";
-import { streamSimple as streamMsaMessages } from "../src/api/msa-messages.ts";
 import { streamSimple as streamOpenAICodexResponses } from "../src/api/openai-codex-responses.ts";
 import { streamSimple as streamOpenAICompletions } from "../src/api/openai-completions.ts";
 import { streamSimple as streamOpenAIResponses } from "../src/api/openai-responses.ts";
@@ -93,7 +92,7 @@ describe("fetch stream option", () => {
     expect(globalThis.fetch).toBe(fallback);
   });
 
-  it("uses fetch for Codex SSE and msa-messages HTTP requests", async () => {
+  it("uses fetch for Codex SSE requests", async () => {
     const { custom, fallback } = mockFetches();
     await streamOpenAICodexResponses(createModel("openai-codex-responses"), context, {
       apiKey: `header.${btoa(JSON.stringify({ "https://api.openai.com/auth": { chatgpt_account_id: "account" } }))}.signature`,
@@ -101,11 +100,7 @@ describe("fetch stream option", () => {
       transport: "sse",
       maxRetries: 0,
     }).result();
-    await streamMsaMessages(createModel("msa-messages"), context, {
-      apiKey: "test-key",
-      fetch: custom,
-    }).result();
-    expect(custom).toHaveBeenCalledTimes(2);
+    expect(custom).toHaveBeenCalledTimes(1);
     expect(fallback).not.toHaveBeenCalled();
     expect(globalThis.fetch).toBe(fallback);
   });

@@ -125,7 +125,6 @@ const lazyEntryPointsOf = (host: HostShape, layout: Layout): Record<string, stri
   "openai-chatgpt": host.join(layout.aiDistDir, "auth", "oauth", "openai-chatgpt.js"),
   "openai-codex": host.join(layout.aiDistDir, "auth", "oauth", "openai-codex.js"),
   openrouter: host.join(layout.aiDistDir, "auth", "oauth", "openrouter.js"),
-  radius: host.join(layout.aiDistDir, "auth", "oauth", "radius.js"),
 });
 
 const requireOAuthEntries = (

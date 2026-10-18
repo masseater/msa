@@ -7,7 +7,6 @@ import { Type } from "typebox";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import { type AnthropicOptions, stream as streamAnthropic } from "../src/api/anthropic-messages.ts";
-import { stream as streamMsaMessages } from "../src/api/msa-messages.ts";
 import type { Model, Tool, TranscriptContext } from "../src/types.ts";
 import { normalizeContext } from "../src/utils/transcript.ts";
 
@@ -302,37 +301,6 @@ describe("Anthropic preferred strict tool fallback", () => {
       true,
       undefined,
       true,
-    ]);
-  });
-
-  it("preserves prefer through msa-messages so the gateway's Anthropic adapter can fall back", async () => {
-    const { payloads, options } = harness((_payload, attempt) =>
-      attempt === 1 ? errorResponse() : successResponse(),
-    );
-    const transcript = context([tool("lookup", "prefer")]);
-    const gatewayModel: Model<"msa-messages"> = {
-      ...model,
-      api: "msa-messages",
-      provider: "radius",
-      baseUrl: "https://radius.example/v1",
-      compat: undefined,
-    };
-    const result = await streamMsaMessages(gatewayModel, transcript, {
-      apiKey: "radius-test",
-      fetch: async (_input, init) => {
-        const request = JSON.parse(init?.body as string) as { context: TranscriptContext };
-        expect(request.context).toEqual(JSON.parse(JSON.stringify(transcript)));
-        const upstream = await streamAnthropic(model, request.context, options).result();
-        return new Response(
-          `data: ${JSON.stringify({ type: "done", reason: upstream.stopReason, usage: upstream.usage })}\n\n`,
-          { headers: { "content-type": "text/event-stream" } },
-        );
-      },
-    }).result();
-    expect(result.stopReason).toBe("stop");
-    expect(payloads.map((payload) => (payload.tools as BetaTool[])[0]?.strict)).toEqual([
-      true,
-      undefined,
     ]);
   });
 });

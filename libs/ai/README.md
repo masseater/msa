@@ -60,7 +60,6 @@ Unified LLM API with provider collections, automatic auth resolution, token and 
 
 - **OpenAI** (including the Decisions classifier API)
 - **OpenAI Codex (legacy)** (ChatGPT Plus/Pro subscription, requires OAuth, see below)
-- **Radius** (API key or OAuth, with a dynamically refreshed gateway catalog)
 - **Anthropic**
 - **OpenRouter**
 - **OpenCode Zen**
@@ -319,7 +318,6 @@ import {
 } from "@msa/ai/providers/all";
 
 const model = getBuiltinModel("openai", "gpt-4o-mini"); // typed Model<'openai-responses'>
-const radius = getBuiltinModel("radius", "balanced"); // typed Model<'msa-messages'>
 const flux = getBuiltinImageModel("openrouter", "black-forest-labs/flux.2-pro");
 const jev = getBuiltinClassifierModel("opencode", "jev-1.13");
 const providers = getBuiltinProviders();
@@ -340,7 +338,7 @@ await models.refresh(); // refresh all providers concurrently, best-effort
 const fresh = models.getModel("llamacpp", "qwen3-30b");
 ```
 
-Static built-in providers are no-ops for `refresh()`. Radius is both static and dynamic: it ships the public `radius.pi.dev` catalog for synchronous API lookup, then overlays cached and freshly fetched `/v1/config` models when refreshed with configured auth. See [createProvider()](#createprovider) for building a dynamic provider.
+Static built-in providers are no-ops for `refresh()`. See [createProvider()](#createprovider) for building a dynamic provider.
 
 ## Auth
 
@@ -434,7 +432,6 @@ Built-in providers resolve these env vars (Node.js; in browsers pass `apiKey` ex
 | -------------------------- | ---------------------------------------------- |
 | OpenAI                     | `OPENAI_API_KEY`                               |
 | Anthropic                  | `ANTHROPIC_API_KEY` or `ANTHROPIC_OAUTH_TOKEN` |
-| Radius                     | `RADIUS_API_KEY`                               |
 | OpenRouter                 | `OPENROUTER_API_KEY`                           |
 | OpenCode Zen / OpenCode Go | `OPENCODE_API_KEY`                             |
 

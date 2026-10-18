@@ -178,7 +178,7 @@ describe("post-login model discovery", () => {
       showWarning: vi.fn(),
       ui: { requestRender: vi.fn() },
     };
-    await complete(context, "radius", "Radius", "oauth", unknownModel);
+    await complete(context, "openrouter", "OpenRouter", "oauth", unknownModel);
     expect(context.showStatus).toHaveBeenCalledWith(expect.stringContaining("Credentials saved"));
     expect(context.showError).not.toHaveBeenCalled();
     expect(setModel).not.toHaveBeenCalled();
@@ -188,27 +188,33 @@ describe("post-login model discovery", () => {
       setModel,
       currentModel,
       async discover(ids: string[]) {
-        availableModels.mockReturnValue(ids.map((id) => ({ ...model, provider: "radius", id })));
+        availableModels.mockReturnValue(
+          ids.map((id) => ({ ...model, provider: "openrouter", id })),
+        );
         finishRefresh();
         await vi.advanceTimersByTimeAsync(0);
       },
     };
   }
 
-  it.each([
-    { models: ["fast", "balanced"], selected: "balanced" },
-    { models: ["fast", "powerful"], selected: "fast" },
-  ])("selects $selected from the refreshed catalog $models", async ({ models, selected }) => {
-    expect(defaultModelPerProvider.radius).toBe("balanced");
+  it("selects the default model from the refreshed catalog", async () => {
+    const selected = defaultModelPerProvider.openrouter!;
     const login = await startLogin();
-    await login.discover(models);
+    await login.discover(["fast", selected]);
     expect(login.setModel).toHaveBeenCalledWith(
-      expect.objectContaining({ provider: "radius", id: selected }),
+      expect.objectContaining({ provider: "openrouter", id: selected }),
       {
         persist: true,
       },
     );
     expect(login.showError).not.toHaveBeenCalled();
+  });
+
+  it("reports a refreshed catalog without the default model", async () => {
+    const login = await startLogin();
+    await login.discover(["fast", "powerful"]);
+    expect(login.setModel).not.toHaveBeenCalled();
+    expect(login.showError).toHaveBeenCalledWith(expect.stringContaining("is not available"));
   });
 
   it("reports an empty catalog only after refresh", async () => {

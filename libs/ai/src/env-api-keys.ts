@@ -19,7 +19,6 @@ function getApiKeyEnvVars(provider: string): readonly string[] | undefined {
 
   const envMap: Record<string, string> = {
     openai: "OPENAI_API_KEY",
-    radius: "RADIUS_API_KEY",
     openrouter: "OPENROUTER_API_KEY",
     opencode: "OPENCODE_API_KEY",
     "opencode-go": "OPENCODE_API_KEY",
