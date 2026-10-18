@@ -302,7 +302,7 @@
     },
     "enableInstallTelemetry": {
       "type": "boolean",
-      "description": "Send attribution headers to OpenRouter, NVIDIA NIM, and Cloudflare.",
+      "description": "Send attribution headers to OpenRouter and Cloudflare.",
       "default": true
     },
     "enableAnalytics": {

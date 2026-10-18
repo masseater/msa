@@ -42,8 +42,6 @@ const compat = {
   openRouterRouting: {},
   vercelGatewayRouting: {},
   chatTemplateKwargs: {},
-  chatTemplateArgs: {},
-  zaiToolStream: false,
   supportsThinkingTokenBudget: false,
   supportsStrictMode: true,
   supportsOpenAIGrammarTools: false,

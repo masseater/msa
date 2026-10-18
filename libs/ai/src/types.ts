@@ -87,7 +87,6 @@ export type ClassifierApi = KnownClassifierApi | (string & {});
 
 export type KnownProvider =
   | "amazon-bedrock"
-  | "ant-ling"
   | "anthropic"
   | "google"
   | "google-vertex"
@@ -96,37 +95,16 @@ export type KnownProvider =
   | "openai-codex"
   | "radius"
   | "typesafe"
-  | "nvidia"
-  | "deepseek"
   | "xai"
-  | "groq"
-  | "cerebras"
   | "openrouter"
   | "vercel-ai-gateway"
-  | "zai"
-  | "zai-coding-cn"
   | "mistral"
-  | "minimax"
-  | "minimax-cn"
-  | "moonshotai"
-  | "moonshotai-cn"
-  | "huggingface"
-  | "fireworks"
-  | "together"
-  | "baseten"
   | "opencode"
   | "opencode-go"
   | "kimi-coding"
   | "meta"
   | "cloudflare-workers-ai"
-  | "cloudflare-ai-gateway"
-  | "qwen-token-plan"
-  | "qwen-token-plan-cn"
-  | "qwen-token-plan-individual"
-  | "xiaomi"
-  | "xiaomi-token-plan-cn"
-  | "xiaomi-token-plan-ams"
-  | "xiaomi-token-plan-sgp";
+  | "cloudflare-ai-gateway";
 export type ProviderId = KnownProvider | string;
 
 export type ToolChoice = "auto" | "none";

@@ -56,13 +56,13 @@ type CapturedParams = {
 
 function vllmModel(
   compat: Model<"openai-completions">["compat"] = {
-    thinkingFormat: "zai",
+    thinkingFormat: "qwen",
     supportsThinkingTokenBudget: true,
   },
 ): Model<"openai-completions"> {
   return {
-    id: "zai-org/glm-5.2",
-    name: "GLM 5.2 (local vLLM)",
+    id: "Qwen/Qwen3.6-27B",
+    name: "Qwen 3.6 27B (local vLLM)",
     api: "openai-completions",
     provider: "local-vllm",
     baseUrl: "http://localhost:8000/v1",
@@ -116,7 +116,7 @@ describe("openai-completions thinking token budget", () => {
   });
 
   it("omits the budget when neither the field nor the alias is set", async () => {
-    const params = await capture(vllmModel({ thinkingFormat: "zai" }), {
+    const params = await capture(vllmModel({ thinkingFormat: "qwen" }), {
       reasoning: "medium",
       thinkingBudgets: { medium: 4096 },
     });
@@ -175,7 +175,7 @@ describe("openai-completions thinking token budget", () => {
   it("lets thinkingTokenBudgetField win over the boolean alias", async () => {
     const params = await capture(
       vllmModel({
-        thinkingFormat: "zai",
+        thinkingFormat: "qwen",
         supportsThinkingTokenBudget: true,
         thinkingTokenBudgetField: "thinking_budget",
       }),

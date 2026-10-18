@@ -522,18 +522,6 @@
             },
             {
               "type": "string",
-              "const": "together"
-            },
-            {
-              "type": "string",
-              "const": "baseten"
-            },
-            {
-              "type": "string",
-              "const": "zai"
-            },
-            {
-              "type": "string",
               "const": "qwen"
             },
             {
@@ -547,13 +535,9 @@
             {
               "type": "string",
               "const": "string-thinking"
-            },
-            {
-              "type": "string",
-              "const": "ant-ling"
             }
           ],
-          "description": "Format for reasoning or thinking parameters. When omitted, msa auto-detects the format from the provider URL. \"openai\" uses reasoning_effort, \"openrouter\" uses reasoning.effort, \"deepseek\" uses thinking.type plus reasoning_effort when supported, \"together\" uses reasoning.enabled plus reasoning_effort when supported, \"baseten\" uses configurable chat_template_args plus reasoning_effort when supported, \"zai\" uses thinking.type, \"qwen\" uses top-level enable_thinking, \"qwen-chat-template\" uses chat_template_kwargs.enable_thinking and preserve_thinking, \"chat-template\" uses configurable chat_template_kwargs, \"string-thinking\" uses top-level thinking, and \"ant-ling\" uses reasoning.effort only when the mapped effort is non-null."
+          "description": "Format for reasoning or thinking parameters. When omitted, msa auto-detects the format from the provider URL. \"openai\" uses reasoning_effort, \"openrouter\" uses reasoning.effort, \"deepseek\" uses thinking.type plus reasoning_effort when supported, \"qwen\" uses top-level enable_thinking, \"qwen-chat-template\" uses chat_template_kwargs.enable_thinking and preserve_thinking, \"chat-template\" uses configurable chat_template_kwargs, and \"string-thinking\" uses top-level thinking."
         },
         "chatTemplateKwargs": {
           "type": "object",
@@ -601,53 +585,6 @@
             }
           },
           "description": "Kwargs sent as chat_template_kwargs when thinkingFormat is \"chat-template\". Use $var with \"thinking.enabled\", \"thinking.effort\", or \"thinking.budget\" for msa-controlled values."
-        },
-        "chatTemplateArgs": {
-          "type": "object",
-          "patternProperties": {
-            "^.*$": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "number"
-                },
-                {
-                  "type": "boolean"
-                },
-                {
-                  "type": "null"
-                },
-                {
-                  "type": "object",
-                  "required": ["$var"],
-                  "properties": {
-                    "$var": {
-                      "anyOf": [
-                        {
-                          "type": "string",
-                          "const": "thinking.enabled"
-                        },
-                        {
-                          "type": "string",
-                          "const": "thinking.effort"
-                        },
-                        {
-                          "type": "string",
-                          "const": "thinking.budget"
-                        }
-                      ]
-                    },
-                    "omitWhenOff": {
-                      "type": "boolean"
-                    }
-                  }
-                }
-              ]
-            }
-          },
-          "description": "Arguments sent as chat_template_args when thinkingFormat is \"baseten\". Use $var with \"thinking.enabled\", \"thinking.effort\", or \"thinking.budget\" for msa-controlled values."
         },
         "openRouterRouting": {
           "type": "object",
@@ -883,11 +820,6 @@
           },
           "description": "Vercel AI Gateway routing preferences. Controls which upstream providers the gateway routes requests to. See https://vercel.com/docs/ai-gateway/models-and-providers/provider-options."
         },
-        "zaiToolStream": {
-          "type": "boolean",
-          "description": "Whether z.ai supports top-level tool_stream for streaming tool call deltas.",
-          "default": false
-        },
         "thinkingTokenBudgetField": {
           "anyOf": [
             {
@@ -995,7 +927,7 @@
         },
         "supportsCacheControlOnTools": {
           "type": "boolean",
-          "description": "Whether the provider supports Anthropic-style cache_control markers on tool definitions. When false, cache_control is omitted from tool parameters. Some Anthropic-compatible providers, such as Fireworks, do not support this field on tools and may reject or ignore it.",
+          "description": "Whether the provider supports Anthropic-style cache_control markers on tool definitions. When false, cache_control is omitted from tool parameters. Some Anthropic-compatible providers do not support this field on tools and may reject or ignore it.",
           "default": true
         },
         "supportsTemperature": {

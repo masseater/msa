@@ -24,7 +24,6 @@ import type { AssistantMessage } from "../types.ts";
  * - MiniMax: "invalid params, context window exceeds limit"
  * - Kimi For Coding: "Your request exceeded model token limit: X (requested: Y)"
  * - DS4: "Prompt has X tokens, but the configured context size is Y tokens"
- * - Cerebras: "400/413 status code (no body)"
  * - Mistral: "Prompt contains X tokens ... too large for model with Y maximum context length"
  * - z.ai: `{"code":"1261","message":"Prompt too long"}`, `{"code":"1261","message":"Prompt exceeds max length"}` (CN endpoint), or silent overflow via usage.input > contextWindow
  * - Xiaomi MiMo: Truncates input to fill contextWindow exactly, then returns finish_reason "length"
@@ -84,8 +83,6 @@ const OVERFLOW_PATTERNS = [
   /token limit exceeded/iu,
 ];
 
-const CEREBRAS_BODYLESS_OVERFLOW_PATTERN = /^4(?:00|13)\s*(?:status code)?\s*\(no body\)/iu;
-
 /**
  * Patterns that indicate non-overflow errors (e.g. rate limiting, server errors).
  * Error messages matching any of these are excluded from overflow detection
@@ -123,7 +120,6 @@ const NON_OVERFLOW_PATTERNS = [
  * - Google Gemini: "input token count exceeds the maximum"
  * - xAI (Grok): "maximum prompt length is X but request contains Y"
  * - Groq: "reduce the length of the messages"
- * - Cerebras: 400/413 status code (no body)
  * - Mistral: "Prompt contains X tokens ... too large for model with Y maximum context length"
  * - OpenRouter (most backends): "maximum context length is X tokens"
  * - OpenRouter/Poolside: "Input length X exceeds the maximum allowed input length of Y tokens."
@@ -164,16 +160,8 @@ export function isContextOverflow(message: AssistantMessage, contextWindow?: num
   if (message.stopReason === "error" && message.errorMessage) {
     // Skip messages matching known non-overflow patterns (e.g. throttling / rate-limit)
     const isNonOverflow = NON_OVERFLOW_PATTERNS.some((p) => p.test(message.errorMessage!));
-    if (!isNonOverflow) {
-      if (OVERFLOW_PATTERNS.some((p) => p.test(message.errorMessage!))) {
-        return true;
-      }
-      if (
-        message.provider === "cerebras" &&
-        CEREBRAS_BODYLESS_OVERFLOW_PATTERN.test(message.errorMessage)
-      ) {
-        return true;
-      }
+    if (!isNonOverflow && OVERFLOW_PATTERNS.some((p) => p.test(message.errorMessage!))) {
+      return true;
     }
   }
 

@@ -39,8 +39,6 @@ const compat: Omit<
   openRouterRouting: {},
   vercelGatewayRouting: {},
   chatTemplateKwargs: {},
-  chatTemplateArgs: {},
-  zaiToolStream: false,
   supportsThinkingTokenBudget: false,
   thinkingTokenBudgetField: undefined,
   supportsStrictMode: true,

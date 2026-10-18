@@ -181,12 +181,6 @@ describe("getSupportedThinkingLevels", () => {
     expect(getSupportedThinkingLevels(model!)).toEqual(["medium", "high", "xhigh"]);
   });
 
-  it("includes low/high/max plus off for DeepSeek V4.1 Flash on the DeepSeek provider", () => {
-    const model = getModel("deepseek", "deepseek-flash");
-    expect(model).toBeDefined();
-    expect(getSupportedThinkingLevels(model!)).toEqual(["off", "low", "high", "max"]);
-  });
-
   it("preserves low/high/max metadata for DeepSeek V4.1 Flash on OpenRouter", () => {
     const model = getModel("openrouter", "deepseek/deepseek-v4.1-flash");
     expect(model).toBeDefined();
@@ -198,27 +192,6 @@ describe("getSupportedThinkingLevels", () => {
     expect(model).toBeDefined();
     expect(getSupportedThinkingLevels(model!)).toEqual(["low", "high", "max"]);
   });
-
-  it("excludes thinking off for Moonshot Kimi K2.7 Code models", () => {
-    const cases = [
-      getModel("moonshotai", "kimi-k2.7-code"),
-      getModel("moonshotai-cn", "kimi-k2.7-code"),
-    ];
-
-    for (const model of cases) {
-      expect(model).toBeDefined();
-      expect(getSupportedThinkingLevels(model!)).toEqual(["minimal", "low", "medium", "high"]);
-    }
-  });
-
-  it.each(["moonshotai", "moonshotai-cn"] as const)(
-    "uses the verified effort options for %s Kimi K3",
-    (provider) => {
-      const model = getModel(provider, "kimi-k3");
-      expect(model).toBeDefined();
-      expect(getSupportedThinkingLevels(model!)).toEqual(["low", "high", "max"]);
-    },
-  );
 
   it("includes only low, high, max for Kimi Coding K3", () => {
     const model = getModel("kimi-coding", "k3");
