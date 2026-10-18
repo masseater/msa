@@ -5,6 +5,7 @@ import { join } from "node:path";
 
 import { getNativeClipboard } from "@msa/tui";
 
+import { readEnv } from "../core/platform.ts";
 import { runClipboardCommand } from "./clipboard-command.ts";
 import { isWSL } from "./wsl.ts";
 
@@ -53,12 +54,12 @@ async function copyViaWindowsClipboard(text: string): Promise<boolean> {
 export async function readClipboardText(): Promise<string | null> {
   const commands: [string, string[]][] = [];
 
-  if (process.env["TERMUX_VERSION"] !== undefined && process.env["TERMUX_VERSION"] !== "")
+  if (readEnv("TERMUX_VERSION") !== undefined && readEnv("TERMUX_VERSION") !== "")
     commands.push(["termux-clipboard-get", []]);
   if (platform() === "linux") {
-    if (process.env["WAYLAND_DISPLAY"] !== undefined && process.env["WAYLAND_DISPLAY"] !== "")
+    if (readEnv("WAYLAND_DISPLAY") !== undefined && readEnv("WAYLAND_DISPLAY") !== "")
       commands.push(["wl-paste", ["--no-newline", "--type", "text"]]);
-    if (process.env["DISPLAY"] !== undefined && process.env["DISPLAY"] !== "") {
+    if (readEnv("DISPLAY") !== undefined && readEnv("DISPLAY") !== "") {
       commands.push(
         ["xclip", ["-selection", "clipboard", "-out"]],
         ["xsel", ["--clipboard", "--output"]],

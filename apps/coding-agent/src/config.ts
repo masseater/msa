@@ -4,6 +4,7 @@ import { homedir } from "os";
 import { basename, dirname, join, resolve, sep, win32 } from "path";
 import { fileURLToPath } from "url";
 
+import { readEnv } from "./core/platform.ts";
 import { spawnProcessSync } from "./utils/child-process.ts";
 import { normalizePath } from "./utils/paths.ts";
 import { stripBom } from "./utils/text.ts";
@@ -129,7 +130,7 @@ function getSelfUpdateCommandForMethod(
       const binDirArgs =
         globalDir === undefined
           ? []
-          : [`--config.global-bin-dir=${process.env["PNPM_HOME"] || dirname(dirname(globalDir))}`];
+          : [`--config.global-bin-dir=${readEnv("PNPM_HOME") || dirname(dirname(globalDir))}`];
       return makeSelfUpdateCommand(
         makeSelfUpdateCommandStep("pnpm", [
           "install",
@@ -422,7 +423,7 @@ export function findNodePackageDir(startDir: string): string {
 }
 
 export function getPackageDir(): string {
-  const envDir = process.env["MSA_PACKAGE_DIR"];
+  const envDir = readEnv("MSA_PACKAGE_DIR");
   if (envDir !== undefined && envDir !== "") {
     return normalizePath(envDir);
   }
@@ -577,12 +578,12 @@ export function expandTildePath(path: string): string {
 const DEFAULT_SHARE_VIEWER_URL = "https://pi.dev/session/";
 
 export function getShareViewerUrl(gistId: string): string {
-  const baseUrl = process.env["MSA_SHARE_VIEWER_URL"] || DEFAULT_SHARE_VIEWER_URL;
+  const baseUrl = readEnv("MSA_SHARE_VIEWER_URL") || DEFAULT_SHARE_VIEWER_URL;
   return `${baseUrl}#${gistId}`;
 }
 
 export function getAgentDir(): string {
-  const envDir = process.env[ENV_AGENT_DIR];
+  const envDir = readEnv(ENV_AGENT_DIR);
   if (envDir !== undefined && envDir !== "") {
     return expandTildePath(envDir);
   }

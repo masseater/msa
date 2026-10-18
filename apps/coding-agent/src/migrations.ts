@@ -13,6 +13,7 @@ import chalk from "chalk";
 
 import { CONFIG_DIR_NAME, getAgentDir, getBinDir } from "./config.ts";
 import { migrateKeybindingsConfig } from "./core/keybindings.ts";
+import { writeLog } from "./core/platform.ts";
 import { stripBom } from "./utils/text.ts";
 
 const MIGRATION_GUIDE_URL =
@@ -117,10 +118,10 @@ function migrateCommandsToPrompts(baseDir: string, label: string): boolean {
   if (existsSync(commandsDir) && !existsSync(promptsDir)) {
     try {
       renameSync(commandsDir, promptsDir);
-      console.log(chalk.green(`Migrated ${label} commands/ → prompts/`));
+      writeLog(chalk.green(`Migrated ${label} commands/ → prompts/`));
       return true;
     } catch (err) {
-      console.log(
+      writeLog(
         chalk.yellow(
           `Warning: Could not migrate ${label} commands/ to prompts/: ${err instanceof Error ? err.message : err}`,
         ),
@@ -177,7 +178,7 @@ function migrateToolsToBin(): void {
   }
 
   if (movedAny) {
-    console.log(chalk.green(`Migrated managed binaries tools/ → bin/`));
+    writeLog(chalk.green(`Migrated managed binaries tools/ → bin/`));
   }
 }
 
@@ -233,12 +234,12 @@ export async function showDeprecationWarnings(warnings: string[]): Promise<void>
   if (warnings.length === 0) return;
 
   for (const warning of warnings) {
-    console.log(chalk.yellow(`Warning: ${warning}`));
+    writeLog(chalk.yellow(`Warning: ${warning}`));
   }
-  console.log(chalk.yellow(`\nMove your extensions to the extensions/ directory.`));
-  console.log(chalk.yellow(`Migration guide: ${MIGRATION_GUIDE_URL}`));
-  console.log(chalk.yellow(`Documentation: ${EXTENSIONS_DOC_URL}`));
-  console.log(chalk.dim(`\nPress any key to continue...`));
+  writeLog(chalk.yellow(`\nMove your extensions to the extensions/ directory.`));
+  writeLog(chalk.yellow(`Migration guide: ${MIGRATION_GUIDE_URL}`));
+  writeLog(chalk.yellow(`Documentation: ${EXTENSIONS_DOC_URL}`));
+  writeLog(chalk.dim(`\nPress any key to continue...`));
 
   await new Promise<void>((resolve) => {
     process.stdin.setRawMode?.(true);
@@ -249,7 +250,7 @@ export async function showDeprecationWarnings(warnings: string[]): Promise<void>
       resolve();
     });
   });
-  console.log();
+  writeLog();
 }
 
 export function runMigrations(cwd: string): {

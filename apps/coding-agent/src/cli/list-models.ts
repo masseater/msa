@@ -4,6 +4,7 @@ import chalk from "chalk";
 
 import { formatNoModelsAvailableMessage } from "../core/auth-guidance.ts";
 import type { ModelRuntime } from "../core/model-runtime.ts";
+import { writeError, writeLog } from "../core/platform.ts";
 
 function formatTokenCount(count: number): string {
   if (count >= 1_000_000) {
@@ -24,7 +25,7 @@ export async function listModels(
 ): Promise<void> {
   const loadError = modelRuntime.getError();
   if (loadError !== undefined && loadError !== "") {
-    console.error(chalk.yellow(`Warning: errors loading models.json:\n${loadError}`));
+    writeError(chalk.yellow(`Warning: errors loading models.json:\n${loadError}`));
   }
 
   const models = [
@@ -32,7 +33,7 @@ export async function listModels(
   ];
 
   if (models.length === 0) {
-    console.log(formatNoModelsAvailableMessage());
+    writeLog(formatNoModelsAvailableMessage());
     return;
   }
 
@@ -42,7 +43,7 @@ export async function listModels(
   }
 
   if (filteredModels.length === 0) {
-    console.log(`No models matching "${searchPattern}"`);
+    writeLog(`No models matching "${searchPattern}"`);
     return;
   }
 
@@ -87,7 +88,7 @@ export async function listModels(
     headers.thinking.padEnd(widths.thinking),
     headers.images.padEnd(widths.images),
   ].join("  ");
-  console.log(headerLine);
+  writeLog(headerLine);
 
   for (const row of rows) {
     const line = [
@@ -98,6 +99,6 @@ export async function listModels(
       row.thinking.padEnd(widths.thinking),
       row.images.padEnd(widths.images),
     ].join("  ");
-    console.log(line);
+    writeLog(line);
   }
 }

@@ -1,6 +1,8 @@
 import { createAssistantMessageEventStream } from "@msa/ai/compat";
 import type { AssistantMessage, JsonObject, Model } from "@msa/ai/compat";
 
+import { nowMs } from "../../core/platform.ts";
+
 export interface Usage {
   input: number;
   output: number;
@@ -28,7 +30,7 @@ export function createReply(model: Model<string>) {
       cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
     },
     stopReason: "pending",
-    timestamp: Date.now(),
+    timestamp: nowMs(),
   } as AssistantMessage;
 
   let started = false;

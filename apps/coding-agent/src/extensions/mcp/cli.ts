@@ -6,6 +6,7 @@ import chalk from "chalk";
 
 import { APP_NAME, CONFIG_DIR_NAME } from "../../config.ts";
 import { validateMcpServerConfig } from "../../core/mcp-servers.ts";
+import { writeError, writeLog } from "../../core/platform.ts";
 import { ProjectTrustStore } from "../../core/trust-manager.ts";
 import { toErrorMessage } from "../../utils/errors.ts";
 import { openBrowser } from "../../utils/open-browser.ts";
@@ -174,8 +175,8 @@ function parseOptions(
 }
 
 export async function runMcpCommand(args: string[], options: McpCommandOptions): Promise<number> {
-  const log = options.log ?? ((line: string) => console.log(line));
-  const error = options.error ?? ((line: string) => console.error(line));
+  const log = options.log ?? ((line: string) => writeLog(line));
+  const error = options.error ?? ((line: string) => writeError(line));
   const [command, ...rest] = args;
   if (
     command === undefined ||

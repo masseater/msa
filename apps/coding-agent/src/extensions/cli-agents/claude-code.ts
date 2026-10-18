@@ -19,6 +19,7 @@ import type {
 } from "@msa/ai/compat";
 
 import type { ExtensionAPI } from "../../core/extensions/types.ts";
+import { nowMs } from "../../core/platform.ts";
 import {
   accountEnv,
   blockIfUnusable,
@@ -175,7 +176,7 @@ class Session {
   private readonly ready = new Map<string, CallToolResult>();
   lastReply = "";
   private busyFlag = false;
-  lastUsed = Date.now();
+  lastUsed = nowMs();
   private child: ChildProcess | undefined;
   private stderrTail = "";
   private idleTimer: NodeJS.Timeout | undefined;
@@ -323,7 +324,7 @@ class Session {
   }
 
   touch(): void {
-    this.lastUsed = Date.now();
+    this.lastUsed = nowMs();
     clearTimeout(this.idleTimer);
     this.idleTimer = setTimeout(() => this.close(), IDLE_CLOSE_MS);
     this.idleTimer.unref();

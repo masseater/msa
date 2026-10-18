@@ -4,6 +4,7 @@ import { resolve } from "path";
 import type { ImageContent } from "@msa/ai";
 import chalk from "chalk";
 
+import { writeError } from "../core/platform.ts";
 import { resolveReadPath } from "../core/tools/path-utils.ts";
 import { toErrorMessage } from "../utils/errors.ts";
 import { processImage } from "../utils/image-process.ts";
@@ -33,7 +34,7 @@ export async function processFileArguments(
     try {
       await access(absolutePath);
     } catch {
-      console.error(chalk.red(`Error: File not found: ${absolutePath}`));
+      writeError(chalk.red(`Error: File not found: ${absolutePath}`));
       process.exit(1);
     }
 
@@ -71,7 +72,7 @@ export async function processFileArguments(
         text += `<file name="${absolutePath}">\n${content}\n</file>\n`;
       } catch (error: unknown) {
         const message = toErrorMessage(error);
-        console.error(chalk.red(`Error: Could not read file ${absolutePath}: ${message}`));
+        writeError(chalk.red(`Error: Could not read file ${absolutePath}: ${message}`));
         process.exit(1);
       }
     }

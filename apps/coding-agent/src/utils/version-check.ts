@@ -1,5 +1,6 @@
 import { compare, valid } from "semver";
 
+import { readEnv } from "../core/platform.ts";
 import { fetchWithRetry } from "./management-http.ts";
 import { getMsaUserAgent } from "./user-agent.ts";
 
@@ -60,8 +61,7 @@ export async function getLatestMsaRelease(
   currentVersion: string,
   options: { timeoutMs?: number; retry?: boolean } = {},
 ): Promise<LatestMsaRelease | undefined> {
-  if (process.env["MSA_OFFLINE"] !== undefined && process.env["MSA_OFFLINE"] !== "")
-    return undefined;
+  if (readEnv("MSA_OFFLINE") !== undefined && readEnv("MSA_OFFLINE") !== "") return undefined;
 
   const response = await fetchWithRetry(
     LATEST_RELEASE_URL,
@@ -87,10 +87,7 @@ export async function getLatestMsaRelease(
 export async function checkForNewMsaVersion(
   currentVersion: string,
 ): Promise<LatestMsaRelease | undefined> {
-  if (
-    process.env["MSA_SKIP_VERSION_CHECK"] !== undefined &&
-    process.env["MSA_SKIP_VERSION_CHECK"] !== ""
-  )
+  if (readEnv("MSA_SKIP_VERSION_CHECK") !== undefined && readEnv("MSA_SKIP_VERSION_CHECK") !== "")
     return undefined;
 
   try {

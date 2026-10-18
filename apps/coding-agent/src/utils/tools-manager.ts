@@ -14,6 +14,7 @@ import { Readable } from "stream";
 import { pipeline } from "stream/promises";
 
 import { APP_NAME, getBinDir } from "../config.ts";
+import { nowMs, readEnv } from "../core/platform.ts";
 import { fetchWithRetry } from "./management-http.ts";
 
 const TOOLS_DIR = getBinDir();
@@ -21,7 +22,7 @@ const NETWORK_TIMEOUT_MS = 10_000;
 const DOWNLOAD_TIMEOUT_MS = 120_000;
 
 function isOfflineModeEnabled(): boolean {
-  const value = process.env["MSA_OFFLINE"];
+  const value = readEnv("MSA_OFFLINE");
   if (value === undefined || value === "") return false;
   return value === "1" || value.toLowerCase() === "true" || value.toLowerCase() === "yes";
 }
@@ -203,7 +204,7 @@ function extractTarGzArchive(archivePath: string, extractDir: string, assetName:
 }
 
 function getWindowsTarCommand(): string {
-  const systemRoot = process.env["SystemRoot"] ?? process.env["WINDIR"];
+  const systemRoot = readEnv("SystemRoot") ?? readEnv("WINDIR");
   if (systemRoot !== undefined && systemRoot !== "") {
     const systemTar = join(systemRoot, "System32", "tar.exe");
     if (existsSync(systemTar)) {
@@ -282,7 +283,7 @@ async function downloadTool(tool: "fd" | "rg"): Promise<string> {
 
   const extractDir = join(
     TOOLS_DIR,
-    `extract_tmp_${config.binaryName}_${process.pid}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`,
+    `extract_tmp_${config.binaryName}_${process.pid}_${nowMs()}_${Math.random().toString(36).slice(2, 10)}`,
   );
   mkdirSync(extractDir, { recursive: true });
 

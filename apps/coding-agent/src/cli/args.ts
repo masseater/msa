@@ -3,6 +3,7 @@ import chalk from "chalk";
 
 import { APP_NAME, CONFIG_DIR_NAME, ENV_AGENT_DIR, ENV_SESSION_DIR } from "../config.ts";
 import type { ExtensionFlag } from "../core/extensions/types.ts";
+import { writeLog } from "../core/platform.ts";
 import { getToolListError, type TuiMode } from "../core/settings-manager.ts";
 
 export type Mode = "text" | "json" | "rpc";
@@ -309,7 +310,7 @@ export function printHelp(extensionFlags?: ExtensionFlag[]): void {
           })
           .join("\n")}\n`
       : "";
-  console.log(`${chalk.bold(APP_NAME)} - AI coding assistant with read, bash, edit, write tools
+  writeLog(`${chalk.bold(APP_NAME)} - AI coding assistant with read, bash, edit, write tools
 
 ${chalk.bold("Usage:")}
   ${APP_NAME} [options] [--] [@files...] [messages...]

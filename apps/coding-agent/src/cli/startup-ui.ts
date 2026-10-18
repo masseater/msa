@@ -19,6 +19,7 @@ import {
 import { areExperimentalFeaturesEnabled } from "../core/experimental.ts";
 import { KeybindingsManager } from "../core/keybindings.ts";
 import { DefaultPackageManager, type ResolvedResource } from "../core/package-manager.ts";
+import { readEnv } from "../core/platform.ts";
 import { SettingsManager } from "../core/settings-manager.ts";
 import { ExtensionInputComponent } from "../modes/interactive/components/extension-input.ts";
 import { ExtensionSelectorComponent } from "../modes/interactive/components/extension-selector.ts";
@@ -146,7 +147,7 @@ export function shouldRunFirstTimeSetup(settingsPath: string = getSettingsPath()
   if (!areExperimentalFeaturesEnabled()) {
     return false;
   }
-  if (process.env[ENV_AGENT_DIR] !== undefined && process.env[ENV_AGENT_DIR] !== "") {
+  if (readEnv(ENV_AGENT_DIR) !== undefined && readEnv(ENV_AGENT_DIR) !== "") {
     return false;
   }
   return !existsSync(settingsPath);

@@ -1,6 +1,8 @@
 import { existsSync, readFileSync } from "fs";
 import path from "node:path";
 
+import { writeError } from "../core/platform.ts";
+
 export interface ChangelogEntry {
   major: number;
   minor: number;
@@ -159,7 +161,7 @@ export function parseChangelog(changelogPath: string): ChangelogEntry[] {
 
     return entries;
   } catch (error) {
-    console.error(`Warning: Could not parse changelog: ${error}`);
+    writeError(`Warning: Could not parse changelog: ${error}`);
     return [];
   }
 }

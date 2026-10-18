@@ -1,6 +1,7 @@
 import type { AuthResult } from "@msa/ai";
 
 import { APP_NAME } from "../config.ts";
+import { writeLog } from "../core/platform.ts";
 import type { Args } from "./args.ts";
 
 export type AuthCommandKind = "check" | "api_key" | "bearer_token";
@@ -42,7 +43,7 @@ export function isAuthCommandHelp(args: string[]): boolean {
 }
 
 export function printAuthCommandHelp(): void {
-  console.log(`Usage:
+  writeLog(`Usage:
   msa auth print-api-key [--provider <provider>] [--model <model>]
   msa auth print-bearer-token [--provider <provider>] [--model <model>] [--min-expiry <duration>]
   msa auth check [--provider <provider>] [--model <model>] [--json] [--credentials] [--no-refresh]

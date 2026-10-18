@@ -6,6 +6,7 @@ import { promisify } from "node:util";
 import type { SDKAssistantMessageError } from "@anthropic-ai/claude-agent-sdk";
 
 import { expandTildePath, getAgentDir } from "../../config.ts";
+import { nowMs, readEnv } from "../../core/platform.ts";
 import { spawnProcess, waitForChildProcess } from "../../utils/child-process.ts";
 import { findExecutableOnPath } from "../../utils/shell.ts";
 
@@ -116,7 +117,7 @@ export function setAutoRotation(name: string, auto: boolean): void {
 }
 
 export function claudeExecutable(): string | undefined {
-  return process.env["CLAUDE_BIN"]?.trim() || findExecutableOnPath("claude") || undefined;
+  return readEnv("CLAUDE_BIN")?.trim() || findExecutableOnPath("claude") || undefined;
 }
 
 const tokens = new Map<string, Promise<string>>();
@@ -124,7 +125,7 @@ const tokens = new Map<string, Promise<string>>();
 async function runTokenCommand(command: string): Promise<string> {
   let stdout: string;
   try {
-    ({ stdout } = await promisify(execFile)(process.env["SHELL"] || "/bin/sh", ["-c", command]));
+    ({ stdout } = await promisify(execFile)(readEnv("SHELL") || "/bin/sh", ["-c", command]));
   } catch (error) {
     const stderr = String((error as { stderr?: unknown }).stderr ?? "").trim();
     throw new Error(`tokenCommand ${command}: ${stderr.split("\n").at(-1) || "failed"}`, {
@@ -283,7 +284,7 @@ function saveBlocks(blocks: Record<string, Block>): void {
   writeFileSync(file, JSON.stringify(blocks, null, 2));
 }
 
-export function blockOf(account: Account, now = Date.now()): Block | undefined {
+export function blockOf(account: Account, now = nowMs()): Block | undefined {
   const block = loadBlocks()[account.name];
   return block !== undefined && block.until > now ? block : undefined;
 }
@@ -309,15 +310,15 @@ const DISABLED_CAUSES = new Set<RunFailure["cause"]>([
 export function blockIfUnusable(account: Account, failure: RunFailure): boolean {
   const { error, cause } = failure;
   let until: number | undefined;
-  if (cause === "usage_limit") until = failure.resetsAt ?? Date.now() + FALLBACK_BLOCK_MS;
+  if (cause === "usage_limit") until = failure.resetsAt ?? nowMs() + FALLBACK_BLOCK_MS;
   else if (
     cause === "authentication_failed" ||
     /^tokenCommand /u.test(error) ||
     /not logged in|please run \/login/iu.test(error)
   ) {
-    until = Date.now() + LOGGED_OUT_BLOCK_MS;
+    until = nowMs() + LOGGED_OUT_BLOCK_MS;
   } else if (DISABLED_CAUSES.has(cause)) {
-    until = Date.now() + DISABLED_BLOCK_MS;
+    until = nowMs() + DISABLED_BLOCK_MS;
   }
   if (until === undefined) return false;
   const blocks = loadBlocks();

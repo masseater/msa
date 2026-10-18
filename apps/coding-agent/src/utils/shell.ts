@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import { delimiter, join } from "node:path";
 
 import { getBinDir } from "../config.ts";
+import { readEnv } from "../core/platform.ts";
 
 export interface ShellConfig {
   shell: string;
@@ -61,11 +62,11 @@ export function getShellConfig(customShellPath?: string): ShellConfig {
 
   if (process.platform === "win32") {
     const paths: string[] = [];
-    const programFiles = process.env["ProgramFiles"];
+    const programFiles = readEnv("ProgramFiles");
     if (programFiles !== undefined && programFiles !== "") {
       paths.push(`${programFiles}\\Git\\bin\\bash.exe`);
     }
-    const programFilesX86 = process.env["ProgramFiles(x86)"];
+    const programFilesX86 = readEnv("ProgramFiles(x86)");
     if (programFilesX86 !== undefined && programFilesX86 !== "") {
       paths.push(`${programFilesX86}\\Git\\bin\\bash.exe`);
     }
@@ -128,7 +129,7 @@ export function getPowerShellConfig(): ShellConfig {
 export function getShellEnv(): NodeJS.ProcessEnv {
   const binDir = getBinDir();
   const pathKey = Object.keys(process.env).find((key) => key.toLowerCase() === "path") ?? "PATH";
-  const currentPath = process.env[pathKey] ?? "";
+  const currentPath = readEnv(pathKey) ?? "";
   const pathEntries = currentPath.split(delimiter).filter(Boolean);
   const hasBinDir = pathEntries.includes(binDir);
   const updatedPath = hasBinDir
@@ -166,7 +167,7 @@ export function killProcessTree(pid: number): void {
   if (process.platform === "win32") {
     try {
       const child = spawn(
-        join(process.env["SystemRoot"] ?? "C:\\Windows", "System32", "taskkill.exe"),
+        join(readEnv("SystemRoot") ?? "C:\\Windows", "System32", "taskkill.exe"),
         ["/F", "/T", "/PID", String(pid)],
         {
           stdio: "ignore",

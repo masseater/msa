@@ -25,6 +25,7 @@ import lockfile from "proper-lockfile";
 import { APP_NAME, getAgentDir } from "../../config.ts";
 import { type AuthStorageBackend, FileAuthStorageBackend } from "../../core/auth-storage.ts";
 import { mcpNamespace } from "../../core/mcp-servers.ts";
+import { nowMs } from "../../core/platform.ts";
 
 const CALLBACK_HOST = "127.0.0.1";
 const CALLBACK_PATH = "/callback";
@@ -326,7 +327,7 @@ export function createMcpAuthProvider(options: {
       const state = await store.load();
       const token = state?.tokens?.access_token;
       const expired =
-        state?.tokensExpireAt !== undefined && state.tokensExpireAt - REFRESH_SKEW_MS <= Date.now();
+        state?.tokensExpireAt !== undefined && state.tokensExpireAt - REFRESH_SKEW_MS <= nowMs();
       if (
         !expired ||
         state?.tokens?.refresh_token === undefined ||

@@ -5,6 +5,7 @@ import type { Model, SimpleStreamOptions, TranscriptContext } from "@msa/ai/comp
 import { getBuiltinModels } from "@msa/ai/providers/all";
 
 import type { ExtensionAPI } from "../../core/extensions/types.ts";
+import { readEnv } from "../../core/platform.ts";
 import { streamViaCli, type CliBackend } from "./run.ts";
 import { flattenTranscript } from "./transcript.ts";
 
@@ -60,7 +61,7 @@ const backend: CliBackend<OpenCodeEvent> = {
   providerId: PROVIDER_ID,
   command(model, context, cwd) {
     return {
-      bin: process.env["OPENCODE_BIN"]?.trim() || join(homedir(), ".opencode", "bin", "opencode"),
+      bin: readEnv("OPENCODE_BIN")?.trim() || join(homedir(), ".opencode", "bin", "opencode"),
       args: [
         "run",
         "--standalone",
@@ -74,7 +75,7 @@ const backend: CliBackend<OpenCodeEvent> = {
       env: {
         ...process.env,
         XDG_DATA_HOME:
-          process.env["OPENCODE_FREE_DATA_HOME"]?.trim() ||
+          readEnv("OPENCODE_FREE_DATA_HOME")?.trim() ||
           join(homedir(), ".local", "share", "msa-opencode-free"),
       },
     };
