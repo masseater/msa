@@ -4,6 +4,7 @@ import { Cause, Deferred, Effect, Exit } from "effect";
 
 import { type Connection, isConnectionLost, type Json } from "./connection.ts";
 import { toFileError } from "./errors.ts";
+import { unrefSleep } from "./unref-sleep.ts";
 
 export interface RemoteWatchOptions {
   mode?: "native" | "polling";
@@ -144,9 +145,7 @@ export class RemoteWatcher implements FileWatcher {
       this.#wake = () => {
         Deferred.doneUnsafe(woken, Exit.void);
       };
-      return Deferred.await(woken).pipe(
-        Effect.timeoutOrElse({ duration: delay, orElse: () => Effect.void }),
-      );
+      return Effect.raceFirst(Deferred.await(woken), unrefSleep(delay));
     });
   }
 
