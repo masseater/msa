@@ -1,6 +1,6 @@
 import photonWasm from "@silvia-odwyer/photon/photon_rs_bg.wasm";
 
-import type { ImageProcessor } from "../tools/image-processor.ts";
+import type { ImageProcessor } from "../tools/image.ts";
 import { createPhotonImages } from "./index.ts";
 
 export function createCloudflarePhotonImages(): ImageProcessor {

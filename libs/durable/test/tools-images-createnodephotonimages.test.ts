@@ -1,7 +1,7 @@
 import { createNodePhotonImages } from "@msa/durable/images/node";
 import { afterAll, beforeAll, describe, expect, it } from "vite-plus/test";
 
-import { DEFAULT_IMAGE_LIMITS } from "../src/tools/image-processor.ts";
+import { DEFAULT_IMAGE_LIMITS } from "../src/tools/image.ts";
 import { bmp, encode, setUpImages } from "./tools-images-fixtures-support.ts";
 import { removeImageDirectory } from "./tools-images-support.ts";
 

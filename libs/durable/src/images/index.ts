@@ -9,8 +9,14 @@ import {
 } from "@silvia-odwyer/photon/photon_rs.js";
 
 import { promiseTry } from "../promise-try.ts";
-import type { ImageLimits, ImageProcessor, PreparedImage } from "../tools/image-processor.ts";
-import { base64Length, INLINE_IMAGE_TYPES, toBase64 } from "../tools/image-processor.ts";
+import {
+  base64Length,
+  type ImageLimits,
+  type ImageProcessor,
+  INLINE_IMAGE_TYPES,
+  type PreparedImage,
+  toBase64,
+} from "../tools/image.ts";
 import { exifOrientation } from "./exif.ts";
 
 const JPEG_QUALITIES = [80, 70, 55, 40];

@@ -20,7 +20,7 @@ export {
   type ImageLimits,
   type ImageProcessor,
   type PreparedImage,
-} from "./image-processor.ts";
+} from "./image.ts";
 export {
   createReadTool,
   type ReadToolDetails,

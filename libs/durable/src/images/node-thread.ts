@@ -2,7 +2,7 @@ import { Worker } from "node:worker_threads";
 
 import { Data } from "effect";
 
-import type { ImageLimits, PreparedImage } from "../tools/image-processor.ts";
+import type { ImageLimits, PreparedImage } from "../tools/image.ts";
 import type { PrepareReply, PrepareRequest } from "./node-worker.ts";
 
 export class WorkerUnavailable extends Data.TaggedError("WorkerUnavailable")<{

@@ -1,7 +1,7 @@
 import { Function } from "effect";
 
 import type { Dual3 } from "../dual.ts";
-import { duplicateError, emptyOldTextError, noChangeError, notFoundError } from "./edit-errors.ts";
+import { duplicateError, emptyOldTextError, noChangeError, notFoundError } from "./edit-display.ts";
 
 function detectLineEnding(content: string): "\r\n" | "\n" {
   const crlfIdx = content.indexOf("\r\n");

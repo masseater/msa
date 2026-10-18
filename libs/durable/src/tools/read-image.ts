@@ -4,17 +4,16 @@ import { Effect } from "effect";
 import type { FileInfo } from "../env/index.ts";
 import type { ToolDiagnostic, ToolExecutionApi, ToolExecutionResult } from "../harness/types.ts";
 import { formatSize } from "../truncate.ts";
-import type { BinarySource } from "./binary-source.ts";
 import {
   base64Length,
   DEFAULT_IMAGE_LIMITS,
+  imageDimensions,
   type ImageLimits,
   type ImageProcessor,
   INLINE_IMAGE_TYPES,
   toBase64,
-} from "./image-processor.ts";
-import { imageDimensions } from "./image.ts";
-import type { ReadToolDetails } from "./read-text.ts";
+} from "./image.ts";
+import type { BinarySource, ReadToolDetails } from "./read-text.ts";
 
 type ImageLoad =
   | {

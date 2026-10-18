@@ -6,20 +6,20 @@ import { afterAll, beforeAll, describe, expect, it } from "vite-plus/test";
 import { exifOrientation } from "../src/images/exif.ts";
 import {
   DEFAULT_IMAGE_LIMITS,
+  imageDimensions,
   type ImageProcessor,
   toBase64,
-} from "../src/tools/image-processor.ts";
-import { imageDimensions } from "../src/tools/image.ts";
+} from "../src/tools/image.ts";
 import {
   decodedImage,
-  noisyPng,
-  encodeRgba,
-  gif,
   encode,
-  withOrientation,
+  encodeRgba,
   EXIF_HEADER,
+  gif,
+  noisyPng,
   setUpImages,
   tiff,
+  withOrientation,
 } from "./tools-images-fixtures-support.ts";
 import { removeImageDirectory } from "./tools-images-support.ts";
 
@@ -215,7 +215,7 @@ describe("toBase64", () => {
 
   // #10923: building the output a character at a time took 138 MB of heap for a 3 MiB image.
   it("encodes a 3 MiB image within a 128 MB heap", () => {
-    const source = new URL("../src/tools/image-processor.ts", import.meta.url).href;
+    const source = new URL("../src/tools/image.ts", import.meta.url).href;
     const script = `
 			const { toBase64 } = await import(${JSON.stringify(source)});
 			const bytes = Uint8Array.from({ length: 3147295 }, (_, index) => (index * 37) % 256);

@@ -4,9 +4,7 @@ import { type Static, Type } from "typebox";
 import { getOrThrow } from "../env/result.ts";
 import { defineTool } from "../harness/define.ts";
 import type { ToolRegistration } from "../harness/types.ts";
-import { requireEnv } from "./env.ts";
-import { fileMutation } from "./file-mutation-queue.ts";
-import { resolveToolPath } from "./path-utils.ts";
+import { fileMutation, requireEnv, resolveToolPath } from "./env.ts";
 
 const writeSchema = Type.Object({
   path: Type.String({ description: "Path to the file to write (relative or absolute)" }),

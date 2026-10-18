@@ -4,7 +4,7 @@ import type { ToolDiagnostic, ToolExecutionApi, ToolExecutionResult } from "@msa
 import { expect } from "vite-plus/test";
 
 import { NodeExecutionEnv } from "../src/env/node.ts";
-import { type ImageProcessor } from "../src/tools/image-processor.ts";
+import type { ImageProcessor } from "../src/tools/image.ts";
 import { createReadTool } from "../src/tools/read.ts";
 import { makeTempDirSync, removeDirSync, writeTempFile } from "./temp-support.ts";
 

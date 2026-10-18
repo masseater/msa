@@ -4,11 +4,9 @@ import { Effect } from "effect";
 import type { ExecutionEnv } from "../env/index.ts";
 import { getOrThrow } from "../env/result.ts";
 import type { ToolExecutionApi } from "../harness/types.ts";
-import { type BinarySource, binarySource } from "./binary-source.ts";
-import type { ImageProcessor } from "./image-processor.ts";
-import { detectSupportedImageMimeTypeOf } from "./image.ts";
+import { detectSupportedImageMimeTypeOf, type ImageProcessor } from "./image.ts";
 import { imageModel, readImage } from "./read-image.ts";
-import { readText } from "./read-text.ts";
+import { type BinarySource, binarySource, readText } from "./read-text.ts";
 
 export type ReadRequest = {
   readonly path: string;

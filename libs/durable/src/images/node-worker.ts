@@ -1,6 +1,6 @@
 import { parentPort, workerData } from "node:worker_threads";
 
-import type { ImageLimits, PreparedImage } from "../tools/image-processor.ts";
+import type { ImageLimits, PreparedImage } from "../tools/image.ts";
 import { createPhotonImages } from "./index.ts";
 
 export type PrepareRequest = {

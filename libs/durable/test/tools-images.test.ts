@@ -6,25 +6,21 @@ import { afterAll, beforeAll, describe, expect, it } from "vite-plus/test";
 
 import { getOrThrow } from "../src/env/index.ts";
 import { NodeExecutionEnv } from "../src/env/node.ts";
-import {
-  DEFAULT_IMAGE_LIMITS,
-  type ImageProcessor,
-  toBase64,
-} from "../src/tools/image-processor.ts";
+import { DEFAULT_IMAGE_LIMITS, type ImageProcessor, toBase64 } from "../src/tools/image.ts";
 import { createReadTool } from "../src/tools/read.ts";
 import {
-  decodedImage,
   bmp,
-  noisyPng,
-  gif,
+  decodedImage,
   encode,
-  withOrientation,
+  gif,
+  noisyPng,
   setUpImages,
+  withOrientation,
 } from "./tools-images-fixtures-support.ts";
 import {
-  onlyImage,
-  messages,
   directory,
+  messages,
+  onlyImage,
   read,
   removeImageDirectory,
 } from "./tools-images-support.ts";

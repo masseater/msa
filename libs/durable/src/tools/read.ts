@@ -4,9 +4,8 @@ import { type Static, Type } from "typebox";
 import { defineTool } from "../harness/define.ts";
 import type { ToolRegistration } from "../harness/types.ts";
 import { DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES } from "../truncate.ts";
-import { requireEnv } from "./env.ts";
-import type { ImageProcessor } from "./image-processor.ts";
-import { resolveReadToolPath } from "./path-utils.ts";
+import { requireEnv, resolveReadToolPath } from "./env.ts";
+import type { ImageProcessor } from "./image.ts";
 import { readContent } from "./read-content.ts";
 import type { ReadToolDetails } from "./read-text.ts";
 

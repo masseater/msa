@@ -4,7 +4,7 @@ import { createRequire } from "node:module";
 import { createNodePhotonImages } from "@msa/durable/images/node";
 import { initSync, PhotonImage } from "@silvia-odwyer/photon/photon_rs.js";
 
-import type { ImageProcessor } from "../src/tools/image-processor.ts";
+import type { ImageProcessor } from "../src/tools/image.ts";
 
 // Fixtures are built with Photon here; the processor prepares them in its worker thread.
 export function setUpImages(): Promise<ImageProcessor> {

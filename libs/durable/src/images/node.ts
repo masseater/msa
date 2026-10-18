@@ -3,7 +3,7 @@ import { createRequire } from "node:module";
 import { Effect, FileSystem } from "effect";
 
 import { nodeRuntime } from "../node-runtime.ts";
-import type { ImageLimits, ImageProcessor } from "../tools/image-processor.ts";
+import type { ImageLimits, ImageProcessor } from "../tools/image.ts";
 import { createPhotonImages } from "./index.ts";
 import { type PhotonThread, startPhotonThread, WorkerUnavailable } from "./node-thread.ts";
 

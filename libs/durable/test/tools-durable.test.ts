@@ -5,18 +5,18 @@ import { BACKGROUND_CONTEXT, withAbortSignal } from "@msa/chord/context";
 import { afterAll, describe, expect, it } from "vite-plus/test";
 
 import { getOrThrow } from "../src/env/index.ts";
-import { withFileMutationQueue } from "../src/tools/file-mutation-queue.ts";
+import { withFileMutationQueue } from "../src/tools/env.ts";
 import { createEditTool, createWriteTool } from "../src/tools/index.ts";
 import { BlockingEditExecutionEnv } from "./tools-blocking-edit-env-support.ts";
 import { SlowReadExecutionEnv } from "./tools-slow-read-env-support.ts";
 import {
+  BlockingWriteExecutionEnv,
   createEnv,
   createTempDir,
-  run,
-  delay,
-  BlockingWriteExecutionEnv,
   deferred,
+  delay,
   removeTempDirs,
+  run,
 } from "./tools-support.ts";
 
 afterAll(removeTempDirs);
