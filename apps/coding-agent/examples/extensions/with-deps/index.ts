@@ -1,16 +1,14 @@
-/**
- * Example extension with its own npm dependencies.
- * Tests that jiti resolves modules from the extension's own node_modules.
- *
- * Requires: npm install in this directory
- */
+import { Data, Effect } from "effect";
 
 import type { ExtensionAPI } from "@msa/coding-agent";
 import ms from "ms";
 import { Type } from "typebox";
 
+class InvalidDurationError extends Data.TaggedError("InvalidDurationError")<{
+  readonly message: string;
+}> {}
+
 export default function (msa: ExtensionAPI) {
-  // Register a tool that uses ms
   msa.registerTool({
     name: "parse_duration",
     label: "Parse Duration",
@@ -19,15 +17,20 @@ export default function (msa: ExtensionAPI) {
     parameters: Type.Object({
       duration: Type.String({ description: "Duration string like '2 days', '1h', '5m'" }),
     }),
-    execute: async (_toolCallId, params) => {
-      const result = ms(params.duration as ms.StringValue);
-      if (result === undefined) {
-        throw new Error(`Invalid duration: "${params.duration}"`);
-      }
-      return {
-        content: [{ type: "text", text: `${params.duration} = ${result} milliseconds` }],
-        details: {},
-      };
-    },
+    execute: (_toolCallId, params) =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          const result = ms(params.duration as ms.StringValue);
+          if (result === undefined) {
+            return yield* new InvalidDurationError({
+              message: `Invalid duration: "${params.duration}"`,
+            });
+          }
+          return {
+            content: [{ type: "text", text: `${params.duration} = ${result} milliseconds` }],
+            details: {},
+          };
+        }),
+      ),
   });
 }

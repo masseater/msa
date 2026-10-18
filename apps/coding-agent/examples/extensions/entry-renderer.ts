@@ -1,12 +1,4 @@
-/**
- * Custom entry rendering example.
- *
- * Shows how to render durable extension data inside the chat without sending it
- * to the LLM. Custom entries are stored in the session via msa.appendEntry() and
- * rendered in interactive mode via msa.registerEntryRenderer().
- *
- * Usage: /status-card [message]
- */
+
 
 import type { ExtensionAPI } from "@msa/coding-agent";
 import { Box, Text } from "@msa/tui";

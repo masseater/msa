@@ -1,14 +1,4 @@
-/**
- * Commands Extension
- *
- * Demonstrates the msa.getCommands() API by providing a /commands command
- * that lists all available slash commands in the current session.
- *
- * Usage:
- * 1. Copy this file to ~/.msa/agent/extensions/ or your project's .msa/extensions/
- * 2. Use /commands to see available commands
- * 3. Use /commands extensions to filter by source
- */
+
 
 import type { ExtensionAPI, SlashCommandInfo } from "@msa/coding-agent";
 
@@ -24,7 +14,7 @@ export default function commandsExtension(msa: ExtensionAPI) {
       const commands = msa.getCommands();
       const sourceFilter = args.trim() as "extension" | "prompt" | "skill" | "";
 
-      // Filter by source if specified
+      
       const filtered = sourceFilter ? commands.filter((c) => c.source === sourceFilter) : commands;
 
       if (filtered.length === 0) {
@@ -35,7 +25,7 @@ export default function commandsExtension(msa: ExtensionAPI) {
         return;
       }
 
-      // Build selection items grouped by source
+      
       const formatCommand = (cmd: SlashCommandInfo): string => {
         const desc = cmd.description ? ` - ${cmd.description}` : "";
         return `/${cmd.name}${desc}`;
@@ -56,12 +46,12 @@ export default function commandsExtension(msa: ExtensionAPI) {
         }
       }
 
-      // Show in a selector (user can scroll and see all commands)
+      
       const selected = await ctx.ui.select("Available Commands", items);
 
-      // If user selected a command (not a header), offer to show its path
+      
       if (selected && !selected.startsWith("---")) {
-        const cmdName = (selected.split(" - ")[0] ?? "").slice(1); // Remove leading /
+        const cmdName = (selected.split(" - ")[0] ?? "").slice(1); 
         const cmd = commands.find((c) => c.name === cmdName);
         if (cmd?.sourceInfo.path) {
           const showPath = await ctx.ui.confirm(

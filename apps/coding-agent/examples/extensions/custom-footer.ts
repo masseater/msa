@@ -1,12 +1,4 @@
-/**
- * Custom Footer Extension - demonstrates ctx.ui.setFooter()
- *
- * footerData exposes data not otherwise accessible:
- * - getGitBranch(): current git branch
- * - getExtensionStatuses(): texts from ctx.ui.setStatus()
- *
- * Token stats come from ctx.sessionManager/ctx.model (already accessible).
- */
+
 
 import type { AssistantMessage } from "@msa/ai";
 import type { ExtensionAPI } from "@msa/coding-agent";
@@ -28,7 +20,7 @@ export default function (msa: ExtensionAPI) {
             dispose: unsub,
             invalidate() {},
             render(width: number): string[] {
-              // Compute tokens from ctx (already accessible to extensions)
+              
               let input = 0;
               let output = 0;
               let cost = 0;
@@ -41,7 +33,7 @@ export default function (msa: ExtensionAPI) {
                 }
               }
 
-              // Get git branch (not otherwise accessible)
+              
               const branch = footerData.getGitBranch();
               const fmt = (n: number) => (n < 1000 ? `${n}` : `${(n / 1000).toFixed(1)}k`);
 

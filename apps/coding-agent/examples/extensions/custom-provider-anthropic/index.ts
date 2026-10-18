@@ -1,25 +1,4 @@
-/**
- * Custom Provider Example
- *
- * Demonstrates registering a custom provider with:
- * - Custom API identifier ("custom-anthropic-api")
- * - Custom streamSimple implementation
- * - OAuth support for /login
- * - API key support via environment variable
- * - Two model definitions
- *
- * Usage:
- *   # First install dependencies
- *   cd apps/coding-agent/examples/extensions/custom-provider && npm install
- *
- *   # With OAuth (run /login custom-anthropic first)
- *   msa -e ./apps/coding-agent/examples/extensions/custom-provider
- *
- *   # With API key
- *   CUSTOM_ANTHROPIC_API_KEY=sk-ant-... msa -e ./apps/coding-agent/examples/extensions/custom-provider
- *
- * Then use /model to select custom-anthropic/claude-sonnet-4-5
- */
+
 
 import Anthropic from "@anthropic-ai/sdk";
 import type {
@@ -50,9 +29,9 @@ import {
 } from "@msa/ai";
 import type { ExtensionAPI } from "@msa/coding-agent";
 
-// =============================================================================
-// OAuth implementation adapted for the legacy extension compatibility interface.
-// =============================================================================
+
+
+
 
 const decode = (s: string) => atob(s);
 const CLIENT_ID = decode("OWQxYzI1MGEtZTYxYi00NGQ5LTg4ZWQtNTk0NGQxOTYyZjVl");
@@ -161,11 +140,11 @@ async function refreshAnthropicToken(
   };
 }
 
-// =============================================================================
-// Streaming Implementation (simplified from libs/ai/src/api/anthropic-messages.ts)
-// =============================================================================
 
-// Claude Code tool names for OAuth stealth mode
+
+
+
+
 const claudeCodeTools = [
   "Read",
   "Write",
@@ -305,7 +284,7 @@ function convertMessages(messages: Message[], isOAuth: boolean, _tools?: Tool[])
     }
   }
 
-  // Add cache control to last user message
+  
   if (params.length > 0) {
     const last = params[params.length - 1];
     if (last.role === "user" && Array.isArray(last.content)) {
@@ -352,8 +331,8 @@ function streamCustomAnthropic(
   options?: SimpleStreamOptions,
 ): AssistantMessageEventStream {
   const stream = createAssistantMessageEventStream();
-  // The transcript carries the prompt and tools in its system messages. This provider sends
-  // one top-level system prompt, so fold later system messages into the leading one first.
+  
+  
   const transcript = collapseSystemMessages(context);
   const systemPrompt = getCurrentSystemPrompt(transcript.messages);
   const tools = getCurrentTools(transcript.messages);
@@ -381,7 +360,7 @@ function streamCustomAnthropic(
       const apiKey = options?.apiKey ?? "";
       const isOAuth = isOAuthToken(apiKey);
 
-      // Configure client based on auth type
+      
       const betaFeatures = [
         "fine-grained-tool-streaming-2025-05-14",
         "interleaved-thinking-2025-05-14",
@@ -412,7 +391,7 @@ function streamCustomAnthropic(
 
       const client = new Anthropic(clientOptions);
 
-      // Build request params
+      
       const params: MessageCreateParamsStreaming = {
         model: model.id,
         messages: convertMessages(transcript.messages, isOAuth, tools),
@@ -420,7 +399,7 @@ function streamCustomAnthropic(
         stream: true,
       };
 
-      // System prompt with Claude Code identity for OAuth
+      
       if (isOAuth) {
         params.system = [
           {
@@ -450,7 +429,7 @@ function streamCustomAnthropic(
         params.tools = convertTools(tools, isOAuth);
       }
 
-      // Handle thinking/reasoning
+      
       if (options?.reasoning && model.reasoning) {
         const defaultBudgets: Record<string, number> = {
           minimal: 1024,
@@ -632,9 +611,9 @@ function streamCustomAnthropic(
   return stream;
 }
 
-// =============================================================================
-// Extension Entry Point
-// =============================================================================
+
+
+
 
 export default function (msa: ExtensionAPI) {
   msa.registerProvider("custom-anthropic", {

@@ -1,17 +1,4 @@
-/**
- * SSH Remote Execution Example
- *
- * Demonstrates delegating tool operations to a remote machine via SSH.
- * When --ssh is provided, read/write/edit/bash run on the remote.
- *
- * Usage:
- *   msa -e ./ssh.ts --ssh user@host
- *   msa -e ./ssh.ts --ssh user@host:/remote/path
- *
- * Requirements:
- *   - SSH key-based auth (no password prompts)
- *   - bash on remote
- */
+
 
 import { spawn } from "node:child_process";
 
@@ -36,10 +23,10 @@ function sshExec(remote: string, command: string): Promise<Buffer> {
     child.stderr.on("data", (data) => errChunks.push(data));
     child.on("error", reject);
     child.on("close", (code) => {
-      if (code !== 0) {
-        reject(new Error(`SSH failed (${code}): ${Buffer.concat(errChunks).toString()}`));
-      } else {
+      if (code === 0) {
         resolve(Buffer.concat(chunks));
+      } else {
+        reject(new Error(`SSH failed (${code}): ${Buffer.concat(errChunks).toString()}`));
       }
     });
   });
@@ -131,7 +118,7 @@ export default function (msa: ExtensionAPI) {
   const localEdit = createEditTool(localCwd);
   const localBash = createBashTool(localCwd);
 
-  // Resolved lazily on session_start (CLI flags not available during factory)
+  
   let resolvedSsh: { remote: string; remoteCwd: string } | null = null;
 
   const getSsh = () => resolvedSsh;
@@ -193,14 +180,14 @@ export default function (msa: ExtensionAPI) {
   });
 
   msa.on("session_start", async (_event, ctx) => {
-    // Resolve SSH config now that CLI flags are available
+    
     const arg = msa.getFlag("ssh") as string | undefined;
     if (arg) {
       if (arg.includes(":")) {
         const [remote = "", path = ""] = arg.split(":");
         resolvedSsh = { remote, remoteCwd: path };
       } else {
-        // No path given, evaluate pwd on remote
+        
         const remote = arg;
         const pwd = (await sshExec(remote, "pwd")).toString().trim();
         resolvedSsh = { remote, remoteCwd: pwd };
@@ -213,14 +200,14 @@ export default function (msa: ExtensionAPI) {
     }
   });
 
-  // Handle user ! commands via SSH
+  
   msa.on("user_bash", (_event) => {
     const ssh = getSsh();
-    if (!ssh) return; // No SSH, use local execution
+    if (!ssh) return; 
     return { operations: createRemoteBashOps(ssh.remote, ssh.remoteCwd, localCwd) };
   });
 
-  // Replace local cwd with remote cwd in system prompt
+  
   msa.on("before_agent_start", async (event) => {
     const ssh = getSsh();
     if (ssh) {

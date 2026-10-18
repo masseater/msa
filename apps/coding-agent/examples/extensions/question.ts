@@ -1,8 +1,4 @@
-/**
- * Question Tool - Single question with options
- * Full custom UI: options list + inline editor for "Type something..."
- * Escape in editor returns to options, Escape in options cancels
- */
+
 
 import type { ExtensionAPI } from "@msa/coding-agent";
 import {
@@ -30,7 +26,7 @@ interface QuestionDetails {
   wasCustom?: boolean;
 }
 
-// Options with labels and optional descriptions
+
 const OptionSchema = Type.Object({
   label: Type.String({ description: "Display label for the option" }),
   description: Type.Optional(
@@ -192,7 +188,7 @@ export default function question(msa: ExtensionAPI) {
 
             addWrappedWithPrefix(prefix, theme.fg(color, label));
 
-            // Show description if present
+            
             if (opt.description) {
               addWrappedWithPrefix("     ", theme.fg("muted", opt.description));
             }
@@ -230,7 +226,7 @@ export default function question(msa: ExtensionAPI) {
         };
       });
 
-      // Build simple options list for details
+      
       const simpleOptions = params.options.map((o) => o.label);
 
       if (!result) {

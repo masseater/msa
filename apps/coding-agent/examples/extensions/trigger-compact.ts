@@ -10,7 +10,7 @@ export default function (msa: ExtensionAPI) {
       ctx.ui.notify("Compaction started", "info");
     }
     ctx.compact({
-      ...(customInstructions !== undefined ? { customInstructions } : {}),
+      ...(customInstructions === undefined ? {} : { customInstructions }),
       onComplete: () => {
         if (ctx.hasUI) {
           ctx.ui.notify("Compaction completed", "info");
@@ -44,9 +44,10 @@ export default function (msa: ExtensionAPI) {
 
   msa.registerCommand("trigger-compact", {
     description: "Trigger compaction immediately",
-    handler: async (args, ctx) => {
+    handler: (args, ctx) => {
       const instructions = args.trim() || undefined;
       triggerCompaction(ctx, instructions);
+      return Promise.resolve();
     },
   });
 }

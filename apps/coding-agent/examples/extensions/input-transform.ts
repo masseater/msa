@@ -1,24 +1,14 @@
-/**
- * Input Transform Example - demonstrates the `input` event for intercepting user input.
- *
- * Start msa with this extension:
- *   msa -e ./examples/extensions/input-transform.ts
- *
- * Then type these inside msa:
- *   ?quick What is TypeScript?  → "Respond briefly: What is TypeScript?"
- *   ping                        → "pong" (instant, no LLM)
- *   time                        → current time (instant, no LLM)
- */
+
 import type { ExtensionAPI } from "@msa/coding-agent";
 
 export default function (msa: ExtensionAPI) {
   msa.on("input", async (event, ctx) => {
-    // Source-based logic: skip processing for extension-injected messages
+    
     if (event.source === "extension") {
       return { action: "continue" };
     }
 
-    // Transform: ?quick prefix for brief responses
+    
     if (event.text.startsWith("?quick ")) {
       const query = event.text.slice(7).trim();
       if (!query) {
@@ -28,7 +18,7 @@ export default function (msa: ExtensionAPI) {
       return { action: "transform", text: `Respond briefly in 1-2 sentences: ${query}` };
     }
 
-    // Handle: instant responses without LLM (extension shows its own feedback)
+    
     if (event.text.toLowerCase() === "ping") {
       ctx.ui.notify("pong", "info");
       return { action: "handled" };

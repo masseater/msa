@@ -1,16 +1,4 @@
-/**
- * Subagent Tool - Delegate tasks to specialized agents
- *
- * Spawns a separate `msa` process for each subagent invocation,
- * giving it an isolated context window.
- *
- * Supports three modes:
- *   - Single: { agent: "name", task: "..." }
- *   - Parallel: { tasks: [{ agent: "name", task: "..." }, ...] }
- *   - Chain: { chain: [{ agent: "name", task: "... {previous} ..." }, ...] }
- *
- * Uses JSON mode to capture structured output from subagents.
- */
+
 
 import { spawn } from "node:child_process";
 import * as fs from "node:fs";
@@ -454,13 +442,13 @@ async function runSingleAgent(
       try {
         fs.unlinkSync(tmpPromptPath);
       } catch {
-        /* ignore */
+        
       }
     if (tmpPromptDir)
       try {
         fs.rmdirSync(tmpPromptDir);
       } catch {
-        /* ignore */
+        
       }
   }
 }
@@ -592,10 +580,10 @@ export default function (msa: ExtensionAPI) {
         for (const [i, step] of params.chain.entries()) {
           const taskWithContext = step.task.replace(/\{previous\}/g, previousOutput);
 
-          // Create update callback that includes all previous results
+          
           const chainUpdate: OnUpdateCallback | undefined = onUpdate
             ? (partial) => {
-                // Combine completed results with current streaming result
+                
                 const currentResult = partial.details?.results[0];
                 if (currentResult) {
                   const allResults = [...results, currentResult];
@@ -660,16 +648,16 @@ export default function (msa: ExtensionAPI) {
             details: makeDetails("parallel")([]),
           };
 
-        // Track all results for streaming updates
+        
         const allResults: SingleResult[] = new Array(params.tasks.length);
 
-        // Initialize placeholder results
+        
         for (const [i, t] of params.tasks.entries()) {
           allResults[i] = {
             agent: t.agent,
             agentSource: "unknown",
             task: t.task,
-            exitCode: -1, // -1 = still running
+            exitCode: -1, 
             messages: [],
             stderr: "",
             usage: {
@@ -713,7 +701,7 @@ export default function (msa: ExtensionAPI) {
               t.cwd,
               undefined,
               signal,
-              // Per-task update callback
+              
               (partial) => {
                 if (partial.details?.results[0]) {
                   allResults[index] = partial.details.results[0];
@@ -792,7 +780,7 @@ export default function (msa: ExtensionAPI) {
           theme.fg("accent", `chain (${args.chain.length} steps)`) +
           theme.fg("muted", ` [${scope}]`);
         for (const [i, step] of args.chain.slice(0, 3).entries()) {
-          // Clean up {previous} placeholder for display
+          
           const cleanTask = step.task.replace(/\{previous\}/g, "").trim();
           const preview = cleanTask.length > 40 ? `${cleanTask.slice(0, 40)}...` : cleanTask;
           text +=
@@ -969,7 +957,7 @@ export default function (msa: ExtensionAPI) {
               new Text(theme.fg("muted", "Task: ") + theme.fg("dim", r.task), 0, 0),
             );
 
-            // Show tool calls
+            
             for (const item of displayItems) {
               if (item.type === "toolCall") {
                 container.addChild(
@@ -983,7 +971,7 @@ export default function (msa: ExtensionAPI) {
               }
             }
 
-            // Show final output as markdown
+            
             if (finalOutput) {
               container.addChild(new Spacer(1));
               container.addChild(new Markdown(finalOutput.trim(), 0, 0, mdTheme));
@@ -1001,7 +989,7 @@ export default function (msa: ExtensionAPI) {
           return container;
         }
 
-        // Collapsed view
+        
         let text =
           icon +
           " " +
@@ -1061,7 +1049,7 @@ export default function (msa: ExtensionAPI) {
               new Text(theme.fg("muted", "Task: ") + theme.fg("dim", r.task), 0, 0),
             );
 
-            // Show tool calls
+            
             for (const item of displayItems) {
               if (item.type === "toolCall") {
                 container.addChild(
@@ -1075,7 +1063,7 @@ export default function (msa: ExtensionAPI) {
               }
             }
 
-            // Show final output as markdown
+            
             if (finalOutput) {
               container.addChild(new Spacer(1));
               container.addChild(new Markdown(finalOutput.trim(), 0, 0, mdTheme));
@@ -1093,7 +1081,7 @@ export default function (msa: ExtensionAPI) {
           return container;
         }
 
-        // Collapsed view (or still running)
+        
         let text = `${icon} ${theme.fg("toolTitle", theme.bold("parallel "))}${theme.fg("accent", status)}`;
         for (const r of details.results) {
           const rIcon =

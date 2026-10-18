@@ -1,9 +1,4 @@
-/**
- * Permission Gate Extension
- *
- * Prompts for confirmation before running potentially dangerous bash commands.
- * Patterns checked: rm -rf, sudo, chmod/chown 777
- */
+
 
 import type { ExtensionAPI } from "@msa/coding-agent";
 
@@ -18,7 +13,7 @@ export default function (msa: ExtensionAPI) {
 
     if (isDangerous) {
       if (!ctx.hasUI) {
-        // In non-interactive mode, block by default
+        
         return { block: true, reason: "Dangerous command blocked (no UI for confirmation)" };
       }
 

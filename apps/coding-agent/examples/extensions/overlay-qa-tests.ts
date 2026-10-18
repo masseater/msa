@@ -1,23 +1,4 @@
-/**
- * Overlay QA Tests - comprehensive overlay positioning and edge case tests
- *
- * Usage: msa --extension ./examples/extensions/overlay-qa-tests.ts
- *
- * Commands:
- *   /overlay-animation  - Real-time animation demo (~30 FPS, proves DOOM-like rendering works)
- *   /overlay-anchors    - Cycle through all 9 anchor positions
- *   /overlay-margins    - Test margin and offset options
- *   /overlay-stack      - Test stacked overlays
- *   /overlay-overflow   - Test width overflow with streaming process output
- *   /overlay-edge       - Test overlay positioned at terminal edge
- *   /overlay-percent    - Test percentage-based positioning
- *   /overlay-maxheight  - Test maxHeight truncation
- *   /overlay-sidepanel  - Responsive sidepanel (hides when terminal < 100 cols)
- *   /overlay-toggle     - Toggle visibility demo (demonstrates OverlayHandle.setHidden)
- *   /overlay-passive    - Non-capturing overlay demo (passive info panel alongside active overlay)
- *   /overlay-focus      - Focus cycling, input routing, dismissal, and rendering order with overlays
- *   /overlay-streaming  - Multiple input panels with simulated streaming (Tab to cycle focus)
- */
+
 
 import { spawn } from "child_process";
 
@@ -25,11 +6,11 @@ import type { ExtensionAPI, ExtensionCommandContext, Theme } from "@msa/coding-a
 import type { Component, OverlayAnchor, OverlayHandle, OverlayOptions, TUI } from "@msa/tui";
 import { Input, matchesKey, truncateToWidth, visibleWidth } from "@msa/tui";
 
-// Global handle for toggle demo (in real code, use a more elegant pattern)
+
 let globalToggleHandle: OverlayHandle | null = null;
 
 export default function (msa: ExtensionAPI) {
-  // Animation demo - proves overlays can handle real-time updates (like msa-doom would need)
+  
   msa.registerCommand("overlay-animation", {
     description: "Test real-time animation in overlay (~30 FPS)",
     handler: async (_args: string, ctx: ExtensionCommandContext) => {
@@ -43,7 +24,7 @@ export default function (msa: ExtensionAPI) {
     },
   });
 
-  // Test all 9 anchor positions
+  
   msa.registerCommand("overlay-anchors", {
     description: "Cycle through all anchor positions",
     handler: async (_args: string, ctx: ExtensionCommandContext) => {
@@ -83,7 +64,7 @@ export default function (msa: ExtensionAPI) {
     },
   });
 
-  // Test margins and offsets
+  
   msa.registerCommand("overlay-margins", {
     description: "Test margin and offset options",
     handler: async (_args: string, ctx: ExtensionCommandContext) => {
@@ -123,12 +104,12 @@ export default function (msa: ExtensionAPI) {
     },
   });
 
-  // Test stacked overlays
+  
   msa.registerCommand("overlay-stack", {
     description: "Test stacked overlays",
     handler: async (_args: string, ctx: ExtensionCommandContext) => {
-      // Three large overlays that overlap in the center area
-      // Each offset slightly so you can see the stacking
+      
+      
 
       ctx.ui.notify("Showing overlay 1 (back)...", "info");
       const p1 = ctx.ui.custom<string>(
@@ -163,13 +144,13 @@ export default function (msa: ExtensionAPI) {
         },
       );
 
-      // Wait for all to close
+      
       const results = await Promise.all([p1, p2, p3]);
       ctx.ui.notify(`Closed in order: ${results.join(", ")}`, "info");
     },
   });
 
-  // Test width overflow scenarios (original crash case) - streams real process output
+  
   msa.registerCommand("overlay-overflow", {
     description: "Test width overflow with streaming process output",
     handler: async (_args: string, ctx: ExtensionCommandContext) => {
@@ -183,7 +164,7 @@ export default function (msa: ExtensionAPI) {
     },
   });
 
-  // Test overlay at terminal edge
+  
   msa.registerCommand("overlay-edge", {
     description: "Test overlay positioned at terminal edge",
     handler: async (_args: string, ctx: ExtensionCommandContext) => {
@@ -194,7 +175,7 @@ export default function (msa: ExtensionAPI) {
     },
   });
 
-  // Test percentage-based positioning
+  
   msa.registerCommand("overlay-percent", {
     description: "Test percentage-based positioning",
     handler: async (_args: string, ctx: ExtensionCommandContext) => {
@@ -230,7 +211,7 @@ export default function (msa: ExtensionAPI) {
     },
   });
 
-  // Test maxHeight
+  
   msa.registerCommand("overlay-maxheight", {
     description: "Test maxHeight truncation",
     handler: async (_args: string, ctx: ExtensionCommandContext) => {
@@ -244,7 +225,7 @@ export default function (msa: ExtensionAPI) {
     },
   });
 
-  // Test responsive sidepanel - only shows when terminal is wide enough
+  
   msa.registerCommand("overlay-sidepanel", {
     description: "Test responsive sidepanel (hides when terminal < 100 cols)",
     handler: async (_args: string, ctx: ExtensionCommandContext) => {
@@ -257,7 +238,7 @@ export default function (msa: ExtensionAPI) {
             width: "25%",
             minWidth: 30,
             margin: { right: 1 },
-            // Only show when terminal is wide enough
+            
             visible: (termWidth) => termWidth >= 100,
           },
         },
@@ -265,7 +246,7 @@ export default function (msa: ExtensionAPI) {
     },
   });
 
-  // Test toggle overlay - demonstrates OverlayHandle.setHidden() via onHandle callback
+  
   msa.registerCommand("overlay-toggle", {
     description: "Test overlay toggle (press 't' to toggle visibility)",
     handler: async (_args: string, ctx: ExtensionCommandContext) => {
@@ -274,10 +255,10 @@ export default function (msa: ExtensionAPI) {
         {
           overlay: true,
           overlayOptions: { anchor: "center", width: 50 },
-          // onHandle callback provides access to the OverlayHandle for visibility control
+          
           onHandle: (handle) => {
-            // Store handle globally so component can access it
-            // (In real code, you'd use a more elegant pattern like a store or event emitter)
+            
+            
             globalToggleHandle = handle;
           },
         },
@@ -286,7 +267,7 @@ export default function (msa: ExtensionAPI) {
     },
   });
 
-  // Non-capturing overlay demo - passive info panel that doesn't steal focus
+  
   msa.registerCommand("overlay-passive", {
     description: "Test non-capturing overlay (passive info panel alongside active overlay)",
     handler: async (_args: string, ctx: ExtensionCommandContext) => {
@@ -301,7 +282,7 @@ export default function (msa: ExtensionAPI) {
     },
   });
 
-  // Focus cycling demo - demonstrates focus(), input routing, per-panel dismissal, and rendering order
+  
   msa.registerCommand("overlay-focus", {
     description: "Test focus cycling, input routing, dismissal, and rendering order with overlays",
     handler: async (_args: string, ctx: ExtensionCommandContext) => {
@@ -316,7 +297,7 @@ export default function (msa: ExtensionAPI) {
     },
   });
 
-  // Test multiple input panels with simulated streaming
+  
   msa.registerCommand("overlay-streaming", {
     description: "Multiple input panels with simulated streaming (Tab to cycle focus)",
     handler: async (_args: string, ctx: ExtensionCommandContext) => {
@@ -336,7 +317,7 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-// Base overlay component with common rendering
+
 abstract class BaseOverlay {
   protected theme: Theme;
 
@@ -371,7 +352,7 @@ abstract class BaseOverlay {
   dispose(): void {}
 }
 
-// Anchor position test
+
 class AnchorTestComponent extends BaseOverlay {
   private anchor: OverlayAnchor;
   private done: (result: "next" | "confirm" | "cancel") => void;
@@ -414,7 +395,7 @@ class AnchorTestComponent extends BaseOverlay {
   }
 }
 
-// Margin/offset test
+
 class MarginTestComponent extends BaseOverlay {
   private config: { name: string; options: OverlayOptions };
   private done: (result: "next" | "close") => void;
@@ -454,7 +435,7 @@ class MarginTestComponent extends BaseOverlay {
   }
 }
 
-// Stacked overlay test
+
 class StackOverlayComponent extends BaseOverlay {
   private num: number;
   private position: string;
@@ -475,7 +456,7 @@ class StackOverlayComponent extends BaseOverlay {
 
   render(width: number): string[] {
     const th = this.theme;
-    // Use different colors for each overlay to show stacking
+    
     const colors = ["error", "success", "accent"] as const;
     const color = colors[(this.num - 1) % colors.length]!;
     const innerW = Math.max(1, width - 2);
@@ -487,7 +468,7 @@ class StackOverlayComponent extends BaseOverlay {
     lines.push(border("│") + padLine(` Overlay ${th.fg("accent", `#${this.num}`)}`) + border("│"));
     lines.push(border("│") + padLine(` Layer: ${th.fg(color, this.position)}`) + border("│"));
     lines.push(border("│") + padLine("") + border("│"));
-    // Add extra lines to make it taller
+    
     for (let i = 0; i < 5; i++) {
       lines.push(border("│") + padLine(` ${"░".repeat(innerW - 2)} `) + border("│"));
     }
@@ -499,7 +480,7 @@ class StackOverlayComponent extends BaseOverlay {
   }
 }
 
-// Streaming overflow test - spawns real process with colored output (original crash scenario)
+
 class StreamingOverflowComponent extends BaseOverlay {
   private tui: TUI;
   private lines: string[] = [];
@@ -518,8 +499,8 @@ class StreamingOverflowComponent extends BaseOverlay {
   }
 
   private startProcess(): void {
-    // Run a command that produces many lines with ANSI colors
-    // Using find with -ls produces file listings, or use ls --color
+    
+    
     this.proc = spawn("bash", [
       "-c",
       `
@@ -551,25 +532,25 @@ class StreamingOverflowComponent extends BaseOverlay {
     ]);
 
     this.proc.stdout?.on("data", (data: Buffer) => {
-      if (this.disposed) return; // Guard against callbacks after dispose
+      if (this.disposed) return; 
       const text = data.toString();
       const newLines = text.split("\n");
       for (const line of newLines) {
         if (line) this.lines.push(line);
       }
-      // Auto-scroll to bottom
+      
       this.scrollOffset = Math.max(0, this.lines.length - this.maxVisibleLines);
       this.tui.requestRender();
     });
 
     this.proc.stderr?.on("data", (data: Buffer) => {
-      if (this.disposed) return; // Guard against callbacks after dispose
+      if (this.disposed) return; 
       this.lines.push(this.theme.fg("error", data.toString().trim()));
       this.tui.requestRender();
     });
 
     this.proc.on("close", () => {
-      if (this.disposed) return; // Guard against callbacks after dispose
+      if (this.disposed) return; 
       this.finished = true;
       this.tui.requestRender();
     });
@@ -581,13 +562,13 @@ class StreamingOverflowComponent extends BaseOverlay {
       this.done();
     } else if (matchesKey(data, "up")) {
       this.scrollOffset = Math.max(0, this.scrollOffset - 1);
-      this.tui.requestRender(); // Trigger re-render after scroll
+      this.tui.requestRender(); 
     } else if (matchesKey(data, "down")) {
       this.scrollOffset = Math.min(
         Math.max(0, this.lines.length - this.maxVisibleLines),
         this.scrollOffset + 1,
       );
-      this.tui.requestRender(); // Trigger re-render after scroll
+      this.tui.requestRender(); 
     }
   }
 
@@ -602,7 +583,7 @@ class StreamingOverflowComponent extends BaseOverlay {
     const titlePad = Math.max(0, innerW - visibleWidth(title));
     result.push(border("╭") + th.fg("accent", title) + border(`${"─".repeat(titlePad)}╮`));
 
-    // Scroll indicators
+    
     const canScrollUp = this.scrollOffset > 0;
     const canScrollDown = this.scrollOffset < this.lines.length - this.maxVisibleLines;
     const scrollInfo = `↑${this.scrollOffset} | ↓${Math.max(0, this.lines.length - this.maxVisibleLines - this.scrollOffset)}`;
@@ -613,7 +594,7 @@ class StreamingOverflowComponent extends BaseOverlay {
         border("│"),
     );
 
-    // Visible lines - truncate long lines to fit within border
+    
     const visibleLines = this.lines.slice(
       this.scrollOffset,
       this.scrollOffset + this.maxVisibleLines,
@@ -622,7 +603,7 @@ class StreamingOverflowComponent extends BaseOverlay {
       result.push(border("│") + padLine(` ${line}`) + border("│"));
     }
 
-    // Pad to maxVisibleLines
+    
     for (let i = visibleLines.length; i < this.maxVisibleLines; i++) {
       result.push(border("│") + padLine("") + border("│"));
     }
@@ -642,7 +623,7 @@ class StreamingOverflowComponent extends BaseOverlay {
   }
 }
 
-// Edge position test
+
 class EdgeTestComponent extends BaseOverlay {
   private done: () => void;
 
@@ -677,7 +658,7 @@ class EdgeTestComponent extends BaseOverlay {
   }
 }
 
-// Percentage positioning test
+
 class PercentTestComponent extends BaseOverlay {
   private config: { name: string; row: number; col: number };
   private done: (result: "next" | "close") => void;
@@ -717,7 +698,7 @@ class PercentTestComponent extends BaseOverlay {
   }
 }
 
-// MaxHeight test - renders 20 lines, truncated to 10 by maxHeight
+
 class MaxHeightTestComponent extends BaseOverlay {
   private done: () => void;
 
@@ -734,8 +715,8 @@ class MaxHeightTestComponent extends BaseOverlay {
 
   render(width: number): string[] {
     const th = this.theme;
-    // Intentionally render 21 lines - maxHeight: 10 will truncate to first 10
-    // You should see header + lines 1-6, with bottom border cut off
+    
+    
     const contentLines: string[] = [
       th.fg("warning", " ⚠ Rendering 21 lines, maxHeight: 10"),
       th.fg("dim", " Lines 11-21 truncated (no bottom border)"),
@@ -752,7 +733,7 @@ class MaxHeightTestComponent extends BaseOverlay {
   }
 }
 
-// Responsive sidepanel - demonstrates percentage width and visibility callback
+
 class SidepanelComponent extends BaseOverlay {
   private tui: TUI;
   private items = ["Dashboard", "Messages", "Settings", "Help", "About"];
@@ -775,7 +756,7 @@ class SidepanelComponent extends BaseOverlay {
       this.selectedIndex = Math.min(this.items.length - 1, this.selectedIndex + 1);
       this.tui.requestRender();
     } else if (matchesKey(data, "return")) {
-      // Could trigger an action here
+      
       this.tui.requestRender();
     }
   }
@@ -787,12 +768,12 @@ class SidepanelComponent extends BaseOverlay {
     const border = (c: string) => th.fg("border", c);
     const lines: string[] = [];
 
-    // Header
+    
     lines.push(border(`╭${"─".repeat(innerW)}╮`));
     lines.push(border("│") + padLine(th.fg("accent", " Responsive Sidepanel")) + border("│"));
     lines.push(border("├") + border("─".repeat(innerW)) + border("┤"));
 
-    // Menu items
+    
     for (let i = 0; i < this.items.length; i++) {
       const item = this.items[i]!;
       const isSelected = i === this.selectedIndex;
@@ -801,7 +782,7 @@ class SidepanelComponent extends BaseOverlay {
       lines.push(border("│") + padLine(`${prefix}${text}`) + border("│"));
     }
 
-    // Footer with responsive behavior info
+    
     lines.push(border("├") + border("─".repeat(innerW)) + border("┤"));
     lines.push(
       border("│") + padLine(th.fg("warning", " ⚠ Resize terminal < 100 cols")) + border("│"),
@@ -815,7 +796,7 @@ class SidepanelComponent extends BaseOverlay {
   }
 }
 
-// Animation demo - proves overlays can handle real-time updates like msa-doom
+
 class AnimationDemoComponent extends BaseOverlay {
   private tui: TUI;
   private frame = 0;
@@ -833,12 +814,12 @@ class AnimationDemoComponent extends BaseOverlay {
   }
 
   private startAnimation(): void {
-    // Run at ~30 FPS (same as DOOM target)
+    
     this.interval = setInterval(() => {
       this.frame++;
       this.framesSinceLastFps++;
 
-      // Update FPS counter every second
+      
       const now = Date.now();
       if (now - this.lastFpsUpdate >= 1000) {
         this.fps = this.framesSinceLastFps;
@@ -873,8 +854,8 @@ class AnimationDemoComponent extends BaseOverlay {
     lines.push(border("│") + padLine(` FPS: ${th.fg("success", String(this.fps))}`) + border("│"));
     lines.push(border("│") + padLine(``) + border("│"));
 
-    // Animated content - bouncing bar
-    const barWidth = Math.max(12, innerW - 4); // Ensure enough space for bar
+    
+    const barWidth = Math.max(12, innerW - 4); 
     const pos = Math.max(0, Math.floor(((Math.sin(this.frame / 10) + 1) * (barWidth - 10)) / 2));
     const bar =
       " ".repeat(pos) +
@@ -882,12 +863,12 @@ class AnimationDemoComponent extends BaseOverlay {
       " ".repeat(Math.max(0, barWidth - 10 - pos));
     lines.push(border("│") + padLine(` ${bar}`) + border("│"));
 
-    // Spinning character
+    
     const spinChars = ["◐", "◓", "◑", "◒"];
     const spin = spinChars[this.frame % spinChars.length];
     lines.push(border("│") + padLine(` Spinner: ${th.fg("warning", spin!)}`) + border("│"));
 
-    // Color cycling
+    
     const hue = (this.frame * 3) % 360;
     const rgb = hslToRgb(hue / 360, 0.8, 0.5);
     const colorBlock = `\x1b[48;2;${rgb[0]};${rgb[1]};${rgb[2]}m${"  ".repeat(10)}\x1b[0m`;
@@ -916,7 +897,7 @@ class AnimationDemoComponent extends BaseOverlay {
   }
 }
 
-// HSL to RGB helper for color cycling animation
+
 function hslToRgb(h: number, s: number, l: number): [number, number, number] {
   let r: number;
   let g: number;
@@ -941,7 +922,7 @@ function hslToRgb(h: number, s: number, l: number): [number, number, number] {
   return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
 }
 
-// Toggle demo - demonstrates OverlayHandle.setHidden() via onHandle callback
+
 class ToggleDemoComponent extends BaseOverlay {
   private tui: TUI;
   private toggleCount = 0;
@@ -958,13 +939,13 @@ class ToggleDemoComponent extends BaseOverlay {
     if (matchesKey(data, "escape") || matchesKey(data, "ctrl+c")) {
       this.done();
     } else if (matchesKey(data, "t") && globalToggleHandle && !this.isToggling) {
-      // Demonstrate toggle by hiding for 1 second then showing again
-      // (In real usage, a global keybinding would control visibility)
+      
+      
       this.isToggling = true;
       this.toggleCount++;
       globalToggleHandle.setHidden(true);
 
-      // Auto-restore after 1 second to demonstrate the API
+      
       setTimeout(() => {
         if (globalToggleHandle) {
           globalToggleHandle.setHidden(false);
@@ -1002,7 +983,7 @@ class ToggleDemoComponent extends BaseOverlay {
   }
 }
 
-// === Non-capturing passive overlay demo ===
+
 
 class PassiveDemoController extends BaseOverlay {
   focused = false;
@@ -1099,7 +1080,7 @@ class TimerPanel extends BaseOverlay {
   }
 }
 
-// === Focus cycling demo ===
+
 
 type FocusPanelColor = "error" | "success" | "accent";
 type FocusPanelConfig = { label: string; color: FocusPanelColor; options: OverlayOptions };
@@ -1318,13 +1299,13 @@ class FocusPanel extends BaseOverlay {
   }
 }
 
-// === Streaming input panel test (/overlay-streaming) ===
+
 
 class StreamingInputController extends BaseOverlay {
   private tui: TUI;
   private panels: StreamingInputPanel[] = [];
   private handles: OverlayHandle[] = [];
-  private focusIndex = -1; // -1 = controller focused, 0-2 = panel focused
+  private focusIndex = -1; 
   private streamLines: string[] = [];
   private streamInterval: ReturnType<typeof setInterval> | null = null;
   private lineCount = 0;
@@ -1335,7 +1316,7 @@ class StreamingInputController extends BaseOverlay {
     this.tui = tui;
     this.done = done;
 
-    // Create 3 input panels as non-capturing overlays
+    
     const colors = ["error", "success", "accent"] as const;
     const labels = ["Panel A", "Panel B", "Panel C"];
 
@@ -1358,9 +1339,9 @@ class StreamingInputController extends BaseOverlay {
       this.handles.push(handle);
     }
 
-    // Start with controller focused (focusIndex = -1)
+    
 
-    // Start simulated streaming
+    
     this.streamInterval = setInterval(() => {
       this.lineCount++;
       const timestamp = new Date().toLocaleTimeString();
@@ -1373,18 +1354,18 @@ class StreamingInputController extends BaseOverlay {
   }
 
   private cycleFocus(): void {
-    // Unfocus current panel if any
+    
     if (this.focusIndex >= 0 && this.focusIndex < this.handles.length) {
       this.handles[this.focusIndex]!.unfocus();
     }
 
-    // Cycle: -1 (controller) → 0 → 1 → 2 → -1 ...
+    
     this.focusIndex++;
     if (this.focusIndex >= this.handles.length) {
-      this.focusIndex = -1; // Back to controller
+      this.focusIndex = -1; 
     }
 
-    // Focus new panel if any
+    
     if (this.focusIndex >= 0) {
       this.handles[this.focusIndex]!.focus();
     }

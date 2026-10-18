@@ -1,11 +1,4 @@
-/**
- * Entry bookmarking example.
- *
- * Shows setLabel to mark entries with labels for easy navigation in /tree.
- * Labels appear in the tree view and help you find important points.
- *
- * Usage: /bookmark [label] - bookmark the last assistant message
- */
+
 
 import type { ExtensionAPI } from "@msa/coding-agent";
 
@@ -15,7 +8,7 @@ export default function (msa: ExtensionAPI) {
     handler: async (args, ctx) => {
       const label = args.trim() || `bookmark-${Date.now()}`;
 
-      // Find the last assistant message entry
+      
       const entries = ctx.sessionManager.getEntries();
       for (const entry of entries.toReversed()) {
         if (entry.type === "message" && entry.message.role === "assistant") {
@@ -29,7 +22,7 @@ export default function (msa: ExtensionAPI) {
     },
   });
 
-  // Remove bookmark
+  
   msa.registerCommand("unbookmark", {
     description: "Remove bookmark from last labeled entry",
     handler: async (_args, ctx) => {

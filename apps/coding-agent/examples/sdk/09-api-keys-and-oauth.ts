@@ -1,8 +1,4 @@
-/**
- * API Keys and OAuth
- *
- * Configure provider auth through ModelRuntime.
- */
+import { Console, Effect } from "effect";
 
 import { createAgentSession, ModelRuntime, SessionManager } from "@msa/coding-agent";
 
@@ -11,7 +7,7 @@ const { session: defaultAuthSession } = await createAgentSession({
   sessionManager: SessionManager.inMemory(),
   modelRuntime,
 });
-console.log("Session with default model runtime");
+Effect.runSync(Console.log("Session with default model runtime"));
 defaultAuthSession.dispose();
 
 const customRuntime = await ModelRuntime.create({
@@ -22,7 +18,7 @@ const { session: customAuthSession } = await createAgentSession({
   sessionManager: SessionManager.inMemory(),
   modelRuntime: customRuntime,
 });
-console.log("Session with custom auth and models locations");
+Effect.runSync(Console.log("Session with custom auth and models locations"));
 customAuthSession.dispose();
 
 await modelRuntime.setRuntimeApiKey("anthropic", "sk-my-temp-key");
@@ -30,5 +26,5 @@ const { session: runtimeKeySession } = await createAgentSession({
   sessionManager: SessionManager.inMemory(),
   modelRuntime,
 });
-console.log("Session with runtime API key override");
+Effect.runSync(Console.log("Session with runtime API key override"));
 runtimeKeySession.dispose();

@@ -1,16 +1,4 @@
-/**
- * Merge and Resolve
- *
- * Keeps the working branch up to date with its upstream tracking ref.
- * After each agent turn, fetches and merges. Clean merges complete
- * silently. When conflicts arise, the working tree is left dirty and
- * the agent receives a follow-up message listing each conflict block
- * with file, line range, and ours/theirs sections so it can resolve them.
- * Also re-sends unresolved conflicts from a previous incomplete merge.
- *
- * Start msa with this extension:
- *   msa -e ./examples/extensions/git-merge-and-resolve.ts
- */
+
 import { createReadStream } from "node:fs";
 import { join } from "node:path";
 import { createInterface } from "node:readline";
@@ -24,7 +12,7 @@ interface ConflictBlock {
   endLine: number;
 }
 
-/** Parse conflict markers from working tree files with unmerged paths. */
+
 async function findConflicts(msa: ExtensionAPI, cwd: string): Promise<ConflictBlock[]> {
   const { stdout, code } = await msa.exec("git", ["diff", "--name-only", "--diff-filter=U"]);
   if (code !== 0 || !stdout.trim()) return [];
@@ -82,10 +70,10 @@ export default function (msa: ExtensionAPI) {
 
     let ref = "MERGE_HEAD";
 
-    // If not already in a merge, attempt one
+    
     const { code: mergeHeadCode } = await msa.exec("git", ["rev-parse", "MERGE_HEAD"]);
     if (mergeHeadCode !== 0) {
-      // Only attempt a new merge if the working tree is clean
+      
       const { stdout: status } = await msa.exec("git", ["status", "--porcelain"]);
       if (status.trim()) return;
 
@@ -111,7 +99,7 @@ export default function (msa: ExtensionAPI) {
       if (mergeCode === 0) return;
     }
 
-    // Either we just merged with conflicts, or we were already in an unfinished merge
+    
     const conflicts = await findConflicts(msa, ctx.cwd);
     if (conflicts.length === 0) return;
 

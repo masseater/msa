@@ -1,24 +1,4 @@
-/**
- * Tool Override Example - Demonstrates overriding built-in tools
- *
- * Extensions can register tools with the same name as built-in tools to replace them.
- * This is useful for:
- * - Adding logging or auditing to tool calls
- * - Implementing access control or sandboxing
- * - Routing tool calls to remote systems (e.g., msa-ssh-remote)
- * - Modifying tool behavior for specific workflows
- *
- * This example overrides the `read` tool to:
- * 1. Log all file access to a log file
- * 2. Block access to sensitive paths (e.g., .env files)
- * 3. Delegate to the original read implementation for allowed files
- *
- * Since no custom renderCall/renderResult are provided, the built-in renderer
- * is used automatically (syntax highlighting, line numbers, truncation warnings).
- *
- * Usage:
- *   msa -e ./tool-override.ts
- */
+
 
 import { constants, readFileSync } from "fs";
 import { access, appendFile, readFile } from "fs/promises";
@@ -30,7 +10,7 @@ import { Type } from "typebox";
 
 const LOG_FILE = join(getAgentDir(), "read-access.log");
 
-// Paths that are blocked from reading
+
 const BLOCKED_PATTERNS = [
   /\.env$/,
   /\.env\..+$/,
@@ -56,7 +36,7 @@ async function logAccess(path: string, allowed: boolean, reason?: string) {
       await appendFile(LOG_FILE, line);
     });
   } catch {
-    // Ignore logging errors
+    
   }
 }
 
@@ -70,7 +50,7 @@ const readSchema = Type.Object({
 
 export default function (msa: ExtensionAPI) {
   msa.registerTool({
-    name: "read", // Same name as built-in - this will override it
+    name: "read", 
     label: "read (audited)",
     description:
       "Read the contents of a file with access logging. Some sensitive paths (.env, secrets, credentials) are blocked.",
@@ -80,7 +60,7 @@ export default function (msa: ExtensionAPI) {
       const { path, offset, limit } = params;
       const absolutePath = resolve(ctx.cwd, path);
 
-      // Check if path is blocked
+      
       if (isBlockedPath(absolutePath)) {
         await logAccess(absolutePath, false, "matches blocked pattern");
         return {
@@ -94,21 +74,21 @@ export default function (msa: ExtensionAPI) {
         };
       }
 
-      // Log allowed access
+      
       await logAccess(absolutePath, true);
 
-      // Perform the actual read (simplified implementation)
+      
       try {
         await access(absolutePath, constants.R_OK);
         const content = await readFile(absolutePath, "utf-8");
         const lines = content.split("\n");
 
-        // Apply offset and limit
+        
         const startLine = offset ? Math.max(0, offset - 1) : 0;
         const endLine = limit ? startLine + limit : lines.length;
         const selectedLines = lines.slice(startLine, endLine);
 
-        // Basic truncation (50KB limit)
+        
         let text = selectedLines.join("\n");
         const maxBytes = 50 * 1024;
         if (Buffer.byteLength(text, "utf-8") > maxBytes) {
@@ -129,17 +109,17 @@ export default function (msa: ExtensionAPI) {
       }
     },
 
-    // No renderCall/renderResult - uses built-in renderer automatically
-    // (syntax highlighting, line numbers, truncation warnings, etc.)
+    
+    
   });
 
-  // Also register a command to view the access log
+  
   msa.registerCommand("read-log", {
     description: "View the file access log",
     handler: async (_args, ctx) => {
       try {
         const log = readFileSync(LOG_FILE, "utf-8");
-        const lines = log.trim().split("\n").slice(-20); // Last 20 entries
+        const lines = log.trim().split("\n").slice(-20); 
         ctx.ui.notify(`Recent file access:\n${lines.join("\n")}`, "info");
       } catch {
         ctx.ui.notify("No access log found", "info");

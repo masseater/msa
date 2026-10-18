@@ -1,29 +1,12 @@
-/**
- * Tic-Tac-Toe extension - demonstrates executionMode: "sequential" on tools.
- *
- * The user plays via /tic-tac-toe (arrow keys + Enter).
- * The agent plays via a single tool `tic_tac_toe` that takes ONE atomic action
- * per call. To play at (r, c) from its cursor (r0, c0) the agent must emit the
- * required move_* and a final `play` as SEPARATE tool_use blocks inside ONE
- * assistant response.
- *
- * Move actions share the agent cursor and have a 300ms delay. Under the
- * default parallel tool-execution mode this races: `play` can resolve before
- * the earlier `move_*` calls finish and O lands on the wrong cell. With
- * `executionMode: "sequential"` the runner serializes the sibling calls and O
- * lands on the intended cell.
- *
- * The user cursor (TUI-only) and the agent cursor (tool-only) are stored in
- * separate variables. Only the agent cursor is ever exposed to the agent.
- */
+
 
 import { StringEnum } from "@msa/ai";
 import type { ExtensionAPI, ExtensionContext, Theme, ToolExecutionMode } from "@msa/coding-agent";
 import { type Component, matchesKey, Text, truncateToWidth, visibleWidth } from "@msa/tui";
 import { Type } from "typebox";
 
-// Thrown from the tool on illegal actions. The agent runtime surfaces thrown
-// errors as tool errors (isError=true) without resetting any of our state.
+
+
 class TicTacToeError extends Error {
   constructor(message: string) {
     super(message);
@@ -31,19 +14,19 @@ class TicTacToeError extends Error {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
+
+
+
 
 type Cell = " " | "X" | "O";
 type GameStatus = "playing" | "win_X" | "win_O" | "draw";
 
 interface GameState {
   board: Cell[][];
-  // User cursor (TUI-only, never exposed to the agent).
+  
   userCursorRow: number;
   userCursorCol: number;
-  // Agent cursor (manipulated by the tool, shown in the TUI during O's turn).
+  
   agentCursorRow: number;
   agentCursorCol: number;
   status: GameStatus;
@@ -52,9 +35,9 @@ interface GameState {
   currentTurn: Cell;
 }
 
-// Persisted with each toolResult for state reconstruction AND sent to the
-// agent as `details`. Only the agent cursor is included: the user cursor is
-// private to the TUI.
+
+
+
 interface BoardDetails {
   board: Cell[][];
   agentCursorRow: number;
@@ -63,16 +46,16 @@ interface BoardDetails {
   currentTurn: Cell;
 }
 
-// ---------------------------------------------------------------------------
-// Game logic
-// ---------------------------------------------------------------------------
 
-// Agent cursor home: where the cursor is reset to after a SUCCESSFUL play.
-// Pinned at (0,0) so every non-origin play requires at least one move, which
-// guarantees multiple tool calls per turn and makes the parallel-vs-sequential
-// behavior observable in the demo. The cursor is NOT reset when the user plays
-// nor on a failed `play` (cell taken), so the agent can retry without
-// starting over.
+
+
+
+
+
+
+
+
+
 const AGENT_CURSOR_HOME_ROW = 0;
 const AGENT_CURSOR_HOME_COL = 0;
 
@@ -171,9 +154,9 @@ function checkWin(board: Cell[][]): GameStatus {
 }
 
 function boardToAscii(board: Cell[][], agentCursorRow: number, agentCursorCol: number): string {
-  // Plain grid with coordinates for empty cells, marking the agent cursor
-  // position with angle brackets. The user cursor is NEVER included: it is a
-  // TUI-only concept and must not leak to the agent.
+  
+  
+  
   const rows = board.map((row, r) =>
     row
       .map((c, cIdx) => {
@@ -187,25 +170,25 @@ function boardToAscii(board: Cell[][], agentCursorRow: number, agentCursorCol: n
   return rows.join(`\n${separator}\n`);
 }
 
-// ---------------------------------------------------------------------------
-// Visual board rendering (ANSI).
-// - Cells have NO background fill. Only the centered glyph is drawn.
-// - Played cells color their glyph AND their surrounding borders in the
-//   player's color, so each mark reads as a colored boxed region.
-// - Cursor is indicated with colored borders around the cursor cell.
-// ---------------------------------------------------------------------------
+
+
+
+
+
+
+
 
 const CELL_WIDTH = 7;
 const CELL_HEIGHT = 3;
 
-// Player colors (SGR fg codes). Also used for the borders of played cells.
-const FG_CODE_X = "34"; // blue
-const FG_CODE_O = "33"; // yellow
-const FG_CODE_WIN = "32"; // green (overrides on the winning line)
 
-// Single-character glyphs, picked for maximum visual size without emoji.
-// - \u2573 (BOX DRAWINGS LIGHT DIAGONAL CROSS) for X
-// - \u25ef (LARGE CIRCLE) for O
+const FG_CODE_X = "34"; 
+const FG_CODE_O = "33"; 
+const FG_CODE_WIN = "32"; 
+
+
+
+
 const GLYPH_X = "\u2573";
 const GLYPH_O = "\u25ef";
 
@@ -220,8 +203,8 @@ function centerPad(content: string, width: number): string {
   return " ".repeat(left) + content + " ".repeat(pad - left);
 }
 
-// Fg color for a played cell's glyph and its surrounding borders. Undefined
-// for empty cells.
+
+
 function cellFgCode(cell: Cell, isWin: boolean): string | undefined {
   if (cell === " ") return undefined;
   if (isWin) return FG_CODE_WIN;
@@ -243,9 +226,9 @@ function buildCellContent(mark: Cell, lineIdx: number, isWin: boolean): string {
   return `${" ".repeat(leftPad)}\x1b[${fg};1m${glyph}${RESET}${" ".repeat(rightPad)}`;
 }
 
-// Fg color for a border char based on its adjacent cells. Undefined when no
-// adjacent cell is played or when adjacent plays disagree (border stays dim
-// to show the separation).
+
+
+
 function borderFgCode(adjacent: ReadonlyArray<{ cell: Cell; isWin: boolean }>): string | undefined {
   const fgs = adjacent.map((a) => cellFgCode(a.cell, a.isWin)).filter((f): f is string => !!f);
   if (fgs.length === 0) return undefined;
@@ -256,8 +239,8 @@ function borderFgCode(adjacent: ReadonlyArray<{ cell: Cell; isWin: boolean }>): 
 interface BoardRenderOpts {
   board: Cell[][];
   maxWidth: number;
-  // Optional cursor overlay. Omit to render a static snapshot (used in tool
-  // results, move messages, and the game-over banner).
+  
+  
   cursor?: { row: number; col: number; owner: "user" | "agent" } | undefined;
 }
 
@@ -267,7 +250,7 @@ function renderBoard(opts: BoardRenderOpts): string[] {
   const cr = cursor?.row ?? -1;
   const cc = cursor?.col ?? -1;
 
-  // Green for user cursor, yellow for agent cursor.
+  
   const cursorSgr = cursor?.owner === "agent" ? "\x1b[33;1m" : "\x1b[32;1m";
 
   const winLine = getWinLine(board);
@@ -320,7 +303,7 @@ function renderBoard(opts: BoardRenderOpts): string[] {
   const lines: string[] = [];
 
   for (let gridR = 0; gridR <= 3; gridR++) {
-    // Horizontal border row.
+    
     let row = "";
     for (let gridC = 0; gridC <= 3; gridC++) {
       const cornerColor = borderFgCode(cornerAdjacent(gridR, gridC));
@@ -360,28 +343,28 @@ function renderBoard(opts: BoardRenderOpts): string[] {
   return lines;
 }
 
-// Full TUI board with the right cursor overlayed for the current turn.
+
 function renderVisualBoard(state: GameState, maxWidth: number): string[] {
   const isUserTurn = state.currentTurn === state.userMark;
   const cursor =
-    state.status !== "playing"
-      ? undefined
-      : {
+    state.status === "playing"
+      ? {
           row: isUserTurn ? state.userCursorRow : state.agentCursorRow,
           col: isUserTurn ? state.userCursorCol : state.agentCursorCol,
           owner: (isUserTurn ? "user" : "agent") as "user" | "agent",
-        };
+        }
+      : undefined;
   return renderBoard({ board: state.board, maxWidth, cursor });
 }
 
-/** Static snapshot used inside tool results and custom messages. */
+
 function renderBoardSnapshot(board: Cell[][], maxWidth: number): string[] {
   return renderBoard({ board, maxWidth });
 }
 
-// ---------------------------------------------------------------------------
-// TUI component
-// ---------------------------------------------------------------------------
+
+
+
 
 class TicTacToeComponent implements Component {
   private state: GameState;
@@ -469,7 +452,7 @@ class TicTacToeComponent implements Component {
 
     const lines: string[] = [];
 
-    // Top title banner, full width.
+    
     const titleText = " Tic-Tac-Toe ";
     const titleLen = visibleWidth(titleText);
     const borderLen = Math.max(0, width - titleLen);
@@ -481,7 +464,7 @@ class TicTacToeComponent implements Component {
 
     lines.push("");
 
-    // Status line.
+    
     if (this.state.status !== "playing") {
       const statusText =
         this.state.status === "draw"
@@ -511,18 +494,18 @@ class TicTacToeComponent implements Component {
     lines.push("");
     lines.push("");
 
-    // Footer.
+    
     let footer: string;
     if (this.state.status !== "playing") {
       footer = `${bold("R")} restart  ${dim("|")}  ${bold("Q")}/${bold("ESC")} quit`;
-    } else if (this.state.currentTurn !== this.state.userMark) {
-      footer = dim("Agent is thinking...");
-    } else {
+    } else if (this.state.currentTurn === this.state.userMark) {
       footer = `${bold("\u2190\u2191\u2193\u2192")} move  ${dim("|")}  ${bold("ENTER")} play  ${dim("|")}  ${bold("ESC")} quit`;
+    } else {
+      footer = dim("Agent is thinking...");
     }
     lines.push(centerPad(footer, width));
 
-    // Bottom separator between the component and the editor below.
+    
     lines.push("");
     lines.push(dim("\u2500".repeat(width)));
 
@@ -533,11 +516,11 @@ class TicTacToeComponent implements Component {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Move-message renderer (full width banner)
-// ---------------------------------------------------------------------------
 
-// Full-width banner message with an optional board snapshot underneath.
+
+
+
+
 class BannerMessageComponent implements Component {
   private readonly title: string;
   private readonly details: BoardDetails | undefined;
@@ -573,8 +556,8 @@ class BannerMessageComponent implements Component {
   }
 }
 
-// End-of-game banner: two dim hrs, a big colored title line, and the final
-// board with the winning line highlighted.
+
+
 class GameOverMessageComponent implements Component {
   private readonly status: GameStatus;
   private readonly details: BoardDetails | undefined;
@@ -634,17 +617,17 @@ class GameOverMessageComponent implements Component {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Delay helper
-// ---------------------------------------------------------------------------
+
+
+
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-// ---------------------------------------------------------------------------
-// Extension
-// ---------------------------------------------------------------------------
+
+
+
 
 const SAVE_TYPE = "tic-tac-toe-save";
 const MOVE_MESSAGE_TYPE = "tic-tac-toe-move";
@@ -689,9 +672,9 @@ export default function (msa: ExtensionAPI) {
   msa.on("session_start", async (_event, ctx) => reconstructState(ctx));
   msa.on("session_tree", async (_event, ctx) => reconstructState(ctx));
 
-  // Sent once per game at end-of-game. The custom renderer paints the banner;
-  // `content` is a plain-text fallback for any non-TUI consumer and for the
-  // LLM (in case the message ends up in future context).
+  
+  
+  
   const emitGameOverMessage = (): void => {
     const label =
       gameState.status === "win_X"
@@ -709,9 +692,9 @@ export default function (msa: ExtensionAPI) {
     });
   };
 
-  // -----------------------------------------------------------------------
-  // Custom message renderer for user move messages
-  // -----------------------------------------------------------------------
+  
+  
+  
   msa.registerMessageRenderer(MOVE_MESSAGE_TYPE, (message, { expanded }, theme) => {
     const details = message.details as BoardDetails | undefined;
     const turnLabel =
@@ -722,18 +705,18 @@ export default function (msa: ExtensionAPI) {
     return new BannerMessageComponent(title, details, expanded, theme);
   });
 
-  // -----------------------------------------------------------------------
-  // Custom message renderer for game-over messages
-  // -----------------------------------------------------------------------
+  
+  
+  
   msa.registerMessageRenderer(GAME_OVER_MESSAGE_TYPE, (message, _options, theme) => {
     const details = message.details as BoardDetails | undefined;
     const status = (details?.status ?? "draw") as GameStatus;
     return new GameOverMessageComponent(status, details, theme);
   });
 
-  // -----------------------------------------------------------------------
-  // before_agent_start - inject game instructions each turn
-  // -----------------------------------------------------------------------
+  
+  
+  
   msa.on("before_agent_start", async (event) => {
     if (!gameActive) return undefined;
 
@@ -802,9 +785,9 @@ Decide the target cell first, then dump every action for the turn in one go.
     };
   });
 
-  // -----------------------------------------------------------------------
-  // /tic-tac-toe command
-  // -----------------------------------------------------------------------
+  
+  
+  
   msa.registerCommand("tic-tac-toe", {
     description: "Play tic-tac-toe against the agent",
 
@@ -839,8 +822,8 @@ Decide the target cell first, then dump every action for the turn in one go.
             msa.appendEntry(SAVE_TYPE, getBoardDetails());
 
             if (gameState.status === "playing") {
-              // IMPORTANT: user play does NOT touch the agent cursor.
-              // The agent cursor is only reset after a successful agent play.
+              
+              
               const boardAscii = boardToAscii(
                 gameState.board,
                 gameState.agentCursorRow,
@@ -872,9 +855,9 @@ Decide the target cell first, then dump every action for the turn in one go.
     },
   });
 
-  // -----------------------------------------------------------------------
-  // tic_tac_toe tool - one action per call.
-  // -----------------------------------------------------------------------
+  
+  
+  
 
   type Action = "move_up" | "move_down" | "move_left" | "move_right" | "play";
 
@@ -938,8 +921,8 @@ Decide the target cell first, then dump every action for the turn in one go.
           const c = gameState.agentCursorCol;
           const target = getCell(gameState.board, r, c);
           if (target !== " ") {
-            // Do NOT reset the cursor on failure. The agent can retry
-            // from the cursor's current position.
+            
+            
             component?.updateState(gameState);
             msa.appendEntry(SAVE_TYPE, getBoardDetails());
             throw new TicTacToeError(
@@ -948,7 +931,7 @@ Decide the target cell first, then dump every action for the turn in one go.
           }
           setCell(gameState.board, r, c, gameState.agentMark);
           gameState.status = checkWin(gameState.board);
-          // Reset agent cursor to home ONLY on successful play.
+          
           gameState.agentCursorRow = AGENT_CURSOR_HOME_ROW;
           gameState.agentCursorCol = AGENT_CURSOR_HOME_COL;
           if (gameState.status === "playing") {
@@ -1003,9 +986,9 @@ Decide the target cell first, then dump every action for the turn in one go.
     },
   });
 
-  // -----------------------------------------------------------------------
-  // tic_tac_toe_see_board tool - inspect board + agent cursor.
-  // -----------------------------------------------------------------------
+  
+  
+  
   msa.registerTool({
     name: "tic_tac_toe_see_board",
     label: "See Board",

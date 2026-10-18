@@ -1,28 +1,11 @@
-/**
- * RPC Extension UI Demo
- *
- * Purpose-built extension that exercises all RPC-supported extension UI methods.
- * Designed to be loaded alongside the rpc-extension-ui-example.ts script to
- * demonstrate the full extension UI protocol.
- *
- * UI methods exercised:
- * - select() - on tool_call for dangerous bash commands
- * - confirm() - on session_before_switch
- * - input() - via /rpc-input command
- * - editor() - via /rpc-editor command
- * - notify() - after each dialog completes
- * - setStatus() - on turn_start/turn_end
- * - setWidget() - on session_start
- * - setTitle() - on session_start
- * - setEditorText() - via /rpc-prefill command
- */
+
 
 import type { ExtensionAPI } from "@msa/coding-agent";
 
 export default function (msa: ExtensionAPI) {
   let turnCount = 0;
 
-  // -- setTitle, setWidget, setStatus on session lifecycle --
+  
 
   msa.on("session_start", async (event, ctx) => {
     ctx.ui.setTitle(event.reason === "new" ? "msa RPC Demo (new session)" : "msa RPC Demo");
@@ -30,7 +13,7 @@ export default function (msa: ExtensionAPI) {
     ctx.ui.setStatus("rpc-demo", `Turns: ${turnCount}`);
   });
 
-  // -- setStatus on turn lifecycle --
+  
 
   msa.on("turn_start", async (_event, ctx) => {
     turnCount++;
@@ -41,7 +24,7 @@ export default function (msa: ExtensionAPI) {
     ctx.ui.setStatus("rpc-demo", `Turn ${turnCount} done`);
   });
 
-  // -- select on dangerous tool calls --
+  
 
   msa.on("tool_call", async (event, ctx) => {
     if (event.toolName !== "bash") return undefined;
@@ -65,7 +48,7 @@ export default function (msa: ExtensionAPI) {
     return undefined;
   });
 
-  // -- confirm on session clear --
+  
 
   msa.on("session_before_switch", async (event, ctx) => {
     if (event.reason !== "new") return;
@@ -79,7 +62,7 @@ export default function (msa: ExtensionAPI) {
     return undefined;
   });
 
-  // -- input via command --
+  
 
   msa.registerCommand("rpc-input", {
     description: "Prompt for text input (demonstrates ctx.ui.input in RPC)",
@@ -93,7 +76,7 @@ export default function (msa: ExtensionAPI) {
     },
   });
 
-  // -- editor via command --
+  
 
   msa.registerCommand("rpc-editor", {
     description: "Open multi-line editor (demonstrates ctx.ui.editor in RPC)",
@@ -107,7 +90,7 @@ export default function (msa: ExtensionAPI) {
     },
   });
 
-  // -- setEditorText via command --
+  
 
   msa.registerCommand("rpc-prefill", {
     description: "Prefill the input editor (demonstrates ctx.ui.setEditorText in RPC)",

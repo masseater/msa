@@ -1,9 +1,4 @@
-/**
- * Skills Configuration
- *
- * Skills provide specialized instructions loaded into the system prompt.
- * Discover, filter, merge, or replace them.
- */
+import { Console, Effect } from "effect";
 
 import {
   createAgentSession,
@@ -14,7 +9,7 @@ import {
   type Skill,
 } from "@msa/coding-agent";
 
-// Or define custom skills inline
+
 const customSkill: Skill = {
   name: "my-skill",
   description: "Custom project instructions",
@@ -39,19 +34,21 @@ const loader = new DefaultResourceLoader({
 });
 await loader.reload();
 
-// Discover all skills from cwd/.msa/skills, ~/.msa/agent/skills, etc.
+
 const { skills: allSkills, diagnostics } = loader.getSkills();
-console.log(
-  "Discovered skills:",
-  allSkills.map((s) => s.name),
+Effect.runSync(
+  Console.log(
+    "Discovered skills:",
+    allSkills.map((s) => s.name),
+  ),
 );
 if (diagnostics.length > 0) {
-  console.log("Warnings:", diagnostics);
+  Effect.runSync(Console.log("Warnings:", diagnostics));
 }
 
 const { session } = await createAgentSession({
   resourceLoader: loader,
   sessionManager: SessionManager.inMemory(),
 });
-console.log("Session created with filtered skills");
+Effect.runSync(Console.log("Session created with filtered skills"));
 session.dispose();

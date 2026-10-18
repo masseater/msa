@@ -1,10 +1,4 @@
-/**
- * Raw provider event viewer.
- *
- * Usage: /debug-provider [on|off]
- * With no argument, the command toggles capture. Captured events are persisted
- * as expandable custom entries.
- */
+
 
 import { type ExtensionAPI, keyHint } from "@msa/coding-agent";
 import { Box, Text } from "@msa/tui";

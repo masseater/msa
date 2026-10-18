@@ -1,9 +1,4 @@
-/**
- * Questionnaire Tool - Unified tool for asking single or multiple questions
- *
- * Single question: simple options list
- * Multiple questions: tab bar navigation between questions
- */
+
 
 import type { ExtensionAPI } from "@msa/coding-agent";
 import {
@@ -17,7 +12,7 @@ import {
 } from "@msa/tui";
 import { Type } from "typebox";
 
-// Types
+
 interface QuestionOption {
   value: string;
   label: string;
@@ -48,7 +43,7 @@ interface QuestionnaireResult {
   cancelled: boolean;
 }
 
-// Schema
+
 const QuestionOptionSchema = Type.Object({
   value: Type.String({ description: "The value returned when selected" }),
   label: Type.String({ description: "Display label for the option" }),
@@ -102,7 +97,7 @@ export default function questionnaire(msa: ExtensionAPI) {
         return errorResult("Error: No questions provided");
       }
 
-      // Normalize questions with defaults
+      
       const questions: Question[] = params.questions.map((q, i) => ({
         ...q,
         label: q.label || `Q${i + 1}`,
@@ -110,10 +105,10 @@ export default function questionnaire(msa: ExtensionAPI) {
       }));
 
       const isMulti = questions.length > 1;
-      const totalTabs = questions.length + 1; // questions + Submit
+      const totalTabs = questions.length + 1; 
 
       const result = await ctx.ui.custom<QuestionnaireResult>((tui, theme, _kb, done) => {
-        // State
+        
         let currentTab = 0;
         let optionIndex = 0;
         let inputMode = false;
@@ -121,7 +116,7 @@ export default function questionnaire(msa: ExtensionAPI) {
         let cachedLines: string[] | undefined;
         const answers = new Map<string, Answer>();
 
-        // Editor for "Type something" option
+        
         const editorTheme: EditorTheme = {
           borderColor: (s) => theme.fg("accent", s),
           selectList: {
@@ -134,7 +129,7 @@ export default function questionnaire(msa: ExtensionAPI) {
         };
         const editor = new Editor(tui, editorTheme);
 
-        // Helpers
+        
         function refresh() {
           cachedLines = undefined;
           tui.requestRender();
@@ -170,7 +165,7 @@ export default function questionnaire(msa: ExtensionAPI) {
           if (currentTab < questions.length - 1) {
             currentTab++;
           } else {
-            currentTab = questions.length; // Submit tab
+            currentTab = questions.length; 
           }
           optionIndex = 0;
           refresh();
@@ -186,7 +181,7 @@ export default function questionnaire(msa: ExtensionAPI) {
           answers.set(questionId, { id: questionId, value, label, wasCustom, index });
         }
 
-        // Editor submit callback
+        
         editor.onSubmit = (value) => {
           if (!inputQuestionId) return;
           const trimmed = value.trim() || "(no response)";
@@ -198,7 +193,7 @@ export default function questionnaire(msa: ExtensionAPI) {
         };
 
         function handleInput(data: string) {
-          // Input mode: route to editor
+          
           if (inputMode) {
             if (matchesKey(data, Key.escape)) {
               inputMode = false;
@@ -215,7 +210,7 @@ export default function questionnaire(msa: ExtensionAPI) {
           const q = currentQuestion();
           const opts = currentOptions();
 
-          // Tab navigation (multi-question only)
+          
           if (isMulti) {
             if (matchesKey(data, Key.tab) || matchesKey(data, Key.right)) {
               currentTab = (currentTab + 1) % totalTabs;
@@ -231,7 +226,7 @@ export default function questionnaire(msa: ExtensionAPI) {
             }
           }
 
-          // Submit tab
+          
           if (currentTab === questions.length) {
             if (matchesKey(data, Key.enter) && allAnswered()) {
               submit(false);
@@ -241,7 +236,7 @@ export default function questionnaire(msa: ExtensionAPI) {
             return;
           }
 
-          // Option navigation
+          
           if (matchesKey(data, Key.up)) {
             optionIndex = Math.max(0, optionIndex - 1);
             refresh();
@@ -253,7 +248,7 @@ export default function questionnaire(msa: ExtensionAPI) {
             return;
           }
 
-          // Select option
+          
           if (matchesKey(data, Key.enter) && q) {
             const opt = opts[optionIndex];
             if (opt === undefined) return;
@@ -269,7 +264,7 @@ export default function questionnaire(msa: ExtensionAPI) {
             return;
           }
 
-          // Cancel
+          
           if (matchesKey(data, Key.escape)) {
             submit(true);
           }
@@ -302,7 +297,7 @@ export default function questionnaire(msa: ExtensionAPI) {
 
           lines.push(theme.fg("accent", "─".repeat(renderWidth)));
 
-          // Tab bar (multi-question only)
+          
           if (isMulti) {
             const tabs: string[] = ["← "];
             for (const [i, question] of questions.entries()) {
@@ -328,7 +323,7 @@ export default function questionnaire(msa: ExtensionAPI) {
             lines.push("");
           }
 
-          // Helper to render options list
+          
           function renderOptions() {
             for (const [i, opt] of opts.entries()) {
               const selected = i === optionIndex;
@@ -344,11 +339,11 @@ export default function questionnaire(msa: ExtensionAPI) {
             }
           }
 
-          // Content
+          
           if (inputMode && q) {
             addWrappedWithPrefix(" ", theme.fg("text", q.prompt));
             lines.push("");
-            // Show options for reference
+            
             renderOptions();
             lines.push("");
             addWrappedWithPrefix(" ", theme.fg("muted", "Your answer:"));
@@ -432,7 +427,7 @@ export default function questionnaire(msa: ExtensionAPI) {
       const count = qs.length;
       const labels = qs.map((q) => q.label || q.id).join(", ");
       let text = theme.fg("toolTitle", theme.bold("questionnaire "));
-      text += theme.fg("muted", `${count} question${count !== 1 ? "s" : ""}`);
+      text += theme.fg("muted", `${count} question${count === 1 ? "" : "s"}`);
       if (labels) {
         text += theme.fg("dim", ` (${labels})`);
       }

@@ -1,16 +1,4 @@
-/**
- * Handoff extension - transfer context to a new focused session
- *
- * Instead of compacting (which is lossy), handoff extracts what matters
- * for your next task and creates a new session with a generated prompt.
- *
- * Usage:
- *   /handoff now implement this for teams as well
- *   /handoff execute phase one of the plan
- *   /handoff check other places that need this fix
- *
- * The generated prompt appears as a draft in the editor for review/editing.
- */
+
 
 import type { AgentMessage } from "@msa/agent-core";
 import { type Message, uuidv7 } from "@msa/ai";
@@ -94,8 +82,8 @@ export default function (msa: ExtensionAPI) {
         return;
       }
 
-      // Gather conversation context from current branch. If the branch was compacted,
-      // include the compaction summary plus entries from firstKeptEntryId onward.
+      
+      
       const messages = getHandoffMessages(ctx.sessionManager.getBranch());
 
       if (messages.length === 0) {
@@ -103,12 +91,12 @@ export default function (msa: ExtensionAPI) {
         return;
       }
 
-      // Convert to LLM format and serialize
+      
       const llmMessages = convertToLlm(messages);
       const conversationText = serializeConversation(llmMessages);
       const currentSessionFile = ctx.sessionManager.getSessionFile();
 
-      // Generate the handoff prompt with loader UI
+      
       const result = await ctx.ui.custom<string | null>((tui, theme, _kb, done) => {
         const loader = new BorderedLoader(tui, theme, `Generating handoff prompt...`);
         loader.onAbort = () => done(null);
@@ -162,7 +150,7 @@ export default function (msa: ExtensionAPI) {
         return;
       }
 
-      // Let user edit the generated prompt
+      
       const editedPrompt = await ctx.ui.editor("Edit handoff prompt", result);
 
       if (editedPrompt === undefined) {
@@ -170,11 +158,11 @@ export default function (msa: ExtensionAPI) {
         return;
       }
 
-      // Create new session with parent tracking. Use the replacement-session
-      // context for post-switch UI work; the original ctx is stale after a
-      // successful session replacement.
+      
+      
+      
       const newSessionResult = await ctx.newSession({
-        ...(currentSessionFile !== undefined ? { parentSession: currentSessionFile } : {}),
+        ...(currentSessionFile === undefined ? {} : { parentSession: currentSessionFile }),
         withSession: async (replacementCtx) => {
           replacementCtx.ui.setEditorText(editedPrompt);
           replacementCtx.ui.notify("Handoff ready. Submit when ready.", "info");

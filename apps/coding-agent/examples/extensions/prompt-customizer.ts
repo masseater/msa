@@ -1,13 +1,4 @@
-/**
- * Prompt Customizer Extension
- *
- * Demonstrates using systemPromptOptions to add context-aware prompt sections
- * without replacing or reparsing the complete rendered prompt.
- *
- * Usage:
- * 1. Copy this file to ~/.msa/agent/extensions/ or your project's .msa/extensions/
- * 2. Use the extension — it automatically adapts to your active tools and skills
- */
+
 
 import type { BuildSystemPromptOptions, ExtensionAPI } from "@msa/coding-agent";
 

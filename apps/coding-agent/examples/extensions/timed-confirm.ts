@@ -1,16 +1,9 @@
-/**
- * Example extension demonstrating timed dialogs with live countdown.
- *
- * Commands:
- * - /timed - Shows confirm dialog that auto-cancels after 5 seconds with countdown
- * - /timed-select - Shows select dialog that auto-cancels after 10 seconds with countdown
- * - /timed-signal - Shows confirm using AbortSignal (manual approach)
- */
+
 
 import type { ExtensionAPI } from "@msa/coding-agent";
 
 export default function (msa: ExtensionAPI) {
-  // Simple approach: use timeout option (recommended)
+  
   msa.registerCommand("timed", {
     description: "Show a timed confirmation dialog (auto-cancels in 5s with countdown)",
     handler: async (_args, ctx) => {
@@ -43,7 +36,7 @@ export default function (msa: ExtensionAPI) {
     },
   });
 
-  // Manual approach: use AbortSignal for more control
+  
   msa.registerCommand("timed-signal", {
     description: "Show a timed confirm using AbortSignal (manual approach)",
     handler: async (_args, ctx) => {

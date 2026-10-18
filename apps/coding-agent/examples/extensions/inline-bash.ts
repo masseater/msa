@@ -1,19 +1,4 @@
-/**
- * Inline Bash Extension - expands inline bash commands in user prompts.
- *
- * Start msa with this extension:
- *   msa -e ./examples/extensions/inline-bash.ts
- *
- * Then type prompts with inline bash:
- *   What's in !{pwd}?
- *   The current branch is !{git branch --show-current} and status: !{git status --short}
- *   My node version is !{node --version}
- *
- * The !{command} patterns are executed and replaced with their output before
- * the prompt is sent to the agent.
- *
- * Note: Regular !command syntax (whole-line bash) is preserved and works as before.
- */
+
 import type { ExtensionAPI } from "@msa/coding-agent";
 
 export default function (msa: ExtensionAPI) {
@@ -23,24 +8,24 @@ export default function (msa: ExtensionAPI) {
   msa.on("input", async (event, ctx) => {
     const text = event.text;
 
-    // Don't process if it's a whole-line bash command (starts with !)
-    // This preserves the existing !command behavior
+    
+    
     if (text.trimStart().startsWith("!") && !text.trimStart().startsWith("!{")) {
       return { action: "continue" };
     }
 
-    // Check if there are any inline bash patterns
+    
     if (!PATTERN.test(text)) {
       return { action: "continue" };
     }
 
-    // Reset regex state after test()
+    
     PATTERN.lastIndex = 0;
 
     let result = text;
     const expansions: Array<{ command: string; output: string; error?: string }> = [];
 
-    // Find all matches first (to avoid issues with replacing while iterating)
+    
     const matches: Array<{ full: string; command: string }> = [];
     let match = PATTERN.exec(text);
     while (match) {
@@ -49,7 +34,7 @@ export default function (msa: ExtensionAPI) {
       match = PATTERN.exec(text);
     }
 
-    // Execute each command and collect results
+    
     for (const { full, command } of matches) {
       try {
         const bashResult = await msa.exec("bash", ["-c", command], {
@@ -77,7 +62,7 @@ export default function (msa: ExtensionAPI) {
       }
     }
 
-    // Show what was expanded (if UI available)
+    
     if (ctx.hasUI && expansions.length > 0) {
       const summary = expansions
         .map((e) => {
@@ -93,7 +78,7 @@ export default function (msa: ExtensionAPI) {
     return {
       action: "transform",
       text: result,
-      ...(event.images !== undefined ? { images: event.images } : {}),
+      ...(event.images === undefined ? {} : { images: event.images }),
     };
   });
 }

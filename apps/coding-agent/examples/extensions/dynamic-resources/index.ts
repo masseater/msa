@@ -1,16 +1,13 @@
-import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import type { ExtensionAPI } from "@msa/coding-agent";
 
-const baseDir = dirname(fileURLToPath(import.meta.url));
+const baseDir = fileURLToPath(new URL(".", import.meta.url));
 
 export default function (msa: ExtensionAPI) {
-  msa.on("resources_discover", () => {
-    return {
-      skillPaths: [join(baseDir, "SKILL.md")],
-      promptPaths: [join(baseDir, "dynamic.md")],
-      themePaths: [join(baseDir, "dynamic.json")],
-    };
-  });
+  msa.on("resources_discover", () => ({
+    skillPaths: [`${baseDir}SKILL.md`],
+    promptPaths: [`${baseDir}dynamic.md`],
+    themePaths: [`${baseDir}dynamic.json`],
+  }));
 }

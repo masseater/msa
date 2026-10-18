@@ -3,7 +3,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { gunzipSync } from "node:zlib";
 
-// Get the bundled WAD path (relative to this module)
+
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const BUNDLED_WAD = join(__dirname, "doom1.wad");
 const WAD_URL = "https://www.gamers.org/pub/idgames/idstuff/doom/doom-1.8.wad.gz";
@@ -17,12 +17,12 @@ export function findWadFile(customPath?: string): string | null {
     return null;
   }
 
-  // Check bundled WAD first
+  
   if (existsSync(BUNDLED_WAD)) {
     return BUNDLED_WAD;
   }
 
-  // Fall back to default paths
+  
   for (const p of DEFAULT_WAD_PATHS) {
     const resolved = resolve(p.replace(/^~/, process.env["HOME"] || ""));
     if (existsSync(resolved)) return resolved;
@@ -31,13 +31,13 @@ export function findWadFile(customPath?: string): string | null {
   return null;
 }
 
-/** Download the shareware WAD if not present. Returns path or null on failure. */
+
 export async function ensureWadFile(): Promise<string | null> {
-  // Check if already exists
+  
   const existing = findWadFile();
   if (existing) return existing;
 
-  // Download to bundled location
+  
   try {
     const response = await fetch(WAD_URL);
     if (!response.ok) {

@@ -1,12 +1,4 @@
-/**
- * Test script for GitLab Duo extension
- * Run: node test.ts [model-id] [--thinking]
- *
- * Examples:
- *   node test.ts                              # Test default (claude-sonnet-4-5-20250929)
- *   node test.ts gpt-5-codex                  # Test GPT-5 Codex
- *   node test.ts claude-sonnet-4-5-20250929 --thinking
- */
+
 
 import { readFileSync } from "fs";
 import { join } from "path";
@@ -35,7 +27,7 @@ async function main() {
     process.exit(1);
   }
 
-  // Read auth
+  
   const authPath = join(getAgentDir(), "extensions", "auth.json");
   const authData = JSON.parse(readFileSync(authPath, "utf-8"));
   const gitlabCred = authData["gitlab-duo"];
@@ -44,14 +36,14 @@ async function main() {
     process.exit(1);
   }
 
-  // Register provider
+  
   registerApiProvider({
     api: "gitlab-duo-api" as Api,
     stream: streamGitLabDuo,
     streamSimple: streamGitLabDuo,
   });
 
-  // Create model
+  
   const model: Model<Api> = {
     id: cfg.id,
     name: cfg.name,

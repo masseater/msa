@@ -1,45 +1,36 @@
-/**
- * Tools Extension
- *
- * Provides a /tools command to enable/disable tools interactively.
- * Tool selection persists across session reloads and respects branch navigation.
- *
- * Usage:
- * 1. Copy this file to ~/.msa/agent/extensions/ or your project's .msa/extensions/
- * 2. Use /tools to open the tool selector
- */
+
 
 import type { ExtensionAPI, ExtensionContext, ToolInfo } from "@msa/coding-agent";
 import { getSettingsListTheme } from "@msa/coding-agent";
 import { Container, type SettingItem, SettingsList } from "@msa/tui";
 
-// State persisted to session
+
 interface ToolsState {
   enabledTools: string[];
 }
 
 export default function toolsExtension(msa: ExtensionAPI) {
-  // Track enabled tools
+  
   let enabledTools: Set<string> = new Set();
   let allTools: ToolInfo[] = [];
 
-  // Persist current state
+  
   function persistState() {
     msa.appendEntry<ToolsState>("tools-config", {
       enabledTools: Array.from(enabledTools),
     });
   }
 
-  // Apply current tool selection
+  
   function applyTools() {
     msa.setActiveTools(Array.from(enabledTools));
   }
 
-  // Find the last tools-config entry in the current branch
+  
   function restoreFromBranch(ctx: ExtensionContext) {
     allTools = msa.getAllTools();
 
-    // Get entries in current branch only
+    
     const branchEntries = ctx.sessionManager.getBranch();
     let savedTools: string[] | undefined;
 
@@ -53,17 +44,17 @@ export default function toolsExtension(msa: ExtensionAPI) {
     }
 
     if (savedTools) {
-      // Restore saved tool selection (filter to only tools that still exist)
+      
       const allToolNames = allTools.map((t) => t.name);
       enabledTools = new Set(savedTools.filter((t: string) => allToolNames.includes(t)));
       applyTools();
     } else {
-      // No saved state - sync with currently active tools
+      
       enabledTools = new Set(msa.getActiveTools());
     }
   }
 
-  // Register /tools command
+  
   msa.registerCommand("tools", {
     description: "Enable/disable tools",
     handler: async (_args, ctx) => {
@@ -72,11 +63,11 @@ export default function toolsExtension(msa: ExtensionAPI) {
         return;
       }
 
-      // Refresh tool list
+      
       allTools = msa.getAllTools();
 
       await ctx.ui.custom((tui, theme, _kb, done) => {
-        // Build settings items for each tool
+        
         const items: SettingItem[] = allTools.map((tool) => ({
           id: tool.name,
           label: tool.name,
@@ -99,7 +90,7 @@ export default function toolsExtension(msa: ExtensionAPI) {
           Math.min(items.length + 2, 15),
           getSettingsListTheme(),
           (id, newValue) => {
-            // Update enabled state and apply immediately
+            
             if (newValue === "enabled") {
               enabledTools.add(id);
             } else {
@@ -109,7 +100,7 @@ export default function toolsExtension(msa: ExtensionAPI) {
             persistState();
           },
           () => {
-            // Close dialog
+            
             done(undefined);
           },
         );
@@ -134,12 +125,12 @@ export default function toolsExtension(msa: ExtensionAPI) {
     },
   });
 
-  // Restore state on session start
+  
   msa.on("session_start", async (_event, ctx) => {
     restoreFromBranch(ctx);
   });
 
-  // Restore state when navigating the session tree
+  
   msa.on("session_tree", async (_event, ctx) => {
     restoreFromBranch(ctx);
   });

@@ -1,12 +1,4 @@
-/**
- * msa Notify Extension
- *
- * Sends a native terminal notification when msa agent is done and waiting for input.
- * Supports multiple terminal protocols:
- * - OSC 777: Ghostty, iTerm2, WezTerm, rxvt-unicode
- * - OSC 99: Kitty
- * - Windows toast: Windows Terminal (WSL)
- */
+
 
 import type { ExtensionAPI } from "@msa/coding-agent";
 
@@ -28,7 +20,7 @@ function notifyOSC777(title: string, body: string): void {
 }
 
 function notifyOSC99(title: string, body: string): void {
-  // Kitty OSC 99: i=notification id, d=0 means not done yet, p=body for second part
+  
   process.stdout.write(`\x1b]99;i=1:d=0;${title}\x1b\\`);
   process.stdout.write(`\x1b]99;i=1:p=body;${body}\x1b\\`);
 }
@@ -49,8 +41,8 @@ function notify(title: string, body: string): void {
 }
 
 export default function (msa: ExtensionAPI) {
-  // `agent_end` fires after each low-level run; msa may still retry, compact,
-  // or continue with queued follow-ups. Notify only after the full run settles.
+  
+  
   msa.on("agent_settled", async () => {
     notify("msa", "Ready for input");
   });

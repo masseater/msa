@@ -1,20 +1,16 @@
-/**
- * Rainbow Editor - highlights "ultrathink" with animated shine effect
- *
- * Usage: msa --extension ./examples/extensions/rainbow-editor.ts
- */
+
 
 import { CustomEditor, type ExtensionAPI } from "@msa/coding-agent";
 
-// Base colors (coral → yellow → green → teal → blue → purple → pink)
+
 const COLORS: [number, number, number][] = [
-  [233, 137, 115], // coral
-  [228, 186, 103], // yellow
-  [141, 192, 122], // green
-  [102, 194, 179], // teal
-  [121, 157, 207], // blue
-  [157, 134, 195], // purple
-  [206, 130, 172], // pink
+  [233, 137, 115], 
+  [228, 186, 103], 
+  [141, 192, 122], 
+  [102, 194, 179], 
+  [121, 157, 207], 
+  [157, 134, 195], 
+  [206, 130, 172], 
 ];
 const RESET = "\x1b[0m";
 
@@ -28,7 +24,7 @@ function colorize(text: string, shinePos: number): string {
     [...text]
       .map((c, i) => {
         const baseColor = COLORS[i % COLORS.length]!;
-        // 3-letter shine: center bright, adjacent dimmer
+        
         let factor = 0;
         if (shinePos >= 0) {
           const dist = Math.abs(i - shinePos);
@@ -74,9 +70,9 @@ class RainbowEditor extends CustomEditor {
   }
 
   override render(width: number): string[] {
-    // Cycle: 10 shine positions + 10 pause frames
+    
     const cycle = this.frame % 20;
-    const shinePos = cycle < 10 ? cycle : -1; // -1 means no shine (pause)
+    const shinePos = cycle < 10 ? cycle : -1; 
     return super
       .render(width)
       .map((line) => line.replace(/ultrathink/gi, (m) => colorize(m, shinePos)));

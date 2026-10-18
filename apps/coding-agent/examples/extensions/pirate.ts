@@ -1,21 +1,11 @@
-/**
- * Pirate Extension
- *
- * Demonstrates modifying the system prompt in before_agent_start to dynamically
- * change agent behavior based on extension state.
- *
- * Usage:
- * 1. Copy this file to ~/.msa/agent/extensions/ or your project's .msa/extensions/
- * 2. Use /pirate to toggle pirate mode
- * 3. When enabled, the agent will respond like a pirate
- */
+
 
 import type { ExtensionAPI } from "@msa/coding-agent";
 
 export default function pirateExtension(msa: ExtensionAPI) {
   let pirateMode = false;
 
-  // Register /pirate command to toggle pirate mode
+  
   msa.registerCommand("pirate", {
     description: "Toggle pirate mode (agent speaks like a pirate)",
     handler: async (_args, ctx) => {
@@ -24,7 +14,7 @@ export default function pirateExtension(msa: ExtensionAPI) {
     },
   });
 
-  // Append to system prompt when pirate mode is enabled
+  
   msa.on("before_agent_start", async (event) => {
     if (pirateMode) {
       return {

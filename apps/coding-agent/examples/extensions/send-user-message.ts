@@ -1,20 +1,9 @@
-/**
- * Send User Message Example
- *
- * Demonstrates msa.sendUserMessage() for sending user messages from extensions.
- * Unlike msa.sendMessage() which sends custom messages, sendUserMessage() sends
- * actual user messages that appear in the conversation as if typed by the user.
- *
- * Usage:
- *   /ask What is 2+2?     - Sends a user message (always triggers a turn)
- *   /steer Focus on X     - Sends while streaming with steer delivery
- *   /followup And then?   - Sends while streaming with followUp delivery
- */
+
 
 import type { ExtensionAPI } from "@msa/coding-agent";
 
 export default function (msa: ExtensionAPI) {
-  // Simple command that sends a user message
+  
   msa.registerCommand("ask", {
     description: "Send a user message to the agent",
     handler: async (args, ctx) => {
@@ -23,8 +12,8 @@ export default function (msa: ExtensionAPI) {
         return;
       }
 
-      // sendUserMessage always triggers a turn when not streaming
-      // If streaming, it will throw (no deliverAs specified)
+      
+      
       if (!ctx.isIdle()) {
         ctx.ui.notify("Agent is busy. Use /steer or /followup instead.", "warning");
         return;
@@ -34,7 +23,7 @@ export default function (msa: ExtensionAPI) {
     },
   });
 
-  // Command that steers the agent mid-conversation
+  
   msa.registerCommand("steer", {
     description: "Send a steering message (interrupts current processing)",
     handler: async (args, ctx) => {
@@ -44,16 +33,16 @@ export default function (msa: ExtensionAPI) {
       }
 
       if (ctx.isIdle()) {
-        // Not streaming, just send normally
+        
         msa.sendUserMessage(args);
       } else {
-        // Streaming - use steer to interrupt
+        
         msa.sendUserMessage(args, { deliverAs: "steer" });
       }
     },
   });
 
-  // Command that queues a follow-up message
+  
   msa.registerCommand("followup", {
     description: "Queue a follow-up message (waits for current processing)",
     handler: async (args, ctx) => {
@@ -63,17 +52,17 @@ export default function (msa: ExtensionAPI) {
       }
 
       if (ctx.isIdle()) {
-        // Not streaming, just send normally
+        
         msa.sendUserMessage(args);
       } else {
-        // Streaming - queue as follow-up
+        
         msa.sendUserMessage(args, { deliverAs: "followUp" });
         ctx.ui.notify("Follow-up queued", "info");
       }
     },
   });
 
-  // Example with content array (text + images would go here)
+  
   msa.registerCommand("askwith", {
     description: "Send a user message with structured content",
     handler: async (args, ctx) => {
@@ -87,7 +76,7 @@ export default function (msa: ExtensionAPI) {
         return;
       }
 
-      // sendUserMessage accepts string or (TextContent | ImageContent)[]
+      
       msa.sendUserMessage([
         { type: "text", text: `User request: ${args}` },
         { type: "text", text: "Please respond concisely." },

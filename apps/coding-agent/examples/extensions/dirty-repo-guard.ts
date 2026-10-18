@@ -1,9 +1,4 @@
-/**
- * Dirty Repo Guard Extension
- *
- * Prevents session changes when there are uncommitted git changes.
- * Useful to ensure work is committed before switching context.
- */
+
 
 import type { ExtensionAPI, ExtensionContext } from "@msa/coding-agent";
 
@@ -12,11 +7,11 @@ async function checkDirtyRepo(
   ctx: ExtensionContext,
   action: string,
 ): Promise<{ cancel: boolean } | undefined> {
-  // Check for uncommitted changes
+  
   const { stdout, code } = await msa.exec("git", ["status", "--porcelain"]);
 
   if (code !== 0) {
-    // Not a git repo, allow the action
+    
     return;
   }
 
@@ -26,11 +21,11 @@ async function checkDirtyRepo(
   }
 
   if (!ctx.hasUI) {
-    // In non-interactive mode, block by default
+    
     return { cancel: true };
   }
 
-  // Count changed files
+  
   const changedFiles = stdout.trim().split("\n").filter(Boolean).length;
 
   const choice = await ctx.ui.select(

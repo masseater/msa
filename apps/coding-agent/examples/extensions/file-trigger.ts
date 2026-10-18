@@ -1,12 +1,4 @@
-/**
- * File Trigger Extension
- *
- * Watches a trigger file and injects its contents into the conversation.
- * Useful for external systems to send messages to the agent.
- *
- * Usage:
- *   echo "Run the tests" > /tmp/agent-trigger.txt
- */
+
 
 import * as fs from "node:fs";
 
@@ -26,12 +18,12 @@ export default function (msa: ExtensionAPI) {
               content: `External trigger: ${content}`,
               display: true,
             },
-            { triggerTurn: true }, // triggerTurn - get LLM to respond
+            { triggerTurn: true }, 
           );
-          fs.writeFileSync(triggerFile, ""); // Clear after reading
+          fs.writeFileSync(triggerFile, ""); 
         }
       } catch {
-        // File might not exist yet
+        
       }
     });
 

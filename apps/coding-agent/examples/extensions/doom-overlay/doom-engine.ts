@@ -1,6 +1,4 @@
-/**
- * DOOM Engine - WebAssembly wrapper for doomgeneric
- */
+
 
 import { existsSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -51,7 +49,7 @@ export class DoomEngine {
   }
 
   async init(): Promise<void> {
-    // Locate WASM build
+    
     const __dirname = dirname(fileURLToPath(import.meta.url));
     const buildDir = join(__dirname, "doom", "build");
     const doomJsPath = join(buildDir, "doom.js");
@@ -60,11 +58,11 @@ export class DoomEngine {
       throw new Error(`WASM not found at ${doomJsPath}. Run ./doom/build.sh first`);
     }
 
-    // Read WAD file
+    
     const wadData = readFileSync(this.wadPath);
     const wadArray = Array.from(new Uint8Array(wadData));
 
-    // Load WASM module - eval to bypass jiti completely
+    
     const doomJsCode = readFileSync(doomJsPath, "utf-8");
     const moduleExports: { exports: unknown } = { exports: {} };
     const nativeRequire = createRequire(doomJsPath);
@@ -90,7 +88,7 @@ export class DoomEngine {
       printErr: () => {},
       preRun: [
         (module: DoomModule) => {
-          // Create /doom directory and add WAD
+          
           module.FS_createPath("/", "doom", true, true);
           module.FS_createDataFile("/doom", "doom1.wad", wadArray, true, false);
         },
@@ -102,10 +100,10 @@ export class DoomEngine {
       throw new Error("Failed to initialize DOOM module");
     }
 
-    // Initialize DOOM
+    
     this.initDoom();
 
-    // Get framebuffer info
+    
     this.frameBufferPtr = this.module._DG_GetFrameBuffer();
     this._width = this.module._DG_GetScreenWidth();
     this._height = this.module._DG_GetScreenHeight();
@@ -140,18 +138,13 @@ export class DoomEngine {
     this.module._free(argvPtr);
   }
 
-  /**
-   * Run one game tick
-   */
+  
   tick(): void {
     if (!this.module || !this.initialized) return;
     this.module._doomgeneric_Tick();
   }
 
-  /**
-   * Get current frame as RGBA pixel data
-   * DOOM outputs ARGB, we convert to RGBA
-   */
+  
   getFrameRGBA(): Uint8Array {
     if (!this.module || !this.initialized) {
       return new Uint8Array(this._width * this._height * 4);
@@ -163,18 +156,16 @@ export class DoomEngine {
     for (let i = 0; i < pixels; i++) {
       const argb = this.module.getValue(this.frameBufferPtr + i * 4, "i32");
       const offset = i * 4;
-      buffer[offset + 0] = (argb >> 16) & 0xff; // R
-      buffer[offset + 1] = (argb >> 8) & 0xff; // G
-      buffer[offset + 2] = argb & 0xff; // B
-      buffer[offset + 3] = 255; // A
+      buffer[offset + 0] = (argb >> 16) & 0xff; 
+      buffer[offset + 1] = (argb >> 8) & 0xff; 
+      buffer[offset + 2] = argb & 0xff; 
+      buffer[offset + 3] = 255; 
     }
 
     return buffer;
   }
 
-  /**
-   * Push a key event
-   */
+  
   pushKey(pressed: boolean, key: number): void {
     if (!this.module || !this.initialized) return;
     this.module._DG_PushKeyEvent(pressed ? 1 : 0, key);

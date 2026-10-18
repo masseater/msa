@@ -1,8 +1,4 @@
-/**
- * Full Control
- *
- * Replace everything - no discovery, explicit configuration.
- */
+import { Config, ConfigProvider, Console, Effect, Option } from "effect";
 
 import { getModel } from "@msa/ai/compat";
 import {
@@ -18,14 +14,19 @@ const modelRuntime = await ModelRuntime.create({
   authPath: "/tmp/my-agent/auth.json",
   modelsPath: "/tmp/my-agent/models.json",
 });
-if (process.env["MY_ANTHROPIC_KEY"]) {
-  await modelRuntime.setRuntimeApiKey("anthropic", process.env["MY_ANTHROPIC_KEY"]);
+const anthropicKey = Effect.runSync(
+  Config.option(Config.String("MY_ANTHROPIC_KEY"))
+    .parse(ConfigProvider.fromEnv({ preserveEmptyStrings: true }))
+    .pipe(Effect.map(Option.getOrUndefined), Effect.orDie),
+);
+if (anthropicKey !== undefined) {
+  await modelRuntime.setRuntimeApiKey("anthropic", anthropicKey);
 }
 
 const model = getModel("anthropic", "claude-sonnet-4-5");
-if (!model) throw new Error("Model not found");
+if (model === undefined) throw new Error("Model not found");
 
-// In-memory settings with overrides
+
 const settingsManager = SettingsManager.inMemory({
   compaction: { enabled: false },
   retry: { enabled: true, maxRetries: 2 },
@@ -45,7 +46,7 @@ Available: read, bash. Be concise.`,
   getAppendSystemPrompt: () => [],
   getAppendSystemPromptSources: () => [],
   extendResources: () => {},
-  reload: async () => {},
+  reload: () => Promise.resolve(),
 };
 
 const { session } = await createAgentSession({
@@ -68,7 +69,7 @@ try {
   });
 
   await session.prompt("List files in the current directory.");
-  console.log();
+  Effect.runSync(Console.log());
 } finally {
   session.dispose();
 }

@@ -1,9 +1,4 @@
-/**
- * Syncs msa theme with macOS system appearance (dark/light mode).
- *
- * Usage:
- *   msa -e examples/extensions/mac-system-theme.ts
- */
+
 
 import { exec } from "node:child_process";
 import { promisify } from "node:util";

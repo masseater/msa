@@ -1,13 +1,4 @@
-/**
- * DOOM Overlay Demo - Play DOOM as an overlay
- *
- * Usage: msa --extension ./examples/extensions/doom-overlay
- *
- * Commands:
- *   /doom-overlay - Play DOOM in an overlay (Q to pause/exit)
- *
- * This demonstrates that overlays can handle real-time game rendering at 35 FPS.
- */
+
 
 import type { ExtensionAPI } from "@msa/coding-agent";
 
@@ -15,7 +6,7 @@ import { DoomOverlayComponent } from "./doom-component.ts";
 import { DoomEngine } from "./doom-engine.ts";
 import { ensureWadFile } from "./wad-finder.ts";
 
-// Persistent engine instance - survives between invocations
+
 let activeEngine: DoomEngine | null = null;
 let activeWadPath: string | null = null;
 
@@ -29,7 +20,7 @@ export default function (msa: ExtensionAPI) {
         return;
       }
 
-      // Auto-download WAD if not present
+      
       ctx.ui.notify("Loading DOOM...", "info");
       const wad = args?.trim() ? args.trim() : await ensureWadFile();
 
@@ -39,7 +30,7 @@ export default function (msa: ExtensionAPI) {
       }
 
       try {
-        // Reuse existing engine if same WAD, otherwise create new
+        
         let isResume = false;
         if (activeEngine && activeWadPath === wad) {
           ctx.ui.notify("Resuming DOOM...", "info");

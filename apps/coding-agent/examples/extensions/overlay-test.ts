@@ -1,12 +1,4 @@
-/**
- * Overlay Test - validates overlay compositing with inline text inputs
- *
- * Usage: msa --extension ./examples/extensions/overlay-test.ts
- *
- * Run /overlay-test to show a floating overlay with:
- * - Inline text inputs within menu items
- * - Edge case tests (wide chars, styled text, emoji)
- */
+
 
 import type { ExtensionAPI, ExtensionCommandContext, Theme } from "@msa/coding-agent";
 import {
@@ -37,7 +29,7 @@ export default function (msa: ExtensionAPI) {
 class OverlayTestComponent implements Focusable {
   readonly width = 70;
 
-  /** Focusable interface - set by TUI when focus changes */
+  
   focused = false;
 
   private selected = 0;
@@ -113,7 +105,7 @@ class OverlayTestComponent implements Focusable {
     lines.push(row(` ${th.fg("accent", "🧪 Overlay Test")}`));
     lines.push(row(""));
 
-    // Edge cases - full width lines to test compositing at boundaries
+    
     lines.push(row(` ${th.fg("dim", "─── Edge Cases (borders should align) ───")}`));
     lines.push(
       row(
@@ -128,7 +120,7 @@ class OverlayTestComponent implements Focusable {
     lines.push(row(" Emoji: 👨‍👩‍👧‍👦 🇯🇵 🚀 💻 🎉 🔥 😀 🎯 🌟 💡 🎨 🔧 📦 🏆 🌈 🎪 🎭 🎬 🎮 🎲"));
     lines.push(row(""));
 
-    // Menu with inline inputs
+    
     lines.push(row(` ${th.fg("dim", "─── Actions ───")}`));
 
     for (let i = 0; i < this.items.length; i++) {
@@ -147,7 +139,7 @@ class OverlayTestComponent implements Focusable {
           const before = inputDisplay.slice(0, item.cursor);
           const cursorChar = inputDisplay[item.cursor] ?? " ";
           const after = inputDisplay.slice(item.cursor + 1);
-          // Emit hardware cursor marker for IME support when focused
+          
           const marker = this.focused ? CURSOR_MARKER : "";
           inputDisplay = `${before}${marker}${renderFakeCursor(cursorChar)}${after}`;
         }

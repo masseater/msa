@@ -1,13 +1,4 @@
-/**
- * GitLab Duo Provider Extension
- *
- * Provides access to GitLab Duo AI models (Claude and GPT) through GitLab's AI Gateway.
- * Delegates to msa-ai's built-in Anthropic and OpenAI streaming implementations.
- *
- * Usage:
- *   msa -e ./apps/coding-agent/examples/extensions/custom-provider-gitlab-duo
- *   # Then /login gitlab-duo, or set GITLAB_TOKEN=glpat-...
- */
+
 
 import {
   type Api,
@@ -24,9 +15,9 @@ import {
 } from "@msa/ai/compat";
 import type { ExtensionAPI } from "@msa/coding-agent";
 
-// =============================================================================
-// Constants
-// =============================================================================
+
+
+
 
 const GITLAB_COM_URL = "https://gitlab.com";
 const AI_GATEWAY_URL = "https://cloud.gitlab.com";
@@ -38,9 +29,9 @@ const OAUTH_SCOPES = ["api"];
 const REDIRECT_URI = "http://127.0.0.1:8080/callback";
 const DIRECT_ACCESS_TTL = 25 * 60 * 1000;
 
-// =============================================================================
-// Models - exported for use by tests
-// =============================================================================
+
+
+
 
 type Backend = "anthropic" | "openai";
 
@@ -58,7 +49,7 @@ interface GitLabModel {
 }
 
 export const MODELS: GitLabModel[] = [
-  // Anthropic
+  
   {
     id: "claude-opus-4-8",
     name: "Claude Opus 4.8",
@@ -119,7 +110,7 @@ export const MODELS: GitLabModel[] = [
     contextWindow: 200000,
     maxTokens: 8192,
   },
-  // OpenAI (all use Responses API)
+  
   {
     id: "gpt-5.5-2026-04-23",
     name: "GPT-5.5",
@@ -168,9 +159,9 @@ export const MODELS: GitLabModel[] = [
 
 const MODEL_MAP = new Map(MODELS.map((m) => [m.id, m]));
 
-// =============================================================================
-// Direct Access Token Cache
-// =============================================================================
+
+
+
 
 interface DirectAccessToken {
   token: string;
@@ -215,9 +206,9 @@ function invalidateDirectAccessToken() {
   cachedDirectAccess = null;
 }
 
-// =============================================================================
-// OAuth
-// =============================================================================
+
+
+
 
 async function generatePKCE(): Promise<{ verifier: string; challenge: string }> {
   const array = new Uint8Array(32);
@@ -307,9 +298,9 @@ async function refreshGitLabToken(
   };
 }
 
-// =============================================================================
-// Stream Function
-// =============================================================================
+
+
+
 
 export function streamGitLabDuo(
   model: Model<Api>,
@@ -383,9 +374,9 @@ export function streamGitLabDuo(
   return stream;
 }
 
-// =============================================================================
-// Extension Entry Point
-// =============================================================================
+
+
+
 
 export default function (msa: ExtensionAPI) {
   msa.registerProvider("gitlab-duo", {

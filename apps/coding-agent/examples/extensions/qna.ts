@@ -1,11 +1,4 @@
-/**
- * Q&A extraction extension - extracts questions from assistant responses
- *
- * Demonstrates the "prompt generator" pattern:
- * 1. /qna command gets the last assistant message
- * 2. Shows a spinner while extracting (hides editor)
- * 3. Loads the result into the editor for user to fill in answers
- */
+
 
 import type { UserMessage } from "@msa/ai";
 import type { ExtensionAPI } from "@msa/coding-agent";
@@ -42,7 +35,7 @@ export default function (msa: ExtensionAPI) {
         return;
       }
 
-      // Find the last assistant message on the current branch
+      
       const branch = ctx.sessionManager.getBranch();
       let lastAssistantText: string | undefined;
 
@@ -70,7 +63,7 @@ export default function (msa: ExtensionAPI) {
         return;
       }
 
-      // Run extraction with loader UI
+      
       const result = await ctx.ui.custom<string | null>((tui, theme, _kb, done) => {
         const loader = new BorderedLoader(
           tui,
@@ -79,7 +72,7 @@ export default function (msa: ExtensionAPI) {
         );
         loader.onAbort = () => done(null);
 
-        // Do the work
+        
         const doExtract = async () => {
           const userMessage: UserMessage = {
             role: "user",

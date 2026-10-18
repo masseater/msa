@@ -1,18 +1,4 @@
-/**
- * RPC Extension UI Example (TUI)
- *
- * A lightweight TUI chat client that spawns the agent in RPC mode.
- * Demonstrates how to build a custom UI on top of the RPC protocol,
- * including handling extension UI requests (select, confirm, input, editor).
- *
- * Usage: node examples/rpc-extension-ui.ts
- *
- * Slash commands:
- *   /select  - demo select dialog
- *   /confirm - demo confirm dialog
- *   /input   - demo input dialog
- *   /editor  - demo editor dialog
- */
+
 
 import { spawn } from "node:child_process";
 import { dirname, join } from "node:path";
@@ -32,9 +18,9 @@ import {
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-// ============================================================================
-// ANSI helpers
-// ============================================================================
+
+
+
 
 const GREEN = "\x1b[32m";
 const YELLOW = "\x1b[33m";
@@ -45,9 +31,9 @@ const DIM = "\x1b[2m";
 const BOLD = "\x1b[1m";
 const RESET = "\x1b[0m";
 
-// ============================================================================
-// Extension UI request type (subset of rpc-types.ts)
-// ============================================================================
+
+
+
 
 interface ExtensionUIRequest {
   type: "extension_ui_request";
@@ -66,9 +52,9 @@ interface ExtensionUIRequest {
   text?: string;
 }
 
-// ============================================================================
-// Output log: accumulates styled lines, renders the tail that fits
-// ============================================================================
+
+
+
 
 class OutputLog implements Component {
   private lines: string[] = [];
@@ -103,9 +89,9 @@ class OutputLog implements Component {
   }
 }
 
-// ============================================================================
-// Loading indicator: "Agent: Working." -> ".." -> "..." -> "."
-// ============================================================================
+
+
+
 
 class LoadingIndicator implements Component {
   private dots = 1;
@@ -135,9 +121,9 @@ class LoadingIndicator implements Component {
   }
 }
 
-// ============================================================================
-// Prompt input: label + single-line input
-// ============================================================================
+
+
+
 
 class PromptInput implements Component {
   readonly input: Input;
@@ -164,9 +150,9 @@ class PromptInput implements Component {
   }
 }
 
-// ============================================================================
-// Dialog components: replace the prompt input during interactive requests
-// ============================================================================
+
+
+
 
 class SelectDialog implements Component {
   private list: SelectList;
@@ -249,9 +235,9 @@ class InputDialog implements Component {
   }
 }
 
-// ============================================================================
-// Main
-// ============================================================================
+
+
+
 
 async function main() {
   const extensionPath = join(__dirname, "extensions/rpc-demo.ts");
@@ -274,7 +260,7 @@ async function main() {
     process.exit(1);
   }
 
-  // -- TUI setup --
+  
 
   const terminal = new ProcessTerminal();
   const tui: TUI = new TuiMainScreen(terminal);
@@ -290,7 +276,7 @@ async function main() {
   tui.addChild(root);
   tui.setFocus(promptInput.input);
 
-  // -- Agent communication --
+  
 
   function send(obj: Record<string, unknown>): void {
     agent.stdin!.write(`${JSON.stringify(obj)}\n`);
@@ -305,9 +291,9 @@ async function main() {
     process.exit(0);
   }
 
-  // -- Bottom area management --
-  // The bottom of the screen is either the prompt input or a dialog.
-  // These helpers swap between them.
+  
+  
+  
 
   let activeDialog: Component | null = null;
 
@@ -354,7 +340,7 @@ async function main() {
     tui.requestRender();
   }
 
-  // -- Extension UI dialog handling --
+  
 
   function showSelectDialog(
     title: string,
@@ -396,13 +382,13 @@ async function main() {
     const { id, method } = req;
 
     switch (method) {
-      // Dialog methods: replace prompt with interactive component
+      
       case "select": {
         showSelectDialog(req.title ?? "Select", req.options ?? [], (value) => {
-          if (value !== undefined) {
-            send({ type: "extension_ui_response", id, value });
-          } else {
+          if (value === undefined) {
             send({ type: "extension_ui_response", id, cancelled: true });
+          } else {
+            send({ type: "extension_ui_response", id, value });
           }
         });
         break;
@@ -421,10 +407,10 @@ async function main() {
           ? `${req.title} (${req.placeholder})`
           : (req.title ?? "Input");
         showInputDialog(title, undefined, (value) => {
-          if (value !== undefined) {
-            send({ type: "extension_ui_response", id, value });
-          } else {
+          if (value === undefined) {
             send({ type: "extension_ui_response", id, cancelled: true });
+          } else {
+            send({ type: "extension_ui_response", id, value });
           }
         });
         break;
@@ -433,16 +419,16 @@ async function main() {
       case "editor": {
         const prefill = req.prefill?.replace(/\n/g, " ");
         showInputDialog(req.title ?? "Editor", prefill, (value) => {
-          if (value !== undefined) {
-            send({ type: "extension_ui_response", id, value });
-          } else {
+          if (value === undefined) {
             send({ type: "extension_ui_response", id, cancelled: true });
+          } else {
+            send({ type: "extension_ui_response", id, value });
           }
         });
         break;
       }
 
-      // Fire-and-forget methods: display as notification
+      
       case "notify": {
         const notifyType = (req.notifyType as string) ?? "info";
         const color = notifyType === "error" ? RED : notifyType === "warning" ? YELLOW : MAGENTA;
@@ -479,7 +465,7 @@ async function main() {
     }
   }
 
-  // -- Slash commands (local, not sent to agent) --
+  
 
   function handleSlashCommand(cmd: string): boolean {
     switch (cmd) {
@@ -529,7 +515,7 @@ async function main() {
     }
   }
 
-  // -- Process agent stdout --
+  
 
   function handleAgentLine(line: string): void {
     let data: Record<string, unknown>;
@@ -618,7 +604,7 @@ async function main() {
     }
   });
 
-  // -- User input --
+  
 
   promptInput.input.onSubmit = (value) => {
     const trimmed = value.trim();
@@ -649,7 +635,7 @@ async function main() {
     }
   };
 
-  // -- Agent exit --
+  
 
   agent.on("exit", (code) => {
     tui.stop();
@@ -658,7 +644,7 @@ async function main() {
     process.exit(code ?? 0);
   });
 
-  // -- Start --
+  
 
   outputLog.append(`${BOLD}RPC Chat${RESET}`);
   outputLog.append(

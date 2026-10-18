@@ -1,14 +1,4 @@
-/**
- * Todo Extension - Demonstrates state management via session entries
- *
- * This extension:
- * - Registers a `todo` tool for the LLM to manage todos
- * - Registers a `/todos` command for users to view the list
- *
- * State is stored in tool result details (not external files), which allows
- * proper branching - when you branch, the todo state is automatically
- * correct for that point in history.
- */
+
 
 import { StringEnum } from "@msa/ai";
 import type { ExtensionAPI, ExtensionContext, Theme } from "@msa/coding-agent";
@@ -34,9 +24,7 @@ const TodoParams = Type.Object({
   id: Type.Optional(Type.Number({ description: "Todo ID (for toggle)" })),
 });
 
-/**
- * UI component for the /todos command
- */
+
 class TodoListComponent {
   private todos: Todo[];
   private theme: Theme;
@@ -107,14 +95,11 @@ class TodoListComponent {
 }
 
 export default function (msa: ExtensionAPI) {
-  // In-memory state (reconstructed from session on load)
+  
   let todos: Todo[] = [];
   let nextId = 1;
 
-  /**
-   * Reconstruct state from session entries.
-   * Scans tool results for this tool and applies them in order.
-   */
+  
   const reconstructState = (ctx: ExtensionContext) => {
     todos = [];
     nextId = 1;
@@ -132,11 +117,11 @@ export default function (msa: ExtensionAPI) {
     }
   };
 
-  // Reconstruct state on session events
+  
   msa.on("session_start", async (_event, ctx) => reconstructState(ctx));
   msa.on("session_tree", async (_event, ctx) => reconstructState(ctx));
 
-  // Register the todo tool for the LLM
+  
   msa.registerTool({
     name: "todo",
     label: "Todo",
@@ -297,7 +282,7 @@ export default function (msa: ExtensionAPI) {
     },
   });
 
-  // Register the /todos command for users
+  
   msa.registerCommand("todos", {
     description: "Show all todos on the current branch",
     handler: async (_args, ctx) => {

@@ -1,11 +1,4 @@
-/**
- * Dynamic Tools Extension
- *
- * Demonstrates registering tools after session initialization.
- *
- * - Registers one tool during session_start
- * - Registers additional tools at runtime via /add-echo-tool <name>
- */
+
 
 import type { ExtensionAPI } from "@msa/coding-agent";
 import { Type } from "typebox";

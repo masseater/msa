@@ -1,16 +1,4 @@
-/**
- * Plan Mode Extension
- *
- * Read-only exploration mode for safe code analysis.
- * When enabled, built-in write tools are disabled.
- *
- * Features:
- * - /plan command or Ctrl+Alt+P to toggle
- * - Bash restricted to allowlisted read-only commands
- * - Extracts numbered plan steps from "Plan:" sections
- * - [DONE:n] markers to complete steps during execution
- * - Progress tracking widget during execution
- */
+
 
 import type { AgentMessage } from "@msa/agent-core";
 import type { AssistantMessage, TextContent } from "@msa/ai";
@@ -19,7 +7,7 @@ import { Key } from "@msa/tui";
 
 import { extractTodoItems, isSafeCommand, markCompletedSteps, type TodoItem } from "./utils.ts";
 
-// Tools
+
 const PLAN_MODE_TOOLS = ["read", "bash", "grep", "find", "ls", "questionnaire"];
 const NORMAL_MODE_TOOLS = ["read", "bash", "edit", "write"];
 const PLAN_MODE_DISABLED_TOOLS = new Set<string>(["edit", "write"]);
@@ -32,12 +20,12 @@ interface PlanModeState {
   toolsBeforePlanMode?: string[];
 }
 
-// Type guard for assistant messages
+
 function isAssistantMessage(m: AgentMessage): m is AssistantMessage {
   return m.role === "assistant" && Array.isArray(m.content);
 }
 
-// Extract text content from an assistant message
+
 function getTextContent(message: AssistantMessage): string {
   return message.content
     .filter((block): block is TextContent => block.type === "text")
@@ -58,7 +46,7 @@ export default function planModeExtension(msa: ExtensionAPI): void {
   });
 
   function updateStatus(ctx: ExtensionContext): void {
-    // Footer status
+    
     if (executionMode && todoItems.length > 0) {
       const completed = todoItems.filter((t) => t.completed).length;
       ctx.ui.setStatus(
@@ -71,7 +59,7 @@ export default function planModeExtension(msa: ExtensionAPI): void {
       ctx.ui.setStatus("plan-mode", undefined);
     }
 
-    // Widget showing todo list
+    
     if (executionMode && todoItems.length > 0) {
       const lines = todoItems.map((item) => {
         if (item.completed) {
@@ -167,7 +155,7 @@ export default function planModeExtension(msa: ExtensionAPI): void {
     handler: async (ctx) => togglePlanMode(ctx),
   });
 
-  // Block destructive bash commands in plan mode
+  
   msa.on("tool_call", async (event) => {
     if (!planModeEnabled || event.toolName !== "bash") return;
 
@@ -181,7 +169,7 @@ export default function planModeExtension(msa: ExtensionAPI): void {
     return undefined;
   });
 
-  // Filter out stale plan mode context when not in plan mode
+  
   msa.on("context", async (event) => {
     if (planModeEnabled) return;
 
@@ -205,9 +193,9 @@ export default function planModeExtension(msa: ExtensionAPI): void {
     };
   });
 
-  // Inject plan/execution context before a user prompt. Runs started by custom messages, such as
-  // background task notifications, skip it: the context from the last prompt is still in the
-  // conversation, and adding it again on every notification would only repeat it.
+  
+  
+  
   msa.on("before_agent_start", async (event) => {
     if (event.messageType !== "user") return;
 
@@ -259,7 +247,7 @@ After completing a step, include a [DONE:n] tag in your response.`,
     return undefined;
   });
 
-  // Track progress after each turn
+  
   msa.on("turn_end", async (event, ctx) => {
     if (!executionMode || todoItems.length === 0) return;
     if (!isAssistantMessage(event.message)) return;
@@ -271,9 +259,9 @@ After completing a step, include a [DONE:n] tag in your response.`,
     persistState();
   });
 
-  // Handle plan completion and plan mode UI
+  
   msa.on("agent_end", async (event, ctx) => {
-    // Check if execution is complete
+    
     if (executionMode && todoItems.length > 0) {
       if (todoItems.every((t) => t.completed)) {
         const completedList = todoItems.map((t) => `~~${t.text}~~`).join("\n");
@@ -288,14 +276,14 @@ After completing a step, include a [DONE:n] tag in your response.`,
         executionMode = false;
         todoItems = [];
         updateStatus(ctx);
-        persistState(); // Save cleared state so resume doesn't restore old execution mode
+        persistState(); 
       }
       return;
     }
 
     if (!planModeEnabled || !ctx.hasUI) return;
 
-    // Extract todos from last assistant message
+    
     const lastAssistant = [...event.messages].reverse().find(isAssistantMessage);
     if (lastAssistant) {
       const extracted = extractTodoItems(getTextContent(lastAssistant));
@@ -307,7 +295,7 @@ After completing a step, include a [DONE:n] tag in your response.`,
     if (todoItems.length === 0) return;
     persistState();
 
-    // Show plan steps and prompt for next action
+    
     const todoListText = todoItems.map((t, i) => `${i + 1}. ☐ ${t.text}`).join("\n");
     const planTodoListMessage = {
       customType: "plan-todo-list",
@@ -353,7 +341,7 @@ After completing a step, include a [DONE:n] tag in your response.`;
     }
   });
 
-  // Restore state on session start/resume
+  
   msa.on("session_start", async (_event, ctx) => {
     if (msa.getFlag("plan") === true) {
       planModeEnabled = true;
@@ -361,7 +349,7 @@ After completing a step, include a [DONE:n] tag in your response.`;
 
     const entries = ctx.sessionManager.getEntries();
 
-    // Restore persisted state
+    
     const planModeEntry = entries
       .filter(
         (e: { type: string; customType?: string }) =>
@@ -376,11 +364,11 @@ After completing a step, include a [DONE:n] tag in your response.`;
       toolsBeforePlanMode = planModeEntry.data.toolsBeforePlanMode ?? toolsBeforePlanMode;
     }
 
-    // On resume: re-scan messages to rebuild completion state
-    // Only scan messages AFTER the last "plan-mode-execute" to avoid picking up [DONE:n] from previous plans
+    
+    
     const isResume = planModeEntry !== undefined;
     if (isResume && executionMode && todoItems.length > 0) {
-      // Find the index of the last plan-mode-execute entry (marks when current execution started)
+      
       let executeIndex = -1;
       for (let i = entries.length - 1; i >= 0; i--) {
         const entry = entries[i] as { type: string; customType?: string };
@@ -390,7 +378,7 @@ After completing a step, include a [DONE:n] tag in your response.`;
         }
       }
 
-      // Only scan messages after the execute marker
+      
       const messages: AssistantMessage[] = [];
       for (const entry of entries.slice(executeIndex + 1)) {
         if (

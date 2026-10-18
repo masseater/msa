@@ -1,20 +1,4 @@
-/**
- * Minimal Mode Example - Demonstrates a "minimal" tool display mode
- *
- * This extension overrides built-in tools to provide custom rendering:
- * - Collapsed mode: Only shows the tool call (command/path), no output
- * - Expanded mode: Shows full output like the built-in renderers
- *
- * This demonstrates how a "minimal mode" could work, where ctrl+o cycles through:
- * - Standard: Shows truncated output (current default)
- * - Expanded: Shows full output (current expanded)
- * - Minimal: Shows only tool call, no output (this extension's collapsed mode)
- *
- * Usage:
- *   msa -e ./minimal-mode.ts
- *
- * Then use ctrl+o to toggle between minimal (collapsed) and full (expanded) views.
- */
+
 
 import { homedir } from "os";
 
@@ -31,9 +15,7 @@ import {
 } from "@msa/coding-agent";
 import { Text } from "@msa/tui";
 
-/**
- * Shorten a path by replacing home directory with ~
- */
+
 function shortenPath(path: string): string {
   const home = homedir();
   if (path.startsWith(home)) {
@@ -57,9 +39,9 @@ function createBuiltInTools(cwd: string) {
 export default function (msa: ExtensionAPI) {
   const tools = createBuiltInTools(process.cwd());
 
-  // =========================================================================
-  // Read Tool
-  // =========================================================================
+  
+  
+  
   msa.registerTool({
     ...tools.read,
 
@@ -76,12 +58,12 @@ export default function (msa: ExtensionAPI) {
     },
 
     renderResult(result, { expanded }, theme, _context) {
-      // Minimal mode: show nothing in collapsed state
+      
       if (!expanded) {
         return new Text("", 0, 0);
       }
 
-      // Expanded mode: show full output
+      
       const textContent = result.content.find((c) => c.type === "text");
       if (!textContent || textContent.type !== "text") {
         return new Text("", 0, 0);
@@ -93,9 +75,9 @@ export default function (msa: ExtensionAPI) {
     },
   });
 
-  // =========================================================================
-  // Bash Tool
-  // =========================================================================
+  
+  
+  
   msa.registerTool({
     ...tools.bash,
 
@@ -108,12 +90,12 @@ export default function (msa: ExtensionAPI) {
     },
 
     renderResult(result, { expanded }, theme, _context) {
-      // Minimal mode: show nothing in collapsed state
+      
       if (!expanded) {
         return new Text("", 0, 0);
       }
 
-      // Expanded mode: show full output
+      
       const textContent = result.content.find((c) => c.type === "text");
       if (!textContent || textContent.type !== "text") {
         return new Text("", 0, 0);
@@ -133,9 +115,9 @@ export default function (msa: ExtensionAPI) {
     },
   });
 
-  // =========================================================================
-  // Write Tool
-  // =========================================================================
+  
+  
+  
   msa.registerTool({
     ...tools.write,
 
@@ -153,12 +135,12 @@ export default function (msa: ExtensionAPI) {
     },
 
     renderResult(result, { expanded }, theme, _context) {
-      // Minimal mode: show nothing (file was written)
+      
       if (!expanded) {
         return new Text("", 0, 0);
       }
 
-      // Expanded mode: show error if any
+      
       if (result.content.some((c) => c.type === "text" && c.text)) {
         const textContent = result.content.find((c) => c.type === "text");
         if (textContent?.type === "text" && textContent.text) {
@@ -170,9 +152,9 @@ export default function (msa: ExtensionAPI) {
     },
   });
 
-  // =========================================================================
-  // Edit Tool
-  // =========================================================================
+  
+  
+  
   msa.registerTool({
     ...tools.edit,
     renderShell: "default",
@@ -185,31 +167,31 @@ export default function (msa: ExtensionAPI) {
     },
 
     renderResult(result, { expanded }, theme, _context) {
-      // Minimal mode: show nothing in collapsed state
+      
       if (!expanded) {
         return new Text("", 0, 0);
       }
 
-      // Expanded mode: show diff or error
+      
       const textContent = result.content.find((c) => c.type === "text");
       if (!textContent || textContent.type !== "text") {
         return new Text("", 0, 0);
       }
 
-      // For errors, show the error message
+      
       const text = textContent.text;
       if (text.includes("Error") || text.includes("error")) {
         return new Text(`\n${theme.fg("error", text)}`, 0, 0);
       }
 
-      // Otherwise show the text (would be nice to show actual diff here)
+      
       return new Text(`\n${theme.fg("toolOutput", text)}`, 0, 0);
     },
   });
 
-  // =========================================================================
-  // Find Tool
-  // =========================================================================
+  
+  
+  
   msa.registerTool({
     ...tools.find,
 
@@ -229,7 +211,7 @@ export default function (msa: ExtensionAPI) {
 
     renderResult(result, { expanded }, theme, _context) {
       if (!expanded) {
-        // Minimal: just show count
+        
         const textContent = result.content.find((c) => c.type === "text");
         if (textContent?.type === "text") {
           const count = textContent.text.trim().split("\n").filter(Boolean).length;
@@ -240,7 +222,7 @@ export default function (msa: ExtensionAPI) {
         return new Text("", 0, 0);
       }
 
-      // Expanded: show full results
+      
       const textContent = result.content.find((c) => c.type === "text");
       if (!textContent || textContent.type !== "text") {
         return new Text("", 0, 0);
@@ -256,9 +238,9 @@ export default function (msa: ExtensionAPI) {
     },
   });
 
-  // =========================================================================
-  // Grep Tool
-  // =========================================================================
+  
+  
+  
   msa.registerTool({
     ...tools.grep,
 
@@ -282,7 +264,7 @@ export default function (msa: ExtensionAPI) {
 
     renderResult(result, { expanded }, theme, _context) {
       if (!expanded) {
-        // Minimal: just show match count
+        
         const textContent = result.content.find((c) => c.type === "text");
         if (textContent?.type === "text") {
           const count = textContent.text.trim().split("\n").filter(Boolean).length;
@@ -293,7 +275,7 @@ export default function (msa: ExtensionAPI) {
         return new Text("", 0, 0);
       }
 
-      // Expanded: show full results
+      
       const textContent = result.content.find((c) => c.type === "text");
       if (!textContent || textContent.type !== "text") {
         return new Text("", 0, 0);
@@ -309,9 +291,9 @@ export default function (msa: ExtensionAPI) {
     },
   });
 
-  // =========================================================================
-  // Ls Tool
-  // =========================================================================
+  
+  
+  
   msa.registerTool({
     ...tools.ls,
 
@@ -329,7 +311,7 @@ export default function (msa: ExtensionAPI) {
 
     renderResult(result, { expanded }, theme, _context) {
       if (!expanded) {
-        // Minimal: just show entry count
+        
         const textContent = result.content.find((c) => c.type === "text");
         if (textContent?.type === "text") {
           const count = textContent.text.trim().split("\n").filter(Boolean).length;
@@ -340,7 +322,7 @@ export default function (msa: ExtensionAPI) {
         return new Text("", 0, 0);
       }
 
-      // Expanded: show full listing
+      
       const textContent = result.content.find((c) => c.type === "text");
       if (!textContent || textContent.type !== "text") {
         return new Text("", 0, 0);

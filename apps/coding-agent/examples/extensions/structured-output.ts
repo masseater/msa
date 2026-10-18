@@ -1,9 +1,4 @@
-/**
- * Structured Output Tool
- *
- * Demonstrates `terminate: true` so the agent can end on a tool call
- * without paying for an extra follow-up LLM turn.
- */
+
 
 import { defineTool, type ExtensionAPI } from "@msa/coding-agent";
 import { Text } from "@msa/tui";

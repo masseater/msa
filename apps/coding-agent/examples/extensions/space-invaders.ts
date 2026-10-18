@@ -1,7 +1,4 @@
-/**
- * Space Invaders game extension - play with /invaders command
- * Uses Kitty keyboard protocol for smooth movement (press/release detection)
- */
+
 
 import type { ExtensionAPI } from "@msa/coding-agent";
 import { isKeyRelease, Key, matchesKey, visibleWidth } from "@msa/tui";
@@ -17,17 +14,17 @@ const ALIEN_START_Y = 2;
 type Point = { x: number; y: number };
 
 interface Bullet extends Point {
-  direction: -1 | 1; // -1 = up (player), 1 = down (alien)
+  direction: -1 | 1; 
 }
 
 interface Alien extends Point {
-  type: 0 | 1 | 2; // different alien types
+  type: 0 | 1 | 2; 
   alive: boolean;
 }
 
 interface Shield {
   x: number;
-  segments: boolean[][]; // 4x3 grid of destructible segments
+  segments: boolean[][]; 
 }
 
 interface GameState {
@@ -119,7 +116,7 @@ class SpaceInvadersComponent {
   private fireCooldown = 0;
   private playerMoveCounter = 0;
 
-  // Opt-in to key release events for smooth movement
+  
   wantsKeyRelease = true;
 
   constructor(
@@ -152,7 +149,7 @@ class SpaceInvadersComponent {
   }
 
   private tick(): void {
-    // Player movement (smooth, every other tick)
+    
     this.playerMoveCounter++;
     if (this.playerMoveCounter >= 2) {
       this.playerMoveCounter = 0;
@@ -164,10 +161,10 @@ class SpaceInvadersComponent {
       }
     }
 
-    // Fire cooldown
+    
     if (this.fireCooldown > 0) this.fireCooldown--;
 
-    // Player shooting
+    
     if (this.keys.fire && this.fireCooldown === 0) {
       const playerBullets = this.state.bullets.filter((b) => b.direction === -1);
       if (playerBullets.length < 2) {
@@ -176,30 +173,30 @@ class SpaceInvadersComponent {
       }
     }
 
-    // Move bullets
+    
     this.state.bullets = this.state.bullets.filter((bullet) => {
       bullet.y += bullet.direction;
       return bullet.y >= 0 && bullet.y < GAME_HEIGHT;
     });
 
-    // Alien movement
+    
     this.state.alienMoveCounter++;
     if (this.state.alienMoveCounter >= this.state.alienMoveDelay) {
       this.state.alienMoveCounter = 0;
       this.moveAliens();
     }
 
-    // Alien shooting
+    
     this.state.alienShootCounter++;
     if (this.state.alienShootCounter >= 30) {
       this.state.alienShootCounter = 0;
       this.alienShoot();
     }
 
-    // Collision detection
+    
     this.checkCollisions();
 
-    // Check victory
+    
     if (this.state.aliens.every((a) => !a.alive)) {
       this.state.victory = true;
     }
@@ -210,7 +207,7 @@ class SpaceInvadersComponent {
     if (aliveAliens.length === 0) return;
 
     if (this.state.alienDropping) {
-      // Drop down
+      
       for (const alien of aliveAliens) {
         alien.y++;
         if (alien.y >= PLAYER_Y - 1) {
@@ -220,7 +217,7 @@ class SpaceInvadersComponent {
       }
       this.state.alienDropping = false;
     } else {
-      // Check if we need to change direction
+      
       const minX = Math.min(...aliveAliens.map((a) => a.x));
       const maxX = Math.max(...aliveAliens.map((a) => a.x));
 
@@ -231,14 +228,14 @@ class SpaceInvadersComponent {
         this.state.alienDirection *= -1;
         this.state.alienDropping = true;
       } else {
-        // Move horizontally
+        
         for (const alien of aliveAliens) {
           alien.x += this.state.alienDirection;
         }
       }
     }
 
-    // Speed up as fewer aliens remain
+    
     const aliveCount = aliveAliens.length;
     if (aliveCount <= 5) {
       this.state.alienMoveDelay = 1;
@@ -253,7 +250,7 @@ class SpaceInvadersComponent {
     const aliveAliens = this.state.aliens.filter((a) => a.alive);
     if (aliveAliens.length === 0) return;
 
-    // Find bottom-most alien in each column
+    
     const columns = new Map<number, Alien>();
     for (const alien of aliveAliens) {
       const existing = columns.get(alien.x);
@@ -262,7 +259,7 @@ class SpaceInvadersComponent {
       }
     }
 
-    // Random column shoots
+    
     const shooters = Array.from(columns.values());
     if (shooters.length > 0 && this.state.bullets.filter((b) => b.direction === 1).length < 3) {
       const shooter = shooters[Math.floor(Math.random() * shooters.length)];
@@ -274,7 +271,7 @@ class SpaceInvadersComponent {
     const bulletsToRemove = new Set<Bullet>();
 
     for (const bullet of this.state.bullets) {
-      // Player bullets hitting aliens
+      
       if (bullet.direction === -1) {
         for (const alien of this.state.aliens) {
           if (alien.alive && Math.abs(bullet.x - alien.x) <= 1 && bullet.y === alien.y) {
@@ -290,7 +287,7 @@ class SpaceInvadersComponent {
         }
       }
 
-      // Alien bullets hitting player
+      
       if (bullet.direction === 1) {
         if (Math.abs(bullet.x - this.state.player.x) <= 1 && bullet.y === PLAYER_Y) {
           bulletsToRemove.add(bullet);
@@ -301,7 +298,7 @@ class SpaceInvadersComponent {
         }
       }
 
-      // Bullets hitting shields
+      
       for (const shield of this.state.shields) {
         const relX = bullet.x - shield.x;
         const relY = bullet.y - (PLAYER_Y - 5);
@@ -321,7 +318,7 @@ class SpaceInvadersComponent {
   handleInput(data: string): void {
     const released = isKeyRelease(data);
 
-    // Pause handling
+    
     if (this.paused && !released) {
       if (matchesKey(data, Key.escape) || data === "q" || data === "Q") {
         this.dispose();
@@ -333,7 +330,7 @@ class SpaceInvadersComponent {
       return;
     }
 
-    // ESC to pause and save
+    
     if (!released && matchesKey(data, Key.escape)) {
       this.dispose();
       this.onSave(this.state);
@@ -341,7 +338,7 @@ class SpaceInvadersComponent {
       return;
     }
 
-    // Q to quit without saving
+    
     if (!released && (data === "q" || data === "Q")) {
       this.dispose();
       this.onSave(null);
@@ -349,7 +346,7 @@ class SpaceInvadersComponent {
       return;
     }
 
-    // Movement keys (track press/release state)
+    
     if (matchesKey(data, Key.left) || data === "a" || data === "A" || matchesKey(data, "a")) {
       this.keys.left = !released;
     }
@@ -357,7 +354,7 @@ class SpaceInvadersComponent {
       this.keys.right = !released;
     }
 
-    // Fire key
+    
     if (
       matchesKey(data, Key.space) ||
       data === " " ||
@@ -368,7 +365,7 @@ class SpaceInvadersComponent {
       this.keys.fire = !released;
     }
 
-    // Restart on game over or victory
+    
     if (!released && (this.state.gameOver || this.state.victory)) {
       if (data === "r" || data === "R" || data === " ") {
         const highScore = this.state.highScore;
@@ -393,7 +390,7 @@ class SpaceInvadersComponent {
 
     const lines: string[] = [];
 
-    // Colors
+    
     const dim = (s: string) => `\x1b[2m${s}\x1b[22m`;
     const green = (s: string) => `\x1b[32m${s}\x1b[0m`;
     const red = (s: string) => `\x1b[31m${s}\x1b[0m`;
@@ -411,10 +408,10 @@ class SpaceInvadersComponent {
       return dim(" │") + content + " ".repeat(padding) + dim("│");
     };
 
-    // Top border
+    
     lines.push(this.padLine(dim(` ╭${"─".repeat(boxWidth)}╮`), width));
 
-    // Header
+    
     const title = `${bold(green("SPACE INVADERS"))}`;
     const scoreText = `Score: ${bold(yellow(String(this.state.score)))}`;
     const highText = `Hi: ${bold(yellow(String(this.state.highScore)))}`;
@@ -423,17 +420,17 @@ class SpaceInvadersComponent {
     const header = `${title} │ ${scoreText} │ ${highText} │ ${levelText} │ ${livesText}`;
     lines.push(this.padLine(boxLine(header), width));
 
-    // Separator
+    
     lines.push(this.padLine(dim(` ├${"─".repeat(boxWidth)}┤`), width));
 
-    // Game grid
+    
     for (let y = 0; y < GAME_HEIGHT; y++) {
       let row = "";
       for (let x = 0; x < GAME_WIDTH; x++) {
         let char = " ";
         let colored = false;
 
-        // Check aliens
+        
         for (const alien of this.state.aliens) {
           if (alien.alive && alien.y === y && Math.abs(alien.x - x) <= 1) {
             const sprites = [
@@ -448,7 +445,7 @@ class SpaceInvadersComponent {
           }
         }
 
-        // Check shields
+        
         if (!colored) {
           for (const shield of this.state.shields) {
             const relX = x - shield.x;
@@ -463,7 +460,7 @@ class SpaceInvadersComponent {
           }
         }
 
-        // Check player
+        
         if (!colored && y === PLAYER_Y && Math.abs(x - this.state.player.x) <= 1) {
           if (x === this.state.player.x) {
             char = white("▲");
@@ -473,7 +470,7 @@ class SpaceInvadersComponent {
           colored = true;
         }
 
-        // Check bullets
+        
         if (!colored) {
           for (const bullet of this.state.bullets) {
             if (bullet.x === x && bullet.y === y) {
@@ -489,10 +486,10 @@ class SpaceInvadersComponent {
       lines.push(this.padLine(dim(" │") + row + dim("│"), width));
     }
 
-    // Separator
+    
     lines.push(this.padLine(dim(` ├${"─".repeat(boxWidth)}┤`), width));
 
-    // Footer
+    
     let footer: string;
     if (this.paused) {
       footer = `${yellow(bold("PAUSED"))} Press any key to continue, ${bold("Q")} to quit`;
@@ -505,7 +502,7 @@ class SpaceInvadersComponent {
     }
     lines.push(this.padLine(boxLine(footer), width));
 
-    // Bottom border
+    
     lines.push(this.padLine(dim(` ╰${"─".repeat(boxWidth)}╯`), width));
 
     this.cachedLines = lines;
@@ -541,7 +538,7 @@ export default function (msa: ExtensionAPI) {
         return;
       }
 
-      // Load saved state from session
+      
       const entries = ctx.sessionManager.getEntries();
       let savedState: GameState | undefined;
       for (const entry of entries.toReversed()) {

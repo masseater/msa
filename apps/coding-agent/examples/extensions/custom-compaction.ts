@@ -1,17 +1,4 @@
-/**
- * Custom Compaction Extension
- *
- * Replaces the default compaction behavior with a full summary of the entire context.
- * Instead of keeping the last 20k tokens of conversation turns, this extension:
- * 1. Summarizes ALL messages (messagesToSummarize + turnPrefixMessages)
- * 2. Discards all old turns completely, keeping only the summary
- *
- * This example also demonstrates using a different model (Gemini Flash) for summarization,
- * which can be cheaper/faster than the main conversation model.
- *
- * Usage:
- *   msa --extension examples/extensions/custom-compaction.ts
- */
+
 
 import { uuidv7 } from "@msa/ai";
 import type { ExtensionAPI } from "@msa/coding-agent";
@@ -30,14 +17,14 @@ export default function (msa: ExtensionAPI) {
       previousSummary,
     } = preparation;
 
-    // Use Gemini Flash for summarization (cheaper/faster than most conversation models)
+    
     const model = ctx.modelRegistry.find("opencode", "gemini-3.5-flash");
     if (!model) {
       ctx.ui.notify(`Could not find Gemini Flash model, using default compaction`, "warning");
       return;
     }
 
-    // Combine all messages for full summary
+    
     const allMessages = [...messagesToSummarize, ...turnPrefixMessages];
 
     ctx.ui.notify(
@@ -45,15 +32,15 @@ export default function (msa: ExtensionAPI) {
       "info",
     );
 
-    // Convert messages to readable text format
+    
     const conversationText = serializeConversation(convertToLlm(allMessages));
 
-    // Include previous summary context if available
+    
     const previousContext = previousSummary
       ? `\n\nPrevious session summary for context:\n${previousSummary}`
       : "";
 
-    // Build messages that ask for a comprehensive summary
+    
     const summaryMessages = [
       {
         role: "user" as const,
@@ -83,7 +70,7 @@ ${conversationText}
     ];
 
     try {
-      // Pass signal to honor abort requests (e.g., user cancels compaction)
+      
       const response = await ctx.modelRegistry.complete(
         model,
         { messages: summaryMessages },
@@ -106,8 +93,8 @@ ${conversationText}
         return;
       }
 
-      // Return compaction content - SessionManager adds id/parentId
-      // Use firstKeptEntryId from preparation to keep recent messages
+      
+      
       return {
         compaction: {
           summary,
@@ -119,7 +106,7 @@ ${conversationText}
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       ctx.ui.notify(`Compaction failed: ${message}`, "error");
-      // Fall back to default compaction on error
+      
       return;
     }
   });

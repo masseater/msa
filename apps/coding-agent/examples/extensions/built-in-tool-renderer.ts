@@ -1,29 +1,4 @@
-/**
- * Built-in Tool Renderer Example - Custom rendering for built-in tools
- *
- * Demonstrates how to override the rendering of built-in tools (read, bash,
- * edit, write) without changing their behavior. Each tool is re-registered
- * with the same name, delegating execution to the original implementation
- * while providing compact custom renderCall/renderResult functions.
- *
- * This is useful for users who prefer more concise tool output, or who want
- * to highlight specific information (e.g., showing only the diff stats for
- * edit, or just the exit code for bash).
- *
- * How it works:
- * - registerTool() with the same name as a built-in replaces it entirely
- * - We create the original definitions via createReadToolDefinition(), etc.
- *   and override only their renderers
- * - renderCall() controls what's shown when the tool is invoked
- * - renderResult() controls what's shown after execution completes
- * - renderShell: "self" lets a tool render its own outer shell instead of
- *   using the default boxed shell from ToolExecutionComponent
- * - The `expanded` flag in renderResult indicates whether the user has
- *   toggled the tool output open (via ctrl+e or clicking)
- *
- * Usage:
- *   msa -e ./built-in-tool-renderer.ts
- */
+
 
 import type {
   BashToolDetails,
@@ -42,7 +17,7 @@ import { Text } from "@msa/tui";
 export default function (msa: ExtensionAPI) {
   const cwd = process.cwd();
 
-  // --- Read tool: show path and line count ---
+  
   const originalRead = createReadToolDefinition(cwd);
   msa.registerTool({
     ...originalRead,
@@ -94,7 +69,7 @@ export default function (msa: ExtensionAPI) {
     },
   });
 
-  // --- Bash tool: show command and exit code ---
+  
   const originalBash = createBashToolDefinition(cwd);
   msa.registerTool({
     ...originalBash,
@@ -117,7 +92,7 @@ export default function (msa: ExtensionAPI) {
       const output = content?.type === "text" ? content.text : "";
 
       const exitCodeText = output.match(/exit code: (\d+)/)?.[1];
-      const exitCode = exitCodeText !== undefined ? parseInt(exitCodeText, 10) : null;
+      const exitCode = exitCodeText === undefined ? null : parseInt(exitCodeText, 10);
       const lineCount = output.split("\n").filter((l) => l.trim()).length;
 
       let text = "";
@@ -146,7 +121,7 @@ export default function (msa: ExtensionAPI) {
     },
   });
 
-  // --- Edit tool: show path and diff stats ---
+  
   const originalEdit = createEditToolDefinition(cwd);
   msa.registerTool({
     ...originalEdit,
@@ -171,7 +146,7 @@ export default function (msa: ExtensionAPI) {
         return new Text(theme.fg("success", "Applied"), 0, 0);
       }
 
-      // Count additions and removals from the diff
+      
       const diffLines = details.diff.split("\n");
       let additions = 0;
       let removals = 0;
@@ -203,7 +178,7 @@ export default function (msa: ExtensionAPI) {
     },
   });
 
-  // --- Write tool: show path and size ---
+  
   const originalWrite = createWriteToolDefinition(cwd);
   msa.registerTool({
     ...originalWrite,

@@ -1,19 +1,29 @@
-import { appendFileSync } from "node:fs";
-import { join } from "node:path";
+import { Effect, FileSystem, ManagedRuntime, Path } from "effect";
+
+import { NodeServices } from "@effect/platform-node";
 
 import { CONFIG_DIR_NAME, type ExtensionAPI } from "@msa/coding-agent";
 
+const runtime = ManagedRuntime.make(NodeServices.layer);
+
+const appendPayloadLog = (cwd: string, line: string): void => {
+  runtime.runSync(
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      yield* fs.writeFileString(path.join(cwd, CONFIG_DIR_NAME, "provider-payload.log"), line, {
+        flag: "a",
+      });
+    }).pipe(Effect.orDie),
+  );
+};
+
 export default function (msa: ExtensionAPI) {
   msa.on("before_provider_request", (event, ctx) => {
-    const logFile = join(ctx.cwd, CONFIG_DIR_NAME, "provider-payload.log");
-    appendFileSync(logFile, `${JSON.stringify(event.payload, null, 2)}\n\n`, "utf8");
-
-    // Optional: replace the payload instead of only logging it.
-    // return { ...event.payload, temperature: 0 };
+    appendPayloadLog(ctx.cwd, `${JSON.stringify(event.payload, null, 2)}\n\n`);
   });
 
   msa.on("after_provider_response", (event, ctx) => {
-    const logFile = join(ctx.cwd, CONFIG_DIR_NAME, "provider-payload.log");
-    appendFileSync(logFile, `[${event.status}] ${JSON.stringify(event.headers)}\n\n`, "utf8");
+    appendPayloadLog(ctx.cwd, `[${event.status}] ${JSON.stringify(event.headers)}\n\n`);
   });
 }

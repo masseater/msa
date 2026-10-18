@@ -1,6 +1,4 @@
-/**
- * Snake game extension - play snake with /snake command
- */
+
 
 import type { ExtensionAPI } from "@msa/coding-agent";
 import { matchesKey, visibleWidth } from "@msa/tui";
@@ -71,11 +69,11 @@ class SnakeComponent {
   ) {
     this.tui = tui;
     if (savedState && !savedState.gameOver) {
-      // Resume from saved state, start paused
+      
       this.state = savedState;
       this.paused = true;
     } else {
-      // New game or saved game was over
+      
       this.state = createInitialState();
       if (savedState) {
         this.state.highScore = savedState.highScore;
@@ -98,10 +96,10 @@ class SnakeComponent {
   }
 
   private tick(): void {
-    // Apply queued direction change
+    
     this.state.direction = this.state.nextDirection;
 
-    // Calculate new head position
+    
     const head = this.state.snake[0];
     if (head === undefined) return;
     let newHead: Point;
@@ -121,22 +119,22 @@ class SnakeComponent {
         break;
     }
 
-    // Check wall collision
+    
     if (newHead.x < 0 || newHead.x >= GAME_WIDTH || newHead.y < 0 || newHead.y >= GAME_HEIGHT) {
       this.state.gameOver = true;
       return;
     }
 
-    // Check self collision
+    
     if (this.state.snake.some((s) => s.x === newHead.x && s.y === newHead.y)) {
       this.state.gameOver = true;
       return;
     }
 
-    // Move snake
+    
     this.state.snake.unshift(newHead);
 
-    // Check food collision
+    
     if (newHead.x === this.state.food.x && newHead.y === this.state.food.y) {
       this.state.score += 10;
       if (this.state.score > this.state.highScore) {
@@ -149,21 +147,21 @@ class SnakeComponent {
   }
 
   handleInput(data: string): void {
-    // If paused (resuming), wait for any key
+    
     if (this.paused) {
       if (matchesKey(data, "escape") || data === "q" || data === "Q") {
-        // Quit without clearing save
+        
         this.dispose();
         this.onClose();
         return;
       }
-      // Any other key resumes
+      
       this.paused = false;
       this.startGame();
       return;
     }
 
-    // ESC to pause and save
+    
     if (matchesKey(data, "escape")) {
       this.dispose();
       this.onSave(this.state);
@@ -171,15 +169,15 @@ class SnakeComponent {
       return;
     }
 
-    // Q to quit without saving (clears saved state)
+    
     if (data === "q" || data === "Q") {
       this.dispose();
-      this.onSave(null); // Clear saved state
+      this.onSave(null); 
       this.onClose();
       return;
     }
 
-    // Arrow keys or WASD
+    
     if (matchesKey(data, "up") || data === "w" || data === "W") {
       if (this.state.direction !== "down") this.state.nextDirection = "up";
     } else if (matchesKey(data, "down") || data === "s" || data === "S") {
@@ -190,12 +188,12 @@ class SnakeComponent {
       if (this.state.direction !== "right") this.state.nextDirection = "left";
     }
 
-    // Restart on game over
+    
     if (this.state.gameOver && (data === "r" || data === "R" || data === " ")) {
       const highScore = this.state.highScore;
       this.state = createInitialState();
       this.state.highScore = highScore;
-      this.onSave(null); // Clear saved state on restart
+      this.onSave(null); 
       this.version++;
       this.tui.requestRender();
     }
@@ -212,12 +210,12 @@ class SnakeComponent {
 
     const lines: string[] = [];
 
-    // Each game cell is 2 chars wide to appear square (terminal cells are ~2:1 aspect)
+    
     const cellWidth = 2;
     const effectiveWidth = Math.min(GAME_WIDTH, Math.floor((width - 4) / cellWidth));
     const effectiveHeight = GAME_HEIGHT;
 
-    // Colors
+    
     const dim = (s: string) => `\x1b[2m${s}\x1b[22m`;
     const green = (s: string) => `\x1b[32m${s}\x1b[0m`;
     const red = (s: string) => `\x1b[31m${s}\x1b[0m`;
@@ -226,26 +224,26 @@ class SnakeComponent {
 
     const boxWidth = effectiveWidth * cellWidth;
 
-    // Helper to pad content inside box
+    
     const boxLine = (content: string) => {
       const contentLen = visibleWidth(content);
       const padding = Math.max(0, boxWidth - contentLen);
       return dim(" │") + content + " ".repeat(padding) + dim("│");
     };
 
-    // Top border
+    
     lines.push(this.padLine(dim(` ╭${"─".repeat(boxWidth)}╮`), width));
 
-    // Header with score
+    
     const scoreText = `Score: ${bold(yellow(String(this.state.score)))}`;
     const highText = `High: ${bold(yellow(String(this.state.highScore)))}`;
     const title = `${bold(green("SNAKE"))} │ ${scoreText} │ ${highText}`;
     lines.push(this.padLine(boxLine(title), width));
 
-    // Separator
+    
     lines.push(this.padLine(dim(` ├${"─".repeat(boxWidth)}┤`), width));
 
-    // Game grid
+    
     const head = this.state.snake[0];
     for (let y = 0; y < effectiveHeight; y++) {
       let row = "";
@@ -255,22 +253,22 @@ class SnakeComponent {
         const isFood = this.state.food.x === x && this.state.food.y === y;
 
         if (isHead) {
-          row += green("██"); // Snake head (2 chars)
+          row += green("██"); 
         } else if (isBody) {
-          row += green("▓▓"); // Snake body (2 chars)
+          row += green("▓▓"); 
         } else if (isFood) {
-          row += red("◆ "); // Food (2 chars)
+          row += red("◆ "); 
         } else {
-          row += "  "; // Empty cell (2 spaces)
+          row += "  "; 
         }
       }
       lines.push(this.padLine(dim(" │") + row + dim("│"), width));
     }
 
-    // Separator
+    
     lines.push(this.padLine(dim(` ├${"─".repeat(boxWidth)}┤`), width));
 
-    // Footer
+    
     let footer: string;
     if (this.paused) {
       footer = `${yellow(bold("PAUSED"))} Press any key to continue, ${bold("Q")} to quit`;
@@ -281,7 +279,7 @@ class SnakeComponent {
     }
     lines.push(this.padLine(boxLine(footer), width));
 
-    // Bottom border
+    
     lines.push(this.padLine(dim(` ╰${"─".repeat(boxWidth)}╯`), width));
 
     this.cachedLines = lines;
@@ -292,7 +290,7 @@ class SnakeComponent {
   }
 
   private padLine(line: string, width: number): string {
-    // Calculate visible length (strip ANSI codes)
+    
     const visibleLen = line.replace(/\x1b\[[0-9;]*m/g, "").length;
     const padding = Math.max(0, width - visibleLen);
     return line + " ".repeat(padding);
@@ -318,7 +316,7 @@ export default function (msa: ExtensionAPI) {
         return;
       }
 
-      // Load saved state from session
+      
       const entries = ctx.sessionManager.getEntries();
       let savedState: GameState | undefined;
       for (const entry of entries.toReversed()) {
@@ -333,7 +331,7 @@ export default function (msa: ExtensionAPI) {
           tui,
           () => done(undefined),
           (state) => {
-            // Save or clear state
+            
             msa.appendEntry(SNAKE_SAVE_TYPE, state);
           },
           savedState,
