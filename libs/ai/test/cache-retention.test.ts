@@ -240,9 +240,9 @@ describe("Cache Retention (MSA_CACHE_RETENTION)", () => {
       } catch {}
 
       expect(capturedPayload).not.toBeNull();
-      const lastMessage = capturedPayload.messages[capturedPayload.messages.length - 1];
+      const lastMessage = capturedPayload.messages.at(-1);
       expect(Array.isArray(lastMessage.content)).toBe(true);
-      const lastBlock = lastMessage.content[lastMessage.content.length - 1];
+      const lastBlock = lastMessage.content.at(-1);
       expect(lastBlock.cache_control).toEqual({ type: "ephemeral" });
     });
   });

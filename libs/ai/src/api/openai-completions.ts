@@ -282,7 +282,7 @@ function appendOpenAIReasoningDetail(
   details: OpenAIReasoningDetail[],
   detail: OpenAIReasoningDetail,
 ): void {
-  const lastDetail = details[details.length - 1];
+  const lastDetail = details.at(-1);
   if (detail.type === "reasoning.text" && lastDetail?.type === "reasoning.text") {
     lastDetail.text += detail.text;
     if (
@@ -904,7 +904,7 @@ function buildParams(
       : {}),
   };
 
-  if (compat.supportsUsageInStreaming !== false) {
+  if (compat.supportsUsageInStreaming) {
     params.stream_options = { include_usage: true };
   }
 
@@ -1240,7 +1240,7 @@ function addCacheControlToLastTool(
     return;
   }
 
-  const lastTool = tools[tools.length - 1] as ChatCompletionToolWithCacheControl;
+  const lastTool = tools.at(-1) as ChatCompletionToolWithCacheControl;
   lastTool.cache_control = cacheControl;
 }
 
@@ -1328,10 +1328,10 @@ export const convertMessages: {
         const separatorIndex = id.indexOf("|");
         const callId = id
           .slice(0, separatorIndex)
-          .replace(/[^a-zA-Z0-9_-]/gu, (char) => "_".repeat(char.length));
+          .replaceAll(/[^a-zA-Z0-9_-]/gu, (char) => "_".repeat(char.length));
         const itemId = id
           .slice(separatorIndex + 1)
-          .replace(/[^a-zA-Z0-9_-]/gu, (char) => "_".repeat(char.length));
+          .replaceAll(/[^a-zA-Z0-9_-]/gu, (char) => "_".repeat(char.length));
         const combinedId = itemId.length > 0 ? `${callId}_${itemId}` : callId;
         if (combinedId.length <= 40) {
           return combinedId;
@@ -1626,14 +1626,14 @@ function convertTools(
       };
     }
 
-    const strict = resolveJsonSchemaStrictSampling(tool, compat.supportsStrictMode !== false);
+    const strict = resolveJsonSchemaStrictSampling(tool, compat.supportsStrictMode);
     return {
       type: "function",
       function: {
         name: tool.name,
         description: tool.description,
         parameters: getJsonSchemaToolParameters(tool, strict) as Record<string, unknown>,
-        ...(compat.supportsStrictMode !== false && { strict: strict ?? false }),
+        ...(compat.supportsStrictMode && { strict: strict ?? false }),
       },
     };
   });

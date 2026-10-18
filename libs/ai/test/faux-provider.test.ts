@@ -382,8 +382,7 @@ describe("faux provider", () => {
           }),
         );
         expect(first.usage.cacheWrite).toBeGreaterThan(0);
-        context.messages.push(first);
-        context.messages.push({
+        context.messages.push(first, {
           role: "user",
           content: "follow up",
           timestamp: (yield* Clock.currentTimeMillis) + 1,
@@ -427,8 +426,7 @@ describe("faux provider", () => {
         expect(first.usage.cacheRead).toBe(0);
         expect(first.usage.cacheWrite).toBeGreaterThan(0);
 
-        context.messages.push(first);
-        context.messages.push({
+        context.messages.push(first, {
           role: "user",
           content: "follow up",
           timestamp: (yield* Clock.currentTimeMillis) + 1,
@@ -502,8 +500,7 @@ describe("faux provider", () => {
             cacheRetention: "none",
           }),
         );
-        context.messages.push(fauxAssistantMessage("first"));
-        context.messages.push({
+        context.messages.push(fauxAssistantMessage("first"), {
           role: "user",
           content: "follow up",
           timestamp: (yield* Clock.currentTimeMillis) + 1,
@@ -670,7 +667,7 @@ describe("faux provider", () => {
           "text_end",
           "error",
         ]);
-        const terminal = events[events.length - 1];
+        const terminal = events.at(-1);
         expect(terminal?.type).toBe("error");
         if (terminal?.type === "error") {
           expect(terminal.reason).toBe("error");
@@ -711,7 +708,7 @@ describe("faux provider", () => {
           "text_end",
           "error",
         ]);
-        const terminal = events[events.length - 1];
+        const terminal = events.at(-1);
         expect(terminal?.type).toBe("error");
         if (terminal?.type === "error") {
           expect(terminal.reason).toBe("aborted");

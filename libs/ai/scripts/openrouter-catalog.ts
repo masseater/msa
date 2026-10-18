@@ -37,7 +37,7 @@ function openRouterInput(values: string[] | undefined): ("text" | "image")[] {
 
 function openRouterChatModel(model: OpenRouterModelListItem): OpenRouterCatalog["chat"][number] {
   const thinkingLevelMap = getOpenRouterThinkingLevelMap(model.reasoning);
-  const useAnthropicMessages = /^anthropic\//u.test(model.id) && !model.id.endsWith(":batch");
+  const useAnthropicMessages = model.id.startsWith("anthropic/") && !model.id.endsWith(":batch");
   return {
     type: "chat",
     id: model.id,

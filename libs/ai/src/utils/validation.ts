@@ -199,7 +199,7 @@ function normalizeOptionalNulls(value: unknown, schema: JsonSchemaObject): void 
 }
 
 function formatValidationPath(error: TLocalizedValidationError): string {
-  const path = error.instancePath.replace(/^\//u, "").replace(/\//gu, ".");
+  const path = error.instancePath.replace(/^\//u, "").replaceAll("/", ".");
   const requiredProperty =
     error.keyword === "required"
       ? (error.params as { requiredProperties?: string[] }).requiredProperties?.[0]

@@ -88,7 +88,7 @@ const handleToolWithImageResult = Effect.fn("handleToolWithImageResult")(functio
 
   const textContent = secondResponse.content.find((b) => b.type === "text");
   expect(textContent).toBeTruthy();
-  if (textContent !== undefined && textContent.type === "text") {
+  if (textContent?.type === "text") {
     const lowerContent = textContent.text.toLowerCase();
     expect(lowerContent).toContain("red");
     expect(lowerContent).toContain("circle");
@@ -168,7 +168,7 @@ const handleToolWithTextAndImageResult = Effect.fn("handleToolWithTextAndImageRe
 
   const textContent = secondResponse.content.find((b) => b.type === "text");
   expect(textContent).toBeTruthy();
-  if (textContent !== undefined && textContent.type === "text") {
+  if (textContent?.type === "text") {
     const lowerContent = textContent.text.toLowerCase();
     expect(lowerContent.match(/diameter|100|pixel/u)).toBeTruthy();
     expect(lowerContent).toContain("red");

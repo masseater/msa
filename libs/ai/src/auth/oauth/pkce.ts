@@ -5,7 +5,7 @@ const base64urlEncode = (bytes: Uint8Array): string => {
   for (const byte of bytes) {
     binary += String.fromCharCode(byte);
   }
-  return btoa(binary).replace(/\+/gu, "-").replace(/\//gu, "_").replace(/=/gu, "");
+  return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
 };
 
 export const generatePKCE = (): Promise<{ verifier: string; challenge: string }> =>

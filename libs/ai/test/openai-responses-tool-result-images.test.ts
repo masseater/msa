@@ -67,8 +67,7 @@ const verifyToolResultImagesStayInFunctionCallOutput = Effect.fn(
     throw new Error("Expected tool call");
   }
 
-  context.messages.push(firstResponse);
-  context.messages.push({
+  context.messages.push(firstResponse, {
     role: "toolResult",
     toolCallId: toolCall.id,
     toolName: toolCall.name,
@@ -96,7 +95,7 @@ const verifyToolResultImagesStayInFunctionCallOutput = Effect.fn(
   const responsePayload = capturedPayload as CapturedResponsePayload | undefined;
   expect(Array.isArray(responsePayload?.input)).toBe(true);
   if (!Array.isArray(responsePayload?.input)) {
-    throw new Error("Expected payload with input array");
+    throw new TypeError("Expected payload with input array");
   }
   const responseInput = responsePayload.input;
 
@@ -113,7 +112,7 @@ const verifyToolResultImagesStayInFunctionCallOutput = Effect.fn(
 
   expect(Array.isArray(functionCallOutput.output)).toBe(true);
   if (!Array.isArray(functionCallOutput.output)) {
-    throw new Error("Expected function_call_output output to be a content array");
+    throw new TypeError("Expected function_call_output output to be a content array");
   }
 
   const outputItems = functionCallOutput.output;

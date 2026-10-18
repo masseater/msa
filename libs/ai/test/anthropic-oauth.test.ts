@@ -33,7 +33,7 @@ function getUrl(input: unknown): string {
 
 function getJsonBody(init?: RequestInit): Record<string, string> {
   if (typeof init?.body !== "string") {
-    throw new Error(`Expected string request body, got ${typeof init?.body}`);
+    throw new TypeError(`Expected string request body, got ${typeof init?.body}`);
   }
   return JSON.parse(init.body) as Record<string, string>;
 }

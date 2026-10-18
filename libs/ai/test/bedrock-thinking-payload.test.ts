@@ -482,8 +482,8 @@ describe("Application inference profile support", () => {
         expect(capturedPayload.system).toHaveLength(2);
         expect(capturedPayload.system[1]).toHaveProperty("cachePoint");
 
-        const lastMsg = capturedPayload.messages[capturedPayload.messages.length - 1];
-        const lastContent = lastMsg.content[lastMsg.content.length - 1];
+        const lastMsg = capturedPayload.messages.at(-1);
+        const lastContent = lastMsg.content.at(-1);
         expect(lastContent).toHaveProperty("cachePoint");
       }),
     ));

@@ -315,16 +315,15 @@ describe("Context overflow error handling", () => {
       () =>
         Effect.runPromise(
           Effect.gen(function* () {
-            const preferredCerebrasModelIds: string[] = [
+            const preferredCerebrasModelIds: ReadonlySet<string> = new Set([
               "gpt-oss-120b",
               "zai-glm-4.7",
               "llama3.1-8b",
-            ];
+            ]);
             const cerebrasModels = getModels("cerebras");
             const model =
-              cerebrasModels.find((candidate) =>
-                preferredCerebrasModelIds.includes(candidate.id),
-              ) ?? cerebrasModels[0];
+              cerebrasModels.find((candidate) => preferredCerebrasModelIds.has(candidate.id)) ??
+              cerebrasModels[0];
             if (model === undefined) {
               throw new Error("No Cerebras models available");
             }

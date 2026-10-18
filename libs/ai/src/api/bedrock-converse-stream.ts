@@ -149,9 +149,7 @@ export const stream = modelCall<
         const blocks = output.content as Block[];
         const optionsProfile = options.profile || options.env?.["AWS_PROFILE"];
         const profile = optionsProfile || getProviderEnvValue("AWS_PROFILE", options.env);
-        const config: BedrockRuntimeClientConfig = {
-          ...(profile === undefined ? {} : { profile }),
-        };
+        const config: BedrockRuntimeClientConfig = profile === undefined ? {} : { profile };
         const configuredRegion = getConfiguredBedrockRegion(options);
         const hasAmbientConfiguredProfile = Boolean(getProviderEnvValue("AWS_PROFILE"));
         const endpointRegion = getStandardBedrockEndpointRegion(model.baseUrl);
@@ -533,7 +531,7 @@ export const streamSimple = modelCall<
         maxTokens,
         reasoning: options.reasoning,
         thinkingBudgets: {
-          ...(options.thinkingBudgets || {}),
+          ...options.thinkingBudgets,
           [clampReasoning(options.reasoning)!]: Math.min(
             adjusted.thinkingBudget,
             Math.max(0, maxTokens - 1024),
@@ -729,7 +727,7 @@ function getModelMatchCandidates(modelId: string, modelName?: string): string[] 
   const values = modelName !== undefined && modelName !== "" ? [modelId, modelName] : [modelId];
   return values.flatMap((value) => {
     const lower = value.toLowerCase();
-    return [lower, lower.replace(/[\s_.:]+/gu, "-")];
+    return [lower, lower.replaceAll(/[\s_.:]+/gu, "-")];
   });
 }
 
@@ -872,7 +870,7 @@ function buildSystemPrompt(
 }
 
 function normalizeToolCallId(id: string): string {
-  const sanitized = id.replace(/[^a-zA-Z0-9_-]/gu, (char) => "_".repeat(char.length));
+  const sanitized = id.replaceAll(/[^a-zA-Z0-9_-]/gu, (char) => "_".repeat(char.length));
   return sanitized.length > 64 ? sanitized.slice(0, 64) : sanitized;
 }
 

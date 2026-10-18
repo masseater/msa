@@ -73,8 +73,7 @@ const basicTextGeneration = Effect.fn("basicTextGeneration")(function* <TApi ext
     "Hello test successful",
   );
 
-  context.messages.push(response);
-  context.messages.push({
+  context.messages.push(response, {
     role: "user",
     content: "Now say 'Goodbye test successful'",
     timestamp: yield* Clock.currentTimeMillis,
@@ -171,7 +170,7 @@ function handleToolCall<TApi extends Api>(model: Model<TApi>, options?: StreamOp
       expect(response.stopReason).toBe("toolUse");
       expect(response.content.some((b) => b.type === "toolCall")).toBeTruthy();
       const toolCall = response.content.find((b) => b.type === "toolCall");
-      if (toolCall !== undefined && toolCall.type === "toolCall") {
+      if (toolCall?.type === "toolCall") {
         expect(toolCall.name).toBe("math_operation");
         expect(toolCall.id).toBeTruthy();
       } else {
@@ -308,7 +307,7 @@ const handleImage = Effect.fn("handleImage")(function* <TApi extends Api>(
 
   expect(response.content.length > 0).toBeTruthy();
   const textContent = response.content.find((b) => b.type === "text");
-  if (textContent !== undefined && textContent.type === "text") {
+  if (textContent?.type === "text") {
     const lowerContent = textContent.text.toLowerCase();
     expect(lowerContent).toContain("red");
     expect(lowerContent).toContain("circle");

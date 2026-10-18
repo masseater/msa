@@ -816,7 +816,7 @@ const applyAuth = <
     }
     const env =
       resolution.env !== undefined || options?.env !== undefined
-        ? { ...(resolution.env ?? {}), ...(options?.env ?? {}) }
+        ? { ...resolution.env, ...options?.env }
         : undefined;
     const requestModel: TModel =
       auth.baseUrl !== undefined && auth.baseUrl !== ""

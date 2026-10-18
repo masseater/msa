@@ -291,12 +291,12 @@ function createMistralToolCallIdNormalizer(): (id: string) => string {
 }
 
 function deriveMistralToolCallId(id: string, attempt: number): string {
-  const normalized = id.replace(/[^a-zA-Z0-9]/gu, "");
+  const normalized = id.replaceAll(/[^a-zA-Z0-9]/gu, "");
   if (attempt === 0 && normalized.length === MISTRAL_TOOL_CALL_ID_LENGTH) return normalized;
   const seedBase = normalized || id;
   const seed = attempt === 0 ? seedBase : `${seedBase}:${attempt}`;
   return shortHash(seed)
-    .replace(/[^a-zA-Z0-9]/gu, "")
+    .replaceAll(/[^a-zA-Z0-9]/gu, "")
     .slice(0, MISTRAL_TOOL_CALL_ID_LENGTH);
 }
 

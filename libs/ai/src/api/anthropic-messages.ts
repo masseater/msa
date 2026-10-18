@@ -762,7 +762,7 @@ export const stream = modelCall<
                   if (event.delta.type === "text_delta") {
                     const index = blocks.findIndex((b) => b.index === event.index);
                     const block = blocks[index];
-                    if (block !== undefined && block.type === "text") {
+                    if (block?.type === "text") {
                       block.text += event.delta.text;
                       events.push({
                         type: "text_delta",
@@ -774,7 +774,7 @@ export const stream = modelCall<
                   } else if (event.delta.type === "thinking_delta") {
                     const index = blocks.findIndex((b) => b.index === event.index);
                     const block = blocks[index];
-                    if (block !== undefined && block.type === "thinking") {
+                    if (block?.type === "thinking") {
                       block.thinking += event.delta.thinking;
                       events.push({
                         type: "thinking_delta",
@@ -786,7 +786,7 @@ export const stream = modelCall<
                   } else if (event.delta.type === "input_json_delta") {
                     const index = blocks.findIndex((b) => b.index === event.index);
                     const block = blocks[index];
-                    if (block !== undefined && block.type === "toolCall") {
+                    if (block?.type === "toolCall") {
                       block.partialJson += event.delta.partial_json;
                       block.arguments = parseStreamingJson(block.partialJson);
                       events.push({
@@ -799,7 +799,7 @@ export const stream = modelCall<
                   } else if (event.delta.type === "signature_delta") {
                     const index = blocks.findIndex((b) => b.index === event.index);
                     const block = blocks[index];
-                    if (block !== undefined && block.type === "thinking") {
+                    if (block?.type === "thinking") {
                       block.thinkingSignature = block.thinkingSignature || "";
                       block.thinkingSignature += event.delta.signature;
                     }
@@ -1320,7 +1320,7 @@ function buildParams(
 }
 
 function normalizeToolCallId(id: string): string {
-  return id.replace(/[^a-zA-Z0-9_-]/gu, (char) => "_".repeat(char.length)).slice(0, 64);
+  return id.replaceAll(/[^a-zA-Z0-9_-]/gu, (char) => "_".repeat(char.length)).slice(0, 64);
 }
 
 function convertToolResult(msg: ToolResultMessage): ContentBlockParam {
@@ -1518,7 +1518,7 @@ function convertMessages(
     const lastMessage = params.at(-1);
     if (lastMessage?.role === "user" || lastMessage?.role === "system") {
       if (Array.isArray(lastMessage.content)) {
-        const lastBlock = lastMessage.content[lastMessage.content.length - 1];
+        const lastBlock = lastMessage.content.at(-1);
         if (
           lastBlock !== undefined &&
           (lastBlock.type === "text" ||

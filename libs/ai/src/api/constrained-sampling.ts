@@ -204,7 +204,7 @@ export const getGrammarToolInput: {
   function (toolName: string, arguments_: Record<string, unknown>, inputProperty: string): string {
     const input = arguments_[inputProperty];
     if (typeof input !== "string") {
-      throw new Error(
+      throw new TypeError(
         `Grammar tool call "${toolName}" requires argument "${inputProperty}" to be a string.`,
       );
     }

@@ -282,7 +282,7 @@ const splitMsaMessagesEvents = (
   buffer: string,
 ): readonly [rest: string, events: ReadonlyArray<MsaMessagesEvent>] => {
   const events: MsaMessagesEvent[] = [];
-  let rest = buffer.replace(/\r\n/gu, "\n");
+  let rest = buffer.replaceAll("\r\n", "\n");
   let split = rest.indexOf("\n\n");
   while (split !== -1) {
     const event = parseMsaMessagesEvent(rest.slice(0, split));

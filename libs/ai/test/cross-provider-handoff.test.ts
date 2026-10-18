@@ -219,7 +219,7 @@ async function generateContext(
     timestamp: currentTimeMillis(),
   };
 
-  const supportsReasoning = model.reasoning === true;
+  const supportsReasoning = model.reasoning;
   const headers = getHeaders(pair);
   let lastPayload: unknown;
   let assistantResponse: AssistantMessage;
@@ -483,7 +483,7 @@ describe.skipIf(!hasAnyApiKey())("Cross-Provider Handoff", () => {
           targetPair.apiOverride === undefined
             ? baseModel
             : { ...baseModel, api: targetPair.apiOverride };
-        const supportsReasoning = model.reasoning === true;
+        const supportsReasoning = model.reasoning;
         const headers = getHeaders(targetPair);
 
         console.log(
@@ -527,7 +527,7 @@ describe.skipIf(!hasAnyApiKey())("Cross-Provider Handoff", () => {
               .filter((c) => c.type === "text")
               .map((c) => c.text)
               .join(" ");
-            const preview = text.slice(0, 100).replace(/\n/gu, " ");
+            const preview = text.slice(0, 100).replaceAll("\n", " ");
             console.log(`[Target: ${targetPair.label}] SUCCESS: ${preview}...`);
             results.push({ target: targetPair.label, success: true });
           }

@@ -93,9 +93,7 @@ async function testEmojiInToolResults<TApi extends Api>(
     timestamp: currentTimeMillis(),
   };
 
-  context.messages.push(toolResult);
-
-  context.messages.push({
+  context.messages.push(toolResult, {
     role: "user",
     content: "Summarize the tool result briefly.",
     timestamp: currentTimeMillis(),
@@ -183,9 +181,7 @@ Unanswered Comments: 2
     timestamp: currentTimeMillis(),
   };
 
-  context.messages.push(toolResult);
-
-  context.messages.push({
+  context.messages.push(toolResult, {
     role: "user",
     content: "How many comments are there?",
     timestamp: currentTimeMillis(),
@@ -261,9 +257,7 @@ async function testUnpairedHighSurrogate<TApi extends Api>(
     timestamp: currentTimeMillis(),
   };
 
-  context.messages.push(toolResult);
-
-  context.messages.push({
+  context.messages.push(toolResult, {
     role: "user",
     content: "What did the tool return?",
     timestamp: currentTimeMillis(),

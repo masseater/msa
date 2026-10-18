@@ -59,8 +59,7 @@ const testAbortSignal = Effect.fn("testAbortSignal")(function* <TApi extends Api
   expect(msg.stopReason).toBe("aborted");
   expect(msg.content.length).toBeGreaterThan(0);
 
-  context.messages.push(msg);
-  context.messages.push({
+  context.messages.push(msg, {
     role: "user",
     content: "Please continue, but only generate 5 names.",
     timestamp: yield* Clock.currentTimeMillis,
@@ -103,9 +102,7 @@ const testAbortThenNewMessage = Effect.fn("testAbortThenNewMessage")(function* <
   expect(abortedResponse.stopReason).toBe("aborted");
   expect(abortedResponse.content.length).toBe(0);
 
-  context.messages.push(abortedResponse);
-
-  context.messages.push({
+  context.messages.push(abortedResponse, {
     role: "user",
     content: "What is 2 + 2?",
     timestamp: yield* Clock.currentTimeMillis,

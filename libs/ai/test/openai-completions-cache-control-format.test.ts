@@ -263,7 +263,7 @@ describe("openai-completions cacheControlFormat", () => {
 
         expect(Array.isArray(instructionMessage?.content)).toBe(false);
         expect(params.tools?.[0]?.cache_control).toBeUndefined();
-        expect(typeof params.messages[params.messages.length - 1]?.content).toBe("string");
+        expect(typeof params.messages.at(-1)?.content).toBe("string");
       }),
     ));
 });

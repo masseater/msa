@@ -5,7 +5,7 @@ import type { ToolCallIdNormalizer } from "./transform-messages.ts";
 const MAX_ID_LENGTH = 64;
 
 function normalizeIdPart(part: string): string {
-  const sanitized = part.replace(/[^a-zA-Z0-9_-]/gu, (char) => "_".repeat(char.length));
+  const sanitized = part.replaceAll(/[^a-zA-Z0-9_-]/gu, (char) => "_".repeat(char.length));
   return sanitized.slice(0, MAX_ID_LENGTH).replace(/_+$/u, "");
 }
 

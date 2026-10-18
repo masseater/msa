@@ -43,7 +43,7 @@ describe("Amazon Bedrock Models", () => {
               .join("")
               .trim();
             expect(textContent).toBeTruthy();
-            yield* Console.log(`${model.id}: ${textContent.substring(0, 100)}`);
+            yield* Console.log(`${model.id}: ${textContent.slice(0, 100)}`);
           }),
         ),
       );
@@ -92,7 +92,7 @@ describe("Amazon Bedrock Models", () => {
               .join("")
               .trim();
             expect(textContent).toBeTruthy();
-            yield* Console.log(`${model.id}: ${textContent.substring(0, 100)}`);
+            yield* Console.log(`${model.id}: ${textContent.slice(0, 100)}`);
           }),
         ),
       );

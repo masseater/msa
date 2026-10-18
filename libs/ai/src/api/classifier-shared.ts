@@ -44,7 +44,7 @@ export const requiredNumber: {
   (label: string, value: unknown, field: string): number;
 } = Function.dual(3, function (label: string, value: unknown, field: string): number {
   if (typeof value !== "number" || !Number.isFinite(value)) {
-    throw new Error(`${label} returned an invalid ${field}`);
+    throw new TypeError(`${label} returned an invalid ${field}`);
   }
   return value;
 });

@@ -383,7 +383,7 @@ async function captureAnthropicRequest(
 function getTools(body: Record<string, unknown>): Record<string, unknown>[] {
   const tools = body["tools"];
   if (!Array.isArray(tools)) {
-    throw new Error("Expected tools in request body");
+    throw new TypeError("Expected tools in request body");
   }
   return tools as Record<string, unknown>[];
 }

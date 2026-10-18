@@ -153,14 +153,14 @@ function appendFunctionCall<T extends GoogleApiType>(
   state.output.content.push(toolCall);
   const contentIndex = lastIndex(state);
   const partial = state.output;
-  state.events.push({ type: "toolcall_start", contentIndex, partial });
-  state.events.push({
-    type: "toolcall_delta",
-    contentIndex,
-    delta: encodeJsonSync(toolCall.arguments),
-    partial,
-  });
-  state.events.push({ type: "toolcall_end", contentIndex, toolCall, partial });
+  const delta = encodeJsonSync(toolCall.arguments);
+  for (const event of [
+    { type: "toolcall_start", contentIndex, partial },
+    { type: "toolcall_delta", contentIndex, delta, partial },
+    { type: "toolcall_end", contentIndex, toolCall, partial },
+  ] as const) {
+    state.events.push(event);
+  }
 }
 
 function applyFinishReason(output: AssistantMessage, candidate: Candidate): void {

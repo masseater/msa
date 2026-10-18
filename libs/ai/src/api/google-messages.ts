@@ -188,7 +188,7 @@ export const convertMessages: {
   const conversation = withoutInitialSystemMessage(collapseSystemMessages(context).messages);
   const normalizeToolCallId = (id: string): string => {
     if (!requiresToolCallId(model.id)) return id;
-    return id.replace(/[^a-zA-Z0-9_-]/gu, (char) => "_".repeat(char.length)).slice(0, 64);
+    return id.replaceAll(/[^a-zA-Z0-9_-]/gu, (char) => "_".repeat(char.length)).slice(0, 64);
   };
   const contents: Content[] = [];
   for (const message of transformMessages(conversation, model, normalizeToolCallId)) {

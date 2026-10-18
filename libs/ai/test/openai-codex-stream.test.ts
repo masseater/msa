@@ -557,8 +557,6 @@ describe("openai-codex streaming", () => {
                   `data: ${JSON.stringify({ type: "response.output_text.delta", delta: "two" })}\n\n`,
                 );
               }, 10),
-            );
-            timers.push(
               setTimeout(() => {
                 if (cancelled) return;
                 enqueue(
