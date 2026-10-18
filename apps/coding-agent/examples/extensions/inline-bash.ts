@@ -1,76 +1,99 @@
 import type { ExtensionAPI } from "@msa/coding-agent";
+import { Effect, Option } from "effect";
 
-export default function (msa: ExtensionAPI) {
-  const PATTERN = /!\{([^}]+)\}/gu;
-  const TIMEOUT_MS = 30000;
+const PATTERN = /!\{([^}]+)\}/gu;
+const TIMEOUT_MS = 30000;
 
-  msa.on("input", async (event, ctx) => {
-    const text = event.text;
+interface Expansion {
+  command: string;
+  output: string;
+  error?: string;
+}
 
-    if (text.trimStart().startsWith("!") && !text.trimStart().startsWith("!{")) {
-      return { action: "continue" };
-    }
+const collectMatches = (text: string): Array<{ full: string; command: string }> => {
+  const matches: Array<{ full: string; command: string }> = [];
+  PATTERN.lastIndex = 0;
+  let match = PATTERN.exec(text);
+  while (match !== null) {
+    const [full, command] = match;
+    if (command !== undefined) matches.push({ full, command });
+    match = PATTERN.exec(text);
+  }
+  return matches;
+};
 
-    if (!PATTERN.test(text)) {
-      return { action: "continue" };
-    }
+const formatSummary = (expansions: Expansion[]): string =>
+  expansions
+    .map((e) => {
+      const status = e.error !== undefined && e.error.length > 0 ? ` (${e.error})` : "";
+      const preview = e.output.length > 50 ? `${e.output.slice(0, 50)}...` : e.output;
+      return `!{${e.command}}${status} -> "${preview}"`;
+    })
+    .join("\n");
 
-    PATTERN.lastIndex = 0;
-
+const expandCommands = (
+  msa: ExtensionAPI,
+  text: string,
+  matches: Array<{ full: string; command: string }>,
+) =>
+  Effect.gen(function* () {
     let result = text;
-    const expansions: Array<{ command: string; output: string; error?: string }> = [];
-
-    const matches: Array<{ full: string; command: string }> = [];
-    let match = PATTERN.exec(text);
-    while (match !== null) {
-      const [full, command] = match;
-      if (command !== undefined) matches.push({ full, command });
-      match = PATTERN.exec(text);
-    }
+    const expansions: Expansion[] = [];
 
     for (const { full, command } of matches) {
-      try {
-        const bashResult = await msa.exec("bash", ["-c", command], {
-          timeout: TIMEOUT_MS,
-        });
+      const bashResult = yield* Effect.promise(() =>
+        msa.exec("bash", ["-c", command], { timeout: TIMEOUT_MS }),
+      ).pipe(Effect.option);
 
-        const output = bashResult.stdout || bashResult.stderr || "";
-        const trimmed = output.trim();
+      if (Option.isNone(bashResult)) {
+        expansions.push({ command, output: "", error: "command failed" });
+        result = result.replace(full, "[error]");
+        continue;
+      }
 
-        if (bashResult.code !== 0 && bashResult.stderr.length > 0) {
-          expansions.push({
-            command,
-            output: trimmed,
-            error: `exit code ${bashResult.code}`,
-          });
-        } else {
-          expansions.push({ command, output: trimmed });
+      const { stdout, stderr, code } = bashResult.value;
+      const trimmed = (stdout || stderr || "").trim();
+      if (code !== 0 && stderr.length > 0) {
+        expansions.push({ command, output: trimmed, error: `exit code ${code}` });
+      } else {
+        expansions.push({ command, output: trimmed });
+      }
+      result = result.replace(full, trimmed);
+    }
+
+    return { expansions, expanded: result };
+  });
+
+export default function (msa: ExtensionAPI) {
+  msa.on("input", (event, ctx) =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const text = event.text;
+
+        if (text.trimStart().startsWith("!") && !text.trimStart().startsWith("!{")) {
+          return { action: "continue" };
         }
 
-        result = result.replace(full, trimmed);
-      } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : String(err);
-        expansions.push({ command, output: "", error: errorMsg });
-        result = result.replace(full, `[error: ${errorMsg}]`);
-      }
-    }
+        if (!PATTERN.test(text)) {
+          return { action: "continue" };
+        }
 
-    if (ctx.hasUI && expansions.length > 0) {
-      const summary = expansions
-        .map((e) => {
-          const status = e.error !== undefined && e.error.length > 0 ? ` (${e.error})` : "";
-          const preview = e.output.length > 50 ? `${e.output.slice(0, 50)}...` : e.output;
-          return `!{${e.command}}${status} -> "${preview}"`;
-        })
-        .join("\n");
+        const matches = collectMatches(text);
+        const { expansions, expanded } = yield* expandCommands(msa, text, matches);
 
-      ctx.ui.notify(`Expanded ${expansions.length} inline command(s):\n${summary}`, "info");
-    }
+        if (ctx.hasUI && expansions.length > 0) {
+          ctx.ui.notify(
+            `Expanded ${expansions.length} inline command(s):\n${formatSummary(expansions)}`,
+            "info",
+          );
+        }
 
-    return {
-      action: "transform",
-      text: result,
-      ...(event.images === undefined ? {} : { images: event.images }),
-    };
-  });
+        return {
+          action: "transform",
+          text: expanded,
+          ...(event.images === undefined ? {} : { images: event.images }),
+        };
+      }),
+    ),
+  );
 }
