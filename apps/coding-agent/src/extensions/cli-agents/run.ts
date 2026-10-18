@@ -4,7 +4,8 @@ import { createInterface } from "node:readline";
 import type { Model, SimpleStreamOptions, TranscriptContext } from "@msa/ai/compat";
 import * as Effect from "effect/Effect";
 
-import { awaited, awaiting } from "../../core/awaiting.ts";
+import { awaited, awaiting, performed } from "../../core/awaiting.ts";
+import { schedule } from "../../core/platform.ts";
 import { spawnProcess, waitForChildProcess } from "../../utils/child-process.ts";
 import { createReply, type ReplyBuilder } from "./reply.ts";
 
@@ -33,10 +34,6 @@ export interface CliBackend<Event> {
   handleEvent(event: Event, sink: EventSink): void;
 
   shouldRetry(detail: string): boolean;
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 export function streamViaCli<Event>(
@@ -145,11 +142,13 @@ export function streamViaCli<Event>(
                 lines.close();
               }
 
+              let killTimer: ReturnType<typeof schedule> | undefined;
               if (aborted) {
                 child.kill("SIGTERM");
-                setTimeout(() => child.kill("SIGKILL"), KILL_GRACE_MS).unref?.();
+                killTimer = schedule(() => child.kill("SIGKILL"), KILL_GRACE_MS);
               }
               yield* awaited(finished);
+              killTimer?.cancel();
               if (aborted) return { ok: false, detail: "aborted" };
               if (spawnError !== "") return { ok: false, detail: spawnError };
               if (exitCode === 0 && !failed) return { ok: true, detail: "" };
@@ -173,7 +172,7 @@ export function streamViaCli<Event>(
           }
           failure = result.detail;
           if (aborted || reply.hasContent || !backend.shouldRetry(failure)) break;
-          yield* awaited(sleep(RETRY_DELAY_MS));
+          yield* performed(Effect.sleep(RETRY_DELAY_MS));
         }
 
         options?.signal?.removeEventListener("abort", onAbort);

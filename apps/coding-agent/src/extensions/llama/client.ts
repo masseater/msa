@@ -1,6 +1,8 @@
 import * as Effect from "effect/Effect";
 
 import { awaited, awaitingWith } from "../../core/awaiting.ts";
+import { schedule } from "../../core/platform.ts";
+import { callbackPromise, fetchResponse } from "../../utils/interop.ts";
 export type LlamaModelStatus = "unloaded" | "loading" | "loaded" | "downloading" | "sleeping";
 
 export interface LlamaModelInfo {
@@ -74,16 +76,16 @@ function linkSignal(source: AbortSignal | undefined, target: AbortController): (
 }
 
 function sleep(ms: number, signal?: AbortSignal): Promise<void> {
-  return new Promise((resolve, reject) => {
+  return callbackPromise<void>((resolve, reject) => {
     if (signal?.aborted === true) {
       reject(signal.reason ?? new Error("Cancelled"));
       return;
     }
     const abort = () => {
-      clearTimeout(timeout);
+      timer.cancel();
       reject(signal?.reason ?? new Error("Cancelled"));
     };
-    const timeout = setTimeout(() => {
+    const timer = schedule(() => {
       signal?.removeEventListener("abort", abort);
       resolve();
     }, ms);
@@ -196,7 +198,7 @@ export class LlamaClient {
             ? AbortSignal.any([init.signal, timeout])
             : timeout;
         const response = yield* awaited(
-          fetch(`${this.serverUrl}${path}`, { ...init, headers, signal }),
+          fetchResponse(`${this.serverUrl}${path}`, { ...init, headers, signal }),
         );
         let payload: unknown;
         try {
@@ -323,7 +325,7 @@ export class LlamaClient {
         if (this.apiKey !== undefined && this.apiKey !== "")
           headers.set("Authorization", `Bearer ${this.apiKey}`);
         const response = yield* awaited(
-          fetch(`${this.serverUrl}/models/sse`, {
+          fetchResponse(`${this.serverUrl}/models/sse`, {
             headers,
             signal: signal ?? null,
           }),

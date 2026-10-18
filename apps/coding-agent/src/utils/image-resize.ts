@@ -10,6 +10,7 @@ import {
   type ResizeImageWorkerResponse,
   resizeImageInProcess,
 } from "./image-resize-core.ts";
+import { callbackPromise } from "./interop.ts";
 
 export type { ImageResizeOptions, ResizedImage } from "./image-resize-core.ts";
 
@@ -42,7 +43,7 @@ function resizeImageInWorker(
       try {
         const inputBytesForWorker = toTransferableBytes(inputBytes);
         return yield* awaited(
-          new Promise<ResizedImage | null>((resolve, reject) => {
+          callbackPromise<ResizedImage | null>((resolve, reject) => {
             let settled = false;
             const settle = (result: ResizedImage | null): void => {
               if (settled) return;

@@ -14,6 +14,9 @@ import type { Readable, Writable } from "node:stream";
 
 import crossSpawn from "cross-spawn";
 
+import { schedule, type Scheduled } from "../core/platform.ts";
+import { callbackPromise } from "./interop.ts";
+
 const EXIT_STDIO_GRACE_MS = 100;
 
 export function spawnProcess(
@@ -44,17 +47,17 @@ export function spawnProcessSync(
 }
 
 export function waitForChildProcess(child: ChildProcess): Promise<number | null> {
-  return new Promise((resolve, reject) => {
+  return callbackPromise((resolve, reject) => {
     let settled = false;
     let exited = false;
     let exitCode: number | null = null;
-    let postExitTimer: NodeJS.Timeout | undefined;
+    let postExitTimer: Scheduled | undefined;
     let stdoutEnded = child.stdout === null;
     let stderrEnded = child.stderr === null;
 
     const cleanup = () => {
       if (postExitTimer !== undefined) {
-        clearTimeout(postExitTimer);
+        postExitTimer.cancel();
         postExitTimer = undefined;
       }
       child.removeListener("error", onError);
@@ -83,8 +86,8 @@ export function waitForChildProcess(child: ChildProcess): Promise<number | null>
     };
 
     const armIdleTimer = () => {
-      if (postExitTimer !== undefined) clearTimeout(postExitTimer);
-      postExitTimer = setTimeout(() => finalize(exitCode), EXIT_STDIO_GRACE_MS);
+      postExitTimer?.cancel();
+      postExitTimer = schedule(() => finalize(exitCode), EXIT_STDIO_GRACE_MS);
     };
 
     const onData = () => {

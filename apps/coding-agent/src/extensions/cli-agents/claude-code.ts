@@ -21,7 +21,8 @@ import * as Effect from "effect/Effect";
 
 import { awaited, awaiting, awaitingWith } from "../../core/awaiting.ts";
 import type { ExtensionAPI } from "../../core/extensions/types.ts";
-import { nowMs } from "../../core/platform.ts";
+import { nowMs, schedule, type Scheduled } from "../../core/platform.ts";
+import { callbackPromise } from "../../utils/interop.ts";
 import {
   accountEnv,
   blockIfUnusable,
@@ -146,7 +147,7 @@ class Input implements AsyncIterable<SDKUserMessage> {
               if (next !== undefined) return { done: false as const, value: next };
               if (this.closed) return { done: true as const, value: undefined };
               yield* awaited(
-                new Promise<void>((resolve) => {
+                callbackPromise<void>((resolve) => {
                   this.wake = resolve;
                 }),
               );
@@ -187,7 +188,7 @@ class Session {
   lastUsed = nowMs();
   private child: ChildProcess | undefined;
   private stderrTail = "";
-  private idleTimer: NodeJS.Timeout | undefined;
+  private idleTimer: Scheduled | undefined;
 
   constructor(sdk: Sdk, config: SessionConfig, account: Account, env: Record<string, string>) {
     this.account = account;
@@ -228,7 +229,7 @@ class Session {
             return result;
           }
           return yield* awaited(
-            new Promise<CallToolResult>((resolve) => this.waiting.set(id, resolve)),
+            callbackPromise<CallToolResult>((resolve) => this.waiting.set(id, resolve)),
           );
         }, this),
       ),
@@ -347,14 +348,13 @@ class Session {
 
   touch(): void {
     this.lastUsed = nowMs();
-    clearTimeout(this.idleTimer);
-    this.idleTimer = setTimeout(() => this.close(), IDLE_CLOSE_MS);
-    this.idleTimer.unref();
+    this.idleTimer?.cancel();
+    this.idleTimer = schedule(() => this.close(), IDLE_CLOSE_MS);
   }
 
   close(): void {
     if (!sessions.delete(this)) return;
-    clearTimeout(this.idleTimer);
+    this.idleTimer?.cancel();
     for (const resolve of this.waiting.values()) {
       resolve({ content: [{ type: "text", text: "session closed" }], isError: true });
     }

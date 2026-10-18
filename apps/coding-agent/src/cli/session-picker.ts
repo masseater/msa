@@ -6,6 +6,7 @@ import { KeybindingsManager } from "../core/keybindings.ts";
 import type { SessionInfo, SessionListProgress } from "../core/session-manager.ts";
 import type { SettingsManager } from "../core/settings-manager.ts";
 import { SessionSelectorComponent } from "../modes/interactive/components/session-selector.ts";
+import { callbackPromise } from "../utils/interop.ts";
 import { createStartupTui, startStartupTui } from "./startup-ui.ts";
 
 type SessionsLoader = (
@@ -22,7 +23,7 @@ export function selectSession(
     awaiting(function* () {
       const ui = yield* awaited(createStartupTui(settingsManager));
       return yield* awaited(
-        new Promise((resolve) => {
+        callbackPromise((resolve) => {
           const keybindings = KeybindingsManager.create();
           setKeybindings(keybindings);
           let resolved = false;

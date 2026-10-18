@@ -28,6 +28,7 @@ import type { SessionEntry } from "../../core/session-manager.ts";
 import { formatSize } from "../../core/tools/truncate.ts";
 import { combineUsage } from "../../core/usage-totals.ts";
 import { toErrorMessage } from "../../utils/errors.ts";
+import { callbackPromise } from "../../utils/interop.ts";
 import { writeOutputFile } from "../../utils/output-files.ts";
 import {
   Bm25Ranker,
@@ -229,7 +230,8 @@ function createLimiter(limit: number): <T>(run: () => Promise<T>) => Promise<T> 
   return (run) =>
     Effect.runPromise(
       awaiting(function* () {
-        if (active >= limit) yield* awaited(new Promise<void>((resolve) => waiting.push(resolve)));
+        if (active >= limit)
+          yield* awaited(callbackPromise<void>((resolve) => waiting.push(resolve)));
         active++;
         try {
           return yield* awaited(run());

@@ -1,6 +1,7 @@
 import * as Effect from "effect/Effect";
 
 import { awaited, awaiting } from "../core/awaiting.ts";
+import { fetchResponse } from "./interop.ts";
 type FetchInput = Parameters<typeof fetch>[0];
 
 const RETRYABLE_STATUS_CODES = new Set([408, 425, 429, 500, 502, 503, 504]);
@@ -51,7 +52,7 @@ export function fetchWithRetry(
 
         try {
           const response = yield* awaited(
-            fetch(input, signal === undefined ? init : { ...init, signal }),
+            fetchResponse(input, signal === undefined ? init : { ...init, signal }),
           );
           const shouldRetry =
             retryOnStatus && RETRYABLE_STATUS_CODES.has(response.status) && attempt < maxRetries;

@@ -17,7 +17,7 @@ import {
   getSettingsPath,
   PACKAGE_NAME,
 } from "../config.ts";
-import { awaited, awaiting } from "../core/awaiting.ts";
+import { awaited, awaiting, performed } from "../core/awaiting.ts";
 import { areExperimentalFeaturesEnabled } from "../core/experimental.ts";
 import { KeybindingsManager } from "../core/keybindings.ts";
 import { DefaultPackageManager, type ResolvedResource } from "../core/package-manager.ts";
@@ -42,6 +42,7 @@ import {
   setTheme,
   type Theme,
 } from "../modes/interactive/theme/theme.ts";
+import { callbackPromise } from "../utils/interop.ts";
 
 const OFFICIAL_PACKAGE_NAME = "@msa/coding-agent";
 const OFFICIAL_APP_NAME = "msa";
@@ -146,7 +147,7 @@ function clearStartupTui(ui: TUI): Promise<void> {
     awaiting(function* () {
       ui.clear();
       ui.requestRender();
-      yield* awaited(new Promise((resolve) => setTimeout(resolve, 25)));
+      yield* performed(Effect.sleep(25));
     }),
   );
 }
@@ -179,7 +180,7 @@ export function showStartupSelector<T>(
     awaiting(function* () {
       const ui = yield* awaited(createStartupTui(settingsManager));
       return yield* awaited(
-        new Promise((resolve) => {
+        callbackPromise((resolve) => {
           let settled = false;
           const finish = (result: T | undefined) =>
             Effect.runPromise(
@@ -215,7 +216,7 @@ export function showFirstTimeSetup(settingsManager: SettingsManager): Promise<vo
     awaiting(function* () {
       const ui = yield* awaited(createStartupTui(settingsManager));
       return yield* awaited(
-        new Promise((resolve) => {
+        callbackPromise((resolve) => {
           let settled = false;
           const finish = (result: FirstTimeSetupResult | undefined) =>
             Effect.runPromise(
@@ -267,7 +268,7 @@ export function showStartupInput(
     awaiting(function* () {
       const ui = yield* awaited(createStartupTui(settingsManager));
       return yield* awaited(
-        new Promise((resolve) => {
+        callbackPromise((resolve) => {
           let settled = false;
           const finish = (result: string | undefined) =>
             Effect.runPromise(

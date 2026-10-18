@@ -8,6 +8,7 @@ import {
   type ScopedResolvedPaths,
 } from "../modes/interactive/components/config-selector.ts";
 import { initTheme, stopThemeWatcher } from "../modes/interactive/theme/theme.ts";
+import { callbackPromise } from "../utils/interop.ts";
 
 export interface ConfigSelectorOptions {
   resolvedPaths: ScopedResolvedPaths;
@@ -24,7 +25,7 @@ export function selectConfig(options: ConfigSelectorOptions): Promise<void> {
       initTheme(options.settingsManager.getTheme(), true);
 
       return yield* awaited(
-        new Promise((resolve) => {
+        callbackPromise((resolve) => {
           const ui: TUI = new TuiMainScreen(
             new ProcessTerminal(),
             options.settingsManager.getShowHardwareCursor(),

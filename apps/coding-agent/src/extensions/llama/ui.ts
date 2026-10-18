@@ -17,10 +17,12 @@ import { Effect } from "effect";
 import { awaited, awaiting, awaitingWith } from "../../core/awaiting.ts";
 import type { ExtensionCommandContext } from "../../core/extensions/types.ts";
 import type { KeybindingsManager } from "../../core/keybindings.ts";
+import { schedule, type Scheduled } from "../../core/platform.ts";
 import { DynamicBorder } from "../../modes/interactive/components/dynamic-border.ts";
 import { keyHint } from "../../modes/interactive/components/keybinding-hints.ts";
 import type { Theme } from "../../modes/interactive/theme/theme.ts";
 import { toErrorMessage } from "../../utils/errors.ts";
+import { callbackPromise } from "../../utils/interop.ts";
 import type { LlamaModelInfo, LlamaProgress } from "./client.ts";
 import type { HuggingFaceModel } from "./huggingface.ts";
 
@@ -116,7 +118,7 @@ class HuggingFaceSearch extends Container implements Focusable {
   private selectedIndex = 0;
   private query = "";
   private status = "Type at least 2 characters";
-  private debounce: ReturnType<typeof setTimeout> | undefined;
+  private debounce: Scheduled | undefined;
   private request: AbortController | undefined;
   private closed = false;
   private _focused = false;
@@ -209,7 +211,7 @@ class HuggingFaceSearch extends Container implements Focusable {
   }
 
   private scheduleSearch(): void {
-    if (this.debounce !== undefined) clearTimeout(this.debounce);
+    this.debounce?.cancel();
     this.request?.abort();
     this.request = undefined;
     if (this.query.length < 2) {
@@ -226,7 +228,7 @@ class HuggingFaceSearch extends Container implements Focusable {
     }
     this.status = "Searching Hugging Face…";
     this.filterResults();
-    this.debounce = setTimeout(() => void this.runSearch(this.query), 500);
+    this.debounce = schedule(() => void this.runSearch(this.query), 500);
   }
 
   private runSearch(query: string): Promise<void> {
@@ -257,7 +259,7 @@ class HuggingFaceSearch extends Container implements Focusable {
   private close(model: string | undefined): void {
     if (this.closed) return;
     this.closed = true;
-    if (this.debounce !== undefined) clearTimeout(this.debounce);
+    this.debounce?.cancel();
     this.request?.abort();
     this.onSelectModel(model);
   }
@@ -363,7 +365,7 @@ class LlamaView implements LlamaUi, Focusable {
         description: "Hugging Face owner/repository[:quant]",
       },
     ];
-    return new Promise((resolve) => {
+    return callbackPromise((resolve) => {
       const list = new SelectList(items, Math.min(items.length, 12), selectTheme(this.theme), {
         minPrimaryColumnWidth: 36,
         maxPrimaryColumnWidth: 56,
@@ -389,7 +391,7 @@ class LlamaView implements LlamaUi, Focusable {
   }
 
   select(title: string, options: string[]): Promise<string | undefined> {
-    return new Promise((resolve) => {
+    return callbackPromise((resolve) => {
       const list = new SelectList(
         options.map((option) => ({ value: option, label: option })),
         Math.min(options.length, 12),
@@ -431,7 +433,7 @@ class LlamaView implements LlamaUi, Focusable {
   searchModels(
     search: (query: string, signal: AbortSignal) => Promise<HuggingFaceModel[]>,
   ): Promise<string | undefined> {
-    return new Promise((resolve) => {
+    return callbackPromise((resolve) => {
       const component = new HuggingFaceSearch(
         this.tui,
         this.theme,
@@ -461,7 +463,7 @@ class LlamaView implements LlamaUi, Focusable {
 
   progress(state: ProgressState): Promise<void> {
     if (this.progressPromise === undefined) {
-      this.progressPromise = new Promise((resolve) => {
+      this.progressPromise = callbackPromise((resolve) => {
         this.progressResolver = resolve;
       });
     }

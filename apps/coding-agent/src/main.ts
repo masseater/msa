@@ -52,7 +52,7 @@ import {
 } from "./core/agent-session-services.ts";
 import { formatNoModelsAvailableMessage } from "./core/auth-guidance.ts";
 import { AuthStorage, ReadOnlyAuthStorage } from "./core/auth-storage.ts";
-import { awaited, awaiting } from "./core/awaiting.ts";
+import { awaited, awaiting, performed } from "./core/awaiting.ts";
 import { exportFromFile } from "./core/export-html/index.ts";
 import type { InlineExtension } from "./core/extensions/types.ts";
 import { applyHttpProxySettings, configureHttpDispatcher } from "./core/http-dispatcher.ts";
@@ -86,6 +86,7 @@ import {
 } from "./modes/interactive/theme/theme.ts";
 import { handleConfigCommand, handlePackageCommand } from "./package-manager-cli.ts";
 import { toErrorMessage } from "./utils/errors.ts";
+import { callbackPromise } from "./utils/interop.ts";
 import { isLocalPath, normalizePath, resolvePath } from "./utils/paths.ts";
 import { cleanupWindowsSelfUpdateQuarantine } from "./utils/windows-self-update.ts";
 
@@ -99,7 +100,7 @@ function readPipedStdin(): Promise<string | undefined> {
       }
 
       return yield* awaited(
-        new Promise((resolve) => {
+        callbackPromise((resolve) => {
           let data = "";
           process.stdin.setEncoding("utf8");
           process.stdin.on("data", (chunk) => {
@@ -346,7 +347,7 @@ function promptConfirm(message: string): Promise<boolean> {
   return Effect.runPromise(
     awaiting(function* () {
       return yield* awaited(
-        new Promise((resolve) => {
+        callbackPromise((resolve) => {
           const rl = createInterface({
             input: process.stdin,
             output: process.stdout,
@@ -1083,12 +1084,7 @@ export function main(args: string[], options?: MainOptions) {
       }
 
       if (!offlineMode && appMode === "rpc") {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 15_000);
-        void modelRuntime
-          .refresh({ signal: controller.signal })
-          .catch(() => {})
-          .finally(() => clearTimeout(timeout));
+        void modelRuntime.refresh({ signal: AbortSignal.timeout(15_000) }).catch(() => {});
       }
 
       if (appMode === "rpc") {
@@ -1111,15 +1107,19 @@ export function main(args: string[], options?: MainOptions) {
           yield* awaited(interactiveMode.init());
           time("interactiveMode.init");
 
-          yield* awaited(new Promise((resolve) => setTimeout(resolve, 150)));
+          yield* performed(Effect.sleep(150));
           interactiveMode.stop();
           stopThemeWatcher();
           printTimings();
           if (process.stdout.writableLength > 0) {
-            yield* awaited(new Promise<void>((resolve) => process.stdout.once("drain", resolve)));
+            yield* awaited(
+              callbackPromise<void>((resolve) => process.stdout.once("drain", resolve)),
+            );
           }
           if (process.stderr.writableLength > 0) {
-            yield* awaited(new Promise<void>((resolve) => process.stderr.once("drain", resolve)));
+            yield* awaited(
+              callbackPromise<void>((resolve) => process.stderr.once("drain", resolve)),
+            );
           }
           return;
         }

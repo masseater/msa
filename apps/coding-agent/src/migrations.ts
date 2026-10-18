@@ -16,6 +16,7 @@ import { CONFIG_DIR_NAME, getAgentDir, getBinDir } from "./config.ts";
 import { awaited, awaiting } from "./core/awaiting.ts";
 import { migrateKeybindingsConfig } from "./core/keybindings.ts";
 import { writeLog } from "./core/platform.ts";
+import { callbackPromise } from "./utils/interop.ts";
 import { stripBom } from "./utils/text.ts";
 
 const MIGRATION_GUIDE_URL =
@@ -246,7 +247,7 @@ export function showDeprecationWarnings(warnings: string[]): Promise<void> {
       writeLog(chalk.dim(`\nPress any key to continue...`));
 
       yield* awaited(
-        new Promise<void>((resolve) => {
+        callbackPromise<void>((resolve) => {
           process.stdin.setRawMode?.(true);
           process.stdin.resume();
           process.stdin.once("data", () => {

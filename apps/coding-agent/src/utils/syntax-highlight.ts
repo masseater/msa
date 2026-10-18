@@ -22,6 +22,7 @@ import swift from "highlight.js/lib/languages/swift.js";
 import typescript from "highlight.js/lib/languages/typescript.js";
 
 import { decodeHtmlEntityAt } from "./html.ts";
+import { callbackPromise } from "./interop.ts";
 
 const eagerLanguages = {
   python,
@@ -55,7 +56,7 @@ let allLanguagesPromise: Promise<void> | undefined;
 
 export function loadAllHighlightLanguages(): Promise<void> {
   if (allLanguagesPromise === undefined) {
-    allLanguagesPromise = new Promise((resolve) => {
+    allLanguagesPromise = callbackPromise((resolve) => {
       setImmediate(() => {
         void import("highlight.js/lib/index.js").then(
           () => resolve(),

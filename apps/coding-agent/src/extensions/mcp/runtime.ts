@@ -27,7 +27,7 @@ import { McpOAuthAuthorizationRequiredError, type OAuthChallenge } from "@msa/mc
 import * as Effect from "effect/Effect";
 
 import { VERSION } from "../../config.ts";
-import { awaited, awaiting, awaitingWith } from "../../core/awaiting.ts";
+import { awaited, awaiting, awaitingWith, performed } from "../../core/awaiting.ts";
 import {
   resolveConfigValueOrThrow,
   resolveHeadersOrThrow,
@@ -310,9 +310,7 @@ export class McpServerConnection implements McpToolCaller, McpResourceServer {
               error instanceof McpHttpError &&
               isTransientError(error)
             ) {
-              yield* awaited(
-                new Promise((proceed) => setTimeout(proceed, CONNECT_RETRY_DELAYS_MS[0])),
-              );
+              yield* performed(Effect.sleep(CONNECT_RETRY_DELAYS_MS[0] ?? 0));
               continue;
             }
             if (error instanceof McpSessionExpiredError && attempt === 1) {

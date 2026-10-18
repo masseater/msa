@@ -5,6 +5,7 @@ import { join } from "node:path";
 import * as Effect from "effect/Effect";
 
 import { awaited, awaiting, awaitingWith } from "../../core/awaiting.ts";
+import { fetchResponse } from "../../utils/interop.ts";
 
 const DEFAULT_HUGGING_FACE_URL = "https://huggingface.co";
 const QUANTIZATION_PATTERN =
@@ -95,7 +96,7 @@ export class HuggingFaceClient {
           headers.set("Authorization", `Bearer ${this.token}`);
         const timeout = AbortSignal.timeout(15_000);
         const response = yield* awaited(
-          fetch(`${this.baseUrl}${path}`, {
+          fetchResponse(`${this.baseUrl}${path}`, {
             headers,
             signal: signal === undefined ? timeout : AbortSignal.any([signal, timeout]),
           }),

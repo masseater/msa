@@ -11,6 +11,7 @@ import { validateMcpServerConfig } from "../../core/mcp-servers.ts";
 import { writeError, writeLog } from "../../core/platform.ts";
 import { ProjectTrustStore } from "../../core/trust-manager.ts";
 import { toErrorMessage } from "../../utils/errors.ts";
+import { callbackPromise } from "../../utils/interop.ts";
 import { openBrowser } from "../../utils/open-browser.ts";
 import {
   addMcpServerConfig,
@@ -643,7 +644,7 @@ function waitForRedirectUrl(
       if (!interactive) {
         if (!signal.aborted)
           yield* awaited(
-            new Promise((resolve) => signal.addEventListener("abort", resolve, { once: true })),
+            callbackPromise((resolve) => signal.addEventListener("abort", resolve, { once: true })),
           );
         return undefined;
       }

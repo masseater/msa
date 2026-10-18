@@ -1,11 +1,14 @@
 import { spawn } from "node:child_process";
 
+import { schedule } from "../core/platform.ts";
+import { callbackPromise } from "./interop.ts";
+
 export function runClipboardCommand(
   command: string,
   args: readonly string[],
   options?: { input?: string; timeoutMs?: number; maxBufferBytes?: number },
 ): Promise<Buffer | undefined> {
-  return new Promise((resolve) => {
+  return callbackPromise((resolve) => {
     const child = spawn(command, args, {
       stdio: ["pipe", options?.input === undefined ? "pipe" : "ignore", "ignore"],
       windowsHide: true,
@@ -16,7 +19,7 @@ export function runClipboardCommand(
     const finish = (result: Buffer | undefined): void => {
       if (settled) return;
       settled = true;
-      clearTimeout(timer);
+      timer.cancel();
       resolve(result);
     };
     const abort = (): void => {
@@ -25,7 +28,7 @@ export function runClipboardCommand(
       child.stdin?.destroy();
       finish(undefined);
     };
-    const timer = setTimeout(abort, options?.timeoutMs ?? 3000);
+    const timer = schedule(abort, options?.timeoutMs ?? 3000);
     child.on("error", () => finish(undefined));
     child.on("close", (code) => {
       if (!settled) finish(code === 0 ? Buffer.concat(chunks, length) : undefined);

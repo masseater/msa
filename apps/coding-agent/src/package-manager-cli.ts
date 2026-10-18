@@ -28,6 +28,7 @@ import { DefaultResourceLoader, isBuiltinExtension } from "./core/resource-loade
 import { SettingsManager } from "./core/settings-manager.ts";
 import { hasTrustRequiringProjectResources, ProjectTrustStore } from "./core/trust-manager.ts";
 import { spawnProcess } from "./utils/child-process.ts";
+import { callbackPromise } from "./utils/interop.ts";
 import {
   formatVersionCheckError,
   getLatestMsaRelease,
@@ -415,36 +416,31 @@ function updateTargetIncludesExtensions(target: UpdateTarget): boolean {
 function refreshModelCatalogs(agentDir: string): Promise<void> {
   return Effect.runPromise(
     awaiting(function* () {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 15_000);
-      try {
-        const modelRuntime = yield* awaited(
-          ModelRuntime.create({
-            authPath: join(agentDir, "auth.json"),
-            modelsPath: join(agentDir, "models.json"),
-            allowModelNetwork: false,
-            signal: controller.signal,
-          }),
-        );
-        const result = yield* awaited(
-          modelRuntime.refresh({
-            allowNetwork: true,
-            force: true,
-            signal: controller.signal,
-          }),
-        );
-        if (result.aborted) {
-          throw new Error("Model catalog refresh timed out.");
-        }
-        if (result.errors.size > 0) {
-          const details = Array.from(
-            result.errors,
-            ([provider, error]) => `${provider}: ${error.message}`,
-          ).join("; ");
-          throw new Error(`Could not refresh model catalogs: ${details}`);
-        }
-      } finally {
-        clearTimeout(timeout);
+      const signal = AbortSignal.timeout(15_000);
+      const modelRuntime = yield* awaited(
+        ModelRuntime.create({
+          authPath: join(agentDir, "auth.json"),
+          modelsPath: join(agentDir, "models.json"),
+          allowModelNetwork: false,
+          signal,
+        }),
+      );
+      const result = yield* awaited(
+        modelRuntime.refresh({
+          allowNetwork: true,
+          force: true,
+          signal,
+        }),
+      );
+      if (result.aborted) {
+        throw new Error("Model catalog refresh timed out.");
+      }
+      if (result.errors.size > 0) {
+        const details = Array.from(
+          result.errors,
+          ([provider, error]) => `${provider}: ${error.message}`,
+        ).join("; ");
+        throw new Error(`Could not refresh model catalogs: ${details}`);
       }
       writeLog(chalk.green("Model catalogs refreshed"));
     }),
@@ -519,7 +515,7 @@ function runSelfUpdate(command: SelfUpdateCommand): Promise<void> {
       writeLog(chalk.dim(`Updating ${APP_NAME} with ${command.display}...`));
       for (const step of command.steps ?? [command]) {
         yield* awaited(
-          new Promise<void>((resolve, reject) => {
+          callbackPromise<void>((resolve, reject) => {
             const child = spawnProcess(step.command, step.args, {
               stdio: "inherit",
             });

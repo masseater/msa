@@ -1,3 +1,4 @@
+import { callbackPromise } from "./interop.ts";
 function abortReason(signal: AbortSignal): unknown {
   if (signal.reason !== undefined) return signal.reason;
   const error = new Error("The operation was aborted");
@@ -19,7 +20,7 @@ export function raceWithAbortSignal<T>(
     return Promise.reject(abortReason(signal));
   }
 
-  return new Promise<T>((resolve, reject) => {
+  return callbackPromise<T>((resolve, reject) => {
     let settled = false;
     const cleanup = () => signal.removeEventListener("abort", onAbort);
     const onAbort = () => {

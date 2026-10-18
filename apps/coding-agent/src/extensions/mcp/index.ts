@@ -2,10 +2,11 @@ import { join, resolve } from "node:path";
 
 import type { SelectItem } from "@msa/tui";
 import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
 import type { TSchema } from "typebox";
 
 import { getAgentDir } from "../../config.ts";
-import { awaited, awaiting } from "../../core/awaiting.ts";
+import { awaited, awaiting, performed } from "../../core/awaiting.ts";
 import type {
   ExtensionAPI,
   ExtensionCommandContext,
@@ -16,6 +17,7 @@ import type {
 import { mcpNamespace } from "../../core/mcp-servers.ts";
 import type { ModelRegistry } from "../../core/model-registry.ts";
 import { toErrorMessage } from "../../utils/errors.ts";
+import { callbackPromise } from "../../utils/interop.ts";
 import { openBrowser } from "../../utils/open-browser.ts";
 import { CODEMODE_TOOL_NAME } from "../codemode/tool.ts";
 import { TOOL_SEARCH_TOOL_NAME } from "../tool-search/tool.ts";
@@ -600,7 +602,7 @@ export function createMcpExtension(options: McpExtensionOptions = {}): Extension
             yield* awaited(
               Promise.race([
                 Promise.all(ready.map((attempt) => attempt.ready)),
-                new Promise<void>((done) => {
+                callbackPromise<void>((done) => {
                   onAbort = () => done();
                   signal?.addEventListener("abort", onAbort, { once: true });
                 }),
@@ -1219,7 +1221,7 @@ export function createMcpExtension(options: McpExtensionOptions = {}): Extension
         return;
       }
 
-      const runtime = new Promise((proceed) => setImmediate(proceed)).then(() => loadMcpRuntime());
+      const runtime = Effect.runPromise(Effect.sleep(0)).then(() => loadMcpRuntime());
       pending = Promise.all(enabled.map((server) => startConnection(server, runtime)))
         .then(() => {
           if (!signal.aborted) reportProblems(ctx);
@@ -1242,16 +1244,11 @@ export function createMcpExtension(options: McpExtensionOptions = {}): Extension
               : [],
           );
           if (ready.length === 0) return;
-          let timer: NodeJS.Timeout | undefined;
-          const finished = yield* awaited(
-            Promise.race([
-              Promise.all(ready).then(() => true),
-              new Promise<boolean>((finish) => {
-                timer = setTimeout(() => finish(false), startupWaitMs);
-              }),
-            ]),
+          const finished = Option.isSome(
+            yield* performed(
+              Effect.promise(() => Promise.all(ready)).pipe(Effect.timeoutOption(startupWaitMs)),
+            ),
           );
-          clearTimeout(timer);
           if (!finished) {
             ctx.ui.notify(
               "MCP servers are still connecting; their tools become available once connected.",

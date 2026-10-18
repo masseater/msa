@@ -21,6 +21,7 @@ import { DynamicBorder } from "../../modes/interactive/components/dynamic-border
 import { keyHint } from "../../modes/interactive/components/keybinding-hints.ts";
 import { getSelectListTheme, type Theme } from "../../modes/interactive/theme/theme.ts";
 import { toErrorMessage } from "../../utils/errors.ts";
+import { callbackPromise } from "../../utils/interop.ts";
 
 export interface McpMenu {
   title: string;
@@ -111,7 +112,7 @@ export class McpManagerView implements McpUi, Component, Focusable {
     build: () => McpMenu,
     subscribe?: (listener: () => void) => () => void,
   ): Promise<string | undefined> {
-    return new Promise((resolve) => {
+    return callbackPromise((resolve) => {
       let unsubscribe: (() => void) | undefined;
       let settled = false;
       const finish = (value: string | undefined) => {
@@ -185,7 +186,7 @@ export class McpManagerView implements McpUi, Component, Focusable {
     authorizationUrl: string,
     signal: AbortSignal,
   ): Promise<string | undefined> {
-    return new Promise((resolve) => {
+    return callbackPromise((resolve) => {
       let settled = false;
       const finish = (value: string | undefined) => {
         if (settled) return;
