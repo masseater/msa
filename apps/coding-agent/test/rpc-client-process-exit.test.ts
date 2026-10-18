@@ -1,42 +1,41 @@
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-
+import { awaited, joinPath, makeTempDir, removeDirs, runTest, writeTextFile } from "@msa/testing";
+import { Effect } from "effect";
 import { afterEach, describe, expect, test } from "vite-plus/test";
 
 import { RpcClient } from "../src/modes/rpc/rpc-client.ts";
 
 const tempDirs: string[] = [];
 
-function writeChildScript(contents: string): string {
-  const dir = mkdtempSync(join(tmpdir(), "msa-rpc-client-exit-"));
+const writeChildScript = Effect.fn("writeChildScript")(function* (contents: string) {
+  const dir = yield* makeTempDir("msa-rpc-client-exit-");
   tempDirs.push(dir);
-  const path = join(dir, "child.mjs");
-  writeFileSync(path, contents);
+  const path = joinPath(dir, "child.mjs");
+  yield* writeTextFile(path, contents);
   return path;
-}
-
-afterEach(() => {
-  for (const dir of tempDirs.splice(0)) {
-    rmSync(dir, { recursive: true, force: true });
-  }
 });
 
+afterEach(() => runTest(removeDirs(tempDirs.splice(0))));
+
 describe("RpcClient child process failures", () => {
-  test("rejects an in-flight request when the child process exits", async () => {
-    const client = new RpcClient({
-      cliPath: writeChildScript(`
+  test("rejects an in-flight request when the child process exits", () =>
+    runTest(
+      Effect.gen(function* () {
+        const client = new RpcClient({
+          cliPath: yield* writeChildScript(`
 process.stdin.once("data", () => {
 	process.exit(43);
 });
 process.stdin.resume();
 `),
-    });
+        });
 
-    await client.start();
+        yield* awaited(client.start());
 
-    await expect(client.getCommands()).rejects.toThrow(
-      /Agent process exited \(code=43 signal=null\)/,
-    );
-  });
+        yield* awaited(
+          expect(client.getCommands()).rejects.toThrow(
+            /Agent process exited \(code=43 signal=null\)/u,
+          ),
+        );
+      }),
+    ));
 });

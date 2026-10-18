@@ -1,4 +1,5 @@
 import type { AgentTool } from "@msa/agent-core";
+import { awaited, runTest } from "@msa/testing";
 import { Type } from "typebox";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -20,7 +21,7 @@ function tool(
     label: name,
     description,
     parameters: Type.Unsafe({ type: "object", properties }),
-    execute: async () => ({ content: [], details: undefined }),
+    execute: () => runTest(awaited({ content: [], details: undefined })),
   };
 }
 
