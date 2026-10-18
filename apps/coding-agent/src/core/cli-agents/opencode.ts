@@ -8,10 +8,10 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
 
-import type { Model, SimpleStreamOptions, TranscriptContext } from "@msa/ai/compat";
+import type { Provider } from "@msa/ai";
 import { getBuiltinModels } from "@msa/ai/providers/all";
 
-import type { ExtensionAPI } from "../../core/extensions/types.ts";
+import { cliAgentProvider } from "./provider.ts";
 import { streamViaCli, type CliBackend } from "./run.ts";
 import { flattenTranscript } from "./transcript.ts";
 
@@ -108,25 +108,18 @@ const backend: CliBackend<OpenCodeEvent> = {
   shouldRetry: (detail) => /readiness|server-connection|database is locked/i.test(detail),
 };
 
-export function registerOpenCode(msa: ExtensionAPI): void {
-  msa.registerProvider(PROVIDER_ID, {
+export function openCodeProvider(): Provider {
+  return cliAgentProvider({
+    id: PROVIDER_ID,
     name: "OpenCode Free",
-    baseUrl: "http://127.0.0.1:1/v1",
-    apiKey: "local",
-    api: "openai-completions",
     models: freeModels().map((free) => ({
       id: free.id,
       name: free.name,
       reasoning: false,
-      input: ["text"] as const,
-      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+      input: ["text"],
       contextWindow: free.contextWindow,
       maxTokens: free.maxTokens,
     })),
-    streamSimple: ((
-      model: Model<string>,
-      context: TranscriptContext,
-      options?: SimpleStreamOptions,
-    ) => streamViaCli(backend, model, context, options)) as never,
+    streamSimple: (model, context, options) => streamViaCli(backend, model, context, options),
   });
 }

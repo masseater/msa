@@ -2,7 +2,7 @@
  * Claude Code as an external service, so `/login` signs its accounts in to Claude. `/accounts claude`
  * manages the same accounts with more actions.
  */
-import type { ExternalService, ServiceLoginInteraction } from "../../core/external-services.ts";
+import type { ExternalService, ServiceLoginInteraction } from "../external-services.ts";
 import {
   type Account,
   addAccount,

@@ -1,4 +1,5 @@
 import { APP_NAME } from "../config.ts";
+import { ACCOUNTS_DESCRIPTION } from "./accounts.ts";
 import type { SourceInfo } from "./source-info.ts";
 
 export type SlashCommandSource = "extension" | "prompt" | "skill";
@@ -35,6 +36,11 @@ export const BUILTIN_SLASH_COMMANDS: ReadonlyArray<BuiltinSlashCommand> = [
   { name: "scoped-models", description: "Enable/disable models for Ctrl+P cycling" },
   { name: "login", description: "Configure provider authentication", argumentHint: "<provider>" },
   { name: "logout", description: "Remove provider authentication" },
+  {
+    name: "accounts",
+    description: ACCOUNTS_DESCRIPTION,
+    argumentHint: "[<kind> <action> <name>]",
+  },
   { name: "clear", description: "Start a new session", aliases: ["new", "reset"] },
   { name: "resume", description: "Resume a different session", aliases: ["continue"] },
   {

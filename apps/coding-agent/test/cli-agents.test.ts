@@ -10,17 +10,13 @@ import {
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 
-import type { AssistantMessageEvent, Model, TranscriptContext } from "@msa/ai/compat";
+import { InMemoryModelsStore } from "@msa/ai";
+import type { AssistantMessageEvent, TranscriptContext } from "@msa/ai/compat";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { ENV_AGENT_DIR } from "../src/config.ts";
-import type {
-  ExtensionAPI,
-  ExtensionCommandContext,
-  ProviderConfig,
-  RegisteredCommand,
-} from "../src/core/extensions/types.ts";
-import accountsExtension from "../src/extensions/accounts/index.ts";
+import { completeAccountsArgument, runAccountsCommand } from "../src/core/accounts.ts";
+import { AuthStorage } from "../src/core/auth-storage.ts";
 import {
   accountEnv,
   addAccount,
@@ -33,9 +29,10 @@ import {
   preferAccount,
   removeAccount,
   setAutoRotation,
-} from "../src/extensions/cli-agents/claude-accounts.ts";
-import { claudeCodeService } from "../src/extensions/cli-agents/claude-service.ts";
-import { registerOpenCode } from "../src/extensions/cli-agents/opencode.ts";
+} from "../src/core/cli-agents/claude-accounts.ts";
+import { claudeCodeService } from "../src/core/cli-agents/claude-service.ts";
+import { openCodeProvider } from "../src/core/cli-agents/opencode.ts";
+import { ModelRuntime } from "../src/core/model-runtime.ts";
 
 let dir: string;
 const savedEnv = { ...process.env };
@@ -116,6 +113,27 @@ describe("Claude Code accounts", () => {
     const error = await accountEnv(account).catch((caught: Error) => caught.message);
     expect(error).toMatch(/^tokenCommand .*: nope$/);
     expect(blockIfUnusable(account, { error: String(error) })).toBe(true);
+  });
+});
+
+describe("Claude Code providers", () => {
+  it("are available without extensions and follow the account list on refresh", async () => {
+    const runtime = await ModelRuntime.create({
+      credentials: AuthStorage.inMemory(),
+      modelsPath: null,
+      modelsStore: new InMemoryModelsStore(),
+      allowModelNetwork: false,
+    });
+    const providers = () =>
+      [...new Set(runtime.getAvailableSnapshot().map((model) => model.provider))]
+        .filter((id) => id.startsWith("claude-code"))
+        .sort();
+    expect(providers()).toEqual(["claude-code"]);
+    expect(runtime.getModel("claude-code", "opus")?.api).toBe("claude-code");
+
+    writeAccounts([{ name: "main" }, { name: "sub" }]);
+    await runtime.refresh({ allowNetwork: false });
+    expect(providers()).toEqual(["claude-code", "claude-code-main", "claude-code-sub"]);
   });
 });
 
@@ -273,33 +291,25 @@ describe("managing Claude Code accounts", () => {
 });
 
 describe("/accounts", () => {
-  function command(): RegisteredCommand {
-    let registered: RegisteredCommand | undefined;
-    accountsExtension({
-      registerCommand: (name: string, options: Omit<RegisteredCommand, "name" | "sourceInfo">) => {
-        if (name === "accounts") registered = options as RegisteredCommand;
-      },
-    } as unknown as ExtensionAPI);
-    if (!registered) throw new Error("command not registered");
-    return registered;
-  }
-
   function context() {
     const notes: string[] = [];
-    let reloads = 0;
+    let refreshes = 0;
     const ctx = {
-      hasUI: false,
-      ui: { notify: (message: string) => notes.push(message) },
-      reload: async () => {
-        reloads += 1;
+      ui: {
+        notify: (message: string) => notes.push(message),
+        input: async () => undefined,
+        confirm: async () => true,
       },
-    } as unknown as ExtensionCommandContext;
-    return { ctx, notes, reloads: () => reloads };
+      refreshProviders: async () => {
+        refreshes += 1;
+      },
+    };
+    return { ctx, notes, refreshes: () => refreshes };
   }
 
   it("completes kinds, then the kind's actions and account names", async () => {
     writeAccounts([{ name: "main" }, { name: "sub" }]);
-    const complete = command().getArgumentCompletions!;
+    const complete = completeAccountsArgument;
     expect((await complete("cl"))?.map((item) => item.value)).toEqual(["claude "]);
     expect((await complete("claude lo"))?.map((item) => item.value)).toEqual([
       "claude login ",
@@ -308,48 +318,32 @@ describe("/accounts", () => {
     expect((await complete("claude use s"))?.map((item) => item.value)).toEqual(["claude use sub"]);
   });
 
-  it("routes to the kind and reloads when the account list changes", async () => {
+  it("routes to the kind and rebuilds the providers when the account list changes", async () => {
     process.env["CLAUDE_BIN"] = "/bin/false";
-    const { ctx, notes, reloads } = context();
-    await command().handler("claude add token printf tok", ctx);
+    const { ctx, notes, refreshes } = context();
+    await runAccountsCommand("claude add token printf tok", ctx);
     expect(loadAccounts().map((account) => account.name)).toEqual(["default", "token"]);
-    expect(reloads()).toBe(1);
-    await command().handler("", ctx);
+    expect(refreshes()).toBe(1);
+    await runAccountsCommand("", ctx);
     expect(notes.at(-1)).toMatch(/^claude:\n1\. default .*\n2\. token /);
-    await command().handler("nope", ctx);
+    await runAccountsCommand("nope", ctx);
     expect(notes.at(-1)).toMatch(/Unknown account kind "nope"/);
   });
 });
 
 describe("opencode-free provider", () => {
-  function register(): ProviderConfig {
-    let config: ProviderConfig | undefined;
-    registerOpenCode({
-      registerProvider: (_id: string, input: ProviderConfig) => {
-        config = input;
-      },
-    } as unknown as ExtensionAPI);
-    if (!config) throw new Error("provider not registered");
-    return config;
-  }
-
   async function run(script: string): Promise<AssistantMessageEvent[]> {
     const bin = join(dir, "opencode");
     writeFileSync(bin, `#!/bin/sh\ncat > "${dir}/stdin.txt"\n${script}\n`);
     chmodSync(bin, 0o755);
     process.env["OPENCODE_BIN"] = bin;
-    const config = register();
-    const model = { ...config.models![0]!, provider: "opencode-free", api: "openai-completions" };
+    const provider = openCodeProvider();
+    const model = provider.getModels()[0]!;
     const context = {
       messages: [{ role: "user", content: "hello", timestamp: 0 }],
     } as unknown as TranscriptContext;
     const events: AssistantMessageEvent[] = [];
-    const stream = (
-      config.streamSimple as (
-        m: Model<string>,
-        c: TranscriptContext,
-      ) => AsyncIterable<AssistantMessageEvent>
-    )(model as unknown as Model<string>, context);
+    const stream = provider.streamSimple(model, context);
     for await (const event of stream) events.push(event);
     return events;
   }

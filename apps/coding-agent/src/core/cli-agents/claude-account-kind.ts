@@ -1,12 +1,11 @@
 /**
  * `/accounts claude`: list the Claude accounts the claude-code provider rotates
  * through, add and remove them, sign them in and out, and pick their order.
- * Changes that add or drop a `claude-code-<account>` provider reload msa.
+ * Changes that add or drop a `claude-code-<account>` provider rebuild the providers.
  */
 import type { AutocompleteItem } from "@msa/tui";
 
-import type { ExtensionCommandContext } from "../../core/extensions/types.ts";
-import type { AccountKind } from "../accounts/kind.ts";
+import type { AccountKind, AccountsContext } from "../accounts.ts";
 import {
   addAccount,
   authStatus,
@@ -53,8 +52,7 @@ async function describeAccounts(): Promise<string> {
     .join("\n");
 }
 
-async function login(account: Account, ctx: ExtensionCommandContext): Promise<void> {
-  if (!ctx.hasUI) throw new Error("Signing in needs the interactive UI");
+async function login(account: Account, ctx: AccountsContext): Promise<void> {
   await loginAccount(account, {
     askCode: (url, signal) => {
       ctx.ui.notify(`Sign in to Claude for "${account.name}":\n${url}`, "info");
@@ -75,7 +73,7 @@ function named(name: string | undefined): Account {
   return account;
 }
 
-async function run(args: string, ctx: ExtensionCommandContext): Promise<void> {
+async function run(args: string, ctx: AccountsContext): Promise<void> {
   const [action = "", name, ...rest] = args.trim().split(/\s+/).filter(Boolean);
   const before = loadAccounts().length;
   switch (action) {
@@ -97,10 +95,7 @@ async function run(args: string, ctx: ExtensionCommandContext): Promise<void> {
       break;
     case "remove":
       named(name);
-      if (
-        ctx.hasUI &&
-        !(await ctx.ui.confirm("Remove Claude account", `Forget "${name}" and its login?`))
-      )
+      if (!(await ctx.ui.confirm("Remove Claude account", `Forget "${name}" and its login?`)))
         return;
       removeAccount(name!);
       break;
@@ -119,7 +114,7 @@ async function run(args: string, ctx: ExtensionCommandContext): Promise<void> {
   }
   ctx.ui.notify(await describeAccounts(), "info");
   // Adding or removing an account adds or drops claude-code-<account> providers.
-  if (loadAccounts().length !== before) await ctx.reload();
+  if (loadAccounts().length !== before) await ctx.refreshProviders();
 }
 
 function completions(prefix: string): AutocompleteItem[] | null {

@@ -38,7 +38,7 @@ List accounts in `~/.msa/agent/claude-code-accounts.json`:
 - `claude-code` uses the first account that is not blocked. An account that hits its usage limit is blocked until the reset time in the message; a logged-out account for 10 minutes. The request then moves to the next account.
 - `claude-code-<name>` always uses that account. `"auto": false` keeps an account out of `claude-code`.
 
-`/claude-accounts` lists the accounts and their blocks; `/claude-accounts clear` lifts the blocks.
+`/accounts claude` lists the accounts and their blocks; `/accounts claude clear` lifts the blocks. `/accounts claude add|login|logout|remove|use|enable|disable <name>` manages them.
 
 ## OpenCode
 

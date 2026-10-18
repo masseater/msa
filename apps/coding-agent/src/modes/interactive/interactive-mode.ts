@@ -62,6 +62,7 @@ import {
   RELEASES_URL,
   VERSION,
 } from "../../config.ts";
+import { completeAccountsArgument, runAccountsCommand } from "../../core/accounts.ts";
 import {
   type AgentSessionRuntime,
   SessionImportFileNotFoundError,
@@ -721,7 +722,10 @@ export class InteractiveMode {
       };
     }
 
-    const thinkingCommand = slashCommands.find((command) => command.name === "thinking");
+    const accountsCommand = slashCommands.find((command) => command.name === "accounts");
+    if (accountsCommand) accountsCommand.getArgumentCompletions = completeAccountsArgument;
+
+    const thinkingCommand = slashCommands.find((command) => command.name === "effort");
     if (thinkingCommand) {
       thinkingCommand.getArgumentCompletions = (prefix: string): AutocompleteItem[] | null => {
         return createFuzzyAutocompleteItems(
@@ -2485,6 +2489,17 @@ export class InteractiveMode {
       const providerRef = text.startsWith("/login ") ? text.slice(7).trim() : undefined;
       this.editor.setText("");
       await this.loginFlow.login(providerRef);
+      return true;
+    }
+    if (text === "/accounts" || text.startsWith("/accounts ")) {
+      this.editor.setText("");
+      await runAccountsCommand(text.slice("/accounts".length), {
+        ui: this.createExtensionUIContext(),
+        refreshProviders: async () => {
+          await this.session.modelRuntime.refresh({ allowNetwork: false });
+          this.setupAutocompleteProvider();
+        },
+      });
       return true;
     }
     if (text === "/logout") {
