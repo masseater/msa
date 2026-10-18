@@ -127,7 +127,6 @@ const checkTreeshakeInputs = (inputs: Metafile["inputs"]) =>
       "@anthropic-ai/sdk",
       "@aws-sdk/client-bedrock-runtime",
       "@google/genai",
-      "@mistralai/mistralai",
       "openai",
     ].filter((packageName) => includesNodePackage(inputs, packageName));
     if (includedAiSdkPackages.length !== 1 || includedAiSdkPackages[0] !== "@anthropic-ai/sdk") {

@@ -226,16 +226,16 @@ describe("AuthStorage", () => {
     writeAuthJson({
       anthropic: { type: "api_key", key: "anthropic-key" },
       openai: { type: "api_key", key: "openai-key" },
-      google: { type: "api_key", key: "external-key" },
+      opencode: { type: "api_key", key: "external-key" },
     });
     await storage.delete("anthropic");
     await expect(storage.list()).resolves.toEqual([
       { providerId: "openai", type: "api_key" },
-      { providerId: "google", type: "api_key" },
+      { providerId: "opencode", type: "api_key" },
     ]);
     expect(await storage.read("anthropic")).toBeUndefined();
     expect(await storage.read("openai")).toEqual({ type: "api_key", key: "openai-key" });
-    expect(await storage.read("google")).toEqual({ type: "api_key", key: "external-key" });
+    expect(await storage.read("opencode")).toEqual({ type: "api_key", key: "external-key" });
   });
 
   test("in-memory storage implements the same credential-store behavior", async () => {
@@ -468,7 +468,7 @@ describe("AuthStorage", () => {
     controller.abort();
     const competingMutation = vi.fn(async () => ({
       result: undefined,
-      next: JSON.stringify({ google: { type: "api_key", key: "committed" } }),
+      next: JSON.stringify({ opencode: { type: "api_key", key: "committed" } }),
     }));
     const competing = backend.withLockAsync(competingMutation);
     await new Promise((resolve) => setTimeout(resolve, 20));
@@ -479,7 +479,7 @@ describe("AuthStorage", () => {
     await competing;
     expect(competingMutation).toHaveBeenCalledTimes(1);
     expect(JSON.parse(readFileSync(authJsonPath, "utf8"))).toEqual({
-      google: { type: "api_key", key: "committed" },
+      opencode: { type: "api_key", key: "committed" },
     });
   });
 

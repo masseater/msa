@@ -22,13 +22,9 @@ export const defaultModelPerProvider: Partial<Record<KnownProvider, string>> = {
   "amazon-bedrock": "us.anthropic.claude-opus-4-6-v1",
   anthropic: "claude-opus-4-8",
   openai: "gpt-5.5",
-  azure: "gpt-5.4",
   "openai-codex": "gpt-6.1-sol",
   radius: "balanced",
-  google: "gemini-3.1-pro-preview",
-  "google-vertex": "gemini-3.1-pro-preview",
   openrouter: "moonshotai/kimi-k2.6",
-  mistral: "devstral-medium-latest",
   opencode: "kimi-k2.6",
   "opencode-go": "kimi-k3",
 };

@@ -12,7 +12,6 @@ import type {
 
 type StreamOptionsWithExtras = StreamOptions & Record<string, unknown>;
 
-import { hasAzureOpenAICredentials, resolveAzureDeploymentName } from "./azure-utils.ts";
 import { hasBedrockCredentials } from "./bedrock-utils.ts";
 import { resolveApiKey } from "./oauth.ts";
 
@@ -159,30 +158,6 @@ async function testEmptyAssistantMessage<TApi extends Api>(
 }
 
 describe("AI Providers Empty Message Tests", () => {
-  describe.skipIf(!process.env["GEMINI_API_KEY"])("Google Provider Empty Messages", () => {
-    const llm = getModel("google", "gemini-2.5-flash");
-
-    it("should handle empty content array", { retry: 3, timeout: 30000 }, async () => {
-      await testEmptyMessage(llm);
-    });
-
-    it("should handle empty string content", { retry: 3, timeout: 30000 }, async () => {
-      await testEmptyStringMessage(llm);
-    });
-
-    it("should handle whitespace-only content", { retry: 3, timeout: 30000 }, async () => {
-      await testWhitespaceOnlyMessage(llm);
-    });
-
-    it(
-      "should handle empty assistant message in conversation",
-      { retry: 3, timeout: 30000 },
-      async () => {
-        await testEmptyAssistantMessage(llm);
-      },
-    );
-  });
-
   describe.skipIf(!process.env["OPENAI_API_KEY"])(
     "OpenAI Completions Provider Empty Messages",
     () => {
@@ -237,61 +212,8 @@ describe("AI Providers Empty Message Tests", () => {
     },
   );
 
-  describe.skipIf(!hasAzureOpenAICredentials())(
-    "Azure OpenAI Responses Provider Empty Messages",
-    () => {
-      const llm = getModel("azure", "gpt-4o-mini");
-      const azureDeploymentName = resolveAzureDeploymentName(llm.id);
-      const azureOptions = azureDeploymentName ? { azureDeploymentName } : {};
-
-      it("should handle empty content array", { retry: 3, timeout: 30000 }, async () => {
-        await testEmptyMessage(llm, azureOptions);
-      });
-
-      it("should handle empty string content", { retry: 3, timeout: 30000 }, async () => {
-        await testEmptyStringMessage(llm, azureOptions);
-      });
-
-      it("should handle whitespace-only content", { retry: 3, timeout: 30000 }, async () => {
-        await testWhitespaceOnlyMessage(llm, azureOptions);
-      });
-
-      it(
-        "should handle empty assistant message in conversation",
-        { retry: 3, timeout: 30000 },
-        async () => {
-          await testEmptyAssistantMessage(llm, azureOptions);
-        },
-      );
-    },
-  );
-
   describe.skipIf(!process.env["ANTHROPIC_API_KEY"])("Anthropic Provider Empty Messages", () => {
     const llm = getModel("anthropic", "claude-haiku-4-5");
-
-    it("should handle empty content array", { retry: 3, timeout: 30000 }, async () => {
-      await testEmptyMessage(llm);
-    });
-
-    it("should handle empty string content", { retry: 3, timeout: 30000 }, async () => {
-      await testEmptyStringMessage(llm);
-    });
-
-    it("should handle whitespace-only content", { retry: 3, timeout: 30000 }, async () => {
-      await testWhitespaceOnlyMessage(llm);
-    });
-
-    it(
-      "should handle empty assistant message in conversation",
-      { retry: 3, timeout: 30000 },
-      async () => {
-        await testEmptyAssistantMessage(llm);
-      },
-    );
-  });
-
-  describe.skipIf(!process.env["MISTRAL_API_KEY"])("Mistral Provider Empty Messages", () => {
-    const llm = getModel("mistral", "devstral-medium-latest");
 
     it("should handle empty content array", { retry: 3, timeout: 30000 }, async () => {
       await testEmptyMessage(llm);

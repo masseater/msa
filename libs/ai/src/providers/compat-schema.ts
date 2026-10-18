@@ -512,17 +512,6 @@ export const BedrockCompatSchema = Type.Object(
   { description: "Compatibility settings for Amazon Bedrock models.", additionalProperties: true },
 );
 
-export const MistralConversationsCompatSchema = Type.Object(
-  {
-    supportsMidConvoSystemMessages: optionalCompatBoolean({
-      description:
-        "Whether the exact model accepts system messages after the conversation has started. When false, later system messages are folded into the leading system message.",
-      default: false,
-    }),
-  },
-  { description: "Compatibility settings for the Mistral chat API.", additionalProperties: true },
-);
-
 const ProviderCompatPropertyOverrides = {
   supportsDeveloperRole: optionalCompatBoolean({
     description:
@@ -617,7 +606,6 @@ const CompatSchemasByApi = {
   "openai-responses": OpenAIResponsesCompatSchema,
   "anthropic-messages": AnthropicMessagesCompatSchema,
   "bedrock-converse-stream": BedrockCompatSchema,
-  "mistral-conversations": MistralConversationsCompatSchema,
 } as const;
 
 const ProviderCompatProperties = mergeCompatProperties(
@@ -649,7 +637,3 @@ export interface OpenAIResponsesCompat extends Static<typeof OpenAIResponsesComp
 export interface AnthropicMessagesCompat extends Static<typeof AnthropicMessagesCompatSchema> {}
 /** Compatibility settings for Amazon Bedrock models. */
 export interface BedrockCompat extends Static<typeof BedrockCompatSchema> {}
-/** Compatibility settings for the Mistral chat API. */
-export interface MistralConversationsCompat extends Static<
-  typeof MistralConversationsCompatSchema
-> {}

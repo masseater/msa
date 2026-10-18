@@ -126,7 +126,7 @@ describe("sampling params", () => {
   });
 
   // Model defaults must apply to direct stream()/complete() calls, not only streamSimple() (#9506)
-  it.each(["openai-completions", "openai-responses", "azure-openai-responses"] as const)(
+  it.each(["openai-completions", "openai-responses"] as const)(
     "applies model-level sampling params with request keys taking precedence for %s",
     async (api) => {
       const payload = await capturePayload(makeModel(api, { top_p: 0.95, min_p: 0.05 }), {
@@ -188,7 +188,7 @@ describe("sampling params", () => {
     expect(payload.top_p).toBe(0.5);
   });
 
-  it.each(["openai-completions", "openai-responses", "azure-openai-responses"] as const)(
+  it.each(["openai-completions", "openai-responses"] as const)(
     "applies thinking-level params between model and request params for %s",
     async (api) => {
       const payload = await capturePayload(
@@ -209,7 +209,7 @@ describe("sampling params", () => {
     },
   );
 
-  it.each(["openai-responses", "azure-openai-responses"] as const)(
+  it.each(["openai-responses"] as const)(
     "uses medium sampling params for summary-only %s requests",
     async (api) => {
       const payload = await capturePayload(

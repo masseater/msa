@@ -5,7 +5,6 @@ import type { Api, Context, Model, StreamOptions } from "../src/types.ts";
 
 type StreamOptionsWithExtras = StreamOptions & Record<string, unknown>;
 
-import { hasAzureOpenAICredentials, resolveAzureDeploymentName } from "./azure-utils.ts";
 import { hasBedrockCredentials } from "./bedrock-utils.ts";
 import { resolveApiKey } from "./oauth.ts";
 
@@ -108,18 +107,6 @@ async function testAbortThenNewMessage<TApi extends Api>(
 }
 
 describe("AI Providers Abort Tests", () => {
-  describe.skipIf(!process.env["GEMINI_API_KEY"])("Google Provider Abort", () => {
-    const llm = getModel("google", "gemini-2.5-flash");
-
-    it("should abort mid-stream", { retry: 3 }, async () => {
-      await testAbortSignal(llm, { thinking: { enabled: true } });
-    });
-
-    it("should handle immediate abort", { retry: 3 }, async () => {
-      await testImmediateAbort(llm, { thinking: { enabled: true } });
-    });
-  });
-
   describe.skipIf(!process.env["OPENAI_API_KEY"])("OpenAI Completions Provider Abort", () => {
     const { compat: _compat, ...baseModel } = getModel("openai", "gpt-4o-mini")!;
     void _compat;
@@ -149,20 +136,6 @@ describe("AI Providers Abort Tests", () => {
     });
   });
 
-  describe.skipIf(!hasAzureOpenAICredentials())("Azure OpenAI Responses Provider Abort", () => {
-    const llm = getModel("azure", "gpt-4o-mini");
-    const azureDeploymentName = resolveAzureDeploymentName(llm.id);
-    const azureOptions = azureDeploymentName ? { azureDeploymentName } : {};
-
-    it("should abort mid-stream", { retry: 3 }, async () => {
-      await testAbortSignal(llm, azureOptions);
-    });
-
-    it("should handle immediate abort", { retry: 3 }, async () => {
-      await testImmediateAbort(llm, azureOptions);
-    });
-  });
-
   describe.skipIf(!process.env["ANTHROPIC_OAUTH_TOKEN"])("Anthropic Provider Abort", () => {
     const llm = getModel("anthropic", "claude-sonnet-4-6");
 
@@ -172,18 +145,6 @@ describe("AI Providers Abort Tests", () => {
 
     it("should handle immediate abort", { retry: 3 }, async () => {
       await testImmediateAbort(llm, { thinkingEnabled: true, thinkingBudgetTokens: 2048 });
-    });
-  });
-
-  describe.skipIf(!process.env["MISTRAL_API_KEY"])("Mistral Provider Abort", () => {
-    const llm = getModel("mistral", "devstral-medium-latest");
-
-    it("should abort mid-stream", { retry: 3 }, async () => {
-      await testAbortSignal(llm);
-    });
-
-    it("should handle immediate abort", { retry: 3 }, async () => {
-      await testImmediateAbort(llm);
     });
   });
 

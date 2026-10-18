@@ -625,7 +625,7 @@ describe("Agent", () => {
     const agent = new Agent({ streamFn: unusedStreamFunction });
 
     // Test setModel
-    const newModel = getModel("google", "gemini-2.5-flash");
+    const newModel = getModel("opencode", "gemini-3-flash");
     agent.state.model = newModel;
     expect(agent.state.model).toBe(newModel);
 

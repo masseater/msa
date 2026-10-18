@@ -8,7 +8,6 @@ import { describe, expect, it } from "vite-plus/test";
 
 import type { Api, Context, Model, StreamOptions, Tool, ToolResultMessage } from "../src/compat.ts";
 import { complete, getModel } from "../src/compat.ts";
-import { hasAzureOpenAICredentials, resolveAzureDeploymentName } from "./azure-utils.ts";
 import { resolveApiKey } from "./oauth.ts";
 
 type StreamOptionsWithExtras = StreamOptions & Record<string, unknown>;
@@ -160,23 +159,6 @@ describe("Responses API tool result images", () => {
       },
     );
   });
-
-  describe.skipIf(!hasAzureOpenAICredentials())(
-    "Azure OpenAI Responses Provider (gpt-4o-mini)",
-    () => {
-      const model = getModel("azure", "gpt-4o-mini");
-      const azureDeploymentName = resolveAzureDeploymentName(model.id);
-      const azureOptions = azureDeploymentName ? { azureDeploymentName } : {};
-
-      it(
-        "should send tool result images in function_call_output",
-        { retry: 3, timeout: 30000 },
-        async () => {
-          await verifyToolResultImagesStayInFunctionCallOutput(model, azureOptions);
-        },
-      );
-    },
-  );
 
   describe("OpenAI Codex Responses Provider (gpt-5.5)", () => {
     const model = getModel("openai-codex", "gpt-5.5");

@@ -5,7 +5,6 @@ import type { Api, Context, Model, StreamOptions } from "../src/types.ts";
 
 type StreamOptionsWithExtras = StreamOptions & Record<string, unknown>;
 
-import { hasAzureOpenAICredentials, resolveAzureDeploymentName } from "./azure-utils.ts";
 import { hasBedrockCredentials } from "./bedrock-utils.ts";
 import { resolveApiKey } from "./oauth.ts";
 
@@ -51,9 +50,7 @@ async function testTokensOnAbort<TApi extends Api>(
   // so when aborted they have no token stats. Anthropic and Google send usage information early in the stream.
   if (
     llm.api === "openai-completions" ||
-    llm.api === "mistral-conversations" ||
     llm.api === "openai-responses" ||
-    llm.api === "azure-openai-responses" ||
     llm.api === "openai-codex-responses" ||
     llm.provider === "amazon-bedrock"
   ) {
@@ -72,18 +69,6 @@ async function testTokensOnAbort<TApi extends Api>(
 }
 
 describe("Token Statistics on Abort", () => {
-  describe.skipIf(!process.env["GEMINI_API_KEY"])("Google Provider", () => {
-    const llm = getModel("google", "gemini-2.5-flash");
-
-    it(
-      "should include token stats when aborted mid-stream",
-      { retry: 3, timeout: 30000 },
-      async () => {
-        await testTokensOnAbort(llm, { thinking: { enabled: true } });
-      },
-    );
-  });
-
   describe.skipIf(!process.env["OPENAI_API_KEY"])("OpenAI Completions Provider", () => {
     const { compat: _compat, ...baseModel } = getModel("openai", "gpt-4o-mini")!;
     void _compat;
@@ -113,34 +98,8 @@ describe("Token Statistics on Abort", () => {
     );
   });
 
-  describe.skipIf(!hasAzureOpenAICredentials())("Azure OpenAI Responses Provider", () => {
-    const llm = getModel("azure", "gpt-4o-mini");
-    const azureDeploymentName = resolveAzureDeploymentName(llm.id);
-    const azureOptions = azureDeploymentName ? { azureDeploymentName } : {};
-
-    it(
-      "should include token stats when aborted mid-stream",
-      { retry: 3, timeout: 30000 },
-      async () => {
-        await testTokensOnAbort(llm, azureOptions);
-      },
-    );
-  });
-
   describe.skipIf(!process.env["ANTHROPIC_API_KEY"])("Anthropic Provider", () => {
     const llm = getModel("anthropic", "claude-sonnet-4-6");
-
-    it(
-      "should include token stats when aborted mid-stream",
-      { retry: 3, timeout: 30000 },
-      async () => {
-        await testTokensOnAbort(llm);
-      },
-    );
-  });
-
-  describe.skipIf(!process.env["MISTRAL_API_KEY"])("Mistral Provider", () => {
-    const llm = getModel("mistral", "devstral-medium-latest");
 
     it(
       "should include token stats when aborted mid-stream",

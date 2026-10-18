@@ -36,7 +36,6 @@ import type {
   Tool,
   ToolResultMessage,
 } from "../src/types.ts";
-import { hasAzureOpenAICredentials } from "./azure-utils.ts";
 import { resolveApiKey } from "./oauth.ts";
 
 // Simple tool for testing
@@ -61,8 +60,6 @@ interface ProviderModelPair {
 const PROVIDER_MODEL_PAIRS: ProviderModelPair[] = [
   // Anthropic
   { provider: "anthropic", model: "claude-sonnet-4-5", label: "anthropic-claude-sonnet-4-5" },
-  // Google
-  { provider: "google", model: "gemini-3-flash-preview", label: "google-gemini-3-flash-preview" },
   // OpenAI
   {
     provider: "openai",
@@ -71,7 +68,6 @@ const PROVIDER_MODEL_PAIRS: ProviderModelPair[] = [
     apiOverride: "openai-completions",
   },
   { provider: "openai", model: "gpt-5-mini", label: "openai-responses-gpt-5-mini" },
-  { provider: "azure", model: "gpt-4o-mini", label: "azure-gpt-4o-mini" },
   // OpenAI Codex
   { provider: "openai-codex", model: "gpt-5.5", label: "openai-codex-gpt-5.5" },
   // Amazon Bedrock
@@ -80,8 +76,6 @@ const PROVIDER_MODEL_PAIRS: ProviderModelPair[] = [
     model: "global.anthropic.claude-sonnet-4-5-20250929-v1:0",
     label: "bedrock-claude-sonnet-4-5",
   },
-  // Mistral
-  { provider: "mistral", model: "devstral-medium-latest", label: "mistral-devstral-medium" },
   // OpenCode Zen
   { provider: "opencode", model: "big-pickle", label: "zen-big-pickle" },
   { provider: "opencode", model: "claude-sonnet-4-5", label: "zen-claude-sonnet-4-5" },
@@ -123,9 +117,6 @@ async function getApiKey(provider: string): Promise<string | undefined> {
  * @returns {boolean} whether an API key is set
  */
 function hasApiKey(pair: ProviderModelPair): boolean {
-  if (pair.provider === "azure") {
-    return hasAzureOpenAICredentials();
-  }
   return !!getEnvApiKey(pair.provider);
 }
 

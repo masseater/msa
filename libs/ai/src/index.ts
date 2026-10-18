@@ -11,13 +11,10 @@ export type {
   AnthropicOptions,
   AnthropicThinkingDisplay,
 } from "./api/anthropic-messages.ts";
-export type { AzureOpenAIResponsesOptions } from "./api/azure-openai-responses.ts";
 export type { BedrockOptions, BedrockThinkingDisplay } from "./api/bedrock-converse-stream.ts";
 export type { GoogleOptions } from "./api/google-generative-ai.ts";
 export type { GoogleApiThinkingLevel, ResolvedGoogleThinkingLevel } from "./api/google-shared.ts";
-export type { GoogleVertexOptions } from "./api/google-vertex.ts";
 export * from "./api/lazy.ts";
-export type { MistralOptions } from "./api/mistral-conversations.ts";
 export type {
   OpenAICodexResponsesOptions,
   OpenAICodexWebSocketDebugStats,

@@ -19,7 +19,6 @@ import type { Api, Context, Model, StreamOptions, Usage } from "../src/types.ts"
 
 type StreamOptionsWithExtras = StreamOptions & Record<string, unknown>;
 
-import { hasAzureOpenAICredentials, resolveAzureDeploymentName } from "./azure-utils.ts";
 import { hasBedrockCredentials } from "./bedrock-utils.ts";
 import { resolveApiKey } from "./oauth.ts";
 
@@ -186,75 +185,6 @@ describe("totalTokens field", () => {
 
         console.log(`\nOpenAI Responses / ${llm.id}:`);
         const { first, second } = await testTotalTokensWithCache(llm);
-
-        logUsage("First request", first);
-        logUsage("Second request", second);
-
-        assertTotalTokensEqualsComponents(first);
-        assertTotalTokensEqualsComponents(second);
-      },
-    );
-  });
-
-  describe.skipIf(!hasAzureOpenAICredentials())("Azure OpenAI Responses", () => {
-    it(
-      "gpt-4o-mini - should return totalTokens equal to sum of components",
-      { retry: 3, timeout: 60000 },
-      async () => {
-        const llm = getModel("azure", "gpt-4o-mini");
-        const azureDeploymentName = resolveAzureDeploymentName(llm.id);
-        const azureOptions = azureDeploymentName ? { azureDeploymentName } : {};
-
-        console.log(`\nAzure OpenAI Responses / ${llm.id}:`);
-        const { first, second } = await testTotalTokensWithCache(llm, azureOptions);
-
-        logUsage("First request", first);
-        logUsage("Second request", second);
-
-        assertTotalTokensEqualsComponents(first);
-        assertTotalTokensEqualsComponents(second);
-      },
-    );
-  });
-
-  // =========================================================================
-  // Google
-  // =========================================================================
-
-  describe.skipIf(!process.env["GEMINI_API_KEY"])("Google", () => {
-    it(
-      "gemini-2.5-flash - should return totalTokens equal to sum of components",
-      { retry: 3, timeout: 60000 },
-      async () => {
-        const llm = getModel("google", "gemini-2.5-flash");
-
-        console.log(`\nGoogle / ${llm.id}:`);
-        const { first, second } = await testTotalTokensWithCache(llm);
-
-        logUsage("First request", first);
-        logUsage("Second request", second);
-
-        assertTotalTokensEqualsComponents(first);
-        assertTotalTokensEqualsComponents(second);
-      },
-    );
-  });
-
-  // =========================================================================
-  // Mistral
-  // =========================================================================
-
-  describe.skipIf(!process.env["MISTRAL_API_KEY"])("Mistral", () => {
-    it(
-      "devstral-medium-latest - should return totalTokens equal to sum of components",
-      { retry: 3, timeout: 60000 },
-      async () => {
-        const llm = getModel("mistral", "devstral-medium-latest");
-
-        console.log(`\nMistral / ${llm.id}:`);
-        const { first, second } = await testTotalTokensWithCache(llm, {
-          apiKey: process.env["MISTRAL_API_KEY"],
-        });
 
         logUsage("First request", first);
         logUsage("Second request", second);

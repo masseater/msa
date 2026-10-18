@@ -1,10 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { streamSimple as streamAnthropic } from "../src/api/anthropic-messages.ts";
-import { streamSimple as streamAzureOpenAIResponses } from "../src/api/azure-openai-responses.ts";
 import { streamSimple as streamGoogleGenerativeAI } from "../src/api/google-generative-ai.ts";
-import { streamSimple as streamGoogleVertex } from "../src/api/google-vertex.ts";
-import { streamSimple as streamMistral } from "../src/api/mistral-conversations.ts";
 import { streamSimple as streamMsaMessages } from "../src/api/msa-messages.ts";
 import { streamSimple as streamOpenAICodexResponses } from "../src/api/openai-codex-responses.ts";
 import { streamSimple as streamOpenAICompletions } from "../src/api/openai-completions.ts";
@@ -86,12 +83,6 @@ describe("fetch stream option", () => {
           fetch: custom,
           maxRetries: 0,
         }).result(),
-      () =>
-        streamAzureOpenAIResponses(createModel("azure-openai-responses"), context, {
-          apiKey: "test-key",
-          fetch: custom,
-          maxRetries: 0,
-        }).result(),
     ];
     const { custom, fallback } = mockFetches();
     for (const run of adapters) {
@@ -102,12 +93,8 @@ describe("fetch stream option", () => {
     expect(globalThis.fetch).toBe(fallback);
   });
 
-  it("uses fetch for Mistral, Codex SSE, and msa-messages HTTP requests", async () => {
+  it("uses fetch for Codex SSE and msa-messages HTTP requests", async () => {
     const { custom, fallback } = mockFetches();
-    await streamMistral(createModel("mistral-conversations"), context, {
-      apiKey: "test-key",
-      fetch: custom,
-    }).result();
     await streamOpenAICodexResponses(createModel("openai-codex-responses"), context, {
       apiKey: `header.${btoa(JSON.stringify({ "https://api.openai.com/auth": { chatgpt_account_id: "account" } }))}.signature`,
       fetch: custom,
@@ -118,18 +105,14 @@ describe("fetch stream option", () => {
       apiKey: "test-key",
       fetch: custom,
     }).result();
-    expect(custom).toHaveBeenCalledTimes(3);
+    expect(custom).toHaveBeenCalledTimes(2);
     expect(fallback).not.toHaveBeenCalled();
     expect(globalThis.fetch).toBe(fallback);
   });
 
-  it("rejects custom fetch for Google adapters instead of silently bypassing it", async () => {
+  it("rejects custom fetch for the Google adapter instead of silently bypassing it", async () => {
     const { custom, fallback } = mockFetches();
     const google = await streamGoogleGenerativeAI(createModel("google-generative-ai"), context, {
-      apiKey: "test-key",
-      fetch: custom,
-    }).result();
-    const vertex = await streamGoogleVertex(createModel("google-vertex"), context, {
       apiKey: "test-key",
       fetch: custom,
     }).result();
@@ -137,15 +120,12 @@ describe("fetch stream option", () => {
     expect(google.errorMessage).toContain(
       "Custom fetch is not supported by the Google Generative AI adapter",
     );
-    expect(vertex.errorMessage).toContain(
-      "Custom fetch is not supported by the Google Vertex adapter",
-    );
     expect(custom).not.toHaveBeenCalled();
     expect(fallback).not.toHaveBeenCalled();
     expect(globalThis.fetch).toBe(fallback);
   });
 
-  it("allows Google adapters to receive globalThis.fetch explicitly", async () => {
+  it("allows the Google adapter to receive globalThis.fetch explicitly", async () => {
     const ambient = vi.fn<FetchFunction>(() =>
       Promise.resolve(
         new Response(JSON.stringify({ error: { message: "upstream rejected request" } }), {

@@ -58,7 +58,7 @@ This monorepo contains the msa CLI and its supporting libraries.
 | ------------------------------------------ | --------------------------------------------------------------------------------------------------- |
 | **[@msa/chord](libs/chord)**               | Typed host runtime for hot-reloadable plugins, contracts, replicated state, and RPC over JSON links |
 | **[@msa/telemetry](libs/telemetry)**       | Vendor-neutral telemetry contracts, reference adapter, conformance tests, and typed schemas         |
-| **[@msa/ai](libs/ai)**                     | Unified multi-provider LLM API (OpenAI, Anthropic, Google, etc.)                                    |
+| **[@msa/ai](libs/ai)**                     | Unified multi-provider LLM API (OpenAI, Anthropic, OpenRouter, etc.)                                |
 | **[@msa/durable](libs/durable)**           | Durable conversation, task, and document runtime                                                    |
 | **[@msa/agent-core](libs/agent)**          | Agent runtime with tool calling and state management                                                |
 | **[@msa/coding-agent](apps/coding-agent)** | Interactive coding agent CLI                                                                        |

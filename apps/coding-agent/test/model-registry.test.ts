@@ -190,20 +190,20 @@ describe("ModelRegistry", () => {
       });
 
       const registry = await createModelRegistry(authStorage, modelsJsonPath);
-      const googleModels = getModelsForProvider(registry, "google");
+      const opencodeModels = getModelsForProvider(registry, "opencode");
 
-      // Google models should still have their original baseUrl
-      expect(googleModels.length).toBeGreaterThan(0);
-      expect(googleModels[0]?.baseUrl).not.toBe("https://my-proxy.example.com/v1");
+      // opencode models should still have their original baseUrl
+      expect(opencodeModels.length).toBeGreaterThan(0);
+      expect(opencodeModels[0]?.baseUrl).not.toBe("https://my-proxy.example.com/v1");
     });
 
     test("can mix baseUrl override and models merge", async () => {
       writeRawModelsJson({
         // baseUrl-only for anthropic
         anthropic: overrideConfig("https://anthropic-proxy.example.com/v1"),
-        // Add custom model for google (merged with built-ins)
-        google: providerConfig(
-          "https://google-proxy.example.com/v1",
+        // Add custom model for opencode (merged with built-ins)
+        opencode: providerConfig(
+          "https://opencode-proxy.example.com/v1",
           [{ id: "gemini-custom" }],
           "google-generative-ai",
         ),
@@ -216,10 +216,10 @@ describe("ModelRegistry", () => {
       expect(anthropicModels.length).toBeGreaterThan(1);
       expect(anthropicModels[0]?.baseUrl).toBe("https://anthropic-proxy.example.com/v1");
 
-      // Google: built-ins plus custom model
-      const googleModels = getModelsForProvider(registry, "google");
-      expect(googleModels.length).toBeGreaterThan(1);
-      expect(googleModels.some((m) => m.id === "gemini-custom")).toBe(true);
+      // opencode: built-ins plus custom model
+      const opencodeModels = getModelsForProvider(registry, "opencode");
+      expect(opencodeModels.length).toBeGreaterThan(1);
+      expect(opencodeModels.some((m) => m.id === "gemini-custom")).toBe(true);
     });
 
     test("refresh() picks up baseUrl override changes", async () => {
@@ -339,7 +339,7 @@ describe("ModelRegistry", () => {
 
       const registry = await createModelRegistry(authStorage, modelsJsonPath);
 
-      expect(getModelsForProvider(registry, "google").length).toBeGreaterThan(0);
+      expect(getModelsForProvider(registry, "opencode").length).toBeGreaterThan(0);
       expect(getModelsForProvider(registry, "openai").length).toBeGreaterThan(0);
     });
 

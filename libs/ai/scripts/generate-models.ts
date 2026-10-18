@@ -147,7 +147,6 @@ interface ModelsDevProvider {
 
 type ModelsDevCatalog = Record<string, ModelsDevProvider>;
 
-const VERTEX_BASE_URL = "https://{location}-aiplatform.googleapis.com";
 const OPENCODE_GO_GLM52_THINKING_LEVEL_MAP = {
   off: null,
   minimal: null,
@@ -171,15 +170,6 @@ const DEEPSEEK_V4_THINKING_LEVEL_MAP = {
 const DEEPSEEK_V4_FLASH_THINKING_LEVEL_MAP = {
   ...DEEPSEEK_V4_THINKING_LEVEL_MAP,
   low: "low",
-} as const;
-// Azure Foundry rejects DeepSeek's own max effort.
-const AZURE_DEEPSEEK_V4_THINKING_LEVEL_MAP = {
-  minimal: null,
-  low: "low",
-  medium: "medium",
-  high: "high",
-  xhigh: null,
-  max: null,
 } as const;
 
 const KIMI_K3_MAX_TOKENS = 131072;
@@ -335,11 +325,7 @@ function supportsDirectReasoningEffort(model: Model<Api>): boolean {
   if (model.api === "anthropic-messages") {
     return (model.compat as AnthropicMessagesCompat | undefined)?.forceAdaptiveThinking === true;
   }
-  if (
-    model.api === "openai-responses" ||
-    model.api === "azure-openai-responses" ||
-    model.api === "openai-codex-responses"
-  ) {
+  if (model.api === "openai-responses" || model.api === "openai-codex-responses") {
     return true;
   }
   if (model.api !== "openai-completions") return false;
@@ -373,7 +359,6 @@ function supportsOpenAiMax(model: Model<Api>): boolean {
   return (
     (model.id.includes("gpt-5.6") || model.id.includes("gpt-6")) &&
     (model.api === "openai-responses" ||
-      model.api === "azure-openai-responses" ||
       model.api === "openai-codex-responses" ||
       model.api === "openai-completions")
   );
@@ -634,15 +619,11 @@ function applyStrictToolCompatMetadata(model: Model<Api>): void {
   }
 }
 
-// Responses endpoints verified (OpenAI, ChatGPT Codex backend, opencode zen) or documented (Azure OpenAI) to pass
+// Responses endpoints verified (OpenAI, ChatGPT Codex backend, opencode zen) to pass
 // OpenAI custom grammar tools through. OpenAI rejects `type: "custom"` tools
 // for pre-GPT-5 models (gpt-4.x, gpt-4o, o-series).
-const OPENAI_GRAMMAR_TOOL_PROVIDERS = new Set(["openai", "openai-codex", "azure", "opencode"]);
-const OPENAI_GRAMMAR_TOOL_APIS = new Set<Api>([
-  "openai-responses",
-  "azure-openai-responses",
-  "openai-codex-responses",
-]);
+const OPENAI_GRAMMAR_TOOL_PROVIDERS = new Set(["openai", "openai-codex", "opencode"]);
+const OPENAI_GRAMMAR_TOOL_APIS = new Set<Api>(["openai-responses", "openai-codex-responses"]);
 
 function applyOpenAIGrammarToolCompatMetadata(model: Model<Api>): void {
   if (
@@ -769,9 +750,7 @@ function applyImageInputMetadata(model: AnyModel): void {
         ? { images: { maxPerMessage: 20 } }
         : model.provider === "openai"
           ? { maxRequestBytes: 512 * 1024 * 1024, images: { maxPerRequest: 1500 } }
-          : model.provider === "google"
-            ? { maxRequestBytes: 20 * 1024 * 1024, images: { maxPerRequest: 3600 } }
-            : undefined;
+          : undefined;
   const configuredImages = model.inputLimits?.images;
   model.inputLimits = {
     ...providerLimits,
@@ -801,10 +780,7 @@ function getGoogleThinkingLevelMap(
 }
 
 function applyThinkingLevelMetadata(model: Model<any>): void {
-  if (
-    (model.api === "openai-responses" || model.api === "azure-openai-responses") &&
-    model.id.startsWith("gpt-5")
-  ) {
+  if (model.api === "openai-responses" && model.id.startsWith("gpt-5")) {
     mergeThinkingLevelMap(model, { off: null });
   }
   if (
@@ -812,9 +788,7 @@ function applyThinkingLevelMetadata(model: Model<any>): void {
       model.id === "gpt-6-sol" ||
       model.id === "gpt-6-luna" ||
       model.id === "gpt-6.1-sol") &&
-    (model.api === "openai-responses" ||
-      model.api === "azure-openai-responses" ||
-      model.api === "openai-codex-responses")
+    (model.api === "openai-responses" || model.api === "openai-codex-responses")
   ) {
     mergeThinkingLevelMap(model, {
       // GPT-6 Astra and GPT-6.1 Sol reject reasoning.effort "none".
@@ -889,12 +863,10 @@ function applyThinkingLevelMetadata(model: Model<any>): void {
       model,
       model.provider === "openrouter"
         ? { ...DEEPSEEK_V4_THINKING_LEVEL_MAP, xhigh: "xhigh", max: null }
-        : model.provider === "azure"
-          ? AZURE_DEEPSEEK_V4_THINKING_LEVEL_MAP
-          : (model.provider === "opencode" || model.provider === "opencode-go") &&
-              model.id.includes("deepseek-v4-flash")
-            ? DEEPSEEK_V4_FLASH_THINKING_LEVEL_MAP
-            : DEEPSEEK_V4_THINKING_LEVEL_MAP,
+        : (model.provider === "opencode" || model.provider === "opencode-go") &&
+            model.id.includes("deepseek-v4-flash")
+          ? DEEPSEEK_V4_FLASH_THINKING_LEVEL_MAP
+          : DEEPSEEK_V4_THINKING_LEVEL_MAP,
     );
   }
   if (model.provider === "openai-codex" && supportsOpenAiXhigh(model.id)) {
@@ -1031,79 +1003,6 @@ async function fetchRadiusModels(): Promise<Model<"msa-messages">[]> {
   }
 }
 
-function processGoogleModels(data: ModelsDevCatalog): Model<Api>[] {
-  const models: Model<Api>[] = [];
-  const googleModels = data["google"]?.models;
-  if (googleModels) {
-    for (const [modelId, model] of Object.entries(googleModels)) {
-      if (model.tool_call !== true) continue;
-      const source =
-        modelId === "gemini-flash-latest"
-          ? (googleModels["gemini-3.5-flash"] ?? model)
-          : modelId === "gemini-flash-lite-latest"
-            ? (googleModels["gemini-3.1-flash-lite"] ?? model)
-            : model;
-      const thinkingLevelMap = getGoogleThinkingLevelMap(modelId, source.reasoning_options ?? []);
-
-      models.push({
-        id: modelId,
-        name: model.name || modelId,
-        api: "google-generative-ai",
-        provider: "google",
-        baseUrl: "https://generativelanguage.googleapis.com/v1beta",
-        reasoning: source.reasoning === true,
-        ...(thinkingLevelMap ? { thinkingLevelMap } : {}),
-        input: source.modalities?.input?.includes("image") ? ["text", "image"] : ["text"],
-        cost: getModelsDevCost(source.cost),
-        contextWindow: source.limit?.context || 4096,
-        maxTokens: source.limit?.output || 4096,
-      });
-    }
-  }
-
-  // The google-vertex models.dev catalog also includes Claude, OpenAI, and other
-  // MaaS models that do not use the @google/genai Gemini streaming path.
-  const vertexModels = data["google-vertex"]?.models;
-  if (vertexModels) {
-    for (const [modelId, model] of Object.entries(vertexModels)) {
-      if (model.tool_call !== true || !modelId.startsWith("gemini-")) continue;
-      if (modelId === "gemini-3.1-flash-lite-preview") continue;
-      const source =
-        modelId === "gemini-flash-latest"
-          ? (vertexModels["gemini-3.5-flash"] ?? model)
-          : modelId === "gemini-flash-lite-latest"
-            ? (vertexModels["gemini-3.1-flash-lite"] ?? model)
-            : model;
-      const thinkingLevelMap = getGoogleThinkingLevelMap(modelId, source.reasoning_options ?? []);
-      // models.dev reports Vertex cache_read/cache_write values for Gemini 2.5 Flash that
-      // do not match the official Gemini API standard pricing table. msa only accounts
-      // cachedContentTokenCount as cacheRead.
-      const cacheRead = modelId === "gemini-2.5-flash" ? 0.03 : source.cost?.cache_read || 0;
-
-      models.push({
-        id: modelId,
-        name: model.name || modelId,
-        api: "google-vertex",
-        provider: "google-vertex",
-        baseUrl: VERTEX_BASE_URL,
-        reasoning: source.reasoning === true,
-        ...(thinkingLevelMap ? { thinkingLevelMap } : {}),
-        input: source.modalities?.input?.includes("image") ? ["text", "image"] : ["text"],
-        cost: {
-          input: source.cost?.input || 0,
-          output: source.cost?.output || 0,
-          cacheRead,
-          cacheWrite: 0,
-        },
-        contextWindow: source.limit?.context || 4096,
-        maxTokens: source.limit?.output || 4096,
-      });
-    }
-  }
-
-  return models;
-}
-
 async function loadModelsDevData(): Promise<Model<any>[]> {
   try {
     console.log("Fetching models from models.dev API...");
@@ -1175,8 +1074,6 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
       }
     }
 
-    models.push(...processGoogleModels(data));
-
     // Process OpenAI models
     if (data["openai"]?.models) {
       for (const [modelId, model] of Object.entries(data["openai"].models)) {
@@ -1198,37 +1095,6 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
           maxTokens: m.limit?.output || 4096,
         });
         recordModelsDevReasoningOptions("openai", modelId, m);
-      }
-    }
-
-    // Process Mistral models
-    if (data["mistral"]?.models) {
-      for (const [modelId, model] of Object.entries(data["mistral"].models)) {
-        const m = model as ModelsDevModel;
-        if (m.tool_call !== true) continue;
-
-        // Models with effort values use `reasoning_effort` with these levels.
-        // Reasoning models without them (Magistral) use `prompt_mode`.
-        const thinkingLevelMap = getEffortThinkingLevelMap(m.reasoning_options ?? []);
-
-        models.push({
-          id: modelId,
-          name: m.name || modelId,
-          api: "mistral-conversations",
-          provider: "mistral",
-          baseUrl: "https://api.mistral.ai",
-          reasoning: m.reasoning === true,
-          ...(thinkingLevelMap ? { thinkingLevelMap } : {}),
-          input: m.modalities?.input?.includes("image") ? ["text", "image"] : ["text"],
-          cost: {
-            input: m.cost?.input || 0,
-            output: m.cost?.output || 0,
-            cacheRead: m.cost?.cache_read ?? (m.cost?.input ? roundCost(m.cost.input * 0.1) : 0),
-            cacheWrite: m.cost?.cache_write || 0,
-          },
-          contextWindow: m.limit?.context || 4096,
-          maxTokens: m.limit?.output || 4096,
-        });
       }
     }
 
@@ -1403,7 +1269,7 @@ const OPENAI_CLASSIFIER_MODELS: ClassifierModel<"openai-decisions">[] = [
 
 async function generateModels() {
   // Fetch models from all upstream catalogs.
-  // models.dev: Anthropic, Google, OpenAI, and others
+  // models.dev: Anthropic, OpenAI, and others
   // OpenRouter: its tool-capable routed catalog
   // Radius: its unauthenticated public catalog; authenticated clients overlay it at runtime
   const modelsDevModels = await loadModelsDevData();
@@ -1483,7 +1349,7 @@ async function generateModels() {
       candidate.cost = withOpenAiLongContextPricing(standardCost ?? candidate.cost);
     }
     // models.dev reports gpt-5-pro output as 272000 (a duplicate of the input sub-limit);
-    // the actual max output is 128000. Also propagates to the derived Azure clone.
+    // the actual max output is 128000.
     if (candidate.provider === "openai" && candidate.id === "gpt-5-pro") {
       candidate.maxTokens = 128000;
     }
@@ -1764,32 +1630,6 @@ async function generateModels() {
   ];
   allModels.push(...codexModels);
 
-  // Add missing Mistral Medium 3.5 model until models.dev includes it
-  if (!allModels.some((m) => m.provider === "mistral" && m.id === "mistral-medium-3.5")) {
-    const thinkingLevelMap = getEffortThinkingLevelMap([
-      { type: "effort", values: ["none", "high"] },
-    ]);
-    allModels.push({
-      id: "mistral-medium-3.5",
-      name: "Mistral Medium 3.5",
-      api: "mistral-conversations",
-      provider: "mistral",
-      baseUrl: "https://api.mistral.ai",
-      reasoning: true,
-      ...(thinkingLevelMap === undefined ? {} : { thinkingLevelMap }),
-      input: ["text", "image"],
-      cost: {
-        input: 1.5,
-        output: 7.5,
-        cacheRead: 0,
-        cacheWrite: 0,
-      },
-      // 256k tokens
-      contextWindow: 262144,
-      maxTokens: 262144,
-    });
-  }
-
   // Add "auto" alias for openrouter/auto
   if (!allModels.some((m) => m.provider === "openrouter" && m.id === "auto")) {
     allModels.push({
@@ -1838,63 +1678,6 @@ async function generateModels() {
       maxTokens: 30000,
     });
   }
-
-  // Azure Foundry deploys these with larger context windows than OpenAI's own short-tier defaults.
-  // See models-sold-directly-by-azure docs.
-  const AZURE_CONTEXT_WINDOW_OVERRIDES: Record<string, number> = {
-    "gpt-5.4": 1050000,
-    "gpt-5.5": 1050000,
-    "gpt-5.6-luna": 1050000,
-    "gpt-5.6-sol": 1050000,
-    "gpt-5.6-terra": 1050000,
-  };
-  const azureOpenAiModels: Model<Api>[] = allModels
-    .filter((model) => model.provider === "openai" && model.api === "openai-responses")
-    .map((model) =>
-      Object.assign({}, model, {
-        api: "azure-openai-responses" as const,
-        provider: "azure",
-        baseUrl: "",
-        cost: {
-          input: model.cost.input,
-          output: model.cost.output,
-          cacheRead: model.cost.cacheRead,
-          cacheWrite: model.cost.cacheWrite,
-        },
-        contextWindow: AZURE_CONTEXT_WINDOW_OVERRIDES[model.id] ?? model.contextWindow,
-      }),
-    );
-  allModels.push(...azureOpenAiModels);
-
-  // Azure resells DeepSeek at its own rates. US data zone, checked 2026-09-16.
-  // https://azure.microsoft.com/en-us/pricing/details/ai-foundry-models/deepseek/
-  const AZURE_DEEPSEEK_V4_PRO_COST: ModelCost = {
-    input: 1.925,
-    output: 3.828,
-    cacheRead: 0.165,
-    cacheWrite: 0,
-  };
-  // Azure 400s on DeepSeek's `thinking` field and on every prompt cache parameter, discards a
-  // `developer` system message unbilled once reasoning_effort is set, and honours mid-convo ones (#9645).
-  allModels.push({
-    id: "deepseek-v4-pro",
-    name: "DeepSeek V4 Pro",
-    api: "openai-completions",
-    baseUrl: "",
-    provider: "azure",
-    reasoning: true,
-    input: ["text"],
-    cost: AZURE_DEEPSEEK_V4_PRO_COST,
-    contextWindow: 1000000,
-    maxTokens: 384000,
-    compat: {
-      ...deepseekCompat,
-      supportsDeveloperRole: false,
-      supportsMidConvoSystemMessages: true,
-      thinkingFormat: "openai",
-      supportsLongCacheRetention: false,
-    },
-  });
 
   for (const model of allModels) {
     applyOpenAICompletionsCompatMetadata(model);
