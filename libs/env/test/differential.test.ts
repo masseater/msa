@@ -13,7 +13,7 @@ afterAll(environments.close);
 const randomSequences = Effect.gen(function* () {
   for (let seed = 1; seed <= 60; seed++) {
     const next = random(seed);
-    const { local, remote, roots } = environments.pair();
+    const { local, remote, roots } = yield* environments.pair;
     for (let step = 0; step < 25; step++) {
       const operation = randomOperation(next);
       const expected = normalize(yield* Effect.promise(() => operation.run(local)), roots[0]);
@@ -76,7 +76,7 @@ const runTool = ({ env, tool, args }: ToolRun): Effect.Effect<unknown> => {
 };
 
 const toolResults = Effect.gen(function* () {
-  const { local, remote, roots } = environments.pair();
+  const { local, remote, roots } = yield* environments.pair;
   for (const [path, content] of FILES) {
     yield* Effect.promise(() => local.writeFile(path, content, context));
     yield* Effect.promise(() => remote.writeFile(path, content, context));

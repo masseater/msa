@@ -14,7 +14,7 @@ const context = BACKGROUND_CONTEXT;
 
 const listsLikeLocal = (server: SshServer): Effect.Effect<void> =>
   Effect.gen(function* () {
-    makeTree(server.home);
+    yield* makeTree(server.home);
     const { connection } = yield* Effect.promise(() => connectTo({ server }));
     const local = new Connection({ command: [daemon] });
     yield* Effect.gen(function* () {

@@ -1,12 +1,10 @@
-import { writeFileSync } from "node:fs";
-import { join } from "node:path";
-
 import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 import { getOrThrow } from "@msa/durable/env";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { RemoteExecutionEnv } from "../src/remote-env.ts";
+import { localPath, writeText } from "./platform.ts";
 import { connectTo, posixAccountShell, type SshServer, sshd, useSshd } from "./sshd.ts";
 
 const context = BACKGROUND_CONTEXT;
@@ -35,8 +33,12 @@ const loginOutput = (server: SshServer, loginShell: boolean): Effect.Effect<stri
 
 const loginShellOnlyWhenAsked = (server: SshServer): Effect.Effect<void> =>
   Effect.gen(function* () {
-    writeFileSync(join(server.home, ".profile"), "export MSA_ENV_LOGIN=yes\n");
-    writeFileSync(join(server.home, ".zprofile"), "export MSA_ENV_LOGIN=yes\n");
+    for (const name of [".profile", ".zprofile"]) {
+      yield* writeText({
+        path: localPath.join(server.home, name),
+        text: "export MSA_ENV_LOGIN=yes\n",
+      });
+    }
     expect(yield* loginOutput(server, false)).toBe("");
     expect(yield* loginOutput(server, true)).toBe("yes");
   });

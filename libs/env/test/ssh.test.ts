@@ -1,6 +1,3 @@
-import { mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
-
 import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 import { getOrThrow } from "@msa/durable/env";
 import { Effect } from "effect";
@@ -9,11 +6,24 @@ import { describe, expect, it } from "vite-plus/test";
 import { RemoteExecutionEnv } from "../src/remote-env.ts";
 import { acceptHostKey, connectSsh, HostKeyUnknownError, scanHostKey } from "../src/ssh.ts";
 import { daemon } from "./daemon.ts";
+import {
+  localPath,
+  makeDirectory,
+  modifiedAt,
+  readBytes,
+  readNames,
+  writeText,
+} from "./platform.ts";
 import { deployedName, type SshServer, sshd, useSshd } from "./sshd.ts";
 
 const context = BACKGROUND_CONTEXT;
 
-const tools = (server: SshServer): string => join(server.home, ".msa/mobile/tools");
+const tools = (server: SshServer): string => localPath.join(server.home, ".msa/mobile/tools");
+
+const sameAsDaemon = (file: string): Effect.Effect<boolean> =>
+  Effect.map(Effect.all([readBytes(file), readBytes(daemon)]), ([deployed, built]) =>
+    Buffer.from(deployed).equals(built),
+  );
 
 const connect = (server: SshServer): ReturnType<typeof connectSsh> =>
   connectSsh({ ...server.target, binary: daemon });
@@ -24,11 +34,9 @@ const runOverSsh = (server: SshServer): Effect.Effect<void> =>
     ({ connection, remote }) =>
       Effect.gen(function* () {
         expect(remote.home).toBe(server.home);
-        const deployed = readFileSync(join(tools(server), deployedName));
-        expect(deployed.equals(readFileSync(daemon))).toBe(true);
-        expect(readdirSync(tools(server)).filter((name) => name.startsWith("msa-env-"))).toEqual([
-          deployedName,
-        ]);
+        expect(yield* sameAsDaemon(localPath.join(tools(server), deployedName))).toBe(true);
+        const names = yield* readNames(tools(server));
+        expect(names.filter((name) => name.startsWith("msa-env-"))).toEqual([deployedName]);
         const env = new RemoteExecutionEnv({ connection, id: "msa-env:test", cwd: server.home });
         getOrThrow(yield* Effect.promise(() => env.writeFile("over-ssh.txt", "hello", context)));
         const read = yield* Effect.promise(() => env.readTextFile("over-ssh.txt", context));
@@ -57,23 +65,26 @@ const deploysOnceTrusted = (server: SshServer): Effect.Effect<void> =>
     const scanned = yield* Effect.promise(() => scanHostKey(server.target));
     expect(scanned.fingerprints.join("\n")).toContain(server.hostFingerprint);
     yield* Effect.promise(() => acceptHostKey(server.target, scanned.lines));
-    mkdirSync(tools(server), { recursive: true });
-    writeFileSync(join(tools(server), "msa-env-0123456789abcdef0123456789abcdef"), "old");
+    yield* makeDirectory(tools(server));
+    yield* writeText({
+      path: localPath.join(tools(server), "msa-env-0123456789abcdef0123456789abcdef"),
+      text: "old",
+    });
     yield* runOverSsh(server);
   });
 
 const reusesVerified = (server: SshServer): Effect.Effect<void> =>
   Effect.gen(function* () {
-    const file = join(tools(server), deployedName);
-    const before = statSync(file).mtimeMs;
+    const file = localPath.join(tools(server), deployedName);
+    const before = yield* modifiedAt(file);
     (yield* Effect.promise(() => connect(server))).connection.close();
-    expect(statSync(file).mtimeMs).toBe(before);
-    writeFileSync(file, "tampered");
+    expect(yield* modifiedAt(file)).toBe(before);
+    yield* writeText({ path: file, text: "tampered" });
     yield* Effect.acquireUseRelease(
       Effect.promise(() => connect(server)),
       ({ connection }) =>
         Effect.gen(function* () {
-          expect(readFileSync(file).equals(readFileSync(daemon))).toBe(true);
+          expect(yield* sameAsDaemon(file)).toBe(true);
           expect((yield* Effect.promise(() => connection.info())).home).toBe(server.home);
         }),
       ({ connection }) =>
@@ -88,13 +99,13 @@ const verifiesAfterLoss = (server: SshServer): Effect.Effect<void> =>
     Effect.promise(() => connect(server)),
     ({ connection }) =>
       Effect.gen(function* () {
-        const file = join(tools(server), deployedName);
+        const file = localPath.join(tools(server), deployedName);
         const { pid } = yield* Effect.promise(() => connection.info());
         process.kill(pid, "SIGKILL");
         yield* Effect.sleep(300);
-        writeFileSync(file, "tampered");
+        yield* writeText({ path: file, text: "tampered" });
         expect((yield* Effect.promise(() => connection.info())).pid).not.toBe(pid);
-        expect(readFileSync(file).equals(readFileSync(daemon))).toBe(true);
+        expect(yield* sameAsDaemon(file)).toBe(true);
       }),
     ({ connection }) =>
       Effect.sync(() => {
