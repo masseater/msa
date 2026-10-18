@@ -1,6 +1,6 @@
 import { Cause, Clock, Context, Crypto, DateTime, type Duration, Effect, Exit } from "effect";
 
-import { provideNode } from "./runtime.ts";
+import { provideNode, testRuntime } from "./runtime.ts";
 
 const clock = Context.get(Context.empty(), Clock.Clock);
 
@@ -39,3 +39,15 @@ export const randomSuffix: Effect.Effect<string> = provideNode(
   Effect.orDie,
   Effect.map((uuid) => uuid.replaceAll("-", "").slice(0, 12)),
 );
+
+export interface Gate extends Promise<void> {
+  readonly release: () => void;
+}
+
+export const gate = (): Gate => {
+  const deferred = Deferred.makeUnsafe<void>();
+  const promise = testRuntime.runPromise(Deferred.await(deferred));
+  return Object.assign(promise, {
+    release: () => Deferred.doneUnsafe(deferred, Effect.void),
+  });
+};

@@ -3,6 +3,8 @@ export {
   awaited,
   currentTimeMillis,
   failure,
+  gate,
+  type Gate,
   nowIso,
   pollUntil,
   randomSuffix,
