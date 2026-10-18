@@ -1,7 +1,3 @@
-/**
- * The `memory` tool: the model's way to save, search, list, and forget long-term memories.
- */
-
 import { type Static, Type } from "typebox";
 
 import type { ToolDefinition } from "../extensions/types.ts";

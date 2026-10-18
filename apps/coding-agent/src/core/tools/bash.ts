@@ -27,7 +27,6 @@ import {
 } from "./truncate.ts";
 
 const MAX_TIMEOUT_MS = 2_147_483_647;
-/** Output limit of `structuredContent.output`, which programmatic callers such as codemode scripts receive. */
 const STRUCTURED_OUTPUT_MAX_BYTES = 1024 * 1024;
 const MAX_TIMEOUT_SECONDS = MAX_TIMEOUT_MS / 1000;
 
@@ -60,10 +59,6 @@ export const bashToolSystemPromptContribution = {
 
 export type BashToolInput = Static<typeof bashSchema>;
 
-/**
- * Result for programmatic callers such as codemode scripts. A non-zero exit code is an error result for the model, but scripts still resolve to this value.
- * `output` is not limited like the model-facing output: callers decide how much of it reaches the model.
- */
 const bashOutputSchema = Type.Object({
   output: Type.String({ description: "Combined stdout and stderr, possibly truncated" }),
   truncated: Type.Boolean(),
@@ -79,19 +74,7 @@ export interface BashToolDetails {
   fullOutputPath?: string | undefined;
 }
 
-/**
- * Pluggable operations for the bash tool.
- * Override these to delegate command execution to remote systems (for example SSH).
- */
 export interface BashOperations {
-  /**
-   * Execute a command and stream output.
-   * @param command The command to execute
-   * @param cwd Working directory
-   * @param options Execution options
-   * @returns Promise resolving to the exit code. Report signal terminations as 128 + signal number;
-   * a null exit code is treated as a failed command.
-   */
   exec: (
     command: string,
     cwd: string,
@@ -104,7 +87,6 @@ export interface BashOperations {
   ) => Promise<{ exitCode: number | null }>;
 }
 
-/** Shared process execution used by the built-in shell tools. */
 export function createLocalShellOperations(
   shellName: string,
   resolveShellConfig: () => ShellConfig,
@@ -148,23 +130,18 @@ export function createLocalShellOperations(
       };
 
       try {
-        // Set timeout if provided.
         if (timeoutMs !== undefined) {
           timeoutHandle = setTimeout(() => {
             timedOut = true;
             if (child.pid) killProcessTree(child.pid);
           }, timeoutMs);
         }
-        // Stream stdout and stderr.
         child.stdout?.on("data", onData);
         child.stderr?.on("data", onData);
-        // Handle abort signal by killing the entire process tree.
         if (signal) {
           if (signal.aborted) onAbort();
           else signal.addEventListener("abort", onAbort, { once: true });
         }
-        // Handle shell spawn errors and wait for the process to terminate without hanging
-        // on inherited stdio handles held by detached descendants.
         const exitCode = await waitForChildProcess(child);
         if (signal?.aborted) {
           throw new Error("aborted");
@@ -172,8 +149,6 @@ export function createLocalShellOperations(
         if (timedOut) {
           throw new Error(`timeout:${timeout}`);
         }
-        // A signal-killed shell has no exit code. Use the standard shell convention so
-        // callers do not mistake the termination for a successful command.
         const signalCode = child.signalCode;
         return {
           exitCode: exitCode ?? (signalCode ? 128 + (osConstants.signals[signalCode] ?? 0) : 1),
@@ -187,12 +162,6 @@ export function createLocalShellOperations(
   };
 }
 
-/**
- * Create bash operations using msa's built-in local shell execution backend.
- *
- * This is useful for extensions that intercept user_bash and still want msa's
- * standard local shell behavior while wrapping or rewriting commands.
- */
 export function createLocalBashOperations(options?: {
   shellPath?: string | undefined;
 }): BashOperations {
@@ -236,15 +205,10 @@ function resolveSpawnContext(
 }
 
 export interface BashToolOptions {
-  /** Custom operations for command execution. Default: local shell */
   operations?: BashOperations;
-  /** Command prefix prepended to every command (for example shell setup commands) */
   commandPrefix?: string | undefined;
-  /** Optional explicit shell path from settings */
   shellPath?: string | undefined;
-  /** Expose current msa session metadata as MSA_* environment variables. Default: true */
   exposeSessionEnvironment?: boolean;
-  /** Hook to adjust command, cwd, or env before execution */
   spawnHook?: BashSpawnHook;
 }
 

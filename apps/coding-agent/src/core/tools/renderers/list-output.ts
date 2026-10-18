@@ -1,10 +1,6 @@
 import { expandHint } from "../../../modes/interactive/components/keybinding-hints.ts";
 import type { Theme } from "../../../modes/interactive/theme/theme.ts";
 
-/**
- * Results that are a list of lines (grep, find, ls). Collapsed, a count of the lines; expanded,
- * every line and the limits that cut the list short.
- */
 export function formatListResult(
   output: string,
   warnings: string[],

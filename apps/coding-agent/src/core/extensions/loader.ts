@@ -1,8 +1,3 @@
-/**
- * Extension loader - loads TypeScript extension modules using jiti.
- *
- */
-
 import * as fs from "node:fs";
 import { createRequire } from "node:module";
 import * as path from "node:path";
@@ -74,10 +69,6 @@ function getVirtualModules(): Promise<Record<string, unknown>> {
   return virtualModulesPromise;
 }
 
-/**
- * Get aliases for jiti (used in built Node.js mode).
- * In compiled binary mode, virtualModules is used instead.
- */
 let _aliases: Record<string, string> | null = null;
 
 function getAliases(): Record<string, string> {
@@ -102,9 +93,6 @@ function getAliases(): Record<string, string> {
   const msaCodingAgentEntry = packageIndex;
   const msaAgentCoreEntry = resolveWorkspaceOrImport("agent/dist/index.js", "@msa/agent-core");
   const msaTuiEntry = resolveWorkspaceOrImport("tui/dist/index.js", "@msa/tui");
-  // Extensions resolve the msa-ai root to the compat entrypoint (a strict
-  // superset of the core entrypoint): existing extensions using the old
-  // global API keep working at runtime until compat is removed.
   const msaAiCompatEntry = resolveWorkspaceOrImport("ai/dist/compat.js", "@msa/ai/compat");
   const msaAiOauthEntry = resolveWorkspaceOrImport("ai/dist/oauth.js", "@msa/ai/oauth");
   const msaAiProvidersEntry = resolveWorkspaceOrImport(
@@ -164,10 +152,6 @@ function useExtensionCacheCwd(cwd: string): ExtensionCacheToken {
   return { cwd: resolvedCwd, generation: extensionCacheGeneration };
 }
 
-/**
- * Create a runtime with throwing stubs for action methods.
- * Runner.bindCore() replaces these with real implementations.
- */
 export function createExtensionRuntime(): ExtensionRuntime {
   const notInitialized = () => {
     throw new Error(
@@ -193,7 +177,6 @@ export function createExtensionRuntime(): ExtensionRuntime {
     getAllTools: notInitialized,
     getSettings: notInitialized,
     setActiveTools: notInitialized,
-    // registerTool() is valid during extension load; refresh is only needed post-bind.
     refreshTools: () => {},
     getCommands: notInitialized,
     setModel: () => Promise.reject(new Error("Extension runtime not initialized")),
@@ -225,8 +208,6 @@ export function createExtensionRuntime(): ExtensionRuntime {
       eventBusUnsubscribers.add(trackedUnsubscribe);
       return trackedUnsubscribe;
     },
-    // Pre-bind: queue registrations so bindCore() can flush them once the
-    // model registry is available. bindCore() replaces both with direct calls.
     registerProvider: (name, config, extensionPath = "<unknown>") => {
       runtime.pendingProviderRegistrations.push({ name, config, extensionPath });
     },
@@ -253,11 +234,6 @@ export function createExtensionRuntime(): ExtensionRuntime {
   return runtime;
 }
 
-/**
- * Create the ExtensionAPI for an extension.
- * Registration methods write to the extension object.
- * Action methods delegate to the shared runtime.
- */
 function createExtensionAPI(
   extension: Extension,
   runtime: ExtensionRuntime,
@@ -287,7 +263,6 @@ function createExtensionAPI(
   };
 
   const api = {
-    // Registration methods - write to extension
     on(event: string, handler: HandlerFn): () => void {
       assertActive();
       const registeredHandler: HandlerFn = (...args) => handler(...args);
@@ -400,7 +375,6 @@ function createExtensionAPI(
       extension.toolRenderers.push(resolver);
     },
 
-    // Flag access - checks extension registered it, reads from runtime
     getFlag(name: string): boolean | string | undefined {
       assertActive();
       if (!extension.flags.has(name)) return undefined;
@@ -409,7 +383,6 @@ function createExtensionAPI(
         : pendingFlagValues.get(name);
     },
 
-    // Action methods - delegate to shared runtime
     sendMessage(message, options): void {
       assertActive();
       runtime.sendMessage(message, options);
@@ -512,7 +485,6 @@ function createExtensionAPI(
       if (owner !== undefined && owner !== extension.path) {
         throw new Error(`MCP server "${name}" is already registered by extension "${owner}"`);
       }
-      // Names that differ only in `-` and `_` would share a namespace.
       const clash = runtime.mcpServers
         .list()
         .find((server) => server.name !== name && mcpNamespace(server.name) === mcpNamespace(name));
@@ -534,8 +506,6 @@ function createExtensionAPI(
 
     registerVirtualModel<TState>(model: ExtensionVirtualModel<TState>) {
       assertActive();
-      // Routing runs after the runner binds, so the context is created per request. The state
-      // comes from the session branch that this router wrote.
       const definition: VirtualModelDefinition = {
         ...model,
         route: (request) =>
@@ -603,9 +573,6 @@ async function loadExtensionModule(extensionPath: string, cacheToken?: Extension
   }
 
   const createJitiImpl = await getCreateJiti();
-  // Compiled binaries and the bundled Node distribution use embedded modules.
-  // Source TypeScript reuses host modules and root tsconfig paths. Unbundled
-  // Node builds use dist aliases and do not need the bundled virtual modules.
   const resolutionOptions = usesEmbeddedModules
     ? { virtualModules: await getVirtualModules(), tryNative: false }
     : isTypeScriptSourceRuntime
@@ -627,9 +594,6 @@ async function loadExtensionModule(extensionPath: string, cacheToken?: Extension
   return factory;
 }
 
-/**
- * Create an Extension object with empty collections.
- */
 function createExtension(extensionPath: string, resolvedPath: string): Extension {
   const source = getSyntheticPathSource(extensionPath) ?? "local";
   const baseDir = isSyntheticPath(extensionPath) ? undefined : path.dirname(resolvedPath);
@@ -704,9 +668,6 @@ async function loadExtension(
   }
 }
 
-/**
- * Create an Extension from an inline factory function.
- */
 export async function loadExtensionFromFactory(
   factory: ExtensionFactory,
   cwd: string,
@@ -718,9 +679,6 @@ export async function loadExtensionFromFactory(
   return initializeExtension(factory, extensionPath, extensionPath, resolvedCwd, eventBus, runtime);
 }
 
-/**
- * Load extensions from paths.
- */
 async function loadExtensionsInternal(
   paths: string[],
   cwd: string,
@@ -785,17 +743,7 @@ function isExtensionFile(name: string): boolean {
   return name.endsWith(".ts") || name.endsWith(".js");
 }
 
-/**
- * Resolve extension entry points from a directory.
- *
- * Checks for:
- * 1. package.json with "msa.extensions" field -> returns declared paths
- * 2. index.ts or index.js -> returns the index file
- *
- * Returns resolved paths or null if no entry points found.
- */
 function resolveExtensionEntries(dir: string): string[] | null {
-  // Check for package.json with "msa" field first
   const packageJsonPath = path.join(dir, "package.json");
   if (fs.existsSync(packageJsonPath)) {
     const manifest = readMsaManifest(packageJsonPath);
@@ -813,7 +761,6 @@ function resolveExtensionEntries(dir: string): string[] | null {
     }
   }
 
-  // Check for index.ts or index.js
   const indexTs = path.join(dir, "index.ts");
   const indexJs = path.join(dir, "index.js");
   if (fs.existsSync(indexTs)) {
@@ -826,16 +773,6 @@ function resolveExtensionEntries(dir: string): string[] | null {
   return null;
 }
 
-/**
- * Discover extensions in a directory.
- *
- * Discovery rules:
- * 1. Direct files: `extensions/*.ts` or `*.js` → load
- * 2. Subdirectory with index: `extensions/* /index.ts` or `index.js` → load
- * 3. Subdirectory with package.json: `extensions/* /package.json` with "msa" field → load what it declares
- *
- * No recursion beyond one level. Complex packages must use package.json manifest.
- */
 function discoverExtensionsInDir(dir: string): string[] {
   if (!fs.existsSync(dir)) {
     return [];
@@ -849,13 +786,11 @@ function discoverExtensionsInDir(dir: string): string[] {
     for (const entry of entries) {
       const entryPath = path.join(dir, entry.name);
 
-      // 1. Direct files: *.ts or *.js
       if ((entry.isFile() || entry.isSymbolicLink()) && isExtensionFile(entry.name)) {
         discovered.push(entryPath);
         continue;
       }
 
-      // 2 & 3. Subdirectories
       if (entry.isDirectory() || entry.isSymbolicLink()) {
         const resolvedEntries = resolveExtensionEntries(entryPath);
         if (resolvedEntries) {
@@ -870,9 +805,6 @@ function discoverExtensionsInDir(dir: string): string[] {
   return discovered;
 }
 
-/**
- * Discover and load extensions from standard locations.
- */
 export async function discoverAndLoadExtensions(
   configuredPaths: string[],
   cwd: string,
@@ -894,25 +826,20 @@ export async function discoverAndLoadExtensions(
     }
   };
 
-  // 1. Project-local extensions: cwd/${CONFIG_DIR_NAME}/extensions/
   const localExtDir = path.join(resolvedCwd, CONFIG_DIR_NAME, "extensions");
   addPaths(discoverExtensionsInDir(localExtDir));
 
-  // 2. Global extensions: agentDir/extensions/
   const globalExtDir = path.join(resolvedAgentDir, "extensions");
   addPaths(discoverExtensionsInDir(globalExtDir));
 
-  // 3. Explicitly configured paths
   for (const p of configuredPaths) {
     const resolved = resolvePath(p, resolvedCwd, { normalizeUnicodeSpaces: true });
     if (fs.existsSync(resolved) && fs.statSync(resolved).isDirectory()) {
-      // Check for package.json with msa manifest or index.ts
       const entries = resolveExtensionEntries(resolved);
       if (entries) {
         addPaths(entries);
         continue;
       }
-      // No explicit entries - discover individual files in directory
       addPaths(discoverExtensionsInDir(resolved));
       continue;
     }

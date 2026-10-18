@@ -1,10 +1,3 @@
-/**
- * Context compaction for long sessions.
- *
- * Pure functions for compaction logic. The session manager handles I/O,
- * and after compaction the session is reloaded.
- */
-
 import type { AgentMessage, StreamFn, ThinkingLevel } from "@msa/agent-core";
 import {
   contentText,
@@ -45,19 +38,11 @@ import {
   serializeConversation,
 } from "./utils.ts";
 
-// ============================================================================
-// File Operation Tracking
-// ============================================================================
-
-/** Details stored in CompactionEntry.details for file tracking */
 export interface CompactionDetails {
   readFiles: string[];
   modifiedFiles: string[];
 }
 
-/**
- * Extract file operations from messages and previous compaction entries.
- */
 function extractFileOperations(
   messages: AgentMessage[],
   entries: SessionEntry[],
@@ -65,11 +50,9 @@ function extractFileOperations(
 ): FileOperations {
   const fileOps = createFileOps();
 
-  // Collect from previous compaction's details (if msa-generated)
   if (prevCompactionIndex >= 0) {
     const prevCompaction = entries[prevCompactionIndex] as CompactionEntry;
     if (!prevCompaction.fromHook && prevCompaction.details) {
-      // fromHook field kept for session file compatibility
       const details = prevCompaction.details as CompactionDetails;
       if (Array.isArray(details.readFiles)) {
         for (const f of details.readFiles) fileOps.read.add(f);
@@ -80,7 +63,6 @@ function extractFileOperations(
     }
   }
 
-  // Extract from tool calls in messages
   for (const msg of messages) {
     extractFileOpsFromMessage(msg, fileOps);
   }
@@ -88,35 +70,19 @@ function extractFileOperations(
   return fileOps;
 }
 
-// ============================================================================
-// Message Extraction
-// ============================================================================
-
-/**
- * Extract AgentMessage from an entry if it produces one.
- * Returns undefined for entries that don't contribute to LLM context.
- */
 function getMessagesFromProjectedEntryForCompaction(entry: ProjectedSessionEntry): AgentMessage[] {
   if (entry.sourceEntry.type === "compaction") return [];
-  // System messages are prompt state, not conversation; the compaction entry carries their replay.
   return entry.messages.filter((message) => message.role !== "system");
 }
 
-/** Result from compact() - SessionManager adds uuid/parentUuid when saving */
 export interface CompactionResult<T = unknown> {
   summary: string;
   firstKeptEntryId: string;
   tokensBefore: number;
   estimatedTokensAfter?: number;
-  /** Usage from the LLM call(s) that generated this summary, if available */
   usage?: Usage | undefined;
-  /** Extension-specific data (e.g., ArtifactIndex, version markers for structured compaction) */
   details?: T | undefined;
 }
-
-// ============================================================================
-// Types
-// ============================================================================
 
 export interface CompactionSettings {
   enabled: boolean;
@@ -130,22 +96,10 @@ export const DEFAULT_COMPACTION_SETTINGS: CompactionSettings = {
   keepRecentTokens: 20000,
 };
 
-// ============================================================================
-// Token calculation
-// ============================================================================
-
-/**
- * Calculate total context tokens from usage.
- * Uses the native totalTokens field when available, falls back to computing from components.
- */
 export function calculateContextTokens(usage: Usage): number {
   return usage.totalTokens || usage.input + usage.output + usage.cacheRead + usage.cacheWrite;
 }
 
-/**
- * Get usage from an assistant message if available.
- * Skips aborted, error, and all-zero usage messages as they don't have valid usage data.
- */
 function getAssistantUsage(msg: AgentMessage): Usage | undefined {
   if (msg.role === "assistant" && "usage" in msg) {
     const assistantMsg = msg as AssistantMessage;
@@ -161,9 +115,6 @@ function getAssistantUsage(msg: AgentMessage): Usage | undefined {
   return undefined;
 }
 
-/**
- * Find the last valid assistant message usage from session entries.
- */
 export function getLastAssistantUsage(entries: SessionEntry[]): Usage | undefined {
   for (let i = entries.length - 1; i >= 0; i--) {
     const entry = entries[i];
@@ -194,10 +145,6 @@ function getLastAssistantUsageInfo(
   return undefined;
 }
 
-/**
- * Estimate context tokens from messages, using the last assistant usage when available.
- * If there are messages after the last usage, estimate their tokens with estimateTokens.
- */
 export function estimateContextTokens(messages: AgentMessage[]): ContextUsageEstimate {
   const usageInfo = getLastAssistantUsageInfo(messages);
 
@@ -228,7 +175,6 @@ export function estimateContextTokens(messages: AgentMessage[]): ContextUsageEst
   };
 }
 
-/** Estimate projected context without trusting usage captured before a later edit or compaction. */
 export function estimateProjectedContextTokens(
   projection: SessionProjection,
   branchEntries: SessionEntry[],
@@ -268,9 +214,6 @@ export function estimateProjectedContextTokens(
   return { tokens, usageTokens: 0, trailingTokens: tokens, lastUsageIndex: null };
 }
 
-/**
- * Check if compaction should trigger based on context usage.
- */
 export function shouldCompact(
   contextTokens: number,
   contextWindow: number,
@@ -279,10 +222,6 @@ export function shouldCompact(
   if (!settings.enabled) return false;
   return contextTokens > contextWindow - settings.reserveTokens;
 }
-
-// ============================================================================
-// Cut point detection
-// ============================================================================
 
 const ESTIMATED_IMAGE_CHARS = 4800;
 
@@ -304,10 +243,6 @@ function estimateTextAndImageContentChars(
   return chars;
 }
 
-/**
- * Estimate token count for a message using chars/4 heuristic.
- * This is conservative (overestimates tokens).
- */
 export function estimateTokens(message: AgentMessage): number {
   let chars = 0;
 
@@ -396,12 +331,6 @@ function isTurnStartEntry(entry: SessionEntry): boolean {
   return sessionEntryToContextMessages(entry).some(isTurnStartMessage);
 }
 
-/**
- * Find valid cut points: indices of context-visible user-like or assistant messages.
- * Never cut at tool results (they must follow their tool call).
- * When we cut at an assistant message with tool calls, its tool results follow it
- * and will be kept.
- */
 function findValidCutPoints(
   entries: SessionEntry[],
   startIndex: number,
@@ -420,10 +349,6 @@ function findValidCutPoints(
   return cutPoints;
 }
 
-/**
- * Find the context-visible user-role message that starts the turn containing the given entry index.
- * Returns -1 if no turn start found before the index.
- */
 export function findTurnStartIndex(
   entries: SessionEntry[],
   entryIndex: number,
@@ -439,30 +364,11 @@ export function findTurnStartIndex(
 }
 
 export interface CutPointResult {
-  /** Index of first entry to keep */
   firstKeptEntryIndex: number;
-  /** Index of user message that starts the turn being split, or -1 if not splitting */
   turnStartIndex: number;
-  /** Whether this cut splits a turn (cut point is not a user message) */
   isSplitTurn: boolean;
 }
 
-/**
- * Find the cut point in session entries that keeps approximately `keepRecentTokens`.
- *
- * Algorithm: Walk backwards from newest, accumulating estimated message sizes.
- * Stop when we've accumulated >= keepRecentTokens. Cut at that point.
- *
- * Can cut at user OR assistant messages (never tool results). When cutting at an
- * assistant message with tool calls, its tool results come after and will be kept.
- *
- * Returns CutPointResult with:
- * - firstKeptEntryIndex: the entry index to start keeping from
- * - turnStartIndex: if cutting mid-turn, the user message that started that turn
- * - isSplitTurn: whether we're cutting in the middle of a turn
- *
- * Only considers entries between `startIndex` and `endIndex` (exclusive).
- */
 export function findCutPoint(
   entries: SessionEntry[],
   startIndex: number,
@@ -477,9 +383,8 @@ export function findCutPoint(
     return { firstKeptEntryIndex: startIndex, turnStartIndex: -1, isSplitTurn: false };
   }
 
-  // Walk backwards from newest, accumulating estimated message sizes
   let accumulatedTokens = 0;
-  let cutIndex = firstCutPoint; // Default: keep from first message (not header)
+  let cutIndex = firstCutPoint;
 
   for (let i = endIndex - 1; i >= startIndex; i--) {
     const entry = entries[i];
@@ -491,20 +396,14 @@ export function findCutPoint(
     if (messageTokens === 0) continue;
     accumulatedTokens += messageTokens;
 
-    // Check if we've exceeded the budget
     if (accumulatedTokens >= keepRecentTokens) {
-      // Prefer the closest valid cut point at or after this entry. If trailing
-      // tool results exceed the budget by themselves, keep their preceding
-      // assistant tool call instead of falling back to the first message.
       cutIndex = cutPoints.find((candidate) => candidate >= i) ?? lastCutPoint;
       break;
     }
   }
 
-  // Scan backwards from cutIndex to include adjacent metadata entries that do not affect context.
   while (cutIndex > startIndex) {
     const prevEntry = entries[cutIndex - 1];
-    // Stop at compaction boundaries or context-visible entries.
     if (
       prevEntry === undefined ||
       prevEntry.type === "compaction" ||
@@ -515,7 +414,6 @@ export function findCutPoint(
     cutIndex--;
   }
 
-  // Determine if this is a split turn
   const cutEntry = entries[cutIndex];
   const startsTurn = cutEntry !== undefined && isTurnStartEntry(cutEntry);
   const turnStartIndex = startsTurn ? -1 : findTurnStartIndex(entries, cutIndex, startIndex);
@@ -526,10 +424,6 @@ export function findCutPoint(
     isSplitTurn: !startsTurn && turnStartIndex !== -1,
   };
 }
-
-// ============================================================================
-// Summarization
-// ============================================================================
 
 const SUMMARIZATION_PROMPT = `The messages above are a conversation to summarize. Create a structured context checkpoint summary that another LLM will use to continue the work.
 
@@ -605,10 +499,6 @@ const UPDATE_SUMMARIZATION_PROMPT = `The messages above are NEW conversation mes
 
 ${UPDATE_SUMMARIZATION_INSTRUCTIONS}`;
 
-/**
- * Returns an error message when a summarization response cannot safely be persisted.
- * A length stop contains partial text and must not become a session checkpoint.
- */
 export function getSummarizationFailure(
   response: AssistantMessage,
   label: string,
@@ -639,13 +529,6 @@ function createSummarizationOptions(
   return options;
 }
 
-/**
- * Shared choke point for every compaction/branch-summary summarization call. Wraps the
- * single LLM call in {@link retryAssistantCall} so transient stream drops (e.g.
- * `terminated`, socket close) honor the configured retry policy instead of failing
- * the whole compaction on the first attempt. Deterministic errors and aborts return
- * immediately (see {@link retryAssistantCall}).
- */
 export async function completeSummarization(
   model: Model<any>,
   context: TranscriptContext,
@@ -654,8 +537,6 @@ export async function completeSummarization(
   retry?: RetryPolicy,
   callbacks?: RetryCallbacks,
 ): Promise<AssistantMessage> {
-  // Avoid cache writes for one-off summaries. Reuse caller-supplied routing when available;
-  // callers without a session ID, including branch summaries, receive a fresh routing ID.
   const requestOptions: SimpleStreamOptions = {
     ...options,
     cacheRetention: "none",
@@ -668,10 +549,6 @@ export async function completeSummarization(
   return retryAssistantCall(produce, retry, requestOptions.signal, callbacks);
 }
 
-/**
- * Generate a summary of the conversation using the LLM.
- * If previousSummary is provided, uses the update prompt to merge.
- */
 export async function generateSummary(
   currentMessages: AgentMessage[],
   model: Model<any>,
@@ -708,7 +585,6 @@ export async function generateSummary(
   ).text;
 }
 
-/** Build the provider context for a standalone summary request. */
 function buildSummarizationContext(promptText: string): TranscriptContext {
   return normalizeContext({
     systemPrompt: SUMMARIZATION_SYSTEM_PROMPT,
@@ -722,7 +598,6 @@ function buildSummarizationContext(promptText: string): TranscriptContext {
   });
 }
 
-/** Generate or update a conversation summary and return its provider usage. */
 export async function generateSummaryWithUsage(
   currentMessages: AgentMessage[],
   model: Model<any>,
@@ -744,18 +619,14 @@ export async function generateSummaryWithUsage(
     model.maxTokens > 0 ? model.maxTokens : Number.POSITIVE_INFINITY,
   );
 
-  // Use update prompt if we have a previous summary, otherwise initial prompt
   let basePrompt = previousSummary ? UPDATE_SUMMARIZATION_PROMPT : SUMMARIZATION_PROMPT;
   if (customInstructions) {
     basePrompt = `${basePrompt}\n\nAdditional focus: ${customInstructions}`;
   }
 
-  // Serialize conversation to text so model doesn't try to continue it
-  // Convert to LLM messages first (handles custom types like bashExecution, custom, etc.)
   const llmMessages = convertToLlm(currentMessages);
   const conversationText = serializeConversation(llmMessages);
 
-  // Build the prompt with conversation wrapped in tags
   let promptText = `<conversation>\n${conversationText}\n</conversation>\n\n`;
   if (previousSummary) {
     promptText += `<previous-summary>\n${previousSummary}\n</previous-summary>\n\n`;
@@ -795,25 +666,14 @@ export async function generateSummaryWithUsage(
   return { text: textContent, usage: response.usage };
 }
 
-// ============================================================================
-// Compaction Preparation (for extensions)
-// ============================================================================
-
 export interface CompactionPreparation {
-  /** UUID of first entry to keep */
   firstKeptEntryId: string;
-  /** Messages that will be summarized and discarded */
   messagesToSummarize: AgentMessage[];
-  /** Messages that will be turned into turn prefix summary (if splitting) */
   turnPrefixMessages: AgentMessage[];
-  /** Whether this is a split turn (cut point in middle of turn) */
   isSplitTurn: boolean;
   tokensBefore: number;
-  /** Summary from previous compaction, for iterative update */
   previousSummary?: string | undefined;
-  /** File operations extracted from messagesToSummarize */
   fileOps: FileOperations;
-  /** Compaction settions from settings.jsonl	*/
   settings: CompactionSettings;
 }
 
@@ -872,9 +732,6 @@ function findProjectedCutPoint(
     }
   }
 
-  // A recovery attempt and its omission edits are context-invisible after the last
-  // visible input. Advance only for a closed suffix containing an omitted assistant
-  // attempt; arbitrary metadata must not move the cut past unsent input.
   const suffix = entries.slice(cutIndex + 1, endIndex);
   const isIntrinsicallyVisible = (entry: ProjectedSessionEntry): boolean =>
     entry.sourceEntry.type !== "context_edit" &&
@@ -937,8 +794,6 @@ export function prepareCompaction(
   const projection = buildSessionProjection(pathEntries);
   const projectedEntries = projection.entries;
   const sourceEntries = projectedEntries.map((entry) => entry.sourceEntry);
-  // The newest compaction is projected first. Older compaction entries can still
-  // occur in its retained raw range, but their projected contribution is empty.
   const prevCompactionIndex = projectedEntries.findIndex(
     (entry) => entry.sourceEntry.type === "compaction" && entry.messages.length > 0,
   );
@@ -948,7 +803,6 @@ export function prepareCompaction(
   const prevCompaction = projectedEntries[prevCompactionIndex];
   if (prevCompaction !== undefined) {
     previousSummary = (prevCompaction.sourceEntry as CompactionEntry).summary;
-    // The canonical projection has already selected the previous compaction's retained tail.
     boundaryStart = prevCompactionIndex + 1;
   }
   const boundaryEnd = projectedEntries.length;
@@ -976,10 +830,8 @@ export function prepareCompaction(
 
   if (messagesToSummarize.length === 0 && turnPrefixMessages.length === 0) return undefined;
 
-  // Extract file operations from edited model-visible messages and the previous compaction.
   const fileOps = extractFileOperations(messagesToSummarize, sourceEntries, prevCompactionIndex);
 
-  // Also extract file ops from turn prefix if splitting
   if (cutPoint.isSplitTurn) {
     for (const msg of turnPrefixMessages) {
       extractFileOpsFromMessage(msg, fileOps);
@@ -998,10 +850,6 @@ export function prepareCompaction(
   };
 }
 
-// ============================================================================
-// Main compaction function
-// ============================================================================
-
 const TURN_PREFIX_SUMMARIZATION_PROMPT = `The messages above are earlier context from an ongoing conversation. Later messages are stored separately and do not need to be reconstructed.
 
 Create a concise checkpoint of the user's request and the progress shown above. This checkpoint will be placed before the later messages so the conversation can continue with the necessary context.
@@ -1017,14 +865,6 @@ Create a concise checkpoint of the user's request and the progress shown above. 
 
 Only summarize information explicitly present above. Do not infer or recreate later messages.`;
 
-/**
- * Generate summaries for compaction using prepared data.
- * Returns CompactionResult - SessionManager adds uuid/parentUuid when saving.
- *
- * @param preparation - Pre-calculated preparation from prepareCompaction()
- * @param customInstructions - Optional custom focus for the summary
- * @param sessionId - Optional routing session ID forwarded without enabling prompt caching
- */
 export async function compact(
   preparation: CompactionPreparation,
   model: Model<any>,
@@ -1050,7 +890,6 @@ export async function compact(
     settings,
   } = preparation;
 
-  // Generate summaries and merge into one
   let summary: string;
   let summaryUsage: Usage;
 
@@ -1091,13 +930,11 @@ export async function compact(
       callbacks,
       sessionId,
     );
-    // Merge into single summary
     summary = `${historyText}\n\n---\n\n**Turn Context (split turn):**\n\n${turnPrefixResult.text}`;
     summaryUsage = historyUsage
       ? combineUsage(historyUsage, turnPrefixResult.usage)
       : turnPrefixResult.usage;
   } else {
-    // Just generate history summary
     const result = await generateSummaryWithUsage(
       messagesToSummarize,
       model,
@@ -1118,7 +955,6 @@ export async function compact(
     summaryUsage = result.usage;
   }
 
-  // Compute file lists and append to summary
   const { readFiles, modifiedFiles } = computeFileLists(fileOps);
   summary += formatFileOperations(readFiles, modifiedFiles);
 
@@ -1135,9 +971,6 @@ export async function compact(
   };
 }
 
-/**
- * Generate a summary for a turn prefix (when splitting a turn).
- */
 async function generateTurnPrefixSummary(
   messages: AgentMessage[],
   model: Model<any>,
@@ -1155,7 +988,7 @@ async function generateTurnPrefixSummary(
   const maxTokens = Math.min(
     Math.floor(0.5 * reserveTokens),
     model.maxTokens > 0 ? model.maxTokens : Number.POSITIVE_INFINITY,
-  ); // Smaller budget for turn prefix
+  );
   const llmMessages = convertToLlm(messages);
   const conversationText = serializeConversation(llmMessages);
   const promptText = `# Conversation\n${conversationText}\n\n# Instructions\n${TURN_PREFIX_SUMMARIZATION_PROMPT}`;

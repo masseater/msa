@@ -1,11 +1,3 @@
-/**
- * Presentation for the edit tool.
- *
- * Renderers live apart from the implementation so a process that only displays tool output does not
- * load the execution path or its typebox parameter schema. `edit.ts` spreads these into its
- * definition, so the tool's public shape is unchanged.
- */
-
 import { Box, Container, Spacer, Text } from "@msa/tui";
 
 import { renderDiff } from "../../../modes/interactive/components/diff.ts";
@@ -103,7 +95,6 @@ function formatEditCall(args: RenderableEditArgs | undefined, theme: Theme, cwd:
   const pathDisplay = renderToolPath(str(args?.file_path ?? args?.path), theme, cwd);
   return `${theme.fg("toolTitle", theme.bold("edit"))} ${pathDisplay}`;
 }
-/** A diff as `+3 -1 lines`, from its `+12 text` / `-12 text` rows. */
 function summarizeDiff(diff: string): string {
   const rows = diff.split("\n");
   const added = rows.filter((row) => /^\+\s*\d/.test(row)).length;

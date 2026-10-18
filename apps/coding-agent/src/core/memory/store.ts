@@ -1,13 +1,3 @@
-/**
- * SQLite-backed storage for long-term memories.
- *
- * One database file holds every memory. Search runs two retrievers and fuses their rankings with
- * Reciprocal Rank Fusion: cosine similarity over stored embeddings, and an FTS5 full-text index
- * ranked by bm25. Text is split into words with `Intl.Segmenter` before it reaches FTS5, because
- * FTS5's own tokenizers do not split Japanese into words and node:sqlite cannot register a custom
- * tokenizer.
- */
-
 import { randomBytes } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
@@ -23,7 +13,6 @@ export interface MemoryRecord {
   content: string;
   kind: MemoryKind;
   scope: MemoryScope;
-  /** Project name when `scope` is `project`, otherwise null. */
   project: string | null;
   createdAt: number;
   updatedAt: number;
@@ -34,27 +23,17 @@ export interface MemoryRecord {
 }
 
 export interface MemoryStoreSearchOptions {
-  /** Query text for the full-text retriever. */
   text: string;
-  /** Query embedding for the vector retriever, when an embedding provider answered. */
   embedding?: Float32Array;
-  /** Project scope to search next to global memories. */
   project?: string;
   limit: number;
-  /**
-   * Floor each retriever applies before fusion: the cosine similarity for the vector retriever,
-   * and the share of query words found for the full-text retriever.
-   */
   minScore: number;
 }
 
 export interface MemoryScore {
   record: MemoryRecord;
-  /** Reciprocal Rank Fusion score over the retrievers that returned this memory. */
   score: number;
-  /** Share of the query words found in the memory, between 0 and 1. */
   keyword: number;
-  /** Cosine similarity, when both the query and the memory carry an embedding. */
   vector: number | undefined;
 }
 
@@ -70,7 +49,6 @@ export interface MemorySaveInput {
 
 export interface MemorySaveResult {
   record: MemoryRecord;
-  /** False when an identical memory in the same scope was refreshed instead. */
   created: boolean;
 }
 
@@ -81,12 +59,10 @@ export interface MemoryStoreStats {
   byKind: Record<string, number>;
 }
 
-/** The rank constant of Reciprocal Rank Fusion (Cormack, Clarke and Büttcher, SIGIR 2009). */
 export const RRF_K = 60;
 
 const segmenter = new Intl.Segmenter("ja", { granularity: "word" });
 
-/** The words of `text` as `Intl.Segmenter` splits them, lowercased, without spaces or punctuation. */
 export function segmentWords(text: string): string[] {
   const words: string[] = [];
   for (const segment of segmenter.segment(text.toLowerCase())) {
@@ -95,12 +71,10 @@ export function segmentWords(text: string): string[] {
   return words;
 }
 
-/** An FTS5 query that matches `word` as one phrase, whatever characters it holds. */
 function phrase(word: string): string {
   return `"${word.replaceAll('"', '""')}"`;
 }
 
-/** Cosine similarity, 0 when either vector is empty or the lengths differ. */
 export function cosineSimilarity(a: Float32Array, b: Float32Array): number {
   if (a.length === 0 || a.length !== b.length) return 0;
   let dot = 0;
@@ -117,10 +91,6 @@ export function cosineSimilarity(a: Float32Array, b: Float32Array): number {
   return dot / (Math.sqrt(normA) * Math.sqrt(normB));
 }
 
-/**
- * Fuse rankings with Reciprocal Rank Fusion: every list adds `1 / (k + rank)` to each id it holds,
- * with ranks counted from 1.
- */
 export function reciprocalRankFusion(
   rankings: readonly (readonly string[])[],
   k = RRF_K,
@@ -139,7 +109,6 @@ function encodeVector(vector: Float32Array): Uint8Array {
 }
 
 function decodeVector(bytes: Uint8Array): Float32Array {
-  // node:sqlite returns a view that may not be 4-byte aligned; copy before reading floats.
   const copy = bytes.slice();
   return new Float32Array(copy.buffer, 0, Math.floor(copy.byteLength / 4));
 }
@@ -174,7 +143,6 @@ function toRecord(row: MemoryRow): MemoryRecord {
   };
 }
 
-/** Long-term memory rows in one SQLite file. */
 export class MemoryStore {
   readonly databasePath: string;
   private readonly database: DatabaseSync;
@@ -209,7 +177,6 @@ export class MemoryStore {
         .prepare(`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'memories_fts'`)
         .get();
       if (indexed) return;
-      // `terms` holds the content split into words by Intl.Segmenter, one space between words.
       this.database.exec(`CREATE VIRTUAL TABLE memories_fts USING fts5(id UNINDEXED, terms)`);
       const rows = this.database.prepare(`SELECT id, content FROM memories`).all() as unknown as {
         id: string;
@@ -247,14 +214,12 @@ export class MemoryStore {
     );
   }
 
-  /** Rows of the scopes a search may see: global memories and those of `project`. */
   private scoped(project: string | undefined): MemoryRow[] {
     return this.statement(
       `SELECT * FROM memories WHERE scope = 'global' OR (scope = 'project' AND project = ?)`,
     ).all(project ?? null) as unknown as MemoryRow[];
   }
 
-  /** Ids whose full-text index matches the FTS5 `query`, best bm25 first. */
   private matching(query: string): string[] {
     return (
       this.statement(
@@ -263,10 +228,6 @@ export class MemoryStore {
     ).map((row) => row.id);
   }
 
-  /**
-   * Save a memory. An identical content in the same scope refreshes the existing row instead of
-   * creating a duplicate, and the refreshed row keeps its creation time and use count.
-   */
   save(input: MemorySaveInput): MemorySaveResult {
     const now = input.now ?? Date.now();
     const content = input.content.trim();
@@ -311,12 +272,6 @@ export class MemoryStore {
     return { record: toRecord(row), created: true };
   }
 
-  /**
-   * Memories of the visible scopes, best first. The vector retriever keeps memories whose cosine
-   * similarity reaches `minScore`; the full-text retriever keeps those holding at least that share
-   * of the query words, ordered by bm25. The two rankings are fused with Reciprocal Rank Fusion,
-   * and memories recalled more often, then the newer ones, win ties.
-   */
   search(options: MemoryStoreSearchOptions): MemoryScore[] {
     const records = new Map<string, MemoryRecord>();
     for (const row of this.scoped(options.project)) records.set(row.id, toRecord(row));
@@ -363,7 +318,6 @@ export class MemoryStore {
     return scores.slice(0, options.limit);
   }
 
-  /** Newest first, optionally limited to one scope. */
   list(options: { project?: string; limit: number }): MemoryRecord[] {
     return this.scoped(options.project)
       .sort((left, right) => right.updated_at - left.updated_at)
@@ -378,7 +332,6 @@ export class MemoryStore {
     return row ? toRecord(row) : undefined;
   }
 
-  /** Memories without a vector or with one from another model, newest first. */
   listStale(embeddingModel: string, limit: number): MemoryRecord[] {
     return (
       this.statement(
@@ -387,7 +340,6 @@ export class MemoryStore {
     ).map(toRecord);
   }
 
-  /** Replace the stored vector of a memory, for example after the embedding model changed. */
   setEmbedding(id: string, embedding: Float32Array, embeddingModel: string): void {
     this.statement(`UPDATE memories SET embedding = ?, embedding_model = ? WHERE id = ?`).run(
       encodeVector(embedding),
@@ -408,7 +360,6 @@ export class MemoryStore {
     return true;
   }
 
-  /** Bump the use counters of recalled memories, so frequently useful ones win ties later. */
   markUsed(ids: readonly string[], now = Date.now()): void {
     const statement = this.statement(
       `UPDATE memories SET use_count = use_count + 1, last_used_at = ? WHERE id = ?`,

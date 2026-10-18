@@ -1,8 +1,3 @@
-/**
- * The memory service: settings resolution, project scoping, embedding-backed recall, and the
- * text formats used by the tool, the `/memory` command, and the recall block injected into a run.
- */
-
 import { execFileSync } from "node:child_process";
 import { basename } from "node:path";
 
@@ -18,16 +13,12 @@ import {
   type MemoryStoreStats,
 } from "./store.ts";
 
-/** Custom message type of the recalled memory block added to a run. */
 export const MEMORY_RECALL_MESSAGE_TYPE = "msa.memory.recall";
 
-/** How long embedding is skipped after a failed request, so a dead endpoint costs one attempt. */
 const EMBEDDING_FAILURE_COOLDOWN_MS = 60_000;
 
-/** Memories re-embedded in one background batch after the embedding model changed. */
 const REEMBED_BATCH_LIMIT = 25;
 
-/** Score floor for explicit searches; recall uses the configured `recall.minScore`. */
 const EXPLICIT_SEARCH_MIN_SCORE = 0.1;
 
 export interface ResolvedMemorySettings {
@@ -37,9 +28,7 @@ export interface ResolvedMemorySettings {
     enabled: boolean;
     baseUrl: string;
     model: string;
-    /** Prepended to search queries, for models trained with task prefixes. */
     queryPrefix: string;
-    /** Prepended to memory text before embedding. */
     documentPrefix: string;
     apiKey?: string;
     timeoutMs: number;
@@ -53,9 +42,7 @@ export interface ResolvedMemorySettings {
 
 export interface MemoryServiceOptions {
   settings: ResolvedMemorySettings;
-  /** Session working directory, used to resolve the project name. */
   cwd: string;
-  /** Project name override; when absent the git repository name or cwd basename is used. */
   project?: string;
 }
 
@@ -66,13 +53,10 @@ export interface MemorySaveRequest {
 }
 
 export interface MemorySaveOutcome extends MemorySaveResult {
-  /** False when the embedding endpoint did not answer, so the memory is keyword-searchable only. */
   embedded: boolean;
-  /** Why embedding was skipped, when it was. */
   embeddingError?: string;
 }
 
-/** Parse `/memory [list|search <query>|forget <id>|stats]`, or undefined for other text. */
 export type MemoryCommand =
   | { kind: "status" }
   | { kind: "list" }
@@ -110,7 +94,6 @@ function truncate(text: string, max = 160): string {
   return line.length > max ? `${line.slice(0, max)}…` : line;
 }
 
-/** How long ago `timestamp` was, in the largest unit that fits. */
 export function formatAge(timestamp: number, now = Date.now()): string {
   const seconds = Math.max(0, Math.floor((now - timestamp) / 1000));
   if (seconds < 60) return `${seconds}s ago`;
@@ -125,7 +108,6 @@ function scopeLabel(record: MemoryRecord): string {
   return record.scope === "project" ? `project:${record.project ?? "?"}` : "global";
 }
 
-/** The block injected into a run when memories match the prompt. */
 export function formatRecallBlock(records: readonly MemoryRecord[]): string {
   return [
     "<memory>",
@@ -146,7 +128,6 @@ export function formatMemoryList(records: readonly MemoryRecord[], now = Date.no
   ].join("\n");
 }
 
-/** What made a memory match: its embedding similarity and the share of query words it holds. */
 function formatSignals(scored: MemoryScore): string {
   const signals = [`keywords ${Math.round(scored.keyword * 100)}%`];
   if (scored.vector !== undefined) signals.unshift(`similarity ${scored.vector.toFixed(2)}`);
@@ -164,7 +145,6 @@ export function formatSearchResults(scores: readonly MemoryScore[], now = Date.n
   ].join("\n");
 }
 
-/** Long-term memory for one session. */
 export class MemoryService {
   readonly settings: ResolvedMemorySettings;
   readonly project: string;
@@ -191,12 +171,10 @@ export class MemoryService {
     return this.settings.enabled;
   }
 
-  /** Whether recall blocks are injected into runs. */
   get recallEnabled(): boolean {
     return this.settings.enabled && this.settings.recall.enabled;
   }
 
-  /** Load the embedding model in the background so the first recall does not wait for it. */
   warm(): void {
     if (!this.recallEnabled) return;
     void this.embedQuery("warmup")
@@ -204,11 +182,6 @@ export class MemoryService {
       .catch(() => undefined);
   }
 
-  /**
-   * Re-embed memories that carry no vector or one from another model, so changing the embedding
-   * model keeps meaning-based search working. Bounded, sequential, and silent: the first failure
-   * (a down endpoint) stops the batch.
-   */
   async reembedStale(limit = REEMBED_BATCH_LIMIT): Promise<number> {
     if (!this.settings.enabled || !this.embedding) return 0;
     let reembedded = 0;
@@ -226,7 +199,6 @@ export class MemoryService {
     return this.store;
   }
 
-  /** The embedding of `text`, or undefined while the endpoint is unavailable. */
   private async embed(text: string, signal?: AbortSignal): Promise<Float32Array | undefined> {
     const client = this.embedding;
     if (!client) return undefined;
@@ -246,17 +218,14 @@ export class MemoryService {
     }
   }
 
-  /** Embed a memory: the model's document form when it was trained with one. */
   private embedDocument(text: string, signal?: AbortSignal): Promise<Float32Array | undefined> {
     return this.embed(`${this.settings.embedding.documentPrefix}${text}`, signal);
   }
 
-  /** Embed a search query: the model's query form when it was trained with one. */
   private embedQuery(text: string, signal?: AbortSignal): Promise<Float32Array | undefined> {
     return this.embed(`${this.settings.embedding.queryPrefix}${text}`, signal);
   }
 
-  /** Memories relevant to `query`, best first. Never throws; an unavailable store means no recall. */
   async recall(query: string, signal?: AbortSignal): Promise<MemoryRecord[]> {
     if (!this.recallEnabled || !query.trim()) return [];
     try {
@@ -319,7 +288,6 @@ export class MemoryService {
     return this.ensureStore().list({ project: this.project, limit });
   }
 
-  /** Counts of the whole store, for the `/memory` view and status text. */
   stats(): MemoryStoreStats {
     return this.ensureStore().stats();
   }
@@ -328,7 +296,6 @@ export class MemoryService {
     return this.ensureStore().forget(id);
   }
 
-  /** The `/memory` answer for the current settings and store. */
   describeStatus(): string {
     if (!this.settings.enabled) return "Memory is disabled (settings: memory.enabled).";
     const stats = this.ensureStore().stats();
@@ -367,7 +334,6 @@ export class MemoryService {
   }
 }
 
-/** Git repository name when `dir` is inside one, otherwise its basename. */
 export function resolveProjectName(dir: string): string {
   try {
     const top = execFileSync("git", ["rev-parse", "--show-toplevel"], {
@@ -376,8 +342,6 @@ export function resolveProjectName(dir: string): string {
       encoding: "utf8",
     }).trim();
     if (top) return basename(top);
-  } catch {
-    // not a git repository
-  }
+  } catch {}
   return basename(dir) || dir;
 }

@@ -33,18 +33,11 @@ export interface LsToolDetails {
   entryLimitReached?: number;
 }
 
-/**
- * Pluggable operations for the ls tool.
- * Override these to delegate directory listing to remote systems (for example SSH).
- */
 export interface LsOperations {
-  /** Check if path exists */
   exists: (absolutePath: string) => Promise<boolean> | boolean;
-  /** Get file or directory stats. Throws if not found. */
   stat: (
     absolutePath: string,
   ) => Promise<{ isDirectory: () => boolean }> | { isDirectory: () => boolean };
-  /** Read directory entries */
   readdir: (absolutePath: string) => Promise<string[]> | string[];
 }
 
@@ -55,7 +48,6 @@ const defaultLsOperations: LsOperations = {
 };
 
 export interface LsToolOptions {
-  /** Custom operations for directory listing. Default: local filesystem */
   operations?: LsOperations;
 }
 
@@ -91,20 +83,17 @@ export function createLsToolDefinition(
             const dirPath = resolveToCwd(path || ".", ctx?.cwd || cwd);
             const effectiveLimit = limit ?? DEFAULT_LIMIT;
 
-            // Check if path exists.
             if (!(await ops.exists(dirPath))) {
               reject(new Error(`Path not found: ${dirPath}`));
               return;
             }
 
-            // Check if path is a directory.
             const stat = await ops.stat(dirPath);
             if (!stat.isDirectory()) {
               reject(new Error(`Not a directory: ${dirPath}`));
               return;
             }
 
-            // Read directory entries.
             let entries: string[];
             try {
               entries = await ops.readdir(dirPath);
@@ -113,10 +102,8 @@ export function createLsToolDefinition(
               return;
             }
 
-            // Sort alphabetically, case-insensitive.
             entries.sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
 
-            // Format entries with directory indicators.
             const results: string[] = [];
             let entryLimitReached = false;
             for (const entry of entries) {
@@ -131,7 +118,6 @@ export function createLsToolDefinition(
                 const entryStat = await ops.stat(fullPath);
                 if (entryStat.isDirectory()) suffix = "/";
               } catch {
-                // Skip entries we cannot stat.
                 continue;
               }
               results.push(entry + suffix);
@@ -148,11 +134,9 @@ export function createLsToolDefinition(
             }
 
             const rawOutput = results.join("\n");
-            // Apply byte truncation. There is no separate line limit because entry count is already capped.
             const truncation = truncateHead(rawOutput, { maxLines: Number.MAX_SAFE_INTEGER });
             let output = truncation.content;
             const details: LsToolDetails = {};
-            // Build actionable notices for truncation and entry limits.
             const notices: string[] = [];
             if (entryLimitReached) {
               notices.push(

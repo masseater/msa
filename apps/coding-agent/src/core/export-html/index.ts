@@ -13,14 +13,8 @@ import type { ToolDefinition } from "../extensions/types.ts";
 import type { SessionEntry } from "../session-manager.ts";
 import { SessionManager } from "../session-manager.ts";
 
-/**
- * Interface for rendering custom tools to HTML.
- * Used by agent-session to pre-render extension tool output.
- */
 export interface ToolHtmlRenderer {
-  /** Render a tool call to HTML. Returns undefined if tool has no custom renderer. */
   renderCall(toolCallId: string, toolName: string, args: unknown): string | undefined;
-  /** Render a tool result to HTML. Returns collapsed/expanded or undefined if tool has no custom renderer. */
   renderResult(
     toolCallId: string,
     toolName: string,
@@ -30,7 +24,6 @@ export interface ToolHtmlRenderer {
   ): { collapsed?: string; expanded?: string } | undefined;
 }
 
-/** Pre-rendered HTML for a custom tool call and result */
 interface RenderedToolHtml {
   callHtml?: string | undefined;
   resultHtmlCollapsed?: string | undefined;
@@ -40,11 +33,9 @@ interface RenderedToolHtml {
 export interface ExportOptions {
   outputPath?: string | undefined;
   themeName?: string | undefined;
-  /** Optional tool renderer for custom tools */
   toolRenderer?: ToolHtmlRenderer;
 }
 
-/** Parse a color string to RGB values. Supports hex (#RRGGBB) and rgb(r,g,b) formats. */
 function parseColor(color: string): { r: number; g: number; b: number } | undefined {
   const hexMatch = color.match(/^#([0-9a-fA-F]{2})([0-9a-fA-F]{2})([0-9a-fA-F]{2})$/);
   const [, hexR, hexG, hexB] = hexMatch ?? [];
@@ -67,7 +58,6 @@ function parseColor(color: string): { r: number; g: number; b: number } | undefi
   return undefined;
 }
 
-/** Calculate relative luminance of a color (0-1, higher = lighter). */
 function getLuminance(r: number, g: number, b: number): number {
   const toLinear = (c: number) => {
     const s = c / 255;
@@ -76,7 +66,6 @@ function getLuminance(r: number, g: number, b: number): number {
   return 0.2126 * toLinear(r) + 0.7152 * toLinear(g) + 0.0722 * toLinear(b);
 }
 
-/** Adjust color brightness. Factor > 1 lightens, < 1 darkens. */
 function adjustBrightness(color: string, factor: number): string {
   const parsed = parseColor(color);
   if (!parsed) return color;
@@ -84,7 +73,6 @@ function adjustBrightness(color: string, factor: number): string {
   return `rgb(${adjust(parsed.r)}, ${adjust(parsed.g)}, ${adjust(parsed.b)})`;
 }
 
-/** Derive export background colors from a base color (e.g., userMessageBg). */
 function deriveExportColors(baseColor: string): { pageBg: string; cardBg: string; infoBg: string } {
   const parsed = parseColor(baseColor);
   if (!parsed) {
@@ -112,9 +100,6 @@ function deriveExportColors(baseColor: string): { pageBg: string; cardBg: string
   };
 }
 
-/**
- * Generate CSS custom property declarations from theme colors.
- */
 function generateThemeVars(themeName?: string): string {
   const colors = getResolvedThemeColors(themeName);
   const lines: string[] = [];
@@ -122,7 +107,6 @@ function generateThemeVars(themeName?: string): string {
     lines.push(`--${key}: ${value};`);
   }
 
-  // Use explicit theme export colors if available, otherwise derive from userMessageBg
   const themeExport = getThemeExportColors(themeName);
   const userMessageBg = colors["userMessageBg"] || "#343541";
   const derivedColors = deriveExportColors(userMessageBg);
@@ -140,13 +124,9 @@ interface SessionData {
   leafId: string | null;
   systemPrompt?: string | undefined;
   tools?: Array<Pick<ToolDefinition, "name" | "description" | "parameters">> | undefined;
-  /** Pre-rendered HTML for custom tool calls/results, keyed by tool call ID */
   renderedTools?: Record<string, RenderedToolHtml> | undefined;
 }
 
-/**
- * Core HTML generation logic shared by both export functions.
- */
 function generateHtml(sessionData: SessionData, themeName?: string): string {
   const templateDir = getExportTemplateDir();
   const template = readFileSync(join(templateDir, "template.html"), "utf-8");
@@ -163,10 +143,8 @@ function generateHtml(sessionData: SessionData, themeName?: string): string {
   const containerBg = themeExport.cardBg ?? derivedExportColors.cardBg;
   const infoBg = themeExport.infoBg ?? derivedExportColors.infoBg;
 
-  // Base64 encode session data to avoid escaping issues
   const sessionDataBase64 = Buffer.from(JSON.stringify(sessionData)).toString("base64");
 
-  // Build the CSS with theme variables injected
   const css = templateCss
     .replace("{{THEME_VARS}}", themeVars)
     .replace("{{BODY_BG}}", bodyBg)
@@ -181,12 +159,8 @@ function generateHtml(sessionData: SessionData, themeName?: string): string {
     .replace("{{HIGHLIGHT_JS}}", hljsJs);
 }
 
-/** Tools rendered directly by the HTML template (not pre-rendered via TUI→ANSI→HTML pipeline) */
 const TEMPLATE_RENDERED_TOOLS = new Set(["bash", "read", "write", "edit", "ls"]);
 
-/**
- * Pre-render custom tools to HTML using their TUI renderers.
- */
 function preRenderCustomTools(
   entries: SessionEntry[],
   toolRenderer: ToolHtmlRenderer,
@@ -197,7 +171,6 @@ function preRenderCustomTools(
     if (entry.type !== "message") continue;
     const msg = entry.message;
 
-    // Find tool calls in assistant messages
     if (msg.role === "assistant" && Array.isArray(msg.content)) {
       for (const block of msg.content) {
         if (block.type === "toolCall" && !TEMPLATE_RENDERED_TOOLS.has(block.name)) {
@@ -209,10 +182,8 @@ function preRenderCustomTools(
       }
     }
 
-    // Find tool results
     if (msg.role === "toolResult" && msg.toolCallId) {
       const toolName = msg.toolName || "";
-      // Only render if we have a pre-rendered call OR it's not template-rendered
       const existing = renderedTools[msg.toolCallId];
       if (existing || !TEMPLATE_RENDERED_TOOLS.has(toolName)) {
         const rendered = toolRenderer.renderResult(
@@ -236,10 +207,6 @@ function preRenderCustomTools(
   return renderedTools;
 }
 
-/**
- * Export session to HTML using SessionManager and AgentState.
- * Used by TUI's /export command.
- */
 export async function exportSessionToHtml(
   sm: SessionManager,
   state?: AgentState,
@@ -257,11 +224,9 @@ export async function exportSessionToHtml(
 
   const entries = sm.getEntries();
 
-  // Pre-render custom tools if a tool renderer is provided
   let renderedTools: Record<string, RenderedToolHtml> | undefined;
   if (opts.toolRenderer) {
     renderedTools = preRenderCustomTools(entries, opts.toolRenderer);
-    // Only include if we actually rendered something
     if (Object.keys(renderedTools).length === 0) {
       renderedTools = undefined;
     }
@@ -292,10 +257,6 @@ export async function exportSessionToHtml(
   return outputPath;
 }
 
-/**
- * Export session file to HTML (standalone, without AgentState).
- * Used by CLI for exporting arbitrary session files.
- */
 export async function exportFromFile(
   inputPath: string,
   options?: ExportOptions | string,

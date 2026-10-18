@@ -47,7 +47,6 @@ function toNodeWithDependencies(record: Neo4jRecord): SessionNodeWithDependencie
   };
 }
 
-/** {@link SessionGraph} in Neo4j: `(:MsaSession)-[:DEPENDS_ON]->(:MsaSession)`. */
 export class Neo4jSessionGraph implements SessionGraph {
   private readonly driver: Driver;
 
@@ -55,7 +54,6 @@ export class Neo4jSessionGraph implements SessionGraph {
     this.driver = driver;
   }
 
-  /** Connects with `NEO4J_URI`, `NEO4J_USERNAME`, and `NEO4J_PASSWORD`. */
   static async connect(env: NodeJS.ProcessEnv = process.env): Promise<Neo4jSessionGraph> {
     const password = env["NEO4J_PASSWORD"];
     if (!password) {

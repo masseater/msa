@@ -1,11 +1,3 @@
-/**
- * Presentation for the shell tools.
- *
- * Renderers live apart from the implementation so a process that only displays tool output does not
- * load the execution path or its typebox parameter schema. `bash.ts` spreads these into the shell
- * tool definition, so the tool's public shape is unchanged.
- */
-
 import { Container, Spacer, Text } from "@msa/tui";
 
 import {
@@ -25,7 +17,6 @@ import {
 import { DEFAULT_MAX_BYTES, formatSize } from "../truncate.ts";
 
 export const BASH_UPDATE_THROTTLE_MS = 100;
-/** The command; collapsed, only its first line and how many lines follow. */
 function formatShellCall(
   args: { command?: string; timeout?: number } | undefined,
   prompt: string,
@@ -102,7 +93,6 @@ function rebuildBashResultRenderComponent(
   if (timerText) component.addChild(new Text(`\n${theme.fg("muted", timerText)}`, 0, 0));
 }
 
-/** Shell renderers are shared by bash and powershell, which differ only in the prompt they display. */
 export function createShellRenderers(
   prompt: string,
 ): Pick<ToolDefinition<any, any>, "renderCall" | "renderResult"> {

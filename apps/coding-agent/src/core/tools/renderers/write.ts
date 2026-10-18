@@ -1,11 +1,3 @@
-/**
- * Presentation for the write tool.
- *
- * Renderers live apart from the implementation so a process that only displays tool output does not
- * load the execution path or its typebox parameter schema. `write.ts` spreads these into its
- * definition, so the tool's public shape is unchanged.
- */
-
 import { Container, Text } from "@msa/tui";
 
 import { expandHint } from "../../../modes/interactive/components/keybinding-hints.ts";
@@ -125,7 +117,6 @@ function formatWriteCall(
         highlightCode(replaceTabs(normalizeDisplayText(fileContent)), lang))
       : normalizeDisplayText(fileContent).split("\n");
     const lines = trimTrailingEmptyLines(renderedLines);
-    // Count source lines: a highlighted blank line is not empty, so `lines` may keep a trailing one.
     const count = normalizeDisplayText(fileContent).replace(/\n+$/, "").split("\n").length;
     text += options.expanded
       ? `\n\n${lines.map((line) => (lang ? line : theme.fg("toolOutput", replaceTabs(line)))).join("\n")}`

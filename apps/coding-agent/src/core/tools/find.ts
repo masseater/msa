@@ -12,7 +12,6 @@ import { findRenderers } from "./renderers/find.ts";
 import { wrapToolDefinition } from "./tool-definition-wrapper.ts";
 import { DEFAULT_MAX_BYTES, formatSize, type TruncationResult, truncateHead } from "./truncate.ts";
 
-/** Relativize a find result against the search root and normalize it to posix separators. */
 export function relativizeFindResultPath(
   resultPath: string,
   searchPath: string,
@@ -51,14 +50,8 @@ export interface FindToolDetails {
   resultLimitReached?: number;
 }
 
-/**
- * Pluggable operations for the find tool.
- * Override these to delegate file search to remote systems (for example SSH).
- */
 export interface FindOperations {
-  /** Check if path exists */
   exists: (absolutePath: string) => Promise<boolean> | boolean;
-  /** Find files matching glob pattern. Returns relative or absolute paths. */
   glob: (
     pattern: string,
     cwd: string,
@@ -68,12 +61,10 @@ export interface FindOperations {
 
 const defaultFindOperations: FindOperations = {
   exists: pathExists,
-  // This is a placeholder. Actual fd execution happens in execute() when no custom glob is provided.
   glob: () => [],
 };
 
 export interface FindToolOptions {
-  /** Custom operations for find. Default: local filesystem plus fd */
   operations?: FindOperations;
 }
 
@@ -122,7 +113,6 @@ export function createFindToolDefinition(
             const effectiveLimit = limit ?? DEFAULT_LIMIT;
             const ops = customOps ?? defaultFindOperations;
 
-            // If custom operations provide glob(), use that instead of fd.
             if (customOps?.glob) {
               if (!(await ops.exists(searchPath))) {
                 settle(() => reject(new Error(`Path not found: ${searchPath}`)));
@@ -150,7 +140,6 @@ export function createFindToolDefinition(
                 return;
               }
 
-              // Relativize paths against the search root for stable output.
               const relativized = results.map((p) => relativizeFindResultPath(p, searchPath));
               const resultLimitReached = relativized.length >= effectiveLimit;
               const rawOutput = relativized.join("\n");
@@ -178,7 +167,6 @@ export function createFindToolDefinition(
               return;
             }
 
-            // Default implementation uses fd.
             const fdPath = await ensureTool("fd");
             if (signal?.aborted) {
               settle(() => reject(new Error("Operation aborted")));
@@ -191,10 +179,6 @@ export function createFindToolDefinition(
 
             const args: string[] = ["--glob", "--color=never", "--hidden"];
 
-            // fd normally ignores .gitignore outside git repos, so keep --no-require-git
-            // there. Inside repos, use fd's default git-aware behavior so parent
-            // .gitignore rules stop at nested repo boundaries:
-            // https://github.com/earendil-works/pi/issues/5960
             let insideGitRepo = false;
             for (let current = searchPath; ;) {
               if (await pathExists(path.join(current, ".git"))) {
@@ -208,16 +192,12 @@ export function createFindToolDefinition(
             if (!insideGitRepo) args.push("--no-require-git");
             args.push("--max-results", String(effectiveLimit));
 
-            // fd --glob matches against the basename unless --full-path is set; in --full-path
-            // mode it matches against the absolute candidate path, so a path-containing
-            // pattern like 'src/**/*.spec.ts' needs a leading '**/' to match anything.
             let effectivePattern = pattern;
             if (pattern.includes("/")) {
               args.push("--full-path");
               if (!pattern.startsWith("/") && !pattern.startsWith("**/") && pattern !== "**") {
                 effectivePattern = `**/${pattern}`;
               }
-              // fd matches full paths using native separators on Windows.
               if (process.platform === "win32")
                 effectivePattern = effectivePattern.replaceAll("/", String.raw`[/\\]`);
             }

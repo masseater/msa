@@ -1,7 +1,3 @@
-/**
- * Extension system for lifecycle events and custom tools.
- */
-
 export type { SlashCommandInfo, SlashCommandSource } from "../slash-commands.ts";
 export type { SourceInfo } from "../source-info.ts";
 export {
@@ -27,14 +23,11 @@ export type {
   AgentEndEvent,
   AgentSettledEvent,
   AgentStartEvent,
-  // Re-exports
   AgentToolResult,
   AgentToolUpdateCallback,
   AppendEntryHandler,
-  // App keybindings (for custom editors)
   AppKeybinding,
   AutocompleteProviderFactory,
-  // Events - Tool (ToolCallEvent types)
   BashToolCallEvent,
   BashToolResultEvent,
   BeforeAgentStartCustomEvent,
@@ -51,12 +44,9 @@ export type {
   CacheWarmingDecisionEvent,
   CacheWarmingDecisionEventResult,
   CompactionEntryDraft,
-  // Context
   CompactOptions,
   ContextEditEntryDraft,
-  // Events - Agent
   ContextEvent,
-  // Event Results
   ContextEventResult,
   ContextUsage,
   ContextWithSystemEvent,
@@ -67,7 +57,6 @@ export type {
   EditorFactory,
   EditToolCallEvent,
   EditToolResultEvent,
-  // Message and Entry Rendering
   EntryRenderer,
   EntryRenderOptions,
   ExecOptions,
@@ -75,20 +64,17 @@ export type {
   ExecuteToolOptions,
   Extension,
   ExtensionActions,
-  // API
   ExtensionAPI,
   ExtensionCommandContext,
   ExtensionCommandContextActions,
   ExtensionContext,
   ExtensionContextActions,
-  // Errors
   ExtensionError,
   ExtensionEvent,
   ExtensionFactory,
   ExtensionFlag,
   ExtensionHandler,
   ExtensionMode,
-  // Runtime
   ExtensionRuntime,
   ExtensionShortcut,
   ExtensionToolContext,
@@ -105,7 +91,6 @@ export type {
   GrepToolCallEvent,
   GrepToolResultEvent,
   InlineExtension,
-  // Events - Input
   InputEvent,
   InputEventResult,
   InputSource,
@@ -116,7 +101,6 @@ export type {
   MarkdownTransformContext,
   MarkdownTransformer,
   McpServersChangeEvent,
-  // Events - Message
   MessageEndEvent,
   MessageEndEventResult,
   MessageRenderer,
@@ -133,18 +117,15 @@ export type {
   ProjectTrustEventDecision,
   ProjectTrustEventResult,
   ProjectTrustHandler,
-  // Provider Registration
   ProviderConfig,
   ProviderModelConfig,
   ProviderStreamEvent,
   ReadToolCallEvent,
   ReadToolResultEvent,
-  // Commands
   RegisteredCommand,
   RegisteredTool,
   ReplacedSessionContext,
   ResolvedCommand,
-  // Events - Resources
   ResourcesDiscoverEvent,
   ResourcesDiscoverResult,
   SendMessageHandler,
@@ -163,7 +144,6 @@ export type {
   SessionEvent,
   SessionInfoChangedEvent,
   SessionShutdownEvent,
-  // Events - Session
   SessionStartEvent,
   SessionTreeEvent,
   SetActiveToolsHandler,
@@ -173,14 +153,10 @@ export type {
   TerminalInputHandler,
   ThinkingLevelSelectEvent,
   ToolAnnotations,
-  // Events - Tool
   ToolCallEvent,
   ToolCallEventResult,
-  // Tools
   ToolDefinition,
-  // Events - Tool Execution
   ToolExecutionEndEvent,
-  // Tool execution mode
   ToolExecutionMode,
   ToolExecutionStartEvent,
   ToolExecutionUpdateEvent,
@@ -201,7 +177,6 @@ export type {
   UIPromptEndEvent,
   UIPromptKind,
   UIPromptStartEvent,
-  // Events - User Bash
   UserBashEvent,
   UserBashEventResult,
   WidgetPlacement,
@@ -209,7 +184,6 @@ export type {
   WriteToolCallEvent,
   WriteToolResultEvent,
 } from "./types.ts";
-// Type guards
 export {
   defineTool,
   isBashToolResult,

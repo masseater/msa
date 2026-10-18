@@ -34,12 +34,6 @@ export const readToolSystemPromptContribution = {
 
 export type ReadToolInput = Static<typeof readSchema>;
 
-/**
- * Result for programmatic callers such as codemode scripts: the text for text files, and an image
- * block for images that codemode's `image()` accepts. `note` is the text that goes with the image,
- * such as resize hints. Property descriptions are left out so the type stays on one line in tool
- * descriptions.
- */
 const readOutputSchema = Type.Union([
   Type.String(),
   Type.Object({
@@ -56,16 +50,9 @@ export interface ReadToolDetails {
   truncation?: TruncationResult;
 }
 
-/**
- * Pluggable operations for the read tool.
- * Override these to delegate file reading to remote systems (for example SSH).
- */
 export interface ReadOperations {
-  /** Read file contents as a Buffer */
   readFile: (absolutePath: string) => Promise<Buffer>;
-  /** Check if file is readable (throw if not) */
   access: (absolutePath: string) => Promise<void>;
-  /** Detect image MIME type, return null or undefined for non-images */
   detectImageMimeType?: (absolutePath: string) => Promise<string | null | undefined>;
 }
 
@@ -76,15 +63,11 @@ const defaultReadOperations: ReadOperations = {
 };
 
 export interface ReadToolOptions {
-  /** Whether to auto-resize images. Default: true */
   autoResizeImages?: boolean;
-  /** Fallback resize profile when the execution context has no model metadata. */
   resizeOptions?: ModelImageResizeOptions;
-  /** Custom operations for file reading. Default: local filesystem */
   operations?: ReadOperations;
 }
 
-/** The image block and its note, or the text for text files and images that could not be processed. */
 function toReadOutput(content: (TextContent | ImageContent)[]): ReadToolOutput {
   const text = content.find((block) => block.type === "text")?.text ?? "";
   const image = content.find((block) => block.type === "image");
@@ -140,7 +123,6 @@ export function createReadToolDefinition(
           try {
             const absolutePath = await resolveReadPathAsync(path, ctx?.cwd || cwd);
             if (aborted) return;
-            // Check if file exists and is readable.
             await ops.access(absolutePath);
             if (aborted) return;
             const mimeType = ops.detectImageMimeType
@@ -150,7 +132,6 @@ export function createReadToolDefinition(
             let details: ReadToolDetails | undefined;
             const nonVisionImageNote = getNonVisionImageNote(ctx?.model);
             if (mimeType) {
-              // Read image as binary.
               const buffer = await ops.readFile(absolutePath);
               const processed = await processImage(buffer, mimeType, {
                 autoResizeImages,
@@ -170,15 +151,12 @@ export function createReadToolDefinition(
                 ];
               }
             } else {
-              // Read text content.
               const buffer = await ops.readFile(absolutePath);
               const textContent = buffer.toString("utf-8");
               const allLines = textContent.split("\n");
               const totalFileLines = allLines.length;
-              // Apply offset if specified. Convert from 1-indexed input to 0-indexed array access.
               const startLine = offset ? Math.max(0, offset - 1) : 0;
               const startLineDisplay = startLine + 1;
-              // Check if offset is out of bounds.
               const firstLine = allLines[startLine];
               if (firstLine === undefined) {
                 throw new Error(
@@ -187,7 +165,6 @@ export function createReadToolDefinition(
               }
               let selectedContent: string;
               let userLimitedLines: number | undefined;
-              // If limit is specified by the user, honor it first. Otherwise truncateHead decides.
               if (limit !== undefined) {
                 const endLine = Math.min(startLine + limit, allLines.length);
                 selectedContent = allLines.slice(startLine, endLine).join("\n");
@@ -195,16 +172,13 @@ export function createReadToolDefinition(
               } else {
                 selectedContent = allLines.slice(startLine).join("\n");
               }
-              // Apply truncation, respecting both line and byte limits.
               const truncation = truncateHead(selectedContent);
               let outputText: string;
               if (truncation.firstLineExceedsLimit) {
-                // First line alone exceeds the byte limit. Point the model at a bash fallback.
                 const firstLineSize = formatSize(Buffer.byteLength(firstLine, "utf-8"));
                 outputText = `[Line ${startLineDisplay} is ${firstLineSize}, exceeds ${formatSize(DEFAULT_MAX_BYTES)} limit. Use bash: sed -n '${startLineDisplay}p' ${path} | head -c ${DEFAULT_MAX_BYTES}]`;
                 details = { truncation };
               } else if (truncation.truncated) {
-                // Truncation occurred. Build an actionable continuation notice.
                 const endLineDisplay = startLineDisplay + truncation.outputLines - 1;
                 const nextOffset = endLineDisplay + 1;
                 outputText = truncation.content;
@@ -218,12 +192,10 @@ export function createReadToolDefinition(
                 userLimitedLines !== undefined &&
                 startLine + userLimitedLines < allLines.length
               ) {
-                // User-specified limit stopped early, but the file still has more content.
                 const remaining = allLines.length - (startLine + userLimitedLines);
                 const nextOffset = startLine + userLimitedLines + 1;
                 outputText = `${truncation.content}\n\n[${remaining} more lines in file. Use offset=${nextOffset} to continue.]`;
               } else {
-                // No truncation and no remaining user-limited content.
                 outputText = truncation.content;
               }
               content = [{ type: "text", text: outputText }];

@@ -31,9 +31,7 @@ function parseLineNumber(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
-/** Format finite numbers or numeric strings as a read line range, omitting malformed ranges. */
 export function formatReadLineRange(offset: unknown, limit: unknown): string {
-  // Strict schemas represent omitted optional arguments as null.
   if (offset == null && limit == null) return "";
   const start = offset == null ? 1 : parseLineNumber(offset);
   if (start === undefined) return "";
@@ -92,11 +90,6 @@ export type ToolRenderResultLike<TDetails> = {
 
 const COLLAPSED_ARGS_CHARS = 100;
 
-/**
- * Generic tool call header: the title followed by the arguments. Collapsed, they are `key=value`
- * pairs on the title line, cut to {@link COLLAPSED_ARGS_CHARS}. Expanded, each is a `key: value`
- * line below the title, with strings shown raw and continuation lines indented.
- */
 export function formatToolCallWithArgs(
   title: string,
   args: unknown,
@@ -126,7 +119,6 @@ export function formatToolCallWithArgs(
   return `${header} ${theme.fg("muted", preview)}`;
 }
 
-/** Duration as `4.2s` below a minute, then `1m 30s` and `2h 3m 4s`. */
 export function formatToolDuration(ms: number): string {
   const seconds = ms / 1000;
   if (seconds < 60) return `${seconds.toFixed(1)}s`;
@@ -139,14 +131,12 @@ export function formatToolDuration(ms: number): string {
   return `${Math.floor(minutes / 60)}h ${minutes % 60}m ${remainder}s`;
 }
 
-/** Renderer state of {@link startToolTimer} and {@link toolTimerText}, kept in `ToolRenderContext.state`. */
 interface ToolTimerState {
   startedAt?: number;
   endedAt?: number | undefined;
   interval?: ReturnType<typeof setInterval> | undefined;
 }
 
-/** Start the row's clock once execution starts. Call from `renderCall`. */
 export function startToolTimer(context: ToolRenderContext<ToolTimerState>): void {
   const state = context.state;
   if (context.executionStarted && state.startedAt === undefined) {
@@ -155,11 +145,6 @@ export function startToolTimer(context: ToolRenderContext<ToolTimerState>): void
   }
 }
 
-/**
- * The row's timing line, from `renderResult`: `Elapsed 4.2s` while the result is partial, redrawn
- * every second, and `Took 4.2s` once it is final. Undefined when the row has no start time and no
- * recorded duration.
- */
 export function toolTimerText(
   context: ToolRenderContext<ToolTimerState>,
   isPartial: boolean,
@@ -175,8 +160,6 @@ export function toolTimerText(
       state.interval = undefined;
     }
   }
-  // A final result's recorded duration wins: it is monotonic and survives reloads. The renderer's own clock is the
-  // fallback for live progress and for results stored without one.
   if (!isPartial && context.durationMs !== undefined)
     return `Took ${formatToolDuration(context.durationMs)}`;
   if (state.startedAt === undefined) return undefined;

@@ -1,10 +1,3 @@
-/**
- * Presentation for the web_search and web_fetch tools.
- *
- * Renderers live apart from the implementation so a process that only displays tool output does not
- * load the HTTP client. The tools spread these into their definitions.
- */
-
 import { getCapabilities, hyperlink, Text } from "@msa/tui";
 
 import { expandHint } from "../../../modes/interactive/components/keybinding-hints.ts";
@@ -21,7 +14,6 @@ function link(text: string, url: string | undefined): string {
   return url && getCapabilities().hyperlinks ? hyperlink(text, url) : text;
 }
 
-/** Who answered and what it cost, as treg reported it. */
 function provenance(details: { servedBy?: string; costMicro?: number } | undefined): string {
   const parts: string[] = [];
   if (details?.servedBy) parts.push(`via ${details.servedBy}`);

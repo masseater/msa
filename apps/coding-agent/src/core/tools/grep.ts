@@ -60,14 +60,8 @@ export interface GrepToolDetails {
   linesTruncated?: boolean;
 }
 
-/**
- * Pluggable operations for the grep tool.
- * Override these to delegate search to remote systems (for example SSH).
- */
 export interface GrepOperations {
-  /** Check if path is a directory. Throws if path does not exist. */
   isDirectory: (absolutePath: string) => Promise<boolean> | boolean;
-  /** Read file contents for context lines */
   readFile: (absolutePath: string) => Promise<string> | string;
 }
 
@@ -77,7 +71,6 @@ const defaultGrepOperations: GrepOperations = {
 };
 
 export interface GrepToolOptions {
-  /** Custom operations for grep. Default: local filesystem plus ripgrep */
   operations?: GrepOperations;
 }
 
@@ -222,7 +215,6 @@ export function createGrepToolDefinition(
                 const lineText = lines[current - 1] ?? "";
                 const sanitized = lineText.replace(/\r/g, "");
                 const isMatchLine = current === lineNumber;
-                // Truncate long lines so grep output stays compact.
                 const { text: truncatedText, wasTruncated } = truncateLine(sanitized);
                 if (wasTruncated) linesTruncated = true;
                 if (isMatchLine) block.push(`${relativePath}:${current}: ${truncatedText}`);
@@ -231,7 +223,6 @@ export function createGrepToolDefinition(
               return block;
             };
 
-            // Collect matches during streaming, then format them after rg exits.
             const matches: Array<{ filePath: string; lineNumber: number; lineText?: string }> = [];
             rl.on("line", (line) => {
               if (!line.trim() || matchCount >= effectiveLimit) return;
@@ -280,7 +271,6 @@ export function createGrepToolDefinition(
                 return;
               }
 
-              // Format matches after streaming finishes so custom readFile() backends can be async.
               for (const match of matches) {
                 if (contextValue === 0 && match.lineText !== undefined) {
                   const relativePath = formatPath(match.filePath);
@@ -298,11 +288,9 @@ export function createGrepToolDefinition(
               }
 
               const rawOutput = outputLines.join("\n");
-              // Apply byte truncation. There is no line limit here because the match limit already capped rows.
               const truncation = truncateHead(rawOutput, { maxLines: Number.MAX_SAFE_INTEGER });
               let output = truncation.content;
               const details: GrepToolDetails = {};
-              // Build actionable notices for truncation and match limits.
               const notices: string[] = [];
               if (matchLimitReached) {
                 notices.push(

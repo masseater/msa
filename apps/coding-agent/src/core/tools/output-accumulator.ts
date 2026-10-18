@@ -23,7 +23,6 @@ export interface OutputSnapshot {
 
 export interface FullOutput {
   content: string;
-  /** Whether `content` omits part of the output. */
   truncated: boolean;
 }
 
@@ -31,13 +30,6 @@ function byteLength(text: string): number {
   return Buffer.byteLength(text, "utf-8");
 }
 
-/**
- * Incrementally tracks streaming output with bounded memory.
- *
- * Appends decode chunks with a streaming UTF-8 decoder, keeps only a decoded
- * tail for display snapshots, and opens a temp file when the full output needs
- * to be preserved.
- */
 export class OutputAccumulator {
   private readonly maxLines: number;
   private readonly maxBytes: number;
@@ -147,11 +139,6 @@ export class OutputAccumulator {
     });
   }
 
-  /**
-   * The complete output, for callers that can take more than the display snapshot. Call after
-   * `finish()` and `closeTempFile()`. Output longer than `maxBytes` raw bytes keeps its first and
-   * last `maxBytes / 2` bytes around an omission marker.
-   */
   async readFullOutput(maxBytes: number): Promise<FullOutput> {
     if (!this.tempFilePath) {
       return { content: new TextDecoder().decode(Buffer.concat(this.rawChunks)), truncated: false };
@@ -168,8 +155,6 @@ export class OutputAccumulator {
       const tail = Buffer.alloc(tailBytes);
       await file.read(head, 0, headBytes, 0);
       await file.read(tail, 0, tailBytes, size - tailBytes);
-      // Cut at character boundaries: streaming decode holds back an incomplete trailing sequence,
-      // and the tail skips leading continuation bytes.
       const headText = new TextDecoder().decode(head, { stream: true });
       let tailStart = 0;
       while (tailStart < tail.length && ((tail[tailStart] ?? 0) & 0xc0) === 0x80) tailStart++;

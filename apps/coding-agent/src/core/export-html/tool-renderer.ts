@@ -1,10 +1,3 @@
-/**
- * Tool HTML renderer for custom tools in HTML export.
- *
- * Renders custom tool calls and results to HTML by invoking their TUI renderers
- * and converting the ANSI output to HTML.
- */
-
 import type { ImageContent, TextContent } from "@msa/ai";
 import type { Component } from "@msa/tui";
 
@@ -13,20 +6,14 @@ import type { ToolRenderContext, ToolRenderers } from "../extensions/types.ts";
 import { ansiLinesToHtml } from "./ansi-to-html.ts";
 
 export interface ToolHtmlRendererDeps {
-  /** Renderers of calls to a tool, as resolved by extensions and the registered tool */
   getToolRenderers: (name: string) => ToolRenderers | undefined;
-  /** Theme for styling */
   theme: Theme;
-  /** Working directory for render context */
   cwd: string;
-  /** Terminal width for rendering (default: 100) */
   width?: number;
 }
 
 export interface ToolHtmlRenderer {
-  /** Render a tool call to HTML. Returns undefined if tool has no custom renderer. */
   renderCall(toolCallId: string, toolName: string, args: unknown): string | undefined;
-  /** Render a tool result to collapsed/expanded HTML. Returns undefined if tool has no custom renderer. */
   renderResult(
     toolCallId: string,
     toolName: string,
@@ -36,12 +23,6 @@ export interface ToolHtmlRenderer {
   ): { collapsed?: string; expanded?: string } | undefined;
 }
 
-/**
- * Create a tool HTML renderer.
- *
- * The renderer looks up tool definitions and invokes their renderCall/renderResult
- * methods, converting the resulting TUI Component output (ANSI) to HTML.
- */
 const ANSI_ESCAPE_REGEX = /\x1b\[[\d;]*m/g;
 
 function isBlankRenderedLine(line: string): boolean {
@@ -121,7 +102,6 @@ export function createToolHtmlRenderer(deps: ToolHtmlRendererDeps): ToolHtmlRend
         const lines = component.render(width);
         return ansiLinesToHtml(lines);
       } catch {
-        // On error, return undefined so HTML export can fall back to structured result rendering
         return undefined;
       }
     },
@@ -139,15 +119,12 @@ export function createToolHtmlRenderer(deps: ToolHtmlRendererDeps): ToolHtmlRend
           return undefined;
         }
 
-        // Build AgentToolResult from content array
-        // Cast content since session storage uses generic object types
         const agentToolResult = {
           content: result as (TextContent | ImageContent)[],
           details,
           isError,
         };
 
-        // Render collapsed
         const collapsedComponent = toolDef.renderResult(
           agentToolResult,
           { expanded: false, isPartial: false },
@@ -165,7 +142,6 @@ export function createToolHtmlRenderer(deps: ToolHtmlRendererDeps): ToolHtmlRend
           trimRenderedResultLines(collapsedComponent.render(width)),
         );
 
-        // Render expanded
         const expandedComponent = toolDef.renderResult(
           agentToolResult,
           { expanded: true, isPartial: false },
@@ -186,7 +162,6 @@ export function createToolHtmlRenderer(deps: ToolHtmlRendererDeps): ToolHtmlRend
           expanded,
         };
       } catch {
-        // On error, return undefined so HTML export can fall back to structured result rendering
         return undefined;
       }
     },

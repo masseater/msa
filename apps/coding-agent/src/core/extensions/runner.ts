@@ -1,7 +1,3 @@
-/**
- * Extension runner - executes extensions and manages their lifecycle.
- */
-
 import type { AgentMessage, AgentTool } from "@msa/agent-core";
 import {
   getCurrentSystemMessage,
@@ -96,8 +92,6 @@ import type {
   UserBashEventResult,
 } from "./types.ts";
 
-// Extension shortcuts compete with canonical keybinding ids from keybindings.json.
-// Only editor-global shortcuts are reserved here. Picker-specific bindings are not.
 const RESERVED_KEYBINDINGS_FOR_EXTENSION_CONFLICTS = [
   "app.interrupt",
   "app.clear",
@@ -131,8 +125,6 @@ const buildBuiltinKeybindings = (resolvedKeybindings: KeybindingsConfig): BuiltI
     ).includes(keybinding);
     for (const key of keyList) {
       const normalizedKey = key.toLowerCase() as KeyId;
-      // If multiple actions bind the same key, the reserved action wins so extensions
-      // remain blocked by reserved shortcuts regardless of iteration order.
       const existing = builtinKeybindings[normalizedKey];
       if (existing?.restrictOverride && !restrictOverride) continue;
       builtinKeybindings[normalizedKey] = {
@@ -171,21 +163,15 @@ function isUserBashEventResult(value: unknown): value is UserBashEventResult {
   );
 }
 
-/** The message that starts a run: the before_agent_start event without its prompt fields. */
 export type BeforeAgentStartTrigger =
   | Pick<BeforeAgentStartUserEvent, "messageType" | "prompt" | "images">
   | Pick<BeforeAgentStartCustomEvent, "messageType" | "message">;
 
-/** Combined result from all before_agent_start handlers. */
 interface BeforeAgentStartCombinedResult {
   messages: NonNullable<BeforeAgentStartEventResult["message"]>[];
   systemPromptOptions: NormalizedBuildSystemPromptOptions;
 }
 
-/**
- * Events handled by the generic emit() method.
- * Events with dedicated emitXxx() methods are excluded for stronger type safety.
- */
 type RunnerEmitEvent = Exclude<
   ExtensionEvent,
   | ToolCallEvent
@@ -280,10 +266,6 @@ export type ReloadHandler = () => Promise<void>;
 
 export type ShutdownHandler = () => void;
 
-/**
- * Helper function to emit session_shutdown event to extensions.
- * Returns true if the event was emitted, false if there were no handlers.
- */
 export async function emitSessionShutdownEvent(
   extensionRunner: ExtensionRunner,
   event: SessionShutdownEvent,
@@ -303,14 +285,6 @@ function sameMessages(left: AgentMessage[], right: AgentMessage[]): boolean {
   return left.length === right.length && left.every((message, index) => message === right[index]);
 }
 
-/**
- * Re-attach the prompt and tool state after a `context` handler. Handlers only see the
- * conversation; the system messages belong to msa. An unchanged conversation keeps every
- * system message in place, so models with mid-conversation support keep their cached
- * prefix. A changed one gets the replayed prompt sections and tool declarations as one
- * leading system message, so pruning, windowing, or slicing from a compaction summary
- * cannot drop them.
- */
 function restoreSystemMessages(
   current: AgentMessage[],
   visible: AgentMessage[],
@@ -331,8 +305,6 @@ export async function emitProjectTrustEvent(
     extensionsResult.extensions,
     "project_trust",
   )) {
-    // A single extension may register multiple handlers for the same event.
-    // The first project_trust handler that returns yes/no wins; undecided falls through.
     for (const handler of handlers) {
       try {
         const handlerResult = (await handler(event, ctx)) as ProjectTrustEventResult;
@@ -410,7 +382,6 @@ export class ExtensionRunner {
     normalizeBuildSystemPromptOptions({ cwd: this.cwd });
   private executeToolFn: ExtensionContextActions["executeTool"];
   private getCallableToolsFn: () => readonly AgentTool[] = () => [];
-  /** Registered MCP servers already reported as unhandled. */
   private readonly reportedMcpServers = new Set<string>();
   private newSessionHandler: NewSessionHandler = async () => ({ cancelled: false });
   private forkHandler: ForkHandler = async () => ({ cancelled: false });
@@ -450,7 +421,6 @@ export class ExtensionRunner {
       unregisterVirtualModel?: (provider: string, id: string) => void;
     },
   ): void {
-    // Copy actions into the shared runtime (all extension APIs reference this)
     this.runtime.sendMessage = actions.sendMessage;
     this.runtime.sendUserMessage = actions.sendUserMessage;
     this.runtime.appendEntry = actions.appendEntry;
@@ -468,7 +438,6 @@ export class ExtensionRunner {
     this.runtime.setThinkingLevel = actions.setThinkingLevel;
     this.runtime.createContext = () => this.createContext();
 
-    // Context actions (required)
     this.getModel = contextActions.getModel;
     this.getScopedModels = contextActions.getScopedModels;
     this.isIdleFn = contextActions.isIdle;
@@ -486,14 +455,11 @@ export class ExtensionRunner {
     this.executeToolFn = contextActions.executeTool;
     this.getCallableToolsFn = contextActions.getCallableTools ?? (() => []);
 
-    // Servers registered from now on reach the extension that connects them right away. Servers
-    // registered during loading are read on session_start.
     this.runtime.mcpServers.setChangeListener(() => {
       void this.emit({ type: "mcp_servers_change", servers: this.runtime.mcpServers.list() });
       this.reportUnhandledMcpServers();
     });
 
-    // Flush provider registrations queued during extension loading
     for (const { name, config, extensionPath } of this.runtime.pendingProviderRegistrations) {
       try {
         if (providerActions?.registerProvider) {
@@ -546,8 +512,6 @@ export class ExtensionRunner {
     }
     this.runtime.pendingVirtualModelRegistrations = [];
 
-    // From this point on, provider registration/unregistration takes effect immediately
-    // without requiring a /reload.
     this.runtime.registerProvider = (name, config) => {
       if (providerActions?.registerProvider) {
         providerActions.registerProvider(name, config);
@@ -675,7 +639,6 @@ export class ExtensionRunner {
     return this.extensions.map((e) => e.path);
   }
 
-  /** Get all registered tools from all extensions (first registration per name wins). */
   getAllRegisteredTools(): RegisteredTool[] {
     const toolsByName = new Map<string, RegisteredTool>();
     for (const ext of this.extensions) {
@@ -688,7 +651,6 @@ export class ExtensionRunner {
     return Array.from(toolsByName.values());
   }
 
-  /** Get a tool definition by name. Returns undefined if not found. */
   getToolDefinition(toolName: string): RegisteredTool["definition"] | undefined {
     for (const ext of this.extensions) {
       const tool = ext.tools.get(toolName);
@@ -794,10 +756,6 @@ export class ExtensionRunner {
     }
   }
 
-  /**
-   * Report registered MCP servers when no extension handles `mcp_servers_change`, which means
-   * nothing connects them (for example when another MCP extension replaced the built-in one).
-   */
   reportUnhandledMcpServers(): void {
     if (this.hasHandlers("mcp_servers_change")) return;
     for (const server of this.runtime.mcpServers.list()) {
@@ -841,7 +799,6 @@ export class ExtensionRunner {
     );
   }
 
-  /** Renderers of calls to `toolName`: extension resolvers in load order, then `base`. */
   resolveToolRenderers(
     toolName: string,
     base: () => ToolRenderers | undefined,
@@ -918,10 +875,6 @@ export class ExtensionRunner {
     return this.resolveRegisteredCommands().find((command) => command.invocationName === name);
   }
 
-  /**
-   * Request a graceful shutdown. Called by extension tools and event handlers.
-   * The actual shutdown behavior is provided by the mode via bindExtensions().
-   */
   shutdown(): void {
     this.shutdownHandler();
   }
@@ -931,10 +884,6 @@ export class ExtensionRunner {
     return this.runtime.getActiveTools();
   }
 
-  /**
-   * Create an ExtensionContext for use in event handlers and tool execution.
-   * Context values are resolved at call time, so changes via bindCore/bindUI are reflected.
-   */
   createContext(): ExtensionContext {
     const runner = this;
     const getModel = this.getModel;
@@ -1015,13 +964,8 @@ export class ExtensionRunner {
     };
   }
 
-  /**
-   * Create the context for executing the tool call `toolCallId`: the extension context plus
-   * `tools` and `executeTool()`. `signal` is the default signal of nested calls.
-   */
   createToolContext(toolCallId: string, signal: AbortSignal | undefined): ExtensionToolContext {
     const runner = this;
-    // createContext() returns a fresh object, so adding properties does not affect other contexts.
     return Object.defineProperties(this.createContext() as ExtensionToolContext, {
       tools: {
         get() {
@@ -1054,9 +998,6 @@ export class ExtensionRunner {
   }
 
   createCommandContext(): ExtensionCommandContext {
-    // Use property descriptors instead of object spread so the guarded getters from
-    // createContext() stay lazy. A spread would eagerly read them once and freeze the
-    // old values into the returned object, bypassing stale-instance checks.
     const context = Object.defineProperties(
       {},
       Object.getOwnPropertyDescriptors(this.createContext()),
@@ -1185,7 +1126,6 @@ export class ExtensionRunner {
     return result as RunnerEmitResult<TEvent>;
   }
 
-  /** Returns the event's own action unless a handler overrides it; the last override wins. */
   async emitCacheWarmingDecision(event: CacheWarmingDecisionEvent): Promise<CacheWarmingAction> {
     const ctx = this.createContext();
     let action = event.action;
@@ -1265,7 +1205,6 @@ export class ExtensionRunner {
 
           if (handlerResult.content !== undefined) {
             currentEvent.content = handlerResult.content;
-            // Structured content that is not replaced along with the content may no longer match it.
             if (handlerResult.structuredContent === undefined)
               delete currentEvent.structuredContent;
             modified = true;
@@ -1363,11 +1302,6 @@ export class ExtensionRunner {
     return undefined;
   }
 
-  /**
-   * Run the request-time transforms in two phases. `context` handlers see the conversation
-   * only and msa restores the prompt and tool state after each; `context_with_system`
-   * handlers then see the full transcript and their output is used as returned.
-   */
   async emitContext(messages: AgentMessage[]): Promise<AgentMessage[]> {
     const ctx = this.createContext();
     let currentMessages = structuredClone(messages);
@@ -1380,7 +1314,6 @@ export class ExtensionRunner {
           const event: ContextEvent = { type: "context", messages: visibleMessages };
           const handlerResult = (await handler(event, ctx)) as ContextEventResult | undefined;
 
-          // Handlers may return a new list or edit event.messages in place.
           const returned =
             handlerResult?.messages ??
             (sameMessages(visibleMessages, visibleSnapshot) ? undefined : visibleMessages);
@@ -1409,8 +1342,6 @@ export class ExtensionRunner {
           };
           const handlerResult = (await handler(event, ctx)) as ContextEventResult | undefined;
           currentMessages = handlerResult?.messages ?? currentMessages;
-          // Providers read the prompt and initial tools from the leading system message.
-          // Losing it is never intended; report it but honor the handler's output.
           if (hadLeadingSystemMessage && currentMessages[0]?.role !== "system") {
             this.emitError({
               extensionPath: ext.path,
@@ -1478,7 +1409,6 @@ export class ExtensionRunner {
     )) {
       for (const handler of handlers) {
         try {
-          // Handlers mutate `headers` in place; the return value is ignored.
           const event: BeforeProviderHeadersEvent = {
             type: "before_provider_headers",
             headers,
@@ -1603,7 +1533,6 @@ export class ExtensionRunner {
     return { skillPaths, promptPaths, themePaths };
   }
 
-  /** Emit input event. Transforms chain, "handled" short-circuits. */
   async emitInput(
     text: string,
     images: ImageContent[] | undefined,

@@ -35,15 +35,12 @@ export interface CreateWorkerOptions {
   cwd: string;
   model: Model<any>;
   thinkingLevel: ThinkingLevel;
-  /** Reopen this transcript instead of starting a new one. */
   sessionFile?: string | undefined;
 }
 
 export interface OrchestratorDefaults {
-  /** `provider/id` */
   workerModel: string;
   workerThinkingLevel: ThinkingLevel;
-  /** `provider/id` */
   reviewModel: string;
   reviewThinkingLevel: ThinkingLevel;
   maxConcurrentSessions: number;
@@ -57,15 +54,12 @@ export interface OrchestratorReport {
 }
 
 export interface OrchestratorOptions {
-  /** The orchestrator session id. Every session it starts belongs to this project. */
   project: string;
   cwd: string;
   connectGraph: () => Promise<SessionGraph>;
   createWorker: (options: CreateWorkerOptions) => Promise<WorkerSession>;
-  /** Resolves `provider/id`, throwing for unknown models. */
   resolveModel: (reference: string) => Model<any>;
   defaults: () => OrchestratorDefaults;
-  /** Delivers a session's outcome to the orchestrator conversation. */
   report: (text: string, details: OrchestratorReport) => void;
 }
 
@@ -136,16 +130,9 @@ function taskPrompt(
   );
 }
 
-/**
- * Starts and tracks the sessions of one orchestrator conversation. Each session is an independent
- * {@link AgentSession} with its own model and thinking level. Sessions declare the sessions they
- * depend on and start once those have completed. Every round of sessions ends in one review
- * session, which depends on the round's sinks and runs alone.
- */
 export class Orchestrator {
   private graph: Promise<SessionGraph> | undefined;
   private readonly workers = new Map<string, WorkerSession>();
-  /** The current run of each running session. A run that is not current ended without effect. */
   private readonly runs = new Map<string, number>();
   private runCount = 0;
   private readonly runStartedAt = new Map<string, number>();
@@ -166,18 +153,15 @@ export class Orchestrator {
     return result;
   }
 
-  /** The sessions as of the last change, for screens that render synchronously. */
   get sessions(): readonly SessionNodeWithDependencies[] {
     return this.snapshot;
   }
 
-  /** Calls `listener` whenever {@link sessions} changes. Returns the unsubscribe function. */
   onChange(listener: () => void): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
   }
 
-  /** The messages of a session's transcript, read from its file when this process holds no worker. */
   messages(id: string): readonly AgentMessage[] {
     const worker = this.workers.get(id);
     if (worker) {
@@ -198,7 +182,6 @@ export class Orchestrator {
     return cached;
   }
 
-  /** When the current run of a session started, and whether it is waiting to retry a failed request. */
   progress(id: string): { startedAt: number | undefined; retrying: boolean } {
     return {
       startedAt: this.runs.has(id) ? this.runStartedAt.get(id) : undefined,
@@ -206,7 +189,6 @@ export class Orchestrator {
     };
   }
 
-  /** Reloads {@link sessions} from the graph. Failures leave the last snapshot in place. */
   async refresh(): Promise<void> {
     try {
       const graph = await this.connect();
@@ -220,7 +202,6 @@ export class Orchestrator {
   private connect(): Promise<SessionGraph> {
     this.graph ??= (async () => {
       const graph = await this.options.connectGraph();
-      // Sessions of an earlier process ended with it.
       for (const node of await graph.list(this.options.project)) {
         if (node.status === "running") await graph.update(node.id, { status: "stopped" });
       }
@@ -333,7 +314,6 @@ export class Orchestrator {
       }
       await this.run(graph, node, message);
       if (review) {
-        // A review that never ran, because every task of its round stopped, closes the round again.
         if (review.status === "stopped") await graph.update(review.id, { status: "queued" });
         await this.relinkReview(graph, review.id, node.round);
       }
@@ -361,7 +341,6 @@ export class Orchestrator {
       const graph = await this.connect();
       const node = await this.node(graph, id);
       if (node.status === "running" || node.status === "queued") {
-        // An aborted prompt can take a while to return, for example from a retry backoff.
         this.runs.delete(id);
         void this.workers
           .get(id)
@@ -375,7 +354,6 @@ export class Orchestrator {
     });
   }
 
-  /** Aborts running sessions and releases the graph connection. */
   async dispose(): Promise<void> {
     this.runs.clear();
     for (const worker of this.workers.values()) {
@@ -401,7 +379,6 @@ export class Orchestrator {
     if (sinks.length === 0) await graph.update(reviewId, { status: "stopped" });
   }
 
-  /** Starts ready sessions: tasks up to the concurrency limit, a review only when nothing runs. */
   private async schedule(graph: SessionGraph): Promise<string[]> {
     const nodes = await graph.list(this.options.project);
     const running = nodes.filter((node) => node.status === "running");
@@ -437,7 +414,6 @@ export class Orchestrator {
         sessionFile: node.sessionFile,
       });
       this.workers.set(node.id, worker);
-      // Screens follow a running session's transcript as it streams.
       worker.subscribe(() => {
         for (const listener of this.listeners) listener();
       });

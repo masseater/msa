@@ -1,14 +1,6 @@
-/**
- * Embedding client for OpenAI-compatible `/embeddings` endpoints, which covers local runtimes
- * (Ollama, LM Studio, llama.cpp) and hosted APIs with one code path. Vectors are L2-normalized
- * before they are stored, so ranking only needs a dot product.
- */
-
 export interface EmbeddingClientOptions {
-  /** Base URL such as `http://127.0.0.1:11434/v1`. `/embeddings` is appended. */
   baseUrl: string;
   model: string;
-  /** Bearer token, when the endpoint requires one. */
   apiKey?: string;
   timeoutMs: number;
 }
@@ -27,7 +19,6 @@ export class EmbeddingClient {
     this.timeoutMs = options.timeoutMs;
   }
 
-  /** The width of the vectors this endpoint returns, known after the first successful call. */
   get dimensions(): number | undefined {
     return this.dimension;
   }
