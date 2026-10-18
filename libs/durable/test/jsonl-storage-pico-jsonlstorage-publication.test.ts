@@ -186,6 +186,14 @@ describe("Pico JsonlStorage publication and recovery", () => {
   }
 });
 
+const ordersPublicationFlushes = Effect.gen(function* () {
+  for (const fsync of [false, true]) {
+    const store = yield* expectCreateFlushOrder(fsync);
+    yield* expectReclaimFlushOrder(store, fsync);
+    yield* expectTaskSidecarRemoval(store, fsync);
+  }
+});
+
 describe("Pico JsonlStorage publication and recovery", () => {
   for (const failure of [
     { operation: "flush", call: 1, mode: "before" },
@@ -230,13 +238,5 @@ describe("Pico JsonlStorage publication and recovery", () => {
   }
 
   it("orders publication flushes exactly and flushes main only to authorize reclamation", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        for (const fsync of [false, true]) {
-          const store = yield* expectCreateFlushOrder(fsync);
-          yield* expectReclaimFlushOrder(store, fsync);
-          yield* expectTaskSidecarRemoval(store, fsync);
-        }
-      }),
-    ));
+    Effect.runPromise(ordersPublicationFlushes));
 });

@@ -38,7 +38,7 @@ const Reviewer = defineExtension({
   ],
 });
 
-const main = Effect.gen(function* () {
+const mainStep1 = Effect.gen(function* () {
   const worktree = yield* makeTempDir("msa-durable-review-");
   yield* writeText(joinPath(worktree, "user.ts"), "export const name = (user) => user.name;\n");
 
@@ -82,6 +82,11 @@ const main = Effect.gen(function* () {
       context,
     ),
   );
+  return { worktree, harness, reviewer };
+});
+
+const main = Effect.gen(function* () {
+  const { worktree, harness, reviewer } = yield* mainStep1;
   const agent = yield* awaited(reviewer.agent(context));
   yield* Console.log(
     "reviewer:",

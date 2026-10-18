@@ -5,7 +5,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { awaited, context, completed, deferred, eventually, openTasks } from "./support.ts";
 
-const listsOwnedConversations = Effect.gen(function* () {
+const listsOwnedConversationsStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const gate = deferred();
@@ -49,6 +49,11 @@ const listsOwnedConversations = Effect.gen(function* () {
     abort: () => Promise.resolve(),
   });
   const { harness } = yield* openTasks(new MemoryStorage(), [Spawner]);
+  return { runPromise, gate, created, Spawner, harness };
+});
+
+const listsOwnedConversations = Effect.gen(function* () {
+  const { runPromise, gate, created, Spawner, harness } = yield* listsOwnedConversationsStep1;
   const root = yield* awaited(harness.root(context));
   const graph = yield* awaited(harness.taskGraph(context));
   const id = yield* awaited(

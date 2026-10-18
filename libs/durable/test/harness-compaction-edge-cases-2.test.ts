@@ -39,7 +39,7 @@ afterEach(() =>
   ),
 );
 
-const keepsBackgroundSummary = Effect.gen(function* () {
+const keepsBackgroundSummaryStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const chat = yield* open({ contextWindow: 2000 });
@@ -83,6 +83,11 @@ const keepsBackgroundSummary = Effect.gen(function* () {
     keepRecentTokens: 50,
   };
   expect((yield* awaited(input.wait(context))).status).toBe("done");
+  return { chat, submission };
+});
+
+const keepsBackgroundSummary = Effect.gen(function* () {
+  const { chat, submission } = yield* keepsBackgroundSummaryStep1;
   expect(firstUserText(chat.faux.agentRequests.at(-1)!.messages)).toContain("BLOCKING");
   expect(yield* awaited(submission.wait(context))).toMatchObject({
     status: "unanswered",

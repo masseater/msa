@@ -46,7 +46,7 @@ afterEach(() =>
   ),
 );
 
-const letsToolOwns = Effect.gen(function* () {
+const letsToolOwnsStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const setup = chatSetup();
@@ -89,6 +89,11 @@ const letsToolOwns = Effect.gen(function* () {
         ),
     }),
   );
+  return { runPromise, setup };
+});
+
+const letsToolOwns = Effect.gen(function* () {
+  const { runPromise, setup } = yield* letsToolOwnsStep1;
   setup.faux.setResponses([
     toolCalls(["delegate", "c1"]),
     fauxAssistantMessage([fauxText("done")]),
@@ -125,7 +130,7 @@ describe("tool rounds and events", () => {
     Effect.runPromise(letsToolOwns));
 });
 
-const holdsFaultedTool = Effect.gen(function* () {
+const holdsFaultedToolStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const setup = chatSetup();
@@ -168,6 +173,11 @@ const holdsFaultedTool = Effect.gen(function* () {
   yield* waitFor(() => log.includes("abort:held"));
   const live = (yield* awaited(harness.snapshot(LiveDoc, root.id, context)))!;
   const tool = live.tools![0]!.taskId!;
+  return { harness, stream, events, submission, live, tool };
+});
+
+const holdsFaultedTool = Effect.gen(function* () {
+  const { harness, stream, events, submission, live, tool } = yield* holdsFaultedToolStep1;
   expect(yield* state(harness, tool)).toMatchObject({
     status: "completing",
     outcome: { status: "faulted" },

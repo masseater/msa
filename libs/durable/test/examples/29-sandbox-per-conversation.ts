@@ -38,7 +38,7 @@ faux.setResponses([
 const registry = createRegistry();
 registry.install(CodingTools);
 
-const main = Effect.gen(function* () {
+const mainStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const harness = yield* awaited(
@@ -62,6 +62,11 @@ const main = Effect.gen(function* () {
   );
 
   const model = { provider: "faux", modelId: "faux-1" };
+  return { harness, model };
+});
+
+const main = Effect.gen(function* () {
+  const { harness, model } = yield* mainStep1;
   const conversationFor = Effect.fn("conversationFor")(function* (user: string) {
     const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 

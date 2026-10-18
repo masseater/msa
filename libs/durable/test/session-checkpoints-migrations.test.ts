@@ -102,7 +102,7 @@ describe("Session document checkpoints", () => {
     Effect.runPromise(callsCheckpointWhenDefinition));
 });
 
-const selectsBasesOnly = Effect.gen(function* () {
+const selectsBasesOnlyStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const { calls, falseCalls, BaseDoc, DeltaDoc, DefaultDoc } = checkpointDocs();
@@ -146,6 +146,12 @@ const selectsBasesOnly = Effect.gen(function* () {
     .filter((write) => write.type === "document.change");
   expect(writes.map((write) => write.content.kind)).toEqual(["base", "delta", "delta"]);
   expect(calls).toHaveLength(1);
+  return { calls, falseCalls, BaseDoc, DeltaDoc, session, publications, writes };
+});
+
+const selectsBasesOnly = Effect.gen(function* () {
+  const { calls, falseCalls, BaseDoc, DeltaDoc, session, publications, writes } =
+    yield* selectsBasesOnlyStep1;
   expect(falseCalls).toHaveLength(1);
   const snapshot = (yield* awaited(session.snapshot(BaseDoc, context)))!;
   const deltaSnapshot = (yield* awaited(session.snapshot(DeltaDoc, context)))!;

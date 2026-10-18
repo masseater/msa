@@ -10,7 +10,7 @@ import { awaited } from "../effect-support.ts";
 
 const context = BACKGROUND_CONTEXT;
 
-const main = Effect.gen(function* () {
+const mainStep1 = Effect.gen(function* () {
   const harness = yield* awaited(
     Harness.open(
       new MemoryStorage(),
@@ -45,7 +45,11 @@ const main = Effect.gen(function* () {
       timestamp: 2,
     };
   }
+  return { harness, assistantMessage };
+});
 
+const mainStep2 = Effect.gen(function* () {
+  const { harness, assistantMessage } = yield* mainStep1;
   function toolResultMessage(id: string): ToolResultMessage {
     return {
       role: "toolResult",
@@ -79,7 +83,11 @@ const main = Effect.gen(function* () {
   );
   const say = (kind: string, ...model: Message[]) =>
     transcript.commit((tx) => tx.appendEntry(transcript.id, { kind, model }), context);
+  return { harness, assistantMessage, toolResultMessage, show, transcript, say };
+});
 
+const mainStep3 = Effect.gen(function* () {
+  const { harness, assistantMessage, toolResultMessage, show, transcript, say } = yield* mainStep2;
   const question = yield* awaited(
     say("message", { role: "user", content: "read a and b", timestamp: 1 }),
   );
@@ -119,7 +127,11 @@ const main = Effect.gen(function* () {
       context,
     ),
   );
+  return { harness, show, transcript, calls };
+});
 
+const main = Effect.gen(function* () {
+  const { harness, show, transcript, calls } = yield* mainStep3;
   let view = yield* awaited(transcript.context(context));
   yield* Console.log(
     "raw active entries:",

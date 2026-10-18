@@ -129,7 +129,7 @@ describe("nested tool calls", () => {
     Effect.runPromise(abortsRunningNested));
 });
 
-const reattachesReplaySafe = Effect.gen(function* () {
+const reattachesReplaySafeStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const { path } = yield* nestedSqlitePath();
@@ -137,6 +137,11 @@ const reattachesReplaySafe = Effect.gen(function* () {
   const echo = echoTool();
   addTool(setup.registry, echo.registration);
   const blocked = deferred();
+  return { runPromise, path, setup, echo, blocked };
+});
+
+const reattachesReplaySafe = Effect.gen(function* () {
+  const { runPromise, path, setup, echo, blocked } = yield* reattachesReplaySafeStep1;
   let runs = 0;
   addTool(
     setup.registry,

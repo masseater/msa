@@ -18,7 +18,7 @@ import { awaited, joinPath, makeDirectory, makeTempDir, removeDir } from "../sup
 
 const context = BACKGROUND_CONTEXT;
 
-const main = Effect.gen(function* () {
+const mainStep1 = Effect.gen(function* () {
   const workspace = yield* makeTempDir("msa-durable-agent-");
   yield* makeDirectory(joinPath(workspace, "app"));
 
@@ -62,7 +62,11 @@ const main = Effect.gen(function* () {
       agent: { model: { provider: "faux", modelId: "faux-1" }, cwd: workspace },
     }),
   );
+  return { workspace, userSettings, harness, root };
+});
 
+const main = Effect.gen(function* () {
+  const { workspace, userSettings, harness, root } = yield* mainStep1;
   const lastBashOutput = Effect.fn("lastBashOutput")(function* () {
     const page = yield* awaited(root.entries({}, 10, undefined, context));
     const result = page.items.find((entry) => ToolResultEntry.is(entry))

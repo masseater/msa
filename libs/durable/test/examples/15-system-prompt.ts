@@ -58,7 +58,7 @@ registry.install(AgentsMd);
 registry.install(Terse);
 const env = ({ cwd = "/" }: { readonly cwd?: string }) => new NodeExecutionEnv({ cwd });
 
-const main = Effect.gen(function* () {
+const mainStep1 = Effect.gen(function* () {
   const harness = yield* awaited(
     Harness.open(new MemoryStorage(), { models, registry, env }, context),
   );
@@ -101,6 +101,11 @@ const main = Effect.gen(function* () {
   yield* Console.log("subagent system prompt:", yield* systemEntries(subagent));
 
   yield* awaited(root.configure({ cwd: "/repo/packages" }, context));
+  return { harness, root, systemEntries };
+});
+
+const main = Effect.gen(function* () {
+  const { harness, root, systemEntries } = yield* mainStep1;
   yield* awaited(
     (yield* awaited(root.submit({ type: "input", content: "Now the package." }, context))).wait(
       context,

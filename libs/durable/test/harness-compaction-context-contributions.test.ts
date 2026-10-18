@@ -23,7 +23,7 @@ afterEach(() =>
   ),
 );
 
-const applyEditsCarried = Effect.gen(function* () {
+const applyEditsCarriedStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const chat = yield* open();
@@ -63,6 +63,11 @@ const applyEditsCarried = Effect.gen(function* () {
   );
   const view = yield* awaited(chat.root.context(context));
   expect(view.entries.map((record) => record.id).slice(1)).toEqual([ids.a, ids.b, ids.c]);
+  return { chat, view };
+});
+
+const applyEditsCarried = Effect.gen(function* () {
+  const { chat, view } = yield* applyEditsCarriedStep1;
   expect(view.contributions.map((messages) => messages.map(userText))).toEqual([
     ["H"],
     ["a"],

@@ -167,7 +167,7 @@ describe("agent events", () => {
     Effect.runPromise(rejectsAttachmentCancelled));
 });
 
-const appliesDeltasOverflow = Effect.gen(function* () {
+const appliesDeltasOverflowStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const { harness, root } = yield* openChat(new MemoryStorage(), chatSetup());
@@ -199,6 +199,12 @@ const appliesDeltasOverflow = Effect.gen(function* () {
   yield* drained();
   const snapshot = batches[0]![0] as SnapshotEvent;
   expect(snapshot.type).toBe("snapshot");
+  return { runPromise, harness, root, stream, batches, snapshot };
+});
+
+const appliesDeltasOverflow = Effect.gen(function* () {
+  const { runPromise, harness, root, stream, batches, snapshot } =
+    yield* appliesDeltasOverflowStep1;
   yield* awaited(
     root.commit(
       (tx) =>

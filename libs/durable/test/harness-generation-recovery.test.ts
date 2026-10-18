@@ -191,11 +191,16 @@ describe("generation recovery", () => {
     Effect.runPromise(convertsCommittedPartial));
 });
 
-const resumesRetryBackoff = Effect.gen(function* () {
+const resumesRetryBackoffStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const path = yield* sqlitePath();
   const setup = chatSetup();
+  return { runPromise, path, setup };
+});
+
+const resumesRetryBackoff = Effect.gen(function* () {
+  const { runPromise, path, setup } = yield* resumesRetryBackoffStep1;
   let now = 1_000;
   setup.now = () => now;
   setup.faux.setResponses([

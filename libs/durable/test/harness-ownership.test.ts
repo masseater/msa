@@ -49,7 +49,7 @@ const keepsConversationBusy = Effect.gen(function* () {
   yield* awaited(harness.close(context));
 });
 
-const holdsOwnerWork = Effect.gen(function* () {
+const holdsOwnerWorkStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const { harness, root } = yield* openHarness();
@@ -91,6 +91,11 @@ const holdsOwnerWork = Effect.gen(function* () {
     ),
   );
   open("owner", "completed");
+  return { harness, owner };
+});
+
+const holdsOwnerWork = Effect.gen(function* () {
+  const { harness, owner } = yield* holdsOwnerWorkStep1;
   yield* waitUntil(
     Effect.gen(function* () {
       return (yield* status(harness, owner)).status === "completing";
@@ -166,7 +171,7 @@ describe("ownership", () => {
     Effect.runPromise(cascadesThroughEnded));
 });
 
-const keepsOwnershipQueries = Effect.gen(function* () {
+const keepsOwnershipQueriesStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const { harness, root } = yield* openHarness();
@@ -209,6 +214,11 @@ const keepsOwnershipQueries = Effect.gen(function* () {
     );
     tasks.push(...ids);
   }
+  return { runPromise, harness, owner, chains, tasks };
+});
+
+const keepsOwnershipQueries = Effect.gen(function* () {
+  const { runPromise, harness, owner, chains, tasks } = yield* keepsOwnershipQueriesStep1;
   for (let n = 0; n < chains; n++) {
     open(`c${n}.1`, "completed");
     open(`c${n}.0`, "completed");

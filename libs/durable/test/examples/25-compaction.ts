@@ -78,7 +78,7 @@ function text(message: Message | undefined): string {
   return block?.type === "text" ? block.text.replaceAll("\n", " ") : "";
 }
 
-const main = Effect.gen(function* () {
+const mainStep1 = Effect.gen(function* () {
   const harness = yield* awaited(
     Harness.open(new MemoryStorage(), { models, registry: createRegistry(), settings }, context),
   );
@@ -121,6 +121,11 @@ const main = Effect.gen(function* () {
   const placement =
     state.outcome.status === "completed" ? state.outcome.result.submissionId : undefined;
   const summary = (yield* awaited(harness.submission(placement!, context)))!;
+  return { harness, root, ask, finishAnswer, busy, summary };
+});
+
+const main = Effect.gen(function* () {
+  const { harness, root, ask, finishAnswer, busy, summary } = yield* mainStep1;
   yield* Console.log(
     "\nmanual compaction finished; its summary is",
     (yield* awaited(summary.status(context))).status,

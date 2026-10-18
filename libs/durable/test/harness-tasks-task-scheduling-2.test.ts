@@ -46,7 +46,7 @@ describe("task abort", () => {
     Effect.runPromise(signalsJoinsRun));
 });
 
-const abortsWaitingWork = Effect.gen(function* () {
+const abortsWaitingWorkStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const gate = deferred();
@@ -89,6 +89,11 @@ const abortsWaitingWork = Effect.gen(function* () {
   );
   yield* awaited(harness.abortTask(lazy, context));
   yield* awaited(harness.abortTask(throwing, context));
+  return { gate, first, harness, lazy, throwing };
+});
+
+const abortsWaitingWork = Effect.gen(function* () {
+  const { gate, first, harness, lazy, throwing } = yield* abortsWaitingWorkStep1;
   expect((yield* awaited(harness.waitForTask(lazy, context))).state.outcome).toEqual({
     status: "faulted",
     error: { message: `Abort handler of task ${lazy} returned without a terminal outcome` },

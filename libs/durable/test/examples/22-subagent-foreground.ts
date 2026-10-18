@@ -123,7 +123,7 @@ if (environmentVariable("OPENAI_API_KEY", true) === undefined) {
 const registry = createRegistry();
 registry.install(Subagent);
 
-const main = Effect.gen(function* () {
+const mainStep1 = Effect.gen(function* () {
   const runSync = Effect.runSyncWith(yield* Effect.context<never>());
 
   const harness = yield* awaited(Harness.open(new MemoryStorage(), { models, registry }, context));
@@ -159,7 +159,11 @@ const main = Effect.gen(function* () {
     );
   });
   yield* attach(root.id, "");
+  return { harness, root };
+});
 
+const main = Effect.gen(function* () {
+  const { harness, root } = yield* mainStep1;
   const submission = yield* awaited(
     root.submit(
       {

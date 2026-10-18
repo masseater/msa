@@ -20,7 +20,7 @@ afterEach(() =>
 
 const Message = defineEntry("message");
 
-const forksConcreteEntry = Effect.gen(function* () {
+const forksConcreteEntryStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const { harness, registry } = yield* openHarness(new MemoryStorage(), ["read"]);
@@ -62,7 +62,11 @@ const forksConcreteEntry = Effect.gen(function* () {
     thinkingLevel: "high",
     tools: ["read"],
   });
+  return { harness, root, at };
+});
 
+const forksConcreteEntry = Effect.gen(function* () {
+  const { harness, root, at } = yield* forksConcreteEntryStep1;
   const unrelated = yield* awaited(
     harness.createConversation({ ownership: { kind: "ownerless" } }, context),
   );

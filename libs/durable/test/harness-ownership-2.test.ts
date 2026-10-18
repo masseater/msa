@@ -84,7 +84,7 @@ describe("ownership", () => {
   );
 });
 
-const holdsOwnerWorkCommit = Effect.gen(function* () {
+const holdsOwnerWorkCommitStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const directory = yield* makeTempDir("msa-durable-ownership-");
@@ -128,6 +128,11 @@ const holdsOwnerWorkCommit = Effect.gen(function* () {
     ),
   );
   open("p", "completed");
+  return { opened, tree, d };
+});
+
+const holdsOwnerWorkCommit = Effect.gen(function* () {
+  const { opened, tree, d } = yield* holdsOwnerWorkCommitStep1;
   yield* waitUntil(
     Effect.gen(function* () {
       return (yield* status(opened.harness, tree.p)).status === "completing";

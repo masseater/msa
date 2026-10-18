@@ -106,11 +106,16 @@ describe("abort order", () => {
     Effect.runPromise(cascadesThroughTask));
 });
 
-const keepsBackgroundWork = Effect.gen(function* () {
+const keepsBackgroundWorkStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const { harness, root } = yield* openNodes();
   const foreground = yield* awaited(start(root, "foreground"));
+  return { runPromise, harness, root, foreground };
+});
+
+const keepsBackgroundWork = Effect.gen(function* () {
+  const { runPromise, harness, root, foreground } = yield* keepsBackgroundWorkStep1;
   let child: TaskId | undefined;
   let below: TaskId | undefined;
   script("background", {

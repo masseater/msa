@@ -19,13 +19,18 @@ afterEach(() =>
   ),
 );
 
-const failsNoModel = Effect.gen(function* () {
+const failsNoModelStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const path = yield* sqlitePath();
   const setup = chatSetup({ deferred: { pollAfterMs: 60_000 } });
   const busy = unanswered();
   setup.faux.setResponses([busy.step, fauxAssistantMessage("deferred")]);
+  return { runPromise, path, setup, busy };
+});
+
+const failsNoModel = Effect.gen(function* () {
+  const { runPromise, path, setup, busy } = yield* failsNoModelStep1;
   let opened = yield* open(path, setup);
   opened.harness.resume();
   const requesting = (yield* awaited(

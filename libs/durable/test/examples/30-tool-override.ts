@@ -54,7 +54,7 @@ const Timing = defineExtension({
   ],
 });
 
-const main = Effect.gen(function* () {
+const mainStep1 = Effect.gen(function* () {
   const project = yield* makeTempDir("msa-durable-venv-");
   yield* makeDirectory(joinPath(project, ".venv/bin"));
   yield* writeText(
@@ -94,6 +94,11 @@ const main = Effect.gen(function* () {
   );
   const model = { provider: "faux", modelId: "faux-1" };
   const plain = yield* awaited(harness.root(context, { agent: { model } }));
+  return { project, harness, model, plain };
+});
+
+const main = Effect.gen(function* () {
+  const { project, harness, model, plain } = yield* mainStep1;
   const python = yield* awaited(
     harness.createConversation(
       { ownership: { kind: "ownerless" }, agent: { model, extensions: { add: [Venv] } } },

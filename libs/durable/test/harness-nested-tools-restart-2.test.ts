@@ -110,7 +110,7 @@ describe("nested tool calls across a restart", () => {
     Effect.runPromise(keepsAbandonedTask));
 });
 
-const orphansAbandonedTask = Effect.gen(function* () {
+const orphansAbandonedTaskStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const path = yield* sqlitePath();
@@ -146,6 +146,11 @@ const orphansAbandonedTask = Effect.gen(function* () {
   const extension = defineExtension({ name: "gone", tasks: [Worker] });
   setup.registry.install(extension);
   const spawned = spawnThroughBatch(setup, Worker);
+  return { runPromise, path, setup, started, extension, spawned };
+});
+
+const orphansAbandonedTask = Effect.gen(function* () {
+  const { runPromise, path, setup, started, extension, spawned } = yield* orphansAbandonedTaskStep1;
   let opened = yield* open(path, setup);
   const id = (yield* awaited(opened.root.submit({ type: "input", content: "go" }, context))).id;
   yield* awaited(started.promise);

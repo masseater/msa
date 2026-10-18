@@ -25,7 +25,7 @@ function sourceWriteDocs() {
   return { Current, AsOf };
 }
 
-const rejectsDuplicateCurrent = Effect.gen(function* () {
+const rejectsDuplicateCurrentStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const AsOf = defineDoc<{ value: string }>({
@@ -46,6 +46,12 @@ const rejectsDuplicateCurrent = Effect.gen(function* () {
   });
   const { session, storage } = openTestSession();
   const parentId = yield* awaited(createConversation(session));
+  return { runPromise, AsOf, Current, session, storage, parentId };
+});
+
+const rejectsDuplicateCurrent = Effect.gen(function* () {
+  const { runPromise, AsOf, Current, session, storage, parentId } =
+    yield* rejectsDuplicateCurrentStep1;
   let oldAt!: EntryId;
   yield* awaited(
     session.commit(

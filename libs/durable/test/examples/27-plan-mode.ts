@@ -64,7 +64,7 @@ const read = createReadTool();
 const enterPlanMode = { extensions: { add: [Plan] }, tools: [read, submitPlan] };
 const leavePlanMode = { extensions: null, tools: null };
 
-const main = Effect.gen(function* () {
+const mainStep1 = Effect.gen(function* () {
   const directory = yield* makeTempDir("msa-durable-plan-");
   yield* writeText(joinPath(directory, "server.ts"), "app.listen(3000);\n");
 
@@ -106,6 +106,11 @@ const main = Effect.gen(function* () {
       agent: { model: { provider: "faux", modelId: "faux-1" } },
     }),
   );
+  return { directory, harness, root };
+});
+
+const main = Effect.gen(function* () {
+  const { directory, harness, root } = yield* mainStep1;
   const tools = Effect.fn("tools")(function* () {
     return (yield* awaited(root.agent(context))).tools.map((tool) => tool.name);
   });

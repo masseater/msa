@@ -62,7 +62,7 @@ describe("compaction pinning, silent overflow, and late policy changes", () => {
     Effect.runPromise(sendsRequestBlocking));
 });
 
-const survivesReopenBlocked = Effect.gen(function* () {
+const survivesReopenBlockedStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const path = yield* sqlitePath();
@@ -104,6 +104,11 @@ const survivesReopenBlocked = Effect.gen(function* () {
     reason: "task_too_old",
   });
   yield* awaited(chat.harness.abortTask(id, context));
+  return { id, chat, events, stream };
+});
+
+const survivesReopenBlocked = Effect.gen(function* () {
+  const { id, chat, events, stream } = yield* survivesReopenBlockedStep1;
   expect((yield* awaited(chat.harness.waitForTask(id, context))).state.outcome).toEqual({
     status: "orphaned",
     reason: "task_too_old",

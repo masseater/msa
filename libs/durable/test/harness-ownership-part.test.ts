@@ -116,7 +116,7 @@ describe("ownership", () => {
   }
 });
 
-const reachesWorkBelow = Effect.gen(function* () {
+const reachesWorkBelowStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const { harness, root } = yield* openHarness();
@@ -158,6 +158,11 @@ const reachesWorkBelow = Effect.gen(function* () {
   open("b", "completed");
   yield* awaited(harness.waitForTask(tree.b, context));
   const c2 = (yield* awaited(harness.conversation(tree.c2, context)))!;
+  return { harness, root, tree, c2 };
+});
+
+const reachesWorkBelow = Effect.gen(function* () {
+  const { harness, root, tree, c2 } = yield* reachesWorkBelowStep1;
   const d = yield* awaited(
     c2.commit(
       (tx) => tx.createTask(Hold, { name: "d" }, { ownership: { kind: "conversation" } }),

@@ -31,39 +31,35 @@ afterEach(() =>
   ),
 );
 
+const startsAboveBackground = Effect.gen(function* () {
+  const chat = yield* open({ contextWindow: 2000 });
+  yield* history(chat);
+  chat.setup.settings.compaction = BACKGROUND;
+  const gate = deferred();
+  const reached = deferred();
+  chat.faux.summaries.push(gated(gate, summary(), reached));
+  yield* turn(chat, text("u4", 100), text("a4", 100));
+  yield* awaited(reached.promise);
+  const [task] = yield* compactionTasks(chat);
+  expect(task).toMatchObject({ background: true, input: { reason: "threshold" } });
+  expect(task!.owner).toBeUndefined();
+  expect((yield* awaited(live(chat))).compactions).toEqual([
+    { taskId: task!.id, reason: "threshold", blocking: false, attempt: 1 },
+  ]);
+  yield* awaited(chat.root.waitForIdle(context));
+  yield* awaited(chat.root.abort(context));
+  expect((yield* awaited(chat.harness.getTask(task!.id, context)))?.state.status).toBe("running");
+  gate.resolve();
+  const outcome = yield* awaited(result(chat, task!.id as TaskId<CompactionResult>));
+  expect(outcome.status).toBe("completed");
+  expect((yield* kinds(chat.root)).at(-1)).toBe("msa.compaction");
+  expect(firstUserText((yield* awaited(chat.root.context(context))).messages)).toContain("SUMMARY");
+  yield* awaited(chat.harness.close(context));
+});
+
 describe("background threshold compaction", () => {
   it("starts above the background threshold without blocking the run; idle waits and Esc ignore it", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const chat = yield* open({ contextWindow: 2000 });
-        yield* history(chat);
-        chat.setup.settings.compaction = BACKGROUND;
-        const gate = deferred();
-        const reached = deferred();
-        chat.faux.summaries.push(gated(gate, summary(), reached));
-        yield* turn(chat, text("u4", 100), text("a4", 100));
-        yield* awaited(reached.promise);
-        const [task] = yield* compactionTasks(chat);
-        expect(task).toMatchObject({ background: true, input: { reason: "threshold" } });
-        expect(task!.owner).toBeUndefined();
-        expect((yield* awaited(live(chat))).compactions).toEqual([
-          { taskId: task!.id, reason: "threshold", blocking: false, attempt: 1 },
-        ]);
-        yield* awaited(chat.root.waitForIdle(context));
-        yield* awaited(chat.root.abort(context));
-        expect((yield* awaited(chat.harness.getTask(task!.id, context)))?.state.status).toBe(
-          "running",
-        );
-        gate.resolve();
-        const outcome = yield* awaited(result(chat, task!.id as TaskId<CompactionResult>));
-        expect(outcome.status).toBe("completed");
-        expect((yield* kinds(chat.root)).at(-1)).toBe("msa.compaction");
-        expect(firstUserText((yield* awaited(chat.root.context(context))).messages)).toContain(
-          "SUMMARY",
-        );
-        yield* awaited(chat.harness.close(context));
-      }),
-    ));
+    Effect.runPromise(startsAboveBackground));
 
   for (const [name, policy] of [
     ["disabled", { ...BACKGROUND, enabled: false }],

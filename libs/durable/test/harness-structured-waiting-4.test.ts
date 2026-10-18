@@ -83,7 +83,7 @@ describe("waiting", () => {
     Effect.runPromise(letsBackgroundTask));
 });
 
-const rejectsCycleHold = Effect.gen(function* () {
+const rejectsCycleHoldStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const { harness, root } = yield* openNodes();
@@ -121,6 +121,11 @@ const rejectsCycleHold = Effect.gen(function* () {
       ),
   });
   ids["orchestrator"] = yield* awaited(start(root, "orchestrator"));
+  return { runPromise, harness, root, ids };
+});
+
+const rejectsCycleHold = Effect.gen(function* () {
+  const { runPromise, harness, root, ids } = yield* rejectsCycleHoldStep1;
   yield* until(() =>
     runPromise(
       Effect.gen(function* () {

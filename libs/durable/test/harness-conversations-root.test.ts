@@ -53,7 +53,7 @@ describe("Harness root and conversations", () => {
     Effect.runPromise(bindsCommitsTask));
 });
 
-const runsConversationCreatedEvery = Effect.gen(function* () {
+const runsConversationCreatedEveryStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const seen: string[] = [];
@@ -89,6 +89,11 @@ const runsConversationCreatedEvery = Effect.gen(function* () {
         ),
     }),
   );
+  return { runPromise, seen, harness, root };
+});
+
+const runsConversationCreatedEvery = Effect.gen(function* () {
+  const { runPromise, seen, harness, root } = yield* runsConversationCreatedEveryStep1;
   const raw = yield* awaited(
     harness.commit(
       (tx) =>

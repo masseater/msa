@@ -71,7 +71,7 @@ describe("scheduler retention", () => {
     Effect.runPromise(forgetsEndedSubagent));
 });
 
-const holdsLiveOwner = Effect.gen(function* () {
+const holdsLiveOwnerStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const storage = yield* awaited(openNodeSqliteStorage(yield* sqlitePath()));
@@ -113,6 +113,11 @@ const holdsLiveOwner = Effect.gen(function* () {
     ),
   );
   gate("p").resolve();
+  return { runPromise, reads, harness, tree, before, loaded, d };
+});
+
+const holdsLiveOwner = Effect.gen(function* () {
+  const { runPromise, reads, harness, tree, before, loaded, d } = yield* holdsLiveOwnerStep1;
   yield* eventually(() =>
     runPromise(
       Effect.gen(function* () {
@@ -135,7 +140,7 @@ describe("scheduler retention", () => {
     Effect.runPromise(holdsLiveOwner));
 });
 
-const holdsOwnerWork = Effect.gen(function* () {
+const holdsOwnerWorkStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const { harness, root } = yield* open();
@@ -166,6 +171,11 @@ const holdsOwnerWork = Effect.gen(function* () {
       context,
     ),
   );
+  return { runPromise, harness, root, tree };
+});
+
+const holdsOwnerWork = Effect.gen(function* () {
+  const { runPromise, harness, root, tree } = yield* holdsOwnerWorkStep1;
   yield* awaited(
     root.commit(
       (tx) =>
@@ -205,7 +215,7 @@ describe("scheduler retention", () => {
     Effect.runPromise(holdsOwnerWork));
 });
 
-const withdrawsInputQueued = Effect.gen(function* () {
+const withdrawsInputQueuedStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const { harness, root } = yield* open();
@@ -248,6 +258,11 @@ const withdrawsInputQueued = Effect.gen(function* () {
   );
   const queued = (yield* awaited(c.submit({ type: "input", content: "later" }, context))).id;
   yield* awaited(harness.abortTask(tree.p, context));
+  return { runPromise, harness, tree, queued };
+});
+
+const withdrawsInputQueued = Effect.gen(function* () {
+  const { runPromise, harness, tree, queued } = yield* withdrawsInputQueuedStep1;
   yield* eventually(() =>
     runPromise(
       Effect.gen(function* () {

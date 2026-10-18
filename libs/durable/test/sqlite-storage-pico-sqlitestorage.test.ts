@@ -127,7 +127,7 @@ describe("Pico SqliteStorage", () => {
     Effect.runPromise(rollsSqlRows));
 });
 
-const reconstructsRecentAncient = Effect.gen(function* () {
+const reconstructsRecentAncientStep1 = Effect.gen(function* () {
   const { storage, path } = yield* createSqliteStorage();
   yield* awaited(createRoot(storage));
   const id = yield* awaited(storage.mintId<DocumentId>());
@@ -150,6 +150,11 @@ const reconstructsRecentAncient = Effect.gen(function* () {
       context,
     ),
   );
+  return { storage, path, id, createdAt };
+});
+
+const reconstructsRecentAncient = Effect.gen(function* () {
+  const { storage, path, id, createdAt } = yield* reconstructsRecentAncientStep1;
   let ancientAt = createdAt;
   let recentAt = createdAt;
   for (const count of Array.from({ length: 40 }, (_, i) => 1 + i)) {

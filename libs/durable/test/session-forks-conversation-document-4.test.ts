@@ -28,7 +28,7 @@ function failingCheckpointDocs() {
   return { Copied, toggle, Failure };
 }
 
-const rollsEveryCopied = Effect.gen(function* () {
+const rollsEveryCopiedStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const { Copied, toggle, Failure } = failingCheckpointDocs();
@@ -72,6 +72,11 @@ const rollsEveryCopied = Effect.gen(function* () {
   expect(storage.commits).toHaveLength(commits);
   expect(publications).toHaveLength(published);
   expect(yield* awaited(storage.conversation(childId, context))).toBeUndefined();
+  return { runPromise, Copied, toggle, Failure, session, parentId };
+});
+
+const rollsEveryCopied = Effect.gen(function* () {
+  const { runPromise, Copied, toggle, Failure, session, parentId } = yield* rollsEveryCopiedStep1;
   toggle.failCheckpoint = false;
   yield* awaited(
     session.commit(
@@ -95,7 +100,7 @@ describe("Session conversation document forks", () => {
     Effect.runPromise(rollsEveryCopied));
 });
 
-const failsSessionRejected = Effect.gen(function* () {
+const failsSessionRejectedStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const Doc = defineDoc<{ value: string }>({
@@ -108,6 +113,11 @@ const failsSessionRejected = Effect.gen(function* () {
   });
   const { session, storage } = openTestSession();
   const parentId = yield* awaited(createConversation(session));
+  return { runPromise, Doc, session, storage, parentId };
+});
+
+const failsSessionRejected = Effect.gen(function* () {
+  const { runPromise, Doc, session, storage, parentId } = yield* failsSessionRejectedStep1;
   let forkAt!: EntryId;
   yield* awaited(
     session.commit(
@@ -153,7 +163,7 @@ describe("Session conversation document forks", () => {
     Effect.runPromise(failsSessionRejected));
 });
 
-const retiresCopiedDocument = Effect.gen(function* () {
+const retiresCopiedDocumentStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const Doc = defineDoc<{ value: string }>({
@@ -197,6 +207,11 @@ const retiresCopiedDocument = Effect.gen(function* () {
       context,
     ),
   );
+  return { Doc, session, storage, child };
+});
+
+const retiresCopiedDocument = Effect.gen(function* () {
+  const { Doc, session, storage, child } = yield* retiresCopiedDocumentStep1;
   const writes = storage.commits.at(-1)!;
   expect(writes.filter((write) => write.type === "document.copy")).toHaveLength(1);
   expect(writes.filter((write) => write.type === "document.create")).toHaveLength(1);

@@ -47,7 +47,7 @@ faux.setResponses([
   fauxAssistantMessage("Done."),
 ]);
 
-const main = Effect.gen(function* () {
+const mainStep1 = Effect.gen(function* () {
   const directory = yield* makeTempDir("msa-durable-reload-");
   const open = Effect.fn("open")(function* (registry: ReturnType<typeof createRegistry>) {
     return yield* awaited(
@@ -58,7 +58,11 @@ const main = Effect.gen(function* () {
       ),
     );
   });
+  return { directory, open };
+});
 
+const mainStep2 = Effect.gen(function* () {
+  const { directory, open } = yield* mainStep1;
   let registry = createRegistry();
   registry.install(loadVersioned("v1"));
   let harness = yield* open(registry);
@@ -99,6 +103,11 @@ const main = Effect.gen(function* () {
   registry = createRegistry();
   harness = yield* open(registry);
   root = yield* awaited(harness.root(context));
+  return { directory, registry, harness, root };
+});
+
+const main = Effect.gen(function* () {
+  const { directory, registry, harness, root } = yield* mainStep2;
   const tools = Effect.fn("tools")(function* () {
     return (yield* awaited(root.agent(context))).tools.map((tool) => tool.name);
   });

@@ -66,7 +66,7 @@ describe("nested tool calls", () => {
     Effect.runPromise(runsNestedCall));
 });
 
-const findsEachNested = Effect.gen(function* () {
+const findsEachNestedStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const setup = chatSetup();
@@ -85,6 +85,11 @@ const findsEachNested = Effect.gen(function* () {
   );
   const before = deferred();
   const checked = deferred();
+  return { runPromise, setup, before, checked };
+});
+
+const findsEachNested = Effect.gen(function* () {
+  const { runPromise, setup, before, checked } = yield* findsEachNestedStep1;
   let slots: { callId: string; status: string; summary?: unknown }[] = [];
   addTool(
     setup.registry,

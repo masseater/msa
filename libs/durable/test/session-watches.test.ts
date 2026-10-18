@@ -13,7 +13,7 @@ const neverCreatesAbsent = Effect.gen(function* () {
   expect(storage.mintCount).toBe(0);
 });
 
-const keepsAcquisitionRevision = Effect.gen(function* () {
+const keepsAcquisitionRevisionStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const { session, publications } = yield* createState();
@@ -57,6 +57,12 @@ const keepsAcquisitionRevision = Effect.gen(function* () {
     return Promise.resolve();
   });
   inline = false;
+  return { watch, initial, firstPublished, secondPublished, deliveries };
+});
+
+const keepsAcquisitionRevision = Effect.gen(function* () {
+  const { watch, initial, firstPublished, secondPublished, deliveries } =
+    yield* keepsAcquisitionRevisionStep1;
   expect(deliveries).toHaveLength(0);
   yield* flush;
   expect(deliveries.map(({ value }) => value?.value)).toEqual([1, 2]);
@@ -75,7 +81,7 @@ describe("Session document watches", () => {
     Effect.runPromise(keepsAcquisitionRevision));
 });
 
-const serializesCallbacksBuffers = Effect.gen(function* () {
+const serializesCallbacksBuffersStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const { session } = yield* createState();
@@ -83,6 +89,12 @@ const serializesCallbacksBuffers = Effect.gen(function* () {
   const entered = deferred();
   const release = deferred();
   const values: number[] = [];
+  return { runPromise, session, watch, entered, release, values };
+});
+
+const serializesCallbacksBuffers = Effect.gen(function* () {
+  const { runPromise, session, watch, entered, release, values } =
+    yield* serializesCallbacksBuffersStep1;
   let active = 0;
   let maxActive = 0;
   watch.start((value) =>

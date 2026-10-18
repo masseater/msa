@@ -5,7 +5,7 @@ import { awaited } from "./effect-support.ts";
 import { setupLive, LiveDoc, MemberDoc } from "./session-documents-support.ts";
 import { context, documentChanges, flush, openTestSession } from "./session-support.ts";
 
-const retiresWithoutAcquisition = Effect.gen(function* () {
+const retiresWithoutAcquisitionStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const { session, storage, publications, conversationId } = yield* setupLive();
@@ -35,7 +35,11 @@ const retiresWithoutAcquisition = Effect.gen(function* () {
       record: expect.objectContaining({ kind: "test.live" }),
     }),
   );
+  return { runPromise, session, storage };
+});
 
+const retiresWithoutAcquisition = Effect.gen(function* () {
+  const { runPromise, session, storage } = yield* retiresWithoutAcquisitionStep1;
   yield* awaited(
     session.commit(
       (tx) =>
@@ -64,7 +68,7 @@ describe("Session document transactions", () => {
     Effect.runPromise(retiresWithoutAcquisition));
 });
 
-const retiresExistingIncarnation = Effect.gen(function* () {
+const retiresExistingIncarnationStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const { session, storage, publications, conversationId } = yield* setupLive();
@@ -107,6 +111,12 @@ const retiresExistingIncarnation = Effect.gen(function* () {
   );
   yield* flush;
   const secondId = documentChanges(publications.at(-1)!)[0]!.record.id;
+  return { runPromise, session, storage, conversationId, secondId };
+});
+
+const retiresExistingIncarnation = Effect.gen(function* () {
+  const { runPromise, session, storage, conversationId, secondId } =
+    yield* retiresExistingIncarnationStep1;
   yield* awaited(
     session.commit(
       (tx) =>

@@ -77,7 +77,7 @@ describe("tool rounds and events", () => {
     Effect.runPromise(endsAbortedSequential));
 });
 
-const emitsOneTurn = Effect.gen(function* () {
+const emitsOneTurnStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const setup = chatSetup();
@@ -121,6 +121,11 @@ const emitsOneTurn = Effect.gen(function* () {
   )).items;
   yield* awaited(harness.waitForTask(first!.id, context));
   yield* awaited(root.commit((tx) => tx.appendEntry(root.id, { kind: "note" }), context));
+  return { harness, early, late };
+});
+
+const emitsOneTurn = Effect.gen(function* () {
+  const { harness, early, late } = yield* emitsOneTurnStep1;
   yield* waitFor(() => late.events.some((event) => event.type === "entry_appended"));
   const turns = (events: readonly AgentEvent[]) =>
     events.filter((event) => event.type === "turn_end").length;

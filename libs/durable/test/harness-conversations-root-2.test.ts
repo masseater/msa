@@ -61,7 +61,7 @@ const txCreatedConversations = Effect.fn("txCreatedConversations")(function* () 
   return { harness, root, ids };
 });
 
-const givesConversationsCreated = Effect.gen(function* () {
+const givesConversationsCreatedStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const { harness, root, ids } = yield* txCreatedConversations();
@@ -95,6 +95,11 @@ const givesConversationsCreated = Effect.gen(function* () {
       context,
     ),
   );
+  return { runPromise, harness, root, ids, at };
+});
+
+const givesConversationsCreated = Effect.gen(function* () {
+  const { runPromise, harness, root, ids, at } = yield* givesConversationsCreatedStep1;
   const fork = yield* awaited(
     root.commit(
       (tx) =>

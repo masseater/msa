@@ -78,7 +78,7 @@ describe("ownership", () => {
     Effect.runPromise(cancelsOnlyCaller));
 });
 
-const abortsWaitingChild = Effect.gen(function* () {
+const abortsWaitingChildStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const { harness, root } = yield* openHarness();
@@ -115,6 +115,11 @@ const abortsWaitingChild = Effect.gen(function* () {
       return (yield* status(harness, blocked)).status === "waiting";
     }),
   );
+  return { runPromise, harness, root, owner, dependency, blocked };
+});
+
+const abortsWaitingChild = Effect.gen(function* () {
+  const { runPromise, harness, root, owner, dependency, blocked } = yield* abortsWaitingChildStep1;
   yield* awaited(
     root.commit(
       (tx) =>
@@ -145,12 +150,17 @@ describe("ownership", () => {
     Effect.runPromise(abortsWaitingChild));
 });
 
-const appliesMarksFound = Effect.gen(function* () {
+const appliesMarksFoundStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const directory = yield* makeTempDir("msa-durable-ownership-");
   directories.add(directory);
   const path = joinPath(directory, "session.sqlite");
+  return { runPromise, path };
+});
+
+const appliesMarksFound = Effect.gen(function* () {
+  const { runPromise, path } = yield* appliesMarksFoundStep1;
   let opened = yield* openHarness(yield* awaited(openNodeSqliteStorage(path)));
   const tree = yield* awaited(ownedChild(opened.root, "owner", { slowOwner: true }));
   open("owner.inner", "completed");

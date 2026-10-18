@@ -110,10 +110,15 @@ describe("completing", () => {
     Effect.runPromise(holdsFinishedTask));
 });
 
-const keepsHoldingOrdinary = Effect.gen(function* () {
+const keepsHoldingOrdinaryStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const { harness, root } = yield* openNodes();
+  return { runPromise, harness, root };
+});
+
+const keepsHoldingOrdinaryStep2 = Effect.gen(function* () {
+  const { runPromise, harness, root } = yield* keepsHoldingOrdinaryStep1;
   let conversation: ConversationId | undefined;
   script("parent", {
     run: (runtime, ctx) =>
@@ -156,6 +161,11 @@ const keepsHoldingOrdinary = Effect.gen(function* () {
     ),
   );
   const child = (yield* awaited(harness.conversation(conversation!, context)))!;
+  return { harness, parent, child };
+});
+
+const keepsHoldingOrdinary = Effect.gen(function* () {
+  const { harness, parent, child } = yield* keepsHoldingOrdinaryStep2;
   yield* awaited(start(child, "second"));
   open("first");
   yield* until(() => log.includes("run:second"));

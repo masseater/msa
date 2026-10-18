@@ -204,7 +204,7 @@ describe("inbox", () => {
     Effect.runPromise(startsQueuedFollow));
 });
 
-const writesLastHandoff = Effect.gen(function* () {
+const writesLastHandoffStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const setup = chatSetup();
@@ -248,6 +248,11 @@ const writesLastHandoff = Effect.gen(function* () {
   );
   firstGate.resolve();
   yield* awaited(f.wait(context));
+  return { harness, root, input };
+});
+
+const writesLastHandoff = Effect.gen(function* () {
+  const { harness, root, input } = yield* writesLastHandoffStep1;
   expect(yield* awaited(status(input))).toMatchObject({ status: "done" });
   expect(transcript(yield* allEntries(root)).slice(-4)).toEqual([
     "msa.tool-result",

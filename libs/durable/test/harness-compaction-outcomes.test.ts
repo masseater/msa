@@ -64,7 +64,7 @@ describe("compaction outcomes", () => {
   it("fails with no_model without a configured model", () => Effect.runPromise(failsNoModel));
 });
 
-const retriesRetryableError = Effect.gen(function* () {
+const retriesRetryableErrorStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const single = yield* open();
@@ -108,6 +108,11 @@ const retriesRetryableError = Effect.gen(function* () {
     ),
   );
   expect(chat.faux.summaryRequests).toHaveLength(2);
+  return { once, chat, twice };
+});
+
+const retriesRetryableError = Effect.gen(function* () {
+  const { once, chat, twice } = yield* retriesRetryableErrorStep1;
   expect(twice).toBe(2 * once);
   const sessionId = (yield* awaited(chat.harness.snapshot(ProviderDoc, chat.root.id, context)))!
     .sessionId;

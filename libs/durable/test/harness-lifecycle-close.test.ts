@@ -112,7 +112,7 @@ const countedSubscriptions = Effect.fn("countedSubscriptions")(function* () {
   return { Notes, storage, harness, root, counted };
 });
 
-const publishesNoFrame = Effect.gen(function* () {
+const publishesNoFrameStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const {
@@ -132,6 +132,43 @@ const publishesNoFrame = Effect.gen(function* () {
   } = yield* observedNotes();
 
   const held = storage.holdCommits();
+  return {
+    runPromise,
+    Notes,
+    storage,
+    harness,
+    root,
+    docState,
+    docWatch,
+    viewState,
+    viewWatch,
+    graphState,
+    graphWatch,
+    frames,
+    docValue,
+    viewValue,
+    held,
+  };
+});
+
+const publishesNoFrame = Effect.gen(function* () {
+  const {
+    runPromise,
+    Notes,
+    storage,
+    harness,
+    root,
+    docState,
+    docWatch,
+    viewState,
+    viewWatch,
+    graphState,
+    graphWatch,
+    frames,
+    docValue,
+    viewValue,
+    held,
+  } = yield* publishesNoFrameStep1;
   const committing = harness.commit(
     (tx) =>
       runPromise(

@@ -146,7 +146,7 @@ describe("structured output", () => {
     Effect.runPromise(givesCallersSchema));
 });
 
-const keepsStructuredOutput = Effect.gen(function* () {
+const keepsStructuredOutputStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const setup = chatSetup();
@@ -167,6 +167,11 @@ const keepsStructuredOutput = Effect.gen(function* () {
           ? result
           : { ...result, output: [{ type: "text", text: "rewritten" }] },
   });
+  return { runPromise, setup };
+});
+
+const keepsStructuredOutput = Effect.gen(function* () {
+  const { runPromise, setup } = yield* keepsStructuredOutputStep1;
   let plain: NestedToolExecutionResult | undefined;
   let counter: NestedToolExecutionResult | undefined;
   let other: NestedToolExecutionResult | undefined;

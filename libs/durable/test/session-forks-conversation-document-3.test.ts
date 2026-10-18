@@ -99,7 +99,7 @@ describe("Session conversation document forks", () => {
     Effect.runPromise(copiesOnlyConversation));
 });
 
-const copiesEveryFamily = Effect.gen(function* () {
+const copiesEveryFamilyStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const Family = defineDocFamily<{ value: number }, number>({
@@ -124,6 +124,11 @@ const copiesEveryFamily = Effect.gen(function* () {
       context,
     ),
   );
+  return { runPromise, Family, session, storage, parentId, forkAt };
+});
+
+const copiesEveryFamily = Effect.gen(function* () {
+  const { runPromise, Family, session, storage, parentId, forkAt } = yield* copiesEveryFamilyStep1;
   yield* awaited(
     session.commit(
       (tx) =>

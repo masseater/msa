@@ -64,7 +64,7 @@ const endedLevelsTree = Effect.fn("endedLevelsTree")(function* () {
   return { harness, tree };
 });
 
-const withdrawsInputQueued = Effect.gen(function* () {
+const withdrawsInputQueuedStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const { harness, tree } = yield* endedLevelsTree();
@@ -103,6 +103,11 @@ const withdrawsInputQueued = Effect.gen(function* () {
       context,
     ),
   );
+  return { runPromise, harness, queued };
+});
+
+const withdrawsInputQueued = Effect.gen(function* () {
+  const { runPromise, harness, queued } = yield* withdrawsInputQueuedStep1;
   yield* eventually(() =>
     runPromise(
       Effect.gen(function* () {

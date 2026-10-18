@@ -149,7 +149,7 @@ describe("nested tool calls across a restart", () => {
     Effect.runPromise(abandonsReplayUnsafe));
 });
 
-const abandonsWorkAbandoned = Effect.gen(function* () {
+const abandonsWorkAbandonedStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const path = yield* sqlitePath();
@@ -193,6 +193,11 @@ const abandonsWorkAbandoned = Effect.gen(function* () {
       .status,
   ).toBe("done");
   yield* awaited(opened.harness.waitForIdle(context));
+  return { phases, aborts, spawned, opened };
+});
+
+const abandonsWorkAbandoned = Effect.gen(function* () {
+  const { phases, aborts, spawned, opened } = yield* abandonsWorkAbandonedStep1;
   expect(phases).toEqual(["work"]);
   expect(aborts).toEqual(["restart"]);
   expect((yield* awaited(opened.harness.getTask(spawned.worker!, context)))?.state).toMatchObject({

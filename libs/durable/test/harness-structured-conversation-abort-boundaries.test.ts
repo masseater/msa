@@ -86,7 +86,7 @@ describe("conversation abort and boundaries", () => {
     Effect.runPromise(failsHarnessFailed));
 });
 
-const showsAbortMarked = Effect.gen(function* () {
+const showsAbortMarkedStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const path = yield* sqlitePath();
@@ -122,6 +122,11 @@ const showsAbortMarked = Effect.gen(function* () {
       context,
     ),
   );
+  return { runPromise, path, session, tree };
+});
+
+const showsAbortMarked = Effect.gen(function* () {
+  const { runPromise, path, session, tree } = yield* showsAbortMarkedStep1;
   yield* awaited(
     session.commit(
       (tx) =>
@@ -155,10 +160,15 @@ describe("recovery through ownership edges", () => {
     Effect.runPromise(showsAbortMarked));
 });
 
-const keepsRootBusy = Effect.gen(function* () {
+const keepsRootBusyStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const path = yield* sqlitePath();
+  return { runPromise, path };
+});
+
+const keepsRootBusy = Effect.gen(function* () {
+  const { runPromise, path } = yield* keepsRootBusyStep1;
   let inner: TaskId | undefined;
   script("child", {
     run: (runtime, ctx) =>
@@ -212,10 +222,15 @@ describe("recovery through ownership edges", () => {
     Effect.runPromise(keepsRootBusy));
 });
 
-const keepsFinishedBackground = Effect.gen(function* () {
+const keepsFinishedBackgroundStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const path = yield* sqlitePath();
+  return { runPromise, path };
+});
+
+const keepsFinishedBackgroundStep2 = Effect.gen(function* () {
+  const { runPromise, path } = yield* keepsFinishedBackgroundStep1;
   let conversation: ConversationId | undefined;
   script("child", {
     run: (runtime, ctx) =>
@@ -258,6 +273,11 @@ const keepsFinishedBackground = Effect.gen(function* () {
     start((yield* awaited(opened.harness.conversation(conversation!, context)))!, "below"),
   );
   yield* until(() => log.includes("run:below"));
+  return { opened, below };
+});
+
+const keepsFinishedBackground = Effect.gen(function* () {
+  const { opened, below } = yield* keepsFinishedBackgroundStep2;
   yield* awaited(opened.root.waitForIdle(context));
   yield* awaited(opened.root.abort(context));
   expect((yield* state(opened.harness, below)).status).toBe("running");

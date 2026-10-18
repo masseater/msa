@@ -111,7 +111,7 @@ describe("scheduler indexes", () => {
     Effect.runPromise(takesCascadeReason));
 });
 
-const finalizesChainHeld = Effect.gen(function* () {
+const finalizesChainHeldStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const storage = yield* awaited(openNodeSqliteStorage(yield* sqlitePath()));
@@ -155,6 +155,11 @@ const finalizesChainHeld = Effect.gen(function* () {
     ),
   );
   gate("top").resolve();
+  return { runPromise, endedIn, harness, top, middle, leaf };
+});
+
+const finalizesChainHeld = Effect.gen(function* () {
+  const { runPromise, endedIn, harness, top, middle, leaf } = yield* finalizesChainHeldStep1;
   gate("middle").resolve();
   yield* eventually(() =>
     runPromise(
@@ -184,7 +189,7 @@ describe("scheduler indexes", () => {
     Effect.runPromise(finalizesChainHeld));
 });
 
-const keepsScopeBusy = Effect.gen(function* () {
+const keepsScopeBusyStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const path = yield* sqlitePath();
@@ -222,6 +227,11 @@ const keepsScopeBusy = Effect.gen(function* () {
   const storage = yield* awaited(openNodeSqliteStorage(path));
   const read = storage.conversation.bind(storage);
   const held = deferred<void>();
+  return { runPromise, child, inner, storage, read, held };
+});
+
+const keepsScopeBusy = Effect.gen(function* () {
+  const { runPromise, child, inner, storage, read, held } = yield* keepsScopeBusyStep1;
   storage.conversation = (id, readContext) =>
     runPromise(
       Effect.gen(function* () {
@@ -229,10 +239,10 @@ const keepsScopeBusy = Effect.gen(function* () {
         return yield* awaited(read(id, readContext));
       }),
     );
-  opened = yield* openTasks(storage, [Hold]);
+  const opened = yield* openTasks(storage, [Hold]);
   expect(yield* settled(opened.harness.waitForIdle(context))).toBe(false);
   held.resolve();
-  root = yield* awaited(opened.harness.root(context));
+  const root = yield* awaited(opened.harness.root(context));
   opened.harness.resume();
   gate("inner").resolve();
   yield* awaited(opened.harness.waitForTask(inner, context));

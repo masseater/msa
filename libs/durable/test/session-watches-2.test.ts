@@ -12,7 +12,7 @@ import { abortController, awaited } from "./effect-support.ts";
 import { context, flush } from "./session-support.ts";
 import { deferred, createState, StateDoc, type State } from "./session-watches-support.ts";
 
-const neverFoldsFlight = Effect.gen(function* () {
+const neverFoldsFlightStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const { session } = yield* createState();
@@ -56,6 +56,11 @@ const neverFoldsFlight = Effect.gen(function* () {
       ),
     );
   }
+  return { watch, release, deliveries };
+});
+
+const neverFoldsFlight = Effect.gen(function* () {
+  const { watch, release, deliveries } = yield* neverFoldsFlightStep1;
   release.resolve();
   yield* flush;
   expect(deliveries[0]!.value).toBe(1);

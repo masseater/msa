@@ -164,7 +164,7 @@ describe("Session transaction tables", () => {
     Effect.runPromise(treatsSynchronousSetTask));
 });
 
-const createsConversationsEntries = Effect.gen(function* () {
+const createsConversationsEntriesStep1 = Effect.gen(function* () {
   const { session, storage, publications, created } = yield* distinctMintedRecords();
   expect(created.headed.head).toBe(created.headed.id);
   expect(created.first).toEqual({
@@ -208,6 +208,11 @@ const createsConversationsEntries = Effect.gen(function* () {
       ),
     ).rejects.toThrow("requires options.conversationId"),
   );
+  return { session };
+});
+
+const createsConversationsEntries = Effect.gen(function* () {
+  const { session } = yield* createsConversationsEntriesStep1;
   yield* awaited(
     expect(
       session.commit(
@@ -223,7 +228,7 @@ describe("Session transaction tables", () => {
     Effect.runPromise(createsConversationsEntries));
 });
 
-const createsConversationExplicitly = Effect.gen(function* () {
+const createsConversationExplicitlyStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const { session, storage } = openTestSession();
@@ -261,7 +266,12 @@ const createsConversationExplicitly = Effect.gen(function* () {
     taskId: created.supervisorId,
   });
   expect(yield* awaited(storage.conversation(created.child.id, context))).toEqual(created.child);
+  return { runPromise, session, storage, parentId, created };
+});
 
+const createsConversationExplicitly = Effect.gen(function* () {
+  const { runPromise, session, storage, parentId, created } =
+    yield* createsConversationExplicitlyStep1;
   yield* awaited(
     expect(
       session.commitWith(

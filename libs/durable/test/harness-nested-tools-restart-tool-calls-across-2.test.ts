@@ -138,7 +138,7 @@ describe("nested tool calls across a restart", () => {
     Effect.runPromise(reattachesReplaySafe));
 });
 
-const abandonsChildTasks = Effect.gen(function* () {
+const abandonsChildTasksStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const path = yield* sqlitePath();
@@ -173,6 +173,11 @@ const abandonsChildTasks = Effect.gen(function* () {
       ),
   });
   setup.registry.install(defineExtension({ name: "direct-worker", tasks: [Worker] }));
+  return { runPromise, path, setup, phases, started, Worker };
+});
+
+const abandonsChildTasks = Effect.gen(function* () {
+  const { runPromise, path, setup, phases, started, Worker } = yield* abandonsChildTasksStep1;
   addTool(
     setup.registry,
     tool("work", (_args, api, callContext) =>

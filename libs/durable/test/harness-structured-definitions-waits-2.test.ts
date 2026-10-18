@@ -98,7 +98,7 @@ describe("conversation abort and boundaries", () => {
     Effect.runPromise(marksAwaitsOnly));
 });
 
-const stopsCascadeUnmarked = Effect.gen(function* () {
+const stopsCascadeUnmarkedStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const { harness, root } = yield* openNodes();
@@ -142,6 +142,11 @@ const stopsCascadeUnmarked = Effect.gen(function* () {
   );
   yield* until(() => log.includes("run:owner") && log.includes("run:background"));
   yield* awaited(harness.abortTask(tree.owner, context));
+  return { harness, tree };
+});
+
+const stopsCascadeUnmarked = Effect.gen(function* () {
+  const { harness, tree } = yield* stopsCascadeUnmarkedStep1;
   yield* until(() => log.includes("abort:owner"));
   const inner = (yield* awaited(harness.conversation(tree.inner, context)))!;
   const outer = (yield* awaited(harness.conversation(tree.outer, context)))!;

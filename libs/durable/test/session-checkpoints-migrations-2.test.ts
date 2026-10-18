@@ -92,7 +92,7 @@ describe("Session document checkpoints", () => {
     Effect.runPromise(skipsPredicateEmpty));
 });
 
-const rollsBackEvery = Effect.gen(function* () {
+const rollsBackEveryStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const { state, First, Second } = throwingCheckpointDocs();
@@ -114,7 +114,35 @@ const rollsBackEvery = Effect.gen(function* () {
   const second = (yield* awaited(session.snapshot(Second, context)))!;
   const commits = storage.commits.length;
   const published = publications.length;
+  return {
+    runPromise,
+    state,
+    First,
+    Second,
+    session,
+    storage,
+    publications,
+    first,
+    second,
+    commits,
+    published,
+  };
+});
 
+const rollsBackEveryStep2 = Effect.gen(function* () {
+  const {
+    runPromise,
+    state,
+    First,
+    Second,
+    session,
+    storage,
+    publications,
+    first,
+    second,
+    commits,
+    published,
+  } = yield* rollsBackEveryStep1;
   yield* awaited(
     expect(
       session.commit(
@@ -137,6 +165,11 @@ const rollsBackEvery = Effect.gen(function* () {
   expect(yield* awaited(session.snapshot(Second, context))).toBe(second);
 
   state.throwCheckpoint = false;
+  return { runPromise, First, Second, session };
+});
+
+const rollsBackEvery = Effect.gen(function* () {
+  const { runPromise, First, Second, session } = yield* rollsBackEveryStep2;
   yield* awaited(
     session.commit(
       (tx) =>

@@ -28,7 +28,7 @@ afterEach(() =>
   ),
 );
 
-const abortsWorkCreated = Effect.gen(function* () {
+const abortsWorkCreatedStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const { harness, root } = yield* open();
@@ -72,6 +72,11 @@ const abortsWorkCreated = Effect.gen(function* () {
       context,
     ),
   );
+  return { runPromise, harness, tree };
+});
+
+const abortsWorkCreated = Effect.gen(function* () {
+  const { runPromise, harness, tree } = yield* abortsWorkCreatedStep1;
   yield* eventually(() =>
     runPromise(
       Effect.gen(function* () {
@@ -96,7 +101,7 @@ describe("scheduler retention", () => {
     Effect.runPromise(abortsWorkCreated));
 });
 
-const keepsScopeBusy = Effect.gen(function* () {
+const keepsScopeBusyStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const path = yield* sqlitePath();
@@ -138,6 +143,11 @@ const keepsScopeBusy = Effect.gen(function* () {
     );
   const c = (yield* awaited(harness.conversation(tree.c, context)))!;
   holding = true;
+  return { harness, held, reached, c };
+});
+
+const keepsScopeBusy = Effect.gen(function* () {
+  const { harness, held, reached, c } = yield* keepsScopeBusyStep1;
   yield* awaited(
     c.commit(
       (tx) => tx.createTask(Hold, { name: "d" }, { ownership: { kind: "conversation" } }),

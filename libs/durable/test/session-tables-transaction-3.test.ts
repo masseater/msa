@@ -49,7 +49,7 @@ describe("Session transaction tables", () => {
   it("replaces task records completely", () => Effect.runPromise(replacesTaskRecords));
 });
 
-const createsTaskDocument = Effect.gen(function* () {
+const createsTaskDocumentStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const { session, publications } = openTestSession();
@@ -85,7 +85,12 @@ const createsTaskDocument = Effect.gen(function* () {
   );
   expect(documents).toHaveLength(2);
   for (const document of documents) expect(document.conversationId).toBe(conversationId);
+  return { runPromise, session, publications, conversationId, taskId };
+});
 
+const createsTaskDocument = Effect.gen(function* () {
+  const { runPromise, session, publications, conversationId, taskId } =
+    yield* createsTaskDocumentStep1;
   yield* awaited(
     session.commit(
       (tx) =>

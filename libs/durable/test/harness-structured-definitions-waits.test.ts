@@ -152,10 +152,15 @@ describe("definitions and waits", () => {
     Effect.runPromise(orphansAbortedWaiting));
 });
 
-const neverMigratesHeld = Effect.gen(function* () {
+const neverMigratesHeldStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const { harness, root, registry, reports } = yield* openNodes();
+  return { runPromise, harness, root, registry, reports };
+});
+
+const neverMigratesHeldStep2 = Effect.gen(function* () {
+  const { runPromise, harness, root, registry, reports } = yield* neverMigratesHeldStep1;
   const holder = (version: number) =>
     defineTask<null, { phase: "run" }, string>({
       name: "test.holder",
@@ -198,6 +203,11 @@ const neverMigratesHeld = Effect.gen(function* () {
       },
     });
   addTask(registry, holder(1));
+  return { runPromise, harness, root, registry, reports, holder };
+});
+
+const neverMigratesHeld = Effect.gen(function* () {
+  const { runPromise, harness, root, registry, reports, holder } = yield* neverMigratesHeldStep2;
   const parent = yield* awaited(
     root.commit((tx) => tx.createTask(holder(1), null, OWN_CONVERSATION), context),
   );

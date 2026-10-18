@@ -25,7 +25,7 @@ faux.setResponses([slow, fauxAssistantMessage("Answer to the follow-up and the s
 const models = createModels();
 models.setProvider(faux.provider);
 
-const main = Effect.gen(function* () {
+const mainStep1 = Effect.gen(function* () {
   const runSync = Effect.runSyncWith(yield* Effect.context<never>());
 
   const harness = yield* awaited(
@@ -67,6 +67,11 @@ const main = Effect.gen(function* () {
   );
 
   release();
+  return { harness, root, first, followUp, steer, note, withdrawn };
+});
+
+const main = Effect.gen(function* () {
+  const { harness, root, first, followUp, steer, note, withdrawn } = yield* mainStep1;
   const status = Effect.fn("status")(function* (name: string, submission: Submission) {
     const record = yield* awaited(submission.wait(context));
     yield* Console.log(

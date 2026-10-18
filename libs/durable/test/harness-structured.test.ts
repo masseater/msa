@@ -102,7 +102,7 @@ describe("task ownership", () => {
     Effect.runPromise(rejectsNoOwnership));
 });
 
-const rejectsNewOwned = Effect.gen(function* () {
+const rejectsNewOwnedStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const { harness, root } = yield* openNodes();
@@ -146,6 +146,11 @@ const rejectsNewOwned = Effect.gen(function* () {
   open("child");
   yield* awaited(harness.waitForTask(parent, context));
   yield* awaited(expect(createChild()).rejects.toThrow("is terminal"));
+  return { runPromise, harness, root, createConversation };
+});
+
+const rejectsNewOwned = Effect.gen(function* () {
+  const { runPromise, harness, root, createConversation } = yield* rejectsNewOwnedStep1;
   yield* awaited(expect(createConversation()).rejects.toThrow("is terminal"));
 
   script("slow", {
@@ -177,7 +182,7 @@ describe("task ownership", () => {
     Effect.runPromise(rejectsNewOwned));
 });
 
-const cannotCreateChild = Effect.gen(function* () {
+const cannotCreateChildStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const { harness, root } = yield* openNodes();
@@ -203,7 +208,11 @@ const cannotCreateChild = Effect.gen(function* () {
     harness.commit((tx) => tx.scanTasks({ kind: "test.node" }, 20), context),
   );
   expect(nodes.items.map((task) => (task.input as NodeInput).name)).toEqual(["eager"]);
+  return { runPromise, harness, root };
+});
 
+const cannotCreateChild = Effect.gen(function* () {
+  const { runPromise, harness, root } = yield* cannotCreateChildStep1;
   let child: ConversationId | undefined;
   script("host", {
     run: (runtime, ctx) =>

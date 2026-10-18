@@ -44,7 +44,7 @@ faux.setResponses([
 const models = createModels();
 models.setProvider(faux.provider);
 
-const main = Effect.gen(function* () {
+const mainStep1 = Effect.gen(function* () {
   const runSync = Effect.runSyncWith(yield* Effect.context<never>());
 
   const harness = yield* awaited(Harness.open(new MemoryStorage(), { models, registry }, context));
@@ -81,6 +81,11 @@ const main = Effect.gen(function* () {
     "snapshot tools:",
     stream.snapshot.tools.map((slot) => `${slot.name} ${slot.status}`),
   );
+  return { runSync, harness, submission, view, stream };
+});
+
+const main = Effect.gen(function* () {
+  const { runSync, harness, submission, view, stream } = yield* mainStep1;
   let output = stream.snapshot.tools[0]?.output ?? "";
   stream.start((events: readonly AgentEvent[]) => {
     for (const event of events) {

@@ -149,7 +149,7 @@ const Checkout = defineTask<{ cards: string[] }, CheckoutState, string>({
 const registry = createRegistry();
 registry.install(defineExtension({ name: "checkout", tasks: [Payment, Checkout] }));
 
-const main = Effect.gen(function* () {
+const mainStep1 = Effect.gen(function* () {
   const runSync = Effect.runSyncWith(yield* Effect.context<never>());
 
   const directory = yield* makeTempDir("msa-durable-example-");
@@ -180,7 +180,11 @@ const main = Effect.gen(function* () {
       (tx) => tx.createTask(Checkout, { cards }, { ownership: { kind: "conversation" } }),
       context,
     );
+  return { directory, open, printGraph, checkout };
+});
 
+const main = Effect.gen(function* () {
+  const { directory, open, printGraph, checkout } = yield* mainStep1;
   let harness = yield* open();
   let root = yield* awaited(harness.root(context));
 

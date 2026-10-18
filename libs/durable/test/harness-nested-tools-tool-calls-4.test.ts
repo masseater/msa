@@ -76,7 +76,7 @@ function gatedLargeArgumentsBatch() {
   return { setup, hookEntered, hookRelease, running, release, large };
 }
 
-const commitsOnlyStatus = Effect.gen(function* () {
+const commitsOnlyStatusStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const setup = chatSetup();
@@ -97,6 +97,11 @@ const commitsOnlyStatus = Effect.gen(function* () {
       ),
     ),
   );
+  return { runPromise, setup, running, release };
+});
+
+const commitsOnlyStatus = Effect.gen(function* () {
+  const { runPromise, setup, running, release } = yield* commitsOnlyStatusStep1;
   let result: NestedToolExecutionResult | undefined;
   addTool(
     setup.registry,
@@ -138,7 +143,7 @@ describe("nested tool calls", () => {
     Effect.runPromise(commitsOnlyStatus));
 });
 
-const losesRunningOutput = Effect.gen(function* () {
+const losesRunningOutputStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const setup = chatSetup();
@@ -182,6 +187,11 @@ const losesRunningOutput = Effect.gen(function* () {
     (yield* awaited(root.submit({ type: "input", content: "go" }, context))).wait(context),
   );
   yield* awaited(harness.waitForIdle(context));
+  return { harness, stream, ends };
+});
+
+const losesRunningOutput = Effect.gen(function* () {
+  const { harness, stream, ends } = yield* losesRunningOutputStep1;
   yield* awaited(stream.stop());
   const end = ends.find(
     (event) => event.type === "tool_execution_end" && event.toolCallId === "c1/1",

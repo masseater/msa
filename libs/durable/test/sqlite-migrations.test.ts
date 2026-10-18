@@ -149,7 +149,7 @@ describe("durable SQLite migrations", () => {
     Effect.runPromise(rollsInitialBootstrap));
 });
 
-const rollsFailedMigration = Effect.gen(function* () {
+const rollsFailedMigrationStep1 = Effect.gen(function* () {
   const { path } = yield* storedBeforeMigration();
 
   const database = yield* awaited(openNodeSqliteDatabase(path));
@@ -188,6 +188,11 @@ const rollsFailedMigration = Effect.gen(function* () {
   ).toEqual({
     version: nextVersion,
   });
+  return { database };
+});
+
+const rollsFailedMigration = Effect.gen(function* () {
+  const { database } = yield* rollsFailedMigrationStep1;
   expect(
     yield* awaited(database.get("SELECT record, commit_seq FROM entries WHERE id = 2")),
   ).toEqual({

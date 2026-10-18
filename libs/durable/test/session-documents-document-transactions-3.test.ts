@@ -79,7 +79,7 @@ describe("Session document transactions", () => {
     Effect.runPromise(keepsPreviousRevision));
 });
 
-const retiresDocumentsCreates = Effect.gen(function* () {
+const retiresDocumentsCreatesStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const { session, storage, publications, conversationId } = yield* setupLive();
@@ -123,6 +123,11 @@ const retiresDocumentsCreates = Effect.gen(function* () {
   expect(yield* awaited(session.snapshot(LiveDoc, conversationId, context))).toBe(created!.value);
 
   yield* awaited(session.commit((tx) => tx.retireDoc(LiveDoc, conversationId), context));
+  return { session, storage, conversationId };
+});
+
+const retiresDocumentsCreates = Effect.gen(function* () {
+  const { session, storage, conversationId } = yield* retiresDocumentsCreatesStep1;
   expect(yield* awaited(session.snapshot(LiveDoc, conversationId, context))).toBeUndefined();
   yield* awaited(session.unloadDocuments());
   expect(yield* awaited(session.snapshot(LiveDoc, conversationId, context))).toBeUndefined();

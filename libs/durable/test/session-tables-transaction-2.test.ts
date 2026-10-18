@@ -13,7 +13,7 @@ import {
 } from "./session-support.ts";
 import { createTask, ProgressDoc, NotesDoc, StepDoc, terminal } from "./session-tables-support.ts";
 
-const retiresTaskDocuments = Effect.gen(function* () {
+const retiresTaskDocumentsStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const { session, storage, publications } = openTestSession();
@@ -48,6 +48,12 @@ const retiresTaskDocuments = Effect.gen(function* () {
     ),
   );
   const writes = storage.commits.at(-1)!;
+  return { runPromise, session, storage, publications, conversationId, taskId, published, writes };
+});
+
+const retiresTaskDocumentsStep2 = Effect.gen(function* () {
+  const { runPromise, session, storage, publications, conversationId, taskId, published, writes } =
+    yield* retiresTaskDocumentsStep1;
   expect(writes).toHaveLength(5);
   expect(writes.filter((write) => write.type === "task")).toHaveLength(1);
   const creations = writes.filter((write) => write.type === "document.create");
@@ -74,6 +80,11 @@ const retiresTaskDocuments = Effect.gen(function* () {
     ),
   );
   expect(alive.items).toEqual([]);
+  return { runPromise, session, taskId };
+});
+
+const retiresTaskDocuments = Effect.gen(function* () {
+  const { runPromise, session, taskId } = yield* retiresTaskDocumentsStep2;
   yield* awaited(
     expect(
       session.commitWith(

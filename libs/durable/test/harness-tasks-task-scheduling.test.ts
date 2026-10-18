@@ -187,7 +187,7 @@ describe("task abort", () => {
     Effect.runPromise(rejectsRunCommits));
 });
 
-const startsNoFurther = Effect.gen(function* () {
+const startsNoFurtherStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const reached = deferred();
@@ -231,6 +231,11 @@ const startsNoFurther = Effect.gen(function* () {
   yield* awaited(reached.promise);
   const { aborting } = yield* markDurably(harness, id);
   proceed.resolve();
+  return { phases, harness, id, aborting };
+});
+
+const startsNoFurther = Effect.gen(function* () {
+  const { phases, harness, id, aborting } = yield* startsNoFurtherStep1;
   expect(yield* awaited(aborting)).toBe("marked");
   expect((yield* awaited(harness.waitForTask(id, context))).state.outcome).toEqual({
     status: "aborted",

@@ -37,7 +37,7 @@ afterEach(() =>
   ),
 );
 
-const followsNoWait = Effect.gen(function* () {
+const followsNoWaitStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const { harness, root } = yield* openNodes();
@@ -81,6 +81,11 @@ const followsNoWait = Effect.gen(function* () {
       ),
     resume: (runtime, ctx) => runtime.commit(() => end("completed", "a"), ctx),
   });
+  return { runPromise, harness, root, ids, cleanup, aWaits };
+});
+
+const followsNoWait = Effect.gen(function* () {
+  const { runPromise, harness, root, ids, cleanup, aWaits } = yield* followsNoWaitStep1;
   yield* awaited(
     root.commit(
       (tx) =>
@@ -169,7 +174,7 @@ describe("waiting", () => {
   it("resumes at the next pass when it waits on nothing", () => Effect.runPromise(resumesNextPass));
 });
 
-const keepsRunningPhases = Effect.gen(function* () {
+const keepsRunningPhasesStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const { harness, root } = yield* openNodes();
@@ -211,6 +216,11 @@ const keepsRunningPhases = Effect.gen(function* () {
   });
   const parent = yield* awaited(start(root, "parent"));
   yield* until(() => log.includes("round:0"));
+  return { runPromise, harness, ids, parent };
+});
+
+const keepsRunningPhases = Effect.gen(function* () {
+  const { runPromise, harness, ids, parent } = yield* keepsRunningPhasesStep1;
   yield* until(() =>
     runPromise(
       Effect.gen(function* () {

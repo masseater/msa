@@ -208,6 +208,25 @@ describe("imageDimensions", () => {
   });
 });
 
+const encodes3MiB = Effect.gen(function* () {
+  const source = new URL("../src/tools/image.ts", import.meta.url).href;
+  const script = `
+			const { toBase64 } = await import(${yield* toJsonText(source)});
+			const bytes = Uint8Array.from({ length: 3147295 }, (_, index) => (index * 37) % 256);
+			if (toBase64(bytes) !== Buffer.from(bytes).toString("base64")) throw new Error("mismatch");
+		`;
+  const args = [
+    "--experimental-strip-types",
+    "--max-heap-size=128",
+    "--input-type=module",
+    "-e",
+    script,
+  ];
+  const result = yield* runCommand(process.execPath, args);
+  expect(result.stderr).not.toMatch(/heap out of memory|mismatch/u);
+  expect(result.status).toBe(0);
+});
+
 describe("toBase64", () => {
   it("matches Buffer for every remainder length", () => {
     for (const length of [0, 1, 2, 3, 4, 5, 8191, 8192, 8193, 10_000, 16_385]) {
@@ -216,31 +235,7 @@ describe("toBase64", () => {
     }
   });
 
-  it(
-    "encodes a 3 MiB image within a 128 MB heap",
-    () =>
-      Effect.runPromise(
-        Effect.gen(function* () {
-          const source = new URL("../src/tools/image.ts", import.meta.url).href;
-          const script = `
-			const { toBase64 } = await import(${yield* toJsonText(source)});
-			const bytes = Uint8Array.from({ length: 3147295 }, (_, index) => (index * 37) % 256);
-			if (toBase64(bytes) !== Buffer.from(bytes).toString("base64")) throw new Error("mismatch");
-		`;
-          const args = [
-            "--experimental-strip-types",
-            "--max-heap-size=128",
-            "--input-type=module",
-            "-e",
-            script,
-          ];
-          const result = yield* runCommand(process.execPath, args);
-          expect(result.stderr).not.toMatch(/heap out of memory|mismatch/u);
-          expect(result.status).toBe(0);
-        }),
-      ),
-    20_000,
-  );
+  it("encodes a 3 MiB image within a 128 MB heap", () => Effect.runPromise(encodes3MiB), 20_000);
 });
 
 const preparesWorkerThread = Effect.gen(function* () {

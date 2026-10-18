@@ -1,0 +1,55 @@
+import { defineDoc, type EntryId } from "@msa/durable";
+import { Effect } from "effect";
+import { describe, expect, it } from "vite-plus/test";
+
+import { awaited } from "./effect-support.ts";
+import { context, createConversation, openTestSession } from "./session-support.ts";
+
+const usesFinalDocument = Effect.gen(function* () {
+  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
+  const Doc = defineDoc<{ value: string }>({
+    kind: "fork.same-commit",
+    version: 1,
+    scope: "conversation",
+    history: "rewindable",
+    fork: "asOf",
+    initial: () => ({ value: "initial" }),
+  });
+  const { session } = openTestSession();
+  const parentId = yield* awaited(createConversation(session));
+  let forkAt!: EntryId;
+  let excluded!: EntryId;
+  yield* awaited(
+    session.commit(
+      (tx) =>
+        runPromise(
+          Effect.gen(function* () {
+            forkAt = (yield* awaited(tx.appendEntry(parentId, { kind: "included" }))).id;
+            (yield* awaited(tx.doc(Doc, parentId))).value = "final-state-of-commit";
+            excluded = (yield* awaited(tx.appendEntry(parentId, { kind: "excluded" }))).id;
+          }),
+        ),
+      context,
+    ),
+  );
+  const child = yield* awaited(
+    session.commit(
+      (tx) => tx.forkConversation(parentId, forkAt, { ownership: { kind: "ownerless" } }),
+      context,
+    ),
+  );
+  expect(yield* awaited(session.snapshot(Doc, child.id, context))).toEqual({
+    value: "final-state-of-commit",
+  });
+  const visible = yield* awaited(
+    session.commit((tx) => tx.scanEntries({ conversationId: child.id }, 10), context),
+  );
+  expect(visible.items.map(({ id }) => id)).toContain(forkAt);
+  expect(visible.items.map(({ id }) => id)).not.toContain(excluded);
+});
+
+describe("Session conversation document forks", () => {
+  it("uses final document state from the fork entry commit while excluding later same-commit entries", () =>
+    Effect.runPromise(usesFinalDocument));
+});

@@ -20,7 +20,7 @@ const prompt =
     (arg, index) => !arg.startsWith("--") && (storageIndex < 0 || index !== storageIndex + 1),
   ) ?? "What is in this directory?";
 
-const main = Effect.gen(function* () {
+const mainStep1 = Effect.gen(function* () {
   const { storage, location } = yield* openJsonExampleStorage(storageKind);
   const print = (value: unknown): void => void process.stdout.write(`${JSON.stringify(value)}\n`);
 
@@ -55,7 +55,11 @@ const main = Effect.gen(function* () {
     Harness.open(storage, { models, registry, env: () => env }, context),
   );
   const root = yield* awaited(harness.root(context, { agent: { model } }));
+  return { location, print, harness, root };
+});
 
+const main = Effect.gen(function* () {
+  const { location, print, harness, root } = yield* mainStep1;
   let stop: () => Promise<unknown>;
   if (mode === "events") {
     const stream = yield* awaited(watchEvents(harness, root.id, context));

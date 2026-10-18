@@ -161,7 +161,7 @@ describe("tool rounds", () => {
     Effect.runPromise(answersUnstartedCalls));
 });
 
-const endsTurnGeneration = Effect.gen(function* () {
+const endsTurnGenerationStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const setup = chatSetup();
@@ -204,6 +204,11 @@ const endsTurnGeneration = Effect.gen(function* () {
   yield* awaited(
     (yield* awaited(root.submit({ type: "input", content: "go" }, context))).wait(context),
   );
+  return { harness, stream, events };
+});
+
+const endsTurnGeneration = Effect.gen(function* () {
+  const { harness, stream, events } = yield* endsTurnGenerationStep1;
   const first = (yield* awaited(
     harness.commit((tx) => tx.scanTasks({ kind: "msa.generation" }, 1), context),
   )).items[0]!;
@@ -224,7 +229,7 @@ describe("tool rounds", () => {
     Effect.runPromise(endsTurnGeneration));
 });
 
-const keepsRunControl = Effect.gen(function* () {
+const keepsRunControlStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const { setup, faulted, failure, storage, harness, root } = yield* faultedGenerationSetup();
@@ -268,6 +273,11 @@ const keepsRunControl = Effect.gen(function* () {
     status: "unanswered",
     reason: "faulted",
   });
+  return { reopened };
+});
+
+const keepsRunControl = Effect.gen(function* () {
+  const { reopened } = yield* keepsRunControlStep1;
   expect(yield* awaited(reopened.harness.snapshot(LiveDoc, reopened.root.id, context))).toEqual({});
   expect((yield* allEntries(reopened.root)).map((entry) => entry.kind)).toEqual([
     "msa.user",

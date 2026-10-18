@@ -26,7 +26,7 @@ import {
 
 const context = BACKGROUND_CONTEXT;
 
-const main = Effect.gen(function* () {
+const mainStep1 = Effect.gen(function* () {
   const runSync = Effect.runSyncWith(yield* Effect.context<never>());
 
   const directory = yield* makeTempDir("msa-durable-example-");
@@ -69,6 +69,11 @@ const main = Effect.gen(function* () {
   registry.install(Timing);
 
   const storage = yield* awaited(openNodeJsonlStorage(directory, context));
+  return { directory, models, registry, storage };
+});
+
+const main = Effect.gen(function* () {
+  const { directory, models, registry, storage } = yield* mainStep1;
   const harness = yield* awaited(
     Harness.open(
       storage,

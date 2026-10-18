@@ -31,7 +31,7 @@ afterEach(() =>
   ),
 );
 
-const keepsChainOne = Effect.gen(function* () {
+const keepsChainOneStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const { harness, root } = yield* open();
@@ -68,6 +68,11 @@ const keepsChainOne = Effect.gen(function* () {
   );
   gate("b").resolve();
   yield* awaited(harness.waitForTask(tree.b, context));
+  return { runPromise, harness, tree };
+});
+
+const keepsChainOne = Effect.gen(function* () {
+  const { runPromise, harness, tree } = yield* keepsChainOneStep1;
   const replacement = yield* awaited(
     harness.commit(
       (tx) =>

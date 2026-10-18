@@ -181,7 +181,7 @@ describe("Session document transactions", () => {
     Effect.runPromise(rejectsNonJson));
 });
 
-const rollsBackPrepared = Effect.gen(function* () {
+const rollsBackPreparedStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const { session, storage, conversationId } = yield* setupLive();
@@ -225,6 +225,11 @@ const rollsBackPrepared = Effect.gen(function* () {
   );
   expect(storage.commits.length).toBe(commits);
   expect(yield* awaited(session.snapshot(LiveDoc, conversationId, context))).toBe(live);
+  return { runPromise, session, conversationId, counter };
+});
+
+const rollsBackPrepared = Effect.gen(function* () {
+  const { runPromise, session, conversationId, counter } = yield* rollsBackPreparedStep1;
   expect(yield* awaited(session.snapshot(CounterDoc, context))).toBe(counter);
   yield* awaited(
     session.commit(

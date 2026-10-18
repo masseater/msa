@@ -103,7 +103,7 @@ const retryingUsageChat = Effect.fn("retryingUsageChat")(function* () {
   return { setup, spent, harness, root };
 });
 
-const totalsAssistantUsage = Effect.gen(function* () {
+const totalsAssistantUsageStep1 = Effect.gen(function* () {
   const setup = chatSetup();
   const spent: Usage = {
     input: 1,
@@ -147,6 +147,11 @@ const totalsAssistantUsage = Effect.gen(function* () {
     models: {},
     tools: {},
   });
+  return { spent, harness, expected, fork };
+});
+
+const totalsAssistantUsage = Effect.gen(function* () {
+  const { spent, harness, expected, fork } = yield* totalsAssistantUsageStep1;
   yield* awaited(
     (yield* awaited(fork.submit({ type: "input", content: "b" }, context))).wait(context),
   );

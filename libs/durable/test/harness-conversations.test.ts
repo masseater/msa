@@ -70,7 +70,7 @@ const closedConversations = Effect.fn("closedConversations")(function* () {
   return { path, root, child, fork, providerSessionIds };
 });
 
-const createsRootLazily = Effect.gen(function* () {
+const createsRootLazilyStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const storage = new ControlledStorage();
@@ -112,7 +112,11 @@ const createsRootLazily = Effect.gen(function* () {
   expect(yield* awaited(harness.snapshot(NoteDoc, root.id, context))).toEqual({
     text: "root note",
   });
+  return { storage, harness, root };
+});
 
+const createsRootLazily = Effect.gen(function* () {
+  const { storage, harness, root } = yield* createsRootLazilyStep1;
   const again = yield* awaited(
     harness.root(context, {
       agent: { thinkingLevel: "low" },
@@ -176,7 +180,7 @@ describe("Harness root and conversations", () => {
     Effect.runPromise(keepsRootConversation));
 });
 
-const createsIndependentConversations = Effect.gen(function* () {
+const createsIndependentConversationsStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const storage = new ControlledStorage();
@@ -218,6 +222,11 @@ const createsIndependentConversations = Effect.gen(function* () {
   expect(storage.commits).toHaveLength(before);
 
   addTool(registry, tool("bash"));
+  return { runPromise, harness, created };
+});
+
+const createsIndependentConversations = Effect.gen(function* () {
+  const { runPromise, harness, created } = yield* createsIndependentConversationsStep1;
   const names = (conversation: Conversation) =>
     runPromise(
       Effect.gen(function* () {

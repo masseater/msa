@@ -73,7 +73,7 @@ describe("nested tool calls", () => {
     Effect.runPromise(abortsNestedCall));
 });
 
-const abortsEveryLeft = Effect.gen(function* () {
+const abortsEveryLeftStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const setup = chatSetup();
@@ -117,6 +117,11 @@ const abortsEveryLeft = Effect.gen(function* () {
       ),
     ),
   );
+  return { setup };
+});
+
+const abortsEveryLeft = Effect.gen(function* () {
+  const { setup } = yield* abortsEveryLeftStep1;
   const { harness, status } = yield* runOnce(setup, [call("batch"), DONE]);
   expect(status).toBe("done");
   const nested = (yield* toolTasks(harness)).filter(
@@ -170,7 +175,7 @@ describe("nested tool calls", () => {
     Effect.runPromise(rejectsExplicitKeys));
 });
 
-const runsNestedCalls = Effect.gen(function* () {
+const runsNestedCallsStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const setup = chatSetup();
@@ -213,6 +218,11 @@ const runsNestedCalls = Effect.gen(function* () {
 
     return Promise.resolve();
   });
+  return { harness, root, stream, tools };
+});
+
+const runsNestedCalls = Effect.gen(function* () {
+  const { harness, root, stream, tools } = yield* runsNestedCallsStep1;
   yield* awaited(
     (yield* awaited(root.submit({ type: "input", content: "go" }, context))).wait(context),
   );

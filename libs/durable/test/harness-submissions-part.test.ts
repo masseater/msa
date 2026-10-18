@@ -25,7 +25,7 @@ afterEach(() =>
   ),
 );
 
-const settlesSubmissionsTheir = Effect.gen(function* () {
+const settlesSubmissionsTheirStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const { harness, root } = yield* openChat(new ControlledStorage(), chatSetup());
@@ -68,6 +68,11 @@ const settlesSubmissionsTheir = Effect.gen(function* () {
       "is not a placed input",
     ),
   );
+  return { runPromise, harness, root, session, entry, answer };
+});
+
+const settlesSubmissionsTheir = Effect.gen(function* () {
+  const { runPromise, harness, root, session, entry, answer } = yield* settlesSubmissionsTheirStep1;
   yield* awaited(
     expect(
       root.commit(

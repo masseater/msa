@@ -8,7 +8,7 @@ import type { SessionImpl } from "../src/session/session.ts";
 import { live } from "./harness-generation-support.ts";
 import { chatSetup, openChat, awaited, context } from "./support.ts";
 
-const orphansBlockedRun = Effect.gen(function* () {
+const orphansBlockedRunStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const setup = chatSetup();
@@ -49,6 +49,11 @@ const orphansBlockedRun = Effect.gen(function* () {
     ),
   );
   harness.resume();
+  return { harness, root, taskId, submissionId };
+});
+
+const orphansBlockedRun = Effect.gen(function* () {
+  const { harness, root, taskId, submissionId } = yield* orphansBlockedRunStep1;
   yield* awaited(
     expect(
       root.submit({ type: "input", content: "busy", whenBusy: "reject" }, context),

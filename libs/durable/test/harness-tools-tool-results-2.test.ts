@@ -25,7 +25,7 @@ function selectedHookExtensions() {
   return { setup, calledIn, Echo, Audit };
 }
 
-const runsHooksSelected = Effect.gen(function* () {
+const runsHooksSelectedStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const { setup, calledIn, Echo, Audit } = selectedHookExtensions();
@@ -68,6 +68,11 @@ const runsHooksSelected = Effect.gen(function* () {
       context,
     ),
   );
+  return { setup, calledIn, first, child, other };
+});
+
+const runsHooksSelected = Effect.gen(function* () {
+  const { setup, calledIn, first, child, other } = yield* runsHooksSelectedStep1;
   for (const conversation of [first.root, child, other]) {
     setup.faux.setResponses([calls(["echo", {}, "c1"]), DONE]);
     yield* awaited(

@@ -81,7 +81,7 @@ describe("nested tool calls", () => {
     Effect.runPromise(storesOneDocument));
 });
 
-const rejectsNestedCall = Effect.gen(function* () {
+const rejectsNestedCallStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const setup = chatSetup();
@@ -89,6 +89,11 @@ const rejectsNestedCall = Effect.gen(function* () {
   addTool(setup.registry, echo.registration);
   const started = deferred();
   const marked = deferred();
+  return { runPromise, setup, started, marked };
+});
+
+const rejectsNestedCall = Effect.gen(function* () {
+  const { runPromise, setup, started, marked } = yield* rejectsNestedCallStep1;
   let rejected: unknown;
   let caller: TaskId | undefined;
   addTool(

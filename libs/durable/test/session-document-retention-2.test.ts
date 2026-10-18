@@ -33,7 +33,7 @@ const EventDoc = defineDocFamily<{ seq: number }, number>({
   initial: (seq) => ({ seq }),
 });
 
-const keepsHistoryForks = Effect.gen(function* () {
+const keepsHistoryForksStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const { session } = open(0);
@@ -76,6 +76,11 @@ const keepsHistoryForks = Effect.gen(function* () {
   ).toEqual({
     count: 2,
   });
+  return { runPromise, session, conversationId, first };
+});
+
+const keepsHistoryForks = Effect.gen(function* () {
+  const { runPromise, session, conversationId, first } = yield* keepsHistoryForksStep1;
   const fork = yield* awaited(
     session.commit(
       (tx) =>

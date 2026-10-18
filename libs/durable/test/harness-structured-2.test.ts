@@ -95,7 +95,7 @@ const heldFailureTree = Effect.fn("heldFailureTree")(function* () {
   return { harness, root, found, spawned };
 });
 
-const resumesOnceEvery = Effect.gen(function* () {
+const resumesOnceEveryStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const { harness, root } = yield* openNodes();
@@ -139,6 +139,11 @@ const resumesOnceEvery = Effect.gen(function* () {
   );
   open("ok");
   open("fails", "failed");
+  return { harness, found, parent };
+});
+
+const resumesOnceEvery = Effect.gen(function* () {
+  const { harness, found, parent } = yield* resumesOnceEveryStep1;
   open("throws", "throw");
   yield* awaited(harness.abortTask(found.ids[3]!, context));
   expect(yield* awaited(harness.abortTask(found.ids[4]!, context))).toBe("marked");

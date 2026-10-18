@@ -10,7 +10,7 @@ import { awaited } from "./effect-support.ts";
 import { ERROR_503 } from "./harness-generation-support.ts";
 import { context } from "./session-support.ts";
 
-const keepsProviderSession = Effect.gen(function* () {
+const keepsProviderSessionStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const setup = chatSetup();
@@ -51,6 +51,11 @@ const keepsProviderSession = Effect.gen(function* () {
       ),
     ),
   );
+  return { runPromise, seen, harness, root, child };
+});
+
+const keepsProviderSession = Effect.gen(function* () {
+  const { runPromise, seen, harness, root, child } = yield* keepsProviderSessionStep1;
   yield* awaited(
     Promise.all(
       [root, child].map((conversation, index) =>

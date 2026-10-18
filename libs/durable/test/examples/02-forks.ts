@@ -19,7 +19,7 @@ const Notes = defineDoc<{ text: string }>({
   initial: () => ({ text: "" }),
 });
 
-const main = Effect.gen(function* () {
+const mainStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const chat = yield* awaited(
@@ -61,6 +61,11 @@ const main = Effect.gen(function* () {
   const branchEntries = yield* awaited(
     session.commit((tx) => tx.scanEntries({ conversationId: branch.id }, 10), context),
   );
+  return { runPromise, chat, branch, branchEntries };
+});
+
+const main = Effect.gen(function* () {
+  const { runPromise, chat, branch, branchEntries } = yield* mainStep1;
   yield* Console.log(
     "fork transcript:",
     branchEntries.items.map((entry) => entry.data),

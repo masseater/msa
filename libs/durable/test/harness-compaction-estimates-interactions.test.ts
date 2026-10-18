@@ -104,7 +104,7 @@ describe("compaction estimates and interactions", () => {
     Effect.runPromise(placesOlderQueued));
 });
 
-const placesHookSummary = Effect.gen(function* () {
+const placesHookSummaryStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const chat = yield* open();
@@ -145,6 +145,11 @@ const placesHookSummary = Effect.gen(function* () {
   });
   yield* history(chat);
   const id = yield* awaited(chat.root.compact(undefined, context));
+  return { runPromise, chat, childGate, id };
+});
+
+const placesHookSummary = Effect.gen(function* () {
+  const { runPromise, chat, childGate, id } = yield* placesHookSummaryStep1;
   yield* waitFor(() =>
     runPromise(
       Effect.gen(function* () {

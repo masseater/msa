@@ -124,7 +124,7 @@ describe("generation", () => {
     Effect.runPromise(commitsPartialsNo));
 });
 
-const rendersSectionsRead = Effect.gen(function* () {
+const rendersSectionsReadStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const { Agent, harness, root } = yield* documentSectionsChat();
@@ -163,6 +163,11 @@ const rendersSectionsRead = Effect.gen(function* () {
   yield* awaited(
     (yield* awaited(sub.submit({ type: "input", content: "two" }, context))).wait(context),
   );
+  return { runPromise, harness, root, sub };
+});
+
+const rendersSectionsRead = Effect.gen(function* () {
+  const { runPromise, harness, root, sub } = yield* rendersSectionsReadStep1;
   const sections = (conversation: Conversation) =>
     runPromise(
       Effect.gen(function* () {
