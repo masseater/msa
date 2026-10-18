@@ -1,4 +1,3 @@
-import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 
@@ -9,6 +8,7 @@ import {
   readTextFile,
   pathExists,
   removePath,
+  makeTempDir,
   joinPath,
   dirnameOf,
   basenameOf,
@@ -38,7 +38,7 @@ function runExternalEditor(fixtureFlag?: "--fail" | "--empty"): Promise<{
 }> {
   return runTest(
     Effect.gen(function* () {
-      const testDirectory = mkdtempSync(joinPath(tmpdir(), "msa-external-editor-test-"));
+      const testDirectory = yield* makeTempDir("msa-external-editor-test-");
       const capturePath = joinPath(testDirectory, "capture.json");
       try {
         const result = yield* awaited(

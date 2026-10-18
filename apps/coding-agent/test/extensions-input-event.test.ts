@@ -1,7 +1,12 @@
-import * as fs from "node:fs";
-import * as os from "node:os";
-
-import { awaited, runTest, writeTextFile, makeDirectory, removePath, joinPath } from "@msa/testing";
+import {
+  awaited,
+  joinPath,
+  makeDirectory,
+  makeTempDir,
+  removePath,
+  runTest,
+  writeTextFile,
+} from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
@@ -18,7 +23,7 @@ describe("Input Event", () => {
   beforeEach(() =>
     runTest(
       Effect.gen(function* () {
-        tempDir = fs.mkdtempSync(joinPath(os.tmpdir(), "msa-input-test-"));
+        tempDir = yield* makeTempDir("msa-input-test-");
         extensionsDir = joinPath(tempDir, "extensions");
         yield* makeDirectory(extensionsDir);
         delete (globalThis as any).testVar;
@@ -26,7 +31,7 @@ describe("Input Event", () => {
     ),
   );
 
-  afterEach(() => fs.rmSync(tempDir, { recursive: true, force: true }));
+  afterEach(() => runTest(removePath(tempDir)));
 
   function createRunner(...extensions: string[]) {
     return runTest(

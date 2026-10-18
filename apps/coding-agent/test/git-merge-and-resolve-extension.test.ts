@@ -1,7 +1,12 @@
-import { mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
-
-import { awaited, runTest, writeTextFile, makeDirectory, joinPath, removePath } from "@msa/testing";
+import {
+  awaited,
+  runTest,
+  writeTextFile,
+  makeDirectory,
+  makeTempDir,
+  joinPath,
+  removePath,
+} from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
@@ -68,15 +73,15 @@ describe("git-merge-and-resolve example", () => {
     ),
   );
 
-  function createTempDir() {
-    tempDir = mkdtempSync(joinPath(tmpdir(), "msa-merge-test-"));
+  const createTempDir: Effect.Effect<string> = Effect.gen(function* () {
+    tempDir = yield* makeTempDir("msa-merge-test-");
     return tempDir;
-  }
+  });
 
   it("skips when not a git repository", () =>
     runTest(
       Effect.gen(function* () {
-        const cwd = createTempDir();
+        const cwd = yield* createTempDir;
         const results = new Map<string, ExecResult>();
         results.set("git rev-parse --git-dir", fail);
 
@@ -91,7 +96,7 @@ describe("git-merge-and-resolve example", () => {
   it("skips when no upstream is configured", () =>
     runTest(
       Effect.gen(function* () {
-        const cwd = createTempDir();
+        const cwd = yield* createTempDir;
         const results = new Map<string, ExecResult>();
         results.set("git rev-parse --git-dir", ok);
         results.set("git rev-parse --abbrev-ref --symbolic-full-name @{u}", fail);
@@ -106,7 +111,7 @@ describe("git-merge-and-resolve example", () => {
   it("re-sends conflicts when in an unfinished merge", () =>
     runTest(
       Effect.gen(function* () {
-        const cwd = createTempDir();
+        const cwd = yield* createTempDir;
         const conflictContent = [
           "<<<<<<< HEAD",
           "ours",
@@ -136,7 +141,7 @@ describe("git-merge-and-resolve example", () => {
   it("skips when working tree is dirty and not in a merge", () =>
     runTest(
       Effect.gen(function* () {
-        const cwd = createTempDir();
+        const cwd = yield* createTempDir;
         const results = new Map<string, ExecResult>();
         results.set("git rev-parse --git-dir", ok);
         results.set("git rev-parse MERGE_HEAD", fail);
@@ -153,7 +158,7 @@ describe("git-merge-and-resolve example", () => {
   it("skips when fetch fails", () =>
     runTest(
       Effect.gen(function* () {
-        const cwd = createTempDir();
+        const cwd = yield* createTempDir;
         const results = withUpstream(new Map<string, ExecResult>());
         results.set("git fetch origin", fail);
 
@@ -167,7 +172,7 @@ describe("git-merge-and-resolve example", () => {
   it("skips when merge is clean", () =>
     runTest(
       Effect.gen(function* () {
-        const cwd = createTempDir();
+        const cwd = yield* createTempDir;
         const results = withUpstream(new Map<string, ExecResult>());
         results.set("git merge --no-ff origin/main", ok);
 
@@ -181,7 +186,7 @@ describe("git-merge-and-resolve example", () => {
   it("sends conflict report as a follow-up", () =>
     runTest(
       Effect.gen(function* () {
-        const cwd = createTempDir();
+        const cwd = yield* createTempDir;
         const conflictContent = [
           "line 1",
           "<<<<<<< HEAD",
@@ -220,7 +225,7 @@ describe("git-merge-and-resolve example", () => {
   it("handles empty ours or theirs sections", () =>
     runTest(
       Effect.gen(function* () {
-        const cwd = createTempDir();
+        const cwd = yield* createTempDir;
         const conflictContent = [
           "<<<<<<< HEAD",
           "=======",
@@ -248,7 +253,7 @@ describe("git-merge-and-resolve example", () => {
   it("skips message when merge fails but no conflict markers found", () =>
     runTest(
       Effect.gen(function* () {
-        const cwd = createTempDir();
+        const cwd = yield* createTempDir;
         const results = withUpstream(new Map<string, ExecResult>());
         results.set("git merge --no-ff origin/main", { ...fail, code: 1 });
         results.set("git diff --name-only --diff-filter=U", { ...ok, stdout: "" });

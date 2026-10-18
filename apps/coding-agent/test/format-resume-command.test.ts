@@ -1,7 +1,4 @@
-import { mkdtempSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-
-import { joinPath, runTest, removePath } from "@msa/testing";
+import { joinPath, runTest, removePath, makeTempDir, writeTextFile } from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
@@ -31,13 +28,13 @@ function setStdoutIsTTY(value: boolean): void {
   Object.defineProperty(process.stdout, "isTTY", { configurable: true, value });
 }
 
-function createTempFile(): string {
-  const dir = mkdtempSync(joinPath(tmpdir(), "msa-format-resume-command-"));
+const createTempFile: Effect.Effect<string> = Effect.gen(function* () {
+  const dir = yield* makeTempDir("msa-format-resume-command-");
   tempDirs.push(dir);
   const file = joinPath(dir, "session.jsonl");
-  writeFileSync(file, "\n");
+  yield* writeTextFile(file, "\n");
   return file;
-}
+});
 
 function createSessionManager(options: {
   persisted?: boolean;
@@ -56,74 +53,86 @@ function createSessionManager(options: {
 }
 
 describe("formatResumeCommand", () => {
-  it("returns a session resume command for default session dirs", () => {
-    setStdoutIsTTY(true);
-    const sessionFile = createTempFile();
-    const sessionManager = createSessionManager({ sessionFile, sessionId: "test-session" });
+  it("returns a session resume command for default session dirs", () =>
+    runTest(
+      Effect.gen(function* () {
+        setStdoutIsTTY(true);
+        const sessionFile = yield* createTempFile;
+        const sessionManager = createSessionManager({ sessionFile, sessionId: "test-session" });
+        expect(formatResumeCommand(sessionManager)).toBe(`${APP_NAME} --session test-session`);
+      }),
+    ));
 
-    expect(formatResumeCommand(sessionManager)).toBe(`${APP_NAME} --session test-session`);
-  });
+  it("includes unquoted safe session dirs for non-default session dirs", () =>
+    runTest(
+      Effect.gen(function* () {
+        setStdoutIsTTY(true);
+        const sessionFile = yield* createTempFile;
+        const sessionManager = createSessionManager({
+          sessionFile,
+          sessionId: "test-session",
+          sessionDir: "/tmp/custom-msa-sessions",
+          usesDefaultSessionDir: false,
+        });
+        expect(formatResumeCommand(sessionManager)).toBe(
+          `${APP_NAME} --session-dir /tmp/custom-msa-sessions --session test-session`,
+        );
+      }),
+    ));
 
-  it("includes unquoted safe session dirs for non-default session dirs", () => {
-    setStdoutIsTTY(true);
-    const sessionFile = createTempFile();
-    const sessionManager = createSessionManager({
-      sessionFile,
-      sessionId: "test-session",
-      sessionDir: "/tmp/custom-msa-sessions",
-      usesDefaultSessionDir: false,
-    });
+  it("quotes session dirs containing spaces", () =>
+    runTest(
+      Effect.gen(function* () {
+        setStdoutIsTTY(true);
+        const sessionFile = yield* createTempFile;
+        const sessionManager = createSessionManager({
+          sessionFile,
+          sessionId: "test-session",
+          sessionDir: "/tmp/custom msa sessions",
+          usesDefaultSessionDir: false,
+        });
+        expect(formatResumeCommand(sessionManager)).toBe(
+          `${APP_NAME} --session-dir '/tmp/custom msa sessions' --session test-session`,
+        );
+      }),
+    ));
 
-    expect(formatResumeCommand(sessionManager)).toBe(
-      `${APP_NAME} --session-dir /tmp/custom-msa-sessions --session test-session`,
-    );
-  });
+  it("quotes session dirs containing single quotes", () =>
+    runTest(
+      Effect.gen(function* () {
+        setStdoutIsTTY(true);
+        const sessionFile = yield* createTempFile;
+        const sessionManager = createSessionManager({
+          sessionFile,
+          sessionId: "test-session",
+          sessionDir: "/tmp/custom msa's sessions",
+          usesDefaultSessionDir: false,
+        });
+        expect(formatResumeCommand(sessionManager)).toBe(
+          `${APP_NAME} --session-dir '/tmp/custom msa'\\''s sessions' --session test-session`,
+        );
+      }),
+    ));
 
-  it("quotes session dirs containing spaces", () => {
-    setStdoutIsTTY(true);
-    const sessionFile = createTempFile();
-    const sessionManager = createSessionManager({
-      sessionFile,
-      sessionId: "test-session",
-      sessionDir: "/tmp/custom msa sessions",
-      usesDefaultSessionDir: false,
-    });
+  it("returns undefined when stdout is not a TTY", () =>
+    runTest(
+      Effect.gen(function* () {
+        setStdoutIsTTY(false);
+        const sessionFile = yield* createTempFile;
+        const sessionManager = createSessionManager({ sessionFile });
+        expect(formatResumeCommand(sessionManager)).toBeUndefined();
+      }),
+    ));
 
-    expect(formatResumeCommand(sessionManager)).toBe(
-      `${APP_NAME} --session-dir '/tmp/custom msa sessions' --session test-session`,
-    );
-  });
-
-  it("quotes session dirs containing single quotes", () => {
-    setStdoutIsTTY(true);
-    const sessionFile = createTempFile();
-    const sessionManager = createSessionManager({
-      sessionFile,
-      sessionId: "test-session",
-      sessionDir: "/tmp/custom msa's sessions",
-      usesDefaultSessionDir: false,
-    });
-
-    expect(formatResumeCommand(sessionManager)).toBe(
-      `${APP_NAME} --session-dir '/tmp/custom msa'\\''s sessions' --session test-session`,
-    );
-  });
-
-  it("returns undefined when stdout is not a TTY", () => {
-    setStdoutIsTTY(false);
-    const sessionFile = createTempFile();
-    const sessionManager = createSessionManager({ sessionFile });
-
-    expect(formatResumeCommand(sessionManager)).toBeUndefined();
-  });
-
-  it("returns undefined for in-memory sessions", () => {
-    setStdoutIsTTY(true);
-    const sessionFile = createTempFile();
-    const sessionManager = createSessionManager({ persisted: false, sessionFile });
-
-    expect(formatResumeCommand(sessionManager)).toBeUndefined();
-  });
+  it("returns undefined for in-memory sessions", () =>
+    runTest(
+      Effect.gen(function* () {
+        setStdoutIsTTY(true);
+        const sessionFile = yield* createTempFile;
+        const sessionManager = createSessionManager({ persisted: false, sessionFile });
+        expect(formatResumeCommand(sessionManager)).toBeUndefined();
+      }),
+    ));
 
   it("returns undefined when the session file is missing", () => {
     setStdoutIsTTY(true);

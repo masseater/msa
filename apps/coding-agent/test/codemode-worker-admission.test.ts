@@ -1,7 +1,7 @@
 import { Worker } from "node:worker_threads";
 
 import * as codemode from "@msa/codemode";
-import { awaited, runTest, abortController } from "@msa/testing";
+import { abortController, awaited, deferredPromise, runTest } from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
@@ -13,9 +13,9 @@ const terminations = new Map<Worker, (code: number) => void>();
 beforeEach(() => {
   vi.spyOn(Worker.prototype, "terminate").mockImplementation(function (this: Worker) {
     this.ref();
-    return new Promise<number>((resolve) => {
-      terminations.set(this, resolve);
-    });
+    const deferred = deferredPromise<number>();
+    terminations.set(this, deferred.resolve);
+    return deferred.promise;
   });
 });
 

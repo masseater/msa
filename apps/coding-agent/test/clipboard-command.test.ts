@@ -1,5 +1,5 @@
 import { awaited, runTest } from "@msa/testing";
-import { Effect } from "effect";
+import { Effect, Fiber } from "effect";
 import { describe, expect, test } from "vite-plus/test";
 
 import { runClipboardCommand } from "../src/utils/clipboard-command.ts";
@@ -43,7 +43,17 @@ describe("clipboard commands", () => {
     runTest(
       Effect.gen(function* () {
         let ticks = 0;
-        const timer = setInterval(() => ticks++, 10);
+        const timer = yield* Effect.forkChild(
+          Effect.forever(
+            Effect.sleep(10).pipe(
+              Effect.andThen(
+                Effect.sync(() => {
+                  ticks++;
+                }),
+              ),
+            ),
+          ),
+        );
         try {
           expect(
             yield* awaited(
@@ -54,7 +64,7 @@ describe("clipboard commands", () => {
           ).toBeUndefined();
           expect(ticks).toBeGreaterThan(5);
         } finally {
-          clearInterval(timer);
+          yield* Fiber.interrupt(timer);
         }
       }),
     ));

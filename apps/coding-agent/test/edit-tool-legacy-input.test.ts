@@ -1,7 +1,12 @@
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-
-import { awaited, runTest, joinPath } from "@msa/testing";
+import {
+  awaited,
+  runTest,
+  joinPath,
+  makeTempDir,
+  readTextFile,
+  removeDirs,
+  writeTextFile,
+} from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
@@ -10,25 +15,13 @@ import { createEditToolDefinition } from "../src/core/tools/edit.ts";
 
 const tempDirs: string[] = [];
 
-function createTempDir(): Promise<string> {
-  return runTest(
-    Effect.gen(function* () {
-      const dir = yield* awaited(mkdtemp(joinPath(tmpdir(), "msa-edit-legacy-input-")));
-      tempDirs.push(dir);
-      return yield* awaited(dir);
-    }),
-  );
-}
+const createTempDir: Effect.Effect<string> = Effect.gen(function* () {
+  const dir = yield* makeTempDir("msa-edit-legacy-input-");
+  tempDirs.push(dir);
+  return dir;
+});
 
-afterEach(() =>
-  runTest(
-    awaited(
-      Promise.all(
-        tempDirs.splice(0, tempDirs.length).map((dir) => rm(dir, { recursive: true, force: true })),
-      ),
-    ),
-  ),
-);
+afterEach(() => runTest(removeDirs(tempDirs.splice(0))));
 
 describe("edit tool prepareArguments", () => {
   it("keeps legacy fields out of the public schema", () => {
@@ -87,9 +80,9 @@ describe("edit tool prepareArguments", () => {
   it("prepared args execute correctly", () =>
     runTest(
       Effect.gen(function* () {
-        const dir = yield* awaited(createTempDir());
+        const dir = yield* createTempDir;
         const filePath = joinPath(dir, "legacy.txt");
-        yield* awaited(writeFile(filePath, "before\n", "utf8"));
+        yield* writeTextFile(filePath, "before\n");
 
         const definition = createEditToolDefinition(dir);
         const prepared = definition.prepareArguments!({
@@ -104,7 +97,7 @@ describe("edit tool prepareArguments", () => {
         expect(result.content).toEqual([
           { type: "text" as const, text: "Successfully replaced 1 block(s) in legacy.txt." },
         ]);
-        expect(yield* awaited(readFile(filePath, "utf8"))).toBe("after\n");
+        expect(yield* readTextFile(filePath)).toBe("after\n");
       }),
     ));
 });
