@@ -1,6 +1,6 @@
 import { Console, Effect, Ref, Stream } from "effect";
 
-import type { HostShape } from "./host.ts";
+import type { CommandOptions, HostShape } from "./host.ts";
 import { fail } from "./profile-startup-args.ts";
 import type { Mode, ProfileOptions, Runtime } from "./profile-startup-args.ts";
 import { formatMs, nowMs, parseStartupTimings } from "./profile-startup-report.ts";
@@ -122,19 +122,26 @@ const benchmarkEnv = (
   };
 };
 
-const spawnOptions = (options: {
+const CHILD_IO = {
+  rpc: { stdin: "pipe", stdout: "pipe" },
+  tui: { stdin: "inherit", stdout: "inherit" },
+} as const satisfies Record<Mode, Pick<CommandOptions, "stdin" | "stdout">>;
+
+const spawnBenchmark = (options: {
   readonly isolatedAgentDir: string | undefined;
   readonly mode: Mode;
   readonly params: RunParams;
   readonly profileName: string;
 }) => {
   const { params } = options;
-  return {
+  return params.host.spawn({
     ...runtimeCommand(params, options.mode, options.profileName),
     cwd: params.paths.packageDir,
     env: benchmarkEnv(params, options.isolatedAgentDir),
     shell: isWindows && params.runtime === "bun",
-  };
+    stderr: "pipe",
+    ...CHILD_IO[options.mode],
+  });
 };
 
 const withAgentDir = <A, E, R>(
@@ -185,12 +192,7 @@ const runTui = (params: RunParams) =>
     Effect.scoped(
       Effect.gen(function* () {
         const profileName = profileNameOf(params);
-        const child = yield* params.host.spawn({
-          ...spawnOptions({ isolatedAgentDir, mode: "tui", params, profileName }),
-          stderr: "pipe",
-          stdin: "inherit",
-          stdout: "inherit",
-        });
+        const child = yield* spawnBenchmark({ isolatedAgentDir, mode: "tui", params, profileName });
         const startedAt = yield* nowMs;
         const [stderr, exitCode] = yield* Effect.all([child.stderrText, child.exitCode], {
           concurrency: "unbounded",
@@ -207,12 +209,7 @@ const runRpc = (params: RunParams) =>
     Effect.scoped(
       Effect.gen(function* () {
         const profileName = profileNameOf(params);
-        const child = yield* params.host.spawn({
-          ...spawnOptions({ isolatedAgentDir, mode: "rpc", params, profileName }),
-          stderr: "pipe",
-          stdin: "pipe",
-          stdout: "pipe",
-        });
+        const child = yield* spawnBenchmark({ isolatedAgentDir, mode: "rpc", params, profileName });
         const requestId = `startup-benchmark-${params.runIndex + 1}`;
         const state = yield* Ref.make<RpcState>({
           readyElapsedMs: undefined,
