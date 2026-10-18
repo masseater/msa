@@ -1,6 +1,7 @@
 import { constants, copyFileSync, existsSync, mkdirSync } from "node:fs";
 import { basename, join, parse, resolve } from "node:path";
 
+import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 
 import { resolvePath } from "../utils/paths.ts";
@@ -34,13 +35,14 @@ export type CreateAgentSessionRuntimeFactory = (options: {
   projectTrustContext?: ProjectTrustContext | undefined;
 }) => Promise<CreateAgentSessionRuntimeResult>;
 
-export class SessionImportFileNotFoundError extends Error {
+export class SessionImportFileNotFoundError extends Data.TaggedError(
+  "SessionImportFileNotFoundError",
+)<{
   readonly filePath: string;
-
+  readonly message: string;
+}> {
   constructor(filePath: string) {
-    super(`File not found: ${filePath}`);
-    this.name = "SessionImportFileNotFoundError";
-    this.filePath = filePath;
+    super({ filePath, message: `File not found: ${filePath}` });
   }
 }
 

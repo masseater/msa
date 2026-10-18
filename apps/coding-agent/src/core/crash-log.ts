@@ -3,7 +3,7 @@ import { dirname, join } from "node:path";
 
 import { getAgentDir, VERSION } from "../config.ts";
 import type { Extension } from "./extensions/types.ts";
-import { nowMs } from "./platform.ts";
+import { nowIso, nowMs } from "./platform.ts";
 import { isSyntheticPath } from "./source-info.ts";
 
 export interface CrashRecord {
@@ -141,7 +141,7 @@ export function recordCrash(
   try {
     const { error } = crash;
     const record: CrashRecord = {
-      timestamp: new Date().toISOString(),
+      timestamp: nowIso(),
       version: VERSION,
       kind: crash.kind,
       message:

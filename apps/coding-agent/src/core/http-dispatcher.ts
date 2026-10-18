@@ -2,6 +2,8 @@ import { EventEmitter } from "node:events";
 
 import * as undici from "undici";
 
+import { readEnv } from "./platform.ts";
+
 export const DEFAULT_HTTP_IDLE_TIMEOUT_MS = 300_000;
 const DEFAULT_AUTO_SELECT_FAMILY_ATTEMPT_TIMEOUT_MS = 2_000;
 
@@ -45,8 +47,8 @@ export function formatHttpIdleTimeoutMs(timeoutMs: number): string {
 export function applyHttpProxySettings(httpProxy: string | undefined): void {
   const proxy = httpProxy?.trim();
   if (proxy === undefined || proxy === "") return;
-  process.env["HTTP_PROXY"] ??= proxy;
-  process.env["HTTPS_PROXY"] ??= proxy;
+  if (readEnv("HTTP_PROXY") === undefined) process.env["HTTP_PROXY"] = proxy;
+  if (readEnv("HTTPS_PROXY") === undefined) process.env["HTTPS_PROXY"] = proxy;
 }
 
 const ignoreUndiciDispatcherError = (_error: unknown): void => {};

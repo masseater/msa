@@ -30,7 +30,9 @@ import {
   type UserMessage,
   uuidv7,
 } from "@msa/ai";
+import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
+import { isNullish } from "effect/Predicate";
 
 import { APP_NAME, getAgentDir as getDefaultAgentDir, getSessionsDir } from "../config.ts";
 import { normalizePath, resolvePath } from "../utils/paths.ts";
@@ -42,6 +44,7 @@ import {
   createCompactionSummaryMessage,
   createCustomMessage,
 } from "./messages.ts";
+import { nowIso, toDate, toEpochMs } from "./platform.ts";
 export const CURRENT_SESSION_VERSION = 3;
 
 export interface SessionHeader {
@@ -388,10 +391,11 @@ function getSessionContextSettings(
 export function sessionEntryToContextMessages(entry: SessionEntry): AgentMessage[] {
   if (entry.type === "message") {
     const message = entry.message;
-    if (message.role === "system" && message.content == null) return [{ ...message, content: "" }];
+    if (message.role === "system" && isNullish(message.content))
+      return [{ ...message, content: "" }];
     if (
       (message.role === "user" || message.role === "assistant" || message.role === "toolResult") &&
-      message.content == null
+      isNullish(message.content)
     ) {
       return [{ ...message, content: [] }];
     }
@@ -543,10 +547,13 @@ const SESSION_READ_BUFFER_SIZE = 1024 * 1024;
 const SESSION_HEADER_READ_BUFFER_SIZE = 4096;
 const MAX_SESSION_HEADER_SCAN_BYTES = 1024 * 1024;
 
-class SessionHeaderScanLimitError extends Error {
+class SessionHeaderScanLimitError extends Data.TaggedError("SessionHeaderScanLimitError")<{
+  readonly message: string;
+}> {
   constructor(filePath: string) {
-    super(`Session header exceeds ${MAX_SESSION_HEADER_SCAN_BYTES}-byte scan limit: ${filePath}`);
-    this.name = "SessionHeaderScanLimitError";
+    super({
+      message: `Session header exceeds ${MAX_SESSION_HEADER_SCAN_BYTES}-byte scan limit: ${filePath}`,
+    });
   }
 }
 
@@ -721,7 +728,7 @@ function getMessageActivityTime(entry: SessionMessageEntry): number | undefined 
     return msgTimestamp;
   }
 
-  const t = new Date(entry.timestamp).getTime();
+  const t = toEpochMs(entry.timestamp);
   return Number.isNaN(t) ? undefined : t;
 }
 
@@ -794,14 +801,13 @@ function buildSessionInfo(
 
       const cwd = typeof header.cwd === "string" ? header.cwd : "";
       const parentSessionPath = header.parentSession;
-      const headerTime =
-        typeof header.timestamp === "string" ? new Date(header.timestamp).getTime() : NaN;
+      const headerTime = typeof header.timestamp === "string" ? toEpochMs(header.timestamp) : NaN;
       const modified =
         typeof lastActivityTime === "number" && lastActivityTime > 0
-          ? new Date(lastActivityTime)
+          ? toDate(lastActivityTime)
           : Number.isNaN(headerTime)
             ? stats.mtime
-            : new Date(headerTime);
+            : toDate(headerTime);
 
       return {
         path: filePath,
@@ -809,7 +815,7 @@ function buildSessionInfo(
         cwd,
         name,
         parentSessionPath,
-        created: new Date(header.timestamp),
+        created: toDate(header.timestamp),
         modified,
         messageCount,
         firstMessage: firstMessage || "(no messages)",
@@ -1007,7 +1013,7 @@ export class SessionManager {
       assertValidSessionId(options.id);
     }
     this.sessionId = options?.id ?? createSessionId();
-    const timestamp = new Date().toISOString();
+    const timestamp = nowIso();
     const header: SessionHeader = {
       type: "session",
       version: CURRENT_SESSION_VERSION,
@@ -1142,7 +1148,7 @@ export class SessionManager {
       type: "message",
       id: generateId(this.byId),
       parentId: this.leafId,
-      timestamp: new Date().toISOString(),
+      timestamp: nowIso(),
       message,
     };
     this.appendEntry(entry);
@@ -1154,7 +1160,7 @@ export class SessionManager {
       type: "thinking_level_change",
       id: generateId(this.byId),
       parentId: this.leafId,
-      timestamp: new Date().toISOString(),
+      timestamp: nowIso(),
       thinkingLevel,
     };
     this.appendEntry(entry);
@@ -1166,7 +1172,7 @@ export class SessionManager {
       type: "model_change",
       id: generateId(this.byId),
       parentId: this.leafId,
-      timestamp: new Date().toISOString(),
+      timestamp: nowIso(),
       provider,
       modelId,
     };
@@ -1185,7 +1191,7 @@ export class SessionManager {
       type: "usage",
       id: generateId(this.byId),
       parentId: this.leafId,
-      timestamp: new Date().toISOString(),
+      timestamp: nowIso(),
       kind,
       provider,
       model,
@@ -1204,7 +1210,7 @@ export class SessionManager {
     fromHook?: boolean,
     usage?: Usage,
   ): string {
-    const timestamp = new Date().toISOString();
+    const timestamp = nowIso();
     const systemMessage = getCurrentSystemMessage(this.buildSessionProjection().messages);
     const id = generateId(this.byId);
     const entry: CompactionEntry<T> = {
@@ -1220,7 +1226,7 @@ export class SessionManager {
       fromHook,
       ...(systemMessage === undefined
         ? {}
-        : { systemMessage: { ...systemMessage, timestamp: new Date(timestamp).getTime() } }),
+        : { systemMessage: { ...systemMessage, timestamp: toEpochMs(timestamp) } }),
     };
     this.appendEntry(entry);
     return entry.id;
@@ -1233,7 +1239,7 @@ export class SessionManager {
       data,
       id: generateId(this.byId),
       parentId: this.leafId,
-      timestamp: new Date().toISOString(),
+      timestamp: nowIso(),
     };
     this.appendEntry(entry);
     return entry.id;
@@ -1245,7 +1251,7 @@ export class SessionManager {
       type: "session_info",
       id: generateId(this.byId),
       parentId: this.leafId,
-      timestamp: new Date().toISOString(),
+      timestamp: nowIso(),
       name: sanitizedName,
     };
     this.appendEntry(entry);
@@ -1276,7 +1282,7 @@ export class SessionManager {
       details,
       id: generateId(this.byId),
       parentId: this.leafId,
-      timestamp: new Date().toISOString(),
+      timestamp: nowIso(),
     };
     this.appendEntry(entry);
     return entry.id;
@@ -1314,7 +1320,7 @@ export class SessionManager {
       type: "context_edit",
       id: generateId(this.byId),
       parentId: this.leafId,
-      timestamp: new Date().toISOString(),
+      timestamp: nowIso(),
       targetId,
       replacement: normalizedReplacement,
     };
@@ -1356,7 +1362,7 @@ export class SessionManager {
       type: "label",
       id: generateId(this.byId),
       parentId: this.leafId,
-      timestamp: new Date().toISOString(),
+      timestamp: nowIso(),
       targetId,
       label,
     };
@@ -1440,9 +1446,7 @@ export class SessionManager {
     const stack: SessionTreeNode[] = [...roots];
     while (stack.length > 0) {
       const node = stack.pop()!;
-      node.children.sort(
-        (a, b) => new Date(a.entry.timestamp).getTime() - new Date(b.entry.timestamp).getTime(),
-      );
+      node.children.sort((a, b) => toEpochMs(a.entry.timestamp) - toEpochMs(b.entry.timestamp));
       stack.push(...node.children);
     }
 
@@ -1476,7 +1480,7 @@ export class SessionManager {
       type: "branch_summary",
       id: generateId(this.byId),
       parentId: branchFromId,
-      timestamp: new Date().toISOString(),
+      timestamp: nowIso(),
       fromId,
       summary,
       details,
@@ -1523,7 +1527,7 @@ export class SessionManager {
     }
 
     const newSessionId = createSessionId();
-    const timestamp = new Date().toISOString();
+    const timestamp = nowIso();
     const fileTimestamp = timestamp.replace(/[:.]/gu, "-");
     const newSessionFile = join(this.getSessionDir(), `${fileTimestamp}_${newSessionId}.jsonl`);
 
@@ -1683,7 +1687,7 @@ export class SessionManager {
       assertValidSessionId(options.id);
     }
     const newSessionId = options?.id ?? createSessionId();
-    const timestamp = new Date().toISOString();
+    const timestamp = nowIso();
     const fileTimestamp = timestamp.replace(/[:.]/gu, "-");
     const newSessionFile = join(dir, `${fileTimestamp}_${newSessionId}.jsonl`);
 

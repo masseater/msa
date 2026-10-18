@@ -1,3 +1,4 @@
+import { readEnv } from "./platform.ts";
 import type { SettingsManager } from "./settings-manager.ts";
 
 function isTruthyEnvFlag(value: string | undefined): boolean {
@@ -7,7 +8,7 @@ function isTruthyEnvFlag(value: string | undefined): boolean {
 
 export function isInstallTelemetryEnabled(
   settingsManager: SettingsManager,
-  telemetryEnv: string | undefined = process.env["MSA_TELEMETRY"],
+  telemetryEnv: string | undefined = readEnv("MSA_TELEMETRY"),
 ): boolean {
   return telemetryEnv === undefined
     ? settingsManager.getEnableInstallTelemetry()

@@ -67,6 +67,7 @@ import {
   classifierErrorResult,
   imageErrorResult,
 } from "@msa/ai/utils/model-operations";
+import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 
 import { getAgentDir } from "../config.ts";
@@ -76,6 +77,7 @@ import { AuthStorage as DefaultAuthStorage } from "./auth-storage.ts";
 import { awaited, awaiting, awaitingWith, performed } from "./awaiting.ts";
 import { ModelConfig } from "./model-config.ts";
 import { FileModelsStore, InMemoryCodingAgentModelsStore } from "./models-store.ts";
+import { readEnv } from "./platform.ts";
 import {
   type AuthStatus,
   type CompatibilityRequestConfig,
@@ -136,25 +138,28 @@ export type CredentialSynchronizationOperation =
   | "setRuntimeApiKey"
   | "removeRuntimeApiKey";
 
-export class CredentialSynchronizationError extends Error {
+export class CredentialSynchronizationError extends Data.TaggedError(
+  "CredentialSynchronizationError",
+)<{
   readonly providerId: string;
   readonly operation: CredentialSynchronizationOperation;
   readonly credential: Credential | undefined;
-
+  readonly message: string;
+  readonly cause: unknown;
+}> {
   constructor(
     providerId: string,
     operation: CredentialSynchronizationOperation,
     credential: Credential | undefined,
     options: ErrorOptions,
   ) {
-    super(
-      `Credential ${operation} committed for ${providerId}, but local synchronization failed`,
-      options,
-    );
-    this.name = "CredentialSynchronizationError";
-    this.providerId = providerId;
-    this.operation = operation;
-    this.credential = credential;
+    super({
+      providerId,
+      operation,
+      credential,
+      message: `Credential ${operation} committed for ${providerId}, but local synchronization failed`,
+      cause: options.cause,
+    });
   }
 }
 
@@ -252,7 +257,7 @@ export class ModelRuntime implements Models {
           modelsPath,
           modelsStore,
           providers,
-          process.env["MSA_OFFLINE"] === undefined,
+          readEnv("MSA_OFFLINE") === undefined,
         );
         runtime.rebuildProviders();
         const refreshFromNetwork =
@@ -662,6 +667,7 @@ export class ModelRuntime implements Models {
     void tail.then(() => {
       if (this.credentialOperations.get(providerId) === tail)
         this.credentialOperations.delete(providerId);
+      return undefined;
     });
     return raceWithAbortSignal(started, signal).then(() => operation);
   }

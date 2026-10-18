@@ -1,5 +1,7 @@
 import { existsSync } from "node:fs";
 
+import * as Data from "effect/Data";
+
 export interface SessionCwdIssue {
   sessionFile?: string;
   sessionCwd: string;
@@ -44,13 +46,12 @@ export function formatMissingSessionCwdPrompt(issue: SessionCwdIssue): string {
   return `cwd from session file does not exist\n${issue.sessionCwd}\n\ncontinue in current cwd\n${issue.fallbackCwd}`;
 }
 
-export class MissingSessionCwdError extends Error {
+export class MissingSessionCwdError extends Data.TaggedError("MissingSessionCwdError")<{
   readonly issue: SessionCwdIssue;
-
+  readonly message: string;
+}> {
   constructor(issue: SessionCwdIssue) {
-    super(formatMissingSessionCwdError(issue));
-    this.name = "MissingSessionCwdError";
-    this.issue = issue;
+    super({ issue, message: formatMissingSessionCwdError(issue) });
   }
 }
 

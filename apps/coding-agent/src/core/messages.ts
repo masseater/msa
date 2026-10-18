@@ -1,6 +1,8 @@
 import type { AgentMessage } from "@msa/agent-core";
 import type { ImageContent, Message, TextContent } from "@msa/ai";
 
+import { toEpochMs } from "./platform.ts";
+
 export const COMPACTION_SUMMARY_PREFIX = `The conversation history before this point was compacted into the following summary:
 
 <summary>
@@ -87,7 +89,7 @@ export function createBranchSummaryMessage(
     role: "branchSummary",
     summary,
     fromId,
-    timestamp: new Date(timestamp).getTime(),
+    timestamp: toEpochMs(timestamp),
   };
 }
 
@@ -100,7 +102,7 @@ export function createCompactionSummaryMessage(
     role: "compactionSummary",
     summary: summary,
     tokensBefore,
-    timestamp: new Date(timestamp).getTime(),
+    timestamp: toEpochMs(timestamp),
   };
 }
 
@@ -117,7 +119,7 @@ export function createCustomMessage(
     content,
     display,
     details,
-    timestamp: new Date(timestamp).getTime(),
+    timestamp: toEpochMs(timestamp),
   };
 }
 

@@ -8,7 +8,7 @@ import { CONFIG_DIR_NAME } from "../config.ts";
 import { toErrorMessage } from "../utils/errors.ts";
 import { canonicalizePath, resolvePath } from "../utils/paths.ts";
 import { stripBom } from "../utils/text.ts";
-import { nowMs } from "./platform.ts";
+import { nowMs, readEnv } from "./platform.ts";
 
 export type ProjectTrustDecision = boolean | null;
 
@@ -189,7 +189,7 @@ function withTrustFileLock<T>(path: string, fn: () => T): T {
 }
 
 export function hasTrustRequiringProjectResources(cwd: string): boolean {
-  const homeDir = canonicalizePath(resolvePath(process.env["HOME"] || homedir()));
+  const homeDir = canonicalizePath(resolvePath(readEnv("HOME") || homedir()));
   const userAgentsSkillsDir = join(homeDir, ".agents", "skills");
   let currentDir = canonicalizePath(resolvePath(cwd));
 

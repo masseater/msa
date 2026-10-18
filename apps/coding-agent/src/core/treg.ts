@@ -199,7 +199,7 @@ export function callTreg(
       );
       const line = stdout.trim().split("\n").at(-1) ?? "";
       const envelope = Schema.decodeOption(CliEnvelope)(line);
-      if (envelope._tag === "None") {
+      if (Option.isNone(envelope)) {
         throw new Error(
           `treg exited ${exitCode} without a result: ${(stderr || stdout).trim().slice(0, 2000)}`,
         );
@@ -212,14 +212,12 @@ export function callTreg(
           `treg returned an unexpected result: ${JSON.stringify(result).slice(0, 2000)}`,
         );
       }
-      const routed = decoded.value;
-      const tregResult: TregResult = { output: routed.output ?? {} };
-      if (
-        routed._treg?.served_by !== undefined &&
-        routed._treg?.served_by !== null &&
-        routed._treg?.served_by !== ""
-      )
-        tregResult.servedBy = routed._treg.served_by;
+      const { output, _treg: routedMeta } = decoded.value;
+      const tregResult: TregResult = { output: output ?? {} };
+      const servedBy = routedMeta?.served_by;
+      if (servedBy !== undefined && servedBy !== null && servedBy !== "") {
+        tregResult.servedBy = servedBy;
+      }
       if (meta.charged_micro !== undefined) tregResult.costMicro = meta.charged_micro;
       return tregResult;
     }),

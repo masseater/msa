@@ -1,6 +1,7 @@
 import { execSync, spawnSync } from "child_process";
 
 import { getShellConfig } from "../utils/shell.ts";
+import { readEnv } from "./platform.ts";
 
 const commandResultCache = new Map<string, string | undefined>();
 const ENV_VAR_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*$/u;
@@ -83,7 +84,7 @@ function parseConfigValueReference(config: string): ConfigValueReference {
 }
 
 function resolveEnvConfigValue(name: string, env?: Record<string, string>): string | undefined {
-  return env?.[name] || process.env[name] || undefined;
+  return env?.[name] || readEnv(name) || undefined;
 }
 
 function getTemplateEnvVarNames(parts: TemplatePart[]): string[] {

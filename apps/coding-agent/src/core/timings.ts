@@ -1,5 +1,5 @@
-import { nowMs, writeError } from "./platform.ts";
-const ENABLED = process.env["MSA_TIMING"] === "1";
+import { nowMs, readEnv, writeError } from "./platform.ts";
+const ENABLED = readEnv("MSA_TIMING") === "1";
 interface TimingNamespace {
   timings: Array<{ label: string; ms: number }>;
   lastTime: number;

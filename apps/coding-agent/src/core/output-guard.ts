@@ -24,15 +24,15 @@ function writeRawStdoutChunk(text: string): Effect.Effect<void> {
   return awaiting(function* () {
     while (true) {
       try {
-        yield* awaited(
-          new Promise<void>((resolve, reject) => {
+        yield* performed(
+          Effect.callback<void>((resume) => {
             try {
               getRawStdoutWrite()(text, (error) => {
-                if (error !== undefined && error !== null) reject(error);
-                else resolve();
+                if (error !== undefined && error !== null) resume(Effect.die(error));
+                else resume(Effect.void);
               });
             } catch (error) {
-              reject(error instanceof Error ? error : new Error(String(error)));
+              resume(Effect.die(error instanceof Error ? error : new Error(String(error))));
             }
           }),
         );
@@ -43,9 +43,7 @@ function writeRawStdoutChunk(text: string): Effect.Effect<void> {
         if (code !== "ENOBUFS" && code !== "EAGAIN" && code !== "EWOULDBLOCK") {
           throw writeError;
         }
-        yield* awaited(
-          new Promise<void>((resolve) => setTimeout(resolve, RAW_STDOUT_RETRY_DELAY_MS)),
-        );
+        yield* performed(Effect.sleep(RAW_STDOUT_RETRY_DELAY_MS));
       }
     }
   });

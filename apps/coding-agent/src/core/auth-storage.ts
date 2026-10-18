@@ -12,7 +12,7 @@ import { toErrorMessage } from "../utils/errors.ts";
 import { getFileRevision, normalizePath } from "../utils/paths.ts";
 import { stripBom } from "../utils/text.ts";
 import { awaited, awaitingWith, performed } from "./awaiting.ts";
-import { nowMs } from "./platform.ts";
+import { nowMs, randomUnit } from "./platform.ts";
 import { isCommandConfigValue, resolveConfigValue } from "./resolve-config-value.ts";
 
 type AuthStorageData = Record<string, Credential>;
@@ -139,7 +139,7 @@ export class FileAuthStorageBackend implements AuthStorageBackend {
           if (code === "EPERM" && ++epermRetries > MAX_EPERM_RETRIES) throw error;
           const baseDelayMs = Math.min(10 * 2 ** retry, maxDelayMs / 2);
           retry++;
-          const delayMs = Math.min(Math.round(baseDelayMs * (1 + Math.random())), remainingMs);
+          const delayMs = Math.min(Math.round(baseDelayMs * (1 + randomUnit())), remainingMs);
           if (signal === undefined) yield* awaited(sleep(delayMs));
           else yield* awaited(sleep(delayMs, undefined, { signal }));
           continue;
@@ -460,9 +460,11 @@ export class AuthStorage implements CredentialStore {
         void reload.promise.then(
           () => {
             if (this.readState.reload === reload) this.readState.reload = undefined;
+            return undefined;
           },
           () => {
             if (this.readState.reload === reload) this.readState.reload = undefined;
+            return undefined;
           },
         );
       }

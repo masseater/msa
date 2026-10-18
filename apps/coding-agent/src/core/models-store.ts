@@ -133,9 +133,11 @@ export class FileModelsStore implements ModelsStore {
         void reload.promise.then(
           () => {
             if (readState.reload === reload) readState.reload = undefined;
+            return undefined;
           },
           () => {
             if (readState.reload === reload) readState.reload = undefined;
+            return undefined;
           },
         );
       }

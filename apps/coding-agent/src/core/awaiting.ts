@@ -22,7 +22,7 @@ const drive = <A>(start: () => Steps<A>): Effect.Effect<A> =>
       if (Exit.isSuccess(exit)) {
         step = steps.next(exit.value);
       } else if (Cause.hasInterruptsOnly(exit.cause)) {
-        return yield* Effect.failCause(exit.cause);
+        return yield* Effect.failCause(exit.cause as Cause.Cause<never>);
       } else {
         step = steps.throw(Cause.squash(exit.cause));
       }

@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 
 import { resolvePath } from "../utils/paths.ts";
+import { nowIso } from "./platform.ts";
 import {
   CURRENT_SESSION_VERSION,
   type SessionHeader,
@@ -14,7 +15,7 @@ export function serializeSessionBranch(
   sessionManager: SessionManager,
   createTrailingEntries?: TrailingEntries,
 ): string {
-  const timestamp = new Date().toISOString();
+  const timestamp = nowIso();
   const header: SessionHeader = {
     type: "session",
     version: CURRENT_SESSION_VERSION,
@@ -34,7 +35,7 @@ export function serializeSessionBranch(
 
 export function exportSessionToJsonl(sessionManager: SessionManager, outputPath?: string): string {
   const filePath = resolvePath(
-    outputPath ?? `session-${new Date().toISOString().replace(/[:.]/gu, "-")}.jsonl`,
+    outputPath ?? `session-${nowIso().replace(/[:.]/gu, "-")}.jsonl`,
     process.cwd(),
   );
   const dir = dirname(filePath);

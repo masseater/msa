@@ -318,7 +318,7 @@ export function resolveModelScopeFromModels(
         models,
         () => true,
       );
-      let matches: readonly Model<Api>[] = [];
+      let matches: readonly Model<Api>[];
       if (exact.status === "resolved") matches = [exact.model];
       else if (exact.status === "ambiguous") {
         matches = exact.candidates;

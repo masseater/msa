@@ -14,7 +14,7 @@ import { stripBom } from "../utils/text.ts";
 import { awaited, awaitingWith } from "./awaiting.ts";
 import { DEFAULT_HTTP_IDLE_TIMEOUT_MS, parseHttpIdleTimeoutMs } from "./http-dispatcher.ts";
 import type { ResolvedMemorySettings } from "./memory/memory.ts";
-import { nowMs } from "./platform.ts";
+import { nowMs, readEnv } from "./platform.ts";
 import { SETTINGS_DEFAULTS } from "./settings-defaults.ts";
 import type {
   CacheWarmingMode,
@@ -628,6 +628,7 @@ export class SettingsManager {
         }
         task();
         this.clearModifiedScope(scope);
+        return undefined;
       })
       .catch((error) => {
         this.recordError(scope, error);
@@ -1038,7 +1039,7 @@ export class SettingsManager {
     if (typeof configuredEditor === "string" && configuredEditor.trim() !== "") {
       return configuredEditor;
     }
-    const environmentEditor = process.env["VISUAL"] || process.env["EDITOR"];
+    const environmentEditor = readEnv("VISUAL") || readEnv("EDITOR");
     if (environmentEditor !== undefined && environmentEditor !== "") {
       return environmentEditor;
     }
@@ -1267,7 +1268,7 @@ export class SettingsManager {
     if (this.settings.terminal?.clearOnShrink !== undefined) {
       return this.settings.terminal.clearOnShrink;
     }
-    if (process.env["MSA_CLEAR_ON_SHRINK"] === "1") return true;
+    if (readEnv("MSA_CLEAR_ON_SHRINK") === "1") return true;
     return SETTINGS_DEFAULTS.terminal.clearOnShrink;
   }
 
@@ -1356,7 +1357,7 @@ export class SettingsManager {
     const defaults = SETTINGS_DEFAULTS.memory;
     const apiKeyEnv = memory?.embedding?.apiKeyEnv?.trim();
     const apiKey =
-      apiKeyEnv !== undefined && apiKeyEnv !== "" ? process.env[apiKeyEnv]?.trim() : undefined;
+      apiKeyEnv !== undefined && apiKeyEnv !== "" ? readEnv(apiKeyEnv)?.trim() : undefined;
     const database = memory?.database?.trim();
     const timeoutMs = memory?.embedding?.timeoutMs;
     const limit = memory?.recall?.limit;
@@ -1432,7 +1433,7 @@ export class SettingsManager {
   }
 
   getShowHardwareCursor(): boolean {
-    return this.settings.showHardwareCursor ?? process.env["MSA_HARDWARE_CURSOR"] === "1";
+    return this.settings.showHardwareCursor ?? readEnv("MSA_HARDWARE_CURSOR") === "1";
   }
 
   setShowHardwareCursor(enabled: boolean): void {

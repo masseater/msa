@@ -14,6 +14,7 @@ import * as Effect from "effect/Effect";
 
 import { closeWatcher, FS_WATCH_RETRY_DELAY_MS, watchWithErrorHandler } from "../utils/fs-watch.ts";
 import { awaited, awaitingWith, performed } from "./awaiting.ts";
+import { readEnv } from "./platform.ts";
 
 export type GitPaths = {
   repoDir: string;
@@ -93,7 +94,7 @@ function resolveBranchWithGitAsync(repoDir: string): Promise<string | null> {
 function isWslEnvironment(): boolean {
   return (
     process.platform === "linux" &&
-    ((process.env["WSL_DISTRO_NAME"] ?? "") !== "" || (process.env["WSL_INTEROP"] ?? "") !== "")
+    ((readEnv("WSL_DISTRO_NAME") ?? "") !== "" || (readEnv("WSL_INTEROP") ?? "") !== "")
   );
 }
 

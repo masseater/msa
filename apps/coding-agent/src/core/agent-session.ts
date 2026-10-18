@@ -43,6 +43,7 @@ import {
   streamSimple,
 } from "@msa/ai/compat";
 import * as Effect from "effect/Effect";
+import { isNullish } from "effect/Predicate";
 
 import { getThemeByName, theme } from "../modes/interactive/theme/theme.ts";
 import { toErrorMessage } from "../utils/errors.ts";
@@ -141,7 +142,7 @@ import {
   type WorkerSession,
 } from "./orchestrator/orchestrator.ts";
 import { createOrchestratorToolDefinitions } from "./orchestrator/tools.ts";
-import { nowMs } from "./platform.ts";
+import { nowMs, toEpochMs } from "./platform.ts";
 import { expandPromptTemplate, type PromptTemplate } from "./prompt-templates.ts";
 import type { ResourceExtensionPaths, ResourceLoader } from "./resource-loader.ts";
 import { exportSessionToJsonl } from "./session-export.ts";
@@ -1447,7 +1448,7 @@ export class AgentSession {
                 replacement.role === "assistant" ||
                 replacement.role === "toolResult" ||
                 replacement.role === "custom") &&
-              replacement.content == null
+              isNullish(replacement.content)
                 ? ({ ...replacement, content: [] } as AgentMessage)
                 : replacement;
             this.replaceMessageInPlace(event.message, normalized);
@@ -3160,7 +3161,7 @@ export class AgentSession {
         const compactionEntry = getLatestCompactionEntry(this.sessionManager.getBranch());
         const assistantIsFromBeforeCompaction =
           compactionEntry !== null &&
-          assistantMessage.timestamp <= new Date(compactionEntry.timestamp).getTime();
+          assistantMessage.timestamp <= toEpochMs(compactionEntry.timestamp);
         if (assistantIsFromBeforeCompaction) {
           return false;
         }
@@ -3261,8 +3262,7 @@ export class AgentSession {
             if (
               compactionEntry !== null &&
               usageMsg?.role === "assistant" &&
-              (usageMsg as AssistantMessage).timestamp <=
-                new Date(compactionEntry.timestamp).getTime()
+              (usageMsg as AssistantMessage).timestamp <= toEpochMs(compactionEntry.timestamp)
             ) {
               return false;
             }

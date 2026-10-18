@@ -57,6 +57,7 @@ import {
 import { stripBom } from "../utils/text.ts";
 import { type MsaManifest, readMsaManifest } from "./manifest.ts";
 import { isStdoutTakenOver } from "./output-guard.ts";
+import { readEnv } from "./platform.ts";
 import type { PackageSource, SettingsManager } from "./settings-manager.ts";
 import { BUILTIN_PATH_PREFIX } from "./source-info.ts";
 
@@ -65,7 +66,7 @@ const UPDATE_CHECK_CONCURRENCY = 4;
 const GIT_UPDATE_CONCURRENCY = 4;
 
 function isOfflineModeEnabled(): boolean {
-  const value = process.env["MSA_OFFLINE"];
+  const value = readEnv("MSA_OFFLINE");
   if (value === undefined || value === "") return false;
   return value === "1" || value.toLowerCase() === "true" || value.toLowerCase() === "yes";
 }
@@ -224,7 +225,7 @@ function toPosixPath(p: string): string {
 }
 
 function getHomeDir(): string {
-  return process.env["HOME"] || homedir();
+  return readEnv("HOME") || homedir();
 }
 
 export function getExtensionTempFolder(agentDir: string): string {
@@ -1260,7 +1261,7 @@ export class DefaultPackageManager implements PackageManager {
         );
         tasks.push(
           Effect.runPromise(this.runWithConcurrency(gitTasks, GIT_UPDATE_CONCURRENCY)).then(
-            () => {},
+            () => undefined,
           ),
         );
       }
@@ -1528,7 +1529,7 @@ export class DefaultPackageManager implements PackageManager {
         }
       }
     } catch {
-      return;
+      return undefined;
     }
   }
 
@@ -1537,11 +1538,8 @@ export class DefaultPackageManager implements PackageManager {
       awaitingWith(function* () {
         if (parsed.type === "npm") {
           yield* performed(this.installNpm(parsed, scope, scope === "temporary"));
-          return;
-        }
-        if (parsed.type === "git") {
+        } else if (parsed.type === "git") {
           yield* performed(this.installGit(parsed, scope));
-          return;
         }
       }, this),
     );
