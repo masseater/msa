@@ -186,12 +186,12 @@ describe("Anthropic workload identity federation", () => {
   });
 
   it("does not federate other anthropic-messages providers", async () => {
-    const kimi: Model<"anthropic-messages"> = {
+    const custom: Model<"anthropic-messages"> = {
       ...anthropicModel,
-      provider: "kimi-coding",
-      baseUrl: "https://api.kimi.com/coding",
+      provider: "custom",
+      baseUrl: "https://example.test/anthropic",
     };
-    const message = await streamAnthropic(kimi, context, { env: federationEnv }).result();
+    const message = await streamAnthropic(custom, context, { env: federationEnv }).result();
 
     expect(message.stopReason).toBe("error");
     expect(mockState.constructorOpts).toBeUndefined();

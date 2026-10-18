@@ -12,7 +12,7 @@ export interface ModelAuth {
 
 /**
  * Stored api-key credential. `env` holds provider-scoped environment/config
- * values such as Cloudflare account/gateway ids.
+ * values such as Google Cloud project and location.
  */
 export interface ApiKeyCredential {
   type: "api_key";

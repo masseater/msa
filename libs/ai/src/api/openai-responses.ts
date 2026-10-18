@@ -445,7 +445,6 @@ function buildParams(
         effort: (model.thinkingLevelMap?.off ?? "none") as ReasoningEffort,
       };
     }
-    if (model.provider === "xai") params.include = ["reasoning.encrypted_content"];
   }
 
   // Last so model and request sampling parameters override named request fields.

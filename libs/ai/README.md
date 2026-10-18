@@ -63,21 +63,14 @@ Unified LLM API with provider collections, automatic auth resolution, token and 
 - **Azure OpenAI (Responses)**
 - **OpenAI Codex (legacy)** (ChatGPT Plus/Pro subscription, requires OAuth, see below)
 - **Radius** (API key or OAuth, with a dynamically refreshed gateway catalog)
-- **TypeSafe** (System One classifier API)
 - **Anthropic**
 - **Google**
 - **Vertex AI** (Gemini via Vertex AI)
 - **Mistral**
-- **Cloudflare AI Gateway**
-- **Cloudflare Workers AI**
-- **xAI**
 - **OpenRouter**
-- **Vercel AI Gateway**
 - **Amazon Bedrock**
 - **OpenCode Zen**
 - **OpenCode Go**
-- **Kimi For Coding** (Moonshot AI subscription endpoint, uses Anthropic-compatible API)
-- **Meta** (Model API, uses OpenAI Responses-compatible API)
 - **Any OpenAI-compatible API**: Ollama, vLLM, LM Studio, etc.
 
 ## Installation
@@ -227,7 +220,7 @@ Snippets in the rest of this README assume a `models` collection set up like thi
 
 A **provider** is the runtime unit: it owns its model catalog, its auth (API key resolution, OAuth flows), and its stream behavior. A `Models` collection holds providers and routes every request to the provider that owns the model.
 
-Providers internally share **API implementations** (the wire protocols): Anthropic models use `anthropic-messages`, OpenAI uses `openai-responses`, while xAI, OpenRouter, and most others share `openai-completions`. Mixed-API providers (OpenCode Zen) dispatch per model.
+Providers internally share **API implementations** (the wire protocols): Anthropic models use `anthropic-messages`, OpenAI uses `openai-responses`, while OpenRouter and most others share `openai-completions`. Mixed-API providers (OpenCode Zen) dispatch per model.
 
 ### Provider Factories
 
@@ -285,7 +278,7 @@ The unqualified reads `getModels()`/`getModel()`/`getAvailable()` return chat mo
 ```typescript
 const images = models.getModelsOfType("image", "openrouter"); // ImageModel[]
 const flux = models.getModelOfType("image", "openrouter", "black-forest-labs/flux.2-pro");
-const jev = models.getModelOfType("classifier", "typesafe", "jev-latest");
+const jev = models.getModelOfType("classifier", "opencode", "jev-1.13");
 const availableImages = await models.getAvailableOfType("image");
 const everything = models.getAllModels(); // AnyModel[]
 ```
@@ -335,11 +328,11 @@ import {
 const model = getBuiltinModel("openai", "gpt-4o-mini"); // typed Model<'openai-responses'>
 const radius = getBuiltinModel("radius", "balanced"); // typed Model<'msa-messages'>
 const flux = getBuiltinImageModel("openrouter", "black-forest-labs/flux.2-pro");
-const jev = getBuiltinClassifierModel("typesafe", "jev-latest");
+const jev = getBuiltinClassifierModel("opencode", "jev-1.13");
 const providers = getBuiltinProviders();
 const openrouterChat = getBuiltinModels("openrouter"); // Model[]
 const openrouterImages = getBuiltinImageModels("openrouter"); // ImageModel[]
-const typesafeClassifiers = getBuiltinClassifierModels("typesafe"); // ClassifierModel[]
+const opencodeClassifiers = getBuiltinClassifierModels("opencode"); // ClassifierModel[]
 const openrouterAll = getAllBuiltinModels("openrouter"); // AnyModel[]
 ```
 
@@ -433,10 +426,8 @@ API-key credentials use the same discriminator as msa's `auth.json` and can carr
 ```typescript
 const credential = {
   type: "api_key",
-  key: "...",
   env: {
-    CLOUDFLARE_ACCOUNT_ID: "account-id",
-    CLOUDFLARE_GATEWAY_ID: "gateway-id",
+    AWS_PROFILE: "my-profile",
   },
 } as const;
 ```
@@ -451,18 +442,11 @@ Built-in providers resolve these env vars (Node.js; in browsers pass `apiKey` ex
 | Azure OpenAI               | `AZURE_OPENAI_API_KEY` + `AZURE_OPENAI_BASE_URL` (e.g. `https://{resource}.ai.azure.com`) or `AZURE_OPENAI_RESOURCE_NAME`. Supports `*.openai.azure.com`, `*.cognitiveservices.azure.com` and `*.ai.azure.com`; root endpoints auto-normalize to `/openai/v1`. Optional: `AZURE_OPENAI_API_VERSION` (default `v1`), `AZURE_OPENAI_DEPLOYMENT_NAME_MAP`. |
 | Anthropic                  | `ANTHROPIC_API_KEY` or `ANTHROPIC_OAUTH_TOKEN`                                                                                                                                                                                                                                                                                                          |
 | Radius                     | `RADIUS_API_KEY`                                                                                                                                                                                                                                                                                                                                        |
-| TypeSafe                   | `TYPESAFE_API_KEY`                                                                                                                                                                                                                                                                                                                                      |
 | Google                     | `GEMINI_API_KEY`                                                                                                                                                                                                                                                                                                                                        |
 | Vertex AI                  | `GOOGLE_CLOUD_API_KEY` or `GOOGLE_CLOUD_PROJECT` (or `GCLOUD_PROJECT`) + `GOOGLE_CLOUD_LOCATION` + ADC                                                                                                                                                                                                                                                  |
 | Mistral                    | `MISTRAL_API_KEY`                                                                                                                                                                                                                                                                                                                                       |
-| Cloudflare AI Gateway      | `CLOUDFLARE_API_KEY` + `CLOUDFLARE_ACCOUNT_ID` + `CLOUDFLARE_GATEWAY_ID`                                                                                                                                                                                                                                                                                |
-| Cloudflare Workers AI      | `CLOUDFLARE_API_KEY` + `CLOUDFLARE_ACCOUNT_ID`                                                                                                                                                                                                                                                                                                          |
-| xAI                        | `XAI_API_KEY`                                                                                                                                                                                                                                                                                                                                           |
 | OpenRouter                 | `OPENROUTER_API_KEY`                                                                                                                                                                                                                                                                                                                                    |
-| Vercel AI Gateway          | `AI_GATEWAY_API_KEY`                                                                                                                                                                                                                                                                                                                                    |
 | OpenCode Zen / OpenCode Go | `OPENCODE_API_KEY`                                                                                                                                                                                                                                                                                                                                      |
-| Kimi For Coding            | `KIMI_API_KEY`                                                                                                                                                                                                                                                                                                                                          |
-| Meta                       | `META_API_KEY`                                                                                                                                                                                                                                                                                                                                          |
 
 Stored credentials remain provider-scoped, so save the key under the provider ID you register.
 
@@ -521,7 +505,7 @@ const strictTool: Tool = {
 };
 ```
 
-Strict JSON-schema constrained sampling is supported for OpenAI, Anthropic, supported Amazon Bedrock Converse models, Mistral, and Gemini 3 tool calls through the Google Generative AI and Vertex adapters. Google uses `VALIDATED` function-calling mode (or `ANY` when explicitly requested); earlier Gemini versions fall back for `strict: 'prefer'` and reject `strict: 'require'` because they do not enforce required parameters. Bedrock strict-tool capability is generated from model structured-output metadata; custom Bedrock models can override `compat.supportsStrictMode`. OpenAI Responses and Chat Completions can also emit grammar-constrained custom tools with OpenAI Lark or regex grammar variants. If multiple OpenAI variants are supplied, Lark is preferred over regex. Grammar constraints are enforced when the active model supports grammar tools; otherwise the tool falls back to normal function/JSON-schema handling. Grammar tool capability is model metadata: the generated catalog sets `compat.supportsOpenAIGrammarTools` for GPT-5+ models on endpoints that pass OpenAI custom tools through (OpenAI, OpenAI Codex, Azure OpenAI Responses, opencode, and Cloudflare AI Gateway). OpenAI rejects `type: "custom"` tools for pre-GPT-5 models, and gateways that normalize tool schemas (e.g. OpenRouter) mangle them, so the flag stays off elsewhere. Custom model definitions can opt in via `compat`. Grammar-capable models reject grammar configurations without a non-empty supported variant. Native grammar tools must have an object parameter schema with exactly one required string property:
+Strict JSON-schema constrained sampling is supported for OpenAI, Anthropic, supported Amazon Bedrock Converse models, Mistral, and Gemini 3 tool calls through the Google Generative AI and Vertex adapters. Google uses `VALIDATED` function-calling mode (or `ANY` when explicitly requested); earlier Gemini versions fall back for `strict: 'prefer'` and reject `strict: 'require'` because they do not enforce required parameters. Bedrock strict-tool capability is generated from model structured-output metadata; custom Bedrock models can override `compat.supportsStrictMode`. OpenAI Responses and Chat Completions can also emit grammar-constrained custom tools with OpenAI Lark or regex grammar variants. If multiple OpenAI variants are supplied, Lark is preferred over regex. Grammar constraints are enforced when the active model supports grammar tools; otherwise the tool falls back to normal function/JSON-schema handling. Grammar tool capability is model metadata: the generated catalog sets `compat.supportsOpenAIGrammarTools` for GPT-5+ models on endpoints that pass OpenAI custom tools through (OpenAI, OpenAI Codex, Azure OpenAI Responses, and opencode). OpenAI rejects `type: "custom"` tools for pre-GPT-5 models, and gateways that normalize tool schemas (e.g. OpenRouter) mangle them, so the flag stays off elsewhere. Custom model definitions can opt in via `compat`. Grammar-capable models reject grammar configurations without a non-empty supported variant. Native grammar tools must have an object parameter schema with exactly one required string property:
 
 ```typescript
 const patchTool: Tool = {
@@ -845,22 +829,19 @@ console.log(model.output); // ['image'] or ['image', 'text']
 
 ## Classification
 
-Classifier models consume structured JSON state, and optionally images, and answer one or more typed questions. They do not use chat or image-generation APIs. TypeSafe's Jev model, Cloudflare's Clef models, and OpenAI's GPT-6 Luna are available from these built-in providers:
+Classifier models consume structured JSON state, and optionally images, and answer one or more typed questions. They do not use chat or image-generation APIs. TypeSafe's Jev model and OpenAI's GPT-6 Luna are available from these built-in providers:
 
-| Provider                | Model IDs                                                          | Auth                                             |
-| ----------------------- | ------------------------------------------------------------------ | ------------------------------------------------ |
-| `typesafe`              | `jev-latest`                                                       | `TYPESAFE_API_KEY`                               |
-| `openrouter`            | `typesafe/jev-1.13`, `~typesafe/jev-latest`                        | `OPENROUTER_API_KEY` or OpenRouter OAuth         |
-| `cloudflare-workers-ai` | `typesafe/jev`, `@cf/cloudflare/clef`, `@cf/cloudflare/clef-flash` | `CLOUDFLARE_API_KEY` and `CLOUDFLARE_ACCOUNT_ID` |
-| `vercel-ai-gateway`     | `typesafe-ai/jev`                                                  | `AI_GATEWAY_API_KEY`                             |
-| `opencode`              | `jev-1.13`, `jev-1.13-free`                                        | `OPENCODE_API_KEY`                               |
-| `openai`                | `gpt-6-luna`                                                       | `OPENAI_API_KEY`                                 |
+| Provider     | Model IDs                                   | Auth                                     |
+| ------------ | ------------------------------------------- | ---------------------------------------- |
+| `openrouter` | `typesafe/jev-1.13`, `~typesafe/jev-latest` | `OPENROUTER_API_KEY` or OpenRouter OAuth |
+| `opencode`   | `jev-1.13`, `jev-1.13-free`                 | `OPENCODE_API_KEY`                       |
+| `openai`     | `gpt-6-luna`                                | `OPENAI_API_KEY`                         |
 
 ```typescript
 import { builtinModels } from "@msa/ai/providers/all";
 
 const models = builtinModels();
-const model = models.getModelOfType("classifier", "typesafe", "jev-latest")!;
+const model = models.getModelOfType("classifier", "opencode", "jev-1.13")!;
 const result = await models.classify(model, {
   state: { message: "The change works perfectly, thanks." },
   questions: {
@@ -958,7 +939,6 @@ Many models support thinking/reasoning capabilities where they can show their in
 const model = models.getModel("anthropic", "claude-sonnet-4-5")!;
 // or models.getModel('openai', 'gpt-5-mini');
 // or models.getModel('google', 'gemini-2.5-flash');
-// or models.getModel('xai', 'grok-4.7');
 
 // Check if model supports reasoning
 if (model.reasoning) {
@@ -1249,7 +1229,7 @@ const gateway = createProvider({
 });
 ```
 
-Provider-wide endpoint or request transformations belong in the provider's API implementation: wrap the `ProviderStreams` you pass as `api` so every request goes through the transformation before dispatch. The Cloudflare providers do this to materialize account/gateway endpoint placeholders from the resolved provider env:
+Provider-wide endpoint or request transformations belong in the provider's API implementation: wrap the `ProviderStreams` you pass as `api` so every request goes through the transformation before dispatch. For example, a gateway can materialize a tenant placeholder in its endpoint:
 
 ```typescript
 function tenantStreams(streams: ProviderStreams): ProviderStreams {
@@ -1361,7 +1341,7 @@ Importing an implementation module loads its SDK. The `./api/<id>.lazy` wrappers
 
 ### OpenAI Compatibility Settings
 
-The `openai-completions` API is implemented by many providers with minor differences. By default, the library auto-detects compatibility settings based on `baseUrl` for a small set of known OpenAI-compatible providers (xAI, Chutes, OpenRouter, OpenCode, Cloudflare Workers AI, etc.). For custom proxies or unknown endpoints, you can override these settings via the `compat` field. For `openai-responses` models, the compat field supports Responses-specific flags.
+The `openai-completions` API is implemented by many providers with minor differences. By default, the library auto-detects compatibility settings based on `baseUrl` for a small set of known OpenAI-compatible providers (Chutes, OpenRouter, OpenCode, etc.). For custom proxies or unknown endpoints, you can override these settings via the `compat` field. For `openai-responses` models, the compat field supports Responses-specific flags.
 
 ```typescript
 interface OpenAICompletionsCompat {
@@ -1400,7 +1380,6 @@ interface OpenAICompletionsCompat {
   supportsThinkingTokenBudget?: boolean; // Alias for thinkingTokenBudgetField: 'thinking_token_budget' (vLLM). Prefer thinkingTokenBudgetField. Default: false.
   cacheControlFormat?: "anthropic"; // Anthropic-style cache_control on system prompt, last tool, and last user/assistant text content
   openRouterRouting?: OpenRouterRouting; // OpenRouter routing preferences (default: {})
-  vercelGatewayRouting?: VercelGatewayRouting; // Vercel AI Gateway routing preferences (default: {})
 }
 
 interface OpenAIResponsesCompat {
@@ -1733,17 +1712,16 @@ That explicit override bundles the AWS SDK. Without it, Bedrock's opaque runtime
 
 ### Provider-Scoped Environment Overrides
 
-Pass `env` in stream options to scope provider configuration to a request. Values in `env` are used before process environment variables for provider auth and configuration such as Cloudflare account IDs, Azure OpenAI settings, Vertex project/location, Bedrock settings, `MSA_CACHE_RETENTION`, and `HTTP_PROXY`/`HTTPS_PROXY`.
+Pass `env` in stream options to scope provider configuration to a request. Values in `env` are used before process environment variables for provider auth and configuration such as Azure OpenAI settings, Vertex project/location, Bedrock settings, `MSA_CACHE_RETENTION`, and `HTTP_PROXY`/`HTTPS_PROXY`.
 
 ```typescript
 const models = builtinModels();
-const model = models.getModel("cloudflare-ai-gateway", "workers-ai/@cf/moonshotai/kimi-k2.6")!;
+const model = models.getModel("azure", "gpt-5.4")!;
 
 const response = await models.complete(model, context, {
   env: {
-    CLOUDFLARE_API_KEY: "...",
-    CLOUDFLARE_ACCOUNT_ID: "account-id",
-    CLOUDFLARE_GATEWAY_ID: "gateway-id",
+    AZURE_OPENAI_API_KEY: "...",
+    AZURE_OPENAI_RESOURCE_NAME: "my-resource",
   },
 });
 ```

@@ -215,23 +215,6 @@ describe("Context overflow error handling", () => {
   });
 
   // =============================================================================
-  // xAI
-  // Expected pattern: "maximum prompt length is X but the request contains Y"
-  // =============================================================================
-
-  describe.skipIf(!process.env["XAI_API_KEY"])("xAI", () => {
-    it("grok-4.3 - should detect overflow via isContextOverflow", async () => {
-      const model = getModel("xai", "grok-4.3");
-      const result = await testContextOverflow(model, process.env["XAI_API_KEY"]!);
-      logResult(result);
-
-      expect(result.stopReason).toBe("error");
-      expect(result.errorMessage).toMatch(/maximum prompt length is \d+/iu);
-      expect(isContextOverflow(result.response, model.contextWindow)).toBe(true);
-    }, 120000);
-  });
-
-  // =============================================================================
   // Mistral
   // =============================================================================
 
@@ -243,36 +226,6 @@ describe("Context overflow error handling", () => {
 
       expect(result.stopReason).toBe("error");
       expect(result.errorMessage).toMatch(/too large for model with \d+ maximum context length/iu);
-      expect(isContextOverflow(result.response, model.contextWindow)).toBe(true);
-    }, 120000);
-  });
-
-  // =============================================================================
-  // Kimi For Coding
-  // =============================================================================
-
-  describe.skipIf(!process.env["KIMI_API_KEY"])("Kimi For Coding", () => {
-    it("kimi-for-coding - should detect overflow via isContextOverflow", async () => {
-      const model = getModel("kimi-coding", "kimi-for-coding");
-      const result = await testContextOverflow(model, process.env["KIMI_API_KEY"]!);
-      logResult(result);
-
-      expect(result.stopReason).toBe("error");
-      expect(isContextOverflow(result.response, model.contextWindow)).toBe(true);
-    }, 120000);
-  });
-
-  // =============================================================================
-  // Vercel AI Gateway - Unified API for multiple providers
-  // =============================================================================
-
-  describe.skipIf(!process.env["AI_GATEWAY_API_KEY"])("Vercel AI Gateway", () => {
-    it("google/gemini-2.5-flash via AI Gateway - should detect overflow via isContextOverflow", async () => {
-      const model = getModel("vercel-ai-gateway", "google/gemini-2.5-flash");
-      const result = await testContextOverflow(model, process.env["AI_GATEWAY_API_KEY"]!);
-      logResult(result);
-
-      expect(result.stopReason).toBe("error");
       expect(isContextOverflow(result.response, model.contextWindow)).toBe(true);
     }, 120000);
   });

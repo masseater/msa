@@ -824,7 +824,7 @@ function createModelGlobals(
       const [type, provider, id] = args as unknown[];
       if (typeof provider !== "string" || typeof id !== "string") {
         throw new Error(
-          `models.getModelOfType(type, provider, id) expects three strings, got (${(args as unknown[]).map(describeValue).join(", ")}). The provider and the id are separate arguments, for example models.getModelOfType("classifier", "typesafe", "jev-latest").`,
+          `models.getModelOfType(type, provider, id) expects three strings, got (${(args as unknown[]).map(describeValue).join(", ")}). The provider and the id are separate arguments, for example models.getModelOfType("classifier", "openrouter", "~typesafe/jev-latest").`,
         );
       }
       const model = models.getModelOfType(toModelType(type), provider, id);

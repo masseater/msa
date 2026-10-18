@@ -32,10 +32,10 @@ function createTool(name: string, fails = false): AgentTool {
 
 const jevModel: ClassifierModel<string> = {
   type: "classifier",
-  id: "jev-latest",
+  id: "~typesafe/jev-latest",
   name: "Jev",
   api: "typesafe-system-one",
-  provider: "typesafe",
+  provider: "openrouter",
   baseUrl: "",
   input: ["text"],
   cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
@@ -58,9 +58,9 @@ describe("jev-router example", () => {
         reasoning: true,
       })),
     });
-    const typesafe = createProvider({
-      id: "typesafe",
-      auth: { apiKey: { name: "TypeSafe", resolve: async () => ({ auth: {} }) } },
+    const openrouter = createProvider({
+      id: "openrouter",
+      auth: { apiKey: { name: "OpenRouter", resolve: async () => ({ auth: {} }) } },
       models: [jevModel],
       classifiers: {
         "typesafe-system-one": {
@@ -87,7 +87,7 @@ describe("jev-router example", () => {
       extensionFactories: [
         (msa) => {
           msa.registerProvider(codex.provider);
-          msa.registerProvider(typesafe);
+          msa.registerProvider(openrouter);
         },
         jevRouter,
       ],

@@ -2,7 +2,12 @@ import { InMemoryModelsStore } from "@msa/ai";
 import { describe, expect, test, vi } from "vite-plus/test";
 
 import { parseArgs } from "../src/cli/args.ts";
-import { AuthCommandError, isAuthCommandHelp, parseAuthCommand } from "../src/cli/auth-command.ts";
+import {
+  AuthCommandError,
+  getAuthCredential,
+  isAuthCommandHelp,
+  parseAuthCommand,
+} from "../src/cli/auth-command.ts";
 import { resolveCredentialForPrint } from "../src/cli/credential-print.ts";
 import { AuthStorage } from "../src/core/auth-storage.ts";
 import { ModelRuntime } from "../src/core/model-runtime.ts";
@@ -41,22 +46,10 @@ describe("credential print commands", () => {
     ).resolves.toBe("openai-test-key");
   });
 
-  test("prints bearer tokens resolved from an Authorization header", async () => {
-    const runtime = await createRuntime(
-      AuthStorage.inMemory({
-        "kimi-coding": {
-          type: "oauth",
-          access: "header-test-token",
-          refresh: "test-refresh-token",
-          expires: Date.now() + 60 * 60 * 1000,
-        },
-      }),
-    );
-    const args = parseArgs(["--provider", "kimi-coding"]);
-
-    await expect(resolveCredentialForPrint(args, runtime, "bearer_token")).resolves.toBe(
-      "header-test-token",
-    );
+  test("prints bearer tokens resolved from an Authorization header", () => {
+    expect(
+      getAuthCredential({ auth: { headers: { Authorization: "Bearer header-test-token" } } }),
+    ).toBe("header-test-token");
   });
 
   test("refreshes an expired OAuth token before printing it", async () => {

@@ -20,10 +20,8 @@ if [[ "$NO_ENV" == "true" ]]; then
   unset ANTHROPIC_OAUTH_TOKEN
   unset OPENAI_API_KEY
   unset GEMINI_API_KEY
-  unset XAI_API_KEY
   unset OPENROUTER_API_KEY
   unset MISTRAL_API_KEY
-  unset AI_GATEWAY_API_KEY
   unset OPENCODE_API_KEY
   unset GH_TOKEN
   unset GITHUB_TOKEN

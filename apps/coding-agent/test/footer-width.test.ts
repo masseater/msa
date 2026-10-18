@@ -246,23 +246,6 @@ describe("FooterComponent width handling", () => {
     expect(statsLine).toContain("CH25.0%");
   });
 
-  it("marks Kimi Coding costs as subscription estimates", () => {
-    const session = createSession({
-      sessionName: "",
-      provider: "kimi-coding",
-      usage: {
-        input: 100,
-        output: 10,
-        cacheRead: 0,
-        cacheWrite: 0,
-        cost: { total: 1.234 },
-      },
-    });
-    const footer = new FooterComponent(session, createFooterData(1));
-
-    expect(renderStatsLine(footer)).toContain("$1.234 (sub)");
-  });
-
   it("marks explicitly identified subscription auth", () => {
     const session = createSession({
       sessionName: "",

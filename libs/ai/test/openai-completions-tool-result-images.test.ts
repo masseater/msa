@@ -37,7 +37,6 @@ const compat: Omit<
   requiresReasoningContentOnAssistantMessages: false,
   thinkingFormat: "openai",
   openRouterRouting: {},
-  vercelGatewayRouting: {},
   chatTemplateKwargs: {},
   supportsThinkingTokenBudget: false,
   thinkingTokenBudgetField: undefined,

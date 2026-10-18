@@ -37,10 +37,6 @@ import type {
   ToolResultMessage,
 } from "../src/types.ts";
 import { hasAzureOpenAICredentials } from "./azure-utils.ts";
-import {
-  hasCloudflareAiGatewayCredentials,
-  hasCloudflareWorkersAICredentials,
-} from "./cloudflare-utils.ts";
 import { resolveApiKey } from "./oauth.ts";
 
 // Simple tool for testing
@@ -60,7 +56,6 @@ interface ProviderModelPair {
   model: string;
   label: string;
   apiOverride?: Api;
-  upstreamApiKeyEnv?: string;
 }
 
 const PROVIDER_MODEL_PAIRS: ProviderModelPair[] = [
@@ -85,36 +80,6 @@ const PROVIDER_MODEL_PAIRS: ProviderModelPair[] = [
     model: "global.anthropic.claude-sonnet-4-5-20250929-v1:0",
     label: "bedrock-claude-sonnet-4-5",
   },
-  // xAI
-  { provider: "xai", model: "grok-4.3", label: "xai-grok-4.3" },
-  // Cloudflare Workers AI
-  {
-    provider: "cloudflare-workers-ai",
-    model: "@cf/moonshotai/kimi-k2.6",
-    label: "cloudflare-kimi-k2.6",
-  },
-  // Cloudflare AI Gateway
-  {
-    provider: "cloudflare-ai-gateway",
-    model: "workers-ai/@cf/moonshotai/kimi-k2.6",
-    label: "cloudflare-gateway-kimi-k2.6",
-  },
-  {
-    provider: "cloudflare-ai-gateway",
-    model: "claude-sonnet-4-5",
-    label: "cloudflare-gateway-claude-sonnet-4-5",
-    upstreamApiKeyEnv: "ANTHROPIC_API_KEY",
-  },
-  {
-    provider: "cloudflare-ai-gateway",
-    model: "gpt-5.1",
-    label: "cloudflare-gateway-gpt-5.1",
-    upstreamApiKeyEnv: "OPENAI_API_KEY",
-  },
-  // Kimi For Coding
-  { provider: "kimi-coding", model: "kimi-for-coding", label: "kimi-for-coding" },
-  // Meta
-  { provider: "meta", model: "muse-spark-1.3", label: "meta-muse-spark-1.3" },
   // Mistral
   { provider: "mistral", model: "devstral-medium-latest", label: "mistral-devstral-medium" },
   // OpenCode Zen
@@ -161,20 +126,7 @@ function hasApiKey(pair: ProviderModelPair): boolean {
   if (pair.provider === "azure") {
     return hasAzureOpenAICredentials();
   }
-  if (pair.provider === "cloudflare-workers-ai") {
-    return hasCloudflareWorkersAICredentials();
-  }
-  if (pair.provider === "cloudflare-ai-gateway") {
-    if (!hasCloudflareAiGatewayCredentials()) return false;
-    return pair.upstreamApiKeyEnv ? !!process.env[pair.upstreamApiKeyEnv] : true;
-  }
   return !!getEnvApiKey(pair.provider);
-}
-
-function getHeaders(pair: ProviderModelPair): Record<string, string> | undefined {
-  if (!pair.upstreamApiKeyEnv) return undefined;
-  const upstreamApiKey = process.env[pair.upstreamApiKeyEnv];
-  return upstreamApiKey ? { Authorization: `Bearer ${upstreamApiKey}` } : undefined;
 }
 
 /**
@@ -233,7 +185,6 @@ async function generateContext(
   };
 
   const supportsReasoning = model.reasoning === true;
-  const headers = getHeaders(pair);
   let lastPayload: unknown;
   let assistantResponse: AssistantMessage;
   try {
@@ -247,7 +198,6 @@ async function generateContext(
       {
         apiKey,
         reasoning: supportsReasoning ? "high" : undefined,
-        headers,
         onPayload: (payload) => {
           lastPayload = payload;
         },
@@ -309,7 +259,6 @@ async function generateContext(
       {
         apiKey,
         reasoning: supportsReasoning ? "high" : undefined,
-        headers,
         onPayload: (payload) => {
           lastPayload = payload;
         },
@@ -446,7 +395,6 @@ describe.skipIf(!hasAnyApiKey())("Cross-Provider Handoff", () => {
           ? { ...baseModel, api: targetPair.apiOverride }
           : baseModel;
         const supportsReasoning = model.reasoning === true;
-        const headers = getHeaders(targetPair);
 
         console.log(
           `[Target: ${targetPair.label}] Testing with ${otherMessages.length} messages from other providers...`,
@@ -464,7 +412,6 @@ describe.skipIf(!hasAnyApiKey())("Cross-Provider Handoff", () => {
             {
               apiKey,
               reasoning: supportsReasoning ? "high" : undefined,
-              headers,
               onPayload: (payload) => {
                 lastPayload = payload;
               },

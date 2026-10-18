@@ -39,7 +39,6 @@ import { openAICodexResponsesApi } from "./api/openai-codex-responses.lazy.ts";
 import { openAICompletionsApi } from "./api/openai-completions.lazy.ts";
 import { openAIResponsesApi } from "./api/openai-responses.lazy.ts";
 import { getEnvApiKey } from "./env-api-keys.ts";
-import type { ModelsApiStreamOptions } from "./models.ts";
 import {
   builtinModels,
   getBuiltinModel,
@@ -248,13 +247,6 @@ function withEnvApiKey<TOptions extends StreamOptions>(
   return { ...options, apiKey } as TOptions;
 }
 
-function hasResolvedCloudflareAuth(options: StreamOptions | undefined): boolean {
-  return (
-    hasExplicitApiKey(options?.apiKey) ||
-    typeof options?.headers?.["cf-aig-authorization"] === "string"
-  );
-}
-
 function getBuiltinProviderForModel(model: Model<Api>) {
   if (getApiProvider(model.api) !== builtinApiProviderInstances.get(model.api)) return undefined;
   const provider = compatModels.getProvider(model.provider);
@@ -279,13 +271,6 @@ export function stream<TApi extends Api>(
   const transcript = normalizeContext(context);
   const builtinProvider = getBuiltinProviderForModel(model);
   if (builtinProvider) {
-    if (model.provider.startsWith("cloudflare-") && !hasResolvedCloudflareAuth(options)) {
-      return compatModels.stream(
-        model,
-        transcript,
-        options as ModelsApiStreamOptions<TApi> | undefined,
-      );
-    }
     return builtinProvider.stream(
       model,
       transcript,
@@ -316,9 +301,6 @@ export function streamSimple<TApi extends Api>(
   const transcript = normalizeContext(context);
   const builtinProvider = getBuiltinProviderForModel(model);
   if (builtinProvider) {
-    if (model.provider.startsWith("cloudflare-") && !hasResolvedCloudflareAuth(options)) {
-      return compatModels.streamSimple(model, transcript, options);
-    }
     return builtinProvider.streamSimple(model, transcript, withEnvApiKey(model, options));
   }
   const provider = resolveApiProvider(model.api);

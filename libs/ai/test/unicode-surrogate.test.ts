@@ -8,10 +8,6 @@ type StreamOptionsWithExtras = StreamOptions & Record<string, unknown>;
 
 import { hasAzureOpenAICredentials, resolveAzureDeploymentName } from "./azure-utils.ts";
 import { hasBedrockCredentials } from "./bedrock-utils.ts";
-import {
-  hasCloudflareAiGatewayCredentials,
-  hasCloudflareWorkersAICredentials,
-} from "./cloudflare-utils.ts";
 import { resolveApiKey } from "./oauth.ts";
 
 // Empty schema for test tools - must be proper OBJECT type for Cloud Code Assist
@@ -464,84 +460,6 @@ describe("AI Providers Unicode Surrogate Pair Tests", () => {
     );
   });
 
-  describe.skipIf(!process.env["XAI_API_KEY"])("xAI Provider Unicode Handling", () => {
-    const llm = getModel("xai", "grok-4.3");
-
-    it("should handle emoji in tool results", { retry: 3, timeout: 30000 }, async () => {
-      await testEmojiInToolResults(llm);
-    });
-
-    it(
-      "should handle real-world LinkedIn comment data with emoji",
-      { retry: 3, timeout: 30000 },
-      async () => {
-        await testRealWorldLinkedInData(llm);
-      },
-    );
-
-    it(
-      "should handle unpaired high surrogate (0xD83D) in tool results",
-      { retry: 3, timeout: 30000 },
-      async () => {
-        await testUnpairedHighSurrogate(llm);
-      },
-    );
-  });
-
-  describe.skipIf(!hasCloudflareWorkersAICredentials())(
-    "Cloudflare Workers AI Provider Unicode Handling",
-    () => {
-      const llm = getModel("cloudflare-workers-ai", "@cf/moonshotai/kimi-k2.6");
-
-      it("should handle emoji in tool results", { retry: 3, timeout: 30000 }, async () => {
-        await testEmojiInToolResults(llm);
-      });
-
-      it(
-        "should handle real-world LinkedIn comment data with emoji",
-        { retry: 3, timeout: 30000 },
-        async () => {
-          await testRealWorldLinkedInData(llm);
-        },
-      );
-
-      it(
-        "should handle unpaired high surrogate (0xD83D) in tool results",
-        { retry: 3, timeout: 30000 },
-        async () => {
-          await testUnpairedHighSurrogate(llm);
-        },
-      );
-    },
-  );
-
-  describe.skipIf(!hasCloudflareAiGatewayCredentials())(
-    "Cloudflare AI Gateway Provider Unicode Handling",
-    () => {
-      const llm = getModel("cloudflare-ai-gateway", "workers-ai/@cf/moonshotai/kimi-k2.6");
-
-      it("should handle emoji in tool results", { retry: 3, timeout: 30000 }, async () => {
-        await testEmojiInToolResults(llm);
-      });
-
-      it(
-        "should handle real-world LinkedIn comment data with emoji",
-        { retry: 3, timeout: 30000 },
-        async () => {
-          await testRealWorldLinkedInData(llm);
-        },
-      );
-
-      it(
-        "should handle unpaired high surrogate (0xD83D) in tool results",
-        { retry: 3, timeout: 30000 },
-        async () => {
-          await testUnpairedHighSurrogate(llm);
-        },
-      );
-    },
-  );
-
   describe.skipIf(!process.env["MISTRAL_API_KEY"])("Mistral Provider Unicode Handling", () => {
     const llm = getModel("mistral", "devstral-medium-latest");
 
@@ -565,57 +483,6 @@ describe("AI Providers Unicode Surrogate Pair Tests", () => {
       },
     );
   });
-
-  describe.skipIf(!process.env["KIMI_API_KEY"])("Kimi For Coding Provider Unicode Handling", () => {
-    const llm = getModel("kimi-coding", "kimi-for-coding");
-
-    it("should handle emoji in tool results", { retry: 3, timeout: 30000 }, async () => {
-      await testEmojiInToolResults(llm);
-    });
-
-    it(
-      "should handle real-world LinkedIn comment data with emoji",
-      { retry: 3, timeout: 30000 },
-      async () => {
-        await testRealWorldLinkedInData(llm);
-      },
-    );
-
-    it(
-      "should handle unpaired high surrogate (0xD83D) in tool results",
-      { retry: 3, timeout: 30000 },
-      async () => {
-        await testUnpairedHighSurrogate(llm);
-      },
-    );
-  });
-
-  describe.skipIf(!process.env["AI_GATEWAY_API_KEY"])(
-    "Vercel AI Gateway Provider Unicode Handling",
-    () => {
-      const llm = getModel("vercel-ai-gateway", "google/gemini-2.5-flash");
-
-      it("should handle emoji in tool results", { retry: 3, timeout: 30000 }, async () => {
-        await testEmojiInToolResults(llm);
-      });
-
-      it(
-        "should handle real-world LinkedIn comment data with emoji",
-        { retry: 3, timeout: 30000 },
-        async () => {
-          await testRealWorldLinkedInData(llm);
-        },
-      );
-
-      it(
-        "should handle unpaired high surrogate (0xD83D) in tool results",
-        { retry: 3, timeout: 30000 },
-        async () => {
-          await testUnpairedHighSurrogate(llm);
-        },
-      );
-    },
-  );
 
   describe.skipIf(!hasBedrockCredentials())("Amazon Bedrock Provider Unicode Handling", () => {
     const llm = getModel("amazon-bedrock", "global.anthropic.claude-sonnet-4-5-20250929-v1:0");

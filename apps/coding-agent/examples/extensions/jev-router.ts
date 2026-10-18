@@ -15,7 +15,7 @@
  * and survives compaction. The selected thinking level passes through as the reasoning effort of
  * the chosen model. Requests outside the agent loop, such as compaction summaries, go to Luna.
  *
- * Requires TypeSafe credentials (TYPESAFE_API_KEY) and an OpenAI Codex login.
+ * Requires OpenRouter credentials (OPENROUTER_API_KEY) and an OpenAI Codex login.
  * Usage: msa -e ./jev-router.ts --model jev/auto
  */
 
@@ -82,7 +82,7 @@ async function choosePlanningModel(request: JevRequest, ctx: ExtensionContext): 
   if (previous?.provider === PROVIDER && (previous.id === SOL || previous.id === TERRA))
     return previous.id;
 
-  const jev = ctx.modelRegistry.findOfType("classifier", "typesafe", "jev-latest");
+  const jev = ctx.modelRegistry.findOfType("classifier", "openrouter", "~typesafe/jev-latest");
   if (!jev) return TERRA;
   const result = await ctx.modelRegistry.classify(
     jev,

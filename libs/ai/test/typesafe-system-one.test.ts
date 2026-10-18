@@ -126,16 +126,14 @@ describe("TypeSafe System One", () => {
 
   it("rejects models for other classifier APIs", async () => {
     const fetch = vi.fn(() => Promise.resolve(Response.json({ answers: wireAnswers })));
-    const result = await classify({ ...model, api: "cloudflare-workers-ai-system-one" }, context, {
+    const result = await classify({ ...model, api: "llama-cpp-classify" }, context, {
       apiKey: "secret",
       fetch,
     });
 
     expect(fetch).not.toHaveBeenCalled();
     expect(result.stopReason).toBe("error");
-    expect(result.errorMessage).toContain(
-      "Unsupported classifier API: cloudflare-workers-ai-system-one",
-    );
+    expect(result.errorMessage).toContain("Unsupported classifier API: llama-cpp-classify");
   });
 
   it("rejects image input before sending", async () => {

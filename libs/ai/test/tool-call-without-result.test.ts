@@ -8,10 +8,6 @@ type StreamOptionsWithExtras = StreamOptions & Record<string, unknown>;
 
 import { hasAzureOpenAICredentials, resolveAzureDeploymentName } from "./azure-utils.ts";
 import { hasBedrockCredentials } from "./bedrock-utils.ts";
-import {
-  hasCloudflareAiGatewayCredentials,
-  hasCloudflareWorkersAICredentials,
-} from "./cloudflare-utils.ts";
 import { resolveApiKey } from "./oauth.ts";
 
 // Resolve OAuth tokens at module level (async, runs before tests)
@@ -166,68 +162,8 @@ describe("Tool Call Without Result Tests", () => {
     );
   });
 
-  describe.skipIf(!process.env["XAI_API_KEY"])("xAI Provider", () => {
-    const model = getModel("xai", "grok-4.3");
-
-    it(
-      "should filter out tool calls without corresponding tool results",
-      { retry: 3, timeout: 30000 },
-      async () => {
-        await testToolCallWithoutResult(model);
-      },
-    );
-  });
-
-  describe.skipIf(!hasCloudflareWorkersAICredentials())("Cloudflare Workers AI Provider", () => {
-    const model = getModel("cloudflare-workers-ai", "@cf/moonshotai/kimi-k2.6");
-
-    it(
-      "should filter out tool calls without corresponding tool results",
-      { retry: 3, timeout: 30000 },
-      async () => {
-        await testToolCallWithoutResult(model);
-      },
-    );
-  });
-
-  describe.skipIf(!hasCloudflareAiGatewayCredentials())("Cloudflare AI Gateway Provider", () => {
-    const model = getModel("cloudflare-ai-gateway", "workers-ai/@cf/moonshotai/kimi-k2.6");
-
-    it(
-      "should filter out tool calls without corresponding tool results",
-      { retry: 3, timeout: 30000 },
-      async () => {
-        await testToolCallWithoutResult(model);
-      },
-    );
-  });
-
   describe.skipIf(!process.env["MISTRAL_API_KEY"])("Mistral Provider", () => {
     const model = getModel("mistral", "devstral-medium-latest");
-
-    it(
-      "should filter out tool calls without corresponding tool results",
-      { retry: 3, timeout: 30000 },
-      async () => {
-        await testToolCallWithoutResult(model);
-      },
-    );
-  });
-
-  describe.skipIf(!process.env["KIMI_API_KEY"])("Kimi For Coding Provider", () => {
-    const model = getModel("kimi-coding", "kimi-for-coding");
-
-    it(
-      "should filter out tool calls without corresponding tool results",
-      { retry: 3, timeout: 30000 },
-      async () => {
-        await testToolCallWithoutResult(model);
-      },
-    );
-  });
-
-  describe.skipIf(!process.env["AI_GATEWAY_API_KEY"])("Vercel AI Gateway Provider", () => {
-    const model = getModel("vercel-ai-gateway", "google/gemini-2.5-flash");
 
     it(
       "should filter out tool calls without corresponding tool results",

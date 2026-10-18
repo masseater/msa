@@ -17,13 +17,9 @@ import type {
 import { amazonBedrockProvider } from "./amazon-bedrock.ts";
 import { anthropicProvider } from "./anthropic.ts";
 import { azureProvider } from "./azure.ts";
-import { cloudflareAIGatewayProvider } from "./cloudflare-ai-gateway.ts";
-import { cloudflareWorkersAIProvider } from "./cloudflare-workers-ai.ts";
 import modelDataManifest from "./data/.manifest.json" with { type: "json" };
 import { googleVertexProvider } from "./google-vertex.ts";
 import { googleProvider } from "./google.ts";
-import { kimiCodingProvider } from "./kimi-coding.ts";
-import { metaProvider } from "./meta.ts";
 import { mistralProvider } from "./mistral.ts";
 import { openaiCodexProvider } from "./openai-codex.ts";
 import { openaiProvider } from "./openai.ts";
@@ -31,9 +27,6 @@ import { opencodeGoProvider } from "./opencode-go.ts";
 import { opencodeProvider } from "./opencode.ts";
 import { openrouterProvider } from "./openrouter.ts";
 import { radiusProvider } from "./radius.ts";
-import { typesafeProvider } from "./typesafe.ts";
-import { vercelAIGatewayProvider } from "./vercel-ai-gateway.ts";
-import { xaiProvider } from "./xai.ts";
 
 export { radiusProvider };
 
@@ -152,12 +145,8 @@ export function builtinProviders(): Provider[] {
     amazonBedrockProvider(),
     anthropicProvider(),
     azureProvider(),
-    cloudflareAIGatewayProvider(),
-    cloudflareWorkersAIProvider(),
     googleProvider(),
     googleVertexProvider(),
-    kimiCodingProvider(),
-    metaProvider(),
     mistralProvider(),
     openaiProvider(),
     openaiCodexProvider(),
@@ -165,9 +154,6 @@ export function builtinProviders(): Provider[] {
     opencodeGoProvider(),
     openrouterProvider(),
     radiusProvider(),
-    typesafeProvider(),
-    vercelAIGatewayProvider(),
-    xaiProvider(),
   ];
 }
 

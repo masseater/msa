@@ -345,7 +345,7 @@ describe("transcript system messages", () => {
       id: "kimi-k3",
       name: "Kimi K3",
       api: "openai-completions",
-      provider: "kimi-coding",
+      provider: "custom",
       compat: {
         supportsDeveloperRole: false,
         supportsMidConvoSystemMessages: true,
@@ -379,12 +379,11 @@ describe("transcript system messages", () => {
     messages: Array<{ role: string; tools?: Array<{ function?: { name: string } }> }>;
   };
 
-  // #10720: Kimi Coding uses Chat Completions so K3-style models keep added tools out of the top-level list.
-  test.each(["k3", "k3-256k", "kimi-for-coding"] as const)(
-    "anchors additions for Kimi Coding %s",
-    async (modelId) => {
+  test.each(["opencode", "opencode-go"] as const)(
+    "anchors additions for %s Kimi K3",
+    async (provider) => {
       const payload = await capturePayload<KimiPayload>(
-        getModel("kimi-coding", modelId),
+        getModel(provider, "kimi-k3"),
         additionContext,
       );
 
@@ -397,10 +396,9 @@ describe("transcript system messages", () => {
     },
   );
 
-  // #10720: Kimi Code Highspeed rejects tool-bearing system messages.
-  test("keeps Kimi Coding Highspeed additions in top-level tools", async () => {
+  test("keeps OpenRouter Kimi K3 additions in top-level tools", async () => {
     const payload = await capturePayload<KimiPayload>(
-      getModel("kimi-coding", "kimi-for-coding-highspeed"),
+      getModel("openrouter", "moonshotai/kimi-k3"),
       additionContext,
     );
 
@@ -414,7 +412,7 @@ describe("transcript system messages", () => {
       id: "kimi-k2.7-code",
       name: "Kimi K2.7 Code",
       api: "openai-completions",
-      provider: "kimi-coding",
+      provider: "custom",
       compat: { supportsDeveloperRole: false, supportsMidConvoSystemMessages: true },
     };
     const payload = await capturePayload<{

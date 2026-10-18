@@ -193,18 +193,6 @@ describe("getSupportedThinkingLevels", () => {
     expect(getSupportedThinkingLevels(model!)).toEqual(["low", "high", "max"]);
   });
 
-  it("includes only low, high, max for Kimi Coding K3", () => {
-    const model = getModel("kimi-coding", "k3");
-    expect(model).toBeDefined();
-    expect(getSupportedThinkingLevels(model!)).toEqual(["low", "high", "max"]);
-  });
-
-  it("excludes off for always-thinking Kimi Coding Highspeed", () => {
-    const model = getModel("kimi-coding", "kimi-for-coding-highspeed");
-    expect(model).toBeDefined();
-    expect(getSupportedThinkingLevels(model!)).not.toContain("off");
-  });
-
   it("includes only high for OpenCode Grok Build", () => {
     const model = getModel("opencode", "grok-build-0.1");
     expect(model).toBeDefined();
@@ -229,12 +217,6 @@ describe("getSupportedThinkingLevels", () => {
     expect(model).toBeDefined();
     expect(getSupportedThinkingLevels(model!)).toContain("xhigh");
     expect(getSupportedThinkingLevels(model!)).toContain("max");
-  });
-
-  it("includes xhigh but not off or max for xAI Grok 4.6", () => {
-    const model = getModel("xai", "grok-4.6");
-    expect(model).toBeDefined();
-    expect(getSupportedThinkingLevels(model!)).toEqual(["low", "medium", "high", "xhigh"]);
   });
 
   it("includes xhigh and max but not off for Bedrock Claude Fable 5", () => {

@@ -800,26 +800,6 @@
           },
           "description": "OpenRouter provider routing preferences. Controls which upstream providers OpenRouter routes requests to. Sent as the provider field in the OpenRouter API request body. See https://openrouter.ai/docs/guides/routing/provider-selection."
         },
-        "vercelGatewayRouting": {
-          "type": "object",
-          "properties": {
-            "only": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              },
-              "description": "List of provider slugs to exclusively use for this request, for example [\"bedrock\", \"anthropic\"]."
-            },
-            "order": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              },
-              "description": "List of provider slugs to try in order, for example [\"anthropic\", \"openai\"]."
-            }
-          },
-          "description": "Vercel AI Gateway routing preferences. Controls which upstream providers the gateway routes requests to. See https://vercel.com/docs/ai-gateway/models-and-providers/provider-options."
-        },
         "thinkingTokenBudgetField": {
           "anyOf": [
             {

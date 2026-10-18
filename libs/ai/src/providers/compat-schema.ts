@@ -174,26 +174,6 @@ export const OpenRouterRoutingSchema = Type.Object(
   },
 );
 
-export const VercelGatewayRoutingSchema = Type.Object(
-  {
-    only: Type.Optional(
-      Type.Array(Type.String(), {
-        description:
-          'List of provider slugs to exclusively use for this request, for example ["bedrock", "anthropic"].',
-      }),
-    ),
-    order: Type.Optional(
-      Type.Array(Type.String(), {
-        description: 'List of provider slugs to try in order, for example ["anthropic", "openai"].',
-      }),
-    ),
-  },
-  {
-    description:
-      "Vercel AI Gateway routing preferences. Controls which upstream providers the gateway routes requests to. See https://vercel.com/docs/ai-gateway/models-and-providers/provider-options.",
-  },
-);
-
 export const AnthropicAllowedFallbackModelSchema = Type.Object(
   {
     provider: Type.String({ minLength: 1 }),
@@ -296,7 +276,6 @@ export const OpenAICompletionsCompatSchema = Type.Object(
       }),
     ),
     openRouterRouting: Type.Optional(OpenRouterRoutingSchema),
-    vercelGatewayRouting: Type.Optional(VercelGatewayRoutingSchema),
     thinkingTokenBudgetField: Type.Optional(
       thinkingTokenBudgetField({
         description:
@@ -657,8 +636,6 @@ export type ThinkingTokenBudgetField = Static<typeof ThinkingTokenBudgetFieldSch
 export type SessionAffinityFormat = Static<typeof SessionAffinityFormatSchema>;
 /** OpenRouter provider routing preferences. */
 export interface OpenRouterRouting extends Static<typeof OpenRouterRoutingSchema> {}
-/** Vercel AI Gateway routing preferences. */
-export interface VercelGatewayRouting extends Static<typeof VercelGatewayRoutingSchema> {}
 /** An Anthropic server-side refusal fallback model with local pricing metadata. */
 export interface AnthropicAllowedFallbackModel extends Static<
   typeof AnthropicAllowedFallbackModelSchema

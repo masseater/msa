@@ -2,11 +2,9 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { InMemoryCredentialStore } from "../src/auth/credential-store.ts";
 import { anthropicOAuth } from "../src/auth/oauth/anthropic.ts";
-import { kimiCodingOAuth } from "../src/auth/oauth/kimi-coding.ts";
 import { openaiChatGPTOAuth } from "../src/auth/oauth/openai-chatgpt.ts";
 import { openaiCodexOAuth } from "../src/auth/oauth/openai-codex.ts";
 import { openRouterOAuth } from "../src/auth/oauth/openrouter.ts";
-import { xaiOAuth } from "../src/auth/oauth/xai.ts";
 import { createModels } from "../src/models.ts";
 import * as extensionOAuthCompatibility from "../src/oauth.ts";
 import { anthropicProvider } from "../src/providers/anthropic.ts";
@@ -32,13 +30,7 @@ describe("OAuthAuth adapters", () => {
   });
 
   it("identifies only subscription-backed OAuth flows as subscriptions", () => {
-    for (const oauth of [
-      anthropicOAuth,
-      openaiChatGPTOAuth,
-      openaiCodexOAuth,
-      kimiCodingOAuth,
-      xaiOAuth,
-    ]) {
+    for (const oauth of [anthropicOAuth, openaiChatGPTOAuth, openaiCodexOAuth]) {
       expect(oauth.isSubscription).toBe(true);
     }
     expect(openRouterOAuth.isSubscription).not.toBe(true);
@@ -83,16 +75,6 @@ describe("OAuthAuth adapters", () => {
     };
     expect(await openRouterOAuth.toAuth(credential)).toEqual({ apiKey: "token" });
     expect(await openRouterOAuth.refresh(credential, neverAbortedSignal)).toBe(credential);
-  });
-
-  it("xAI toAuth derives the api key from the access token", async () => {
-    const auth = await xaiOAuth.toAuth({
-      type: "oauth",
-      access: "token",
-      refresh: "r",
-      expires: 0,
-    });
-    expect(auth).toEqual({ apiKey: "token" });
   });
 
   it("anthropic refresh exchanges the refresh token and returns a typed credential", async () => {

@@ -124,13 +124,10 @@ const lazyEntryPointsOf = (host: HostShape, layout: Layout): Record<string, stri
   anthropic: host.join(layout.aiDistDir, "auth", "oauth", "anthropic.js"),
   "bedrock-converse-stream": host.join(layout.aiDistDir, "api", "bedrock-converse-stream.js"),
   "image-resize-worker": host.join(layout.codingAgentDistDir, "utils", "image-resize-worker.js"),
-  "kimi-coding": host.join(layout.aiDistDir, "auth", "oauth", "kimi-coding.js"),
-  meta: host.join(layout.aiDistDir, "auth", "oauth", "meta.js"),
   "openai-chatgpt": host.join(layout.aiDistDir, "auth", "oauth", "openai-chatgpt.js"),
   "openai-codex": host.join(layout.aiDistDir, "auth", "oauth", "openai-codex.js"),
   openrouter: host.join(layout.aiDistDir, "auth", "oauth", "openrouter.js"),
   radius: host.join(layout.aiDistDir, "auth", "oauth", "radius.js"),
-  xai: host.join(layout.aiDistDir, "auth", "oauth", "xai.js"),
 });
 
 const requireOAuthEntries = (

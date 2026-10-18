@@ -434,7 +434,7 @@ export const SettingsSchema = Type.Object(
     ),
     enableInstallTelemetry: Type.Optional(
       Type.Boolean({
-        description: "Send attribution headers to OpenRouter and Cloudflare.",
+        description: "Send attribution headers to OpenRouter.",
         default: SETTINGS_DEFAULTS.enableInstallTelemetry,
       }),
     ),

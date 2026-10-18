@@ -1012,17 +1012,6 @@ function buildParams(
     (params as any).provider = model.compat.openRouterRouting;
   }
 
-  // Vercel AI Gateway provider routing preferences
-  if (model.compat?.vercelGatewayRouting) {
-    const routing = model.compat.vercelGatewayRouting;
-    if (routing.only || routing.order) {
-      const gatewayOptions: Record<string, string[]> = {};
-      if (routing.only) gatewayOptions["only"] = routing.only;
-      if (routing.order) gatewayOptions["order"] = routing.order;
-      (params as any).providerOptions = { gateway: gatewayOptions };
-    }
-  }
-
   // Last so model and request sampling parameters override named request fields.
   const samplingParams = resolveSamplingParams(
     model,
@@ -1660,23 +1649,12 @@ function detectCompat(model: Model<"openai-completions">): ResolvedOpenAIComplet
   const baseUrl = model.baseUrl;
 
   const isOpenRouter = provider === "openrouter" || baseUrl.includes("openrouter.ai");
-  const isCloudflareWorkersAI =
-    provider === "cloudflare-workers-ai" || baseUrl.includes("api.cloudflare.com");
-  const isCloudflareAiGateway =
-    provider === "cloudflare-ai-gateway" || baseUrl.includes("gateway.ai.cloudflare.com");
 
   const isNonStandard =
-    provider === "xai" ||
-    baseUrl.includes("api.x.ai") ||
-    baseUrl.includes("chutes.ai") ||
-    provider === "opencode" ||
-    baseUrl.includes("opencode.ai") ||
-    isCloudflareWorkersAI ||
-    isCloudflareAiGateway;
+    baseUrl.includes("chutes.ai") || provider === "opencode" || baseUrl.includes("opencode.ai");
 
-  const useMaxTokens = baseUrl.includes("chutes.ai") || isCloudflareAiGateway;
+  const useMaxTokens = baseUrl.includes("chutes.ai");
 
-  const isGrok = provider === "xai" || baseUrl.includes("api.x.ai");
   const isOpenRouterDeveloperRoleModel =
     isOpenRouter && (model.id.startsWith("anthropic/") || model.id.startsWith("openai/"));
   const cacheControlFormat =
@@ -1685,7 +1663,7 @@ function detectCompat(model: Model<"openai-completions">): ResolvedOpenAIComplet
   return {
     supportsStore: !isNonStandard,
     supportsDeveloperRole: isOpenRouterDeveloperRoleModel || (!isNonStandard && !isOpenRouter),
-    supportsReasoningEffort: !isGrok && !isCloudflareAiGateway,
+    supportsReasoningEffort: true,
     supportsUsageInStreaming: true,
     supportsFinishReason: true,
     maxTokensField: useMaxTokens ? "max_tokens" : "max_completion_tokens",
@@ -1695,7 +1673,6 @@ function detectCompat(model: Model<"openai-completions">): ResolvedOpenAIComplet
     requiresReasoningContentOnAssistantMessages: false,
     thinkingFormat: isOpenRouter ? "openrouter" : "openai",
     openRouterRouting: {},
-    vercelGatewayRouting: {},
     chatTemplateKwargs: {},
     supportsThinkingTokenBudget: false,
     thinkingTokenBudgetField: undefined,
@@ -1707,7 +1684,7 @@ function detectCompat(model: Model<"openai-completions">): ResolvedOpenAIComplet
     cacheControlFormat,
     sendSessionAffinityHeaders: isOpenRouter,
     sessionAffinityFormat: isOpenRouter ? "openrouter" : "openai",
-    supportsLongCacheRetention: !(isCloudflareWorkersAI || isCloudflareAiGateway),
+    supportsLongCacheRetention: true,
   };
 }
 
@@ -1740,7 +1717,6 @@ function getCompat(model: Model<"openai-completions">): ResolvedOpenAICompletion
       detected.requiresReasoningContentOnAssistantMessages,
     thinkingFormat: model.compat.thinkingFormat ?? detected.thinkingFormat,
     openRouterRouting: model.compat.openRouterRouting ?? {},
-    vercelGatewayRouting: model.compat.vercelGatewayRouting ?? detected.vercelGatewayRouting,
     chatTemplateKwargs: model.compat.chatTemplateKwargs ?? detected.chatTemplateKwargs,
     supportsThinkingTokenBudget:
       model.compat.supportsThinkingTokenBudget ?? detected.supportsThinkingTokenBudget,

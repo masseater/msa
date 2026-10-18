@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { getModels, streamSimple } from "../src/compat.ts";
+import { streamSimple } from "../src/compat.ts";
 import type { AssistantMessage, Context, Model } from "../src/types.ts";
 
 interface AnthropicPayload {
@@ -103,12 +103,5 @@ describe("Anthropic empty thinking signature compat", () => {
     expect(assistant?.content).toEqual([
       { type: "thinking", thinking: "internal reasoning", signature: "" },
     ]);
-  });
-
-  // Regression for #9676: Vercel AI Gateway emits unsigned thinking for translated models.
-  it("allows empty thinking signatures for every Vercel AI Gateway model", () => {
-    const models = getModels("vercel-ai-gateway");
-    expect(models.length).toBeGreaterThan(0);
-    expect(models.every((model) => model.compat?.allowEmptySignature === true)).toBe(true);
   });
 });

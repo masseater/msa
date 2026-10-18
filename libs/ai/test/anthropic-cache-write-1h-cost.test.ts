@@ -91,9 +91,9 @@ describe("Anthropic 1h cache write cost", () => {
     expect(result.usage.cost.cacheWrite).toBeCloseTo(7.75, 10);
   });
 
-  // Regression for #9210: Vercel AI Gateway sends cache usage in message_delta, not message_start.
+  // Regression for #9210: some gateways send cache usage in message_delta, not message_start.
   it("prices 1h cache writes reported only in message_delta", async () => {
-    const model = getModel("vercel-ai-gateway", "anthropic/claude-haiku-4.5");
+    const model = getModel("anthropic", "claude-haiku-4-5");
     const response = createSseResponse([
       {
         event: "message_start",
