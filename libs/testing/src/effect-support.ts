@@ -1,4 +1,14 @@
-import { Cause, Clock, Context, Crypto, DateTime, type Duration, Effect, Exit } from "effect";
+import {
+  Cause,
+  Clock,
+  Context,
+  Crypto,
+  DateTime,
+  Deferred,
+  type Duration,
+  Effect,
+  Exit,
+} from "effect";
 
 import { provideNode, testRuntime } from "./runtime.ts";
 
