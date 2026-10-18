@@ -4,12 +4,15 @@ export {
   currentDate,
   currentTimeMillis,
   dateFromMillis,
+  deferredPromise,
   failure,
   isoFromMillis,
+  neverPromise,
   nowIso,
   pollUntil,
   randomSuffix,
   randomSuffixSync,
+  sleep,
 } from "./effect-support.ts";
 export {
   appendTextFile,

@@ -1,4 +1,14 @@
-import { Cause, Clock, Context, Crypto, DateTime, type Duration, Effect, Exit } from "effect";
+import {
+  Cause,
+  Clock,
+  Context,
+  Crypto,
+  DateTime,
+  Deferred,
+  type Duration,
+  Effect,
+  Exit,
+} from "effect";
 
 import { provideNode, testRuntime } from "./runtime.ts";
 
@@ -29,6 +39,29 @@ export const failure = <A, E>(effect: Effect.Effect<A, E>): Effect.Effect<unknow
   );
 
 export const abortController = (): AbortController => new AbortController();
+
+export interface DeferredPromise<A> {
+  readonly promise: Promise<A>;
+  readonly resolve: (value: A) => void;
+  readonly reject: (error: unknown) => void;
+}
+
+export const deferredPromise = <A>(): DeferredPromise<A> => {
+  const deferred = Deferred.makeUnsafe<A>();
+  return {
+    promise: Deferred.await(deferred).pipe(Effect.runPromise),
+    resolve: (value) => {
+      Deferred.doneUnsafe(deferred, Effect.succeed(value));
+    },
+    reject: (error) => {
+      Deferred.doneUnsafe(deferred, Effect.die(error));
+    },
+  };
+};
+
+export const neverPromise = <A = never>(): Promise<A> => Effect.runPromise(Effect.never);
+
+export const sleep = (duration: Duration.Input): Effect.Effect<void> => Effect.sleep(duration);
 
 export const pollUntil = Effect.fn("pollUntil")(function* (
   check: Effect.Effect<boolean>,
