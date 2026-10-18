@@ -1,6 +1,7 @@
 import type { ImageContent } from "@msa/ai";
 import chalk from "chalk";
 import * as Effect from "effect/Effect";
+import { dual } from "effect/Function";
 
 import { awaited, awaiting } from "../core/awaiting.ts";
 import { resolve } from "../core/platform-node.ts";
@@ -21,7 +22,7 @@ export interface ProcessFileOptions {
   autoResizeImages?: boolean;
 }
 
-export function processFileArguments(
+function processFileArgumentsImpl(
   fileArgs: string[],
   options?: ProcessFileOptions,
 ): Promise<ProcessedFiles> {
@@ -85,3 +86,8 @@ export function processFileArguments(
     }),
   );
 }
+
+export const processFileArguments: {
+  (fileArgs: string[], options?: ProcessFileOptions): Promise<ProcessedFiles>;
+  (options?: ProcessFileOptions): (fileArgs: string[]) => Promise<ProcessedFiles>;
+} = dual((args: IArguments) => args.length >= 1, processFileArgumentsImpl);

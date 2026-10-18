@@ -18,11 +18,7 @@ function formatData(data: unknown): string {
   }
 }
 
-export function formatMcpLogMessage(
-  server: string,
-  params: unknown,
-  now: Date = toDate(nowMs()),
-): string {
+function formatMcpLogMessage(server: string, params: unknown, now: Date = toDate(nowMs())): string {
   const message = isRecord(params) ? params : { data: params };
   const level = typeof message["level"] === "string" ? message["level"] : "info";
   const logger =

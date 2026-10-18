@@ -1,4 +1,5 @@
 import * as Effect from "effect/Effect";
+import { dual } from "effect/Function";
 import { compare, valid } from "semver";
 
 import { awaited, awaiting } from "../core/awaiting.ts";
@@ -39,10 +40,7 @@ export function formatVersionCheckError(error: unknown): string {
     : rootMessage;
 }
 
-export function comparePackageVersions(
-  leftVersion: string,
-  rightVersion: string,
-): number | undefined {
+function comparePackageVersionsImpl(leftVersion: string, rightVersion: string): number | undefined {
   const left = valid(leftVersion.trim());
   const right = valid(rightVersion.trim());
   if (left === null || left === "" || right === null || right === "") {
@@ -51,7 +49,12 @@ export function comparePackageVersions(
   return compare(left, right);
 }
 
-export function isNewerPackageVersion(candidateVersion: string, currentVersion: string): boolean {
+export const comparePackageVersions: {
+  (leftVersion: string, rightVersion: string): number | undefined;
+  (rightVersion: string): (leftVersion: string) => number | undefined;
+} = dual((args: IArguments) => args.length >= 2, comparePackageVersionsImpl);
+
+function isNewerPackageVersionImpl(candidateVersion: string, currentVersion: string): boolean {
   const comparison = comparePackageVersions(candidateVersion, currentVersion);
   if (comparison !== undefined) {
     return comparison > 0;
@@ -59,7 +62,12 @@ export function isNewerPackageVersion(candidateVersion: string, currentVersion: 
   return candidateVersion.trim() !== currentVersion.trim();
 }
 
-export function getLatestMsaRelease(
+export const isNewerPackageVersion: {
+  (candidateVersion: string, currentVersion: string): boolean;
+  (currentVersion: string): (candidateVersion: string) => boolean;
+} = dual((args: IArguments) => args.length >= 2, isNewerPackageVersionImpl);
+
+function getLatestMsaReleaseImpl(
   currentVersion: string,
   options: { timeoutMs?: number; retry?: boolean } = {},
 ): Promise<LatestMsaRelease | undefined> {
@@ -91,6 +99,17 @@ export function getLatestMsaRelease(
     }),
   );
 }
+
+export const getLatestMsaRelease: {
+  (
+    currentVersion: string,
+    options?: { timeoutMs?: number; retry?: boolean },
+  ): Promise<LatestMsaRelease | undefined>;
+  (options?: {
+    timeoutMs?: number;
+    retry?: boolean;
+  }): (currentVersion: string) => Promise<LatestMsaRelease | undefined>;
+} = dual((args: IArguments) => args.length >= 1, getLatestMsaReleaseImpl);
 
 export function checkForNewMsaVersion(
   currentVersion: string,

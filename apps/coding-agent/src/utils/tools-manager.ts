@@ -13,6 +13,7 @@ import { Readable } from "stream";
 import { pipeline } from "stream/promises";
 
 import * as Effect from "effect/Effect";
+import { dual } from "effect/Function";
 
 import { APP_NAME, getBinDir } from "../config.ts";
 import { awaited, awaiting } from "../core/awaiting.ts";
@@ -358,7 +359,7 @@ export interface ToolStatus {
   message: string;
 }
 
-export function ensureTool(
+function ensureToolImpl(
   tool: "fd" | "rg",
   onStatus?: (status: ToolStatus) => void,
 ): Promise<string | undefined> {
@@ -413,3 +414,8 @@ export function ensureTool(
     }),
   );
 }
+
+export const ensureTool: {
+  (tool: "fd" | "rg", onStatus?: (status: ToolStatus) => void): Promise<string | undefined>;
+  (onStatus?: (status: ToolStatus) => void): (tool: "fd" | "rg") => Promise<string | undefined>;
+} = dual((args: IArguments) => args.length >= 1, ensureToolImpl);

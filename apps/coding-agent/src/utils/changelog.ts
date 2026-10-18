@@ -1,5 +1,7 @@
 import { existsSync, readFileSync } from "fs";
 
+import { dual } from "effect/Function";
+
 import { writeError } from "../core/platform.ts";
 import { posix } from "./platform-extra.ts";
 
@@ -102,10 +104,7 @@ function normalizeChangelogLinkTarget(target: string, tag: string): string {
   return `https://github.com/${GITHUB_REPO}/${route}/${tag}/${encodeURI(repositoryPath)}${query}${fragment}`;
 }
 
-export function normalizeChangelogLinks(
-  markdown: string,
-  version: string | ChangelogEntry,
-): string {
+function normalizeChangelogLinksImpl(markdown: string, version: string | ChangelogEntry): string {
   const tag = normalizeTag(version);
   return markdown.replace(
     INLINE_MARKDOWN_LINK_RE,
@@ -113,6 +112,11 @@ export function normalizeChangelogLinks(
       `${prefix}${normalizeChangelogLinkTarget(target, tag)}${suffix}`,
   );
 }
+
+export const normalizeChangelogLinks: {
+  (markdown: string, version: string | ChangelogEntry): string;
+  (version: string | ChangelogEntry): (markdown: string) => string;
+} = dual((args: IArguments) => args.length >= 2, normalizeChangelogLinksImpl);
 
 export function parseChangelog(changelogPath: string): ChangelogEntry[] {
   if (!existsSync(changelogPath)) {
@@ -168,13 +172,13 @@ export function parseChangelog(changelogPath: string): ChangelogEntry[] {
   }
 }
 
-export function compareVersions(v1: ChangelogEntry, v2: ChangelogEntry): number {
+function compareVersions(v1: ChangelogEntry, v2: ChangelogEntry): number {
   if (v1.major !== v2.major) return v1.major - v2.major;
   if (v1.minor !== v2.minor) return v1.minor - v2.minor;
   return v1.patch - v2.patch;
 }
 
-export function getNewEntries(entries: ChangelogEntry[], lastVersion: string): ChangelogEntry[] {
+function getNewEntriesImpl(entries: ChangelogEntry[], lastVersion: string): ChangelogEntry[] {
   const parts = lastVersion.split(".").map(Number);
   const last: ChangelogEntry = {
     major: parts[0] || 0,
@@ -185,5 +189,10 @@ export function getNewEntries(entries: ChangelogEntry[], lastVersion: string): C
 
   return entries.filter((entry) => compareVersions(entry, last) > 0);
 }
+
+export const getNewEntries: {
+  (entries: ChangelogEntry[], lastVersion: string): ChangelogEntry[];
+  (lastVersion: string): (entries: ChangelogEntry[]) => ChangelogEntry[];
+} = dual((args: IArguments) => args.length >= 2, getNewEntriesImpl);
 
 export { getChangelogPath } from "../config.ts";

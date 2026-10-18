@@ -1,5 +1,6 @@
 import { setKeybindings } from "@msa/tui";
 import * as Effect from "effect/Effect";
+import { dual } from "effect/Function";
 
 import { awaited, awaiting } from "../core/awaiting.ts";
 import { KeybindingsManager } from "../core/keybindings.ts";
@@ -14,7 +15,7 @@ type SessionsLoader = (
   signal?: AbortSignal,
 ) => Promise<SessionInfo[]>;
 
-export function selectSession(
+function selectSessionImpl(
   currentSessionsLoader: SessionsLoader,
   allSessionsLoader: SessionsLoader,
   settingsManager: SettingsManager,
@@ -61,3 +62,15 @@ export function selectSession(
     }),
   );
 }
+
+export const selectSession: {
+  (
+    currentSessionsLoader: SessionsLoader,
+    allSessionsLoader: SessionsLoader,
+    settingsManager: SettingsManager,
+  ): Promise<string | null>;
+  (
+    allSessionsLoader: SessionsLoader,
+    settingsManager: SettingsManager,
+  ): (currentSessionsLoader: SessionsLoader) => Promise<string | null>;
+} = dual((args: IArguments) => args.length >= 3, selectSessionImpl);

@@ -1,4 +1,5 @@
 import * as Effect from "effect/Effect";
+import { dual } from "effect/Function";
 
 import { awaited, awaiting } from "../core/awaiting.ts";
 import { convertImageBytesToPng } from "./image-convert.ts";
@@ -75,7 +76,7 @@ function conversionHint(from: string | undefined, to: string): string | undefine
   return `[Image converted from ${from} to ${to}.]`;
 }
 
-export function processImage(
+function processImageImpl(
   bytes: Uint8Array,
   mimeType: string,
   options?: ProcessImageOptions,
@@ -129,3 +130,11 @@ export function processImage(
     }),
   );
 }
+
+export const processImage: {
+  (bytes: Uint8Array, mimeType: string, options?: ProcessImageOptions): Promise<ProcessImageResult>;
+  (
+    mimeType: string,
+    options?: ProcessImageOptions,
+  ): (bytes: Uint8Array) => Promise<ProcessImageResult>;
+} = dual((args: IArguments) => args.length >= 2, processImageImpl);

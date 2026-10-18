@@ -9,6 +9,7 @@ import {
 } from "@msa/mcp";
 import { Container, Spacer, Text } from "@msa/tui";
 import * as Effect from "effect/Effect";
+import { dual } from "effect/Function";
 import type { TSchema } from "typebox";
 
 import { awaited, awaiting } from "../../core/awaiting.ts";
@@ -51,7 +52,7 @@ export interface McpToolDetails {
 
 export type McpOutputSaver = (data: string | Uint8Array, extension: string) => Promise<string>;
 
-export function saveToTempFile(data: string | Uint8Array, extension: string): Promise<string> {
+function saveToTempFile(data: string | Uint8Array, extension: string): Promise<string> {
   return writeOutputFile("msa-mcp", extension, data);
 }
 
@@ -63,7 +64,7 @@ export interface McpToolCaller {
   ): Promise<CallToolResult>;
 }
 
-export function createMcpToolName(
+function createMcpToolNameImpl(
   server: string,
   tool: string,
   isTaken: (name: string) => boolean = () => false,
@@ -73,6 +74,11 @@ export function createMcpToolName(
   const hash = sha256Hex(`${server}\0${tool}`).slice(0, 8);
   return `${name.slice(0, MAX_TOOL_NAME_LENGTH - hash.length - 1)}_${hash}`;
 }
+
+export const createMcpToolName: {
+  (server: string, tool: string, isTaken?: (name: string) => boolean): string;
+  (tool: string, isTaken?: (name: string) => boolean): (server: string) => string;
+} = dual((args: IArguments) => args.length >= 2, createMcpToolNameImpl);
 
 function textOf(content: readonly (TextContent | ImageContent)[]): string {
   return content
@@ -152,7 +158,7 @@ export function createMcpResultSchema(
   } as unknown as TSchema;
 }
 
-export function limitMcpContent(
+function limitMcpContentImpl(
   content: (TextContent | ImageContent)[],
   saveOutput: McpOutputSaver = saveToTempFile,
 ): Promise<{ content: (TextContent | ImageContent)[]; fullOutputPath?: string }> {
@@ -178,6 +184,18 @@ export function limitMcpContent(
     }),
   );
 }
+
+export const limitMcpContent: {
+  (
+    content: (TextContent | ImageContent)[],
+    saveOutput?: McpOutputSaver,
+  ): Promise<{ content: (TextContent | ImageContent)[]; fullOutputPath?: string }>;
+  (
+    saveOutput?: McpOutputSaver,
+  ): (
+    content: (TextContent | ImageContent)[],
+  ) => Promise<{ content: (TextContent | ImageContent)[]; fullOutputPath?: string }>;
+} = dual((args: IArguments) => args.length >= 1, limitMcpContentImpl);
 
 export interface ConvertMcpResultOptions {
   saveOutput?: McpOutputSaver | undefined;
@@ -257,7 +275,7 @@ function blockToContent(
   );
 }
 
-export function toModelContent(
+function toModelContentImpl(
   server: string,
   blocks: readonly ContentBlock[],
   options: ConvertMcpResultOptions = {},
@@ -271,7 +289,19 @@ export function toModelContent(
   );
 }
 
-export function convertMcpResult(
+export const toModelContent: {
+  (
+    server: string,
+    blocks: readonly ContentBlock[],
+    options?: ConvertMcpResultOptions,
+  ): Promise<(TextContent | ImageContent)[]>;
+  (
+    blocks: readonly ContentBlock[],
+    options?: ConvertMcpResultOptions,
+  ): (server: string) => Promise<(TextContent | ImageContent)[]>;
+} = dual((args: IArguments) => args.length >= 2, toModelContentImpl);
+
+function convertMcpResultImpl(
   server: string,
   tool: string,
   result: CallToolResult,
@@ -303,6 +333,20 @@ export function convertMcpResult(
     }),
   );
 }
+
+export const convertMcpResult: {
+  (
+    server: string,
+    tool: string,
+    result: CallToolResult,
+    options?: ConvertMcpResultOptions,
+  ): Promise<AgentToolResult<McpToolDetails>>;
+  (
+    tool: string,
+    result: CallToolResult,
+    options?: ConvertMcpResultOptions,
+  ): (server: string) => Promise<AgentToolResult<McpToolDetails>>;
+} = dual((args: IArguments) => args.length >= 3, convertMcpResultImpl);
 
 function toParameters(schema: Record<string, unknown>): TSchema {
   return {

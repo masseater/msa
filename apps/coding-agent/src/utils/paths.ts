@@ -2,6 +2,8 @@ import { realpathSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
 
+import { dual } from "effect/Function";
+
 import { join, resolve as nodeResolvePath, relative, sep } from "../core/platform-node.ts";
 import { spawnProcessSync } from "./child-process.ts";
 import { isAbsolute } from "./platform-extra.ts";
@@ -64,7 +66,7 @@ export function normalizeWindowsShellPath(filePath: string): string {
   return `${drive.toUpperCase()}:\\${suffix ?? ""}`;
 }
 
-export function normalizePath(input: string, options: PathInputOptions = {}): string {
+function normalizePathImpl(input: string, options: PathInputOptions = {}): string {
   let normalized = options.trim === true ? input.trim() : input;
   if (options.normalizeUnicodeSpaces === true) {
     normalized = normalized.replace(UNICODE_SPACES, " ");
@@ -94,7 +96,12 @@ export function normalizePath(input: string, options: PathInputOptions = {}): st
   return normalized;
 }
 
-export function resolvePath(
+export const normalizePath: {
+  (input: string, options?: PathInputOptions): string;
+  (options?: PathInputOptions): (input: string) => string;
+} = dual((args: IArguments) => args.length >= 1, normalizePathImpl);
+
+function resolvePathImpl(
   input: string,
   baseDir: string = process.cwd(),
   options: PathInputOptions = {},
@@ -106,7 +113,12 @@ export function resolvePath(
     : nodeResolvePath(normalizedBaseDir, normalized);
 }
 
-export function getCwdRelativePath(filePath: string, cwd: string): string | undefined {
+export const resolvePath: {
+  (input: string, baseDir?: string, options?: PathInputOptions): string;
+  (baseDir?: string, options?: PathInputOptions): (input: string) => string;
+} = dual((args: IArguments) => args.length >= 1, resolvePathImpl);
+
+function getCwdRelativePathImpl(filePath: string, cwd: string): string | undefined {
   const resolvedCwd = resolvePath(cwd);
   const resolvedPath = resolvePath(filePath, resolvedCwd);
   const relativePath = relative(resolvedCwd, resolvedPath);
@@ -117,17 +129,32 @@ export function getCwdRelativePath(filePath: string, cwd: string): string | unde
   return isInsideCwd ? (relativePath === "" ? "." : relativePath) : undefined;
 }
 
-export function abbreviateHomePath(filePath: string, home: string = homedir()): string {
+export const getCwdRelativePath: {
+  (filePath: string, cwd: string): string | undefined;
+  (cwd: string): (filePath: string) => string | undefined;
+} = dual((args: IArguments) => args.length >= 2, getCwdRelativePathImpl);
+
+function abbreviateHomePathImpl(filePath: string, home: string = homedir()): string {
   if (home === "" || !filePath.startsWith(home)) return filePath;
   const rest = filePath.slice(home.length);
   if (rest !== "" && !rest.startsWith("/") && !rest.startsWith("\\")) return filePath;
   return `~${rest}`;
 }
 
-export function formatPathRelativeToCwdOrAbsolute(filePath: string, cwd: string): string {
+export const abbreviateHomePath: {
+  (filePath: string, home?: string): string;
+  (home?: string): (filePath: string) => string;
+} = dual((args: IArguments) => args.length >= 1, abbreviateHomePathImpl);
+
+function formatPathRelativeToCwdOrAbsoluteImpl(filePath: string, cwd: string): string {
   const absolutePath = resolvePath(filePath, cwd);
   return (getCwdRelativePath(absolutePath, cwd) ?? absolutePath).split(sep).join("/");
 }
+
+export const formatPathRelativeToCwdOrAbsolute: {
+  (filePath: string, cwd: string): string;
+  (cwd: string): (filePath: string) => string;
+} = dual((args: IArguments) => args.length >= 2, formatPathRelativeToCwdOrAbsoluteImpl);
 
 export function markPathIgnoredByCloudSync(path: string): void {
   const attrs =

@@ -1,5 +1,6 @@
 import type { CredentialStore } from "@msa/ai";
 import * as Effect from "effect/Effect";
+import { dual } from "effect/Function";
 
 import { awaited, awaiting } from "../core/awaiting.ts";
 import { resolveCliModel } from "../core/model-resolver.ts";
@@ -22,7 +23,7 @@ export interface AuthCheckResult {
   authType?: "api_key" | "oauth";
 }
 
-export function checkProviderAuth(
+function checkProviderAuthImpl(
   args: Args,
   modelRuntime: ModelRuntime,
   options: { refresh: boolean } = { refresh: false },
@@ -64,7 +65,19 @@ export function checkProviderAuth(
   );
 }
 
-export function getProviderCredential(
+export const checkProviderAuth: {
+  (
+    args: Args,
+    modelRuntime: ModelRuntime,
+    options?: { refresh: boolean },
+  ): Promise<AuthCheckResult>;
+  (
+    modelRuntime: ModelRuntime,
+    options?: { refresh: boolean },
+  ): (args: Args) => Promise<AuthCheckResult>;
+} = dual((args: IArguments) => args.length >= 2, checkProviderAuthImpl);
+
+function getProviderCredentialImpl(
   providerId: string,
   modelRuntime: ModelRuntime,
   credentials: CredentialStore,
@@ -78,6 +91,20 @@ export function getProviderCredential(
     }),
   );
 }
+
+export const getProviderCredential: {
+  (
+    providerId: string,
+    modelRuntime: ModelRuntime,
+    credentials: CredentialStore,
+    options: { refresh: boolean },
+  ): Promise<string | undefined>;
+  (
+    modelRuntime: ModelRuntime,
+    credentials: CredentialStore,
+    options: { refresh: boolean },
+  ): (providerId: string) => Promise<string | undefined>;
+} = dual((args: IArguments) => args.length >= 4, getProviderCredentialImpl);
 
 export function createAuthCheckModelRuntime(credentials: CredentialStore): Promise<ModelRuntime> {
   return Effect.runPromise(

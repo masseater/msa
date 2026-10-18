@@ -2,6 +2,7 @@ import { createWriteStream, type WriteStream } from "node:fs";
 import { tmpdir } from "node:os";
 
 import * as Effect from "effect/Effect";
+import { dual } from "effect/Function";
 
 import { awaited, awaiting } from "../core/awaiting.ts";
 import { join } from "../core/platform-node.ts";
@@ -14,7 +15,7 @@ function createOutputFilePath(prefix: string, extension: string): string {
   return join(tmpdir(), `${prefix}-${randomHex(8)}${extension}`);
 }
 
-export function writeOutputFile(
+function writeOutputFileImpl(
   prefix: string,
   extension: string,
   data: string | Uint8Array,
@@ -29,10 +30,20 @@ export function writeOutputFile(
   );
 }
 
-export function createOutputFileStream(
+export const writeOutputFile: {
+  (prefix: string, extension: string, data: string | Uint8Array): Promise<string>;
+  (extension: string, data: string | Uint8Array): (prefix: string) => Promise<string>;
+} = dual((args: IArguments) => args.length >= 3, writeOutputFileImpl);
+
+function createOutputFileStreamImpl(
   prefix: string,
   extension: string,
 ): { path: string; stream: WriteStream } {
   const path = createOutputFilePath(prefix, extension);
   return { path, stream: createWriteStream(path, { mode: OUTPUT_FILE_MODE, flags: "wx" }) };
 }
+
+export const createOutputFileStream: {
+  (prefix: string, extension: string): { path: string; stream: WriteStream };
+  (extension: string): (prefix: string) => { path: string; stream: WriteStream };
+} = dual((args: IArguments) => args.length >= 2, createOutputFileStreamImpl);

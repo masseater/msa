@@ -48,6 +48,7 @@
           "effect/Crypto#make",
           "effect/FileSystem#FileSystem",
           "effect/Path#Path",
+          "effect/Path#layer",
           "effect/PlatformError#PlatformError",
           "effect/encoding/Ndjson#decode",
           "effect/encoding/Ndjson#encode",

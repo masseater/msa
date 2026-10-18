@@ -1,5 +1,6 @@
 import type { ImageContent, ModelImageResizeOptions, TextContent } from "@msa/ai";
 import * as Effect from "effect/Effect";
+import { dual } from "effect/Function";
 
 import { awaited, awaiting } from "../core/awaiting.ts";
 import { processImage } from "./image-process.ts";
@@ -12,7 +13,7 @@ export interface NormalizeToolResultImagesOptions {
   resizeOptions?: ModelImageResizeOptions;
 }
 
-export function normalizeToolResultImages(
+function normalizeToolResultImagesImpl(
   content: ToolResultContent[],
   options?: NormalizeToolResultImagesOptions,
 ): Promise<ToolResultContent[]> {
@@ -63,3 +64,13 @@ export function normalizeToolResultImages(
     }),
   );
 }
+
+export const normalizeToolResultImages: {
+  (
+    content: ToolResultContent[],
+    options?: NormalizeToolResultImagesOptions,
+  ): Promise<ToolResultContent[]>;
+  (
+    options?: NormalizeToolResultImagesOptions,
+  ): (content: ToolResultContent[]) => Promise<ToolResultContent[]>;
+} = dual((args: IArguments) => args.length >= 1, normalizeToolResultImagesImpl);

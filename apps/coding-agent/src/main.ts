@@ -4,6 +4,7 @@ import { type ImageContent, modelsAreEqual } from "@msa/ai";
 import { primeTerminalCapabilities, setCapabilityOverrides } from "@msa/tui";
 import chalk from "chalk";
 import { Effect } from "effect";
+import { dual } from "effect/Function";
 
 import { type Args, type Mode, normalizeSessionName, parseArgs, printHelp } from "./cli/args.ts";
 import {
@@ -428,7 +429,7 @@ function forkSessionOrExit(
   }
 }
 
-export function createSessionManager(
+function createSessionManagerImpl(
   parsed: Args,
   cwd: string,
   sessionDir: string | undefined,
@@ -531,6 +532,20 @@ export function createSessionManager(
     }),
   );
 }
+
+export const createSessionManager: {
+  (
+    parsed: Args,
+    cwd: string,
+    sessionDir: string | undefined,
+    settingsManager: SettingsManager,
+  ): Promise<SessionManager>;
+  (
+    cwd: string,
+    sessionDir: string | undefined,
+    settingsManager: SettingsManager,
+  ): (parsed: Args) => Promise<SessionManager>;
+} = dual((args: IArguments) => args.length >= 4, createSessionManagerImpl);
 
 function buildSessionOptions(
   parsed: Args,
@@ -671,7 +686,7 @@ export interface MainOptions {
   extensionFactories?: InlineExtension[];
 }
 
-export function main(args: string[], options?: MainOptions) {
+function mainImpl(args: string[], options?: MainOptions): Promise<undefined> {
   return Effect.runPromise(
     awaiting(function* () {
       resetTimings();
@@ -1145,3 +1160,8 @@ export function main(args: string[], options?: MainOptions) {
     }),
   );
 }
+
+export const main: {
+  (args: string[], options?: MainOptions): Promise<undefined>;
+  (options?: MainOptions): (args: string[]) => Promise<undefined>;
+} = dual((args: IArguments) => args.length >= 1, mainImpl);

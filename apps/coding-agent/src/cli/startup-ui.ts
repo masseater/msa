@@ -8,6 +8,7 @@ import {
   TuiMainScreen,
 } from "@msa/tui";
 import * as Effect from "effect/Effect";
+import { dual } from "effect/Function";
 
 import {
   APP_NAME,
@@ -125,13 +126,18 @@ export function createStartupTui(settingsManager: SettingsManager): Promise<TUI>
   );
 }
 
-export function startStartupTui(ui: TUI, settingsManager: SettingsManager): void {
+function startStartupTuiImpl(ui: TUI, settingsManager: SettingsManager): void {
   ui.start();
   const themeSetting = settingsManager.getThemeSetting();
   queryStartupTerminalColors(ui, () => {
     setTheme(resolveThemeSetting(themeSetting, getTerminalTheme()) ?? SYSTEM_THEME_NAME);
   });
 }
+
+export const startStartupTui: {
+  (ui: TUI, settingsManager: SettingsManager): void;
+  (settingsManager: SettingsManager): (ui: TUI) => void;
+} = dual((args: IArguments) => args.length >= 2, startStartupTuiImpl);
 
 function queryStartupTerminalColors(ui: TUI, onColors: () => void): void {
   void requestTerminalColors(ui, (colors) => {
@@ -171,7 +177,7 @@ export function shouldRunFirstTimeSetup(settingsPath: string = getSettingsPath()
   return !existsSync(settingsPath);
 }
 
-export function showStartupSelector<T>(
+function showStartupSelectorImpl<T>(
   settingsManager: SettingsManager,
   title: string,
   options: Array<{ label: string; value: T }>,
@@ -210,6 +216,18 @@ export function showStartupSelector<T>(
     }),
   );
 }
+
+export const showStartupSelector: {
+  <T>(
+    settingsManager: SettingsManager,
+    title: string,
+    options: Array<{ label: string; value: T }>,
+  ): Promise<T | undefined>;
+  <T>(
+    title: string,
+    options: Array<{ label: string; value: T }>,
+  ): (settingsManager: SettingsManager) => Promise<T | undefined>;
+} = dual((args: IArguments) => args.length >= 3, showStartupSelectorImpl);
 
 export function showFirstTimeSetup(settingsManager: SettingsManager): Promise<void> {
   return Effect.runPromise(
@@ -259,7 +277,7 @@ export function showFirstTimeSetup(settingsManager: SettingsManager): Promise<vo
   );
 }
 
-export function showStartupInput(
+function showStartupInputImpl(
   settingsManager: SettingsManager,
   title: string,
   placeholder?: string,
@@ -301,3 +319,15 @@ export function showStartupInput(
     }),
   );
 }
+
+export const showStartupInput: {
+  (
+    settingsManager: SettingsManager,
+    title: string,
+    placeholder?: string,
+  ): Promise<string | undefined>;
+  (
+    title: string,
+    placeholder?: string,
+  ): (settingsManager: SettingsManager) => Promise<string | undefined>;
+} = dual((args: IArguments) => args.length >= 2, showStartupInputImpl);

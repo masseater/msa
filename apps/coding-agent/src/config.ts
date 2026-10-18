@@ -3,6 +3,8 @@ import { createRequire } from "module";
 import { homedir } from "os";
 import { fileURLToPath } from "url";
 
+import { dual } from "effect/Function";
+
 import { basename, dirname, join, resolve, sep } from "./core/platform-node.ts";
 import { readEnv } from "./core/platform.ts";
 import { spawnProcessSync } from "./utils/child-process.ts";
@@ -357,7 +359,7 @@ function isManagedByGlobalPackageManager(
   );
 }
 
-export function getSelfUpdateCommand(
+function getSelfUpdateCommandImpl(
   packageName: string,
   npmCommand?: string[],
   updatePackageTarget: SelfUpdatePackageTarget = packageName,
@@ -379,7 +381,19 @@ export function getSelfUpdateCommand(
   return command;
 }
 
-export function getSelfUpdateUnavailableInstruction(
+export const getSelfUpdateCommand: {
+  (
+    packageName: string,
+    npmCommand?: string[],
+    updatePackageTarget?: SelfUpdatePackageTarget,
+  ): SelfUpdateCommand | undefined;
+  (
+    npmCommand?: string[],
+    updatePackageTarget?: SelfUpdatePackageTarget,
+  ): (packageName: string) => SelfUpdateCommand | undefined;
+} = dual((args: IArguments) => args.length >= 1, getSelfUpdateCommandImpl);
+
+function getSelfUpdateUnavailableInstructionImpl(
   packageName: string,
   npmCommand?: string[],
   updatePackageTarget: SelfUpdatePackageTarget = packageName,
@@ -401,6 +415,18 @@ export function getSelfUpdateUnavailableInstruction(
   }
   return `Update ${target.installSpec} using the package manager, wrapper, or source checkout that provides this installation.`;
 }
+
+export const getSelfUpdateUnavailableInstruction: {
+  (
+    packageName: string,
+    npmCommand?: string[],
+    updatePackageTarget?: SelfUpdatePackageTarget,
+  ): string;
+  (
+    npmCommand?: string[],
+    updatePackageTarget?: SelfUpdatePackageTarget,
+  ): (packageName: string) => string;
+} = dual((args: IArguments) => args.length >= 1, getSelfUpdateUnavailableInstructionImpl);
 
 export function getUpdateInstruction(packageName: string): string {
   const method = detectInstallMethod();
@@ -502,7 +528,7 @@ export function getQuickJSWasmPath(): string {
   return quickJSWasmPath;
 }
 
-export function resolveCodemodeWorkerSpecifier(
+function resolveCodemodeWorkerSpecifierImpl(
   runtime: "bun-binary" | "bundled-node" | "unbundled",
   moduleUrl: string,
 ): string | URL | undefined {
@@ -510,6 +536,16 @@ export function resolveCodemodeWorkerSpecifier(
   if (runtime === "bundled-node") return new URL("./codemode-worker.js", moduleUrl);
   return undefined;
 }
+
+export const resolveCodemodeWorkerSpecifier: {
+  (
+    runtime: "bun-binary" | "bundled-node" | "unbundled",
+    moduleUrl: string,
+  ): string | URL | undefined;
+  (
+    moduleUrl: string,
+  ): (runtime: "bun-binary" | "bundled-node" | "unbundled") => string | URL | undefined;
+} = dual((args: IArguments) => args.length >= 2, resolveCodemodeWorkerSpecifierImpl);
 
 let codemodeWorkerDataUrl: URL | undefined;
 

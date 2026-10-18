@@ -13,6 +13,7 @@ import {
   visibleWidth,
 } from "@msa/tui";
 import { Effect } from "effect";
+import { dual } from "effect/Function";
 
 import { awaited, awaiting, awaitingWith } from "../../core/awaiting.ts";
 import type { ExtensionCommandContext } from "../../core/extensions/types.ts";
@@ -526,7 +527,7 @@ class LlamaView implements LlamaUi, Focusable {
   }
 }
 
-export function showLlamaUi(
+function showLlamaUiImpl(
   ctx: ExtensionCommandContext,
   run: (ui: LlamaUi) => Promise<void>,
 ): Promise<void> {
@@ -550,7 +551,12 @@ export function showLlamaUi(
   );
 }
 
-export function runWithProgress<T>(
+export const showLlamaUi: {
+  (ctx: ExtensionCommandContext, run: (ui: LlamaUi) => Promise<void>): Promise<void>;
+  (run: (ui: LlamaUi) => Promise<void>): (ctx: ExtensionCommandContext) => Promise<void>;
+} = dual((args: IArguments) => args.length >= 2, showLlamaUiImpl);
+
+function runWithProgressImpl<T>(
   ui: LlamaUi,
   options: {
     title: string;
@@ -609,3 +615,27 @@ export function runWithProgress<T>(
     }),
   );
 }
+
+export const runWithProgress: {
+  <T>(
+    ui: LlamaUi,
+    options: {
+      title: string;
+      model: string;
+      initialMessage: string;
+      cancelTitle: string;
+      cancelMessage: string;
+      run(signal: AbortSignal, update: (progress: LlamaProgress) => void): Promise<T>;
+      cancel(): Promise<void>;
+    },
+  ): Promise<{ cancelled: true } | { cancelled: false; value: T }>;
+  <T>(options: {
+    title: string;
+    model: string;
+    initialMessage: string;
+    cancelTitle: string;
+    cancelMessage: string;
+    run(signal: AbortSignal, update: (progress: LlamaProgress) => void): Promise<T>;
+    cancel(): Promise<void>;
+  }): (ui: LlamaUi) => Promise<{ cancelled: true } | { cancelled: false; value: T }>;
+} = dual((args: IArguments) => args.length >= 2, runWithProgressImpl);

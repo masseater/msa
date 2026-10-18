@@ -1,5 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 
+import { dual } from "effect/Function";
+
 import { CONFIG_DIR_NAME } from "../../config.ts";
 import {
   type McpExposure,
@@ -145,7 +147,7 @@ export interface McpServerConfigPatch {
   exposure?: McpExposure;
 }
 
-export function updateMcpServerConfig(
+function updateMcpServerConfigImpl(
   path: string,
   name: string,
   patch: McpServerConfigPatch,
@@ -171,7 +173,16 @@ export function updateMcpServerConfig(
   });
 }
 
-export function addMcpServerConfig(path: string, name: string, config: McpServerConfig): boolean {
+export const updateMcpServerConfig: {
+  (path: string, name: string, patch: McpServerConfigPatch, options?: { override?: boolean }): void;
+  (
+    name: string,
+    patch: McpServerConfigPatch,
+    options?: { override?: boolean },
+  ): (path: string) => void;
+} = dual((args: IArguments) => args.length >= 3, updateMcpServerConfigImpl);
+
+function addMcpServerConfigImpl(path: string, name: string, config: McpServerConfig): boolean {
   let replaced = false;
   editMcpServers(path, (servers, parsed) => {
     const target = servers ?? {};
@@ -183,7 +194,12 @@ export function addMcpServerConfig(path: string, name: string, config: McpServer
   return replaced;
 }
 
-export function removeMcpServerConfig(path: string, name: string): boolean {
+export const addMcpServerConfig: {
+  (path: string, name: string, config: McpServerConfig): boolean;
+  (name: string, config: McpServerConfig): (path: string) => boolean;
+} = dual((args: IArguments) => args.length >= 3, addMcpServerConfigImpl);
+
+function removeMcpServerConfigImpl(path: string, name: string): boolean {
   if (!existsSync(path)) return false;
   let removed = false;
   editMcpServers(path, (servers) => {
@@ -194,6 +210,11 @@ export function removeMcpServerConfig(path: string, name: string): boolean {
   });
   return removed;
 }
+
+export const removeMcpServerConfig: {
+  (path: string, name: string): boolean;
+  (name: string): (path: string) => boolean;
+} = dual((args: IArguments) => args.length >= 2, removeMcpServerConfigImpl);
 
 function editMcpServers(
   path: string,

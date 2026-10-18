@@ -2,6 +2,7 @@ import type { Api, Model } from "@msa/ai";
 import { fuzzyFilter } from "@msa/tui";
 import chalk from "chalk";
 import * as Effect from "effect/Effect";
+import { dual } from "effect/Function";
 
 import { formatNoModelsAvailableMessage } from "../core/auth-guidance.ts";
 import { awaited, awaiting } from "../core/awaiting.ts";
@@ -20,7 +21,7 @@ function formatTokenCount(count: number): string {
   return count.toString();
 }
 
-export function listModels(
+function listModelsImpl(
   modelRuntime: ModelRuntime,
   searchPattern?: string,
   signal?: AbortSignal,
@@ -110,3 +111,8 @@ export function listModels(
     }),
   );
 }
+
+export const listModels: {
+  (modelRuntime: ModelRuntime, searchPattern?: string, signal?: AbortSignal): Promise<void>;
+  (searchPattern?: string, signal?: AbortSignal): (modelRuntime: ModelRuntime) => Promise<void>;
+} = dual((args: IArguments) => args.length >= 1, listModelsImpl);

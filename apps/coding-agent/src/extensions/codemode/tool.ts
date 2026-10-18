@@ -7,6 +7,7 @@ import {
 } from "@msa/codemode/declarations";
 import { CODEMODE_SOURCE_GRAMMAR } from "@msa/codemode/source";
 import * as Effect from "effect/Effect";
+import { dual } from "effect/Function";
 import { type Static, Type } from "typebox";
 
 import { getDocsPath } from "../../config.ts";
@@ -114,7 +115,7 @@ export const DEFAULT_CODEMODE_INLINE_BUDGET = SETTINGS_DEFAULTS.codemode.inlineB
 
 const CHARS_PER_TOKEN = 4;
 
-export function toCodemodeDeclaration(
+function toCodemodeDeclarationImpl(
   tool: AgentTool<any>,
   guidelines: readonly string[] = [],
 ): Omit<CodemodeTool, "execute"> {
@@ -129,6 +130,11 @@ export function toCodemodeDeclaration(
     outputSchema: (tool.outputSchema as CodemodeJsonSchema | undefined) ?? TEXT_OUTPUT_SCHEMA,
   };
 }
+
+export const toCodemodeDeclaration: {
+  (tool: AgentTool<any>, guidelines?: readonly string[]): Omit<CodemodeTool, "execute">;
+  (guidelines?: readonly string[]): (tool: AgentTool<any>) => Omit<CodemodeTool, "execute">;
+} = dual((args: IArguments) => args.length >= 1, toCodemodeDeclarationImpl);
 
 export function getCodemodeCallableTools(tools: readonly AgentTool<any>[]): AgentTool<any>[] {
   return tools.filter((tool) => tool.name !== CODEMODE_TOOL_NAME);
@@ -186,7 +192,7 @@ function selectCatalog(groups: readonly CatalogGroup[], budget: number | undefin
   return shown;
 }
 
-export function createCodemodeDescription(
+function createCodemodeDescriptionImpl(
   tools: readonly AgentTool<any>[],
   options: CodemodeDescriptionOptions = {},
 ): string {
@@ -238,6 +244,11 @@ export function createCodemodeDescription(
   sections.push(toolSections.join("\n\n"));
   return sections.join("\n\n");
 }
+
+export const createCodemodeDescription: {
+  (tools: readonly AgentTool<any>[], options?: CodemodeDescriptionOptions): string;
+  (options?: CodemodeDescriptionOptions): (tools: readonly AgentTool<any>[]) => string;
+} = dual((args: IArguments) => args.length >= 1, createCodemodeDescriptionImpl);
 
 function describeFields(schema: unknown, depth: number): string | undefined {
   if (typeof schema !== "object" || schema === null) return undefined;
@@ -353,7 +364,7 @@ export function createCodemodeToolDefinition(
   };
 }
 
-export function createCodemodeTool(
+function createCodemodeToolImpl(
   tools: readonly AgentTool<any>[] = [],
   options: CodemodeToolOptions = {},
 ): AgentTool<typeof codemodeSchema> {
@@ -366,3 +377,13 @@ export function createCodemodeTool(
   });
   return tool;
 }
+
+export const createCodemodeTool: {
+  (
+    tools?: readonly AgentTool<any>[],
+    options?: CodemodeToolOptions,
+  ): AgentTool<typeof codemodeSchema>;
+  (
+    options?: CodemodeToolOptions,
+  ): (tools?: readonly AgentTool<any>[]) => AgentTool<typeof codemodeSchema>;
+} = dual((args: IArguments) => args.length >= 0, createCodemodeToolImpl);

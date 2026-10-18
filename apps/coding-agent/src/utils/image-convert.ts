@@ -1,5 +1,6 @@
 import { getCapabilities, type ImageTranscoder, setImageTranscoder } from "@msa/tui";
 import * as Effect from "effect/Effect";
+import { dual } from "effect/Function";
 
 import { awaited, awaiting } from "../core/awaiting.ts";
 import { applyExifOrientation } from "./exif-orientation.ts";
@@ -34,7 +35,7 @@ export function convertImageBytesToPng(bytes: Uint8Array): Promise<Uint8Array | 
   );
 }
 
-export function convertToPng(
+function convertToPngImpl(
   base64Data: string,
   mimeType: string,
 ): Promise<{ data: string; mimeType: string } | null> {
@@ -57,6 +58,11 @@ export function convertToPng(
     }),
   );
 }
+
+export const convertToPng: {
+  (base64Data: string, mimeType: string): Promise<{ data: string; mimeType: string } | null>;
+  (mimeType: string): (base64Data: string) => Promise<{ data: string; mimeType: string } | null>;
+} = dual((args: IArguments) => args.length >= 2, convertToPngImpl);
 
 export function loadPngTranscoder(): Promise<ImageTranscoder | undefined> {
   return Effect.runPromise(

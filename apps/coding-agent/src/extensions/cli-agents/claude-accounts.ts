@@ -2,6 +2,7 @@ import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 
 import type { SDKAssistantMessageError } from "@anthropic-ai/claude-agent-sdk";
 import * as Effect from "effect/Effect";
+import { dual } from "effect/Function";
 
 import { expandTildePath, getAgentDir } from "../../config.ts";
 import { awaited, awaiting } from "../../core/awaiting.ts";
@@ -63,7 +64,7 @@ function findAccount(accounts: Account[], name: string): Account {
   return account;
 }
 
-export function addAccount(name: string, tokenCommand?: string): Account {
+function addAccountImpl(name: string, tokenCommand?: string): Account {
   if (!/^[a-z0-9][a-z0-9_-]*$/u.test(name)) {
     throw new Error(`Account name "${name}" must be lowercase letters, digits, "-" or "_"`);
   }
@@ -79,6 +80,11 @@ export function addAccount(name: string, tokenCommand?: string): Account {
   });
   return account;
 }
+
+export const addAccount: {
+  (name: string, tokenCommand?: string): Account;
+  (tokenCommand?: string): (name: string) => Account;
+} = dual((args: IArguments) => args.length >= 1, addAccountImpl);
 
 export function removeAccount(name: string): void {
   let removed: Account | undefined;
@@ -105,7 +111,7 @@ export function preferAccount(name: string): void {
   });
 }
 
-export function setAutoRotation(name: string, auto: boolean): void {
+function setAutoRotationImpl(name: string, auto: boolean): void {
   editAccounts((accounts) => {
     findAccount(accounts, name);
     return accounts.map((account) => {
@@ -115,6 +121,11 @@ export function setAutoRotation(name: string, auto: boolean): void {
     });
   });
 }
+
+export const setAutoRotation: {
+  (name: string, auto: boolean): void;
+  (auto: boolean): (name: string) => void;
+} = dual((args: IArguments) => args.length >= 2, setAutoRotationImpl);
 
 export function claudeExecutable(): string | undefined {
   return readEnv("CLAUDE_BIN")?.trim() || findExecutableOnPath("claude") || undefined;
@@ -229,7 +240,7 @@ export interface LoginPrompts {
   askCode(url: string, signal: AbortSignal): Promise<string | undefined>;
 }
 
-export function loginAccount(account: Account, prompts: LoginPrompts): Promise<void> {
+function loginAccountImpl(account: Account, prompts: LoginPrompts): Promise<void> {
   return Effect.runPromise(
     awaiting(function* () {
       if (
@@ -289,6 +300,11 @@ export function loginAccount(account: Account, prompts: LoginPrompts): Promise<v
   );
 }
 
+export const loginAccount: {
+  (account: Account, prompts: LoginPrompts): Promise<void>;
+  (prompts: LoginPrompts): (account: Account) => Promise<void>;
+} = dual((args: IArguments) => args.length >= 2, loginAccountImpl);
+
 export function logoutAccount(account: Account): Promise<void> {
   return Effect.runPromise(
     awaiting(function* () {
@@ -318,10 +334,15 @@ function saveBlocks(blocks: Record<string, Block>): void {
   writeFileSync(file, JSON.stringify(blocks, null, 2));
 }
 
-export function blockOf(account: Account, now = nowMs()): Block | undefined {
+function blockOfImpl(account: Account, now: number = nowMs()): Block | undefined {
   const block = loadBlocks()[account.name];
   return block !== undefined && block.until > now ? block : undefined;
 }
+
+export const blockOf: {
+  (account: Account, now?: number): Block | undefined;
+  (now?: number): (account: Account) => Block | undefined;
+} = dual((args: IArguments) => args.length >= 1, blockOfImpl);
 
 export function clearBlocks(): void {
   saveBlocks({});
@@ -341,7 +362,7 @@ const DISABLED_CAUSES = new Set<RunFailure["cause"]>([
   "billing_error",
 ]);
 
-export function blockIfUnusable(account: Account, failure: RunFailure): boolean {
+function blockIfUnusableImpl(account: Account, failure: RunFailure): boolean {
   const { error, cause } = failure;
   let until: number | undefined;
   if (cause === "usage_limit") until = failure.resetsAt ?? nowMs() + FALLBACK_BLOCK_MS;
@@ -360,3 +381,8 @@ export function blockIfUnusable(account: Account, failure: RunFailure): boolean 
   saveBlocks(blocks);
   return true;
 }
+
+export const blockIfUnusable: {
+  (account: Account, failure: RunFailure): boolean;
+  (failure: RunFailure): (account: Account) => boolean;
+} = dual((args: IArguments) => args.length >= 2, blockIfUnusableImpl);

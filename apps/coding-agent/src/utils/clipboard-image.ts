@@ -2,6 +2,7 @@ import { tmpdir } from "os";
 
 import { getNativeClipboard } from "@msa/tui";
 import * as Effect from "effect/Effect";
+import { dual } from "effect/Function";
 
 import { awaited, awaiting } from "../core/awaiting.ts";
 import { join, randomUuid } from "../core/platform-node.ts";
@@ -221,7 +222,7 @@ function readClipboardImageViaNativeClipboard(): Promise<ClipboardImage | null |
   );
 }
 
-export function readClipboardImageFromCommand(
+function readClipboardImageFromCommandImpl(
   command: string,
   platform: NodeJS.Platform = process.platform,
 ): Promise<ClipboardImage | null | undefined> {
@@ -251,6 +252,11 @@ export function readClipboardImageFromCommand(
     }),
   );
 }
+
+export const readClipboardImageFromCommand: {
+  (command: string, platform?: NodeJS.Platform): Promise<ClipboardImage | null | undefined>;
+  (platform?: NodeJS.Platform): (command: string) => Promise<ClipboardImage | null | undefined>;
+} = dual((args: IArguments) => args.length >= 1, readClipboardImageFromCommandImpl);
 
 export function readClipboardImage(options?: {
   env?: NodeJS.ProcessEnv;

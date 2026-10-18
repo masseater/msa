@@ -15,6 +15,7 @@ import type { Readable, Writable } from "node:stream";
 import { promisify } from "node:util";
 
 import crossSpawn from "cross-spawn";
+import { dual } from "effect/Function";
 
 import { schedule, type Scheduled } from "../core/platform.ts";
 import { callbackPromise } from "./interop.ts";
@@ -36,24 +37,39 @@ export function execFileText(options: {
   });
 }
 
-export function spawnProcess(
-  command: string,
-  args: string[],
-  options: SpawnOptionsWithStdioTuple<StdioNull, StdioPipe, StdioPipe>,
-): ChildProcessByStdio<null, Readable, Readable>;
-export function spawnProcess(
-  command: string,
-  args: string[],
-  options: SpawnOptionsWithStdioTuple<StdioPipe, StdioPipe, StdioPipe>,
-): ChildProcessByStdio<Writable, Readable, Readable>;
-export function spawnProcess(command: string, args: string[], options: SpawnOptions): ChildProcess;
-export function spawnProcess(command: string, args: string[], options: SpawnOptions): ChildProcess {
+type PipedStdio = SpawnOptionsWithStdioTuple<StdioPipe, StdioPipe, StdioPipe>;
+type NullInputStdio = SpawnOptionsWithStdioTuple<StdioNull, StdioPipe, StdioPipe>;
+
+function spawnProcessImpl(command: string, args: string[], options: SpawnOptions): ChildProcess {
   return process.platform === "win32"
     ? crossSpawn(command, args, options)
     : nodeSpawn(command, args, options);
 }
 
-export function spawnProcessSync(
+export const spawnProcess: {
+  (
+    command: string,
+    args: string[],
+    options: NullInputStdio,
+  ): ChildProcessByStdio<null, Readable, Readable>;
+  (
+    command: string,
+    args: string[],
+    options: PipedStdio,
+  ): ChildProcessByStdio<Writable, Readable, Readable>;
+  (command: string, args: string[], options: SpawnOptions): ChildProcess;
+  (
+    args: string[],
+    options: NullInputStdio,
+  ): (command: string) => ChildProcessByStdio<null, Readable, Readable>;
+  (
+    args: string[],
+    options: PipedStdio,
+  ): (command: string) => ChildProcessByStdio<Writable, Readable, Readable>;
+  (args: string[], options: SpawnOptions): (command: string) => ChildProcess;
+} = dual((args: IArguments) => args.length >= 3, spawnProcessImpl);
+
+function spawnProcessSyncImpl(
   command: string,
   args: string[],
   options: SpawnSyncOptionsWithStringEncoding,
@@ -62,6 +78,18 @@ export function spawnProcessSync(
     ? crossSpawn.sync(command, args, options)
     : nodeSpawnSync(command, args, options);
 }
+
+export const spawnProcessSync: {
+  (
+    command: string,
+    args: string[],
+    options: SpawnSyncOptionsWithStringEncoding,
+  ): SpawnSyncReturns<string>;
+  (
+    args: string[],
+    options: SpawnSyncOptionsWithStringEncoding,
+  ): (command: string) => SpawnSyncReturns<string>;
+} = dual((args: IArguments) => args.length >= 3, spawnProcessSyncImpl);
 
 export function waitForChildProcess(child: ChildProcess): Promise<number | null> {
   return callbackPromise((resolve, reject) => {

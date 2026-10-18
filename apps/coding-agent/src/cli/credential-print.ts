@@ -1,5 +1,6 @@
 import type { Api, CredentialInfo, Model } from "@msa/ai";
 import * as Effect from "effect/Effect";
+import { dual } from "effect/Function";
 
 import { awaited, awaiting } from "../core/awaiting.ts";
 import { resolveCliModel, resolveModelReference } from "../core/model-resolver.ts";
@@ -16,7 +17,7 @@ const DEFAULT_BEARER_TOKEN_MIN_EXPIRY_MS = 30 * 60_000;
 
 type CredentialPrintKind = Exclude<AuthCommandKind, "check">;
 
-export function resolveCredentialForPrint(
+function resolveCredentialForPrintImpl(
   args: Args,
   modelRuntime: ModelRuntime,
   kind: CredentialPrintKind,
@@ -130,3 +131,19 @@ export function resolveCredentialForPrint(
     }),
   );
 }
+
+export const resolveCredentialForPrint: {
+  (
+    args: Args,
+    modelRuntime: ModelRuntime,
+    kind: CredentialPrintKind,
+    minExpiryMs?: number,
+    signal?: AbortSignal,
+  ): Promise<string>;
+  (
+    modelRuntime: ModelRuntime,
+    kind: CredentialPrintKind,
+    minExpiryMs?: number,
+    signal?: AbortSignal,
+  ): (args: Args) => Promise<string>;
+} = dual((args: IArguments) => args.length >= 3, resolveCredentialForPrintImpl);

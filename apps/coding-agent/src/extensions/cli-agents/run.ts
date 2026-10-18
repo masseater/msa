@@ -2,6 +2,7 @@ import { createInterface } from "node:readline";
 
 import type { Model, SimpleStreamOptions, TranscriptContext } from "@msa/ai/compat";
 import * as Effect from "effect/Effect";
+import { dual } from "effect/Function";
 
 import { awaited, awaiting, performed } from "../../core/awaiting.ts";
 import { schedule } from "../../core/platform.ts";
@@ -35,7 +36,7 @@ export interface CliBackend<Event> {
   shouldRetry(detail: string): boolean;
 }
 
-export function streamViaCli<Event>(
+function streamViaCliImpl<Event>(
   backend: CliBackend<Event>,
   model: Model<string>,
   context: TranscriptContext,
@@ -189,3 +190,17 @@ export function streamViaCli<Event>(
 
   return reply.stream;
 }
+
+export const streamViaCli: {
+  <Event>(
+    backend: CliBackend<Event>,
+    model: Model<string>,
+    context: TranscriptContext,
+    options?: SimpleStreamOptions,
+  ): ReplyBuilder["stream"];
+  <Event>(
+    model: Model<string>,
+    context: TranscriptContext,
+    options?: SimpleStreamOptions,
+  ): (backend: CliBackend<Event>) => ReplyBuilder["stream"];
+} = dual((args: IArguments) => args.length >= 3, streamViaCliImpl);

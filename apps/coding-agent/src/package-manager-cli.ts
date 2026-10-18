@@ -1,5 +1,6 @@
 import chalk from "chalk";
 import * as Effect from "effect/Effect";
+import { dual } from "effect/Function";
 
 import { selectConfig } from "./cli/config-selector.ts";
 import { createProjectTrustContext } from "./cli/project-trust.ts";
@@ -32,6 +33,7 @@ import {
   formatVersionCheckError,
   getLatestMsaRelease,
   isNewerPackageVersion,
+  type LatestMsaRelease,
 } from "./utils/version-check.ts";
 import {
   cleanupWindowsSelfUpdateQuarantine,
@@ -481,7 +483,7 @@ interface SelfUpdatePlan {
 function getSelfUpdatePlan(force: boolean): Promise<SelfUpdatePlan> {
   return Effect.runPromise(
     awaiting(function* () {
-      let latestRelease: Awaited<ReturnType<typeof getLatestMsaRelease>>;
+      let latestRelease: LatestMsaRelease | undefined;
       try {
         latestRelease = yield* awaited(getLatestMsaRelease(VERSION, { retry: true }));
       } catch (error: unknown) {
@@ -627,7 +629,7 @@ function createCommandSettingsManager(options: {
   );
 }
 
-export function handleConfigCommand(
+function handleConfigCommandImpl(
   args: string[],
   runtimeOptions: PackageCommandRuntimeOptions = {},
 ): Promise<boolean> {
@@ -725,7 +727,12 @@ export function handleConfigCommand(
   );
 }
 
-export function handlePackageCommand(
+export const handleConfigCommand: {
+  (args: string[], runtimeOptions?: PackageCommandRuntimeOptions): Promise<boolean>;
+  (runtimeOptions?: PackageCommandRuntimeOptions): (args: string[]) => Promise<boolean>;
+} = dual((args: IArguments) => args.length >= 1, handleConfigCommandImpl);
+
+function handlePackageCommandImpl(
   args: string[],
   runtimeOptions: PackageCommandRuntimeOptions = {},
 ): Promise<boolean> {
@@ -971,3 +978,8 @@ export function handlePackageCommand(
     }),
   );
 }
+
+export const handlePackageCommand: {
+  (args: string[], runtimeOptions?: PackageCommandRuntimeOptions): Promise<boolean>;
+  (runtimeOptions?: PackageCommandRuntimeOptions): (args: string[]) => Promise<boolean>;
+} = dual((args: IArguments) => args.length >= 1, handlePackageCommandImpl);

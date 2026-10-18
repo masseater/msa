@@ -23,6 +23,7 @@ import {
 } from "@msa/mcp";
 import { McpOAuthAuthorizationRequiredError, type OAuthChallenge } from "@msa/mcp/oauth";
 import * as Effect from "effect/Effect";
+import { dual } from "effect/Function";
 
 import { VERSION } from "../../config.ts";
 import { awaited, awaiting, awaitingWith, performed } from "../../core/awaiting.ts";
@@ -89,7 +90,7 @@ function expandHome(value: string): string {
   return value;
 }
 
-export function createDefaultTransport(
+function createDefaultTransportImpl(
   entry: McpServerEntry,
   cwd: string,
   authProvider: AuthProvider | undefined,
@@ -115,6 +116,11 @@ export function createDefaultTransport(
     stderr: "pipe",
   });
 }
+
+export const createDefaultTransport: {
+  (entry: McpServerEntry, cwd: string, authProvider: AuthProvider | undefined): McpTransport;
+  (cwd: string, authProvider: AuthProvider | undefined): (entry: McpServerEntry) => McpTransport;
+} = dual((args: IArguments) => args.length >= 3, createDefaultTransportImpl);
 
 function withoutTemplates<T>(list: () => Promise<T>, empty: T): Promise<T> {
   return Effect.runPromise(

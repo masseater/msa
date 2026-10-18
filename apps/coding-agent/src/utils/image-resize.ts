@@ -1,6 +1,7 @@
 import { Worker } from "node:worker_threads";
 
 import * as Effect from "effect/Effect";
+import { dual } from "effect/Function";
 
 import { awaited, awaiting } from "../core/awaiting.ts";
 import {
@@ -84,7 +85,7 @@ function resizeImageInWorker(
   );
 }
 
-export function resizeImage(
+function resizeImageImpl(
   inputBytes: Uint8Array,
   mimeType: string,
   options?: ImageResizeOptions,
@@ -118,6 +119,18 @@ export function resizeImage(
     }),
   );
 }
+
+export const resizeImage: {
+  (
+    inputBytes: Uint8Array,
+    mimeType: string,
+    options?: ImageResizeOptions,
+  ): Promise<ResizedImage | null>;
+  (
+    mimeType: string,
+    options?: ImageResizeOptions,
+  ): (inputBytes: Uint8Array) => Promise<ResizedImage | null>;
+} = dual((args: IArguments) => args.length >= 2, resizeImageImpl);
 
 export function formatDimensionNote(result: ResizedImage): string | undefined {
   if (!result.wasResized) {

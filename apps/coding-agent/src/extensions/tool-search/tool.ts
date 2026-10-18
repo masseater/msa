@@ -1,4 +1,5 @@
 import * as Effect from "effect/Effect";
+import { dual } from "effect/Function";
 import { type Static, Type } from "typebox";
 
 import type {
@@ -87,7 +88,7 @@ function schemaText(schema: unknown, parts: string[]): void {
   }
 }
 
-export function createToolSearchDocument(
+function createToolSearchDocumentImpl(
   tool: Pick<ToolInfo, "name" | "description" | "parameters">,
   namespace?: ToolNamespace,
 ): ToolSearchDocument {
@@ -97,6 +98,16 @@ export function createToolSearchDocument(
     parts.push(namespace.name, namespace.description ?? "", namespace.instructions ?? "");
   return { name: tool.name, text: parts.filter((part) => part.trim()).join(" ") };
 }
+
+export const createToolSearchDocument: {
+  (
+    tool: Pick<ToolInfo, "name" | "description" | "parameters">,
+    namespace?: ToolNamespace,
+  ): ToolSearchDocument;
+  (
+    namespace?: ToolNamespace,
+  ): (tool: Pick<ToolInfo, "name" | "description" | "parameters">) => ToolSearchDocument;
+} = dual((args: IArguments) => args.length >= 1, createToolSearchDocumentImpl);
 
 export class Bm25Ranker implements ToolRanker {
   private readonly k1: number;

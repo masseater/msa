@@ -2,6 +2,7 @@ import { createInterface } from "node:readline/promises";
 
 import chalk from "chalk";
 import * as Effect from "effect/Effect";
+import { dual } from "effect/Function";
 
 import { APP_NAME, CONFIG_DIR_NAME } from "../../config.ts";
 import { awaited, awaiting } from "../../core/awaiting.ts";
@@ -177,7 +178,7 @@ function parseOptions(
   return { positional, values, lists };
 }
 
-export function runMcpCommand(args: string[], options: McpCommandOptions): Promise<number> {
+function runMcpCommandImpl(args: string[], options: McpCommandOptions): Promise<number> {
   return Effect.runPromise(
     awaiting(function* () {
       const log = options.log ?? ((line: string) => writeLog(line));
@@ -276,6 +277,11 @@ export function runMcpCommand(args: string[], options: McpCommandOptions): Promi
     }),
   );
 }
+
+export const runMcpCommand: {
+  (args: string[], options: McpCommandOptions): Promise<number>;
+  (options: McpCommandOptions): (args: string[]) => Promise<number>;
+} = dual((args: IArguments) => args.length >= 2, runMcpCommandImpl);
 
 function parsePairs(option: string, pairs: string[] | undefined, error: (line: string) => void) {
   if (pairs === undefined) return {};

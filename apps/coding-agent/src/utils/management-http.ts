@@ -1,4 +1,5 @@
 import * as Effect from "effect/Effect";
+import { dual } from "effect/Function";
 
 import { awaited, awaiting } from "../core/awaiting.ts";
 import { fetchResponse } from "./interop.ts";
@@ -16,7 +17,7 @@ export interface FetchRetryOptions {
   attemptTimeoutMs?: number;
 }
 
-export function fetchWithRetry(
+function fetchWithRetryImpl(
   input: FetchInput,
   init: RequestInit | undefined = undefined,
   options: FetchRetryOptions = {},
@@ -81,3 +82,15 @@ export function fetchWithRetry(
     }),
   );
 }
+
+export const fetchWithRetry: {
+  (
+    input: FetchInput,
+    init?: RequestInit | undefined,
+    options?: FetchRetryOptions,
+  ): Promise<Response>;
+  (
+    init?: RequestInit | undefined,
+    options?: FetchRetryOptions,
+  ): (input: FetchInput) => Promise<Response>;
+} = dual((args: IArguments) => args.length >= 1, fetchWithRetryImpl);

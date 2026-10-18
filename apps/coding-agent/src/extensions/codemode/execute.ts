@@ -20,6 +20,7 @@ import {
   toCodemodeIdentifier,
 } from "@msa/codemode";
 import * as Effect from "effect/Effect";
+import { dual } from "effect/Function";
 
 import { getCodemodeWorkerSpecifier, getQuickJSWasmPath } from "../../config.ts";
 import { awaited, awaiting } from "../../core/awaiting.ts";
@@ -457,7 +458,7 @@ function toScriptValue(tool: AgentTool<any>, outcome: AgentToolCallOutcome): unk
   return text;
 }
 
-export function executeCodemode(
+function executeCodemodeImpl(
   toolCallId: string,
   input: CodemodeToolInput,
   signal: AbortSignal | undefined,
@@ -624,6 +625,24 @@ export function executeCodemode(
     }),
   );
 }
+
+export const executeCodemode: {
+  (
+    toolCallId: string,
+    input: CodemodeToolInput,
+    signal: AbortSignal | undefined,
+    onUpdate: ((result: AgentToolResult<CodemodeToolDetails>) => void) | undefined,
+    ctx: ExtensionToolContext | undefined,
+    options?: CodemodeToolOptions,
+  ): Promise<AgentToolResult<CodemodeToolDetails>>;
+  (
+    input: CodemodeToolInput,
+    signal: AbortSignal | undefined,
+    onUpdate: ((result: AgentToolResult<CodemodeToolDetails>) => void) | undefined,
+    ctx: ExtensionToolContext | undefined,
+    options?: CodemodeToolOptions,
+  ): (toolCallId: string) => Promise<AgentToolResult<CodemodeToolDetails>>;
+} = dual((args: IArguments) => args.length >= 5, executeCodemodeImpl);
 
 function isNamespaceName(namespace: ToolNamespace, query: string): boolean {
   const queryId = toCodemodeIdentifier(query);

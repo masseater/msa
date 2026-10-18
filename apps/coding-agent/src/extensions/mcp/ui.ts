@@ -12,6 +12,7 @@ import {
   visibleWidth,
 } from "@msa/tui";
 import { Effect } from "effect";
+import { dual } from "effect/Function";
 
 import { awaited, awaiting } from "../../core/awaiting.ts";
 import type { ExtensionCommandContext } from "../../core/extensions/types.ts";
@@ -265,7 +266,7 @@ export class McpManagerView implements McpUi, Component, Focusable {
   }
 }
 
-export function showMcpManager(
+function showMcpManagerImpl(
   ctx: ExtensionCommandContext,
   manage: (ui: McpUi) => Promise<void>,
 ): Promise<void> {
@@ -288,3 +289,8 @@ export function showMcpManager(
     }),
   );
 }
+
+export const showMcpManager: {
+  (ctx: ExtensionCommandContext, manage: (ui: McpUi) => Promise<void>): Promise<void>;
+  (manage: (ui: McpUi) => Promise<void>): (ctx: ExtensionCommandContext) => Promise<void>;
+} = dual((args: IArguments) => args.length >= 2, showMcpManagerImpl);

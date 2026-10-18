@@ -1,3 +1,5 @@
+import { dual } from "effect/Function";
+
 import { callbackPromise } from "./interop.ts";
 function abortReason(signal: AbortSignal): unknown {
   if (signal.reason !== undefined) return signal.reason;
@@ -10,7 +12,7 @@ export function operationSignal(signal?: AbortSignal): AbortSignal {
   return signal ?? new AbortController().signal;
 }
 
-export function raceWithAbortSignal<T>(
+function raceWithAbortSignalImpl<T>(
   operation: Promise<T>,
   signal: AbortSignal | undefined,
 ): Promise<T> {
@@ -50,3 +52,8 @@ export function raceWithAbortSignal<T>(
     if (signal.aborted) onAbort();
   });
 }
+
+export const raceWithAbortSignal: {
+  <T>(operation: Promise<T>, signal: AbortSignal | undefined): Promise<T>;
+  <T>(signal: AbortSignal | undefined): (operation: Promise<T>) => Promise<T>;
+} = dual((args: IArguments) => args.length >= 2, raceWithAbortSignalImpl);

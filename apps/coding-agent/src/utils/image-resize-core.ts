@@ -1,4 +1,5 @@
 import * as Effect from "effect/Effect";
+import { dual } from "effect/Function";
 
 import { awaited, awaiting } from "../core/awaiting.ts";
 import { applyExifOrientation } from "./exif-orientation.ts";
@@ -51,7 +52,7 @@ function encodeCandidate(buffer: Uint8Array, mimeType: string): EncodedCandidate
   };
 }
 
-export function resizeImageInProcess(
+function resizeImageInProcessImpl(
   inputBytes: Uint8Array,
   mimeType: string,
   options?: ImageResizeOptions,
@@ -170,3 +171,15 @@ export function resizeImageInProcess(
     }),
   );
 }
+
+export const resizeImageInProcess: {
+  (
+    inputBytes: Uint8Array,
+    mimeType: string,
+    options?: ImageResizeOptions,
+  ): Promise<ResizedImage | null>;
+  (
+    mimeType: string,
+    options?: ImageResizeOptions,
+  ): (inputBytes: Uint8Array) => Promise<ResizedImage | null>;
+} = dual((args: IArguments) => args.length >= 2, resizeImageInProcessImpl);

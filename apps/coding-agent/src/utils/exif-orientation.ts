@@ -1,3 +1,5 @@
+import { dual } from "effect/Function";
+
 import type { PhotonImageType } from "./photon.ts";
 
 type Photon = typeof import("@silvia-odwyer/photon-node");
@@ -155,7 +157,7 @@ function rotate90(photon: Photon, image: PhotonImageType, dstIndex: DstIndexFn):
   return new photon.PhotonImage(dst, h, w);
 }
 
-export function applyExifOrientation(
+function applyExifOrientationImpl(
   photon: Photon,
   image: PhotonImageType,
   originalBytes: Uint8Array,
@@ -192,3 +194,8 @@ export function applyExifOrientation(
       return image;
   }
 }
+
+export const applyExifOrientation: {
+  (photon: Photon, image: PhotonImageType, originalBytes: Uint8Array): PhotonImageType;
+  (image: PhotonImageType, originalBytes: Uint8Array): (photon: Photon) => PhotonImageType;
+} = dual((args: IArguments) => args.length >= 3, applyExifOrientationImpl);

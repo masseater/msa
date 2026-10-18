@@ -1,5 +1,6 @@
 import type { AuthResult } from "@msa/ai";
 import { Data } from "effect";
+import { dual } from "effect/Function";
 
 import { APP_NAME } from "../config.ts";
 import { writeLog } from "../core/platform.ts";
@@ -112,7 +113,7 @@ export function parseAuthCommand(args: string[]): AuthCommand | undefined {
     : { kind, args: commandArgs, json, credentials, noRefresh, minExpiryMs };
 }
 
-export function validateAuthCommandArgs(
+function validateAuthCommandArgsImpl(
   args: Args,
   kind: AuthCommandKind,
 ): { provider?: string | undefined; model?: string | undefined } {
@@ -138,6 +139,16 @@ export function validateAuthCommandArgs(
   }
   return { provider, model };
 }
+
+export const validateAuthCommandArgs: {
+  (
+    args: Args,
+    kind: AuthCommandKind,
+  ): { provider?: string | undefined; model?: string | undefined };
+  (
+    kind: AuthCommandKind,
+  ): (args: Args) => { provider?: string | undefined; model?: string | undefined };
+} = dual((args: IArguments) => args.length >= 2, validateAuthCommandArgsImpl);
 
 export function getAuthCredential(auth: AuthResult | undefined): string | undefined {
   if (auth?.auth.apiKey !== undefined && auth?.auth.apiKey !== "") return auth.auth.apiKey;

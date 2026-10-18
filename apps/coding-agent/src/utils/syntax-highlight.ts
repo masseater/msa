@@ -1,3 +1,4 @@
+import { dual } from "effect/Function";
 import hljs from "highlight.js/lib/core.js";
 import bash from "highlight.js/lib/languages/bash.js";
 import c from "highlight.js/lib/languages/c.js";
@@ -155,7 +156,7 @@ function isSpanOpenTagStart(html: string, index: number): boolean {
   );
 }
 
-export function renderHighlightedHtml(html: string, theme: HighlightTheme = {}): string {
+function renderHighlightedHtmlImpl(html: string, theme: HighlightTheme = {}): string {
   let output = "";
   let textBuffer = "";
   const scopes: Array<string | undefined> = [];
@@ -215,7 +216,12 @@ export function renderHighlightedHtml(html: string, theme: HighlightTheme = {}):
   return output;
 }
 
-export function highlight(code: string, options: HighlightOptions = {}): string {
+export const renderHighlightedHtml: {
+  (html: string, theme?: HighlightTheme): string;
+  (theme?: HighlightTheme): (html: string) => string;
+} = dual((args: IArguments) => args.length >= 1, renderHighlightedHtmlImpl);
+
+function highlightImpl(code: string, options: HighlightOptions = {}): string {
   const html =
     options.language !== undefined && options.language !== ""
       ? hljs.highlight(code, {
@@ -225,6 +231,11 @@ export function highlight(code: string, options: HighlightOptions = {}): string 
       : hljs.highlightAuto(code, options.languageSubset).value;
   return renderHighlightedHtml(html, options.theme);
 }
+
+export const highlight: {
+  (code: string, options?: HighlightOptions): string;
+  (options?: HighlightOptions): (code: string) => string;
+} = dual((args: IArguments) => args.length >= 1, highlightImpl);
 
 export function supportsLanguage(name: string): boolean {
   return hljs.getLanguage(name) !== undefined;
