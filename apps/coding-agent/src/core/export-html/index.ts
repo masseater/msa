@@ -68,14 +68,14 @@ function getLuminance(r: number, g: number, b: number): number {
 
 function adjustBrightness(color: string, factor: number): string {
   const parsed = parseColor(color);
-  if (!parsed) return color;
+  if (parsed === undefined) return color;
   const adjust = (c: number) => Math.min(255, Math.max(0, Math.round(c * factor)));
   return `rgb(${adjust(parsed.r)}, ${adjust(parsed.g)}, ${adjust(parsed.b)})`;
 }
 
 function deriveExportColors(baseColor: string): { pageBg: string; cardBg: string; infoBg: string } {
   const parsed = parseColor(baseColor);
-  if (!parsed) {
+  if (parsed === undefined) {
     return {
       pageBg: "rgb(24, 24, 30)",
       cardBg: "rgb(30, 30, 36)",
@@ -175,7 +175,7 @@ function preRenderCustomTools(
       for (const block of msg.content) {
         if (block.type === "toolCall" && !TEMPLATE_RENDERED_TOOLS.has(block.name)) {
           const callHtml = toolRenderer.renderCall(block.id, block.name, block.arguments);
-          if (callHtml) {
+          if (callHtml !== undefined && callHtml !== "") {
             renderedTools[block.id] = { callHtml };
           }
         }
@@ -193,7 +193,7 @@ function preRenderCustomTools(
           msg.details,
           msg.isError || false,
         );
-        if (rendered) {
+        if (rendered !== undefined) {
           renderedTools[msg.toolCallId] = {
             ...existing,
             resultHtmlCollapsed: rendered.collapsed,
@@ -212,10 +212,11 @@ export async function exportSessionToHtml(
   state?: AgentState,
   options?: ExportOptions | string,
 ): Promise<string> {
-  const opts: ExportOptions = typeof options === "string" ? { outputPath: options } : options || {};
+  const opts: ExportOptions =
+    typeof options === "string" ? { outputPath: options } : (options ?? {});
 
   const sessionFile = sm.getSessionFile();
-  if (!sessionFile) {
+  if (sessionFile === undefined || sessionFile === "") {
     throw new Error("Cannot export in-memory session to HTML");
   }
   if (!existsSync(sessionFile)) {
@@ -225,7 +226,7 @@ export async function exportSessionToHtml(
   const entries = sm.getEntries();
 
   let renderedTools: Record<string, RenderedToolHtml> | undefined;
-  if (opts.toolRenderer) {
+  if (opts.toolRenderer !== undefined) {
     renderedTools = preRenderCustomTools(entries, opts.toolRenderer);
     if (Object.keys(renderedTools).length === 0) {
       renderedTools = undefined;
@@ -247,8 +248,11 @@ export async function exportSessionToHtml(
 
   const html = generateHtml(sessionData, opts.themeName);
 
-  let outputPath = opts.outputPath ? normalizePath(opts.outputPath) : undefined;
-  if (!outputPath) {
+  let outputPath =
+    opts.outputPath !== undefined && opts.outputPath !== ""
+      ? normalizePath(opts.outputPath)
+      : undefined;
+  if (outputPath === undefined || outputPath === "") {
     const sessionBasename = basename(sessionFile, ".jsonl");
     outputPath = `${APP_NAME}-session-${sessionBasename}.html`;
   }
@@ -261,7 +265,8 @@ export async function exportFromFile(
   inputPath: string,
   options?: ExportOptions | string,
 ): Promise<string> {
-  const opts: ExportOptions = typeof options === "string" ? { outputPath: options } : options || {};
+  const opts: ExportOptions =
+    typeof options === "string" ? { outputPath: options } : (options ?? {});
   const resolvedInputPath = resolvePath(inputPath);
 
   if (!existsSync(resolvedInputPath)) {
@@ -280,8 +285,11 @@ export async function exportFromFile(
 
   const html = generateHtml(sessionData, opts.themeName);
 
-  let outputPath = opts.outputPath ? normalizePath(opts.outputPath) : undefined;
-  if (!outputPath) {
+  let outputPath =
+    opts.outputPath !== undefined && opts.outputPath !== ""
+      ? normalizePath(opts.outputPath)
+      : undefined;
+  if (outputPath === undefined || outputPath === "") {
     const inputBasename = basename(resolvedInputPath, ".jsonl");
     outputPath = `${APP_NAME}-session-${inputBasename}.html`;
   }

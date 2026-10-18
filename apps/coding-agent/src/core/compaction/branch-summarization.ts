@@ -67,7 +67,7 @@ export function collectEntriesForBranchSummary(
   oldLeafId: string | null,
   targetId: string,
 ): CollectEntriesResult {
-  if (!oldLeafId) {
+  if (oldLeafId === null || oldLeafId === "") {
     return { entries: [], commonAncestorId: null };
   }
 
@@ -88,7 +88,7 @@ export function collectEntriesForBranchSummary(
 
   while (current && current !== commonAncestorId) {
     const entry = session.getEntry(current);
-    if (!entry) break;
+    if (entry === undefined) break;
     entries.push(entry);
     current = entry.parentId;
   }
@@ -156,7 +156,7 @@ export function prepareBranchEntries(
     const entry = entries[i];
     if (entry === undefined) continue;
     const message = getMessageFromEntry(entry);
-    if (!message) continue;
+    if (message === undefined) continue;
 
     extractFileOpsFromMessage(message, fileOps);
 
@@ -246,7 +246,7 @@ export async function generateBranchSummary(
   let instructions: string;
   if (replaceInstructions && customInstructions) {
     instructions = customInstructions;
-  } else if (customInstructions) {
+  } else if (customInstructions !== undefined && customInstructions !== "") {
     instructions = `${BRANCH_SUMMARY_PROMPT}\n\nAdditional focus: ${customInstructions}`;
   } else {
     instructions = BRANCH_SUMMARY_PROMPT;
@@ -284,7 +284,7 @@ export async function generateBranchSummary(
     return { aborted: true };
   }
   const failure = getSummarizationFailure(response, "Branch summarization");
-  if (failure) {
+  if (failure !== undefined && failure !== "") {
     return { error: failure };
   }
   if (response.content.some((block) => block.type === "toolCall")) {

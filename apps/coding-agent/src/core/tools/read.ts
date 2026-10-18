@@ -71,11 +71,13 @@ export interface ReadToolOptions {
 function toReadOutput(content: (TextContent | ImageContent)[]): ReadToolOutput {
   const text = content.find((block) => block.type === "text")?.text ?? "";
   const image = content.find((block) => block.type === "image");
-  return image ? { type: "image", data: image.data, mimeType: image.mimeType, note: text } : text;
+  return image !== undefined
+    ? { type: "image", data: image.data, mimeType: image.mimeType, note: text }
+    : text;
 }
 
 function getNonVisionImageNote(model: Model<Api> | undefined): string | undefined {
-  if (!model || model.input.includes("image")) {
+  if (model === undefined || model.input.includes("image")) {
     return undefined;
   }
   return "[Current model does not support images. The image will be omitted from this request.]";
@@ -108,7 +110,7 @@ export function createReadToolDefinition(
         content: (TextContent | ImageContent)[];
         details: ReadToolDetails | undefined;
       }>((resolve, reject) => {
-        if (signal?.aborted) {
+        if (signal?.aborted === true) {
           reject(new Error("Operation aborted"));
           return;
         }
@@ -125,13 +127,14 @@ export function createReadToolDefinition(
             if (aborted) return;
             await ops.access(absolutePath);
             if (aborted) return;
-            const mimeType = ops.detectImageMimeType
-              ? await ops.detectImageMimeType(absolutePath)
-              : undefined;
+            const mimeType =
+              ops.detectImageMimeType !== undefined
+                ? await ops.detectImageMimeType(absolutePath)
+                : undefined;
             let content: (TextContent | ImageContent)[];
             let details: ReadToolDetails | undefined;
             const nonVisionImageNote = getNonVisionImageNote(ctx?.model);
-            if (mimeType) {
+            if (mimeType !== undefined && mimeType !== null && mimeType !== "") {
               const buffer = await ops.readFile(absolutePath);
               const processed = await processImage(buffer, mimeType, {
                 autoResizeImages,
@@ -139,12 +142,14 @@ export function createReadToolDefinition(
               });
               if (!processed.ok) {
                 let textNote = `Read image file [${mimeType}]\n${processed.message}`;
-                if (nonVisionImageNote) textNote += `\n${nonVisionImageNote}`;
+                if (nonVisionImageNote !== undefined && nonVisionImageNote !== "")
+                  textNote += `\n${nonVisionImageNote}`;
                 content = [{ type: "text", text: textNote }];
               } else {
                 let textNote = `Read image file [${processed.mimeType}]`;
                 if (processed.hints.length > 0) textNote += `\n${processed.hints.join("\n")}`;
-                if (nonVisionImageNote) textNote += `\n${nonVisionImageNote}`;
+                if (nonVisionImageNote !== undefined && nonVisionImageNote !== "")
+                  textNote += `\n${nonVisionImageNote}`;
                 content = [
                   { type: "text", text: textNote },
                   { type: "image", data: processed.data, mimeType: processed.mimeType },
@@ -155,7 +160,7 @@ export function createReadToolDefinition(
               const textContent = buffer.toString("utf-8");
               const allLines = textContent.split("\n");
               const totalFileLines = allLines.length;
-              const startLine = offset ? Math.max(0, offset - 1) : 0;
+              const startLine = offset !== undefined && offset !== 0 ? Math.max(0, offset - 1) : 0;
               const startLineDisplay = startLine + 1;
               const firstLine = allLines[startLine];
               if (firstLine === undefined) {

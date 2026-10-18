@@ -69,8 +69,8 @@ function createEmptyStyle(): TextStyle {
 
 function styleToInlineCSS(style: TextStyle): string {
   const parts: string[] = [];
-  if (style.fg) parts.push(`color:${style.fg}`);
-  if (style.bg) parts.push(`background-color:${style.bg}`);
+  if (style.fg !== null && style.fg !== "") parts.push(`color:${style.fg}`);
+  if (style.bg !== null && style.bg !== "") parts.push(`background-color:${style.bg}`);
   if (style.bold) parts.push("font-weight:bold");
   if (style.dim) parts.push("opacity:0.6");
   if (style.italic) parts.push("font-style:italic");
@@ -172,12 +172,15 @@ export function ansiToHtml(text: string): string {
   let match = ANSI_REGEX.exec(text);
   while (match !== null) {
     const beforeText = text.slice(lastIndex, match.index);
-    if (beforeText) {
+    if (beforeText !== "") {
       result += escapeHtml(beforeText);
     }
 
     const paramStr = match[1];
-    const params = paramStr ? paramStr.split(";").map((p) => parseInt(p, 10) || 0) : [0];
+    const params =
+      paramStr !== undefined && paramStr !== ""
+        ? paramStr.split(";").map((p) => parseInt(p, 10) || 0)
+        : [0];
 
     if (inSpan) {
       result += "</span>";
@@ -196,7 +199,7 @@ export function ansiToHtml(text: string): string {
   }
 
   const remainingText = text.slice(lastIndex);
-  if (remainingText) {
+  if (remainingText !== "") {
     result += escapeHtml(remainingText);
   }
 

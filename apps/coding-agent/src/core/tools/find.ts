@@ -87,7 +87,7 @@ export function createFindToolDefinition(
       ctx?: ExtensionContext,
     ) {
       return new Promise((resolve, reject) => {
-        if (signal?.aborted) {
+        if (signal?.aborted === true) {
           reject(new Error("Operation aborted"));
           return;
         }
@@ -113,12 +113,12 @@ export function createFindToolDefinition(
             const effectiveLimit = limit ?? DEFAULT_LIMIT;
             const ops = customOps ?? defaultFindOperations;
 
-            if (customOps?.glob) {
+            if (customOps?.glob !== undefined) {
               if (!(await ops.exists(searchPath))) {
                 settle(() => reject(new Error(`Path not found: ${searchPath}`)));
                 return;
               }
-              if (signal?.aborted) {
+              if (signal?.aborted === true) {
                 settle(() => reject(new Error("Operation aborted")));
                 return;
               }
@@ -126,7 +126,7 @@ export function createFindToolDefinition(
                 ignore: ["**/node_modules/**", "**/.git/**"],
                 limit: effectiveLimit,
               });
-              if (signal?.aborted) {
+              if (signal?.aborted === true) {
                 settle(() => reject(new Error("Operation aborted")));
                 return;
               }
@@ -168,11 +168,11 @@ export function createFindToolDefinition(
             }
 
             const fdPath = await ensureTool("fd");
-            if (signal?.aborted) {
+            if (signal?.aborted === true) {
               settle(() => reject(new Error("Operation aborted")));
               return;
             }
-            if (!fdPath) {
+            if (fdPath === undefined || fdPath === "") {
               settle(() => reject(new Error("fd is not available and could not be downloaded")));
               return;
             }
@@ -233,19 +233,19 @@ export function createFindToolDefinition(
 
             child.on("close", (code) => {
               cleanup();
-              if (signal?.aborted) {
+              if (signal?.aborted === true) {
                 settle(() => reject(new Error("Operation aborted")));
                 return;
               }
               const output = lines.join("\n");
               if (code !== 0) {
                 const errorMsg = stderr.trim() || `fd exited with code ${code}`;
-                if (!output) {
+                if (output === "") {
                   settle(() => reject(new Error(errorMsg)));
                   return;
                 }
               }
-              if (!output) {
+              if (output === "") {
                 settle(() =>
                   resolve({
                     content: [{ type: "text", text: "No files found matching pattern" }],
@@ -258,7 +258,7 @@ export function createFindToolDefinition(
               const relativized: string[] = [];
               for (const rawLine of lines) {
                 const line = rawLine.replace(/\r$/, "").trim();
-                if (!line) continue;
+                if (line === "") continue;
                 relativized.push(relativizeFindResultPath(line, searchPath));
               }
 
@@ -289,7 +289,7 @@ export function createFindToolDefinition(
               );
             });
           } catch (e) {
-            if (signal?.aborted) {
+            if (signal?.aborted === true) {
               settle(() => reject(new Error("Operation aborted")));
               return;
             }

@@ -164,14 +164,14 @@ export class Orchestrator {
 
   messages(id: string): readonly AgentMessage[] {
     const worker = this.workers.get(id);
-    if (worker) {
+    if (worker !== undefined) {
       const streaming = worker.state.streamingMessage;
-      return streaming ? [...worker.messages, streaming] : worker.messages;
+      return streaming !== undefined ? [...worker.messages, streaming] : worker.messages;
     }
     const sessionFile = this.snapshot.find((node) => node.id === id)?.sessionFile;
-    if (!sessionFile) return [];
+    if (sessionFile === undefined || sessionFile === "") return [];
     let cached = this.transcripts.get(sessionFile);
-    if (!cached) {
+    if (cached === undefined) {
       try {
         cached = SessionManager.open(sessionFile).buildSessionContext().messages;
       } catch {
@@ -215,7 +215,8 @@ export class Orchestrator {
 
   private async node(graph: SessionGraph, id: string): Promise<SessionNodeWithDependencies> {
     const node = await graph.get(id);
-    if (!node || node.project !== this.options.project) throw new Error(`Unknown session: ${id}`);
+    if (node === undefined || node.project !== this.options.project)
+      throw new Error(`Unknown session: ${id}`);
     return node;
   }
 
@@ -261,7 +262,7 @@ export class Orchestrator {
         },
         input.dependsOn,
       );
-      if (!review) {
+      if (review === undefined) {
         const reviewNode: SessionNode = {
           id: `r-${randomUUID().slice(0, 8)}`,
           project: this.options.project,
@@ -313,7 +314,7 @@ export class Orchestrator {
         );
       }
       await this.run(graph, node, message);
-      if (review) {
+      if (review !== undefined) {
         if (review.status === "stopped") await graph.update(review.id, { status: "queued" });
         await this.relinkReview(graph, review.id, node.round);
       }
@@ -327,9 +328,9 @@ export class Orchestrator {
       const node = await this.node(graph, id);
       const resolved = this.options.resolveModel(model);
       const worker = this.workers.get(id);
-      if (worker) {
+      if (worker !== undefined) {
         await worker.setModel(resolved);
-        if (thinkingLevel) worker.setThinkingLevel(thinkingLevel);
+        if (thinkingLevel !== undefined) worker.setThinkingLevel(thinkingLevel);
       }
       await graph.update(id, { model, thinkingLevel: thinkingLevel ?? node.thinkingLevel });
       return this.node(graph, id);
@@ -370,7 +371,7 @@ export class Orchestrator {
     const review = (await graph.list(this.options.project)).find(
       (node) => node.kind === "review" && node.round === round && node.status === "queued",
     );
-    if (review) await this.relinkReview(graph, review.id, round);
+    if (review !== undefined) await this.relinkReview(graph, review.id, round);
   }
 
   private async relinkReview(graph: SessionGraph, reviewId: string, round: number): Promise<void> {
@@ -388,7 +389,7 @@ export class Orchestrator {
     const byId = new Map(nodes.map((node) => [node.id, node]));
     for (const ready of await graph.ready(this.options.project)) {
       const node = byId.get(ready.id);
-      if (!node) continue;
+      if (node === undefined) continue;
       if (node.kind === "review") {
         if (running.length > 0 || started.length > 0) continue;
         await this.run(graph, node, reviewPrompt(node.round, nodes));
@@ -406,7 +407,7 @@ export class Orchestrator {
 
   private async run(graph: SessionGraph, node: SessionNode, text: string): Promise<void> {
     let worker = this.workers.get(node.id);
-    if (!worker) {
+    if (worker === undefined) {
       worker = await this.options.createWorker({
         cwd: node.cwd,
         model: this.options.resolveModel(node.model),
@@ -438,7 +439,7 @@ export class Orchestrator {
         (message): message is AssistantMessage => message.role === "assistant",
       );
       let status: SessionStatus = "completed";
-      let report = last ? contentText(last.content, "\n").trim() : "";
+      let report = last !== undefined ? contentText(last.content, "\n").trim() : "";
       if (error !== undefined) {
         status = "failed";
         report = toErrorMessage(error);
@@ -459,7 +460,7 @@ export class Orchestrator {
         status !== "completed" && waiting.length > 0
           ? `Waiting on it: ${waiting.map((other) => other.id).join(", ")}. Send it a message to rerun it, or stop them.`
           : undefined,
-        report ? `<session-report>\n${truncate(report)}\n</session-report>` : undefined,
+        report !== "" ? `<session-report>\n${truncate(report)}\n</session-report>` : undefined,
       ];
       this.options.report(lines.filter(Boolean).join("\n\n"), {
         sessionId: id,

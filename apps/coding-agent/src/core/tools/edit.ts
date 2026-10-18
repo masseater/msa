@@ -158,7 +158,7 @@ export function createEditToolDefinition(
 
       return withFileMutationQueue(absolutePath, async () => {
         const throwIfAborted = (): void => {
-          if (signal?.aborted) throw new Error("Operation aborted");
+          if (signal?.aborted === true) throw new Error("Operation aborted");
         };
 
         throwIfAborted();

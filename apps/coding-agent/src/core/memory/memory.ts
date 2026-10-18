@@ -66,9 +66,9 @@ export type MemoryCommand =
 
 export function parseMemoryCommand(text: string): MemoryCommand | undefined {
   const match = /^\/memory(?:\s+([\s\S]*))?$/.exec(text.trim());
-  if (!match) return undefined;
+  if (match === null) return undefined;
   const args = (match[1] ?? "").trim();
-  if (!args) return { kind: "status" };
+  if (args === "") return { kind: "status" };
   const [head = "", ...rest] = args.split(/\s+/);
   const tail = rest.join(" ").trim();
   switch (head) {
@@ -77,9 +77,9 @@ export function parseMemoryCommand(text: string): MemoryCommand | undefined {
     case "stats":
       return { kind: "stats" };
     case "search":
-      return tail ? { kind: "search", query: tail } : { kind: "status" };
+      return tail !== "" ? { kind: "search", query: tail } : { kind: "status" };
     case "forget":
-      return tail ? { kind: "forget", id: tail } : { kind: "status" };
+      return tail !== "" ? { kind: "forget", id: tail } : { kind: "status" };
     default:
       return { kind: "search", query: args };
   }
@@ -161,7 +161,7 @@ export class MemoryService {
       this.embedding = new EmbeddingClient({
         baseUrl: this.settings.embedding.baseUrl,
         model: this.settings.embedding.model,
-        ...(apiKey ? { apiKey } : {}),
+        ...(apiKey !== undefined && apiKey !== "" ? { apiKey } : {}),
         timeoutMs: this.settings.embedding.timeoutMs,
       });
     }
@@ -183,11 +183,11 @@ export class MemoryService {
   }
 
   async reembedStale(limit = REEMBED_BATCH_LIMIT): Promise<number> {
-    if (!this.settings.enabled || !this.embedding) return 0;
+    if (!this.settings.enabled || this.embedding === undefined) return 0;
     let reembedded = 0;
     for (const record of this.ensureStore().listStale(this.settings.embedding.model, limit)) {
       const vector = await this.embedDocument(record.content);
-      if (!vector) break;
+      if (vector === undefined) break;
       this.ensureStore().setEmbedding(record.id, vector, this.settings.embedding.model);
       reembedded++;
     }
@@ -201,7 +201,7 @@ export class MemoryService {
 
   private async embed(text: string, signal?: AbortSignal): Promise<Float32Array | undefined> {
     const client = this.embedding;
-    if (!client) return undefined;
+    if (client === undefined) return undefined;
     const failedAt = this.embeddingFailedAt;
     if (failedAt !== undefined && Date.now() - failedAt < EMBEDDING_FAILURE_COOLDOWN_MS) {
       return undefined;
@@ -232,7 +232,7 @@ export class MemoryService {
       const embedding = await this.embedQuery(query, signal);
       const scores = this.ensureStore().search({
         text: query,
-        ...(embedding ? { embedding } : {}),
+        ...(embedding !== undefined ? { embedding } : {}),
         project: this.project,
         limit: this.settings.recall.limit,
         minScore: this.settings.recall.minScore,
@@ -247,7 +247,7 @@ export class MemoryService {
 
   async save(request: MemorySaveRequest): Promise<MemorySaveOutcome> {
     const content = request.content.trim();
-    if (!content) throw new Error("Memory content is empty");
+    if (content === "") throw new Error("Memory content is empty");
     const kind = request.kind ?? "fact";
     if (!isMemoryKind(kind)) {
       throw new Error(`Unknown memory kind "${kind}"; use one of ${MEMORY_KINDS.join(", ")}`);
@@ -262,7 +262,9 @@ export class MemoryService {
       kind,
       scope,
       project: this.project,
-      ...(embedding ? { embedding, embeddingModel: this.settings.embedding.model } : {}),
+      ...(embedding !== undefined
+        ? { embedding, embeddingModel: this.settings.embedding.model }
+        : {}),
     });
     return {
       ...result,
@@ -277,7 +279,7 @@ export class MemoryService {
     const embedding = await this.embedQuery(query);
     return this.ensureStore().search({
       text: query,
-      ...(embedding ? { embedding } : {}),
+      ...(embedding !== undefined ? { embedding } : {}),
       project: this.project,
       limit,
       minScore: EXPLICIT_SEARCH_MIN_SCORE,
@@ -300,7 +302,7 @@ export class MemoryService {
     if (!this.settings.enabled) return "Memory is disabled (settings: memory.enabled).";
     const stats = this.ensureStore().stats();
     const embedding = this.settings.embedding.enabled
-      ? this.lastEmbeddingError
+      ? this.lastEmbeddingError !== undefined && this.lastEmbeddingError !== ""
         ? `unavailable: ${truncate(this.lastEmbeddingError, 120)}`
         : `${this.settings.embedding.model} at ${this.settings.embedding.baseUrl}`
       : "disabled";
@@ -322,7 +324,7 @@ export class MemoryService {
       .join(", ");
     return [
       `Total: ${stats.total} (${stats.embedded} embedded)`,
-      kinds ? `Kinds: ${kinds}` : "Kinds: none",
+      kinds !== "" ? `Kinds: ${kinds}` : "Kinds: none",
       `Projects: ${stats.projects}`,
       `Database: ${this.settings.database}`,
     ].join("\n");
@@ -341,7 +343,7 @@ export function resolveProjectName(dir: string): string {
       stdio: ["ignore", "pipe", "ignore"],
       encoding: "utf8",
     }).trim();
-    if (top) return basename(top);
+    if (top !== "") return basename(top);
   } catch {}
   return basename(dir) || dir;
 }

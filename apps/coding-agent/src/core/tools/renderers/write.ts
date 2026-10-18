@@ -42,8 +42,8 @@ function rebuildWriteHighlightCacheFull(
   rawPath: string | null,
   fileContent: string,
 ): WriteHighlightCache | undefined {
-  const lang = rawPath ? getLanguageFromPath(rawPath) : undefined;
-  if (!lang) return undefined;
+  const lang = rawPath !== null && rawPath !== "" ? getLanguageFromPath(rawPath) : undefined;
+  if (lang === undefined || lang === "") return undefined;
   const displayContent = normalizeDisplayText(fileContent);
   const normalized = replaceTabs(displayContent);
   return {
@@ -59,9 +59,9 @@ function updateWriteHighlightCacheIncremental(
   rawPath: string | null,
   fileContent: string,
 ): WriteHighlightCache | undefined {
-  const lang = rawPath ? getLanguageFromPath(rawPath) : undefined;
-  if (!lang) return undefined;
-  if (!cache) return rebuildWriteHighlightCacheFull(rawPath, fileContent);
+  const lang = rawPath !== null && rawPath !== "" ? getLanguageFromPath(rawPath) : undefined;
+  if (lang === undefined || lang === "") return undefined;
+  if (cache === undefined) return rebuildWriteHighlightCacheFull(rawPath, fileContent);
   if (cache.lang !== lang || cache.rawPath !== rawPath)
     return rebuildWriteHighlightCacheFull(rawPath, fileContent);
   if (!fileContent.startsWith(cache.rawContent))
@@ -110,16 +110,17 @@ function formatWriteCall(
 
   if (fileContent === null) {
     text += `\n\n${theme.fg("error", "[invalid content arg - expected string]")}`;
-  } else if (fileContent) {
-    const lang = rawPath ? getLanguageFromPath(rawPath) : undefined;
-    const renderedLines = lang
-      ? (cache?.highlightedLines ??
-        highlightCode(replaceTabs(normalizeDisplayText(fileContent)), lang))
-      : normalizeDisplayText(fileContent).split("\n");
+  } else if (fileContent !== "") {
+    const lang = rawPath !== null && rawPath !== "" ? getLanguageFromPath(rawPath) : undefined;
+    const renderedLines =
+      lang !== undefined && lang !== ""
+        ? (cache?.highlightedLines ??
+          highlightCode(replaceTabs(normalizeDisplayText(fileContent)), lang))
+        : normalizeDisplayText(fileContent).split("\n");
     const lines = trimTrailingEmptyLines(renderedLines);
     const count = normalizeDisplayText(fileContent).replace(/\n+$/, "").split("\n").length;
     text += options.expanded
-      ? `\n\n${lines.map((line) => (lang ? line : theme.fg("toolOutput", replaceTabs(line)))).join("\n")}`
+      ? `\n\n${lines.map((line) => (lang !== undefined && lang !== "" ? line : theme.fg("toolOutput", replaceTabs(line)))).join("\n")}`
       : `\n${expandHint(`${count} ${count === 1 ? "line" : "lines"}`)}`;
   }
 
@@ -132,14 +133,14 @@ function formatWriteResult(
   },
   theme: Theme,
 ): string | undefined {
-  if (!result.isError) {
+  if (result.isError !== true) {
     return undefined;
   }
   const output = result.content
     .filter((c) => c.type === "text")
     .map((c) => c.text || "")
     .join("\n");
-  if (!output) {
+  if (output === "") {
     return undefined;
   }
   return `\n${theme.fg("error", output)}`;
@@ -173,7 +174,7 @@ export const writeRenderers: Pick<ToolDefinition<any, any>, "renderCall" | "rend
   },
   renderResult(result, _options, theme, context) {
     const output = formatWriteResult({ ...result, isError: context.isError }, theme);
-    if (!output) {
+    if (output === undefined || output === "") {
       const component = (context.lastComponent as Container | undefined) ?? new Container();
       component.clear();
       return component;

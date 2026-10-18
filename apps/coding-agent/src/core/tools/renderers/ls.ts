@@ -32,8 +32,8 @@ function formatLsResult(
   const entryLimit = result.details?.entryLimitReached;
   const truncation = result.details?.truncation;
   const warnings: string[] = [];
-  if (entryLimit) warnings.push(`${entryLimit} entries limit`);
-  if (truncation?.truncated)
+  if (entryLimit !== undefined && entryLimit !== 0) warnings.push(`${entryLimit} entries limit`);
+  if (truncation?.truncated === true)
     warnings.push(`${formatSize(truncation.maxBytes ?? DEFAULT_MAX_BYTES)} limit`);
   const output = getTextOutput(result, showImages).trim();
   return formatListResult(output, warnings, options.expanded, "entries", theme);

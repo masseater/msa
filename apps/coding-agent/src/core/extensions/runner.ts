@@ -292,7 +292,7 @@ function restoreSystemMessages(
 ): AgentMessage[] {
   if (sameMessages(returned, visible)) return current;
   const head = getCurrentSystemMessage(current);
-  return head ? [head, ...returned] : returned;
+  return head !== undefined ? [head, ...returned] : returned;
 }
 
 export async function emitProjectTrustEvent(
@@ -462,7 +462,7 @@ export class ExtensionRunner {
 
     for (const { name, config, extensionPath } of this.runtime.pendingProviderRegistrations) {
       try {
-        if (providerActions?.registerProvider) {
+        if (providerActions?.registerProvider !== undefined) {
           providerActions.registerProvider(name, config);
         } else {
           this.modelRegistry.registerProvider(name, config);
@@ -479,7 +479,7 @@ export class ExtensionRunner {
     this.runtime.pendingProviderRegistrations = [];
     for (const { provider, extensionPath } of this.runtime.pendingNativeProviderRegistrations) {
       try {
-        if (providerActions?.registerNativeProvider) {
+        if (providerActions?.registerNativeProvider !== undefined) {
           providerActions.registerNativeProvider(provider);
         } else {
           this.modelRegistry.registerProvider(provider);
@@ -495,7 +495,8 @@ export class ExtensionRunner {
     }
     this.runtime.pendingNativeProviderRegistrations = [];
     const registerVirtualModel = (definition: VirtualModelDefinition) => {
-      if (providerActions?.registerVirtualModel) providerActions.registerVirtualModel(definition);
+      if (providerActions?.registerVirtualModel !== undefined)
+        providerActions.registerVirtualModel(definition);
       else this.modelRegistry.registerVirtualModel(definition);
     };
     for (const { definition, extensionPath } of this.runtime.pendingVirtualModelRegistrations) {
@@ -513,21 +514,21 @@ export class ExtensionRunner {
     this.runtime.pendingVirtualModelRegistrations = [];
 
     this.runtime.registerProvider = (name, config) => {
-      if (providerActions?.registerProvider) {
+      if (providerActions?.registerProvider !== undefined) {
         providerActions.registerProvider(name, config);
         return;
       }
       this.modelRegistry.registerProvider(name, config);
     };
     this.runtime.registerNativeProvider = (provider) => {
-      if (providerActions?.registerNativeProvider) {
+      if (providerActions?.registerNativeProvider !== undefined) {
         providerActions.registerNativeProvider(provider);
         return;
       }
       this.modelRegistry.registerProvider(provider);
     };
     this.runtime.unregisterProvider = (name) => {
-      if (providerActions?.unregisterProvider) {
+      if (providerActions?.unregisterProvider !== undefined) {
         providerActions.unregisterProvider(name);
         return;
       }
@@ -535,14 +536,14 @@ export class ExtensionRunner {
     };
     this.runtime.registerVirtualModel = registerVirtualModel;
     this.runtime.unregisterVirtualModel = (provider, id) => {
-      if (providerActions?.unregisterVirtualModel)
+      if (providerActions?.unregisterVirtualModel !== undefined)
         providerActions.unregisterVirtualModel(provider, id);
       else this.modelRegistry.unregisterVirtualModel(provider, id);
     };
   }
 
   bindCommandContext(actions?: ExtensionCommandContextActions): void {
-    if (actions) {
+    if (actions !== undefined) {
       this.waitForIdleFn = actions.waitForIdle;
       this.newSessionHandler = actions.newSession;
       this.forkHandler = actions.fork;
@@ -561,7 +562,7 @@ export class ExtensionRunner {
   }
 
   setUIContext(uiContext?: ExtensionUIContext, mode: ExtensionMode = "print"): void {
-    this.uiContext = uiContext ? this.wrapUIPromptContext(uiContext) : noOpUIContext;
+    this.uiContext = uiContext !== undefined ? this.wrapUIPromptContext(uiContext) : noOpUIContext;
     this.mode = mode;
   }
 
@@ -593,7 +594,7 @@ export class ExtensionRunner {
         type: "ui_prompt_start",
         reason: "ui_prompt",
         kind,
-        ...(title ? { title } : {}),
+        ...(title !== undefined && title !== "" ? { title } : {}),
       });
     }
 
@@ -607,7 +608,7 @@ export class ExtensionRunner {
         type: "ui_prompt_end",
         reason: "ui_prompt",
         kind: prompt.kind,
-        ...(prompt.title ? { title: prompt.title } : {}),
+        ...(prompt.title !== undefined && prompt.title !== "" ? { title: prompt.title } : {}),
       });
     };
 
@@ -654,7 +655,7 @@ export class ExtensionRunner {
   getToolDefinition(toolName: string): RegisteredTool["definition"] | undefined {
     for (const ext of this.extensions) {
       const tool = ext.tools.get(toolName);
-      if (tool) {
+      if (tool !== undefined) {
         return tool.definition;
       }
     }
@@ -714,7 +715,7 @@ export class ExtensionRunner {
         }
 
         const existingExtensionShortcut = extensionShortcuts.get(normalizedKey);
-        if (existingExtensionShortcut) {
+        if (existingExtensionShortcut !== undefined) {
           addDiagnostic(
             `Extension shortcut conflict: '${key}' registered by both ${existingExtensionShortcut.extensionPath} and ${shortcut.extensionPath}. Using ${shortcut.extensionPath}.`,
             shortcut.extensionPath,
@@ -733,14 +734,14 @@ export class ExtensionRunner {
   invalidate(
     message = "This extension ctx is stale after session replacement or reload. Do not use a captured msa or command ctx after ctx.newSession(), ctx.fork(), ctx.switchSession(), or ctx.reload(). For newSession, fork, and switchSession, move post-replacement work into withSession and use the ctx passed to withSession. For reload, do not use the old ctx after await ctx.reload().",
   ): void {
-    if (!this.staleMessage) {
+    if (this.staleMessage === undefined || this.staleMessage === "") {
       this.staleMessage = message;
       this.runtime.invalidate(message);
     }
   }
 
   private assertActive(): void {
-    if (this.staleMessage) {
+    if (this.staleMessage !== undefined && this.staleMessage !== "") {
       throw new Error(this.staleMessage);
     }
   }
@@ -782,7 +783,7 @@ export class ExtensionRunner {
   getMessageRenderer(customType: string): MessageRenderer | undefined {
     for (const ext of this.extensions) {
       const renderer = ext.messageRenderers.get(customType);
-      if (renderer) {
+      if (renderer !== undefined) {
         return renderer;
       }
     }
@@ -795,7 +796,7 @@ export class ExtensionRunner {
 
   getMarkdownTransformers(): MarkdownTransformer[] {
     return this.extensions.flatMap((ext) =>
-      ext.markdownTransformer ? [ext.markdownTransformer] : [],
+      ext.markdownTransformer !== undefined ? [ext.markdownTransformer] : [],
     );
   }
 
@@ -806,7 +807,7 @@ export class ExtensionRunner {
     const resolvers = this.extensions.flatMap((ext) => ext.toolRenderers ?? []);
     const resolve = (index: number): ToolRenderers | undefined => {
       const resolver = resolvers[index];
-      return resolver ? resolver(toolName, () => resolve(index + 1)) : base();
+      return resolver !== undefined ? resolver(toolName, () => resolve(index + 1)) : base();
     };
     return resolve(0);
   }
@@ -814,7 +815,7 @@ export class ExtensionRunner {
   getEntryRenderer(customType: string): EntryRenderer | undefined {
     for (const ext of this.extensions) {
       const renderer = ext.entryRenderers?.get(customType);
-      if (renderer) {
+      if (renderer !== undefined) {
         return renderer;
       }
     }
@@ -976,7 +977,7 @@ export class ExtensionRunner {
       executeTool: {
         value: async (name: string, args: unknown, options: ExecuteToolOptions = {}) => {
           runner.assertActive();
-          if (!runner.executeToolFn) {
+          if (runner.executeToolFn === undefined) {
             return {
               toolCall: { type: "toolCall", id: `${toolCallId}/0`, name, arguments: {} },
               result: {
@@ -1106,7 +1107,7 @@ export class ExtensionRunner {
 
           if (this.isSessionBeforeEvent(event) && handlerResult) {
             result = handlerResult as SessionBeforeEventResult;
-            if (result.cancel) {
+            if (result.cancel === true) {
               return result as RunnerEmitResult<TEvent>;
             }
           }
@@ -1161,7 +1162,7 @@ export class ExtensionRunner {
           const handlerResult = (await handler(currentEvent, ctx)) as
             | MessageEndEventResult
             | undefined;
-          if (!handlerResult?.message) continue;
+          if (handlerResult?.message === undefined) continue;
 
           if (handlerResult.message.role !== currentMessage.role) {
             this.emitError({
@@ -1201,7 +1202,7 @@ export class ExtensionRunner {
           const handlerResult = (await handler(currentEvent, ctx)) as
             | ToolResultEventResult
             | undefined;
-          if (!handlerResult) continue;
+          if (handlerResult === undefined) continue;
 
           if (handlerResult.content !== undefined) {
             currentEvent.content = handlerResult.content;
@@ -1261,7 +1262,7 @@ export class ExtensionRunner {
 
         if (handlerResult) {
           result = handlerResult as ToolCallEventResult;
-          if (result.block) {
+          if (result.block === true) {
             return result;
           }
         }
@@ -1317,7 +1318,7 @@ export class ExtensionRunner {
           const returned =
             handlerResult?.messages ??
             (sameMessages(visibleMessages, visibleSnapshot) ? undefined : visibleMessages);
-          if (!returned) continue;
+          if (returned === undefined) continue;
           currentMessages = restoreSystemMessages(currentMessages, visibleSnapshot, returned);
         } catch (err) {
           const message = toErrorMessage(err);
@@ -1461,7 +1462,7 @@ export class ExtensionRunner {
 
           if (handlerResult) {
             const result = handlerResult as BeforeAgentStartEventResult;
-            if (result.message) messages.push(result.message);
+            if (result.message !== undefined) messages.push(result.message);
             if (result.systemPrompt !== undefined) {
               currentOptions.forceSystemPrompt = result.systemPrompt;
             }
@@ -1502,17 +1503,17 @@ export class ExtensionRunner {
           const handlerResult = await handler(event, ctx);
           const result = handlerResult as ResourcesDiscoverResult | undefined;
 
-          if (result?.skillPaths?.length) {
+          if (result?.skillPaths?.length !== undefined && result?.skillPaths?.length > 0) {
             skillPaths.push(
               ...result.skillPaths.map((path) => ({ path, extensionPath: ext.path })),
             );
           }
-          if (result?.promptPaths?.length) {
+          if (result?.promptPaths?.length !== undefined && result?.promptPaths?.length > 0) {
             promptPaths.push(
               ...result.promptPaths.map((path) => ({ path, extensionPath: ext.path })),
             );
           }
-          if (result?.themePaths?.length) {
+          if (result?.themePaths?.length !== undefined && result?.themePaths?.length > 0) {
             themePaths.push(
               ...result.themePaths.map((path) => ({ path, extensionPath: ext.path })),
             );

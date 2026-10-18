@@ -26,7 +26,7 @@ export class EmbeddingClient {
   async embed(text: string, signal?: AbortSignal): Promise<Float32Array> {
     const controller = new AbortController();
     const onAbort = () => controller.abort(signal?.reason);
-    if (signal?.aborted) controller.abort(signal.reason);
+    if (signal?.aborted === true) controller.abort(signal.reason);
     else signal?.addEventListener("abort", onAbort, { once: true });
     const timeout = setTimeout(
       () => controller.abort(new Error(`Embedding request timed out after ${this.timeoutMs} ms`)),
@@ -37,7 +37,9 @@ export class EmbeddingClient {
         method: "POST",
         headers: {
           "content-type": "application/json",
-          ...(this.apiKey ? { authorization: `Bearer ${this.apiKey}` } : {}),
+          ...(this.apiKey !== undefined && this.apiKey !== ""
+            ? { authorization: `Bearer ${this.apiKey}` }
+            : {}),
         },
         body: JSON.stringify({ model: this.model, input: text }),
         signal: controller.signal,

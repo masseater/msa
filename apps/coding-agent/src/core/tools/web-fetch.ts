@@ -40,17 +40,19 @@ export function createWebFetchToolDefinition(
       const page = rows(result.output, "pages")[0];
       const details: WebFetchToolDetails = {
         url: pickString(page, "final_url", "url") ?? params.url,
-        ...(result.servedBy ? { servedBy: result.servedBy } : {}),
+        ...(result.servedBy !== undefined && result.servedBy !== ""
+          ? { servedBy: result.servedBy }
+          : {}),
         ...(result.costMicro === undefined ? {} : { costMicro: result.costMicro }),
       };
       const title = pickString(page, "title");
-      if (title) details.title = title;
+      if (title !== undefined && title !== "") details.title = title;
       const body = pickString(page, "text", "markdown", "content", "raw_content");
-      if (!body) {
+      if (body === undefined || body === "") {
         throw new Error(`Could not read ${params.url}: no vendor returned its content.`);
       }
       const truncation = truncateHead(
-        [title ? `# ${title}` : undefined, details.url, "", body]
+        [title !== undefined && title !== "" ? `# ${title}` : undefined, details.url, "", body]
           .filter((line) => line !== undefined)
           .join("\n"),
       );

@@ -72,7 +72,7 @@ function getVirtualModules(): Promise<Record<string, unknown>> {
 let _aliases: Record<string, string> | null = null;
 
 function getAliases(): Record<string, string> {
-  if (_aliases) return _aliases;
+  if (_aliases !== null) return _aliases;
 
   const __dirname = path.dirname(fileURLToPath(import.meta.url));
   const packageIndex = path.resolve(__dirname, "../..", "index.js");
@@ -161,7 +161,7 @@ export function createExtensionRuntime(): ExtensionRuntime {
   const state: { staleMessage?: string } = {};
   const eventBusUnsubscribers = new Set<() => void>();
   const assertActive = () => {
-    if (state.staleMessage) {
+    if (state.staleMessage !== undefined && state.staleMessage !== "") {
       throw new Error(state.staleMessage);
     }
   };
@@ -190,7 +190,7 @@ export function createExtensionRuntime(): ExtensionRuntime {
     createContext: notInitialized,
     assertActive,
     invalidate: (message) => {
-      if (state.staleMessage) return;
+      if (state.staleMessage !== undefined && state.staleMessage !== "") return;
       state.staleMessage =
         message ??
         "This extension ctx is stale after session replacement or reload. Do not use a captured msa or command ctx after ctx.newSession(), ctx.fork(), ctx.switchSession(), or ctx.reload(). For newSession, fork, and switchSession, move post-replacement work into withSession and use the ctx passed to withSession. For reload, do not use the old ctx after await ctx.reload().";
@@ -272,7 +272,7 @@ function createExtensionAPI(
 
       return () => {
         const handlers = extension.handlers.get(event);
-        if (!handlers) return;
+        if (handlers === undefined) return;
         const handlerIndex = handlers.indexOf(registeredHandler);
         if (handlerIndex === -1) return;
         handlers.splice(handlerIndex, 1);
@@ -461,7 +461,8 @@ function createExtensionAPI(
     registerProvider(providerOrName: Provider | string, config?: ProviderConfig) {
       assertActive();
       if (typeof providerOrName === "string") {
-        if (!config) throw new Error("Provider config is required when registering by name");
+        if (config === undefined)
+          throw new Error("Provider config is required when registering by name");
         applyRuntimeChange(() => runtime.registerProvider(providerOrName, config, extension.path));
         return;
       }
@@ -488,7 +489,7 @@ function createExtensionAPI(
       const clash = runtime.mcpServers
         .list()
         .find((server) => server.name !== name && mcpNamespace(server.name) === mcpNamespace(name));
-      if (clash)
+      if (clash !== undefined)
         throw new Error(`MCP server "${name}" conflicts with registered server "${clash.name}"`);
       const server = { name, config: structuredClone(validated), extensionPath: extension.path };
       applyRuntimeChange(() => runtime.mcpServers.register(server));
@@ -567,7 +568,7 @@ function isCurrentCacheToken(
 async function loadExtensionModule(extensionPath: string, cacheToken?: ExtensionCacheToken) {
   if (isCurrentCacheToken(cacheToken)) {
     const cachedFactory = extensionCache.get(extensionPath);
-    if (cachedFactory) {
+    if (cachedFactory !== undefined) {
       return cachedFactory;
     }
   }
@@ -645,7 +646,7 @@ async function loadExtension(
   try {
     const factory = await loadExtensionModule(resolvedPath, cacheToken);
     time(`${extensionPath} module import`, "extensions");
-    if (!factory) {
+    if (factory === undefined) {
       return {
         extension: null,
         error: `Extension does not export a valid factory function: ${extensionPath}`,
@@ -703,12 +704,12 @@ async function loadExtensionsInternal(
       cacheToken,
     );
 
-    if (error) {
+    if (error !== null && error !== "") {
       errors.push({ path: extPath, error });
       continue;
     }
 
-    if (extension) {
+    if (extension !== null) {
       extensions.push(extension);
     }
   }
@@ -747,7 +748,7 @@ function resolveExtensionEntries(dir: string): string[] | null {
   const packageJsonPath = path.join(dir, "package.json");
   if (fs.existsSync(packageJsonPath)) {
     const manifest = readMsaManifest(packageJsonPath);
-    if (manifest?.extensions?.length) {
+    if (manifest?.extensions?.length !== undefined && manifest?.extensions?.length > 0) {
       const entries: string[] = [];
       for (const extPath of manifest.extensions) {
         const resolvedExtPath = path.resolve(dir, extPath);
@@ -793,7 +794,7 @@ function discoverExtensionsInDir(dir: string): string[] {
 
       if (entry.isDirectory() || entry.isSymbolicLink()) {
         const resolvedEntries = resolveExtensionEntries(entryPath);
-        if (resolvedEntries) {
+        if (resolvedEntries !== null) {
           discovered.push(...resolvedEntries);
         }
       }
@@ -836,7 +837,7 @@ export async function discoverAndLoadExtensions(
     const resolved = resolvePath(p, resolvedCwd, { normalizeUnicodeSpaces: true });
     if (fs.existsSync(resolved) && fs.statSync(resolved).isDirectory()) {
       const entries = resolveExtensionEntries(resolved);
-      if (entries) {
+      if (entries !== null) {
         addPaths(entries);
         continue;
       }

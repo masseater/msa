@@ -111,7 +111,9 @@ export function createOrchestratorToolDefinitions(
         const node = await orchestrator.read(id);
         return [
           formatSessionList([node]),
-          node.sessionFile ? `Transcript: ${node.sessionFile}` : undefined,
+          node.sessionFile !== undefined && node.sessionFile !== ""
+            ? `Transcript: ${node.sessionFile}`
+            : undefined,
           `<prompt>\n${node.prompt}\n</prompt>`,
           `<report>\n${node.report ?? ""}\n</report>`,
         ]

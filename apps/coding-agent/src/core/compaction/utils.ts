@@ -38,7 +38,7 @@ function addFileOp(
   fileOps: FileOperations,
 ): void {
   const path = typeof args?.["path"] === "string" ? args["path"] : undefined;
-  if (!path) return;
+  if (path === undefined || path === "") return;
   switch (toolName) {
     case "read":
       fileOps.read.add(path);
@@ -92,7 +92,7 @@ export function serializeConversation(
   for (const msg of messages) {
     if (msg.role === "user") {
       const content = contentText(msg.content, "");
-      if (content) parts.push(`[User]: ${content}`);
+      if (content !== "") parts.push(`[User]: ${content}`);
     } else if (msg.role === "assistant") {
       const toolCalls: string[] = [];
 
@@ -114,7 +114,7 @@ export function serializeConversation(
       }
     } else if (msg.role === "toolResult") {
       const content = contentText(msg.content, "");
-      if (content) {
+      if (content !== "") {
         parts.push(`[Tool result]: ${truncateToolResult(content)}`);
       }
     }

@@ -66,7 +66,7 @@ const segmenter = new Intl.Segmenter("ja", { granularity: "word" });
 export function segmentWords(text: string): string[] {
   const words: string[] = [];
   for (const segment of segmenter.segment(text.toLowerCase())) {
-    if (segment.isWordLike) words.push(segment.segment);
+    if (segment.isWordLike === true) words.push(segment.segment);
   }
   return words;
 }
@@ -138,7 +138,7 @@ function toRecord(row: MemoryRow): MemoryRecord {
     updatedAt: row.updated_at,
     useCount: row.use_count,
     lastUsedAt: row.last_used_at,
-    embedding: row.embedding ? decodeVector(row.embedding) : null,
+    embedding: row.embedding !== null ? decodeVector(row.embedding) : null,
     embeddingModel: row.embedding_model,
   };
 }
@@ -176,7 +176,7 @@ export class MemoryStore {
       const indexed = this.database
         .prepare(`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'memories_fts'`)
         .get();
-      if (indexed) return;
+      if (indexed !== undefined) return;
       this.database.exec(`CREATE VIRTUAL TABLE memories_fts USING fts5(id UNINDEXED, terms)`);
       const rows = this.database.prepare(`SELECT id, content FROM memories`).all() as unknown as {
         id: string;
@@ -188,7 +188,7 @@ export class MemoryStore {
 
   private statement(sql: string): StatementSync {
     let statement = this.statements.get(sql);
-    if (!statement) {
+    if (statement === undefined) {
       statement = this.database.prepare(sql);
       this.statements.set(sql, statement);
     }
@@ -235,8 +235,8 @@ export class MemoryStore {
     const existing = this.statement(
       `SELECT * FROM memories WHERE content = ? AND scope = ? AND project IS ?`,
     ).get(content, input.scope, project) as unknown as MemoryRow | undefined;
-    const embedding = input.embedding ? encodeVector(input.embedding) : null;
-    if (existing) {
+    const embedding = input.embedding !== undefined ? encodeVector(input.embedding) : null;
+    if (existing !== undefined) {
       this.statement(
         `UPDATE memories SET updated_at = ?, embedding = COALESCE(?, embedding),
            embedding_model = COALESCE(?, embedding_model) WHERE id = ?`,
@@ -277,9 +277,9 @@ export class MemoryStore {
     for (const row of this.scoped(options.project)) records.set(row.id, toRecord(row));
 
     const vectors = new Map<string, number>();
-    if (options.embedding) {
+    if (options.embedding !== undefined) {
       for (const record of records.values()) {
-        if (!record.embedding) continue;
+        if (record.embedding === null) continue;
         const similarity = cosineSimilarity(options.embedding, record.embedding);
         if (similarity >= options.minScore) vectors.set(record.id, similarity);
       }
@@ -329,7 +329,7 @@ export class MemoryStore {
     const row = this.statement(`SELECT * FROM memories WHERE id = ?`).get(id) as unknown as
       | MemoryRow
       | undefined;
-    return row ? toRecord(row) : undefined;
+    return row !== undefined ? toRecord(row) : undefined;
   }
 
   listStale(embeddingModel: string, limit: number): MemoryRecord[] {
@@ -352,7 +352,7 @@ export class MemoryStore {
     const row = this.statement(`SELECT id FROM memories WHERE id = ?`).get(id) as unknown as
       | { id: string }
       | undefined;
-    if (!row) return false;
+    if (row === undefined) return false;
     this.transaction(() => {
       this.statement(`DELETE FROM memories WHERE id = ?`).run(id);
       this.statement(`DELETE FROM memories_fts WHERE id = ?`).run(id);

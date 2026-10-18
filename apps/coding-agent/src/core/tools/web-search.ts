@@ -37,12 +37,14 @@ function formatRow(row: unknown, index: number): string {
   const title = pickString(row, "title", "name");
   const url = pickString(row, "url", "link");
   const snippet = pickString(row, "snippet", "description", "content", "text");
-  if (!title && !url) return `${index + 1}. ${JSON.stringify(row)}`;
+  if ((title === undefined || title === "") && (url === undefined || url === ""))
+    return `${index + 1}. ${JSON.stringify(row)}`;
   const lines = [`${index + 1}. ${title ?? url}`];
-  if (url) lines.push(`   ${url}`);
+  if (url !== undefined && url !== "") lines.push(`   ${url}`);
   const date = pickString(row, "publishedDate", "published_date", "date");
-  if (date) lines.push(`   Published: ${date}`);
-  if (snippet) lines.push(...snippet.split("\n").map((line) => `   ${line}`));
+  if (date !== undefined && date !== "") lines.push(`   Published: ${date}`);
+  if (snippet !== undefined && snippet !== "")
+    lines.push(...snippet.split("\n").map((line) => `   ${line}`));
   return lines.join("\n");
 }
 
@@ -72,10 +74,12 @@ export function createWebSearchToolDefinition(
           const url = pickString(row, "url", "link");
           return {
             title: pickString(row, "title", "name") ?? url ?? "(untitled)",
-            ...(url ? { url } : {}),
+            ...(url !== undefined && url !== "" ? { url } : {}),
           };
         }),
-        ...(result.servedBy ? { servedBy: result.servedBy } : {}),
+        ...(result.servedBy !== undefined && result.servedBy !== ""
+          ? { servedBy: result.servedBy }
+          : {}),
         ...(result.costMicro === undefined ? {} : { costMicro: result.costMicro }),
       };
       if (found.length === 0) {

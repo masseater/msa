@@ -24,10 +24,11 @@ function formatShellCall(
 ): string {
   const command = str(args?.command);
   const timeout = args?.timeout as number | undefined;
-  const timeoutSuffix = timeout ? theme.fg("muted", ` (timeout ${timeout}s)`) : "";
+  const timeoutSuffix =
+    timeout !== undefined && timeout !== 0 ? theme.fg("muted", ` (timeout ${timeout}s)`) : "";
   if (command === null)
     return theme.fg("toolTitle", theme.bold(`${prompt} ${invalidArgText(theme)}`));
-  if (!command)
+  if (command === "")
     return theme.fg("toolTitle", theme.bold(`${prompt} ${theme.fg("toolOutput", "...")}`));
   const lines = command.trimEnd().split("\n");
   const shown = expanded ? lines.join("\n") : lines[0];
@@ -63,7 +64,7 @@ function rebuildBashResultRenderComponent(
     return;
   }
 
-  if (output) {
+  if (output !== "") {
     const styledOutput = output
       .split("\n")
       .map((line) => theme.fg("toolOutput", line))
@@ -73,10 +74,10 @@ function rebuildBashResultRenderComponent(
 
   if (truncation?.truncated || fullOutputPath) {
     const warnings: string[] = [];
-    if (fullOutputPath) {
+    if (fullOutputPath !== undefined && fullOutputPath !== "") {
       warnings.push(`Full output: ${fullOutputPath}`);
     }
-    if (truncation?.truncated) {
+    if (truncation?.truncated === true) {
       if (truncation.truncatedBy === "lines") {
         warnings.push(
           `Truncated: showing ${truncation.outputLines} of ${truncation.totalLines} lines`,
@@ -90,7 +91,8 @@ function rebuildBashResultRenderComponent(
     component.addChild(new Text(`\n${theme.fg("warning", `[${warnings.join(". ")}]`)}`, 0, 0));
   }
 
-  if (timerText) component.addChild(new Text(`\n${theme.fg("muted", timerText)}`, 0, 0));
+  if (timerText !== undefined && timerText !== "")
+    component.addChild(new Text(`\n${theme.fg("muted", timerText)}`, 0, 0));
 }
 
 export function createShellRenderers(

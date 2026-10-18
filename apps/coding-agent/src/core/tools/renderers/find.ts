@@ -38,8 +38,8 @@ function formatFindResult(
   const resultLimit = result.details?.resultLimitReached;
   const truncation = result.details?.truncation;
   const warnings: string[] = [];
-  if (resultLimit) warnings.push(`${resultLimit} results limit`);
-  if (truncation?.truncated)
+  if (resultLimit !== undefined && resultLimit !== 0) warnings.push(`${resultLimit} results limit`);
+  if (truncation?.truncated === true)
     warnings.push(`${formatSize(truncation.maxBytes ?? DEFAULT_MAX_BYTES)} limit`);
   const output = getTextOutput(result, showImages).trim();
   return formatListResult(output, warnings, options.expanded, "files", theme);

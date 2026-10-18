@@ -94,7 +94,7 @@ export function createLocalShellOperations(
   return {
     exec: async (command, cwd, { onData, signal, timeout, env }) => {
       const timeoutMs = resolveTimeoutMs(timeout);
-      if (signal?.aborted) {
+      if (signal?.aborted === true) {
         throw new Error("aborted");
       }
       const shellConfig = resolveShellConfig();
@@ -122,28 +122,28 @@ export function createLocalShellOperations(
         child.stdin?.on("error", () => {});
         child.stdin?.end(command);
       }
-      if (child.pid) trackDetachedChildPid(child.pid);
+      if (child.pid !== undefined && child.pid !== 0) trackDetachedChildPid(child.pid);
       let timedOut = false;
       let timeoutHandle: NodeJS.Timeout | undefined;
       const onAbort = () => {
-        if (child.pid) killProcessTree(child.pid);
+        if (child.pid !== undefined && child.pid !== 0) killProcessTree(child.pid);
       };
 
       try {
         if (timeoutMs !== undefined) {
           timeoutHandle = setTimeout(() => {
             timedOut = true;
-            if (child.pid) killProcessTree(child.pid);
+            if (child.pid !== undefined && child.pid !== 0) killProcessTree(child.pid);
           }, timeoutMs);
         }
         child.stdout?.on("data", onData);
         child.stderr?.on("data", onData);
-        if (signal) {
+        if (signal !== undefined) {
           if (signal.aborted) onAbort();
           else signal.addEventListener("abort", onAbort, { once: true });
         }
         const exitCode = await waitForChildProcess(child);
-        if (signal?.aborted) {
+        if (signal?.aborted === true) {
           throw new Error("aborted");
         }
         if (timedOut) {
@@ -151,12 +151,13 @@ export function createLocalShellOperations(
         }
         const signalCode = child.signalCode;
         return {
-          exitCode: exitCode ?? (signalCode ? 128 + (osConstants.signals[signalCode] ?? 0) : 1),
+          exitCode:
+            exitCode ?? (signalCode !== null ? 128 + (osConstants.signals[signalCode] ?? 0) : 1),
         };
       } finally {
-        if (child.pid) untrackDetachedChildPid(child.pid);
-        if (timeoutHandle) clearTimeout(timeoutHandle);
-        if (signal) signal.removeEventListener("abort", onAbort);
+        if (child.pid !== undefined && child.pid !== 0) untrackDetachedChildPid(child.pid);
+        if (timeoutHandle !== undefined) clearTimeout(timeoutHandle);
+        if (signal !== undefined) signal.removeEventListener("abort", onAbort);
       }
     },
   };
@@ -193,15 +194,15 @@ function resolveSpawnContext(
     const model = ctx.model;
     env["MSA_SESSION_ID"] = ctx.sessionManager.getSessionId();
     const sessionFile = ctx.sessionManager.getSessionFile();
-    if (sessionFile) env["MSA_SESSION_FILE"] = sessionFile;
-    if (model) {
+    if (sessionFile !== undefined && sessionFile !== "") env["MSA_SESSION_FILE"] = sessionFile;
+    if (model !== undefined) {
       env["MSA_PROVIDER"] = model.provider;
       env["MSA_MODEL"] = model.id;
     }
-    if (ctx.thinkingLevel) env["MSA_REASONING_LEVEL"] = ctx.thinkingLevel;
+    if (ctx.thinkingLevel !== undefined) env["MSA_REASONING_LEVEL"] = ctx.thinkingLevel;
   }
   const baseContext: BashSpawnContext = { command, cwd, env };
-  return spawnHook ? spawnHook(baseContext) : baseContext;
+  return spawnHook !== undefined ? spawnHook(baseContext) : baseContext;
 }
 
 export interface BashToolOptions {
@@ -256,7 +257,10 @@ export function createShellToolDefinition(
       onUpdate?,
       ctx?: ExtensionContext,
     ) {
-      const resolvedCommand = commandPrefix ? `${commandPrefix}\n${command}` : command;
+      const resolvedCommand =
+        commandPrefix !== undefined && commandPrefix !== ""
+          ? `${commandPrefix}\n${command}`
+          : command;
       const spawnContext = resolveSpawnContext(
         resolvedCommand,
         ctx?.cwd || cwd,
@@ -271,7 +275,7 @@ export function createShellToolDefinition(
       let lastUpdateAt = 0;
 
       const emitOutputUpdate = () => {
-        if (!onUpdate || !updateDirty) return;
+        if (onUpdate === undefined || !updateDirty) return;
         updateDirty = false;
         lastUpdateAt = Date.now();
         const snapshot = output.snapshot({ persistIfTruncated: true });
@@ -285,14 +289,14 @@ export function createShellToolDefinition(
       };
 
       const clearUpdateTimer = () => {
-        if (updateTimer) {
+        if (updateTimer !== undefined) {
           clearTimeout(updateTimer);
           updateTimer = undefined;
         }
       };
 
       const scheduleOutputUpdate = () => {
-        if (!onUpdate) return;
+        if (onUpdate === undefined) return;
         updateDirty = true;
         const delay = BASH_UPDATE_THROTTLE_MS - (Date.now() - lastUpdateAt);
         if (delay <= 0) {
@@ -306,7 +310,7 @@ export function createShellToolDefinition(
         }, delay);
       };
 
-      if (onUpdate) {
+      if (onUpdate !== undefined) {
         onUpdate({ content: [], details: undefined });
       }
 
@@ -350,7 +354,7 @@ export function createShellToolDefinition(
       };
 
       const appendStatus = (text: string, status: string) =>
-        `${text ? `${text}\n\n` : ""}${status}`;
+        `${text !== "" ? `${text}\n\n` : ""}${status}`;
       const startedAt = performance.now();
 
       try {

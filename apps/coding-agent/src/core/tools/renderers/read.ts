@@ -37,7 +37,7 @@ const COMPACT_RESOURCE_FILE_NAMES = new Set([
 type ReadRenderArgs = { path?: string; file_path?: string; offset?: unknown; limit?: unknown };
 function styledReadLineRange(args: ReadRenderArgs | undefined, theme: Theme): string {
   const range = formatReadLineRange(args?.offset, args?.limit);
-  return range ? theme.fg("warning", range) : "";
+  return range !== "" ? theme.fg("warning", range) : "";
 }
 function formatReadCall(args: ReadRenderArgs | undefined, theme: Theme, cwd: string): string {
   const pathDisplay = renderToolPath(str(args?.file_path ?? args?.path), theme, cwd);
@@ -76,7 +76,7 @@ function getCompactReadClassification(
   cwd: string,
 ): CompactReadClassification | undefined {
   const rawPath = str(args?.file_path ?? args?.path);
-  if (!rawPath) return undefined;
+  if (rawPath === null || rawPath === "") return undefined;
 
   const absolutePath = resolveToCwd(rawPath, cwd);
   const fileName = basename(absolutePath);
@@ -85,7 +85,7 @@ function getCompactReadClassification(
   }
 
   const docsClassification = getMsaDocsClassification(absolutePath);
-  if (docsClassification) return docsClassification;
+  if (docsClassification !== undefined) return docsClassification;
 
   if (COMPACT_RESOURCE_FILE_NAMES.has(fileName)) {
     return { kind: "resource", label: formatPathRelativeToCwdOrAbsolute(absolutePath, cwd) };
@@ -132,18 +132,21 @@ function formatReadResult(
   const rawPath = str(args?.file_path ?? args?.path);
   const output = getTextOutput(result, showImages);
   const lang = !isError && rawPath ? getLanguageFromPath(rawPath) : undefined;
-  const renderedLines = lang ? highlightCode(replaceTabs(output), lang) : output.split("\n");
+  const renderedLines =
+    lang !== undefined && lang !== ""
+      ? highlightCode(replaceTabs(output), lang)
+      : output.split("\n");
   const lines = trimTrailingEmptyLines(renderedLines);
   const maxLines = options.expanded ? lines.length : 10;
   const displayLines = lines.slice(0, maxLines);
   const remaining = lines.length - maxLines;
-  let text = `\n${displayLines.map((line) => (lang ? replaceTabs(line) : theme.fg("toolOutput", replaceTabs(line)))).join("\n")}`;
+  let text = `\n${displayLines.map((line) => (lang !== undefined && lang !== "" ? replaceTabs(line) : theme.fg("toolOutput", replaceTabs(line)))).join("\n")}`;
   if (remaining > 0) {
     text += `\n${expandHint(`${remaining} more lines`)}`;
   }
 
   const truncation = result.details?.truncation;
-  if (truncation?.truncated) {
+  if (truncation?.truncated === true) {
     if (truncation.firstLineExceedsLimit) {
       text += `\n${theme.fg("warning", `[First line exceeds ${formatSize(truncation.maxBytes ?? DEFAULT_MAX_BYTES)} limit]`)}`;
     } else if (truncation.truncatedBy === "lines") {
@@ -166,7 +169,7 @@ export const readRenderers: Pick<
       ? getCompactReadClassification(args, context.cwd)
       : undefined;
     text.setText(
-      classification
+      classification !== undefined
         ? formatCompactReadCall(classification, args, theme)
         : formatReadCall(args, theme, context.cwd),
     );

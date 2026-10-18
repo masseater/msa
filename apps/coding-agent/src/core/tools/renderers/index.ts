@@ -45,7 +45,7 @@ export function withBuiltInRenderers<TDefinition extends ToolRenderers>(
   definition: TDefinition | undefined,
 ): TDefinition | ToolRenderers | undefined {
   const builtIn = createAllToolRenderers()[toolName as RenderedToolName];
-  if (!definition) return builtIn;
+  if (definition === undefined) return builtIn;
   if (!builtIn) return definition;
   return {
     ...definition,

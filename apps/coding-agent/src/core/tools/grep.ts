@@ -109,7 +109,7 @@ export function createGrepToolDefinition(
       ctx?: ExtensionContext,
     ) {
       return new Promise((resolve, reject) => {
-        if (signal?.aborted) {
+        if (signal?.aborted === true) {
           reject(new Error("Operation aborted"));
           return;
         }
@@ -124,7 +124,7 @@ export function createGrepToolDefinition(
         (async () => {
           try {
             const rgPath = await ensureTool("rg");
-            if (!rgPath) {
+            if (rgPath === undefined || rgPath === "") {
               settle(() =>
                 reject(new Error("ripgrep (rg) is not available and could not be downloaded")),
               );
@@ -156,7 +156,7 @@ export function createGrepToolDefinition(
             const fileCache = new Map<string, string[]>();
             const getFileLines = async (filePath: string): Promise<string[]> => {
               let lines = fileCache.get(filePath);
-              if (!lines) {
+              if (lines === undefined) {
                 try {
                   const content = await ops.readFile(filePath);
                   lines = content.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
@@ -169,9 +169,9 @@ export function createGrepToolDefinition(
             };
 
             const args: string[] = ["--json", "--line-number", "--color=never", "--hidden"];
-            if (ignoreCase) args.push("--ignore-case");
-            if (literal) args.push("--fixed-strings");
-            if (glob) args.push("--glob", glob);
+            if (ignoreCase === true) args.push("--ignore-case");
+            if (literal === true) args.push("--fixed-strings");
+            if (glob !== undefined && glob !== "") args.push("--glob", glob);
             args.push("--", pattern, searchPath);
 
             const child = spawn(rgPath, args, { stdio: ["ignore", "pipe", "pipe"] });
@@ -206,7 +206,8 @@ export function createGrepToolDefinition(
             const formatBlock = async (filePath: string, lineNumber: number): Promise<string[]> => {
               const relativePath = formatPath(filePath);
               const lines = await getFileLines(filePath);
-              if (!lines.length) return [`${relativePath}:${lineNumber}: (unable to read file)`];
+              if (lines.length === 0)
+                return [`${relativePath}:${lineNumber}: (unable to read file)`];
               const block: string[] = [];
               const start = contextValue > 0 ? Math.max(1, lineNumber - contextValue) : lineNumber;
               const end =

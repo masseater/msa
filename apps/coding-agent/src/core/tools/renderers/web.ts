@@ -16,7 +16,8 @@ function link(text: string, url: string | undefined): string {
 
 function provenance(details: { servedBy?: string; costMicro?: number } | undefined): string {
   const parts: string[] = [];
-  if (details?.servedBy) parts.push(`via ${details.servedBy}`);
+  if (details?.servedBy !== undefined && details?.servedBy !== "")
+    parts.push(`via ${details.servedBy}`);
   if (details?.costMicro !== undefined)
     parts.push(`$${Number((details.costMicro / 1e6).toFixed(6))}`);
   return parts.join(", ");
@@ -31,14 +32,16 @@ function formatSearchResult(
   const summary = [
     `${results.length} results`,
     provenance(details),
-    details?.truncation?.truncated ? "truncated" : "",
+    details?.truncation?.truncated === true ? "truncated" : "",
   ]
     .filter(Boolean)
     .join(", ");
   if (!options.expanded) return `\n${expandHint(summary)}`;
   const lines = results.map((result) => {
     const title = link(theme.fg("toolOutput", result.title), result.url);
-    return result.url ? `${title}\n  ${theme.fg("muted", result.url)}` : title;
+    return result.url !== undefined && result.url !== ""
+      ? `${title}\n  ${theme.fg("muted", result.url)}`
+      : title;
   });
   return `\n${[...lines, theme.fg("muted", summary)].join("\n")}`;
 }
@@ -54,13 +57,14 @@ function formatFetchResult(
   const summary = [
     `${output.split("\n").length} lines`,
     provenance(details),
-    details?.truncation?.truncated ? "truncated" : "",
+    details?.truncation?.truncated === true ? "truncated" : "",
   ]
     .filter(Boolean)
     .join(", ");
-  const heading = details?.title
-    ? `\n${link(theme.fg("toolOutput", details.title), details.url)}`
-    : "";
+  const heading =
+    details?.title !== undefined && details?.title !== ""
+      ? `\n${link(theme.fg("toolOutput", details.title), details.url)}`
+      : "";
   if (!options.expanded) return `${heading}\n${expandHint(summary)}`;
   return `\n${theme.fg("toolOutput", output)}\n${theme.fg("muted", summary)}`;
 }

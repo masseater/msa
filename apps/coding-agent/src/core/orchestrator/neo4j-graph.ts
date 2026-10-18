@@ -56,7 +56,7 @@ export class Neo4jSessionGraph implements SessionGraph {
 
   static async connect(env: NodeJS.ProcessEnv = process.env): Promise<Neo4jSessionGraph> {
     const password = env["NEO4J_PASSWORD"];
-    if (!password) {
+    if (password === undefined || password === "") {
       throw new Error(
         "NEO4J_PASSWORD is not set. The orchestrator keeps session dependencies in Neo4j (NEO4J_URI, NEO4J_USERNAME, NEO4J_PASSWORD).",
       );
@@ -125,7 +125,7 @@ export class Neo4jSessionGraph implements SessionGraph {
        RETURN s, collect(d.id) AS dependsOn`,
       { id },
     );
-    return records[0] ? toNodeWithDependencies(records[0]) : undefined;
+    return records[0] !== undefined ? toNodeWithDependencies(records[0]) : undefined;
   }
 
   async list(project: string): Promise<SessionNodeWithDependencies[]> {

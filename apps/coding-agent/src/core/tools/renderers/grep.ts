@@ -22,7 +22,7 @@ function formatGrepCall(
     " " +
     (pattern === null ? invalidArg : theme.fg("accent", `/${pattern || ""}/`)) +
     theme.fg("toolOutput", ` in ${path === null ? invalidArg : path}`);
-  if (glob) text += theme.fg("toolOutput", ` (${glob})`);
+  if (glob !== null && glob !== "") text += theme.fg("toolOutput", ` (${glob})`);
   if (limit !== undefined) text += theme.fg("toolOutput", ` limit ${limit}`);
   return text;
 }
@@ -38,10 +38,10 @@ function formatGrepResult(
   const matchLimit = result.details?.matchLimitReached;
   const truncation = result.details?.truncation;
   const warnings: string[] = [];
-  if (matchLimit) warnings.push(`${matchLimit} matches limit`);
-  if (truncation?.truncated)
+  if (matchLimit !== undefined && matchLimit !== 0) warnings.push(`${matchLimit} matches limit`);
+  if (truncation?.truncated === true)
     warnings.push(`${formatSize(truncation.maxBytes ?? DEFAULT_MAX_BYTES)} limit`);
-  if (result.details?.linesTruncated) warnings.push("some lines truncated");
+  if (result.details?.linesTruncated === true) warnings.push("some lines truncated");
   const output = getTextOutput(result, showImages).trim();
   return formatListResult(output, warnings, options.expanded, "lines", theme);
 }

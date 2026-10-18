@@ -70,7 +70,7 @@ export function createLsToolDefinition(
       ctx?: ExtensionContext,
     ) {
       return new Promise((resolve, reject) => {
-        if (signal?.aborted) {
+        if (signal?.aborted === true) {
           reject(new Error("Operation aborted"));
           return;
         }

@@ -117,7 +117,7 @@ export class OutputAccumulator {
   }
 
   async closeTempFile(): Promise<void> {
-    if (!this.tempFileStream) {
+    if (this.tempFileStream === undefined) {
       return;
     }
 
@@ -140,7 +140,7 @@ export class OutputAccumulator {
   }
 
   async readFullOutput(maxBytes: number): Promise<FullOutput> {
-    if (!this.tempFilePath) {
+    if (this.tempFilePath === undefined || this.tempFilePath === "") {
       return { content: new TextDecoder().decode(Buffer.concat(this.rawChunks)), truncated: false };
     }
     const file = await open(this.tempFilePath, "r");
@@ -240,7 +240,7 @@ export class OutputAccumulator {
   }
 
   private ensureTempFile(): void {
-    if (this.tempFilePath) {
+    if (this.tempFilePath !== undefined && this.tempFilePath !== "") {
       return;
     }
     const { path, stream } = createOutputFileStream(this.tempFilePrefix, ".log");

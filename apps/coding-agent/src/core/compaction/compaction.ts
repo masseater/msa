@@ -120,7 +120,7 @@ export function getLastAssistantUsage(entries: SessionEntry[]): Usage | undefine
     const entry = entries[i];
     if (entry?.type === "message") {
       const usage = getAssistantUsage(entry.message);
-      if (usage) return usage;
+      if (usage !== undefined) return usage;
     }
   }
   return undefined;
@@ -140,7 +140,7 @@ function getLastAssistantUsageInfo(
     const message = messages[i];
     if (message === undefined) continue;
     const usage = getAssistantUsage(message);
-    if (usage) return { usage, index: i };
+    if (usage !== undefined) return { usage, index: i };
   }
   return undefined;
 }
@@ -148,7 +148,7 @@ function getLastAssistantUsageInfo(
 export function estimateContextTokens(messages: AgentMessage[]): ContextUsageEstimate {
   const usageInfo = getLastAssistantUsageInfo(messages);
 
-  if (!usageInfo) {
+  if (usageInfo === undefined) {
     let estimated = 0;
     for (const message of messages) {
       estimated += estimateTokens(message);
@@ -192,9 +192,10 @@ export function estimateProjectedContextTokens(
       projectedMessageIndex = nextMessageIndex;
     }
 
-    const usageEntryIndex = usageEntryId
-      ? branchEntries.findIndex((entry) => entry.id === usageEntryId)
-      : -1;
+    const usageEntryIndex =
+      usageEntryId !== undefined && usageEntryId !== ""
+        ? branchEntries.findIndex((entry) => entry.id === usageEntryId)
+        : -1;
     let latestInvalidatingEntryIndex = -1;
     for (let i = branchEntries.length - 1; i >= 0; i--) {
       const entry = branchEntries[i];
@@ -207,7 +208,7 @@ export function estimateProjectedContextTokens(
   }
 
   const currentSystem = getCurrentSystemMessage(projection.messages);
-  let tokens = currentSystem ? estimateTokens(currentSystem) : 0;
+  let tokens = currentSystem !== undefined ? estimateTokens(currentSystem) : 0;
   for (const message of projection.messages) {
     if (message.role !== "system") tokens += estimateTokens(message);
   }
@@ -250,12 +251,12 @@ export function estimateTokens(message: AgentMessage): number {
     case "system": {
       const system = message as SystemMessage;
       chars = estimateTextAndImageContentChars(system.content);
-      if (system.sections) {
+      if (system.sections !== undefined) {
         for (const section of Object.values(system.sections)) {
-          if (section) chars += section.length;
+          if (section !== null && section !== "") chars += section.length;
         }
       }
-      if (system.toolsAdded) chars += JSON.stringify(system.toolsAdded).length;
+      if (system.toolsAdded !== undefined) chars += JSON.stringify(system.toolsAdded).length;
       return Math.ceil(chars / 4);
     }
     case "user": {
@@ -543,7 +544,7 @@ export async function completeSummarization(
     sessionId: options.sessionId ?? uuidv7(),
   };
   const produce = async (): Promise<AssistantMessage> =>
-    streamFn
+    streamFn !== undefined
       ? (await streamFn(model, context, requestOptions)).result()
       : completeSimple(model, context, requestOptions);
   return retryAssistantCall(produce, retry, requestOptions.signal, callbacks);
@@ -619,8 +620,11 @@ export async function generateSummaryWithUsage(
     model.maxTokens > 0 ? model.maxTokens : Number.POSITIVE_INFINITY,
   );
 
-  let basePrompt = previousSummary ? UPDATE_SUMMARIZATION_PROMPT : SUMMARIZATION_PROMPT;
-  if (customInstructions) {
+  let basePrompt =
+    previousSummary !== undefined && previousSummary !== ""
+      ? UPDATE_SUMMARIZATION_PROMPT
+      : SUMMARIZATION_PROMPT;
+  if (customInstructions !== undefined && customInstructions !== "") {
     basePrompt = `${basePrompt}\n\nAdditional focus: ${customInstructions}`;
   }
 
@@ -628,7 +632,7 @@ export async function generateSummaryWithUsage(
   const conversationText = serializeConversation(llmMessages);
 
   let promptText = `<conversation>\n${conversationText}\n</conversation>\n\n`;
-  if (previousSummary) {
+  if (previousSummary !== undefined && previousSummary !== "") {
     promptText += `<previous-summary>\n${previousSummary}\n</previous-summary>\n\n`;
   }
   promptText += basePrompt;
@@ -654,7 +658,7 @@ export async function generateSummaryWithUsage(
   );
 
   const failure = getSummarizationFailure(response, "Summarization");
-  if (failure) {
+  if (failure !== undefined && failure !== "") {
     throw new Error(failure);
   }
   if (response.content.some((block) => block.type === "toolCall")) {
@@ -815,7 +819,7 @@ export function prepareCompaction(
   );
 
   const firstKeptEntry = projectedEntries[cutPoint.firstKeptEntryIndex]?.sourceEntry;
-  if (!firstKeptEntry?.id) return undefined;
+  if (firstKeptEntry?.id === undefined || firstKeptEntry?.id === "") return undefined;
   const firstKeptEntryId = firstKeptEntry.id;
   const historyEnd = cutPoint.isSplitTurn ? cutPoint.turnStartIndex : cutPoint.firstKeptEntryIndex;
 
@@ -931,9 +935,10 @@ export async function compact(
       sessionId,
     );
     summary = `${historyText}\n\n---\n\n**Turn Context (split turn):**\n\n${turnPrefixResult.text}`;
-    summaryUsage = historyUsage
-      ? combineUsage(historyUsage, turnPrefixResult.usage)
-      : turnPrefixResult.usage;
+    summaryUsage =
+      historyUsage !== undefined
+        ? combineUsage(historyUsage, turnPrefixResult.usage)
+        : turnPrefixResult.usage;
   } else {
     const result = await generateSummaryWithUsage(
       messagesToSummarize,
@@ -958,7 +963,7 @@ export async function compact(
   const { readFiles, modifiedFiles } = computeFileLists(fileOps);
   summary += formatFileOperations(readFiles, modifiedFiles);
 
-  if (!firstKeptEntryId) {
+  if (firstKeptEntryId === "") {
     throw new Error("First kept entry has no UUID - session may need migration");
   }
 
@@ -1012,7 +1017,7 @@ async function generateTurnPrefixSummary(
   );
 
   const failure = getSummarizationFailure(response, "Turn prefix summarization");
-  if (failure) {
+  if (failure !== undefined && failure !== "") {
     throw new Error(failure);
   }
   if (response.content.some((block) => block.type === "toolCall")) {

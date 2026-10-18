@@ -39,7 +39,7 @@ export function formatReadLineRange(offset: unknown, limit: unknown): string {
   const count = parseLineNumber(limit);
   if (count === undefined) return "";
   const end = start + count - 1;
-  return `:${start}${end ? `-${end}` : ""}`;
+  return `:${start}${end !== 0 ? `-${end}` : ""}`;
 }
 
 export function replaceTabs(text: string): string {
@@ -56,7 +56,7 @@ export function getTextOutput(
     | undefined,
   showImages: boolean,
 ): string {
-  if (!result) return "";
+  if (result === undefined) return "";
 
   const textBlocks = result.content.filter((c) => c.type === "text");
   const imageBlocks = result.content.filter((c) => c.type === "image");
@@ -66,7 +66,7 @@ export function getTextOutput(
     .join("\n");
 
   const caps = getCapabilities();
-  if (imageBlocks.length > 0 && (!caps.images || !showImages)) {
+  if (imageBlocks.length > 0 && (caps.images === null || !showImages)) {
     const imageIndicators = imageBlocks
       .map((img) => {
         const mimeType = img.mimeType ?? "image/unknown";
@@ -77,7 +77,7 @@ export function getTextOutput(
         return imageFallback(mimeType, dims);
       })
       .join("\n");
-    output = output ? `${output}\n${imageIndicators}` : imageIndicators;
+    output = output !== "" ? `${output}\n${imageIndicators}` : imageIndicators;
   }
 
   return output;
@@ -150,12 +150,12 @@ export function toolTimerText(
   isPartial: boolean,
 ): string | undefined {
   const state = context.state;
-  if (state.startedAt !== undefined && isPartial && !state.interval) {
+  if (state.startedAt !== undefined && isPartial && state.interval === undefined) {
     state.interval = setInterval(() => context.invalidate(), 1000);
   }
   if (!isPartial || context.isError) {
     state.endedAt ??= Date.now();
-    if (state.interval) {
+    if (state.interval !== undefined) {
       clearInterval(state.interval);
       state.interval = undefined;
     }
@@ -179,6 +179,6 @@ export function renderToolPath(
 ): string {
   if (rawPath === null) return invalidArgText(theme);
   const value = rawPath || options?.emptyFallback;
-  if (!value) return theme.fg("toolOutput", "...");
+  if (value === undefined || value === "") return theme.fg("toolOutput", "...");
   return linkPath(theme.fg("accent", shortenPath(value)), value, cwd);
 }

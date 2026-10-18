@@ -62,10 +62,11 @@ export function createMemoryToolDefinition(
       switch (params.action) {
         case "save": {
           const content = params.content?.trim();
-          if (!content) throw new Error("action save requires content");
+          if (content === undefined || content === "")
+            throw new Error("action save requires content");
           let kind: MemoryKind | undefined;
           const rawKind = params.kind?.trim();
-          if (rawKind) {
+          if (rawKind !== undefined && rawKind !== "") {
             if (!isMemoryKind(rawKind)) {
               throw new Error(
                 `Unknown memory kind "${rawKind}"; use one of ${MEMORY_KINDS.join(", ")}`,
@@ -75,7 +76,7 @@ export function createMemoryToolDefinition(
           }
           let scope: MemoryScope | undefined;
           const rawScope = params.scope?.trim();
-          if (rawScope) {
+          if (rawScope !== undefined && rawScope !== "") {
             if (rawScope !== "project" && rawScope !== "global") {
               throw new Error(`Unknown memory scope "${rawScope}"; use project or global`);
             }
@@ -83,8 +84,8 @@ export function createMemoryToolDefinition(
           }
           const outcome = await service.save({
             content,
-            ...(kind ? { kind } : {}),
-            ...(scope ? { scope } : {}),
+            ...(kind !== undefined ? { kind } : {}),
+            ...(scope !== undefined ? { scope } : {}),
           });
           const lines = [
             outcome.created
@@ -93,7 +94,7 @@ export function createMemoryToolDefinition(
           ];
           if (!outcome.embedded) {
             lines.push(
-              `Saved without an embedding${outcome.embeddingError ? `: ${outcome.embeddingError}` : ""}; it stays searchable by keyword.`,
+              `Saved without an embedding${outcome.embeddingError !== undefined && outcome.embeddingError !== "" ? `: ${outcome.embeddingError}` : ""}; it stays searchable by keyword.`,
             );
           }
           return {
@@ -108,7 +109,7 @@ export function createMemoryToolDefinition(
         }
         case "search": {
           const query = params.query?.trim();
-          if (!query) throw new Error("action search requires query");
+          if (query === undefined || query === "") throw new Error("action search requires query");
           const scores = await service.search(query, params.limit ?? 5);
           return {
             content: [{ type: "text", text: formatSearchResults(scores) }],
@@ -124,7 +125,7 @@ export function createMemoryToolDefinition(
         }
         case "forget": {
           const id = params.id?.trim();
-          if (!id) throw new Error("action forget requires id");
+          if (id === undefined || id === "") throw new Error("action forget requires id");
           const forgotten = service.forget(id);
           return {
             content: [

@@ -83,7 +83,7 @@ export function createToolHtmlRenderer(deps: ToolHtmlRendererDeps): ToolHtmlRend
       try {
         renderedArgs.set(toolCallId, args);
         const toolDef = getToolRenderers(toolName);
-        if (!toolDef?.renderCall) {
+        if (toolDef?.renderCall === undefined) {
           return undefined;
         }
 
@@ -115,7 +115,7 @@ export function createToolHtmlRenderer(deps: ToolHtmlRendererDeps): ToolHtmlRend
     ): { collapsed?: string; expanded?: string } | undefined {
       try {
         const toolDef = getToolRenderers(toolName);
-        if (!toolDef?.renderResult) {
+        if (toolDef?.renderResult === undefined) {
           return undefined;
         }
 
