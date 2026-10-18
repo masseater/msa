@@ -1,5 +1,3 @@
-
-
 import { spawn } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -71,10 +69,10 @@ function deepMerge(base: SandboxConfig, overrides: Partial<SandboxConfig>): Sand
   const result: SandboxConfig = { ...base };
 
   if (overrides.enabled !== undefined) result.enabled = overrides.enabled;
-  if (overrides.network) {
+  if (overrides.network !== undefined) {
     result.network = { ...base.network, ...overrides.network };
   }
-  if (overrides.filesystem) {
+  if (overrides.filesystem !== undefined) {
     result.filesystem = { ...base.filesystem, ...overrides.filesystem };
   }
 
@@ -87,7 +85,7 @@ function deepMerge(base: SandboxConfig, overrides: Partial<SandboxConfig>): Sand
     enableWeakerNestedSandbox?: boolean;
   };
 
-  if (extOverrides.ignoreViolations) {
+  if (extOverrides.ignoreViolations !== undefined) {
     extResult.ignoreViolations = extOverrides.ignoreViolations;
   }
   if (extOverrides.enableWeakerNestedSandbox !== undefined) {
@@ -119,7 +117,7 @@ function createSandboxedBashOps(): BashOperations {
         if (timeout !== undefined && timeout > 0) {
           timeoutHandle = setTimeout(() => {
             timedOut = true;
-            if (child.pid) {
+            if (child.pid !== undefined) {
               try {
                 process.kill(-child.pid, "SIGKILL");
               } catch {
@@ -133,12 +131,12 @@ function createSandboxedBashOps(): BashOperations {
         child.stderr?.on("data", onData);
 
         child.on("error", (err) => {
-          if (timeoutHandle) clearTimeout(timeoutHandle);
+          if (timeoutHandle !== undefined) clearTimeout(timeoutHandle);
           reject(err);
         });
 
         const onAbort = () => {
-          if (child.pid) {
+          if (child.pid !== undefined) {
             try {
               process.kill(-child.pid, "SIGKILL");
             } catch {
@@ -150,10 +148,10 @@ function createSandboxedBashOps(): BashOperations {
         signal?.addEventListener("abort", onAbort, { once: true });
 
         child.on("close", (code) => {
-          if (timeoutHandle) clearTimeout(timeoutHandle);
+          if (timeoutHandle !== undefined) clearTimeout(timeoutHandle);
           signal?.removeEventListener("abort", onAbort);
 
-          if (signal?.aborted) {
+          if (signal?.aborted === true) {
             reject(new Error("aborted"));
           } else if (timedOut) {
             reject(new Error(`timeout:${timeout}`));
@@ -210,7 +208,7 @@ export default function (msa: ExtensionAPI) {
 
     const config = loadConfig(ctx.cwd);
 
-    if (!config.enabled) {
+    if (config.enabled !== true) {
       sandboxEnabled = false;
       ctx.ui.notify("Sandbox disabled via config", "info");
       return;
@@ -259,9 +257,7 @@ export default function (msa: ExtensionAPI) {
     if (sandboxInitialized) {
       try {
         await SandboxManager.reset();
-      } catch {
-        
-      }
+      } catch {}
     }
   });
 

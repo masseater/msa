@@ -1,8 +1,6 @@
-import { Effect, FileSystem, ManagedRuntime, Path } from "effect";
-
 import { NodeServices } from "@effect/platform-node";
-
 import { CONFIG_DIR_NAME, type ExtensionAPI } from "@msa/coding-agent";
+import { Effect, FileSystem, ManagedRuntime, Path } from "effect";
 
 const runtime = ManagedRuntime.make(NodeServices.layer);
 

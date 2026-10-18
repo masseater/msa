@@ -1,5 +1,3 @@
-
-
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -8,24 +6,21 @@ import type { ExtensionAPI, ExtensionContext } from "@msa/coding-agent";
 import { CONFIG_DIR_NAME, DynamicBorder, getAgentDir } from "@msa/coding-agent";
 import { Container, Key, type SelectItem, SelectList, Text } from "@msa/tui";
 
-
 interface Preset {
-  
   provider?: string;
-  
+
   model?: string;
-  
+
   thinkingLevel?: "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
-  
+
   tools?: string[];
-  
+
   instructions?: string;
 }
 
 interface PresetsConfig {
   [name: string]: Preset;
 }
-
 
 function loadPresets(cwd: string): PresetsConfig {
   const globalPath = join(getAgentDir(), "presets.json");
@@ -34,7 +29,6 @@ function loadPresets(cwd: string): PresetsConfig {
   let globalPresets: PresetsConfig = {};
   let projectPresets: PresetsConfig = {};
 
-  
   if (existsSync(globalPath)) {
     try {
       const content = readFileSync(globalPath, "utf-8");
@@ -44,7 +38,6 @@ function loadPresets(cwd: string): PresetsConfig {
     }
   }
 
-  
   if (existsSync(projectPath)) {
     try {
       const content = readFileSync(projectPath, "utf-8");
@@ -54,7 +47,6 @@ function loadPresets(cwd: string): PresetsConfig {
     }
   }
 
-  
   return { ...globalPresets, ...projectPresets };
 }
 
@@ -70,19 +62,16 @@ export default function presetExtension(msa: ExtensionAPI) {
   let activePreset: Preset | undefined;
   let originalState: OriginalState | undefined;
 
-  
   msa.registerFlag("preset", {
     description: "Preset configuration to use",
     type: "string",
   });
 
-  
   async function applyPreset(
     name: string,
     preset: Preset,
     ctx: ExtensionContext,
   ): Promise<boolean> {
-    
     if (activePresetName === undefined) {
       originalState = {
         model: ctx.model,
@@ -91,10 +80,14 @@ export default function presetExtension(msa: ExtensionAPI) {
       };
     }
 
-    
-    if (preset.provider && preset.model) {
+    if (
+      preset.provider !== undefined &&
+      preset.provider.length > 0 &&
+      preset.model !== undefined &&
+      preset.model.length > 0
+    ) {
       const model = ctx.modelRegistry.find(preset.provider, preset.model);
-      if (model) {
+      if (model !== undefined) {
         const success = await msa.setModel(model);
         if (!success) {
           ctx.ui.notify(
@@ -110,13 +103,11 @@ export default function presetExtension(msa: ExtensionAPI) {
       }
     }
 
-    
-    if (preset.thinkingLevel) {
+    if (preset.thinkingLevel !== undefined) {
       msa.setThinkingLevel(preset.thinkingLevel);
     }
 
-    
-    if (preset.tools && preset.tools.length > 0) {
+    if (preset.tools !== undefined && preset.tools.length > 0) {
       const allToolNames = msa.getAllTools().map((t) => t.name);
       const validTools = preset.tools.filter((t) => allToolNames.includes(t));
       const invalidTools = preset.tools.filter((t) => !allToolNames.includes(t));
@@ -130,27 +121,30 @@ export default function presetExtension(msa: ExtensionAPI) {
       }
     }
 
-    
     activePresetName = name;
     activePreset = preset;
 
     return true;
   }
 
-  
   function buildPresetDescription(preset: Preset): string {
     const parts: string[] = [];
 
-    if (preset.provider && preset.model) {
+    if (
+      preset.provider !== undefined &&
+      preset.provider.length > 0 &&
+      preset.model !== undefined &&
+      preset.model.length > 0
+    ) {
       parts.push(`${preset.provider}/${preset.model}`);
     }
-    if (preset.thinkingLevel) {
+    if (preset.thinkingLevel !== undefined) {
       parts.push(`thinking:${preset.thinkingLevel}`);
     }
-    if (preset.tools) {
+    if (preset.tools !== undefined && preset.tools.length > 0) {
       parts.push(`tools:${preset.tools.join(",")}`);
     }
-    if (preset.instructions) {
+    if (preset.instructions !== undefined && preset.instructions.length > 0) {
       const truncated =
         preset.instructions.length > 30
           ? `${preset.instructions.slice(0, 27)}...`
@@ -161,7 +155,6 @@ export default function presetExtension(msa: ExtensionAPI) {
     return parts.join(" | ");
   }
 
-  
   async function showPresetSelector(ctx: ExtensionContext): Promise<void> {
     const presetNames = Object.keys(presets);
 
@@ -173,7 +166,6 @@ export default function presetExtension(msa: ExtensionAPI) {
       return;
     }
 
-    
     const items: SelectItem[] = Object.entries(presets).map(([name, preset]) => {
       const isActive = name === activePresetName;
       return {
@@ -183,7 +175,6 @@ export default function presetExtension(msa: ExtensionAPI) {
       };
     });
 
-    
     items.push({
       value: "(none)",
       label: "(none)",
@@ -194,10 +185,8 @@ export default function presetExtension(msa: ExtensionAPI) {
       const container = new Container();
       container.addChild(new DynamicBorder((str) => theme.fg("accent", str)));
 
-      
       container.addChild(new Text(theme.fg("accent", theme.bold("Select Preset"))));
 
-      
       const selectList = new SelectList(items, Math.min(items.length, 10), {
         selectedPrefix: (text) => theme.fg("accent", text),
         selectedText: (text) => theme.fg("accent", text),
@@ -211,7 +200,6 @@ export default function presetExtension(msa: ExtensionAPI) {
 
       container.addChild(selectList);
 
-      
       container.addChild(new Text(theme.fg("dim", "↑↓ navigate • enter select • esc cancel")));
 
       container.addChild(new DynamicBorder((str) => theme.fg("accent", str)));
@@ -230,14 +218,13 @@ export default function presetExtension(msa: ExtensionAPI) {
       };
     });
 
-    if (!result) return;
+    if (result === null || result.length === 0) return;
 
     if (result === "(none)") {
-      
       activePresetName = undefined;
       activePreset = undefined;
-      if (originalState) {
-        if (originalState.model) {
+      if (originalState !== undefined) {
+        if (originalState.model !== undefined) {
           await msa.setModel(originalState.model);
         }
         msa.setThinkingLevel(originalState.thinkingLevel);
@@ -251,16 +238,15 @@ export default function presetExtension(msa: ExtensionAPI) {
     }
 
     const preset = presets[result];
-    if (preset) {
+    if (preset !== undefined) {
       await applyPreset(result, preset, ctx);
       ctx.ui.notify(`Preset "${result}" activated`, "info");
       updateStatus(ctx);
     }
   }
 
-  
   function updateStatus(ctx: ExtensionContext) {
-    if (activePresetName) {
+    if (activePresetName !== undefined && activePresetName.length > 0) {
       ctx.ui.setStatus("preset", ctx.ui.theme.fg("accent", `preset:${activePresetName}`));
     } else {
       ctx.ui.setStatus("preset", undefined);
@@ -291,8 +277,8 @@ export default function presetExtension(msa: ExtensionAPI) {
     if (nextName === "(none)") {
       activePresetName = undefined;
       activePreset = undefined;
-      if (originalState) {
-        if (originalState.model) {
+      if (originalState !== undefined) {
+        if (originalState.model !== undefined) {
           await msa.setModel(originalState.model);
         }
         msa.setThinkingLevel(originalState.thinkingLevel);
@@ -306,7 +292,7 @@ export default function presetExtension(msa: ExtensionAPI) {
     }
 
     const preset = presets[nextName];
-    if (!preset) return;
+    if (preset === undefined) return;
 
     await applyPreset(nextName, preset, ctx);
     ctx.ui.notify(`Preset "${nextName}" activated`, "info");
@@ -320,16 +306,14 @@ export default function presetExtension(msa: ExtensionAPI) {
     },
   });
 
-  
   msa.registerCommand("preset", {
     description: "Switch preset configuration",
     handler: async (args, ctx) => {
-      
-      if (args?.trim()) {
+      if (args?.trim().length > 0) {
         const name = args.trim();
         const preset = presets[name];
 
-        if (!preset) {
+        if (preset === undefined) {
           const available = Object.keys(presets).join(", ") || "(none defined)";
           ctx.ui.notify(`Unknown preset "${name}". Available: ${available}`, "error");
           return;
@@ -341,14 +325,12 @@ export default function presetExtension(msa: ExtensionAPI) {
         return;
       }
 
-      
       await showPresetSelector(ctx);
     },
   });
 
-  
   msa.on("before_agent_start", async (event) => {
-    if (activePreset?.instructions) {
+    if (activePreset?.instructions !== undefined && activePreset?.instructions.length > 0) {
       return {
         systemPrompt: `${event.systemPrompt}\n\n${activePreset.instructions}`,
       };
@@ -356,16 +338,13 @@ export default function presetExtension(msa: ExtensionAPI) {
     return undefined;
   });
 
-  
   msa.on("session_start", async (_event, ctx) => {
-    
     presets = loadPresets(ctx.cwd);
 
-    
     const presetFlag = msa.getFlag("preset");
-    if (typeof presetFlag === "string" && presetFlag) {
+    if (typeof presetFlag === "string" && presetFlag.length > 0) {
       const preset = presets[presetFlag];
-      if (preset) {
+      if (preset !== undefined) {
         await applyPreset(presetFlag, preset, ctx);
         ctx.ui.notify(`Preset "${presetFlag}" activated`, "info");
       } else {
@@ -374,7 +353,6 @@ export default function presetExtension(msa: ExtensionAPI) {
       }
     }
 
-    
     const entries = ctx.sessionManager.getEntries();
     const presetEntry = entries
       .filter(
@@ -383,21 +361,21 @@ export default function presetExtension(msa: ExtensionAPI) {
       )
       .pop() as { data?: { name: string } } | undefined;
 
-    if (presetEntry?.data?.name && !presetFlag) {
-      const preset = presets[presetEntry.data.name];
-      if (preset) {
-        activePresetName = presetEntry.data.name;
+    const presetEntryName = presetEntry?.data?.name;
+    const hasPresetFlag = presetFlag !== undefined && presetFlag !== "" && presetFlag !== false;
+    if (presetEntryName !== undefined && presetEntryName.length > 0 && !hasPresetFlag) {
+      const preset = presets[presetEntryName];
+      if (preset !== undefined) {
+        activePresetName = presetEntryName;
         activePreset = preset;
-        
       }
     }
 
     updateStatus(ctx);
   });
 
-  
   msa.on("turn_start", async () => {
-    if (activePresetName) {
+    if (activePresetName !== undefined && activePresetName.length > 0) {
       msa.appendEntry("preset-state", { name: activePresetName });
     }
   });

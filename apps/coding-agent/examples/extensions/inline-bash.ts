@@ -1,4 +1,3 @@
-
 import type { ExtensionAPI } from "@msa/coding-agent";
 
 export default function (msa: ExtensionAPI) {
@@ -8,33 +7,27 @@ export default function (msa: ExtensionAPI) {
   msa.on("input", async (event, ctx) => {
     const text = event.text;
 
-    
-    
     if (text.trimStart().startsWith("!") && !text.trimStart().startsWith("!{")) {
       return { action: "continue" };
     }
 
-    
     if (!PATTERN.test(text)) {
       return { action: "continue" };
     }
 
-    
     PATTERN.lastIndex = 0;
 
     let result = text;
     const expansions: Array<{ command: string; output: string; error?: string }> = [];
 
-    
     const matches: Array<{ full: string; command: string }> = [];
     let match = PATTERN.exec(text);
-    while (match) {
+    while (match !== null) {
       const [full, command] = match;
       if (command !== undefined) matches.push({ full, command });
       match = PATTERN.exec(text);
     }
 
-    
     for (const { full, command } of matches) {
       try {
         const bashResult = await msa.exec("bash", ["-c", command], {
@@ -44,7 +37,7 @@ export default function (msa: ExtensionAPI) {
         const output = bashResult.stdout || bashResult.stderr || "";
         const trimmed = output.trim();
 
-        if (bashResult.code !== 0 && bashResult.stderr) {
+        if (bashResult.code !== 0 && bashResult.stderr.length > 0) {
           expansions.push({
             command,
             output: trimmed,
@@ -62,11 +55,10 @@ export default function (msa: ExtensionAPI) {
       }
     }
 
-    
     if (ctx.hasUI && expansions.length > 0) {
       const summary = expansions
         .map((e) => {
-          const status = e.error ? ` (${e.error})` : "";
+          const status = e.error !== undefined && e.error.length > 0 ? ` (${e.error})` : "";
           const preview = e.output.length > 50 ? `${e.output.slice(0, 50)}...` : e.output;
           return `!{${e.command}}${status} -> "${preview}"`;
         })

@@ -1,11 +1,7 @@
-
-
 import { StringEnum } from "@msa/ai";
 import type { ExtensionAPI, ExtensionContext, Theme, ToolExecutionMode } from "@msa/coding-agent";
 import { type Component, matchesKey, Text, truncateToWidth, visibleWidth } from "@msa/tui";
 import { Type } from "typebox";
-
-
 
 class TicTacToeError extends Error {
   constructor(message: string) {
@@ -14,19 +10,15 @@ class TicTacToeError extends Error {
   }
 }
 
-
-
-
-
 type Cell = " " | "X" | "O";
 type GameStatus = "playing" | "win_X" | "win_O" | "draw";
 
 interface GameState {
   board: Cell[][];
-  
+
   userCursorRow: number;
   userCursorCol: number;
-  
+
   agentCursorRow: number;
   agentCursorCol: number;
   status: GameStatus;
@@ -35,9 +27,6 @@ interface GameState {
   currentTurn: Cell;
 }
 
-
-
-
 interface BoardDetails {
   board: Cell[][];
   agentCursorRow: number;
@@ -45,16 +34,6 @@ interface BoardDetails {
   status: GameStatus;
   currentTurn: Cell;
 }
-
-
-
-
-
-
-
-
-
-
 
 const AGENT_CURSOR_HOME_ROW = 0;
 const AGENT_CURSOR_HOME_COL = 0;
@@ -143,7 +122,7 @@ function getWinLine(board: Cell[][]): [number, number][] | null {
 
 function checkWin(board: Cell[][]): GameStatus {
   const winStart = getWinLine(board)?.[0];
-  if (winStart) {
+  if (winStart !== undefined) {
     const [r, c] = winStart;
     return getCell(board, r, c) === "X" ? "win_X" : "win_O";
   }
@@ -154,9 +133,6 @@ function checkWin(board: Cell[][]): GameStatus {
 }
 
 function boardToAscii(board: Cell[][], agentCursorRow: number, agentCursorCol: number): string {
-  
-  
-  
   const rows = board.map((row, r) =>
     row
       .map((c, cIdx) => {
@@ -170,24 +146,12 @@ function boardToAscii(board: Cell[][], agentCursorRow: number, agentCursorCol: n
   return rows.join(`\n${separator}\n`);
 }
 
-
-
-
-
-
-
-
-
 const CELL_WIDTH = 7;
 const CELL_HEIGHT = 3;
 
-
-const FG_CODE_X = "34"; 
-const FG_CODE_O = "33"; 
-const FG_CODE_WIN = "32"; 
-
-
-
+const FG_CODE_X = "34";
+const FG_CODE_O = "33";
+const FG_CODE_WIN = "32";
 
 const GLYPH_X = "\u2573";
 const GLYPH_O = "\u25ef";
@@ -202,8 +166,6 @@ function centerPad(content: string, width: number): string {
   const left = Math.floor(pad / 2);
   return " ".repeat(left) + content + " ".repeat(pad - left);
 }
-
-
 
 function cellFgCode(cell: Cell, isWin: boolean): string | undefined {
   if (cell === " ") return undefined;
@@ -226,11 +188,10 @@ function buildCellContent(mark: Cell, lineIdx: number, isWin: boolean): string {
   return `${" ".repeat(leftPad)}\x1b[${fg};1m${glyph}${RESET}${" ".repeat(rightPad)}`;
 }
 
-
-
-
 function borderFgCode(adjacent: ReadonlyArray<{ cell: Cell; isWin: boolean }>): string | undefined {
-  const fgs = adjacent.map((a) => cellFgCode(a.cell, a.isWin)).filter((f): f is string => !!f);
+  const fgs = adjacent
+    .map((a) => cellFgCode(a.cell, a.isWin))
+    .filter((f): f is string => f !== undefined && f.length > 0);
   if (fgs.length === 0) return undefined;
   const first = fgs[0];
   return fgs.every((f) => f === first) ? first : undefined;
@@ -239,18 +200,16 @@ function borderFgCode(adjacent: ReadonlyArray<{ cell: Cell; isWin: boolean }>): 
 interface BoardRenderOpts {
   board: Cell[][];
   maxWidth: number;
-  
-  
+
   cursor?: { row: number; col: number; owner: "user" | "agent" } | undefined;
 }
 
 function renderBoard(opts: BoardRenderOpts): string[] {
   const { board, maxWidth, cursor } = opts;
-  const showCursor = !!cursor;
+  const showCursor = cursor !== undefined;
   const cr = cursor?.row ?? -1;
   const cc = cursor?.col ?? -1;
 
-  
   const cursorSgr = cursor?.owner === "agent" ? "\x1b[33;1m" : "\x1b[32;1m";
 
   const winLine = getWinLine(board);
@@ -269,7 +228,7 @@ function renderBoard(opts: BoardRenderOpts): string[] {
 
   const paintBorder = (ch: string, highlighted: boolean, fgCode: string | undefined): string => {
     if (highlighted) return `${cursorSgr}${ch}${RESET}`;
-    if (fgCode) return `\x1b[${fgCode};1m${ch}${RESET}`;
+    if (fgCode !== undefined && fgCode.length > 0) return `\x1b[${fgCode};1m${ch}${RESET}`;
     return DIM(ch);
   };
 
@@ -303,7 +262,6 @@ function renderBoard(opts: BoardRenderOpts): string[] {
   const lines: string[] = [];
 
   for (let gridR = 0; gridR <= 3; gridR++) {
-    
     let row = "";
     for (let gridC = 0; gridC <= 3; gridC++) {
       const cornerColor = borderFgCode(cornerAdjacent(gridR, gridC));
@@ -343,7 +301,6 @@ function renderBoard(opts: BoardRenderOpts): string[] {
   return lines;
 }
 
-
 function renderVisualBoard(state: GameState, maxWidth: number): string[] {
   const isUserTurn = state.currentTurn === state.userMark;
   const cursor =
@@ -357,14 +314,9 @@ function renderVisualBoard(state: GameState, maxWidth: number): string[] {
   return renderBoard({ board: state.board, maxWidth, cursor });
 }
 
-
 function renderBoardSnapshot(board: Cell[][], maxWidth: number): string[] {
   return renderBoard({ board, maxWidth });
 }
-
-
-
-
 
 class TicTacToeComponent implements Component {
   private state: GameState;
@@ -452,7 +404,6 @@ class TicTacToeComponent implements Component {
 
     const lines: string[] = [];
 
-    
     const titleText = " Tic-Tac-Toe ";
     const titleLen = visibleWidth(titleText);
     const borderLen = Math.max(0, width - titleLen);
@@ -464,7 +415,6 @@ class TicTacToeComponent implements Component {
 
     lines.push("");
 
-    
     if (this.state.status !== "playing") {
       const statusText =
         this.state.status === "draw"
@@ -494,7 +444,6 @@ class TicTacToeComponent implements Component {
     lines.push("");
     lines.push("");
 
-    
     let footer: string;
     if (this.state.status !== "playing") {
       footer = `${bold("R")} restart  ${dim("|")}  ${bold("Q")}/${bold("ESC")} quit`;
@@ -505,7 +454,6 @@ class TicTacToeComponent implements Component {
     }
     lines.push(centerPad(footer, width));
 
-    
     lines.push("");
     lines.push(dim("\u2500".repeat(width)));
 
@@ -515,11 +463,6 @@ class TicTacToeComponent implements Component {
     return lines;
   }
 }
-
-
-
-
-
 
 class BannerMessageComponent implements Component {
   private readonly title: string;
@@ -547,7 +490,7 @@ class BannerMessageComponent implements Component {
       `${dim("\u2500".repeat(leftFill))} ${this.title} ${dim("\u2500".repeat(rightFill))}`,
     );
 
-    if (this.expanded && this.details) {
+    if (this.expanded && this.details !== undefined) {
       lines.push("");
       lines.push(...renderBoardSnapshot(this.details.board, width));
     }
@@ -555,8 +498,6 @@ class BannerMessageComponent implements Component {
     return lines;
   }
 }
-
-
 
 class GameOverMessageComponent implements Component {
   private readonly status: GameStatus;
@@ -607,7 +548,7 @@ class GameOverMessageComponent implements Component {
     }
 
     lines.push("");
-    if (this.details) {
+    if (this.details !== undefined) {
       lines.push(...renderBoardSnapshot(this.details.board, width));
       lines.push("");
     }
@@ -617,17 +558,9 @@ class GameOverMessageComponent implements Component {
   }
 }
 
-
-
-
-
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
-
-
-
-
 
 const SAVE_TYPE = "tic-tac-toe-save";
 const MOVE_MESSAGE_TYPE = "tic-tac-toe-move";
@@ -648,7 +581,7 @@ function reconstructState(ctx: ExtensionContext): void {
     if (msg.toolName !== "tic_tac_toe" && msg.toolName !== "tic_tac_toe_see_board") continue;
 
     const details = msg.details as BoardDetails | undefined;
-    if (details) {
+    if (details !== undefined) {
       gameState.board = details.board.map((row) => [...row]);
       gameState.agentCursorRow = details.agentCursorRow;
       gameState.agentCursorCol = details.agentCursorCol;
@@ -672,9 +605,6 @@ export default function (msa: ExtensionAPI) {
   msa.on("session_start", async (_event, ctx) => reconstructState(ctx));
   msa.on("session_tree", async (_event, ctx) => reconstructState(ctx));
 
-  
-  
-  
   const emitGameOverMessage = (): void => {
     const label =
       gameState.status === "win_X"
@@ -692,9 +622,6 @@ export default function (msa: ExtensionAPI) {
     });
   };
 
-  
-  
-  
   msa.registerMessageRenderer(MOVE_MESSAGE_TYPE, (message, { expanded }, theme) => {
     const details = message.details as BoardDetails | undefined;
     const turnLabel =
@@ -705,18 +632,12 @@ export default function (msa: ExtensionAPI) {
     return new BannerMessageComponent(title, details, expanded, theme);
   });
 
-  
-  
-  
   msa.registerMessageRenderer(GAME_OVER_MESSAGE_TYPE, (message, _options, theme) => {
     const details = message.details as BoardDetails | undefined;
     const status = (details?.status ?? "draw") as GameStatus;
     return new GameOverMessageComponent(status, details, theme);
   });
 
-  
-  
-  
   msa.on("before_agent_start", async (event) => {
     if (!gameActive) return undefined;
 
@@ -785,9 +706,6 @@ Decide the target cell first, then dump every action for the turn in one go.
     };
   });
 
-  
-  
-  
   msa.registerCommand("tic-tac-toe", {
     description: "Play tic-tac-toe against the agent",
 
@@ -822,8 +740,6 @@ Decide the target cell first, then dump every action for the turn in one go.
             msa.appendEntry(SAVE_TYPE, getBoardDetails());
 
             if (gameState.status === "playing") {
-              
-              
               const boardAscii = boardToAscii(
                 gameState.board,
                 gameState.agentCursorRow,
@@ -854,10 +770,6 @@ Decide the target cell first, then dump every action for the turn in one go.
       });
     },
   });
-
-  
-  
-  
 
   type Action = "move_up" | "move_down" | "move_left" | "move_right" | "play";
 
@@ -921,8 +833,6 @@ Decide the target cell first, then dump every action for the turn in one go.
           const c = gameState.agentCursorCol;
           const target = getCell(gameState.board, r, c);
           if (target !== " ") {
-            
-            
             component?.updateState(gameState);
             msa.appendEntry(SAVE_TYPE, getBoardDetails());
             throw new TicTacToeError(
@@ -931,7 +841,7 @@ Decide the target cell first, then dump every action for the turn in one go.
           }
           setCell(gameState.board, r, c, gameState.agentMark);
           gameState.status = checkWin(gameState.board);
-          
+
           gameState.agentCursorRow = AGENT_CURSOR_HOME_ROW;
           gameState.agentCursorCol = AGENT_CURSOR_HOME_COL;
           if (gameState.status === "playing") {
@@ -979,16 +889,13 @@ Decide the target cell first, then dump every action for the turn in one go.
         : theme.fg("success", "\u2713 ");
       const summary = prefix + theme.fg("muted", msg);
 
-      if (expanded && details) {
+      if (expanded && details !== undefined) {
         return new BannerMessageComponent(summary, details, true, theme);
       }
       return new Text(summary, 0, 0);
     },
   });
 
-  
-  
-  
   msa.registerTool({
     name: "tic_tac_toe_see_board",
     label: "See Board",
@@ -1026,7 +933,7 @@ Decide the target cell first, then dump every action for the turn in one go.
           "muted",
           `cursor (${details?.agentCursorRow ?? 0},${details?.agentCursorCol ?? 0})`,
         );
-      if (expanded && details) {
+      if (expanded && details !== undefined) {
         return new BannerMessageComponent(summary, details, true, theme);
       }
       return new Text(summary, 0, 0);

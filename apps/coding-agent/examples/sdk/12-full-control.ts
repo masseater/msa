@@ -1,5 +1,3 @@
-import { Config, ConfigProvider, Console, Effect, Option } from "effect";
-
 import { getModel } from "@msa/ai/compat";
 import {
   createAgentSession,
@@ -9,6 +7,7 @@ import {
   SessionManager,
   SettingsManager,
 } from "@msa/coding-agent";
+import { Config, ConfigProvider, Console, Effect, Option } from "effect";
 
 const modelRuntime = await ModelRuntime.create({
   authPath: "/tmp/my-agent/auth.json",
@@ -25,7 +24,6 @@ if (anthropicKey !== undefined) {
 
 const model = getModel("anthropic", "claude-sonnet-4-5");
 if (model === undefined) throw new Error("Model not found");
-
 
 const settingsManager = SettingsManager.inMemory({
   compaction: { enabled: false },

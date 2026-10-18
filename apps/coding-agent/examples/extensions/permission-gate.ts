@@ -1,5 +1,3 @@
-
-
 import type { ExtensionAPI } from "@msa/coding-agent";
 
 export default function (msa: ExtensionAPI) {
@@ -13,7 +11,6 @@ export default function (msa: ExtensionAPI) {
 
     if (isDangerous) {
       if (!ctx.hasUI) {
-        
         return { block: true, reason: "Dangerous command blocked (no UI for confirmation)" };
       }
 

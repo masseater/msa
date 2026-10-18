@@ -1,5 +1,3 @@
-
-
 import type { ExtensionAPI } from "@msa/coding-agent";
 
 function windowsToastScript(title: string, body: string): string {
@@ -20,7 +18,6 @@ function notifyOSC777(title: string, body: string): void {
 }
 
 function notifyOSC99(title: string, body: string): void {
-  
   process.stdout.write(`\x1b]99;i=1:d=0;${title}\x1b\\`);
   process.stdout.write(`\x1b]99;i=1:p=body;${body}\x1b\\`);
 }
@@ -31,9 +28,12 @@ function notifyWindows(title: string, body: string): void {
 }
 
 function notify(title: string, body: string): void {
-  if (process.env["WT_SESSION"]) {
+  if (process.env["WT_SESSION"] !== undefined && process.env["WT_SESSION"].length > 0) {
     notifyWindows(title, body);
-  } else if (process.env["KITTY_WINDOW_ID"]) {
+  } else if (
+    process.env["KITTY_WINDOW_ID"] !== undefined &&
+    process.env["KITTY_WINDOW_ID"].length > 0
+  ) {
     notifyOSC99(title, body);
   } else {
     notifyOSC777(title, body);
@@ -41,8 +41,6 @@ function notify(title: string, body: string): void {
 }
 
 export default function (msa: ExtensionAPI) {
-  
-  
   msa.on("agent_settled", async () => {
     notify("msa", "Ready for input");
   });

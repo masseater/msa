@@ -1,5 +1,3 @@
-
-
 import type { AgentMessage } from "@msa/agent-core";
 import { type Message, uuidv7 } from "@msa/ai";
 import type { ExtensionAPI, SessionEntry } from "@msa/coding-agent";
@@ -71,19 +69,17 @@ export default function (msa: ExtensionAPI) {
         return;
       }
 
-      if (!ctx.model) {
+      if (ctx.model === undefined) {
         ctx.ui.notify("No model selected", "error");
         return;
       }
 
       const goal = args.trim();
-      if (!goal) {
+      if (goal.length === 0) {
         ctx.ui.notify("Usage: /handoff <goal for new thread>", "error");
         return;
       }
 
-      
-      
       const messages = getHandoffMessages(ctx.sessionManager.getBranch());
 
       if (messages.length === 0) {
@@ -91,12 +87,10 @@ export default function (msa: ExtensionAPI) {
         return;
       }
 
-      
       const llmMessages = convertToLlm(messages);
       const conversationText = serializeConversation(llmMessages);
       const currentSessionFile = ctx.sessionManager.getSessionFile();
 
-      
       const result = await ctx.ui.custom<string | null>((tui, theme, _kb, done) => {
         const loader = new BorderedLoader(tui, theme, `Generating handoff prompt...`);
         loader.onAbort = () => done(null);
@@ -150,7 +144,6 @@ export default function (msa: ExtensionAPI) {
         return;
       }
 
-      
       const editedPrompt = await ctx.ui.editor("Edit handoff prompt", result);
 
       if (editedPrompt === undefined) {
@@ -158,9 +151,6 @@ export default function (msa: ExtensionAPI) {
         return;
       }
 
-      
-      
-      
       const newSessionResult = await ctx.newSession({
         ...(currentSessionFile === undefined ? {} : { parentSession: currentSessionFile }),
         withSession: async (replacementCtx) => {

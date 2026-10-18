@@ -1,5 +1,3 @@
-
-
 import type { Message } from "@msa/ai";
 import type {
   ExtensionAPI,
@@ -13,12 +11,11 @@ const SOL = "gpt-5.6-sol";
 const TERRA = "gpt-5.6-terra";
 const LUNA = "gpt-5.6-luna";
 
-
 const EDIT_TOOLS = new Set(["edit", "write"]);
 
 interface JevState {
   phase: "planning" | "implementation";
-  
+
   model: string;
 }
 
@@ -31,7 +28,7 @@ function routeTo(
   state?: JevState,
 ): ModelRoute<JevState> {
   const model = ctx.modelRegistry.find(PROVIDER, id);
-  if (!model) throw new Error(`Model ${PROVIDER}/${id} is not in the catalog`);
+  if (model === undefined) throw new Error(`Model ${PROVIDER}/${id} is not in the catalog`);
   return {
     model,
     thinkingLevel: request.thinkingLevel,
@@ -45,7 +42,6 @@ function lastUserText(messages: readonly Message[]): string {
   return content.flatMap((block) => (block.type === "text" ? [block.text] : [])).join("\n");
 }
 
-
 function editedThisTurn(messages: readonly Message[]): boolean {
   const lastUser = messages.findLastIndex((message) => message.role === "user");
   return messages
@@ -56,15 +52,13 @@ function editedThisTurn(messages: readonly Message[]): boolean {
     );
 }
 
-
 async function choosePlanningModel(request: JevRequest, ctx: ExtensionContext): Promise<string> {
-  
   const previous = request.previous?.model;
   if (previous?.provider === PROVIDER && (previous.id === SOL || previous.id === TERRA))
     return previous.id;
 
   const jev = ctx.modelRegistry.findOfType("classifier", "openrouter", "~typesafe/jev-latest");
-  if (!jev) return TERRA;
+  if (jev === undefined) return TERRA;
   const result = await ctx.modelRegistry.classify(
     jev,
     {
@@ -92,17 +86,17 @@ export default function (msa: ExtensionAPI) {
     id: "auto",
     name: "Auto (Jev)",
     thinkingLevels: ["low", "medium", "high", "xhigh"],
-    
+
     contextWindow: 272_000,
     maxTokens: 128_000,
     async route(request, ctx) {
       if (request.reason === "direct") return routeTo(request, ctx, LUNA);
       const state = request.state;
-      if (!state) {
+      if (state === undefined) {
         const model = await choosePlanningModel(request, ctx);
         return routeTo(request, ctx, model, { phase: "planning", model });
       }
-      
+
       if (state.phase === "planning" && editedThisTurn(request.messages)) {
         return routeTo(request, ctx, LUNA, { phase: "implementation", model: LUNA });
       }

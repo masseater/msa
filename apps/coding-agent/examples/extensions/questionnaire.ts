@@ -1,5 +1,3 @@
-
-
 import type { ExtensionAPI } from "@msa/coding-agent";
 import {
   Editor,
@@ -11,7 +9,6 @@ import {
   wrapTextWithAnsi,
 } from "@msa/tui";
 import { Type } from "typebox";
-
 
 interface QuestionOption {
   value: string;
@@ -42,7 +39,6 @@ interface QuestionnaireResult {
   answers: Answer[];
   cancelled: boolean;
 }
-
 
 const QuestionOptionSchema = Type.Object({
   value: Type.String({ description: "The value returned when selected" }),
@@ -97,7 +93,6 @@ export default function questionnaire(msa: ExtensionAPI) {
         return errorResult("Error: No questions provided");
       }
 
-      
       const questions: Question[] = params.questions.map((q, i) => ({
         ...q,
         label: q.label || `Q${i + 1}`,
@@ -105,10 +100,9 @@ export default function questionnaire(msa: ExtensionAPI) {
       }));
 
       const isMulti = questions.length > 1;
-      const totalTabs = questions.length + 1; 
+      const totalTabs = questions.length + 1;
 
       const result = await ctx.ui.custom<QuestionnaireResult>((tui, theme, _kb, done) => {
-        
         let currentTab = 0;
         let optionIndex = 0;
         let inputMode = false;
@@ -116,7 +110,6 @@ export default function questionnaire(msa: ExtensionAPI) {
         let cachedLines: string[] | undefined;
         const answers = new Map<string, Answer>();
 
-        
         const editorTheme: EditorTheme = {
           borderColor: (s) => theme.fg("accent", s),
           selectList: {
@@ -129,7 +122,6 @@ export default function questionnaire(msa: ExtensionAPI) {
         };
         const editor = new Editor(tui, editorTheme);
 
-        
         function refresh() {
           cachedLines = undefined;
           tui.requestRender();
@@ -145,7 +137,7 @@ export default function questionnaire(msa: ExtensionAPI) {
 
         function currentOptions(): RenderOption[] {
           const q = currentQuestion();
-          if (!q) return [];
+          if (q === undefined) return [];
           const opts: RenderOption[] = [...q.options];
           if (q.allowOther) {
             opts.push({ value: "__other__", label: "Type something.", isOther: true });
@@ -165,7 +157,7 @@ export default function questionnaire(msa: ExtensionAPI) {
           if (currentTab < questions.length - 1) {
             currentTab++;
           } else {
-            currentTab = questions.length; 
+            currentTab = questions.length;
           }
           optionIndex = 0;
           refresh();
@@ -181,9 +173,8 @@ export default function questionnaire(msa: ExtensionAPI) {
           answers.set(questionId, { id: questionId, value, label, wasCustom, index });
         }
 
-        
         editor.onSubmit = (value) => {
-          if (!inputQuestionId) return;
+          if (inputQuestionId === null || inputQuestionId.length === 0) return;
           const trimmed = value.trim() || "(no response)";
           saveAnswer(inputQuestionId, trimmed, trimmed, true);
           inputMode = false;
@@ -193,7 +184,6 @@ export default function questionnaire(msa: ExtensionAPI) {
         };
 
         function handleInput(data: string) {
-          
           if (inputMode) {
             if (matchesKey(data, Key.escape)) {
               inputMode = false;
@@ -210,7 +200,6 @@ export default function questionnaire(msa: ExtensionAPI) {
           const q = currentQuestion();
           const opts = currentOptions();
 
-          
           if (isMulti) {
             if (matchesKey(data, Key.tab) || matchesKey(data, Key.right)) {
               currentTab = (currentTab + 1) % totalTabs;
@@ -226,7 +215,6 @@ export default function questionnaire(msa: ExtensionAPI) {
             }
           }
 
-          
           if (currentTab === questions.length) {
             if (matchesKey(data, Key.enter) && allAnswered()) {
               submit(false);
@@ -236,7 +224,6 @@ export default function questionnaire(msa: ExtensionAPI) {
             return;
           }
 
-          
           if (matchesKey(data, Key.up)) {
             optionIndex = Math.max(0, optionIndex - 1);
             refresh();
@@ -248,11 +235,10 @@ export default function questionnaire(msa: ExtensionAPI) {
             return;
           }
 
-          
-          if (matchesKey(data, Key.enter) && q) {
+          if (matchesKey(data, Key.enter) && q !== undefined) {
             const opt = opts[optionIndex];
             if (opt === undefined) return;
-            if (opt.isOther) {
+            if (opt.isOther === true) {
               inputMode = true;
               inputQuestionId = q.id;
               editor.setText("");
@@ -264,14 +250,13 @@ export default function questionnaire(msa: ExtensionAPI) {
             return;
           }
 
-          
           if (matchesKey(data, Key.escape)) {
             submit(true);
           }
         }
 
         function render(width: number): string[] {
-          if (cachedLines) return cachedLines;
+          if (cachedLines !== undefined && cachedLines.length > 0) return cachedLines;
 
           const lines: string[] = [];
           const renderWidth = Math.max(1, width);
@@ -297,7 +282,6 @@ export default function questionnaire(msa: ExtensionAPI) {
 
           lines.push(theme.fg("accent", "─".repeat(renderWidth)));
 
-          
           if (isMulti) {
             const tabs: string[] = ["← "];
             for (const [i, question] of questions.entries()) {
@@ -323,7 +307,6 @@ export default function questionnaire(msa: ExtensionAPI) {
             lines.push("");
           }
 
-          
           function renderOptions() {
             for (const [i, opt] of opts.entries()) {
               const selected = i === optionIndex;
@@ -333,17 +316,16 @@ export default function questionnaire(msa: ExtensionAPI) {
               const color = selected || (isOther && inputMode) ? "accent" : "text";
 
               addWrappedWithPrefix(prefix, theme.fg(color, label));
-              if (opt.description) {
+              if (opt.description !== undefined && opt.description.length > 0) {
                 addWrappedWithPrefix("     ", theme.fg("muted", opt.description));
               }
             }
           }
 
-          
-          if (inputMode && q) {
+          if (inputMode && q !== undefined) {
             addWrappedWithPrefix(" ", theme.fg("text", q.prompt));
             lines.push("");
-            
+
             renderOptions();
             lines.push("");
             addWrappedWithPrefix(" ", theme.fg("muted", "Your answer:"));
@@ -357,7 +339,7 @@ export default function questionnaire(msa: ExtensionAPI) {
             lines.push("");
             for (const question of questions) {
               const answer = answers.get(question.id);
-              if (answer) {
+              if (answer !== undefined) {
                 const prefix = answer.wasCustom ? "(wrote) " : "";
                 const summary = `${theme.fg("muted", `${question.label}: `)}${theme.fg("text", prefix + answer.label)}`;
                 addWrappedWithPrefix(" ", summary);
@@ -373,7 +355,7 @@ export default function questionnaire(msa: ExtensionAPI) {
                 .join(", ");
               addWrappedWithPrefix(" ", theme.fg("warning", `Unanswered: ${missing}`));
             }
-          } else if (q) {
+          } else if (q !== undefined) {
             addWrappedWithPrefix(" ", theme.fg("text", q.prompt));
             lines.push("");
             renderOptions();
@@ -428,7 +410,7 @@ export default function questionnaire(msa: ExtensionAPI) {
       const labels = qs.map((q) => q.label || q.id).join(", ");
       let text = theme.fg("toolTitle", theme.bold("questionnaire "));
       text += theme.fg("muted", `${count} question${count === 1 ? "" : "s"}`);
-      if (labels) {
+      if (labels.length > 0) {
         text += theme.fg("dim", ` (${labels})`);
       }
       return new Text(text, 0, 0);
@@ -436,7 +418,7 @@ export default function questionnaire(msa: ExtensionAPI) {
 
     renderResult(result, _options, theme, _context) {
       const details = result.details as QuestionnaireResult | undefined;
-      if (!details) {
+      if (details === undefined) {
         const text = result.content[0];
         return new Text(text?.type === "text" ? text.text : "", 0, 0);
       }
@@ -447,7 +429,7 @@ export default function questionnaire(msa: ExtensionAPI) {
         if (a.wasCustom) {
           return `${theme.fg("success", "✓ ")}${theme.fg("accent", a.id)}: ${theme.fg("muted", "(wrote) ")}${a.label}`;
         }
-        const display = a.index ? `${a.index}. ${a.label}` : a.label;
+        const display = a.index !== undefined ? `${a.index}. ${a.label}` : a.label;
         return `${theme.fg("success", "✓ ")}${theme.fg("accent", a.id)}: ${display}`;
       });
       return new Text(lines.join("\n"), 0, 0);

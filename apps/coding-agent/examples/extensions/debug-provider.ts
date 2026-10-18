@@ -1,5 +1,3 @@
-
-
 import { type ExtensionAPI, keyHint } from "@msa/coding-agent";
 import { Box, Text } from "@msa/tui";
 
@@ -20,7 +18,8 @@ export default function (msa: ExtensionAPI) {
 
   msa.registerEntryRenderer<ProviderDebugEntry>(ENTRY_TYPE, (entry, { expanded }, theme) => {
     const data = entry.data;
-    if (!data) return new Text(theme.fg("warning", "[provider debug] Missing event data"), 0, 0);
+    if (data === undefined)
+      return new Text(theme.fg("warning", "[provider debug] Missing event data"), 0, 0);
 
     const box = new Box(1, 1, (text) => theme.bg("customMessageBg", text));
     const count = `${data.events.length} event${data.events.length === 1 ? "" : "s"}`;
@@ -66,7 +65,7 @@ export default function (msa: ExtensionAPI) {
   });
 
   msa.on("message_end", (event) => {
-    if (event.message.role !== "assistant" || !activeEvents) return;
+    if (event.message.role !== "assistant" || activeEvents === undefined) return;
     completedEntry = {
       provider: event.message.provider,
       api: event.message.api,
@@ -77,7 +76,7 @@ export default function (msa: ExtensionAPI) {
   });
 
   msa.on("turn_end", () => {
-    if (!completedEntry) return;
+    if (completedEntry === undefined) return;
     msa.appendEntry<ProviderDebugEntry>(ENTRY_TYPE, completedEntry);
     completedEntry = undefined;
   });

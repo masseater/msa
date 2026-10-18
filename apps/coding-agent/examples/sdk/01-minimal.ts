@@ -1,6 +1,5 @@
-import { Console, Effect } from "effect";
-
 import { createAgentSession } from "@msa/coding-agent";
+import { Console, Effect } from "effect";
 
 const { session } = await createAgentSession();
 

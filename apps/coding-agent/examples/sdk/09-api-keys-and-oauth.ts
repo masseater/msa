@@ -1,6 +1,5 @@
-import { Console, Effect } from "effect";
-
 import { createAgentSession, ModelRuntime, SessionManager } from "@msa/coding-agent";
+import { Console, Effect } from "effect";
 
 const modelRuntime = await ModelRuntime.create();
 const { session: defaultAuthSession } = await createAgentSession({

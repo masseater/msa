@@ -29,7 +29,7 @@ const extractTextParts = (content: unknown): string[] => {
 
   const textParts: string[] = [];
   for (const part of content) {
-    if (!part || typeof part !== "object") {
+    if (part === null || typeof part !== "object") {
       continue;
     }
 
@@ -49,7 +49,7 @@ const extractToolCallLines = (content: unknown): string[] => {
 
   const toolCalls: string[] = [];
   for (const part of content) {
-    if (!part || typeof part !== "object") {
+    if (part === null || typeof part !== "object") {
       continue;
     }
 
@@ -69,7 +69,11 @@ const buildConversationText = (entries: SessionEntry[]): string => {
   const sections: string[] = [];
 
   for (const entry of entries) {
-    if (entry.type !== "message" || !entry.message?.role) {
+    if (
+      entry.type !== "message" ||
+      entry.message?.role === undefined ||
+      entry.message?.role.length === 0
+    ) {
       continue;
     }
 
@@ -149,7 +153,7 @@ export default function (msa: ExtensionAPI) {
       const branch = ctx.sessionManager.getBranch();
       const conversationText = buildConversationText(branch);
 
-      if (!conversationText.trim()) {
+      if (conversationText.trim().length === 0) {
         if (ctx.hasUI) {
           ctx.ui.notify("No conversation text found", "warning");
         }
@@ -161,7 +165,7 @@ export default function (msa: ExtensionAPI) {
       }
 
       const model = ctx.modelRegistry.find("openai", "gpt-5.2");
-      if (!model) {
+      if (model === undefined) {
         if (ctx.hasUI) ctx.ui.notify("Model openai/gpt-5.2 not found", "warning");
         return;
       }

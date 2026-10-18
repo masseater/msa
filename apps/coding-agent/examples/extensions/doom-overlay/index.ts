@@ -1,11 +1,8 @@
-
-
 import type { ExtensionAPI } from "@msa/coding-agent";
 
 import { DoomOverlayComponent } from "./doom-component.ts";
 import { DoomEngine } from "./doom-engine.ts";
 import { ensureWadFile } from "./wad-finder.ts";
-
 
 let activeEngine: DoomEngine | null = null;
 let activeWadPath: string | null = null;
@@ -20,19 +17,17 @@ export default function (msa: ExtensionAPI) {
         return;
       }
 
-      
       ctx.ui.notify("Loading DOOM...", "info");
-      const wad = args?.trim() ? args.trim() : await ensureWadFile();
+      const wad = (args?.trim() ?? "").length > 0 ? args.trim() : await ensureWadFile();
 
-      if (!wad) {
+      if (wad === null || wad.length === 0) {
         ctx.ui.notify("Failed to download DOOM WAD file. Check your internet connection.", "error");
         return;
       }
 
       try {
-        
         let isResume = false;
-        if (activeEngine && activeWadPath === wad) {
+        if (activeEngine !== null && activeWadPath === wad) {
           ctx.ui.notify("Resuming DOOM...", "info");
           isResume = true;
         } else {

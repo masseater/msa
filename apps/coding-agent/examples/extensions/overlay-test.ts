@@ -1,5 +1,3 @@
-
-
 import type { ExtensionAPI, ExtensionCommandContext, Theme } from "@msa/coding-agent";
 import {
   CURSOR_MARKER,
@@ -18,8 +16,11 @@ export default function (msa: ExtensionAPI) {
         { overlay: true },
       );
 
-      if (result) {
-        const msg = result.query ? `${result.action}: "${result.query}"` : result.action;
+      if (result !== undefined) {
+        const msg =
+          result.query !== undefined && result.query.length > 0
+            ? `${result.action}: "${result.query}"`
+            : result.action;
         ctx.ui.notify(msg, "info");
       }
     },
@@ -29,7 +30,6 @@ export default function (msa: ExtensionAPI) {
 class OverlayTestComponent implements Focusable {
   readonly width = 70;
 
-  
   focused = false;
 
   private selected = 0;
@@ -105,7 +105,6 @@ class OverlayTestComponent implements Focusable {
     lines.push(row(` ${th.fg("accent", "🧪 Overlay Test")}`));
     lines.push(row(""));
 
-    
     lines.push(row(` ${th.fg("dim", "─── Edge Cases (borders should align) ───")}`));
     lines.push(
       row(
@@ -120,7 +119,6 @@ class OverlayTestComponent implements Focusable {
     lines.push(row(" Emoji: 👨‍👩‍👧‍👦 🇯🇵 🚀 💻 🎉 🔥 😀 🎯 🌟 💡 🎨 🔧 📦 🏆 🌈 🎪 🎭 🎬 🎮 🎲"));
     lines.push(row(""));
 
-    
     lines.push(row(` ${th.fg("dim", "─── Actions ───")}`));
 
     for (let i = 0; i < this.items.length; i++) {
@@ -139,7 +137,7 @@ class OverlayTestComponent implements Focusable {
           const before = inputDisplay.slice(0, item.cursor);
           const cursorChar = inputDisplay[item.cursor] ?? " ";
           const after = inputDisplay.slice(item.cursor + 1);
-          
+
           const marker = this.focused ? CURSOR_MARKER : "";
           inputDisplay = `${before}${marker}${renderFakeCursor(cursorChar)}${after}`;
         }

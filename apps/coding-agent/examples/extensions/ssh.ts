@@ -1,5 +1,3 @@
-
-
 import { spawn } from "node:child_process";
 
 import type { ExtensionAPI } from "@msa/coding-agent";
@@ -81,24 +79,25 @@ function createRemoteBashOps(remote: string, remoteCwd: string, localCwd: string
         const cmd = `cd ${JSON.stringify(toRemote(cwd))} && ${command}`;
         const child = spawn("ssh", [remote, cmd], { stdio: ["ignore", "pipe", "pipe"] });
         let timedOut = false;
-        const timer = timeout
-          ? setTimeout(() => {
-              timedOut = true;
-              child.kill();
-            }, timeout * 1000)
-          : undefined;
+        const timer =
+          timeout !== undefined
+            ? setTimeout(() => {
+                timedOut = true;
+                child.kill();
+              }, timeout * 1000)
+            : undefined;
         child.stdout.on("data", onData);
         child.stderr.on("data", onData);
         child.on("error", (e) => {
-          if (timer) clearTimeout(timer);
+          if (timer !== undefined) clearTimeout(timer);
           reject(e);
         });
         const onAbort = () => child.kill();
         signal?.addEventListener("abort", onAbort, { once: true });
         child.on("close", (code) => {
-          if (timer) clearTimeout(timer);
+          if (timer !== undefined) clearTimeout(timer);
           signal?.removeEventListener("abort", onAbort);
-          if (signal?.aborted) reject(new Error("aborted"));
+          if (signal?.aborted === true) reject(new Error("aborted"));
           else if (timedOut) reject(new Error(`timeout:${timeout}`));
           else resolve({ exitCode: code });
         });
@@ -118,7 +117,6 @@ export default function (msa: ExtensionAPI) {
   const localEdit = createEditTool(localCwd);
   const localBash = createBashTool(localCwd);
 
-  
   let resolvedSsh: { remote: string; remoteCwd: string } | null = null;
 
   const getSsh = () => resolvedSsh;
@@ -127,7 +125,7 @@ export default function (msa: ExtensionAPI) {
     ...localRead,
     async execute(id, params, signal, onUpdate, _ctx) {
       const ssh = getSsh();
-      if (ssh) {
+      if (ssh !== null) {
         const tool = createReadTool(localCwd, {
           operations: createRemoteReadOps(ssh.remote, ssh.remoteCwd, localCwd),
         });
@@ -141,7 +139,7 @@ export default function (msa: ExtensionAPI) {
     ...localWrite,
     async execute(id, params, signal, onUpdate, _ctx) {
       const ssh = getSsh();
-      if (ssh) {
+      if (ssh !== null) {
         const tool = createWriteTool(localCwd, {
           operations: createRemoteWriteOps(ssh.remote, ssh.remoteCwd, localCwd),
         });
@@ -155,7 +153,7 @@ export default function (msa: ExtensionAPI) {
     ...localEdit,
     async execute(id, params, signal, onUpdate, _ctx) {
       const ssh = getSsh();
-      if (ssh) {
+      if (ssh !== null) {
         const tool = createEditTool(localCwd, {
           operations: createRemoteEditOps(ssh.remote, ssh.remoteCwd, localCwd),
         });
@@ -169,7 +167,7 @@ export default function (msa: ExtensionAPI) {
     ...localBash,
     async execute(id, params, signal, onUpdate, _ctx) {
       const ssh = getSsh();
-      if (ssh) {
+      if (ssh !== null) {
         const tool = createBashTool(localCwd, {
           operations: createRemoteBashOps(ssh.remote, ssh.remoteCwd, localCwd),
         });
@@ -180,14 +178,12 @@ export default function (msa: ExtensionAPI) {
   });
 
   msa.on("session_start", async (_event, ctx) => {
-    
     const arg = msa.getFlag("ssh") as string | undefined;
-    if (arg) {
+    if (arg !== undefined && arg.length > 0) {
       if (arg.includes(":")) {
         const [remote = "", path = ""] = arg.split(":");
         resolvedSsh = { remote, remoteCwd: path };
       } else {
-        
         const remote = arg;
         const pwd = (await sshExec(remote, "pwd")).toString().trim();
         resolvedSsh = { remote, remoteCwd: pwd };
@@ -200,17 +196,15 @@ export default function (msa: ExtensionAPI) {
     }
   });
 
-  
   msa.on("user_bash", (_event) => {
     const ssh = getSsh();
-    if (!ssh) return; 
+    if (ssh === null) return;
     return { operations: createRemoteBashOps(ssh.remote, ssh.remoteCwd, localCwd) };
   });
 
-  
   msa.on("before_agent_start", async (event) => {
     const ssh = getSsh();
-    if (ssh) {
+    if (ssh !== null) {
       const modified = event.systemPrompt.replace(
         `Current working directory: ${localCwd}`,
         `Current working directory: ${ssh.remoteCwd} (via SSH: ${ssh.remote})`,

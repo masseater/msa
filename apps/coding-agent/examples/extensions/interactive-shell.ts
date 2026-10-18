@@ -1,12 +1,8 @@
-
-
 import { spawnSync } from "node:child_process";
 
 import type { ExtensionAPI } from "@msa/coding-agent";
 
-
 const DEFAULT_INTERACTIVE_COMMANDS = [
-  
   "vim",
   "nvim",
   "vi",
@@ -17,11 +13,11 @@ const DEFAULT_INTERACTIVE_COMMANDS = [
   "helix",
   "hx",
   "kak",
-  
+
   "less",
   "more",
   "most",
-  
+
   "git commit",
   "git rebase",
   "git merge",
@@ -39,40 +35,40 @@ const DEFAULT_INTERACTIVE_COMMANDS = [
   "git checkout --patch",
   "git difftool",
   "git mergetool",
-  
+
   "htop",
   "top",
   "btop",
   "glances",
-  
+
   "ranger",
   "nnn",
   "lf",
   "mc",
   "vifm",
-  
+
   "tig",
   "lazygit",
   "gitui",
-  
+
   "fzf",
   "sk",
-  
+
   "ssh",
   "telnet",
   "mosh",
-  
+
   "psql",
   "mysql",
   "sqlite3",
   "mongosh",
   "redis-cli",
-  
+
   "kubectl edit",
   "kubectl exec -it",
   "docker exec -it",
   "docker run -it",
-  
+
   "tmux",
   "screen",
   "ncdu",
@@ -98,7 +94,7 @@ function isInteractiveCommand(command: string): boolean {
 
   for (const cmd of commands) {
     const cmdLower = cmd.toLowerCase();
-    
+
     if (
       trimmed === cmdLower ||
       trimmed.startsWith(`${cmdLower} `) ||
@@ -106,7 +102,7 @@ function isInteractiveCommand(command: string): boolean {
     ) {
       return true;
     }
-    
+
     const pipeIdx = trimmed.lastIndexOf("|");
     if (pipeIdx !== -1) {
       const afterPipe = trimmed.slice(pipeIdx + 1).trim();
@@ -123,8 +119,6 @@ export default function (msa: ExtensionAPI) {
     let command = event.command;
     let forceInteractive = false;
 
-    
-    
     if (command.startsWith("i ") || command.startsWith("i\t")) {
       forceInteractive = true;
       command = command.slice(2).trim();
@@ -132,10 +126,9 @@ export default function (msa: ExtensionAPI) {
 
     const shouldBeInteractive = forceInteractive || isInteractiveCommand(command);
     if (!shouldBeInteractive) {
-      return; 
+      return;
     }
 
-    
     if (ctx.mode !== "tui") {
       return {
         result: {
@@ -147,33 +140,25 @@ export default function (msa: ExtensionAPI) {
       };
     }
 
-    
     const exitCode = await ctx.ui.custom<number | null>((tui, _theme, _kb, done) => {
-      
       tui.stop();
 
-      
       process.stdout.write("\x1b[2J\x1b[H");
 
-      
       const shell = process.env["SHELL"] || "/bin/sh";
       const result = spawnSync(shell, ["-c", command], {
         stdio: "inherit",
         env: process.env,
       });
 
-      
       tui.start();
       tui.requestRender(true);
 
-      
       done(result.status);
 
-      
       return { render: () => [], invalidate: () => {} };
     });
 
-    
     const output =
       exitCode === 0
         ? "(interactive command completed successfully)"

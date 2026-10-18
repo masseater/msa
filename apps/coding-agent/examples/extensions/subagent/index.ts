@@ -1,5 +1,3 @@
-
-
 import { spawn } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
@@ -46,16 +44,16 @@ function formatUsageStats(
   model?: string,
 ): string {
   const parts: string[] = [];
-  if (usage.turns) parts.push(`${usage.turns} turn${usage.turns > 1 ? "s" : ""}`);
-  if (usage.input) parts.push(`↑${formatTokens(usage.input)}`);
-  if (usage.output) parts.push(`↓${formatTokens(usage.output)}`);
-  if (usage.cacheRead) parts.push(`R${formatTokens(usage.cacheRead)}`);
-  if (usage.cacheWrite) parts.push(`W${formatTokens(usage.cacheWrite)}`);
-  if (usage.cost) parts.push(`$${usage.cost.toFixed(4)}`);
-  if (usage.contextTokens && usage.contextTokens > 0) {
+  if (usage.turns !== undefined) parts.push(`${usage.turns} turn${usage.turns > 1 ? "s" : ""}`);
+  if (usage.input !== 0) parts.push(`↑${formatTokens(usage.input)}`);
+  if (usage.output !== 0) parts.push(`↓${formatTokens(usage.output)}`);
+  if (usage.cacheRead !== 0) parts.push(`R${formatTokens(usage.cacheRead)}`);
+  if (usage.cacheWrite !== 0) parts.push(`W${formatTokens(usage.cacheWrite)}`);
+  if (usage.cost !== 0) parts.push(`$${usage.cost.toFixed(4)}`);
+  if (usage.contextTokens !== undefined && usage.contextTokens > 0) {
     parts.push(`ctx:${formatTokens(usage.contextTokens)}`);
   }
-  if (model) parts.push(model);
+  if (model !== undefined && model.length > 0) parts.push(model);
   return parts.join(" ");
 }
 
@@ -80,7 +78,7 @@ function formatToolCall(
       const filePath = shortenPath(rawPath);
       const lineRange = formatReadLineRange(args["offset"], args["limit"]);
       let text = themeFg("accent", filePath);
-      if (lineRange) {
+      if (lineRange.length > 0) {
         text += themeFg("warning", lineRange);
       }
       return themeFg("muted", "read ") + text;
@@ -222,7 +220,7 @@ async function mapWithConcurrencyLimit<TIn, TOut>(
   const workers = new Array(limit).fill(null).map(async () => {
     while (true) {
       const next = queue.next();
-      if (next.done) return;
+      if (next.done === true) return;
       const [current, item] = next.value;
       results[current] = await fn(item, current);
     }
@@ -247,7 +245,12 @@ async function writePromptToTempFile(
 function getMsaInvocation(args: string[]): { command: string; args: string[] } {
   const currentScript = process.argv[1];
   const isBunVirtualScript = currentScript?.startsWith("/$bunfs/root/");
-  if (currentScript && !isBunVirtualScript && fs.existsSync(currentScript)) {
+  if (
+    currentScript !== undefined &&
+    currentScript.length > 0 &&
+    isBunVirtualScript !== true &&
+    fs.existsSync(currentScript)
+  ) {
     return { command: process.execPath, args: [currentScript, ...args] };
   }
 
@@ -281,7 +284,7 @@ async function runSingleAgent(
 ): Promise<SingleResult> {
   const agent = agents.find((a) => a.name === agentName);
 
-  if (!agent) {
+  if (agent === undefined) {
     const available = agents.map((a) => `"${a.name}"`).join(", ") || "none";
     return {
       agent: agentName,
@@ -304,13 +307,14 @@ async function runSingleAgent(
   }
 
   const args: string[] = ["--mode", "json", "-p", "--no-session"];
-  const inheritsDispatchConfig = !agent.model;
+  const inheritsDispatchConfig = agent.model === undefined || agent.model.length === 0;
   const model = agent.model ?? dispatchDefaults.model;
-  if (model) args.push("--model", model);
-  if (inheritsDispatchConfig && dispatchDefaults.thinkingLevel) {
+  if (model !== undefined && model.length > 0) args.push("--model", model);
+  if (inheritsDispatchConfig && dispatchDefaults.thinkingLevel !== undefined) {
     args.push("--thinking", dispatchDefaults.thinkingLevel);
   }
-  if (agent.tools && agent.tools.length > 0) args.push("--tools", agent.tools.join(","));
+  if (agent.tools !== undefined && agent.tools.length > 0)
+    args.push("--tools", agent.tools.join(","));
 
   let tmpPromptDir: string | null = null;
   let tmpPromptPath: string | null = null;
@@ -336,7 +340,7 @@ async function runSingleAgent(
   };
 
   const emitUpdate = () => {
-    if (onUpdate) {
+    if (onUpdate !== undefined) {
       onUpdate({
         content: [{ type: "text", text: getFinalOutput(currentResult.messages) || "(running...)" }],
         details: makeDetails([currentResult]),
@@ -345,7 +349,7 @@ async function runSingleAgent(
   };
 
   try {
-    if (agent.systemPrompt.trim()) {
+    if (agent.systemPrompt.trim().length > 0) {
       const tmp = await writePromptToTempFile(agent.name, agent.systemPrompt);
       tmpPromptDir = tmp.dir;
       tmpPromptPath = tmp.filePath;
@@ -365,7 +369,7 @@ async function runSingleAgent(
       let buffer = "";
 
       const processLine = (line: string) => {
-        if (!line.trim()) return;
+        if (line.trim().length === 0) return;
         let event: any;
         try {
           event = JSON.parse(line);
@@ -373,29 +377,32 @@ async function runSingleAgent(
           return;
         }
 
-        if (event.type === "message_end" && event.message) {
+        if (event.type === "message_end" && event.message !== undefined) {
           const msg = event.message as Message;
           currentResult.messages.push(msg);
 
           if (msg.role === "assistant") {
             currentResult.usage.turns++;
             const usage = msg.usage;
-            if (usage) {
-              currentResult.usage.input += usage.input || 0;
-              currentResult.usage.output += usage.output || 0;
-              currentResult.usage.cacheRead += usage.cacheRead || 0;
-              currentResult.usage.cacheWrite += usage.cacheWrite || 0;
-              currentResult.usage.cost += usage.cost?.total || 0;
-              currentResult.usage.contextTokens = usage.totalTokens || 0;
-            }
-            if (!currentResult.model && msg.model) currentResult.model = msg.model;
-            if (msg.stopReason) currentResult.stopReason = msg.stopReason;
-            if (msg.errorMessage) currentResult.errorMessage = msg.errorMessage;
+            currentResult.usage.input += usage.input || 0;
+            currentResult.usage.output += usage.output || 0;
+            currentResult.usage.cacheRead += usage.cacheRead || 0;
+            currentResult.usage.cacheWrite += usage.cacheWrite || 0;
+            currentResult.usage.cost += usage.cost?.total || 0;
+            currentResult.usage.contextTokens = usage.totalTokens || 0;
+            if (
+              currentResult.model === undefined ||
+              (currentResult.model.length === 0 && msg.model.length > 0)
+            )
+              currentResult.model = msg.model;
+            currentResult.stopReason = msg.stopReason;
+            if (msg.errorMessage !== undefined && msg.errorMessage.length > 0)
+              currentResult.errorMessage = msg.errorMessage;
           }
           emitUpdate();
         }
 
-        if (event.type === "tool_result_end" && event.message) {
+        if (event.type === "tool_result_end" && event.message !== undefined) {
           currentResult.messages.push(event.message as Message);
           emitUpdate();
         }
@@ -413,7 +420,7 @@ async function runSingleAgent(
       });
 
       proc.on("close", (code) => {
-        if (buffer.trim()) processLine(buffer);
+        if (buffer.trim().length > 0) processLine(buffer);
         resolve(code ?? 0);
       });
 
@@ -421,7 +428,7 @@ async function runSingleAgent(
         resolve(1);
       });
 
-      if (signal) {
+      if (signal !== undefined) {
         const killProc = () => {
           wasAborted = true;
           proc.kill("SIGTERM");
@@ -438,18 +445,14 @@ async function runSingleAgent(
     if (wasAborted) throw new Error("Subagent was aborted");
     return currentResult;
   } finally {
-    if (tmpPromptPath)
+    if (tmpPromptPath !== null && tmpPromptPath.length > 0)
       try {
         fs.unlinkSync(tmpPromptPath);
-      } catch {
-        
-      }
-    if (tmpPromptDir)
+      } catch {}
+    if (tmpPromptDir !== null && tmpPromptDir.length > 0)
       try {
         fs.rmdirSync(tmpPromptDir);
-      } catch {
-        
-      }
+      } catch {}
   }
 }
 
@@ -509,7 +512,7 @@ export default function (msa: ExtensionAPI) {
     async execute(_toolCallId, params, signal, onUpdate, ctx) {
       const agentScope: AgentScope = params.agentScope ?? "user";
       const dispatchDefaults: DispatchDefaults = {
-        model: ctx.model ? `${ctx.model.provider}/${ctx.model.id}` : undefined,
+        model: ctx.model !== undefined ? `${ctx.model.provider}/${ctx.model.id}` : undefined,
         thinkingLevel: ctx.thinkingLevel,
       };
       const discovery = discoverAgents(ctx.cwd, agentScope);
@@ -550,9 +553,12 @@ export default function (msa: ExtensionAPI) {
         !ctx.isProjectTrusted()
       ) {
         const requestedAgentNames = new Set<string>();
-        if (params.chain) for (const step of params.chain) requestedAgentNames.add(step.agent);
-        if (params.tasks) for (const t of params.tasks) requestedAgentNames.add(t.agent);
-        if (params.agent) requestedAgentNames.add(params.agent);
+        if (params.chain !== undefined)
+          for (const step of params.chain) requestedAgentNames.add(step.agent);
+        if (params.tasks !== undefined)
+          for (const t of params.tasks) requestedAgentNames.add(t.agent);
+        if (params.agent !== undefined && params.agent.length > 0)
+          requestedAgentNames.add(params.agent);
 
         const projectAgentsRequested = Array.from(requestedAgentNames)
           .map((name) => agents.find((a) => a.name === name))
@@ -573,27 +579,26 @@ export default function (msa: ExtensionAPI) {
         }
       }
 
-      if (params.chain && params.chain.length > 0) {
+      if (params.chain !== undefined && params.chain.length > 0) {
         const results: SingleResult[] = [];
         let previousOutput = "";
 
         for (const [i, step] of params.chain.entries()) {
           const taskWithContext = step.task.replace(/\{previous\}/g, previousOutput);
 
-          
-          const chainUpdate: OnUpdateCallback | undefined = onUpdate
-            ? (partial) => {
-                
-                const currentResult = partial.details?.results[0];
-                if (currentResult) {
-                  const allResults = [...results, currentResult];
-                  onUpdate({
-                    content: partial.content,
-                    details: makeDetails("chain")(allResults),
-                  });
+          const chainUpdate: OnUpdateCallback | undefined =
+            onUpdate !== undefined
+              ? (partial) => {
+                  const currentResult = partial.details?.results[0];
+                  if (currentResult !== undefined) {
+                    const allResults = [...results, currentResult];
+                    onUpdate({
+                      content: partial.content,
+                      details: makeDetails("chain")(allResults),
+                    });
+                  }
                 }
-              }
-            : undefined;
+              : undefined;
 
           const result = await runSingleAgent(
             ctx.cwd,
@@ -636,7 +641,7 @@ export default function (msa: ExtensionAPI) {
         };
       }
 
-      if (params.tasks && params.tasks.length > 0) {
+      if (params.tasks !== undefined && params.tasks.length > 0) {
         if (params.tasks.length > MAX_PARALLEL_TASKS)
           return {
             content: [
@@ -648,16 +653,14 @@ export default function (msa: ExtensionAPI) {
             details: makeDetails("parallel")([]),
           };
 
-        
         const allResults: SingleResult[] = new Array(params.tasks.length);
 
-        
         for (const [i, t] of params.tasks.entries()) {
           allResults[i] = {
             agent: t.agent,
             agentSource: "unknown",
             task: t.task,
-            exitCode: -1, 
+            exitCode: -1,
             messages: [],
             stderr: "",
             usage: {
@@ -673,7 +676,7 @@ export default function (msa: ExtensionAPI) {
         }
 
         const emitParallelUpdate = () => {
-          if (onUpdate) {
+          if (onUpdate !== undefined) {
             const running = allResults.filter((r) => r.exitCode === -1).length;
             const done = allResults.filter((r) => r.exitCode !== -1).length;
             onUpdate({
@@ -701,9 +704,9 @@ export default function (msa: ExtensionAPI) {
               t.cwd,
               undefined,
               signal,
-              
+
               (partial) => {
-                if (partial.details?.results[0]) {
+                if (partial.details?.results[0] !== undefined) {
                   allResults[index] = partial.details.results[0];
                   emitParallelUpdate();
                 }
@@ -720,7 +723,7 @@ export default function (msa: ExtensionAPI) {
         const summaries = results.map((r) => {
           const output = truncateParallelOutput(getResultOutput(r));
           const status = isFailedResult(r)
-            ? `failed${r.stopReason && r.stopReason !== "end" ? ` (${r.stopReason})` : ""}`
+            ? `failed${r.stopReason !== undefined && r.stopReason.length > 0 && r.stopReason !== "end" ? ` (${r.stopReason})` : ""}`
             : "completed";
           return `### [${r.agent}] ${status}\n\n${output}`;
         });
@@ -735,7 +738,12 @@ export default function (msa: ExtensionAPI) {
         };
       }
 
-      if (params.agent && params.task) {
+      if (
+        params.agent !== undefined &&
+        params.agent.length > 0 &&
+        params.task !== undefined &&
+        params.task.length > 0
+      ) {
         const result = await runSingleAgent(
           ctx.cwd,
           dispatchDefaults,
@@ -774,13 +782,12 @@ export default function (msa: ExtensionAPI) {
 
     renderCall(args, theme, _context) {
       const scope: AgentScope = args.agentScope ?? "user";
-      if (args.chain && args.chain.length > 0) {
+      if (args.chain !== undefined && args.chain.length > 0) {
         let text =
           theme.fg("toolTitle", theme.bold("subagent ")) +
           theme.fg("accent", `chain (${args.chain.length} steps)`) +
           theme.fg("muted", ` [${scope}]`);
         for (const [i, step] of args.chain.slice(0, 3).entries()) {
-          
           const cleanTask = step.task.replace(/\{previous\}/g, "").trim();
           const preview = cleanTask.length > 40 ? `${cleanTask.slice(0, 40)}...` : cleanTask;
           text +=
@@ -794,7 +801,7 @@ export default function (msa: ExtensionAPI) {
           text += `\n  ${theme.fg("muted", `... +${args.chain.length - 3} more`)}`;
         return new Text(text, 0, 0);
       }
-      if (args.tasks && args.tasks.length > 0) {
+      if (args.tasks !== undefined && args.tasks.length > 0) {
         let text =
           theme.fg("toolTitle", theme.bold("subagent ")) +
           theme.fg("accent", `parallel (${args.tasks.length} tasks)`) +
@@ -808,11 +815,12 @@ export default function (msa: ExtensionAPI) {
         return new Text(text, 0, 0);
       }
       const agentName = args.agent || "...";
-      const preview = args.task
-        ? args.task.length > 60
-          ? `${args.task.slice(0, 60)}...`
-          : args.task
-        : "...";
+      const preview =
+        args.task !== undefined && args.task.length > 0
+          ? args.task.length > 60
+            ? `${args.task.slice(0, 60)}...`
+            : args.task
+          : "...";
       let text =
         theme.fg("toolTitle", theme.bold("subagent ")) +
         theme.fg("accent", agentName) +
@@ -823,7 +831,7 @@ export default function (msa: ExtensionAPI) {
 
     renderResult(result, { expanded }, theme, _context) {
       const details = result.details as SubagentDetails | undefined;
-      if (!details || details.results.length === 0) {
+      if (details === undefined || details.results.length === 0) {
         const text = result.content[0];
         return new Text(text?.type === "text" ? text.text : "(no output)", 0, 0);
       }
@@ -831,8 +839,8 @@ export default function (msa: ExtensionAPI) {
       const mdTheme = getMarkdownTheme();
 
       const renderDisplayItems = (items: DisplayItem[], limit?: number) => {
-        const toShow = limit ? items.slice(-limit) : items;
-        const skipped = limit && items.length > limit ? items.length - limit : 0;
+        const toShow = limit !== undefined ? items.slice(-limit) : items;
+        const skipped = limit !== undefined && items.length > limit ? items.length - limit : 0;
         let text = "";
         if (skipped > 0) text += theme.fg("muted", `... ${skipped} earlier items\n`);
         for (const item of toShow) {
@@ -857,16 +865,17 @@ export default function (msa: ExtensionAPI) {
         if (expanded) {
           const container = new Container();
           let header = `${icon} ${theme.fg("toolTitle", theme.bold(r.agent))}${theme.fg("muted", ` (${r.agentSource})`)}`;
-          if (isError && r.stopReason) header += ` ${theme.fg("error", `[${r.stopReason}]`)}`;
+          if (isError && r.stopReason !== undefined && r.stopReason.length > 0)
+            header += ` ${theme.fg("error", `[${r.stopReason}]`)}`;
           container.addChild(new Text(header, 0, 0));
-          if (isError && r.errorMessage)
+          if (isError && r.errorMessage !== undefined && r.errorMessage.length > 0)
             container.addChild(new Text(theme.fg("error", `Error: ${r.errorMessage}`), 0, 0));
           container.addChild(new Spacer(1));
           container.addChild(new Text(theme.fg("muted", "─── Task ───"), 0, 0));
           container.addChild(new Text(theme.fg("dim", r.task), 0, 0));
           container.addChild(new Spacer(1));
           container.addChild(new Text(theme.fg("muted", "─── Output ───"), 0, 0));
-          if (displayItems.length === 0 && !finalOutput) {
+          if (displayItems.length === 0 && finalOutput.length === 0) {
             container.addChild(new Text(theme.fg("muted", "(no output)"), 0, 0));
           } else {
             for (const item of displayItems) {
@@ -880,13 +889,13 @@ export default function (msa: ExtensionAPI) {
                   ),
                 );
             }
-            if (finalOutput) {
+            if (finalOutput.length > 0) {
               container.addChild(new Spacer(1));
               container.addChild(new Markdown(finalOutput.trim(), 0, 0, mdTheme));
             }
           }
           const usageStr = formatUsageStats(r.usage, r.model);
-          if (usageStr) {
+          if (usageStr.length > 0) {
             container.addChild(new Spacer(1));
             container.addChild(new Text(theme.fg("dim", usageStr), 0, 0));
           }
@@ -894,8 +903,10 @@ export default function (msa: ExtensionAPI) {
         }
 
         let text = `${icon} ${theme.fg("toolTitle", theme.bold(r.agent))}${theme.fg("muted", ` (${r.agentSource})`)}`;
-        if (isError && r.stopReason) text += ` ${theme.fg("error", `[${r.stopReason}]`)}`;
-        if (isError && r.errorMessage) text += `\n${theme.fg("error", `Error: ${r.errorMessage}`)}`;
+        if (isError && r.stopReason !== undefined && r.stopReason.length > 0)
+          text += ` ${theme.fg("error", `[${r.stopReason}]`)}`;
+        if (isError && r.errorMessage !== undefined && r.errorMessage.length > 0)
+          text += `\n${theme.fg("error", `Error: ${r.errorMessage}`)}`;
         else if (displayItems.length === 0) text += `\n${theme.fg("muted", "(no output)")}`;
         else {
           text += `\n${renderDisplayItems(displayItems, COLLAPSED_ITEM_COUNT)}`;
@@ -903,7 +914,7 @@ export default function (msa: ExtensionAPI) {
             text += `\n${theme.fg("muted", "(Ctrl+O to expand)")}`;
         }
         const usageStr = formatUsageStats(r.usage, r.model);
-        if (usageStr) text += `\n${theme.fg("dim", usageStr)}`;
+        if (usageStr.length > 0) text += `\n${theme.fg("dim", usageStr)}`;
         return new Text(text, 0, 0);
       }
 
@@ -957,7 +968,6 @@ export default function (msa: ExtensionAPI) {
               new Text(theme.fg("muted", "Task: ") + theme.fg("dim", r.task), 0, 0),
             );
 
-            
             for (const item of displayItems) {
               if (item.type === "toolCall") {
                 container.addChild(
@@ -971,25 +981,24 @@ export default function (msa: ExtensionAPI) {
               }
             }
 
-            
-            if (finalOutput) {
+            if (finalOutput.length > 0) {
               container.addChild(new Spacer(1));
               container.addChild(new Markdown(finalOutput.trim(), 0, 0, mdTheme));
             }
 
             const stepUsage = formatUsageStats(r.usage, r.model);
-            if (stepUsage) container.addChild(new Text(theme.fg("dim", stepUsage), 0, 0));
+            if (stepUsage.length > 0)
+              container.addChild(new Text(theme.fg("dim", stepUsage), 0, 0));
           }
 
           const usageStr = formatUsageStats(aggregateUsage(details.results));
-          if (usageStr) {
+          if (usageStr.length > 0) {
             container.addChild(new Spacer(1));
             container.addChild(new Text(theme.fg("dim", `Total: ${usageStr}`), 0, 0));
           }
           return container;
         }
 
-        
         let text =
           icon +
           " " +
@@ -1003,7 +1012,7 @@ export default function (msa: ExtensionAPI) {
           else text += `\n${renderDisplayItems(displayItems, 5)}`;
         }
         const usageStr = formatUsageStats(aggregateUsage(details.results));
-        if (usageStr) text += `\n\n${theme.fg("dim", `Total: ${usageStr}`)}`;
+        if (usageStr.length > 0) text += `\n\n${theme.fg("dim", `Total: ${usageStr}`)}`;
         text += `\n${theme.fg("muted", "(Ctrl+O to expand)")}`;
         return new Text(text, 0, 0);
       }
@@ -1049,7 +1058,6 @@ export default function (msa: ExtensionAPI) {
               new Text(theme.fg("muted", "Task: ") + theme.fg("dim", r.task), 0, 0),
             );
 
-            
             for (const item of displayItems) {
               if (item.type === "toolCall") {
                 container.addChild(
@@ -1063,25 +1071,24 @@ export default function (msa: ExtensionAPI) {
               }
             }
 
-            
-            if (finalOutput) {
+            if (finalOutput.length > 0) {
               container.addChild(new Spacer(1));
               container.addChild(new Markdown(finalOutput.trim(), 0, 0, mdTheme));
             }
 
             const taskUsage = formatUsageStats(r.usage, r.model);
-            if (taskUsage) container.addChild(new Text(theme.fg("dim", taskUsage), 0, 0));
+            if (taskUsage.length > 0)
+              container.addChild(new Text(theme.fg("dim", taskUsage), 0, 0));
           }
 
           const usageStr = formatUsageStats(aggregateUsage(details.results));
-          if (usageStr) {
+          if (usageStr.length > 0) {
             container.addChild(new Spacer(1));
             container.addChild(new Text(theme.fg("dim", `Total: ${usageStr}`), 0, 0));
           }
           return container;
         }
 
-        
         let text = `${icon} ${theme.fg("toolTitle", theme.bold("parallel "))}${theme.fg("accent", status)}`;
         for (const r of details.results) {
           const rIcon =
@@ -1098,7 +1105,7 @@ export default function (msa: ExtensionAPI) {
         }
         if (!isRunning) {
           const usageStr = formatUsageStats(aggregateUsage(details.results));
-          if (usageStr) text += `\n\n${theme.fg("dim", `Total: ${usageStr}`)}`;
+          if (usageStr.length > 0) text += `\n\n${theme.fg("dim", `Total: ${usageStr}`)}`;
         }
         if (!expanded) text += `\n${theme.fg("muted", "(Ctrl+O to expand)")}`;
         return new Text(text, 0, 0);

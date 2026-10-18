@@ -1,12 +1,9 @@
-
-
 import type { AgentMessage } from "@msa/agent-core";
 import type { AssistantMessage, TextContent } from "@msa/ai";
 import type { ExtensionAPI, ExtensionContext } from "@msa/coding-agent";
 import { Key } from "@msa/tui";
 
 import { extractTodoItems, isSafeCommand, markCompletedSteps, type TodoItem } from "./utils.ts";
-
 
 const PLAN_MODE_TOOLS = ["read", "bash", "grep", "find", "ls", "questionnaire"];
 const NORMAL_MODE_TOOLS = ["read", "bash", "edit", "write"];
@@ -20,11 +17,9 @@ interface PlanModeState {
   toolsBeforePlanMode?: string[];
 }
 
-
 function isAssistantMessage(m: AgentMessage): m is AssistantMessage {
   return m.role === "assistant" && Array.isArray(m.content);
 }
-
 
 function getTextContent(message: AssistantMessage): string {
   return message.content
@@ -46,7 +41,6 @@ export default function planModeExtension(msa: ExtensionAPI): void {
   });
 
   function updateStatus(ctx: ExtensionContext): void {
-    
     if (executionMode && todoItems.length > 0) {
       const completed = todoItems.filter((t) => t.completed).length;
       ctx.ui.setStatus(
@@ -59,7 +53,6 @@ export default function planModeExtension(msa: ExtensionAPI): void {
       ctx.ui.setStatus("plan-mode", undefined);
     }
 
-    
     if (executionMode && todoItems.length > 0) {
       const lines = todoItems.map((item) => {
         if (item.completed) {
@@ -155,7 +148,6 @@ export default function planModeExtension(msa: ExtensionAPI): void {
     handler: async (ctx) => togglePlanMode(ctx),
   });
 
-  
   msa.on("tool_call", async (event) => {
     if (!planModeEnabled || event.toolName !== "bash") return;
 
@@ -169,7 +161,6 @@ export default function planModeExtension(msa: ExtensionAPI): void {
     return undefined;
   });
 
-  
   msa.on("context", async (event) => {
     if (planModeEnabled) return;
 
@@ -193,9 +184,6 @@ export default function planModeExtension(msa: ExtensionAPI): void {
     };
   });
 
-  
-  
-  
   msa.on("before_agent_start", async (event) => {
     if (event.messageType !== "user") return;
 
@@ -247,7 +235,6 @@ After completing a step, include a [DONE:n] tag in your response.`,
     return undefined;
   });
 
-  
   msa.on("turn_end", async (event, ctx) => {
     if (!executionMode || todoItems.length === 0) return;
     if (!isAssistantMessage(event.message)) return;
@@ -259,9 +246,7 @@ After completing a step, include a [DONE:n] tag in your response.`,
     persistState();
   });
 
-  
   msa.on("agent_end", async (event, ctx) => {
-    
     if (executionMode && todoItems.length > 0) {
       if (todoItems.every((t) => t.completed)) {
         const completedList = todoItems.map((t) => `~~${t.text}~~`).join("\n");
@@ -276,16 +261,15 @@ After completing a step, include a [DONE:n] tag in your response.`,
         executionMode = false;
         todoItems = [];
         updateStatus(ctx);
-        persistState(); 
+        persistState();
       }
       return;
     }
 
     if (!planModeEnabled || !ctx.hasUI) return;
 
-    
     const lastAssistant = [...event.messages].reverse().find(isAssistantMessage);
-    if (lastAssistant) {
+    if (lastAssistant !== undefined) {
       const extracted = extractTodoItems(getTextContent(lastAssistant));
       if (extracted.length > 0) {
         todoItems = extracted;
@@ -295,7 +279,6 @@ After completing a step, include a [DONE:n] tag in your response.`,
     if (todoItems.length === 0) return;
     persistState();
 
-    
     const todoListText = todoItems.map((t, i) => `${i + 1}. ☐ ${t.text}`).join("\n");
     const planTodoListMessage = {
       customType: "plan-todo-list",
@@ -309,9 +292,9 @@ After completing a step, include a [DONE:n] tag in your response.`,
       "Refine the plan",
     ]);
 
-    if (choice?.startsWith("Execute")) {
+    if (choice?.startsWith("Execute") === true) {
       const firstTodoItem = todoItems[0];
-      if (!firstTodoItem) return;
+      if (firstTodoItem === undefined) return;
 
       planModeEnabled = false;
       executionMode = true;
@@ -334,14 +317,13 @@ After completing a step, include a [DONE:n] tag in your response.`;
       );
     } else if (choice === "Refine the plan") {
       const refinement = await ctx.ui.editor("Refine the plan:", "");
-      if (refinement?.trim()) {
+      if (refinement !== undefined && refinement.trim().length > 0) {
         msa.sendMessage(planTodoListMessage, { deliverAs: "followUp" });
         msa.sendUserMessage(refinement.trim(), { deliverAs: "followUp" });
       }
     }
   });
 
-  
   msa.on("session_start", async (_event, ctx) => {
     if (msa.getFlag("plan") === true) {
       planModeEnabled = true;
@@ -349,7 +331,6 @@ After completing a step, include a [DONE:n] tag in your response.`;
 
     const entries = ctx.sessionManager.getEntries();
 
-    
     const planModeEntry = entries
       .filter(
         (e: { type: string; customType?: string }) =>
@@ -357,18 +338,15 @@ After completing a step, include a [DONE:n] tag in your response.`;
       )
       .pop() as { data?: PlanModeState } | undefined;
 
-    if (planModeEntry?.data) {
+    if (planModeEntry?.data !== undefined) {
       planModeEnabled = planModeEntry.data.enabled ?? planModeEnabled;
       todoItems = planModeEntry.data.todos ?? todoItems;
       executionMode = planModeEntry.data.executing ?? executionMode;
       toolsBeforePlanMode = planModeEntry.data.toolsBeforePlanMode ?? toolsBeforePlanMode;
     }
 
-    
-    
     const isResume = planModeEntry !== undefined;
     if (isResume && executionMode && todoItems.length > 0) {
-      
       let executeIndex = -1;
       for (let i = entries.length - 1; i >= 0; i--) {
         const entry = entries[i] as { type: string; customType?: string };
@@ -378,7 +356,6 @@ After completing a step, include a [DONE:n] tag in your response.`;
         }
       }
 
-      
       const messages: AssistantMessage[] = [];
       for (const entry of entries.slice(executeIndex + 1)) {
         if (

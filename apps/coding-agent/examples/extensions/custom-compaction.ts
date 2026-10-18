@@ -1,5 +1,3 @@
-
-
 import { uuidv7 } from "@msa/ai";
 import type { ExtensionAPI } from "@msa/coding-agent";
 import { convertToLlm, serializeConversation } from "@msa/coding-agent";
@@ -17,14 +15,12 @@ export default function (msa: ExtensionAPI) {
       previousSummary,
     } = preparation;
 
-    
     const model = ctx.modelRegistry.find("opencode", "gemini-3.5-flash");
-    if (!model) {
+    if (model === undefined) {
       ctx.ui.notify(`Could not find Gemini Flash model, using default compaction`, "warning");
       return;
     }
 
-    
     const allMessages = [...messagesToSummarize, ...turnPrefixMessages];
 
     ctx.ui.notify(
@@ -32,15 +28,13 @@ export default function (msa: ExtensionAPI) {
       "info",
     );
 
-    
     const conversationText = serializeConversation(convertToLlm(allMessages));
 
-    
-    const previousContext = previousSummary
-      ? `\n\nPrevious session summary for context:\n${previousSummary}`
-      : "";
+    const previousContext =
+      previousSummary !== undefined && previousSummary.length > 0
+        ? `\n\nPrevious session summary for context:\n${previousSummary}`
+        : "";
 
-    
     const summaryMessages = [
       {
         role: "user" as const,
@@ -70,7 +64,6 @@ ${conversationText}
     ];
 
     try {
-      
       const response = await ctx.modelRegistry.complete(
         model,
         { messages: summaryMessages },
@@ -87,14 +80,12 @@ ${conversationText}
         .map((c) => c.text)
         .join("\n");
 
-      if (!summary.trim()) {
+      if (summary.trim().length === 0) {
         if (!signal.aborted)
           ctx.ui.notify("Compaction summary was empty, using default compaction", "warning");
         return;
       }
 
-      
-      
       return {
         compaction: {
           summary,
@@ -106,7 +97,7 @@ ${conversationText}
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       ctx.ui.notify(`Compaction failed: ${message}`, "error");
-      
+
       return;
     }
   });

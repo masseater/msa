@@ -1,11 +1,8 @@
-
-
 import type { ExtensionAPI } from "@msa/coding-agent";
 
 export default function pirateExtension(msa: ExtensionAPI) {
   let pirateMode = false;
 
-  
   msa.registerCommand("pirate", {
     description: "Toggle pirate mode (agent speaks like a pirate)",
     handler: async (_args, ctx) => {
@@ -14,7 +11,6 @@ export default function pirateExtension(msa: ExtensionAPI) {
     },
   });
 
-  
   msa.on("before_agent_start", async (event) => {
     if (pirateMode) {
       return {

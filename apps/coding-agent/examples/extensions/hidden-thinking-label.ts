@@ -1,5 +1,3 @@
-
-
 import type { ExtensionAPI, ExtensionContext } from "@msa/coding-agent";
 
 const DEFAULT_LABEL = "Pondering...";
@@ -20,7 +18,7 @@ export default function (msa: ExtensionAPI) {
     handler: async (args, ctx) => {
       const nextLabel = args.trim();
 
-      if (!nextLabel) {
+      if (nextLabel.length === 0) {
         label = DEFAULT_LABEL;
         ctx.ui.setHiddenThinkingLabel();
         ctx.ui.notify(`Hidden thinking label reset to: ${DEFAULT_LABEL}`);

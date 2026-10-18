@@ -1,5 +1,3 @@
-
-
 import { execSync } from "child_process";
 import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "os";
@@ -38,16 +36,15 @@ export default function (msa: ExtensionAPI) {
   msa.registerTool({
     name: "rg",
     label: "ripgrep",
-    
+
     description: `Search file contents using ripgrep. Output is truncated to ${DEFAULT_MAX_LINES} lines or ${formatSize(DEFAULT_MAX_BYTES)} (whichever is hit first). If truncated, full output is saved to a temp file.`,
     parameters: RgParams,
 
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
       const { pattern, path: searchPath, glob } = params;
 
-      
       const args = ["rg", "--line-number", "--color=never"];
-      if (glob) args.push("--glob", glob);
+      if (glob !== undefined && glob.length > 0) args.push("--glob", glob);
       args.push(pattern);
       args.push(searchPath || ".");
 
@@ -56,10 +53,9 @@ export default function (msa: ExtensionAPI) {
         output = execSync(args.join(" "), {
           cwd: ctx.cwd,
           encoding: "utf-8",
-          maxBuffer: 100 * 1024 * 1024, 
+          maxBuffer: 100 * 1024 * 1024,
         });
       } catch (err: any) {
-        
         if (err.status === 1) {
           return {
             content: [{ type: "text", text: "No matches found" }],
@@ -69,22 +65,18 @@ export default function (msa: ExtensionAPI) {
         throw new Error(`ripgrep failed: ${err.message}`, { cause: err });
       }
 
-      if (!output.trim()) {
+      if (output.trim().length === 0) {
         return {
           content: [{ type: "text", text: "No matches found" }],
           details: { pattern, path: searchPath, glob, matchCount: 0 } as RgDetails,
         };
       }
 
-      
-      
-      
       const truncation = truncateHead(output, {
         maxLines: DEFAULT_MAX_LINES,
         maxBytes: DEFAULT_MAX_BYTES,
       });
 
-      
       const matchCount = output.split("\n").filter((line) => line.trim()).length;
 
       const details: RgDetails = {
@@ -97,7 +89,6 @@ export default function (msa: ExtensionAPI) {
       let resultText = truncation.content;
 
       if (truncation.truncated) {
-        
         const tempDir = await mkdtemp(join(tmpdir(), "msa-rg-"));
         const tempFile = join(tempDir, "output.txt");
         await withFileMutationQueue(tempFile, async () => {
@@ -107,7 +98,6 @@ export default function (msa: ExtensionAPI) {
         details.truncation = truncation;
         details.fullOutputPath = tempFile;
 
-        
         const truncatedLines = truncation.totalLines - truncation.outputLines;
         const truncatedBytes = truncation.totalBytes - truncation.outputBytes;
 
@@ -123,46 +113,38 @@ export default function (msa: ExtensionAPI) {
       };
     },
 
-    
     renderCall(args, theme, _context) {
       let text = theme.fg("toolTitle", theme.bold("rg "));
       text += theme.fg("accent", `"${args.pattern}"`);
-      if (args.path) {
+      if (args.path !== undefined && args.path.length > 0) {
         text += theme.fg("muted", ` in ${args.path}`);
       }
-      if (args.glob) {
+      if (args.glob !== undefined && args.glob.length > 0) {
         text += theme.fg("dim", ` --glob ${args.glob}`);
       }
       return new Text(text, 0, 0);
     },
 
-    
     renderResult(result, { expanded, isPartial }, theme, _context) {
       const details = result.details as RgDetails | undefined;
 
-      
       if (isPartial) {
         return new Text(theme.fg("warning", "Searching..."), 0, 0);
       }
 
-      
-      if (!details || details.matchCount === 0) {
+      if (details === undefined || details.matchCount === 0) {
         return new Text(theme.fg("dim", "No matches found"), 0, 0);
       }
 
-      
       let text = theme.fg("success", `${details.matchCount} matches`);
 
-      
-      if (details.truncation?.truncated) {
+      if (details.truncation?.truncated === true) {
         text += theme.fg("warning", " (truncated)");
       }
 
-      
       if (expanded) {
         const content = result.content[0];
         if (content?.type === "text") {
-          
           const lines = content.text.split("\n").slice(0, 20);
           for (const line of lines) {
             text += `\n${theme.fg("dim", line)}`;
@@ -172,8 +154,7 @@ export default function (msa: ExtensionAPI) {
           }
         }
 
-        
-        if (details.fullOutputPath) {
+        if (details.fullOutputPath !== undefined && details.fullOutputPath.length > 0) {
           text += `\n${theme.fg("dim", `Full output: ${details.fullOutputPath}`)}`;
         }
       }

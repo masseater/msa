@@ -1,9 +1,6 @@
-
-
-import { Effect, type Fiber } from "effect";
-
 import type { Component } from "@msa/tui";
 import { isKeyRelease, type TUI } from "@msa/tui";
+import { Effect, type Fiber } from "effect";
 
 import type { DoomEngine } from "./doom-engine.ts";
 import { DoomKeys, mapKeyToDoom } from "./doom-keys.ts";
@@ -48,7 +45,6 @@ export class DoomOverlayComponent implements Component {
   private fiber: Fiber.Fiber<void> | undefined;
   private onExit: () => void;
 
-  
   wantsKeyRelease = true;
 
   constructor(tui: TUI, engine: DoomEngine, onExit: () => void, resume = false) {
@@ -56,7 +52,6 @@ export class DoomOverlayComponent implements Component {
     this.engine = engine;
     this.onExit = onExit;
 
-    
     if (resume) {
       this.engine.pushKey(true, DoomKeys.KEY_PAUSE);
       this.engine.pushKey(false, DoomKeys.KEY_PAUSE);
@@ -75,15 +70,11 @@ export class DoomOverlayComponent implements Component {
         this.onExit();
       }
     });
-    this.fiber = Effect.runFork(
-      Effect.forever(tick.pipe(Effect.andThen(Effect.sleep(1000 / 35)))),
-    );
+    this.fiber = Effect.runFork(Effect.forever(tick.pipe(Effect.andThen(Effect.sleep(1000 / 35)))));
   }
 
   handleInput(data: string): void {
-    
     if (!isKeyRelease(data) && (data === "q" || data === "Q")) {
-      
       this.engine.pushKey(true, DoomKeys.KEY_PAUSE);
       this.engine.pushKey(false, DoomKeys.KEY_PAUSE);
       this.dispose();
@@ -102,10 +93,6 @@ export class DoomOverlayComponent implements Component {
   }
 
   render(width: number): string[] {
-    
-    
-    
-    
     const ASPECT_RATIO = 3.2;
     const MIN_HEIGHT = 10;
     const height = Math.max(MIN_HEIGHT, Math.floor(width / ASPECT_RATIO));
@@ -113,7 +100,6 @@ export class DoomOverlayComponent implements Component {
     const rgba = this.engine.getFrameRGBA();
     const lines = renderHalfBlock(rgba, this.engine.width, this.engine.height, width, height);
 
-    
     const footer =
       " DOOM | Q=Pause | WASD=Move | Shift+WASD=Run | Space=Use | F=Fire | 1-7=Weapons";
     const truncatedFooter = footer.length > width ? footer.slice(0, width) : footer;

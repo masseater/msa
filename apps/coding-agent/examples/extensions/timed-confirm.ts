@@ -1,9 +1,6 @@
-
-
 import type { ExtensionAPI } from "@msa/coding-agent";
 
 export default function (msa: ExtensionAPI) {
-  
   msa.registerCommand("timed", {
     description: "Show a timed confirmation dialog (auto-cancels in 5s with countdown)",
     handler: async (_args, ctx) => {
@@ -28,7 +25,7 @@ export default function (msa: ExtensionAPI) {
         timeout: 10000,
       });
 
-      if (choice) {
+      if (choice !== undefined && choice.length > 0) {
         ctx.ui.notify(`Selected: ${choice}`, "info");
       } else {
         ctx.ui.notify("Selection cancelled or timed out", "info");
@@ -36,7 +33,6 @@ export default function (msa: ExtensionAPI) {
     },
   });
 
-  
   msa.registerCommand("timed-signal", {
     description: "Show a timed confirm using AbortSignal (manual approach)",
     handler: async (_args, ctx) => {

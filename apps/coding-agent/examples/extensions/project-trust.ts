@@ -1,6 +1,5 @@
-import { Effect } from "effect";
-
 import type { ExtensionAPI, ProjectTrustContext } from "@msa/coding-agent";
+import { Effect } from "effect";
 
 const TRUST_CHOICES = [
   "Trust and remember",

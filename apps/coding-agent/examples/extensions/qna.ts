@@ -1,5 +1,3 @@
-
-
 import type { UserMessage } from "@msa/ai";
 import type { ExtensionAPI } from "@msa/coding-agent";
 import { BorderedLoader } from "@msa/coding-agent";
@@ -30,12 +28,11 @@ export default function (msa: ExtensionAPI) {
         return;
       }
 
-      if (!ctx.model) {
+      if (ctx.model === undefined) {
         ctx.ui.notify("No model selected", "error");
         return;
       }
 
-      
       const branch = ctx.sessionManager.getBranch();
       let lastAssistantText: string | undefined;
 
@@ -58,12 +55,11 @@ export default function (msa: ExtensionAPI) {
         }
       }
 
-      if (!lastAssistantText) {
+      if (lastAssistantText === undefined || lastAssistantText.length === 0) {
         ctx.ui.notify("No assistant messages found", "error");
         return;
       }
 
-      
       const result = await ctx.ui.custom<string | null>((tui, theme, _kb, done) => {
         const loader = new BorderedLoader(
           tui,
@@ -72,7 +68,6 @@ export default function (msa: ExtensionAPI) {
         );
         loader.onAbort = () => done(null);
 
-        
         const doExtract = async () => {
           const userMessage: UserMessage = {
             role: "user",

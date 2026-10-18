@@ -1,5 +1,3 @@
-
-
 import { constants, readFileSync } from "fs";
 import { access, appendFile, readFile } from "fs/promises";
 import { join, resolve } from "path";
@@ -9,7 +7,6 @@ import { type ExtensionAPI, getAgentDir, withFileMutationQueue } from "@msa/codi
 import { Type } from "typebox";
 
 const LOG_FILE = join(getAgentDir(), "read-access.log");
-
 
 const BLOCKED_PATTERNS = [
   /\.env$/,
@@ -28,16 +25,14 @@ function isBlockedPath(path: string): boolean {
 async function logAccess(path: string, allowed: boolean, reason?: string) {
   const timestamp = new Date().toISOString();
   const status = allowed ? "ALLOWED" : "BLOCKED";
-  const msg = reason ? ` (${reason})` : "";
+  const msg = reason !== undefined && reason.length > 0 ? ` (${reason})` : "";
   const line = `[${timestamp}] ${status}: ${path}${msg}\n`;
 
   try {
     await withFileMutationQueue(LOG_FILE, async () => {
       await appendFile(LOG_FILE, line);
     });
-  } catch {
-    
-  }
+  } catch {}
 }
 
 const readSchema = Type.Object({
@@ -50,7 +45,7 @@ const readSchema = Type.Object({
 
 export default function (msa: ExtensionAPI) {
   msa.registerTool({
-    name: "read", 
+    name: "read",
     label: "read (audited)",
     description:
       "Read the contents of a file with access logging. Some sensitive paths (.env, secrets, credentials) are blocked.",
@@ -60,7 +55,6 @@ export default function (msa: ExtensionAPI) {
       const { path, offset, limit } = params;
       const absolutePath = resolve(ctx.cwd, path);
 
-      
       if (isBlockedPath(absolutePath)) {
         await logAccess(absolutePath, false, "matches blocked pattern");
         return {
@@ -74,21 +68,17 @@ export default function (msa: ExtensionAPI) {
         };
       }
 
-      
       await logAccess(absolutePath, true);
 
-      
       try {
         await access(absolutePath, constants.R_OK);
         const content = await readFile(absolutePath, "utf-8");
         const lines = content.split("\n");
 
-        
-        const startLine = offset ? Math.max(0, offset - 1) : 0;
-        const endLine = limit ? startLine + limit : lines.length;
+        const startLine = offset !== undefined ? Math.max(0, offset - 1) : 0;
+        const endLine = limit !== undefined ? startLine + limit : lines.length;
         const selectedLines = lines.slice(startLine, endLine);
 
-        
         let text = selectedLines.join("\n");
         const maxBytes = 50 * 1024;
         if (Buffer.byteLength(text, "utf-8") > maxBytes) {
@@ -108,18 +98,14 @@ export default function (msa: ExtensionAPI) {
         };
       }
     },
-
-    
-    
   });
 
-  
   msa.registerCommand("read-log", {
     description: "View the file access log",
     handler: async (_args, ctx) => {
       try {
         const log = readFileSync(LOG_FILE, "utf-8");
-        const lines = log.trim().split("\n").slice(-20); 
+        const lines = log.trim().split("\n").slice(-20);
         ctx.ui.notify(`Recent file access:\n${lines.join("\n")}`, "info");
       } catch {
         ctx.ui.notify("No access log found", "info");

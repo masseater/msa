@@ -1,5 +1,3 @@
-
-
 import type { AssistantMessage } from "@msa/ai";
 import type { ExtensionAPI } from "@msa/coding-agent";
 import { truncateToWidth, visibleWidth } from "@msa/tui";
@@ -20,7 +18,6 @@ export default function (msa: ExtensionAPI) {
             dispose: unsub,
             invalidate() {},
             render(width: number): string[] {
-              
               let input = 0;
               let output = 0;
               let cost = 0;
@@ -33,12 +30,11 @@ export default function (msa: ExtensionAPI) {
                 }
               }
 
-              
               const branch = footerData.getGitBranch();
               const fmt = (n: number) => (n < 1000 ? `${n}` : `${(n / 1000).toFixed(1)}k`);
 
               const left = theme.fg("dim", `↑${fmt(input)} ↓${fmt(output)} $${cost.toFixed(3)}`);
-              const branchStr = branch ? ` (${branch})` : "";
+              const branchStr = branch !== null && branch.length > 0 ? ` (${branch})` : "";
               const right = theme.fg("dim", `${ctx.model?.id || "no-model"}${branchStr}`);
 
               const pad = " ".repeat(Math.max(1, width - visibleWidth(left) - visibleWidth(right)));

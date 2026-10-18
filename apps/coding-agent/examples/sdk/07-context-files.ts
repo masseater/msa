@@ -1,12 +1,10 @@
-import { Console, Effect } from "effect";
-
 import {
   createAgentSession,
   DefaultResourceLoader,
   getAgentDir,
   SessionManager,
 } from "@msa/coding-agent";
-
+import { Console, Effect } from "effect";
 
 const loader = new DefaultResourceLoader({
   cwd: process.cwd(),
@@ -27,7 +25,6 @@ const loader = new DefaultResourceLoader({
   }),
 });
 await loader.reload();
-
 
 const discovered = loader.getAgentsFiles().agentsFiles;
 Effect.runSync(Console.log("Discovered context files:"));

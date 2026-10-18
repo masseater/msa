@@ -1,19 +1,13 @@
-
-
 import type { ExtensionAPI } from "@msa/coding-agent";
 
 export default function (msa: ExtensionAPI) {
   let turnCount = 0;
-
-  
 
   msa.on("session_start", async (event, ctx) => {
     ctx.ui.setTitle(event.reason === "new" ? "msa RPC Demo (new session)" : "msa RPC Demo");
     ctx.ui.setWidget("rpc-demo", ["--- RPC Extension UI Demo ---", "Loaded and ready."]);
     ctx.ui.setStatus("rpc-demo", `Turns: ${turnCount}`);
   });
-
-  
 
   msa.on("turn_start", async (_event, ctx) => {
     turnCount++;
@@ -23,8 +17,6 @@ export default function (msa: ExtensionAPI) {
   msa.on("turn_end", async (_event, ctx) => {
     ctx.ui.setStatus("rpc-demo", `Turn ${turnCount} done`);
   });
-
-  
 
   msa.on("tool_call", async (event, ctx) => {
     if (event.toolName !== "bash") return undefined;
@@ -48,8 +40,6 @@ export default function (msa: ExtensionAPI) {
     return undefined;
   });
 
-  
-
   msa.on("session_before_switch", async (event, ctx) => {
     if (event.reason !== "new") return;
     if (!ctx.hasUI) return;
@@ -62,13 +52,11 @@ export default function (msa: ExtensionAPI) {
     return undefined;
   });
 
-  
-
   msa.registerCommand("rpc-input", {
     description: "Prompt for text input (demonstrates ctx.ui.input in RPC)",
     handler: async (_args, ctx) => {
       const value = await ctx.ui.input("Enter a value", "type something...");
-      if (value) {
+      if (value !== undefined && value.length > 0) {
         ctx.ui.notify(`You entered: ${value}`, "info");
       } else {
         ctx.ui.notify("Input cancelled", "info");
@@ -76,21 +64,17 @@ export default function (msa: ExtensionAPI) {
     },
   });
 
-  
-
   msa.registerCommand("rpc-editor", {
     description: "Open multi-line editor (demonstrates ctx.ui.editor in RPC)",
     handler: async (_args, ctx) => {
       const text = await ctx.ui.editor("Edit some text", "Line 1\nLine 2\nLine 3");
-      if (text) {
+      if (text !== undefined && text.length > 0) {
         ctx.ui.notify(`Editor submitted (${text.split("\n").length} lines)`, "info");
       } else {
         ctx.ui.notify("Editor cancelled", "info");
       }
     },
   });
-
-  
 
   msa.registerCommand("rpc-prefill", {
     description: "Prefill the input editor (demonstrates ctx.ui.setEditorText in RPC)",

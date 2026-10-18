@@ -1,33 +1,26 @@
-
-
 import type { ExtensionAPI } from "@msa/coding-agent";
 import { Box, Text } from "@msa/tui";
 
 export default function (msa: ExtensionAPI) {
-  
   msa.registerMessageRenderer("status-update", (message, { expanded, outputPad }, theme) => {
     const details = message.details as { level: string; timestamp: number } | undefined;
     const level = details?.level ?? "info";
 
-    
     const color = level === "error" ? "error" : level === "warn" ? "warning" : "success";
     const prefix = theme.fg(color, `[${level.toUpperCase()}]`);
 
     let text = `${prefix} ${message.content}`;
 
-    
-    if (expanded && details?.timestamp) {
+    if (expanded && details?.timestamp !== undefined) {
       const time = new Date(details.timestamp).toLocaleTimeString();
       text += `\n${theme.fg("dim", `  at ${time}`)}`;
     }
 
-    
     const box = new Box(outputPad, 1, (t) => theme.bg("customMessageBg", t));
     box.addChild(new Text(text, 0, 0));
     return box;
   });
 
-  
   msa.registerCommand("status", {
     description: "Send a status message (usage: /status [warn|error] message)",
     handler: async (args, _ctx) => {
@@ -35,7 +28,6 @@ export default function (msa: ExtensionAPI) {
       let level = "info";
       let content = args.trim();
 
-      
       if (parts[0] === "warn" || parts[0] === "error") {
         level = parts[0];
         content = parts.slice(1).join(" ") || "Status update";

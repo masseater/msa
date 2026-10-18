@@ -1,11 +1,7 @@
-
-
 import type { ExtensionAPI } from "@msa/coding-agent";
 import { Type } from "typebox";
 
 export default function (msa: ExtensionAPI) {
-  
-  
   msa.registerCommand("reload-runtime", {
     description: "Reload extensions, skills, prompts, themes, and context files",
     handler: async (_args, ctx) => {
@@ -14,8 +10,6 @@ export default function (msa: ExtensionAPI) {
     },
   });
 
-  
-  
   msa.registerTool({
     name: "reload_runtime",
     label: "Reload Runtime",

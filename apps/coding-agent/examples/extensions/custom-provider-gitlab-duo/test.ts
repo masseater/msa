@@ -1,5 +1,3 @@
-
-
 import { readFileSync } from "fs";
 import { join } from "path";
 
@@ -21,29 +19,27 @@ async function main() {
   const useThinking = process.argv.includes("--thinking");
 
   const cfg = MODEL_MAP.get(modelId);
-  if (!cfg) {
+  if (cfg === undefined) {
     console.error(`Unknown model: ${modelId}`);
     console.error("Available:", MODELS.map((m) => m.id).join(", "));
     process.exit(1);
   }
 
-  
   const authPath = join(getAgentDir(), "extensions", "auth.json");
   const authData = JSON.parse(readFileSync(authPath, "utf-8"));
-  const gitlabCred = authData["gitlab-duo"];
-  if (!gitlabCred?.access) {
+  const gitlabCred: unknown = authData["gitlab-duo"];
+  const gitlabAccess = (gitlabCred as { access?: unknown } | undefined)?.access;
+  if (typeof gitlabAccess !== "string" || gitlabAccess.length === 0) {
     console.error("No gitlab-duo credentials. Run /login gitlab-duo first.");
     process.exit(1);
   }
 
-  
   registerApiProvider({
     api: "gitlab-duo-api" as Api,
     stream: streamGitLabDuo,
     streamSimple: streamGitLabDuo,
   });
 
-  
   const model: Model<Api> = {
     id: cfg.id,
     name: cfg.name,
@@ -64,7 +60,7 @@ async function main() {
   console.log(`Model: ${model.id}, Backend: ${cfg.backend}, Thinking: ${useThinking}`);
 
   const stream = streamSimple(model, context, {
-    apiKey: gitlabCred.access,
+    apiKey: gitlabAccess,
     maxTokens: 100,
     reasoning: useThinking ? "low" : undefined,
   });

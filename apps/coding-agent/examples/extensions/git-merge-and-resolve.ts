@@ -1,4 +1,3 @@
-
 import { createReadStream } from "node:fs";
 import { join } from "node:path";
 import { createInterface } from "node:readline";
@@ -12,10 +11,9 @@ interface ConflictBlock {
   endLine: number;
 }
 
-
 async function findConflicts(msa: ExtensionAPI, cwd: string): Promise<ConflictBlock[]> {
   const { stdout, code } = await msa.exec("git", ["diff", "--name-only", "--diff-filter=U"]);
-  if (code !== 0 || !stdout.trim()) return [];
+  if (code !== 0 || stdout.trim().length === 0) return [];
 
   const blocks: ConflictBlock[] = [];
   for (const file of stdout.trim().split("\n")) {
@@ -70,12 +68,10 @@ export default function (msa: ExtensionAPI) {
 
     let ref = "MERGE_HEAD";
 
-    
     const { code: mergeHeadCode } = await msa.exec("git", ["rev-parse", "MERGE_HEAD"]);
     if (mergeHeadCode !== 0) {
-      
       const { stdout: status } = await msa.exec("git", ["status", "--porcelain"]);
-      if (status.trim()) return;
+      if (status.trim().length > 0) return;
 
       const { stdout: upstream, code: upstreamCode } = await msa.exec("git", [
         "rev-parse",
@@ -99,7 +95,6 @@ export default function (msa: ExtensionAPI) {
       if (mergeCode === 0) return;
     }
 
-    
     const conflicts = await findConflicts(msa, ctx.cwd);
     if (conflicts.length === 0) return;
 

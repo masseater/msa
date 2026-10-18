@@ -1,5 +1,3 @@
-
-
 import type {
   BashToolDetails,
   EditToolDetails,
@@ -17,7 +15,6 @@ import { Text } from "@msa/tui";
 export default function (msa: ExtensionAPI) {
   const cwd = process.cwd();
 
-  
   const originalRead = createReadToolDefinition(cwd);
   msa.registerTool({
     ...originalRead,
@@ -25,10 +22,10 @@ export default function (msa: ExtensionAPI) {
     renderCall(args, theme, _context) {
       let text = theme.fg("toolTitle", theme.bold("read "));
       text += theme.fg("accent", args.path);
-      if (args.offset || args.limit) {
+      if (args.offset !== undefined || args.limit !== undefined) {
         const parts: string[] = [];
-        if (args.offset) parts.push(`offset=${args.offset}`);
-        if (args.limit) parts.push(`limit=${args.limit}`);
+        if (args.offset !== undefined) parts.push(`offset=${args.offset}`);
+        if (args.limit !== undefined) parts.push(`limit=${args.limit}`);
         text += theme.fg("dim", ` (${parts.join(", ")})`);
       }
       return new Text(text, 0, 0);
@@ -51,7 +48,7 @@ export default function (msa: ExtensionAPI) {
       const lineCount = content.text.split("\n").length;
       let text = theme.fg("success", `${lineCount} lines`);
 
-      if (details?.truncation?.truncated) {
+      if (details?.truncation?.truncated === true) {
         text += theme.fg("warning", ` (truncated from ${details.truncation.totalLines})`);
       }
 
@@ -69,7 +66,6 @@ export default function (msa: ExtensionAPI) {
     },
   });
 
-  
   const originalBash = createBashToolDefinition(cwd);
   msa.registerTool({
     ...originalBash,
@@ -78,7 +74,7 @@ export default function (msa: ExtensionAPI) {
       let text = theme.fg("toolTitle", theme.bold("$ "));
       const cmd = args.command.length > 80 ? `${args.command.slice(0, 77)}...` : args.command;
       text += theme.fg("accent", cmd);
-      if (args.timeout) {
+      if (args.timeout !== undefined) {
         text += theme.fg("dim", ` (timeout: ${args.timeout}s)`);
       }
       return new Text(text, 0, 0);
@@ -103,7 +99,7 @@ export default function (msa: ExtensionAPI) {
       }
       text += theme.fg("dim", ` (${lineCount} lines)`);
 
-      if (details?.truncation?.truncated) {
+      if (details?.truncation?.truncated === true) {
         text += theme.fg("warning", " [truncated]");
       }
 
@@ -121,7 +117,6 @@ export default function (msa: ExtensionAPI) {
     },
   });
 
-  
   const originalEdit = createEditToolDefinition(cwd);
   msa.registerTool({
     ...originalEdit,
@@ -142,11 +137,10 @@ export default function (msa: ExtensionAPI) {
         return new Text(theme.fg("error", content.text.split("\n")[0] ?? ""), 0, 0);
       }
 
-      if (!details?.diff) {
+      if (details?.diff === undefined || details?.diff.length === 0) {
         return new Text(theme.fg("success", "Applied"), 0, 0);
       }
 
-      
       const diffLines = details.diff.split("\n");
       let additions = 0;
       let removals = 0;
@@ -178,7 +172,6 @@ export default function (msa: ExtensionAPI) {
     },
   });
 
-  
   const originalWrite = createWriteToolDefinition(cwd);
   msa.registerTool({
     ...originalWrite,

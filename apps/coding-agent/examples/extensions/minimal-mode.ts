@@ -1,5 +1,3 @@
-
-
 import { homedir } from "os";
 
 import type { ExtensionAPI } from "@msa/coding-agent";
@@ -14,7 +12,6 @@ import {
   formatReadLineRange,
 } from "@msa/coding-agent";
 import { Text } from "@msa/tui";
-
 
 function shortenPath(path: string): string {
   const home = homedir();
@@ -39,18 +36,15 @@ function createBuiltInTools(cwd: string) {
 export default function (msa: ExtensionAPI) {
   const tools = createBuiltInTools(process.cwd());
 
-  
-  
-  
   msa.registerTool({
     ...tools.read,
 
     renderCall(args, theme, _context) {
       const path = shortenPath(args.path || "");
-      let pathDisplay = path ? theme.fg("accent", path) : theme.fg("toolOutput", "...");
+      let pathDisplay = path.length > 0 ? theme.fg("accent", path) : theme.fg("toolOutput", "...");
 
       const lineRange = formatReadLineRange(args.offset, args.limit);
-      if (lineRange) {
+      if (lineRange.length > 0) {
         pathDisplay += theme.fg("warning", lineRange);
       }
 
@@ -58,14 +52,12 @@ export default function (msa: ExtensionAPI) {
     },
 
     renderResult(result, { expanded }, theme, _context) {
-      
       if (!expanded) {
         return new Text("", 0, 0);
       }
 
-      
       const textContent = result.content.find((c) => c.type === "text");
-      if (!textContent || textContent.type !== "text") {
+      if (textContent === undefined || textContent.type !== "text") {
         return new Text("", 0, 0);
       }
 
@@ -75,29 +67,25 @@ export default function (msa: ExtensionAPI) {
     },
   });
 
-  
-  
-  
   msa.registerTool({
     ...tools.bash,
 
     renderCall(args, theme, _context) {
       const command = args.command || "...";
       const timeout = args.timeout as number | undefined;
-      const timeoutSuffix = timeout ? theme.fg("muted", ` (timeout ${timeout}s)`) : "";
+      const timeoutSuffix =
+        timeout !== undefined ? theme.fg("muted", ` (timeout ${timeout}s)`) : "";
 
       return new Text(theme.fg("toolTitle", theme.bold(`$ ${command}`)) + timeoutSuffix, 0, 0);
     },
 
     renderResult(result, { expanded }, theme, _context) {
-      
       if (!expanded) {
         return new Text("", 0, 0);
       }
 
-      
       const textContent = result.content.find((c) => c.type === "text");
-      if (!textContent || textContent.type !== "text") {
+      if (textContent === undefined || textContent.type !== "text") {
         return new Text("", 0, 0);
       }
 
@@ -107,7 +95,7 @@ export default function (msa: ExtensionAPI) {
         .map((line) => theme.fg("toolOutput", line))
         .join("\n");
 
-      if (!output) {
+      if (output.length === 0) {
         return new Text("", 0, 0);
       }
 
@@ -115,16 +103,14 @@ export default function (msa: ExtensionAPI) {
     },
   });
 
-  
-  
-  
   msa.registerTool({
     ...tools.write,
 
     renderCall(args, theme, _context) {
       const path = shortenPath(args.path || "");
-      const pathDisplay = path ? theme.fg("accent", path) : theme.fg("toolOutput", "...");
-      const lineCount = args.content ? args.content.split("\n").length : 0;
+      const pathDisplay =
+        path.length > 0 ? theme.fg("accent", path) : theme.fg("toolOutput", "...");
+      const lineCount = args.content.length > 0 ? args.content.split("\n").length : 0;
       const lineInfo = lineCount > 0 ? theme.fg("muted", ` (${lineCount} lines)`) : "";
 
       return new Text(
@@ -135,15 +121,13 @@ export default function (msa: ExtensionAPI) {
     },
 
     renderResult(result, { expanded }, theme, _context) {
-      
       if (!expanded) {
         return new Text("", 0, 0);
       }
 
-      
       if (result.content.some((c) => c.type === "text" && c.text)) {
         const textContent = result.content.find((c) => c.type === "text");
-        if (textContent?.type === "text" && textContent.text) {
+        if (textContent?.type === "text" && textContent.text.length > 0) {
           return new Text(`\n${theme.fg("error", textContent.text)}`, 0, 0);
         }
       }
@@ -152,46 +136,37 @@ export default function (msa: ExtensionAPI) {
     },
   });
 
-  
-  
-  
   msa.registerTool({
     ...tools.edit,
     renderShell: "default",
 
     renderCall(args, theme, _context) {
       const path = shortenPath(args.path || "");
-      const pathDisplay = path ? theme.fg("accent", path) : theme.fg("toolOutput", "...");
+      const pathDisplay =
+        path.length > 0 ? theme.fg("accent", path) : theme.fg("toolOutput", "...");
 
       return new Text(`${theme.fg("toolTitle", theme.bold("edit"))} ${pathDisplay}`, 0, 0);
     },
 
     renderResult(result, { expanded }, theme, _context) {
-      
       if (!expanded) {
         return new Text("", 0, 0);
       }
 
-      
       const textContent = result.content.find((c) => c.type === "text");
-      if (!textContent || textContent.type !== "text") {
+      if (textContent === undefined || textContent.type !== "text") {
         return new Text("", 0, 0);
       }
 
-      
       const text = textContent.text;
       if (text.includes("Error") || text.includes("error")) {
         return new Text(`\n${theme.fg("error", text)}`, 0, 0);
       }
 
-      
       return new Text(`\n${theme.fg("toolOutput", text)}`, 0, 0);
     },
   });
 
-  
-  
-  
   msa.registerTool({
     ...tools.find,
 
@@ -211,7 +186,6 @@ export default function (msa: ExtensionAPI) {
 
     renderResult(result, { expanded }, theme, _context) {
       if (!expanded) {
-        
         const textContent = result.content.find((c) => c.type === "text");
         if (textContent?.type === "text") {
           const count = textContent.text.trim().split("\n").filter(Boolean).length;
@@ -222,9 +196,8 @@ export default function (msa: ExtensionAPI) {
         return new Text("", 0, 0);
       }
 
-      
       const textContent = result.content.find((c) => c.type === "text");
-      if (!textContent || textContent.type !== "text") {
+      if (textContent === undefined || textContent.type !== "text") {
         return new Text("", 0, 0);
       }
 
@@ -238,9 +211,6 @@ export default function (msa: ExtensionAPI) {
     },
   });
 
-  
-  
-  
   msa.registerTool({
     ...tools.grep,
 
@@ -252,7 +222,7 @@ export default function (msa: ExtensionAPI) {
 
       let text = `${theme.fg("toolTitle", theme.bold("grep"))} ${theme.fg("accent", `/${pattern}/`)}`;
       text += theme.fg("toolOutput", ` in ${path}`);
-      if (glob) {
+      if (glob !== undefined && glob.length > 0) {
         text += theme.fg("toolOutput", ` (${glob})`);
       }
       if (limit !== undefined) {
@@ -264,7 +234,6 @@ export default function (msa: ExtensionAPI) {
 
     renderResult(result, { expanded }, theme, _context) {
       if (!expanded) {
-        
         const textContent = result.content.find((c) => c.type === "text");
         if (textContent?.type === "text") {
           const count = textContent.text.trim().split("\n").filter(Boolean).length;
@@ -275,9 +244,8 @@ export default function (msa: ExtensionAPI) {
         return new Text("", 0, 0);
       }
 
-      
       const textContent = result.content.find((c) => c.type === "text");
-      if (!textContent || textContent.type !== "text") {
+      if (textContent === undefined || textContent.type !== "text") {
         return new Text("", 0, 0);
       }
 
@@ -291,9 +259,6 @@ export default function (msa: ExtensionAPI) {
     },
   });
 
-  
-  
-  
   msa.registerTool({
     ...tools.ls,
 
@@ -311,7 +276,6 @@ export default function (msa: ExtensionAPI) {
 
     renderResult(result, { expanded }, theme, _context) {
       if (!expanded) {
-        
         const textContent = result.content.find((c) => c.type === "text");
         if (textContent?.type === "text") {
           const count = textContent.text.trim().split("\n").filter(Boolean).length;
@@ -322,9 +286,8 @@ export default function (msa: ExtensionAPI) {
         return new Text("", 0, 0);
       }
 
-      
       const textContent = result.content.find((c) => c.type === "text");
-      if (!textContent || textContent.type !== "text") {
+      if (textContent === undefined || textContent.type !== "text") {
         return new Text("", 0, 0);
       }
 

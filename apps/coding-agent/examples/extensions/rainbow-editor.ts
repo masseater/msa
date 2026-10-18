@@ -1,16 +1,13 @@
-
-
 import { CustomEditor, type ExtensionAPI } from "@msa/coding-agent";
 
-
 const COLORS: [number, number, number][] = [
-  [233, 137, 115], 
-  [228, 186, 103], 
-  [141, 192, 122], 
-  [102, 194, 179], 
-  [121, 157, 207], 
-  [157, 134, 195], 
-  [206, 130, 172], 
+  [233, 137, 115],
+  [228, 186, 103],
+  [141, 192, 122],
+  [102, 194, 179],
+  [121, 157, 207],
+  [157, 134, 195],
+  [206, 130, 172],
 ];
 const RESET = "\x1b[0m";
 
@@ -24,7 +21,7 @@ function colorize(text: string, shinePos: number): string {
     [...text]
       .map((c, i) => {
         const baseColor = COLORS[i % COLORS.length]!;
-        
+
         let factor = 0;
         if (shinePos >= 0) {
           const dist = Math.abs(i - shinePos);
@@ -46,7 +43,7 @@ class RainbowEditor extends CustomEditor {
   }
 
   private startAnimation(): void {
-    if (this.animationTimer) return;
+    if (this.animationTimer !== undefined) return;
     this.animationTimer = setInterval(() => {
       this.frame++;
       this.tui.requestRender();
@@ -54,7 +51,7 @@ class RainbowEditor extends CustomEditor {
   }
 
   private stopAnimation(): void {
-    if (this.animationTimer) {
+    if (this.animationTimer !== undefined) {
       clearInterval(this.animationTimer);
       this.animationTimer = undefined;
     }
@@ -70,9 +67,8 @@ class RainbowEditor extends CustomEditor {
   }
 
   override render(width: number): string[] {
-    
     const cycle = this.frame % 20;
-    const shinePos = cycle < 10 ? cycle : -1; 
+    const shinePos = cycle < 10 ? cycle : -1;
     return super
       .render(width)
       .map((line) => line.replace(/ultrathink/gi, (m) => colorize(m, shinePos)));

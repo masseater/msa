@@ -1,14 +1,10 @@
-import { Console, Effect } from "effect";
-
 import {
   createAgentSession,
   DefaultResourceLoader,
   getAgentDir,
   SessionManager,
 } from "@msa/coding-agent";
-
-
-
+import { Console, Effect } from "effect";
 
 const resourceLoader = new DefaultResourceLoader({
   cwd: process.cwd(),
@@ -41,6 +37,3 @@ try {
 } finally {
   session.dispose();
 }
-
-
-

@@ -1,5 +1,3 @@
-
-
 import Anthropic from "@anthropic-ai/sdk";
 import type {
   ContentBlockParam,
@@ -28,10 +26,6 @@ import {
   type TranscriptContext,
 } from "@msa/ai";
 import type { ExtensionAPI } from "@msa/coding-agent";
-
-
-
-
 
 const decode = (s: string) => atob(s);
 const CLIENT_ID = decode("OWQxYzI1MGEtZTYxYi00NGQ5LTg4ZWQtNTk0NGQxOTYyZjVl");
@@ -140,11 +134,6 @@ async function refreshAnthropicToken(
   };
 }
 
-
-
-
-
-
 const claudeCodeTools = [
   "Read",
   "Write",
@@ -211,7 +200,7 @@ function convertMessages(messages: Message[], isOAuth: boolean, _tools?: Tool[])
 
     if (msg.role === "user") {
       if (typeof msg.content === "string") {
-        if (msg.content.trim()) {
+        if (msg.content.trim().length > 0) {
           params.push({ role: "user", content: sanitizeSurrogates(msg.content) });
         }
       } else {
@@ -234,10 +223,10 @@ function convertMessages(messages: Message[], isOAuth: boolean, _tools?: Tool[])
     } else if (msg.role === "assistant") {
       const blocks: ContentBlockParam[] = [];
       for (const block of msg.content) {
-        if (block.type === "text" && block.text.trim()) {
+        if (block.type === "text" && block.text.trim().length > 0) {
           blocks.push({ type: "text", text: sanitizeSurrogates(block.text) });
-        } else if (block.type === "thinking" && block.thinking.trim()) {
-          if ((block as ThinkingContent).thinkingSignature) {
+        } else if (block.type === "thinking" && block.thinking.trim().length > 0) {
+          if (((block as ThinkingContent).thinkingSignature ?? "").length > 0) {
             blocks.push({
               type: "thinking" as any,
               thinking: sanitizeSurrogates(block.thinking),
@@ -284,12 +273,11 @@ function convertMessages(messages: Message[], isOAuth: boolean, _tools?: Tool[])
     }
   }
 
-  
   if (params.length > 0) {
     const last = params[params.length - 1];
     if (last.role === "user" && Array.isArray(last.content)) {
       const lastBlock = last.content[last.content.length - 1];
-      if (lastBlock) {
+      if (lastBlock !== undefined) {
         lastBlock.cache_control = { type: "ephemeral" };
       }
     }
@@ -331,8 +319,7 @@ function streamCustomAnthropic(
   options?: SimpleStreamOptions,
 ): AssistantMessageEventStream {
   const stream = createAssistantMessageEventStream();
-  
-  
+
   const transcript = collapseSystemMessages(context);
   const systemPrompt = getCurrentSystemPrompt(transcript.messages);
   const tools = getCurrentTools(transcript.messages);
@@ -360,7 +347,6 @@ function streamCustomAnthropic(
       const apiKey = options?.apiKey ?? "";
       const isOAuth = isOAuthToken(apiKey);
 
-      
       const betaFeatures = [
         "fine-grained-tool-streaming-2025-05-14",
         "interleaved-thinking-2025-05-14",
@@ -391,7 +377,6 @@ function streamCustomAnthropic(
 
       const client = new Anthropic(clientOptions);
 
-      
       const params: MessageCreateParamsStreaming = {
         model: model.id,
         messages: convertMessages(transcript.messages, isOAuth, tools),
@@ -399,7 +384,6 @@ function streamCustomAnthropic(
         stream: true,
       };
 
-      
       if (isOAuth) {
         params.system = [
           {
@@ -408,14 +392,14 @@ function streamCustomAnthropic(
             cache_control: { type: "ephemeral" },
           },
         ];
-        if (systemPrompt) {
+        if (systemPrompt.length > 0) {
           params.system.push({
             type: "text",
             text: sanitizeSurrogates(systemPrompt),
             cache_control: { type: "ephemeral" },
           });
         }
-      } else if (systemPrompt) {
+      } else if (systemPrompt.length > 0) {
         params.system = [
           {
             type: "text",
@@ -429,8 +413,7 @@ function streamCustomAnthropic(
         params.tools = convertTools(tools, isOAuth);
       }
 
-      
-      if (options?.reasoning && model.reasoning) {
+      if (options?.reasoning !== undefined && model.reasoning) {
         const defaultBudgets: Record<string, number> = {
           minimal: 1024,
           low: 4096,
@@ -505,7 +488,7 @@ function streamCustomAnthropic(
         } else if (event.type === "content_block_delta") {
           const index = blocks.findIndex((b) => b.index === event.index);
           const block = blocks[index];
-          if (!block) continue;
+          if (block === undefined) continue;
 
           if (event.delta.type === "text_delta" && block.type === "text") {
             block.text += event.delta.text;
@@ -541,7 +524,7 @@ function streamCustomAnthropic(
         } else if (event.type === "content_block_stop") {
           const index = blocks.findIndex((b) => b.index === event.index);
           const block = blocks[index];
-          if (!block) continue;
+          if (block === undefined) continue;
 
           delete (block as any).index;
           if (block.type === "text") {
@@ -571,7 +554,7 @@ function streamCustomAnthropic(
             });
           }
         } else if (event.type === "message_delta") {
-          if ((event.delta as any).stop_reason) {
+          if ((event.delta as any).stop_reason !== undefined) {
             output.stopReason = mapStopReason((event.delta as any).stop_reason);
           }
           output.usage.input = (event.usage as any).input_tokens || 0;
@@ -587,7 +570,7 @@ function streamCustomAnthropic(
         }
       }
 
-      if (options?.signal?.aborted) {
+      if (options?.signal?.aborted === true) {
         throw new Error("Request was aborted");
       }
       if (output.stopReason === "pending") {
@@ -601,7 +584,7 @@ function streamCustomAnthropic(
       stream.end();
     } catch (error) {
       for (const block of output.content) delete (block as any).index;
-      output.stopReason = options?.signal?.aborted ? "aborted" : "error";
+      output.stopReason = options?.signal?.aborted === true ? "aborted" : "error";
       output.errorMessage = error instanceof Error ? error.message : JSON.stringify(error);
       stream.push({ type: "error", reason: output.stopReason, error: output });
       stream.end();
@@ -610,10 +593,6 @@ function streamCustomAnthropic(
 
   return stream;
 }
-
-
-
-
 
 export default function (msa: ExtensionAPI) {
   msa.registerProvider("custom-anthropic", {

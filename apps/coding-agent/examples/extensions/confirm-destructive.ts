@@ -1,10 +1,9 @@
-import { Effect } from "effect";
-
 import type {
   ExtensionAPI,
   SessionBeforeSwitchEvent,
   SessionMessageEntry,
 } from "@msa/coding-agent";
+import { Effect } from "effect";
 
 const registerBeforeSwitch = (msa: ExtensionAPI): void => {
   msa.on("session_before_switch", (event: SessionBeforeSwitchEvent, ctx) =>

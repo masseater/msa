@@ -1,5 +1,3 @@
-
-
 import type { ExtensionAPI } from "@msa/coding-agent";
 import { matchesKey, visibleWidth } from "@msa/tui";
 
@@ -68,14 +66,12 @@ class SnakeComponent {
     savedState?: GameState,
   ) {
     this.tui = tui;
-    if (savedState && !savedState.gameOver) {
-      
+    if (savedState !== undefined && !savedState.gameOver) {
       this.state = savedState;
       this.paused = true;
     } else {
-      
       this.state = createInitialState();
-      if (savedState) {
+      if (savedState !== undefined) {
         this.state.highScore = savedState.highScore;
       }
       this.paused = false;
@@ -96,10 +92,8 @@ class SnakeComponent {
   }
 
   private tick(): void {
-    
     this.state.direction = this.state.nextDirection;
 
-    
     const head = this.state.snake[0];
     if (head === undefined) return;
     let newHead: Point;
@@ -119,22 +113,18 @@ class SnakeComponent {
         break;
     }
 
-    
     if (newHead.x < 0 || newHead.x >= GAME_WIDTH || newHead.y < 0 || newHead.y >= GAME_HEIGHT) {
       this.state.gameOver = true;
       return;
     }
 
-    
     if (this.state.snake.some((s) => s.x === newHead.x && s.y === newHead.y)) {
       this.state.gameOver = true;
       return;
     }
 
-    
     this.state.snake.unshift(newHead);
 
-    
     if (newHead.x === this.state.food.x && newHead.y === this.state.food.y) {
       this.state.score += 10;
       if (this.state.score > this.state.highScore) {
@@ -147,21 +137,18 @@ class SnakeComponent {
   }
 
   handleInput(data: string): void {
-    
     if (this.paused) {
       if (matchesKey(data, "escape") || data === "q" || data === "Q") {
-        
         this.dispose();
         this.onClose();
         return;
       }
-      
+
       this.paused = false;
       this.startGame();
       return;
     }
 
-    
     if (matchesKey(data, "escape")) {
       this.dispose();
       this.onSave(this.state);
@@ -169,15 +156,13 @@ class SnakeComponent {
       return;
     }
 
-    
     if (data === "q" || data === "Q") {
       this.dispose();
-      this.onSave(null); 
+      this.onSave(null);
       this.onClose();
       return;
     }
 
-    
     if (matchesKey(data, "up") || data === "w" || data === "W") {
       if (this.state.direction !== "down") this.state.nextDirection = "up";
     } else if (matchesKey(data, "down") || data === "s" || data === "S") {
@@ -188,12 +173,11 @@ class SnakeComponent {
       if (this.state.direction !== "right") this.state.nextDirection = "left";
     }
 
-    
     if (this.state.gameOver && (data === "r" || data === "R" || data === " ")) {
       const highScore = this.state.highScore;
       this.state = createInitialState();
       this.state.highScore = highScore;
-      this.onSave(null); 
+      this.onSave(null);
       this.version++;
       this.tui.requestRender();
     }
@@ -210,12 +194,10 @@ class SnakeComponent {
 
     const lines: string[] = [];
 
-    
     const cellWidth = 2;
     const effectiveWidth = Math.min(GAME_WIDTH, Math.floor((width - 4) / cellWidth));
     const effectiveHeight = GAME_HEIGHT;
 
-    
     const dim = (s: string) => `\x1b[2m${s}\x1b[22m`;
     const green = (s: string) => `\x1b[32m${s}\x1b[0m`;
     const red = (s: string) => `\x1b[31m${s}\x1b[0m`;
@@ -224,26 +206,21 @@ class SnakeComponent {
 
     const boxWidth = effectiveWidth * cellWidth;
 
-    
     const boxLine = (content: string) => {
       const contentLen = visibleWidth(content);
       const padding = Math.max(0, boxWidth - contentLen);
       return dim(" │") + content + " ".repeat(padding) + dim("│");
     };
 
-    
     lines.push(this.padLine(dim(` ╭${"─".repeat(boxWidth)}╮`), width));
 
-    
     const scoreText = `Score: ${bold(yellow(String(this.state.score)))}`;
     const highText = `High: ${bold(yellow(String(this.state.highScore)))}`;
     const title = `${bold(green("SNAKE"))} │ ${scoreText} │ ${highText}`;
     lines.push(this.padLine(boxLine(title), width));
 
-    
     lines.push(this.padLine(dim(` ├${"─".repeat(boxWidth)}┤`), width));
 
-    
     const head = this.state.snake[0];
     for (let y = 0; y < effectiveHeight; y++) {
       let row = "";
@@ -253,22 +230,20 @@ class SnakeComponent {
         const isFood = this.state.food.x === x && this.state.food.y === y;
 
         if (isHead) {
-          row += green("██"); 
+          row += green("██");
         } else if (isBody) {
-          row += green("▓▓"); 
+          row += green("▓▓");
         } else if (isFood) {
-          row += red("◆ "); 
+          row += red("◆ ");
         } else {
-          row += "  "; 
+          row += "  ";
         }
       }
       lines.push(this.padLine(dim(" │") + row + dim("│"), width));
     }
 
-    
     lines.push(this.padLine(dim(` ├${"─".repeat(boxWidth)}┤`), width));
 
-    
     let footer: string;
     if (this.paused) {
       footer = `${yellow(bold("PAUSED"))} Press any key to continue, ${bold("Q")} to quit`;
@@ -279,7 +254,6 @@ class SnakeComponent {
     }
     lines.push(this.padLine(boxLine(footer), width));
 
-    
     lines.push(this.padLine(dim(` ╰${"─".repeat(boxWidth)}╯`), width));
 
     this.cachedLines = lines;
@@ -290,14 +264,13 @@ class SnakeComponent {
   }
 
   private padLine(line: string, width: number): string {
-    
     const visibleLen = line.replace(/\x1b\[[0-9;]*m/g, "").length;
     const padding = Math.max(0, width - visibleLen);
     return line + " ".repeat(padding);
   }
 
   dispose(): void {
-    if (this.interval) {
+    if (this.interval !== null) {
       clearInterval(this.interval);
       this.interval = null;
     }
@@ -316,7 +289,6 @@ export default function (msa: ExtensionAPI) {
         return;
       }
 
-      
       const entries = ctx.sessionManager.getEntries();
       let savedState: GameState | undefined;
       for (const entry of entries.toReversed()) {
@@ -331,7 +303,6 @@ export default function (msa: ExtensionAPI) {
           tui,
           () => done(undefined),
           (state) => {
-            
             msa.appendEntry(SNAKE_SAVE_TYPE, state);
           },
           savedState,

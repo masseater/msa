@@ -1,5 +1,3 @@
-
-
 import { exec } from "node:child_process";
 import { promisify } from "node:util";
 
@@ -35,7 +33,7 @@ export default function (msa: ExtensionAPI) {
   });
 
   msa.on("session_shutdown", () => {
-    if (intervalId) {
+    if (intervalId !== null) {
       clearInterval(intervalId);
       intervalId = null;
     }

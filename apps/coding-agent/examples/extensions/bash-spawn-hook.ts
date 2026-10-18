@@ -1,5 +1,3 @@
-
-
 import type { ExtensionAPI } from "@msa/coding-agent";
 import { createBashTool } from "@msa/coding-agent";
 
@@ -16,7 +14,6 @@ export default function (msa: ExtensionAPI) {
 
   msa.registerTool({
     ...bashTool,
-    execute: (id, params, signal, onUpdate) =>
-      bashTool.execute(id, params, signal, onUpdate),
+    execute: (id, params, signal, onUpdate) => bashTool.execute(id, params, signal, onUpdate),
   });
 }

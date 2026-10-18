@@ -1,5 +1,3 @@
-
-
 import type { ExtensionAPI, ExtensionContext, WorkingIndicatorOptions } from "@msa/coding-agent";
 
 type WorkingIndicatorMode = "dot" | "none" | "pulse" | "spinner" | "default";
@@ -86,7 +84,7 @@ export default function (msa: ExtensionAPI) {
     description: "Set the streaming working indicator: dot, pulse, none, spinner, or reset.",
     handler: async (args, ctx) => {
       const nextMode = args.trim().toLowerCase();
-      if (!nextMode) {
+      if (nextMode.length === 0) {
         ctx.ui.notify(`Working indicator: ${describeMode(mode)}`, "info");
         return;
       }

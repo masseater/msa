@@ -1,5 +1,3 @@
-
-
 import type { ExtensionAPI } from "@msa/coding-agent";
 import { Type } from "typebox";
 
@@ -9,7 +7,7 @@ const ECHO_PARAMS = Type.Object({
 
 function normalizeToolName(input: string): string | undefined {
   const trimmed = input.trim().toLowerCase();
-  if (!trimmed) return undefined;
+  if (trimmed.length === 0) return undefined;
   if (!/^[a-z0-9_]+$/.test(trimmed)) return undefined;
   return trimmed;
 }
@@ -50,7 +48,7 @@ export default function dynamicToolsExtension(msa: ExtensionAPI) {
     description: "Register a new echo tool dynamically: /add-echo-tool <tool_name>",
     handler: async (args, ctx) => {
       const toolName = normalizeToolName(args);
-      if (!toolName) {
+      if (toolName === undefined || toolName.length === 0) {
         ctx.ui.notify(
           "Usage: /add-echo-tool <tool_name> (lowercase, numbers, underscores)",
           "warning",

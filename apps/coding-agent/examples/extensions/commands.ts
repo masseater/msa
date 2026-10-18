@@ -1,5 +1,3 @@
-
-
 import type { ExtensionAPI, SlashCommandInfo } from "@msa/coding-agent";
 
 export default function commandsExtension(msa: ExtensionAPI) {
@@ -14,20 +12,22 @@ export default function commandsExtension(msa: ExtensionAPI) {
       const commands = msa.getCommands();
       const sourceFilter = args.trim() as "extension" | "prompt" | "skill" | "";
 
-      
-      const filtered = sourceFilter ? commands.filter((c) => c.source === sourceFilter) : commands;
+      const filtered =
+        sourceFilter.length > 0 ? commands.filter((c) => c.source === sourceFilter) : commands;
 
       if (filtered.length === 0) {
         ctx.ui.notify(
-          sourceFilter ? `No ${sourceFilter} commands found` : "No commands found",
+          sourceFilter.length > 0 ? `No ${sourceFilter} commands found` : "No commands found",
           "info",
         );
         return;
       }
 
-      
       const formatCommand = (cmd: SlashCommandInfo): string => {
-        const desc = cmd.description ? ` - ${cmd.description}` : "";
+        const desc =
+          cmd.description !== undefined && cmd.description.length > 0
+            ? ` - ${cmd.description}`
+            : "";
         return `/${cmd.name}${desc}`;
       };
 
@@ -46,14 +46,12 @@ export default function commandsExtension(msa: ExtensionAPI) {
         }
       }
 
-      
       const selected = await ctx.ui.select("Available Commands", items);
 
-      
-      if (selected && !selected.startsWith("---")) {
-        const cmdName = (selected.split(" - ")[0] ?? "").slice(1); 
+      if (selected !== undefined && selected.length > 0 && !selected.startsWith("---")) {
+        const cmdName = (selected.split(" - ")[0] ?? "").slice(1);
         const cmd = commands.find((c) => c.name === cmdName);
-        if (cmd?.sourceInfo.path) {
+        if (cmd?.sourceInfo.path !== undefined && cmd?.sourceInfo.path.length > 0) {
           const showPath = await ctx.ui.confirm(
             cmd.name,
             `View source path?\n${cmd.sourceInfo.path}`,

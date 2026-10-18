@@ -1,5 +1,3 @@
-
-
 import {
   type Api,
   type AssistantMessageEventStream,
@@ -15,10 +13,6 @@ import {
 } from "@msa/ai/compat";
 import type { ExtensionAPI } from "@msa/coding-agent";
 
-
-
-
-
 const GITLAB_COM_URL = "https://gitlab.com";
 const AI_GATEWAY_URL = "https://cloud.gitlab.com";
 const ANTHROPIC_PROXY_URL = `${AI_GATEWAY_URL}/ai/v1/proxy/anthropic/`;
@@ -28,10 +22,6 @@ const BUNDLED_CLIENT_ID = "da4edff2e6ebd2bc3208611e2768bc1c1dd7be791dc5ff26ca34c
 const OAUTH_SCOPES = ["api"];
 const REDIRECT_URI = "http://127.0.0.1:8080/callback";
 const DIRECT_ACCESS_TTL = 25 * 60 * 1000;
-
-
-
-
 
 type Backend = "anthropic" | "openai";
 
@@ -49,7 +39,6 @@ interface GitLabModel {
 }
 
 export const MODELS: GitLabModel[] = [
-  
   {
     id: "claude-opus-4-8",
     name: "Claude Opus 4.8",
@@ -110,7 +99,7 @@ export const MODELS: GitLabModel[] = [
     contextWindow: 200000,
     maxTokens: 8192,
   },
-  
+
   {
     id: "gpt-5.5-2026-04-23",
     name: "GPT-5.5",
@@ -159,10 +148,6 @@ export const MODELS: GitLabModel[] = [
 
 const MODEL_MAP = new Map(MODELS.map((m) => [m.id, m]));
 
-
-
-
-
 interface DirectAccessToken {
   token: string;
   headers: Record<string, string>;
@@ -173,7 +158,7 @@ let cachedDirectAccess: DirectAccessToken | null = null;
 
 async function getDirectAccessToken(gitlabAccessToken: string): Promise<DirectAccessToken> {
   const now = Date.now();
-  if (cachedDirectAccess && cachedDirectAccess.expiresAt > now) {
+  if (cachedDirectAccess !== null && cachedDirectAccess.expiresAt > now) {
     return cachedDirectAccess;
   }
 
@@ -206,10 +191,6 @@ function invalidateDirectAccessToken() {
   cachedDirectAccess = null;
 }
 
-
-
-
-
 async function generatePKCE(): Promise<{ verifier: string; challenge: string }> {
   const array = new Uint8Array(32);
   crypto.getRandomValues(array);
@@ -240,7 +221,8 @@ async function loginGitLab(callbacks: OAuthLoginCallbacks): Promise<OAuthCredent
   callbacks.onAuth({ url: `${GITLAB_COM_URL}/oauth/authorize?${authParams.toString()}` });
   const callbackUrl = await callbacks.onPrompt({ message: "Paste the callback URL:" });
   const code = new URL(callbackUrl).searchParams.get("code");
-  if (!code) throw new Error("No authorization code found in callback URL");
+  if (code === null || code.length === 0)
+    throw new Error("No authorization code found in callback URL");
 
   const tokenResponse = await fetch(`${GITLAB_COM_URL}/oauth/token`, {
     method: "POST",
@@ -298,10 +280,6 @@ async function refreshGitLabToken(
   };
 }
 
-
-
-
-
 export function streamGitLabDuo(
   model: Model<Api>,
   context: TranscriptContext,
@@ -312,11 +290,11 @@ export function streamGitLabDuo(
   (async () => {
     try {
       const gitlabAccessToken = options?.apiKey;
-      if (!gitlabAccessToken)
+      if (gitlabAccessToken === undefined || gitlabAccessToken.length === 0)
         throw new Error("No GitLab access token. Run /login gitlab-duo or set GITLAB_TOKEN");
 
       const cfg = MODEL_MAP.get(model.id);
-      if (!cfg) throw new Error(`Unknown model: ${model.id}`);
+      if (cfg === undefined) throw new Error(`Unknown model: ${model.id}`);
 
       const directAccess = await getDirectAccessToken(gitlabAccessToken);
       const modelWithBaseUrl = { ...model, baseUrl: cfg.baseUrl };
@@ -374,10 +352,6 @@ export function streamGitLabDuo(
   return stream;
 }
 
-
-
-
-
 export default function (msa: ExtensionAPI) {
   msa.registerProvider("gitlab-duo", {
     baseUrl: AI_GATEWAY_URL,
@@ -388,7 +362,7 @@ export default function (msa: ExtensionAPI) {
         id,
         name,
         reasoning,
-        ...(thinkingLevelMap ? { thinkingLevelMap } : {}),
+        ...(thinkingLevelMap !== undefined ? { thinkingLevelMap } : {}),
         input,
         cost,
         contextWindow,

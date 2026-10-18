@@ -1,5 +1,3 @@
-import { Console, Effect } from "effect";
-
 import {
   createAgentSession,
   createSyntheticSourceInfo,
@@ -8,7 +6,7 @@ import {
   SessionManager,
   type Skill,
 } from "@msa/coding-agent";
-
+import { Console, Effect } from "effect";
 
 const customSkill: Skill = {
   name: "my-skill",
@@ -33,7 +31,6 @@ const loader = new DefaultResourceLoader({
   },
 });
 await loader.reload();
-
 
 const { skills: allSkills, diagnostics } = loader.getSkills();
 Effect.runSync(

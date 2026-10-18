@@ -1,16 +1,12 @@
-
-
 import { spawn } from "child_process";
 
 import type { ExtensionAPI, ExtensionCommandContext, Theme } from "@msa/coding-agent";
 import type { Component, OverlayAnchor, OverlayHandle, OverlayOptions, TUI } from "@msa/tui";
 import { Input, matchesKey, truncateToWidth, visibleWidth } from "@msa/tui";
 
-
 let globalToggleHandle: OverlayHandle | null = null;
 
 export default function (msa: ExtensionAPI) {
-  
   msa.registerCommand("overlay-animation", {
     description: "Test real-time animation in overlay (~30 FPS)",
     handler: async (_args: string, ctx: ExtensionCommandContext) => {
@@ -24,7 +20,6 @@ export default function (msa: ExtensionAPI) {
     },
   });
 
-  
   msa.registerCommand("overlay-anchors", {
     description: "Cycle through all anchor positions",
     handler: async (_args: string, ctx: ExtensionCommandContext) => {
@@ -64,7 +59,6 @@ export default function (msa: ExtensionAPI) {
     },
   });
 
-  
   msa.registerCommand("overlay-margins", {
     description: "Test margin and offset options",
     handler: async (_args: string, ctx: ExtensionCommandContext) => {
@@ -104,13 +98,9 @@ export default function (msa: ExtensionAPI) {
     },
   });
 
-  
   msa.registerCommand("overlay-stack", {
     description: "Test stacked overlays",
     handler: async (_args: string, ctx: ExtensionCommandContext) => {
-      
-      
-
       ctx.ui.notify("Showing overlay 1 (back)...", "info");
       const p1 = ctx.ui.custom<string>(
         (_tui, theme, _kb, done) => new StackOverlayComponent(theme, 1, "back (red border)", done),
@@ -144,13 +134,11 @@ export default function (msa: ExtensionAPI) {
         },
       );
 
-      
       const results = await Promise.all([p1, p2, p3]);
       ctx.ui.notify(`Closed in order: ${results.join(", ")}`, "info");
     },
   });
 
-  
   msa.registerCommand("overlay-overflow", {
     description: "Test width overflow with streaming process output",
     handler: async (_args: string, ctx: ExtensionCommandContext) => {
@@ -164,7 +152,6 @@ export default function (msa: ExtensionAPI) {
     },
   });
 
-  
   msa.registerCommand("overlay-edge", {
     description: "Test overlay positioned at terminal edge",
     handler: async (_args: string, ctx: ExtensionCommandContext) => {
@@ -175,7 +162,6 @@ export default function (msa: ExtensionAPI) {
     },
   });
 
-  
   msa.registerCommand("overlay-percent", {
     description: "Test percentage-based positioning",
     handler: async (_args: string, ctx: ExtensionCommandContext) => {
@@ -211,7 +197,6 @@ export default function (msa: ExtensionAPI) {
     },
   });
 
-  
   msa.registerCommand("overlay-maxheight", {
     description: "Test maxHeight truncation",
     handler: async (_args: string, ctx: ExtensionCommandContext) => {
@@ -225,7 +210,6 @@ export default function (msa: ExtensionAPI) {
     },
   });
 
-  
   msa.registerCommand("overlay-sidepanel", {
     description: "Test responsive sidepanel (hides when terminal < 100 cols)",
     handler: async (_args: string, ctx: ExtensionCommandContext) => {
@@ -238,7 +222,7 @@ export default function (msa: ExtensionAPI) {
             width: "25%",
             minWidth: 30,
             margin: { right: 1 },
-            
+
             visible: (termWidth) => termWidth >= 100,
           },
         },
@@ -246,7 +230,6 @@ export default function (msa: ExtensionAPI) {
     },
   });
 
-  
   msa.registerCommand("overlay-toggle", {
     description: "Test overlay toggle (press 't' to toggle visibility)",
     handler: async (_args: string, ctx: ExtensionCommandContext) => {
@@ -255,10 +238,8 @@ export default function (msa: ExtensionAPI) {
         {
           overlay: true,
           overlayOptions: { anchor: "center", width: 50 },
-          
+
           onHandle: (handle) => {
-            
-            
             globalToggleHandle = handle;
           },
         },
@@ -267,7 +248,6 @@ export default function (msa: ExtensionAPI) {
     },
   });
 
-  
   msa.registerCommand("overlay-passive", {
     description: "Test non-capturing overlay (passive info panel alongside active overlay)",
     handler: async (_args: string, ctx: ExtensionCommandContext) => {
@@ -282,7 +262,6 @@ export default function (msa: ExtensionAPI) {
     },
   });
 
-  
   msa.registerCommand("overlay-focus", {
     description: "Test focus cycling, input routing, dismissal, and rendering order with overlays",
     handler: async (_args: string, ctx: ExtensionCommandContext) => {
@@ -297,7 +276,6 @@ export default function (msa: ExtensionAPI) {
     },
   });
 
-  
   msa.registerCommand("overlay-streaming", {
     description: "Multiple input panels with simulated streaming (Tab to cycle focus)",
     handler: async (_args: string, ctx: ExtensionCommandContext) => {
@@ -317,7 +295,6 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-
 abstract class BaseOverlay {
   protected theme: Theme;
 
@@ -330,7 +307,8 @@ abstract class BaseOverlay {
     const innerW = Math.max(1, width - 2);
     const result: string[] = [];
 
-    const titleStr = title ? truncateToWidth(` ${title} `, innerW) : "";
+    const titleStr =
+      title !== undefined && title.length > 0 ? truncateToWidth(` ${title} `, innerW) : "";
     const titleW = visibleWidth(titleStr);
     const topLine = "─".repeat(Math.floor((innerW - titleW) / 2));
     const topLine2 = "─".repeat(Math.max(0, innerW - titleW - topLine.length));
@@ -351,7 +329,6 @@ abstract class BaseOverlay {
   invalidate(): void {}
   dispose(): void {}
 }
-
 
 class AnchorTestComponent extends BaseOverlay {
   private anchor: OverlayAnchor;
@@ -395,7 +372,6 @@ class AnchorTestComponent extends BaseOverlay {
   }
 }
 
-
 class MarginTestComponent extends BaseOverlay {
   private config: { name: string; options: OverlayOptions };
   private done: (result: "next" | "close") => void;
@@ -435,7 +411,6 @@ class MarginTestComponent extends BaseOverlay {
   }
 }
 
-
 class StackOverlayComponent extends BaseOverlay {
   private num: number;
   private position: string;
@@ -456,7 +431,7 @@ class StackOverlayComponent extends BaseOverlay {
 
   render(width: number): string[] {
     const th = this.theme;
-    
+
     const colors = ["error", "success", "accent"] as const;
     const color = colors[(this.num - 1) % colors.length]!;
     const innerW = Math.max(1, width - 2);
@@ -468,7 +443,7 @@ class StackOverlayComponent extends BaseOverlay {
     lines.push(border("│") + padLine(` Overlay ${th.fg("accent", `#${this.num}`)}`) + border("│"));
     lines.push(border("│") + padLine(` Layer: ${th.fg(color, this.position)}`) + border("│"));
     lines.push(border("│") + padLine("") + border("│"));
-    
+
     for (let i = 0; i < 5; i++) {
       lines.push(border("│") + padLine(` ${"░".repeat(innerW - 2)} `) + border("│"));
     }
@@ -479,7 +454,6 @@ class StackOverlayComponent extends BaseOverlay {
     return lines;
   }
 }
-
 
 class StreamingOverflowComponent extends BaseOverlay {
   private tui: TUI;
@@ -499,8 +473,6 @@ class StreamingOverflowComponent extends BaseOverlay {
   }
 
   private startProcess(): void {
-    
-    
     this.proc = spawn("bash", [
       "-c",
       `
@@ -532,25 +504,25 @@ class StreamingOverflowComponent extends BaseOverlay {
     ]);
 
     this.proc.stdout?.on("data", (data: Buffer) => {
-      if (this.disposed) return; 
+      if (this.disposed) return;
       const text = data.toString();
       const newLines = text.split("\n");
       for (const line of newLines) {
-        if (line) this.lines.push(line);
+        if (line.length > 0) this.lines.push(line);
       }
-      
+
       this.scrollOffset = Math.max(0, this.lines.length - this.maxVisibleLines);
       this.tui.requestRender();
     });
 
     this.proc.stderr?.on("data", (data: Buffer) => {
-      if (this.disposed) return; 
+      if (this.disposed) return;
       this.lines.push(this.theme.fg("error", data.toString().trim()));
       this.tui.requestRender();
     });
 
     this.proc.on("close", () => {
-      if (this.disposed) return; 
+      if (this.disposed) return;
       this.finished = true;
       this.tui.requestRender();
     });
@@ -562,13 +534,13 @@ class StreamingOverflowComponent extends BaseOverlay {
       this.done();
     } else if (matchesKey(data, "up")) {
       this.scrollOffset = Math.max(0, this.scrollOffset - 1);
-      this.tui.requestRender(); 
+      this.tui.requestRender();
     } else if (matchesKey(data, "down")) {
       this.scrollOffset = Math.min(
         Math.max(0, this.lines.length - this.maxVisibleLines),
         this.scrollOffset + 1,
       );
-      this.tui.requestRender(); 
+      this.tui.requestRender();
     }
   }
 
@@ -583,7 +555,6 @@ class StreamingOverflowComponent extends BaseOverlay {
     const titlePad = Math.max(0, innerW - visibleWidth(title));
     result.push(border("╭") + th.fg("accent", title) + border(`${"─".repeat(titlePad)}╮`));
 
-    
     const canScrollUp = this.scrollOffset > 0;
     const canScrollDown = this.scrollOffset < this.lines.length - this.maxVisibleLines;
     const scrollInfo = `↑${this.scrollOffset} | ↓${Math.max(0, this.lines.length - this.maxVisibleLines - this.scrollOffset)}`;
@@ -594,7 +565,6 @@ class StreamingOverflowComponent extends BaseOverlay {
         border("│"),
     );
 
-    
     const visibleLines = this.lines.slice(
       this.scrollOffset,
       this.scrollOffset + this.maxVisibleLines,
@@ -603,7 +573,6 @@ class StreamingOverflowComponent extends BaseOverlay {
       result.push(border("│") + padLine(` ${line}`) + border("│"));
     }
 
-    
     for (let i = visibleLines.length; i < this.maxVisibleLines; i++) {
       result.push(border("│") + padLine("") + border("│"));
     }
@@ -622,7 +591,6 @@ class StreamingOverflowComponent extends BaseOverlay {
     this.proc?.kill();
   }
 }
-
 
 class EdgeTestComponent extends BaseOverlay {
   private done: () => void;
@@ -657,7 +625,6 @@ class EdgeTestComponent extends BaseOverlay {
     );
   }
 }
-
 
 class PercentTestComponent extends BaseOverlay {
   private config: { name: string; row: number; col: number };
@@ -698,7 +665,6 @@ class PercentTestComponent extends BaseOverlay {
   }
 }
 
-
 class MaxHeightTestComponent extends BaseOverlay {
   private done: () => void;
 
@@ -715,8 +681,7 @@ class MaxHeightTestComponent extends BaseOverlay {
 
   render(width: number): string[] {
     const th = this.theme;
-    
-    
+
     const contentLines: string[] = [
       th.fg("warning", " ⚠ Rendering 21 lines, maxHeight: 10"),
       th.fg("dim", " Lines 11-21 truncated (no bottom border)"),
@@ -732,7 +697,6 @@ class MaxHeightTestComponent extends BaseOverlay {
     return this.box(contentLines, width, "MaxHeight Test");
   }
 }
-
 
 class SidepanelComponent extends BaseOverlay {
   private tui: TUI;
@@ -756,7 +720,6 @@ class SidepanelComponent extends BaseOverlay {
       this.selectedIndex = Math.min(this.items.length - 1, this.selectedIndex + 1);
       this.tui.requestRender();
     } else if (matchesKey(data, "return")) {
-      
       this.tui.requestRender();
     }
   }
@@ -768,12 +731,10 @@ class SidepanelComponent extends BaseOverlay {
     const border = (c: string) => th.fg("border", c);
     const lines: string[] = [];
 
-    
     lines.push(border(`╭${"─".repeat(innerW)}╮`));
     lines.push(border("│") + padLine(th.fg("accent", " Responsive Sidepanel")) + border("│"));
     lines.push(border("├") + border("─".repeat(innerW)) + border("┤"));
 
-    
     for (let i = 0; i < this.items.length; i++) {
       const item = this.items[i]!;
       const isSelected = i === this.selectedIndex;
@@ -782,7 +743,6 @@ class SidepanelComponent extends BaseOverlay {
       lines.push(border("│") + padLine(`${prefix}${text}`) + border("│"));
     }
 
-    
     lines.push(border("├") + border("─".repeat(innerW)) + border("┤"));
     lines.push(
       border("│") + padLine(th.fg("warning", " ⚠ Resize terminal < 100 cols")) + border("│"),
@@ -795,7 +755,6 @@ class SidepanelComponent extends BaseOverlay {
     return lines;
   }
 }
-
 
 class AnimationDemoComponent extends BaseOverlay {
   private tui: TUI;
@@ -814,12 +773,10 @@ class AnimationDemoComponent extends BaseOverlay {
   }
 
   private startAnimation(): void {
-    
     this.interval = setInterval(() => {
       this.frame++;
       this.framesSinceLastFps++;
 
-      
       const now = Date.now();
       if (now - this.lastFpsUpdate >= 1000) {
         this.fps = this.framesSinceLastFps;
@@ -854,8 +811,7 @@ class AnimationDemoComponent extends BaseOverlay {
     lines.push(border("│") + padLine(` FPS: ${th.fg("success", String(this.fps))}`) + border("│"));
     lines.push(border("│") + padLine(``) + border("│"));
 
-    
-    const barWidth = Math.max(12, innerW - 4); 
+    const barWidth = Math.max(12, innerW - 4);
     const pos = Math.max(0, Math.floor(((Math.sin(this.frame / 10) + 1) * (barWidth - 10)) / 2));
     const bar =
       " ".repeat(pos) +
@@ -863,12 +819,10 @@ class AnimationDemoComponent extends BaseOverlay {
       " ".repeat(Math.max(0, barWidth - 10 - pos));
     lines.push(border("│") + padLine(` ${bar}`) + border("│"));
 
-    
     const spinChars = ["◐", "◓", "◑", "◒"];
     const spin = spinChars[this.frame % spinChars.length];
     lines.push(border("│") + padLine(` Spinner: ${th.fg("warning", spin!)}`) + border("│"));
 
-    
     const hue = (this.frame * 3) % 360;
     const rgb = hslToRgb(hue / 360, 0.8, 0.5);
     const colorBlock = `\x1b[48;2;${rgb[0]};${rgb[1]};${rgb[2]}m${"  ".repeat(10)}\x1b[0m`;
@@ -890,13 +844,12 @@ class AnimationDemoComponent extends BaseOverlay {
   }
 
   override dispose(): void {
-    if (this.interval) {
+    if (this.interval !== null) {
       clearInterval(this.interval);
       this.interval = null;
     }
   }
 }
-
 
 function hslToRgb(h: number, s: number, l: number): [number, number, number] {
   let r: number;
@@ -922,7 +875,6 @@ function hslToRgb(h: number, s: number, l: number): [number, number, number] {
   return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
 }
 
-
 class ToggleDemoComponent extends BaseOverlay {
   private tui: TUI;
   private toggleCount = 0;
@@ -938,16 +890,13 @@ class ToggleDemoComponent extends BaseOverlay {
   handleInput(data: string): void {
     if (matchesKey(data, "escape") || matchesKey(data, "ctrl+c")) {
       this.done();
-    } else if (matchesKey(data, "t") && globalToggleHandle && !this.isToggling) {
-      
-      
+    } else if (matchesKey(data, "t") && globalToggleHandle !== null && !this.isToggling) {
       this.isToggling = true;
       this.toggleCount++;
       globalToggleHandle.setHidden(true);
 
-      
       setTimeout(() => {
-        if (globalToggleHandle) {
+        if (globalToggleHandle !== null) {
           globalToggleHandle.setHidden(false);
           this.isToggling = false;
           this.tui.requestRender();
@@ -982,8 +931,6 @@ class ToggleDemoComponent extends BaseOverlay {
     );
   }
 }
-
-
 
 class PassiveDemoController extends BaseOverlay {
   focused = false;
@@ -1047,7 +994,7 @@ class PassiveDemoController extends BaseOverlay {
   }
 
   private cleanup(): void {
-    if (this.interval) {
+    if (this.interval !== null) {
       clearInterval(this.interval);
       this.interval = null;
     }
@@ -1079,8 +1026,6 @@ class TimerPanel extends BaseOverlay {
     );
   }
 }
-
-
 
 type FocusPanelColor = "error" | "success" | "accent";
 type FocusPanelConfig = { label: string; color: FocusPanelColor; options: OverlayOptions };
@@ -1126,7 +1071,7 @@ class FocusDemoController extends BaseOverlay {
     const currentOpenPosition = openEntries.findIndex((candidate) => candidate.panel === panel);
     if (currentOpenPosition === -1) return;
     const entry = openEntries[currentOpenPosition];
-    if (!entry) throw new Error(`Invalid focus panel index ${currentOpenPosition}`);
+    if (entry === undefined) throw new Error(`Invalid focus panel index ${currentOpenPosition}`);
     const remainingEntries = openEntries.filter((candidate) => candidate.panel !== panel);
 
     entry.panel.closed = true;
@@ -1188,7 +1133,7 @@ class FocusDemoController extends BaseOverlay {
 
   private focusFirstOpenPanel(): void {
     const firstOpen = this.openEntries()[0];
-    if (firstOpen) {
+    if (firstOpen !== undefined) {
       firstOpen.handle.focus();
       this.tui.requestRender();
     }
@@ -1196,7 +1141,7 @@ class FocusDemoController extends BaseOverlay {
 
   private focusEntryAt(entries: FocusPanelEntry[], index: number): void {
     const entry = entries[index];
-    if (!entry) throw new Error(`Invalid focus panel index ${index}`);
+    if (entry === undefined) throw new Error(`Invalid focus panel index ${index}`);
     entry.handle.focus();
     this.tui.requestRender();
   }
@@ -1299,13 +1244,11 @@ class FocusPanel extends BaseOverlay {
   }
 }
 
-
-
 class StreamingInputController extends BaseOverlay {
   private tui: TUI;
   private panels: StreamingInputPanel[] = [];
   private handles: OverlayHandle[] = [];
-  private focusIndex = -1; 
+  private focusIndex = -1;
   private streamLines: string[] = [];
   private streamInterval: ReturnType<typeof setInterval> | null = null;
   private lineCount = 0;
@@ -1316,7 +1259,6 @@ class StreamingInputController extends BaseOverlay {
     this.tui = tui;
     this.done = done;
 
-    
     const colors = ["error", "success", "accent"] as const;
     const labels = ["Panel A", "Panel B", "Panel C"];
 
@@ -1339,9 +1281,6 @@ class StreamingInputController extends BaseOverlay {
       this.handles.push(handle);
     }
 
-    
-
-    
     this.streamInterval = setInterval(() => {
       this.lineCount++;
       const timestamp = new Date().toLocaleTimeString();
@@ -1354,18 +1293,15 @@ class StreamingInputController extends BaseOverlay {
   }
 
   private cycleFocus(): void {
-    
     if (this.focusIndex >= 0 && this.focusIndex < this.handles.length) {
       this.handles[this.focusIndex]!.unfocus();
     }
 
-    
     this.focusIndex++;
     if (this.focusIndex >= this.handles.length) {
-      this.focusIndex = -1; 
+      this.focusIndex = -1;
     }
 
-    
     if (this.focusIndex >= 0) {
       this.handles[this.focusIndex]!.focus();
     }
@@ -1374,7 +1310,7 @@ class StreamingInputController extends BaseOverlay {
   }
 
   private close(): void {
-    if (this.streamInterval) {
+    if (this.streamInterval !== null) {
       clearInterval(this.streamInterval);
       this.streamInterval = null;
     }

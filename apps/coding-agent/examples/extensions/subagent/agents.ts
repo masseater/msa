@@ -1,5 +1,3 @@
-
-
 import * as fs from "node:fs";
 import * as path from "node:path";
 
@@ -22,14 +20,12 @@ export interface AgentDiscoveryResult {
   projectAgentsDir: string | null;
 }
 
-
 type AgentFrontmatter = {
   name?: unknown;
   description?: unknown;
   tools?: unknown;
   model?: unknown;
 };
-
 
 function parseToolList(value: unknown): string[] | undefined {
   const raw = Array.isArray(value) ? value : typeof value === "string" ? value.split(",") : [];
@@ -112,7 +108,9 @@ export function discoverAgents(cwd: string, scope: AgentScope): AgentDiscoveryRe
 
   const userAgents = scope === "project" ? [] : loadAgentsFromDir(userDir, "user");
   const projectAgents =
-    scope === "user" || !projectAgentsDir ? [] : loadAgentsFromDir(projectAgentsDir, "project");
+    scope === "user" || projectAgentsDir === null || projectAgentsDir.length === 0
+      ? []
+      : loadAgentsFromDir(projectAgentsDir, "project");
 
   const agentMap = new Map<string, AgentConfig>();
 

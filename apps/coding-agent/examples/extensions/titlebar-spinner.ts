@@ -1,5 +1,3 @@
-
-
 import path from "node:path";
 
 import type { ExtensionAPI, ExtensionContext } from "@msa/coding-agent";
@@ -9,7 +7,7 @@ const BRAILLE_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", 
 function getBaseTitle(msa: ExtensionAPI): string {
   const cwd = path.basename(process.cwd());
   const session = msa.getSessionName();
-  return session ? `msa - ${session} - ${cwd}` : `msa - ${cwd}`;
+  return session !== undefined && session.length > 0 ? `msa - ${session} - ${cwd}` : `msa - ${cwd}`;
 }
 
 export default function (msa: ExtensionAPI) {
@@ -17,7 +15,7 @@ export default function (msa: ExtensionAPI) {
   let frameIndex = 0;
 
   function stopAnimation(ctx: ExtensionContext) {
-    if (timer) {
+    if (timer !== null) {
       clearInterval(timer);
       timer = null;
     }
@@ -31,7 +29,10 @@ export default function (msa: ExtensionAPI) {
       const frame = BRAILLE_FRAMES[frameIndex % BRAILLE_FRAMES.length];
       const cwd = path.basename(process.cwd());
       const session = msa.getSessionName();
-      const title = session ? `${frame} msa - ${session} - ${cwd}` : `${frame} msa - ${cwd}`;
+      const title =
+        session !== undefined && session.length > 0
+          ? `${frame} msa - ${session} - ${cwd}`
+          : `${frame} msa - ${cwd}`;
       ctx.ui.setTitle(title);
       frameIndex++;
     }, 80);

@@ -1,24 +1,20 @@
-
 import type { ExtensionAPI } from "@msa/coding-agent";
 
 export default function (msa: ExtensionAPI) {
   msa.on("input", async (event, ctx) => {
-    
     if (event.source === "extension") {
       return { action: "continue" };
     }
 
-    
     if (event.text.startsWith("?quick ")) {
       const query = event.text.slice(7).trim();
-      if (!query) {
+      if (query.length === 0) {
         ctx.ui.notify("Usage: ?quick <question>", "warning");
         return { action: "handled" };
       }
       return { action: "transform", text: `Respond briefly in 1-2 sentences: ${query}` };
     }
 
-    
     if (event.text.toLowerCase() === "ping") {
       ctx.ui.notify("pong", "info");
       return { action: "handled" };

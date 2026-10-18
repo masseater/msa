@@ -1,21 +1,17 @@
+import { createAgentSession, ModelRuntime } from "@msa/coding-agent";
 import { Console, Effect } from "effect";
 
-import { createAgentSession, ModelRuntime } from "@msa/coding-agent";
-
 const modelRuntime = await ModelRuntime.create();
-
 
 const opus = modelRuntime.getModel("anthropic", "claude-opus-4-5");
 if (opus !== undefined) {
   Effect.runSync(Console.log(`Found model: ${opus.provider}/${opus.id}`));
 }
 
-
 const customModel = modelRuntime.getModel("my-provider", "my-model");
 if (customModel !== undefined) {
   Effect.runSync(Console.log(`Found custom model: ${customModel.provider}/${customModel.id}`));
 }
-
 
 const available = await modelRuntime.getAvailable();
 Effect.runSync(
@@ -28,7 +24,7 @@ Effect.runSync(
 if (available.length > 0) {
   const { session } = await createAgentSession({
     model: available[0],
-    thinkingLevel: "medium", 
+    thinkingLevel: "medium",
     modelRuntime,
   });
 

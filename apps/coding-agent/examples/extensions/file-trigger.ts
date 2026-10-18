@@ -1,5 +1,3 @@
-
-
 import * as fs from "node:fs";
 
 import type { ExtensionAPI } from "@msa/coding-agent";
@@ -11,20 +9,18 @@ export default function (msa: ExtensionAPI) {
     fs.watch(triggerFile, () => {
       try {
         const content = fs.readFileSync(triggerFile, "utf-8").trim();
-        if (content) {
+        if (content.length > 0) {
           msa.sendMessage(
             {
               customType: "file-trigger",
               content: `External trigger: ${content}`,
               display: true,
             },
-            { triggerTurn: true }, 
+            { triggerTurn: true },
           );
-          fs.writeFileSync(triggerFile, ""); 
+          fs.writeFileSync(triggerFile, "");
         }
-      } catch {
-        
-      }
+      } catch {}
     });
 
     if (ctx.hasUI) {

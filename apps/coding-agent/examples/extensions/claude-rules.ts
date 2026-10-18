@@ -1,10 +1,7 @@
-
-
 import * as fs from "node:fs";
 import * as path from "node:path";
 
 import type { ExtensionAPI } from "@msa/coding-agent";
-
 
 function findMarkdownFiles(dir: string, basePath: string = ""): string[] {
   const results: string[] = [];
@@ -16,7 +13,7 @@ function findMarkdownFiles(dir: string, basePath: string = ""): string[] {
   const entries = fs.readdirSync(dir, { withFileTypes: true });
 
   for (const entry of entries) {
-    const relativePath = basePath ? `${basePath}/${entry.name}` : entry.name;
+    const relativePath = basePath.length > 0 ? `${basePath}/${entry.name}` : entry.name;
 
     if (entry.isDirectory()) {
       results.push(...findMarkdownFiles(path.join(dir, entry.name), relativePath));
@@ -32,7 +29,6 @@ export default function claudeRulesExtension(msa: ExtensionAPI) {
   let ruleFiles: string[] = [];
   let rulesDir: string = "";
 
-  
   msa.on("session_start", async (_event, ctx) => {
     rulesDir = path.join(ctx.cwd, ".claude", "rules");
     ruleFiles = findMarkdownFiles(rulesDir);
@@ -42,7 +38,6 @@ export default function claudeRulesExtension(msa: ExtensionAPI) {
     }
   });
 
-  
   msa.on("before_agent_start", async (event) => {
     if (ruleFiles.length === 0) {
       return;

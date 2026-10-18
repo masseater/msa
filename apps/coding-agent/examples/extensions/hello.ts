@@ -1,7 +1,6 @@
-import { Effect } from "effect";
-
 import { Type } from "@msa/ai";
 import { defineTool, type ExtensionAPI } from "@msa/coding-agent";
+import { Effect } from "effect";
 
 const helloTool = defineTool({
   name: "hello",

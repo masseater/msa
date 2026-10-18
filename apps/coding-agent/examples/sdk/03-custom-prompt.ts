@@ -1,22 +1,20 @@
-import { Console, Effect } from "effect";
-
 import {
   createAgentSession,
   DefaultResourceLoader,
   getAgentDir,
   SessionManager,
 } from "@msa/coding-agent";
+import { Console, Effect } from "effect";
 
 const cwd = process.cwd();
 const agentDir = getAgentDir();
-
 
 const loader1 = new DefaultResourceLoader({
   cwd,
   agentDir,
   systemPromptOverride: () => `You are a helpful assistant that speaks like a pirate.
 Always end responses with "Arrr!"`,
-  
+
   appendSystemPromptOverride: () => [],
 });
 await loader1.reload();
@@ -39,7 +37,6 @@ try {
 } finally {
   session1.dispose();
 }
-
 
 const loader2 = new DefaultResourceLoader({
   cwd,

@@ -1,5 +1,3 @@
-import { Console, Effect } from "effect";
-
 import {
   type AgentSession,
   type CreateAgentSessionRuntimeFactory,
@@ -9,6 +7,7 @@ import {
   getAgentDir,
   SessionManager,
 } from "@msa/coding-agent";
+import { Console, Effect } from "effect";
 
 const createRuntime: CreateAgentSessionRuntimeFactory = ({
   cwd,

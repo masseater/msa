@@ -1,5 +1,3 @@
-
-
 import type { ExtensionAPI } from "@msa/coding-agent";
 import {
   Editor,
@@ -25,7 +23,6 @@ interface QuestionDetails {
   answer: string | null;
   wasCustom?: boolean;
 }
-
 
 const OptionSchema = Type.Object({
   label: Type.String({ description: "Display label for the option" }),
@@ -97,7 +94,7 @@ export default function question(msa: ExtensionAPI) {
 
         editor.onSubmit = (value) => {
           const trimmed = value.trim();
-          if (trimmed) {
+          if (trimmed.length > 0) {
             done({ answer: trimmed, wasCustom: true });
           } else {
             editMode = false;
@@ -138,7 +135,7 @@ export default function question(msa: ExtensionAPI) {
           if (matchesKey(data, Key.enter)) {
             const selected = allOptions[optionIndex];
             if (selected === undefined) return;
-            if (selected.isOther) {
+            if (selected.isOther === true) {
               editMode = true;
               refresh();
             } else {
@@ -153,7 +150,7 @@ export default function question(msa: ExtensionAPI) {
         }
 
         function render(width: number): string[] {
-          if (cachedLines) return cachedLines;
+          if (cachedLines !== undefined && cachedLines.length > 0) return cachedLines;
 
           const lines: string[] = [];
           const renderWidth = Math.max(1, width);
@@ -188,8 +185,7 @@ export default function question(msa: ExtensionAPI) {
 
             addWrappedWithPrefix(prefix, theme.fg(color, label));
 
-            
-            if (opt.description) {
+            if (opt.description !== undefined && opt.description.length > 0) {
               addWrappedWithPrefix("     ", theme.fg("muted", opt.description));
             }
           }
@@ -226,10 +222,9 @@ export default function question(msa: ExtensionAPI) {
         };
       });
 
-      
       const simpleOptions = params.options.map((o) => o.label);
 
-      if (!result) {
+      if (result === null) {
         return {
           content: [{ type: "text", text: "User cancelled the selection" }],
           details: {
@@ -265,7 +260,7 @@ export default function question(msa: ExtensionAPI) {
     renderCall(args, theme, _context) {
       let text = theme.fg("toolTitle", theme.bold("question ")) + theme.fg("muted", args.question);
       const opts = Array.isArray(args.options) ? args.options : [];
-      if (opts.length) {
+      if (opts.length !== 0) {
         const labels = opts.map((o: OptionWithDesc) => o.label);
         const numbered = [...labels, "Type something."].map((o, i) => `${i + 1}. ${o}`);
         text += `\n${theme.fg("dim", `  Options: ${numbered.join(", ")}`)}`;
@@ -275,7 +270,7 @@ export default function question(msa: ExtensionAPI) {
 
     renderResult(result, _options, theme, _context) {
       const details = result.details as QuestionDetails | undefined;
-      if (!details) {
+      if (details === undefined) {
         const text = result.content[0];
         return new Text(text?.type === "text" ? text.text : "", 0, 0);
       }
@@ -284,7 +279,7 @@ export default function question(msa: ExtensionAPI) {
         return new Text(theme.fg("warning", "Cancelled"), 0, 0);
       }
 
-      if (details.wasCustom) {
+      if (details.wasCustom === true) {
         return new Text(
           theme.fg("success", "✓ ") +
             theme.fg("muted", "(wrote) ") +

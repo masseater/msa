@@ -1,5 +1,3 @@
-import { Console, Effect } from "effect";
-
 import {
   createAgentSession,
   createCodemodeExtension,
@@ -10,6 +8,7 @@ import {
   SessionManager,
   SettingsManager,
 } from "@msa/coding-agent";
+import { Console, Effect } from "effect";
 
 const cwd = process.cwd();
 
@@ -19,7 +18,7 @@ const resourceLoader = new DefaultResourceLoader({
   extensionFactories: [
     createCodemodeExtension({ mode: "on" }),
     createToolSearchExtension(),
-    
+
     createMcpExtension(),
   ],
 });
@@ -36,7 +35,6 @@ const { session } = await createAgentSession({
 });
 
 try {
-  
   await session.bindExtensions({});
   Effect.runSync(Console.log("Active tools:", session.getActiveToolNames().join(", ")));
   session.subscribe((event) => {

@@ -1,4 +1,3 @@
-
 export const DoomKeys = {
   KEY_RIGHTARROW: 0xae,
   KEY_LEFTARROW: 0xac,

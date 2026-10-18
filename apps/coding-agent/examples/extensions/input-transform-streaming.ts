@@ -1,6 +1,5 @@
-import { Effect } from "effect";
-
 import type { ExtensionAPI } from "@msa/coding-agent";
+import { Effect } from "effect";
 
 const TRIGGER = /\b(changes?|diff|modified)\b/iu;
 

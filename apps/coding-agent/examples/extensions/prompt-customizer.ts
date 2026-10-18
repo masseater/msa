@@ -1,5 +1,3 @@
-
-
 import type { BuildSystemPromptOptions, ExtensionAPI } from "@msa/coding-agent";
 
 function buildToolGuidance(options: BuildSystemPromptOptions): string {
@@ -21,7 +19,7 @@ function buildToolGuidance(options: BuildSystemPromptOptions): string {
   if (hasTool("write")) {
     rules.push("- Use `write` to create new files or replace existing files completely.");
   }
-  if (options.skills && options.skills.length > 0) {
+  if (options.skills !== undefined && options.skills.length > 0) {
     rules.push(`- Available skills: ${options.skills.map((skill) => skill.name).join(", ")}.`);
   }
 
@@ -31,7 +29,7 @@ function buildToolGuidance(options: BuildSystemPromptOptions): string {
 export default function promptCustomizer(msa: ExtensionAPI) {
   msa.on("before_agent_start", (event) => {
     const guidance = buildToolGuidance(event.systemPromptOptions);
-    if (guidance) {
+    if (guidance.length > 0) {
       event.systemPromptOptions.sections["tool_guidance"] = guidance;
     } else {
       delete event.systemPromptOptions.sections["tool_guidance"];

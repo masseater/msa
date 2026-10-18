@@ -1,5 +1,3 @@
-
-
 import type { ExtensionAPI } from "@msa/coding-agent";
 
 export default function (msa: ExtensionAPI) {
@@ -8,12 +6,17 @@ export default function (msa: ExtensionAPI) {
     handler: async (args, ctx) => {
       const name = args.trim();
 
-      if (name) {
+      if (name.length > 0) {
         msa.setSessionName(name);
         ctx.ui.notify(`Session named: ${name}`, "info");
       } else {
         const current = msa.getSessionName();
-        ctx.ui.notify(current ? `Session: ${current}` : "No session name set", "info");
+        ctx.ui.notify(
+          current !== undefined && current.length > 0
+            ? `Session: ${current}`
+            : "No session name set",
+          "info",
+        );
       }
     },
   });

@@ -1,6 +1,3 @@
-
-
-
 import type { ExtensionAPI } from "@msa/coding-agent";
 import {
   type AutocompleteItem,
@@ -27,12 +24,12 @@ function extractIssueToken(textBeforeCursor: string): string | undefined {
 
 function parseGitHubRepo(remoteUrl: string): string | undefined {
   const sshMatch = remoteUrl.match(/^git@github\.com:([^/]+\/[^/]+?)(?:\.git)?$/);
-  if (sshMatch) {
+  if (sshMatch !== null) {
     return sshMatch[1];
   }
 
   const httpsMatch = remoteUrl.match(/^https?:\/\/github\.com\/([^/]+\/[^/]+?)(?:\.git)?$/);
-  if (httpsMatch) {
+  if (httpsMatch !== null) {
     return httpsMatch[1];
   }
 
@@ -48,11 +45,11 @@ async function resolveGitHubRepo(msa: ExtensionAPI, cwd: string): Promise<RepoRe
   for (const line of result.stdout.split("\n")) {
     const columns = line.trim().split(/\s+/);
     const remoteUrl = columns[1];
-    if (!remoteUrl) {
+    if (remoteUrl === undefined || remoteUrl.length === 0) {
       continue;
     }
     const repo = parseGitHubRepo(remoteUrl);
-    if (repo) {
+    if (repo !== undefined && repo.length > 0) {
       return { ok: true, repo };
     }
   }
@@ -69,7 +66,7 @@ function formatIssueItem(issue: GitHubIssue): AutocompleteItem {
 }
 
 function filterIssues(issues: GitHubIssue[], query: string): AutocompleteItem[] {
-  if (!query.trim()) {
+  if (query.trim().length === 0) {
     return issues.slice(0, MAX_SUGGESTIONS).map(formatIssueItem);
   }
 
@@ -107,7 +104,7 @@ function createIssueAutocompleteProvider(
       }
 
       const issues = await getIssues();
-      if (options.signal.aborted || !issues || issues.length === 0) {
+      if (options.signal.aborted || issues === undefined || issues.length === 0) {
         return current.getSuggestions(lines, cursorLine, cursorCol, options);
       }
 

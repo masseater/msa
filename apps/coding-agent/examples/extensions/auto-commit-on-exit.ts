@@ -1,6 +1,5 @@
-import { Effect } from "effect";
-
 import type { ExtensionAPI } from "@msa/coding-agent";
+import { Effect } from "effect";
 
 export default function (msa: ExtensionAPI) {
   msa.on("session_shutdown", (_event, ctx) =>

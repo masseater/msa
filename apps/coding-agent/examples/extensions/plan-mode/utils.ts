@@ -1,6 +1,3 @@
-
-
-
 const DESTRUCTIVE_PATTERNS = [
   /\brm\b/i,
   /\brmdir\b/i,
@@ -36,7 +33,6 @@ const DESTRUCTIVE_PATTERNS = [
   /\bservice\s+\S+\s+(start|stop|restart)/i,
   /\b(vim?|nano|emacs|code|subl)\b/i,
 ];
-
 
 const SAFE_PATTERNS = [
   /^\s*cat\b/,
@@ -105,8 +101,8 @@ export interface TodoItem {
 
 export function cleanStepText(text: string): string {
   let cleaned = text
-    .replace(/\*{1,2}([^*]+)\*{1,2}/g, "$1") 
-    .replace(/`([^`]+)`/g, "$1") 
+    .replace(/\*{1,2}([^*]+)\*{1,2}/g, "$1")
+    .replace(/`([^`]+)`/g, "$1")
     .replace(
       /^(Use|Run|Execute|Create|Write|Read|Check|Verify|Update|Modify|Add|Remove|Delete|Install)\s+(the\s+)?/i,
       "",
@@ -126,7 +122,7 @@ export function cleanStepText(text: string): string {
 export function extractTodoItems(message: string): TodoItem[] {
   const items: TodoItem[] = [];
   const headerMatch = message.match(/\*{0,2}Plan:\*{0,2}\s*\n/i);
-  if (!headerMatch) return items;
+  if (headerMatch === null) return items;
 
   const planSection = message.slice(message.indexOf(headerMatch[0]) + headerMatch[0].length);
   const numberedPattern = /^\s*(\d+)[.)]\s+\*{0,2}([^*\n]+)/gm;
@@ -165,7 +161,7 @@ export function markCompletedSteps(text: string, items: TodoItem[]): number {
   const doneSteps = extractDoneSteps(text);
   for (const step of doneSteps) {
     const item = items.find((t) => t.step === step);
-    if (item) item.completed = true;
+    if (item !== undefined) item.completed = true;
   }
   return doneSteps.length;
 }

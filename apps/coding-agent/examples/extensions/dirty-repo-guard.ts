@@ -1,5 +1,3 @@
-
-
 import type { ExtensionAPI, ExtensionContext } from "@msa/coding-agent";
 
 async function checkDirtyRepo(
@@ -7,11 +5,9 @@ async function checkDirtyRepo(
   ctx: ExtensionContext,
   action: string,
 ): Promise<{ cancel: boolean } | undefined> {
-  
   const { stdout, code } = await msa.exec("git", ["status", "--porcelain"]);
 
   if (code !== 0) {
-    
     return;
   }
 
@@ -21,11 +17,9 @@ async function checkDirtyRepo(
   }
 
   if (!ctx.hasUI) {
-    
     return { cancel: true };
   }
 
-  
   const changedFiles = stdout.trim().split("\n").filter(Boolean).length;
 
   const choice = await ctx.ui.select(

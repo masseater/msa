@@ -1,5 +1,3 @@
-
-
 import { StringEnum } from "@msa/ai";
 import type { ExtensionAPI, ExtensionContext, Theme } from "@msa/coding-agent";
 import { matchesKey, Text, truncateToWidth } from "@msa/tui";
@@ -24,7 +22,6 @@ const TodoParams = Type.Object({
   id: Type.Optional(Type.Number({ description: "Todo ID (for toggle)" })),
 });
 
-
 class TodoListComponent {
   private todos: Todo[];
   private theme: Theme;
@@ -45,7 +42,11 @@ class TodoListComponent {
   }
 
   render(width: number): string[] {
-    if (this.cachedLines && this.cachedWidth === width) {
+    if (
+      this.cachedLines !== undefined &&
+      this.cachedLines.length > 0 &&
+      this.cachedWidth === width
+    ) {
       return this.cachedLines;
     }
 
@@ -95,11 +96,9 @@ class TodoListComponent {
 }
 
 export default function (msa: ExtensionAPI) {
-  
   let todos: Todo[] = [];
   let nextId = 1;
 
-  
   const reconstructState = (ctx: ExtensionContext) => {
     todos = [];
     nextId = 1;
@@ -110,18 +109,16 @@ export default function (msa: ExtensionAPI) {
       if (msg.role !== "toolResult" || msg.toolName !== "todo") continue;
 
       const details = msg.details as TodoDetails | undefined;
-      if (details) {
+      if (details !== undefined) {
         todos = details.todos;
         nextId = details.nextId;
       }
     }
   };
 
-  
   msa.on("session_start", async (_event, ctx) => reconstructState(ctx));
   msa.on("session_tree", async (_event, ctx) => reconstructState(ctx));
 
-  
   msa.registerTool({
     name: "todo",
     label: "Todo",
@@ -135,16 +132,17 @@ export default function (msa: ExtensionAPI) {
             content: [
               {
                 type: "text",
-                text: todos.length
-                  ? todos.map((t) => `[${t.done ? "x" : " "}] #${t.id}: ${t.text}`).join("\n")
-                  : "No todos",
+                text:
+                  todos.length !== 0
+                    ? todos.map((t) => `[${t.done ? "x" : " "}] #${t.id}: ${t.text}`).join("\n")
+                    : "No todos",
               },
             ],
             details: { action: "list", todos: [...todos], nextId } as TodoDetails,
           };
 
         case "add": {
-          if (!params.text) {
+          if (params.text === undefined || params.text.length === 0) {
             return {
               content: [{ type: "text", text: "Error: text required for add" }],
               details: {
@@ -176,7 +174,7 @@ export default function (msa: ExtensionAPI) {
             };
           }
           const todo = todos.find((t) => t.id === params.id);
-          if (!todo) {
+          if (todo === undefined) {
             return {
               content: [{ type: "text", text: `Todo #${params.id} not found` }],
               details: {
@@ -221,19 +219,20 @@ export default function (msa: ExtensionAPI) {
 
     renderCall(args, theme, _context) {
       let text = theme.fg("toolTitle", theme.bold("todo ")) + theme.fg("muted", args.action);
-      if (args.text) text += ` ${theme.fg("dim", `"${args.text}"`)}`;
+      if (args.text !== undefined && args.text.length > 0)
+        text += ` ${theme.fg("dim", `"${args.text}"`)}`;
       if (args.id !== undefined) text += ` ${theme.fg("accent", `#${args.id}`)}`;
       return new Text(text, 0, 0);
     },
 
     renderResult(result, { expanded }, theme, _context) {
       const details = result.details as TodoDetails | undefined;
-      if (!details) {
+      if (details === undefined) {
         const text = result.content[0];
         return new Text(text?.type === "text" ? text.text : "", 0, 0);
       }
 
-      if (details.error) {
+      if (details.error !== undefined && details.error.length > 0) {
         return new Text(theme.fg("error", `Error: ${details.error}`), 0, 0);
       }
 
@@ -282,7 +281,6 @@ export default function (msa: ExtensionAPI) {
     },
   });
 
-  
   msa.registerCommand("todos", {
     description: "Show all todos on the current branch",
     handler: async (_args, ctx) => {

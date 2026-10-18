@@ -44,7 +44,7 @@ function fitBorder(
 
 function formatCwd(cwd: string): string {
   const home = process.env["HOME"];
-  if (home && cwd.startsWith(home)) {
+  if (home !== undefined && home.length > 0 && cwd.startsWith(home)) {
     return `~${cwd.slice(home.length)}`;
   }
   return cwd;
@@ -53,7 +53,7 @@ function formatCwd(cwd: string): string {
 function formatContext(ctx: ExtensionContext): string {
   const usage = ctx.getContextUsage();
   const contextWindow = usage?.contextWindow ?? ctx.model?.contextWindow;
-  if (!contextWindow || !usage || usage.percent === null) {
+  if (contextWindow === undefined || usage === undefined || usage.percent === null) {
     return "ctx ?";
   }
   return `ctx ${Math.round(usage.percent)}%/${(contextWindow / 1000).toFixed(0)}k`;
@@ -79,7 +79,7 @@ export default function (msa: ExtensionAPI) {
   const spinnerFrames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
   const stopSpinner = () => {
-    if (spinnerTimer) {
+    if (spinnerTimer !== undefined) {
       clearInterval(spinnerTimer);
       spinnerTimer = undefined;
     }
@@ -117,7 +117,7 @@ export default function (msa: ExtensionAPI) {
         .exec("git", ["branch", "--show-current"], { cwd: ctx.cwd })
         .catch(() => undefined);
       const stdout = result?.stdout.trim();
-      branch = stdout && stdout.length > 0 ? stdout : undefined;
+      branch = stdout !== undefined && stdout.length > 0 ? stdout : undefined;
       activeTui?.requestRender();
     };
     void refreshBranch();
@@ -133,14 +133,15 @@ export default function (msa: ExtensionAPI) {
         if (lines.length < 2) return lines;
 
         const thm = ctx.ui.theme;
-        const model = ctx.model ? `${ctx.model.provider}/${ctx.model.id}` : "no model";
+        const model =
+          ctx.model !== undefined ? `${ctx.model.provider}/${ctx.model.id}` : "no model";
         const thinking = msa.getThinkingLevel();
         const topLeft = isWorking ? thm.fg("accent", ` ${spinnerFrames[spinnerIndex]} `) : "";
         const topRight = "";
         const bottomLeft = thm.fg("muted", ` ${model} · ${formatThinking(thinking)} `);
         const bottomRight = thm.fg(
           "muted",
-          ` ${formatContext(ctx)} · ${formatCwd(ctx.cwd)}${branch ? ` (${branch})` : ""} `,
+          ` ${formatContext(ctx)} · ${formatCwd(ctx.cwd)}${branch !== undefined && branch.length > 0 ? ` (${branch})` : ""} `,
         );
         const borderColor = (text: string) => this.borderColor(text);
 

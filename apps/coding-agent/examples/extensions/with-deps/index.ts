@@ -1,6 +1,5 @@
-import { Data, Effect } from "effect";
-
 import type { ExtensionAPI } from "@msa/coding-agent";
+import { Data, Effect } from "effect";
 import ms from "ms";
 import { Type } from "typebox";
 

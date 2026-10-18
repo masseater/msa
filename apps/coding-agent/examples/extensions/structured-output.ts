@@ -1,5 +1,3 @@
-
-
 import { defineTool, type ExtensionAPI } from "@msa/coding-agent";
 import { Text } from "@msa/tui";
 import { Type } from "typebox";
@@ -40,7 +38,7 @@ const structuredOutputTool = defineTool({
 
   renderResult(result, _options, theme) {
     const details = result.details as StructuredOutputDetails | undefined;
-    if (!details) {
+    if (details === undefined) {
       const text = result.content[0];
       return new Text(text?.type === "text" ? text.text : "", 0, 0);
     }

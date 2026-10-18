@@ -1,5 +1,3 @@
-
-
 import { spawn } from "node:child_process";
 import { dirname, join } from "node:path";
 import { StringDecoder } from "node:string_decoder";
@@ -18,10 +16,6 @@ import {
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-
-
-
-
 const GREEN = "\x1b[32m";
 const YELLOW = "\x1b[33m";
 const BLUE = "\x1b[34m";
@@ -30,10 +24,6 @@ const RED = "\x1b[31m";
 const DIM = "\x1b[2m";
 const BOLD = "\x1b[1m";
 const RESET = "\x1b[0m";
-
-
-
-
 
 interface ExtensionUIRequest {
   type: "extension_ui_request";
@@ -51,10 +41,6 @@ interface ExtensionUIRequest {
   widgetLines?: string[];
   text?: string;
 }
-
-
-
-
 
 class OutputLog implements Component {
   private lines: string[] = [];
@@ -89,10 +75,6 @@ class OutputLog implements Component {
   }
 }
 
-
-
-
-
 class LoadingIndicator implements Component {
   private dots = 1;
   private intervalId: NodeJS.Timeout | null = null;
@@ -108,7 +90,7 @@ class LoadingIndicator implements Component {
   }
 
   stop(): void {
-    if (this.intervalId) {
+    if (this.intervalId !== null) {
       clearInterval(this.intervalId);
       this.intervalId = null;
     }
@@ -120,10 +102,6 @@ class LoadingIndicator implements Component {
     return [`${BLUE}${BOLD}Agent:${RESET} ${DIM}Working${".".repeat(this.dots)}${RESET}`];
   }
 }
-
-
-
-
 
 class PromptInput implements Component {
   readonly input: Input;
@@ -149,10 +127,6 @@ class PromptInput implements Component {
     return [`${GREEN}${BOLD}You:${RESET}`, ...this.input.render(width)];
   }
 }
-
-
-
-
 
 class SelectDialog implements Component {
   private list: SelectList;
@@ -199,7 +173,7 @@ class InputDialog implements Component {
   constructor(title: string, prefill?: string) {
     this.title = title;
     this.dialogInput = new Input();
-    if (prefill) this.dialogInput.setValue(prefill);
+    if (prefill !== undefined && prefill.length > 0) this.dialogInput.setValue(prefill);
   }
 
   set onSubmit(fn: (value: string) => void) {
@@ -235,10 +209,6 @@ class InputDialog implements Component {
   }
 }
 
-
-
-
-
 async function main() {
   const extensionPath = join(__dirname, "extensions/rpc-demo.ts");
   const cliPath = join(__dirname, "../dist/cli.js");
@@ -260,8 +230,6 @@ async function main() {
     process.exit(1);
   }
 
-  
-
   const terminal = new ProcessTerminal();
   const tui: TUI = new TuiMainScreen(terminal);
 
@@ -276,8 +244,6 @@ async function main() {
   tui.addChild(root);
   tui.setFocus(promptInput.input);
 
-  
-
   function send(obj: Record<string, unknown>): void {
     agent.stdin!.write(`${JSON.stringify(obj)}\n`);
   }
@@ -290,10 +256,6 @@ async function main() {
     agent.kill("SIGTERM");
     process.exit(0);
   }
-
-  
-  
-  
 
   let activeDialog: Component | null = null;
 
@@ -325,7 +287,7 @@ async function main() {
       root.addChild(outputLog);
       root.addChild(loadingIndicator);
       root.addChild(activeDialog ?? promptInput);
-      if (!activeDialog) tui.setFocus(promptInput.input);
+      if (activeDialog === null) tui.setFocus(promptInput.input);
       loadingIndicator.start(tui);
       tui.requestRender();
     }
@@ -336,11 +298,9 @@ async function main() {
     root.clear();
     root.addChild(outputLog);
     root.addChild(activeDialog ?? promptInput);
-    if (!activeDialog) tui.setFocus(promptInput.input);
+    if (activeDialog === null) tui.setFocus(promptInput.input);
     tui.requestRender();
   }
-
-  
 
   function showSelectDialog(
     title: string,
@@ -382,7 +342,6 @@ async function main() {
     const { id, method } = req;
 
     switch (method) {
-      
       case "select": {
         showSelectDialog(req.title ?? "Select", req.options ?? [], (value) => {
           if (value === undefined) {
@@ -395,7 +354,10 @@ async function main() {
       }
 
       case "confirm": {
-        const title = req.message ? `${req.title}: ${req.message}` : (req.title ?? "Confirm");
+        const title =
+          req.message !== undefined && req.message.length > 0
+            ? `${req.title}: ${req.message}`
+            : (req.title ?? "Confirm");
         showSelectDialog(title, ["Yes", "No"], (value) => {
           send({ type: "extension_ui_response", id, confirmed: value === "Yes" });
         });
@@ -403,9 +365,10 @@ async function main() {
       }
 
       case "input": {
-        const title = req.placeholder
-          ? `${req.title} (${req.placeholder})`
-          : (req.title ?? "Input");
+        const title =
+          req.placeholder !== undefined && req.placeholder.length > 0
+            ? `${req.title} (${req.placeholder})`
+            : (req.title ?? "Input");
         showInputDialog(title, undefined, (value) => {
           if (value === undefined) {
             send({ type: "extension_ui_response", id, cancelled: true });
@@ -428,7 +391,6 @@ async function main() {
         break;
       }
 
-      
       case "notify": {
         const notifyType = (req.notifyType as string) ?? "info";
         const color = notifyType === "error" ? RED : notifyType === "warning" ? YELLOW : MAGENTA;
@@ -446,7 +408,7 @@ async function main() {
 
       case "setWidget": {
         const lines = req.widgetLines;
-        if (lines && lines.length > 0) {
+        if (lines !== undefined && lines.length > 0) {
           outputLog.append(
             `${MAGENTA}${BOLD}Notification:${RESET} ${DIM}[widget: ${req.widgetKey}]${RESET}`,
           );
@@ -465,13 +427,11 @@ async function main() {
     }
   }
 
-  
-
   function handleSlashCommand(cmd: string): boolean {
     switch (cmd) {
       case "/select":
         showSelectDialog("Pick a color", ["Red", "Green", "Blue", "Yellow"], (value) => {
-          if (value) {
+          if (value !== undefined && value.length > 0) {
             outputLog.append(`${MAGENTA}${BOLD}Notification:${RESET} You picked: ${value}`);
           } else {
             outputLog.append(`${MAGENTA}${BOLD}Notification:${RESET} Selection cancelled`);
@@ -490,7 +450,7 @@ async function main() {
 
       case "/input":
         showInputDialog("Enter your name", undefined, (value) => {
-          if (value) {
+          if (value !== undefined && value.length > 0) {
             outputLog.append(`${MAGENTA}${BOLD}Notification:${RESET} You entered: ${value}`);
           } else {
             outputLog.append(`${MAGENTA}${BOLD}Notification:${RESET} Input cancelled`);
@@ -501,7 +461,7 @@ async function main() {
 
       case "/editor":
         showInputDialog("Edit text", "Hello, world!", (value) => {
-          if (value) {
+          if (value !== undefined && value.length > 0) {
             outputLog.append(`${MAGENTA}${BOLD}Notification:${RESET} Submitted: ${value}`);
           } else {
             outputLog.append(`${MAGENTA}${BOLD}Notification:${RESET} Editor cancelled`);
@@ -515,8 +475,6 @@ async function main() {
     }
   }
 
-  
-
   function handleAgentLine(line: string): void {
     let data: Record<string, unknown>;
     try {
@@ -525,7 +483,7 @@ async function main() {
       return;
     }
 
-    if (data["type"] === "response" && !data["success"]) {
+    if (data["type"] === "response" && data["success"] !== true) {
       outputLog.append(`${RED}[error]${RESET} ${data["command"]}: ${data["error"]}`);
       tui.requestRender();
       return;
@@ -553,7 +511,7 @@ async function main() {
         const parts = delta.split("\n");
         for (const [i, part] of parts.entries()) {
           if (i > 0) outputLog.append("");
-          if (part) outputLog.appendRaw(part);
+          if (part.length > 0) outputLog.appendRaw(part);
         }
         tui.requestRender();
       }
@@ -604,11 +562,9 @@ async function main() {
     }
   });
 
-  
-
   promptInput.input.onSubmit = (value) => {
     const trimmed = value.trim();
-    if (!trimmed) return;
+    if (trimmed.length === 0) return;
 
     promptInput.input.setValue("");
 
@@ -635,16 +591,12 @@ async function main() {
     }
   };
 
-  
-
   agent.on("exit", (code) => {
     tui.stop();
-    if (stderr) console.error(stderr);
+    if (stderr.length > 0) console.error(stderr);
     console.log(`Agent exited with code ${code}`);
     process.exit(code ?? 0);
   });
-
-  
 
   outputLog.append(`${BOLD}RPC Chat${RESET}`);
   outputLog.append(

@@ -1,5 +1,3 @@
-import { Console, Effect } from "effect";
-
 import {
   createAgentSession,
   createSyntheticSourceInfo,
@@ -8,7 +6,7 @@ import {
   type PromptTemplate,
   SessionManager,
 } from "@msa/coding-agent";
-
+import { Console, Effect } from "effect";
 
 const deployTemplate: PromptTemplate = {
   name: "deploy",
@@ -31,7 +29,6 @@ const loader = new DefaultResourceLoader({
   }),
 });
 await loader.reload();
-
 
 const discovered = loader.getPrompts().prompts;
 Effect.runSync(Console.log("Discovered prompt templates:"));
