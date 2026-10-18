@@ -9,6 +9,8 @@ import {
   resolveThemeSetting,
 } from "../src/modes/interactive/theme/theme.ts";
 
+const ESC = String.fromCharCode(27);
+
 afterEach(() => {
   resetCapabilitiesCache();
 });
@@ -54,13 +56,15 @@ describe("theme color mode", () => {
     const ansi256Theme = getThemeByName("dark");
     if (!(ansi256Theme !== undefined)) throw new Error("dark theme not found");
     expect(ansi256Theme.getColorMode()).toBe("256color");
-    expect(ansi256Theme.getFgAnsi("accent")).toMatch(/^\x1b\[38;5;\d+m$/u);
+    expect(ansi256Theme.getFgAnsi("accent")).toMatch(new RegExp(`^${ESC}\\[38;5;\\d+m$`, "u"));
 
     setCapabilities({ images: null, trueColor: true, hyperlinks: false });
     const truecolorTheme = getThemeByName("dark");
     if (!(truecolorTheme !== undefined)) throw new Error("dark theme not found");
     expect(truecolorTheme.getColorMode()).toBe("truecolor");
-    expect(truecolorTheme.getFgAnsi("accent")).toMatch(/^\x1b\[38;2;\d+;\d+;\d+m$/u);
+    expect(truecolorTheme.getFgAnsi("accent")).toMatch(
+      new RegExp(`^${ESC}\\[38;2;\\d+;\\d+;\\d+m$`, "u"),
+    );
   });
 });
 

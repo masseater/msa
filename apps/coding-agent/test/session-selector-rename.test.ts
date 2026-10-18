@@ -1,4 +1,4 @@
-import { awaited, runTest, dateFromMillis } from "@msa/testing";
+import { awaited, runTest, dateFromMillis, sleep } from "@msa/testing";
 import { setKeybindings } from "@msa/tui";
 import { Effect } from "effect";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vite-plus/test";
@@ -8,15 +8,7 @@ import type { SessionInfo } from "../src/core/session-manager.ts";
 import { SessionSelectorComponent } from "../src/modes/interactive/components/session-selector.ts";
 import { initTheme } from "../src/modes/interactive/theme/theme.ts";
 
-function flushPromises(): Promise<void> {
-  return runTest(
-    awaited(
-      new Promise<void>((resolve) => {
-        setImmediate(resolve);
-      }),
-    ),
-  );
-}
+const flushPromises = sleep("1 millis");
 
 function makeSession(overrides: Partial<SessionInfo> & { id: string }): SessionInfo {
   return {
@@ -59,7 +51,7 @@ describe("session selector rename", () => {
           () => {},
           { showRenameHint: true, keybindings },
         );
-        yield* awaited(flushPromises());
+        yield* flushPromises;
 
         const output = selector.render(120).join("\n");
         expect(output).toContain("ctrl+r");
@@ -83,7 +75,7 @@ describe("session selector rename", () => {
           () => {},
           { showRenameHint: false, keybindings },
         );
-        yield* awaited(flushPromises());
+        yield* flushPromises;
 
         const output = selector.render(120).join("\n");
         expect(output).not.toContain("ctrl+r");
@@ -109,10 +101,10 @@ describe("session selector rename", () => {
           () => {},
           { renameSession, showRenameHint: true, keybindings },
         );
-        yield* awaited(flushPromises());
+        yield* flushPromises;
 
         selector.getSessionList().handleInput(CTRL_R);
-        yield* awaited(flushPromises());
+        yield* flushPromises;
 
         const output = selector.render(120).join("\n");
         expect(output).toContain("Rename Session");
@@ -120,7 +112,7 @@ describe("session selector rename", () => {
 
         selector.handleInput("X");
         selector.handleInput("\r");
-        yield* awaited(flushPromises());
+        yield* flushPromises;
 
         expect(renameSession).toHaveBeenCalledTimes(1);
         expect(renameSession).toHaveBeenCalledWith(sessions[0]!.path, "XOld");
