@@ -1,382 +1,124 @@
-import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
-
-import type { Api, Model } from "@msa/ai";
 import type { ExtensionAPI, ExtensionContext } from "@msa/coding-agent";
-import { CONFIG_DIR_NAME, DynamicBorder, getAgentDir } from "@msa/coding-agent";
-import { Container, Key, type SelectItem, SelectList, Text } from "@msa/tui";
+import { Key } from "@msa/tui";
+import { Effect } from "effect";
 
-interface Preset {
-  provider?: string;
+import { createPresetStore, type Preset, type PresetStore } from "./preset-store.ts";
+import { showPresetSelector } from "./preset-ui.ts";
 
-  model?: string;
+const activate = (store: PresetStore, name: string, preset: Preset, ctx: ExtensionContext) =>
+  Effect.gen(function* () {
+    yield* Effect.promise(() => store.apply(name, preset, ctx));
+    ctx.ui.notify(`Preset "${name}" activated`, "info");
+    store.updateStatus(ctx);
+  });
 
-  thinkingLevel?: "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
+const cyclePreset = (store: PresetStore, ctx: ExtensionContext) =>
+  Effect.gen(function* () {
+    const names = store.order();
+    if (names.length === 0) {
+      ctx.ui.notify("No presets defined. Add a presets.json to the agent directory.", "warning");
+      return;
+    }
 
-  tools?: string[];
+    const cycleList = ["(none)", ...names];
+    const currentIndex = cycleList.indexOf(store.activeName ?? "(none)");
+    const nextIndex = currentIndex === -1 ? 0 : (currentIndex + 1) % cycleList.length;
+    const nextName = cycleList[nextIndex];
+    if (nextName === undefined) return;
 
-  instructions?: string;
-}
+    if (nextName === "(none)") {
+      yield* Effect.promise(() => store.clear(ctx));
+      store.updateStatus(ctx);
+      return;
+    }
 
-interface PresetsConfig {
-  [name: string]: Preset;
-}
+    const preset = store.presets[nextName];
+    if (preset === undefined) return;
+    yield* activate(store, nextName, preset, ctx);
+  });
 
-function loadPresets(cwd: string): PresetsConfig {
-  const globalPath = join(getAgentDir(), "presets.json");
-  const projectPath = join(cwd, CONFIG_DIR_NAME, "presets.json");
+const runPresetCommand = (store: PresetStore, args: string, ctx: ExtensionContext) =>
+  Effect.gen(function* () {
+    const name = args.trim();
+    if (name.length === 0) {
+      yield* showPresetSelector({ store, ctx });
+      return;
+    }
 
-  let globalPresets: PresetsConfig = {};
-  let projectPresets: PresetsConfig = {};
+    const preset = store.presets[name];
+    if (preset === undefined) {
+      const available = Object.keys(store.presets).join(", ") || "(none defined)";
+      ctx.ui.notify(`Unknown preset "${name}". Available: ${available}`, "error");
+      return;
+    }
 
-  if (existsSync(globalPath)) {
-    try {
-      const content = readFileSync(globalPath, "utf-8");
-      globalPresets = JSON.parse(content);
-    } catch (err) {
-      console.error(`Failed to load global presets from ${globalPath}: ${err}`);
+    yield* activate(store, name, preset, ctx);
+  });
+
+const restoreFromBranch = (msa: ExtensionAPI, store: PresetStore, ctx: ExtensionContext): void => {
+  const presetFlag = msa.getFlag("preset");
+  if (typeof presetFlag === "string" && presetFlag.length > 0) {
+    const preset = store.presets[presetFlag];
+    if (preset === undefined) {
+      const available = Object.keys(store.presets).join(", ") || "(none defined)";
+      ctx.ui.notify(`Unknown preset "${presetFlag}". Available: ${available}`, "warning");
+    } else {
+      void store.apply(presetFlag, preset, ctx);
     }
   }
 
-  if (existsSync(projectPath)) {
-    try {
-      const content = readFileSync(projectPath, "utf-8");
-      projectPresets = JSON.parse(content);
-    } catch (err) {
-      console.error(`Failed to load project presets from ${projectPath}: ${err}`);
-    }
+  const entries = ctx.sessionManager.getEntries();
+  const presetEntry = entries
+    .filter(
+      (e: { type: string; customType?: string }) =>
+        e.type === "custom" && e.customType === "preset-state",
+    )
+    .pop() as { data?: { name: string } } | undefined;
+
+  const entryName = presetEntry?.data?.name;
+  const hasFlag = typeof presetFlag === "string" && presetFlag.length > 0;
+  if (entryName !== undefined && entryName.length > 0 && !hasFlag) {
+    store.restoreActive(entryName);
   }
 
-  return { ...globalPresets, ...projectPresets };
-}
-
-interface OriginalState {
-  model: Model<Api> | undefined;
-  thinkingLevel: "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
-  tools: string[];
-}
+  store.updateStatus(ctx);
+};
 
 export default function presetExtension(msa: ExtensionAPI) {
-  let presets: PresetsConfig = {};
-  let activePresetName: string | undefined;
-  let activePreset: Preset | undefined;
-  let originalState: OriginalState | undefined;
+  const store = createPresetStore(msa);
 
   msa.registerFlag("preset", {
     description: "Preset configuration to use",
     type: "string",
   });
 
-  async function applyPreset(
-    name: string,
-    preset: Preset,
-    ctx: ExtensionContext,
-  ): Promise<boolean> {
-    if (activePresetName === undefined) {
-      originalState = {
-        model: ctx.model,
-        thinkingLevel: msa.getThinkingLevel(),
-        tools: msa.getActiveTools(),
-      };
-    }
-
-    if (
-      preset.provider !== undefined &&
-      preset.provider.length > 0 &&
-      preset.model !== undefined &&
-      preset.model.length > 0
-    ) {
-      const model = ctx.modelRegistry.find(preset.provider, preset.model);
-      if (model === undefined) {
-        ctx.ui.notify(
-          `Preset "${name}": Model ${preset.provider}/${preset.model} not found`,
-          "warning",
-        );
-      } else {
-        const success = await msa.setModel(model);
-        if (!success) {
-          ctx.ui.notify(
-            `Preset "${name}": No API key for ${preset.provider}/${preset.model}`,
-            "warning",
-          );
-        }
-      }
-    }
-
-    if (preset.thinkingLevel !== undefined) {
-      msa.setThinkingLevel(preset.thinkingLevel);
-    }
-
-    if (preset.tools !== undefined && preset.tools.length > 0) {
-      const allToolNames = msa.getAllTools().map((t) => t.name);
-      const validTools = preset.tools.filter((t) => allToolNames.includes(t));
-      const invalidTools = preset.tools.filter((t) => !allToolNames.includes(t));
-
-      if (invalidTools.length > 0) {
-        ctx.ui.notify(`Preset "${name}": Unknown tools: ${invalidTools.join(", ")}`, "warning");
-      }
-
-      if (validTools.length > 0) {
-        msa.setActiveTools(validTools);
-      }
-    }
-
-    activePresetName = name;
-    activePreset = preset;
-
-    return true;
-  }
-
-  function buildPresetDescription(preset: Preset): string {
-    const parts: string[] = [];
-
-    if (
-      preset.provider !== undefined &&
-      preset.provider.length > 0 &&
-      preset.model !== undefined &&
-      preset.model.length > 0
-    ) {
-      parts.push(`${preset.provider}/${preset.model}`);
-    }
-    if (preset.thinkingLevel !== undefined) {
-      parts.push(`thinking:${preset.thinkingLevel}`);
-    }
-    if (preset.tools !== undefined && preset.tools.length > 0) {
-      parts.push(`tools:${preset.tools.join(",")}`);
-    }
-    if (preset.instructions !== undefined && preset.instructions.length > 0) {
-      const truncated =
-        preset.instructions.length > 30
-          ? `${preset.instructions.slice(0, 27)}...`
-          : preset.instructions;
-      parts.push(`"${truncated}"`);
-    }
-
-    return parts.join(" | ");
-  }
-
-  async function showPresetSelector(ctx: ExtensionContext): Promise<void> {
-    const presetNames = Object.keys(presets);
-
-    if (presetNames.length === 0) {
-      ctx.ui.notify(
-        `No presets defined. Add presets to ${join(getAgentDir(), "presets.json")} or ${join(ctx.cwd, CONFIG_DIR_NAME, "presets.json")}`,
-        "warning",
-      );
-      return;
-    }
-
-    const items: SelectItem[] = Object.entries(presets).map(([name, preset]) => {
-      const isActive = name === activePresetName;
-      return {
-        value: name,
-        label: isActive ? `${name} (active)` : name,
-        description: buildPresetDescription(preset),
-      };
-    });
-
-    items.push({
-      value: "(none)",
-      label: "(none)",
-      description: "Clear active preset, restore defaults",
-    });
-
-    const result = await ctx.ui.custom<string | null>((tui, theme, _kb, done) => {
-      const container = new Container();
-      container.addChild(new DynamicBorder((str) => theme.fg("accent", str)));
-
-      container.addChild(new Text(theme.fg("accent", theme.bold("Select Preset"))));
-
-      const selectList = new SelectList(items, Math.min(items.length, 10), {
-        selectedPrefix: (text) => theme.fg("accent", text),
-        selectedText: (text) => theme.fg("accent", text),
-        description: (text) => theme.fg("muted", text),
-        scrollInfo: (text) => theme.fg("dim", text),
-        noMatch: (text) => theme.fg("warning", text),
-      });
-
-      selectList.onSelect = (item) => done(item.value);
-      selectList.onCancel = () => done(null);
-
-      container.addChild(selectList);
-
-      container.addChild(new Text(theme.fg("dim", "↑↓ navigate • enter select • esc cancel")));
-
-      container.addChild(new DynamicBorder((str) => theme.fg("accent", str)));
-
-      return {
-        render(width: number) {
-          return container.render(width);
-        },
-        invalidate() {
-          container.invalidate();
-        },
-        handleInput(data: string) {
-          selectList.handleInput(data);
-          tui.requestRender();
-        },
-      };
-    });
-
-    if (result === null || result.length === 0) return;
-
-    if (result === "(none)") {
-      activePresetName = undefined;
-      activePreset = undefined;
-      if (originalState === undefined) {
-        msa.setActiveTools(["read", "bash", "edit", "write"]);
-      } else {
-        if (originalState.model !== undefined) {
-          await msa.setModel(originalState.model);
-        }
-        msa.setThinkingLevel(originalState.thinkingLevel);
-        msa.setActiveTools(originalState.tools);
-      }
-      ctx.ui.notify("Preset cleared, defaults restored", "info");
-      updateStatus(ctx);
-      return;
-    }
-
-    const preset = presets[result];
-    if (preset !== undefined) {
-      await applyPreset(result, preset, ctx);
-      ctx.ui.notify(`Preset "${result}" activated`, "info");
-      updateStatus(ctx);
-    }
-  }
-
-  function updateStatus(ctx: ExtensionContext) {
-    if (activePresetName !== undefined && activePresetName.length > 0) {
-      ctx.ui.setStatus("preset", ctx.ui.theme.fg("accent", `preset:${activePresetName}`));
-    } else {
-      ctx.ui.setStatus("preset", undefined);
-    }
-  }
-
-  function getPresetOrder(): string[] {
-    return Object.keys(presets).sort();
-  }
-
-  async function cyclePreset(ctx: ExtensionContext): Promise<void> {
-    const presetNames = getPresetOrder();
-    if (presetNames.length === 0) {
-      ctx.ui.notify(
-        `No presets defined. Add presets to ${join(getAgentDir(), "presets.json")} or ${join(ctx.cwd, CONFIG_DIR_NAME, "presets.json")}`,
-        "warning",
-      );
-      return;
-    }
-
-    const cycleList = ["(none)", ...presetNames];
-    const currentName = activePresetName ?? "(none)";
-    const currentIndex = cycleList.indexOf(currentName);
-    const nextIndex = currentIndex === -1 ? 0 : (currentIndex + 1) % cycleList.length;
-    const nextName = cycleList[nextIndex];
-    if (nextName === undefined) return;
-
-    if (nextName === "(none)") {
-      activePresetName = undefined;
-      activePreset = undefined;
-      if (originalState === undefined) {
-        msa.setActiveTools(["read", "bash", "edit", "write"]);
-      } else {
-        if (originalState.model !== undefined) {
-          await msa.setModel(originalState.model);
-        }
-        msa.setThinkingLevel(originalState.thinkingLevel);
-        msa.setActiveTools(originalState.tools);
-      }
-      ctx.ui.notify("Preset cleared, defaults restored", "info");
-      updateStatus(ctx);
-      return;
-    }
-
-    const preset = presets[nextName];
-    if (preset === undefined) return;
-
-    await applyPreset(nextName, preset, ctx);
-    ctx.ui.notify(`Preset "${nextName}" activated`, "info");
-    updateStatus(ctx);
-  }
-
   msa.registerShortcut(Key.ctrlShift("u"), {
     description: "Cycle presets",
-    handler: async (ctx) => {
-      await cyclePreset(ctx);
-    },
+    handler: (ctx) => Effect.runPromise(cyclePreset(store, ctx)),
   });
 
   msa.registerCommand("preset", {
     description: "Switch preset configuration",
-    handler: async (args, ctx) => {
-      if (args?.trim().length > 0) {
-        const name = args.trim();
-        const preset = presets[name];
-
-        if (preset === undefined) {
-          const available = Object.keys(presets).join(", ") || "(none defined)";
-          ctx.ui.notify(`Unknown preset "${name}". Available: ${available}`, "error");
-          return;
-        }
-
-        await applyPreset(name, preset, ctx);
-        ctx.ui.notify(`Preset "${name}" activated`, "info");
-        updateStatus(ctx);
-        return;
-      }
-
-      await showPresetSelector(ctx);
-    },
+    handler: (args, ctx) => Effect.runPromise(runPresetCommand(store, args, ctx)),
   });
 
   msa.on("before_agent_start", (event) => {
-    if (activePreset?.instructions !== undefined && activePreset?.instructions.length > 0) {
-      return {
-        systemPrompt: `${event.systemPrompt}\n\n${activePreset.instructions}`,
-      };
+    const instructions = store.active?.instructions;
+    if (instructions !== undefined && instructions.length > 0) {
+      return { systemPrompt: `${event.systemPrompt}\n\n${instructions}` };
     }
     return undefined;
   });
 
-  msa.on("session_start", async (_event, ctx) => {
-    presets = loadPresets(ctx.cwd);
-
-    const presetFlag = msa.getFlag("preset");
-    if (typeof presetFlag === "string" && presetFlag.length > 0) {
-      const preset = presets[presetFlag];
-      if (preset === undefined) {
-        const available = Object.keys(presets).join(", ") || "(none defined)";
-        ctx.ui.notify(`Unknown preset "${presetFlag}". Available: ${available}`, "warning");
-      } else {
-        await applyPreset(presetFlag, preset, ctx);
-        ctx.ui.notify(`Preset "${presetFlag}" activated`, "info");
-      }
-    }
-
-    const entries = ctx.sessionManager.getEntries();
-    const presetEntry = entries
-      .filter(
-        (e: { type: string; customType?: string }) =>
-          e.type === "custom" && e.customType === "preset-state",
-      )
-      .pop() as { data?: { name: string } } | undefined;
-
-    const presetEntryName = presetEntry?.data?.name;
-    const hasPresetFlag = presetFlag !== undefined && presetFlag !== "" && presetFlag !== false;
-    if (presetEntryName !== undefined && presetEntryName.length > 0 && !hasPresetFlag) {
-      const preset = presets[presetEntryName];
-      if (preset !== undefined) {
-        activePresetName = presetEntryName;
-        activePreset = preset;
-      }
-    }
-
-    updateStatus(ctx);
+  msa.on("session_start", (_event, ctx) => {
+    store.load(ctx.cwd);
+    restoreFromBranch(msa, store, ctx);
   });
 
   msa.on("turn_start", () => {
-    if (activePresetName !== undefined && activePresetName.length > 0) {
-      msa.appendEntry("preset-state", { name: activePresetName });
+    const name = store.activeName;
+    if (name !== undefined && name.length > 0) {
+      msa.appendEntry("preset-state", { name });
     }
   });
 }

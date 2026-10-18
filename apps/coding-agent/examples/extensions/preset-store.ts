@@ -1,0 +1,250 @@
+import { NodeServices } from "@effect/platform-node";
+import type { Api, Model } from "@msa/ai";
+import type { ExtensionAPI, ExtensionContext } from "@msa/coding-agent";
+import { CONFIG_DIR_NAME, getAgentDir } from "@msa/coding-agent";
+import { Console, Effect, FileSystem, ManagedRuntime, Option, Path, Schema } from "effect";
+
+const ThinkingLevelSchema = Schema.Literals([
+  "off",
+  "minimal",
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+  "max",
+]);
+
+const PresetSchema = Schema.Struct({
+  provider: Schema.optional(Schema.String),
+  model: Schema.optional(Schema.String),
+  thinkingLevel: Schema.optional(ThinkingLevelSchema),
+  tools: Schema.optional(Schema.Array(Schema.String)),
+  instructions: Schema.optional(Schema.String),
+});
+
+const PresetsSchema = Schema.Record(Schema.String, PresetSchema);
+
+export type Preset = typeof PresetSchema.Type;
+export type PresetsConfig = typeof PresetsSchema.Type;
+export type ThinkingLevel = typeof ThinkingLevelSchema.Type;
+
+interface OriginalState {
+  model: Model<Api> | undefined;
+  thinkingLevel: ThinkingLevel;
+  tools: string[];
+}
+
+export interface PresetStore {
+  presets: PresetsConfig;
+  activeName: string | undefined;
+  active: Preset | undefined;
+  load(cwd: string): void;
+  apply(name: string, preset: Preset, ctx: ExtensionContext): Promise<boolean>;
+  clear(ctx: ExtensionContext): Promise<void>;
+  restoreActive(name: string): void;
+  updateStatus(ctx: ExtensionContext): void;
+  order(): string[];
+}
+
+const runtime = ManagedRuntime.make(NodeServices.layer);
+const pathService = runtime.runSync(Path.Path);
+const fsService = runtime.runSync(FileSystem.FileSystem);
+
+const parsePresets = Schema.decodeUnknownOption(Schema.fromJsonString(PresetsSchema));
+
+const readPresets = (file: string): PresetsConfig => {
+  const content = runtime.runSync(fsService.readFileString(file).pipe(Effect.option));
+  if (Option.isNone(content)) return {};
+
+  const parsed = parsePresets(content.value);
+  if (Option.isNone(parsed)) {
+    Effect.runSync(Console.error(`Failed to load presets from ${file}`));
+    return {};
+  }
+  return parsed.value;
+};
+
+const loadPresets = (cwd: string): PresetsConfig => ({
+  ...readPresets(pathService.join(getAgentDir(), "presets.json")),
+  ...readPresets(pathService.join(cwd, CONFIG_DIR_NAME, "presets.json")),
+});
+
+const describePreset = (preset: Preset): string => {
+  const parts: string[] = [];
+
+  if (
+    preset.provider !== undefined &&
+    preset.provider.length > 0 &&
+    preset.model !== undefined &&
+    preset.model.length > 0
+  ) {
+    parts.push(`${preset.provider}/${preset.model}`);
+  }
+  if (preset.thinkingLevel !== undefined) {
+    parts.push(`thinking:${preset.thinkingLevel}`);
+  }
+  if (preset.tools !== undefined && preset.tools.length > 0) {
+    parts.push(`tools:${preset.tools.join(",")}`);
+  }
+  if (preset.instructions !== undefined && preset.instructions.length > 0) {
+    const truncated =
+      preset.instructions.length > 30
+        ? `${preset.instructions.slice(0, 27)}...`
+        : preset.instructions;
+    parts.push(`"${truncated}"`);
+  }
+
+  return parts.join(" | ");
+};
+
+export const buildPresetDescription = describePreset;
+
+export const presetsPathHint = (cwd: string): string =>
+  `${pathService.join(getAgentDir(), "presets.json")} or ${pathService.join(cwd, CONFIG_DIR_NAME, "presets.json")}`;
+
+interface StoreState {
+  presets: PresetsConfig;
+  activeName: string | undefined;
+  active: Preset | undefined;
+  originalState: OriginalState | undefined;
+}
+
+const rememberOriginal = (msa: ExtensionAPI, state: StoreState, ctx: ExtensionContext): void => {
+  if (state.activeName !== undefined) return;
+  state.originalState = {
+    model: ctx.model,
+    thinkingLevel: msa.getThinkingLevel(),
+    tools: msa.getActiveTools(),
+  };
+};
+
+const applyModel = (msa: ExtensionAPI, name: string, preset: Preset, ctx: ExtensionContext) =>
+  Effect.gen(function* () {
+    if (
+      preset.provider === undefined ||
+      preset.provider.length === 0 ||
+      preset.model === undefined ||
+      preset.model.length === 0
+    ) {
+      return;
+    }
+
+    const model = ctx.modelRegistry.find(preset.provider, preset.model);
+    if (model === undefined) {
+      ctx.ui.notify(
+        `Preset "${name}": Model ${preset.provider}/${preset.model} not found`,
+        "warning",
+      );
+      return;
+    }
+
+    const success = yield* Effect.promise(() => msa.setModel(model));
+    if (!success) {
+      ctx.ui.notify(
+        `Preset "${name}": No API key for ${preset.provider}/${preset.model}`,
+        "warning",
+      );
+    }
+  });
+
+const applyTools = (
+  msa: ExtensionAPI,
+  name: string,
+  preset: Preset,
+  ctx: ExtensionContext,
+): void => {
+  if (preset.tools === undefined || preset.tools.length === 0) return;
+
+  const allToolNames = msa.getAllTools().map((t) => t.name);
+  const validTools = preset.tools.filter((t) => allToolNames.includes(t));
+  const invalidTools = preset.tools.filter((t) => !allToolNames.includes(t));
+
+  if (invalidTools.length > 0) {
+    ctx.ui.notify(`Preset "${name}": Unknown tools: ${invalidTools.join(", ")}`, "warning");
+  }
+  if (validTools.length > 0) {
+    msa.setActiveTools(validTools);
+  }
+};
+
+const apply = (
+  msa: ExtensionAPI,
+  state: StoreState,
+  name: string,
+  preset: Preset,
+  ctx: ExtensionContext,
+) =>
+  Effect.gen(function* () {
+    rememberOriginal(msa, state, ctx);
+    yield* applyModel(msa, name, preset, ctx);
+
+    if (preset.thinkingLevel !== undefined) {
+      msa.setThinkingLevel(preset.thinkingLevel);
+    }
+    applyTools(msa, name, preset, ctx);
+
+    state.activeName = name;
+    state.active = preset;
+    return true;
+  });
+
+const clearPreset = (msa: ExtensionAPI, state: StoreState, ctx: ExtensionContext) =>
+  Effect.gen(function* () {
+    state.activeName = undefined;
+    state.active = undefined;
+
+    const original = state.originalState;
+    if (original === undefined) {
+      msa.setActiveTools(["read", "bash", "edit", "write"]);
+    } else {
+      if (original.model !== undefined) {
+        const model = original.model;
+        yield* Effect.promise(() => msa.setModel(model));
+      }
+      msa.setThinkingLevel(original.thinkingLevel);
+      msa.setActiveTools(original.tools);
+    }
+
+    ctx.ui.notify("Preset cleared, defaults restored", "info");
+  });
+
+export const createPresetStore = (msa: ExtensionAPI): PresetStore => {
+  const state: StoreState = {
+    presets: {},
+    activeName: undefined,
+    active: undefined,
+    originalState: undefined,
+  };
+
+  return {
+    get presets() {
+      return state.presets;
+    },
+    get activeName() {
+      return state.activeName;
+    },
+    get active() {
+      return state.active;
+    },
+    load: (cwd) => {
+      state.presets = loadPresets(cwd);
+    },
+    apply: (name, preset, ctx) => runtime.runPromise(apply(msa, state, name, preset, ctx)),
+    clear: (ctx) => runtime.runPromise(clearPreset(msa, state, ctx)),
+    restoreActive: (name) => {
+      state.activeName = name;
+      state.active = state.presets[name];
+    },
+    updateStatus: (ctx) => {
+      const label =
+        state.activeName !== undefined && state.activeName.length > 0
+          ? state.activeName
+          : undefined;
+      ctx.ui.setStatus(
+        "preset",
+        label === undefined ? undefined : ctx.ui.theme.fg("accent", `preset:${label}`),
+      );
+    },
+    order: () => Object.keys(state.presets).sort(),
+  };
+};
