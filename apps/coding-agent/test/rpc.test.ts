@@ -25,7 +25,7 @@ describe.skipIf(!process.env["ANTHROPIC_API_KEY"] && !process.env["ANTHROPIC_OAU
         cliPath: join(__dirname, "..", "dist", "cli.js"),
         cwd: join(__dirname, ".."),
         env: { MSA_CODING_AGENT_DIR: sessionDir },
-        provider: "anthropic",
+        provider: "anthropic-api",
         model: "claude-sonnet-4-5",
       });
     });

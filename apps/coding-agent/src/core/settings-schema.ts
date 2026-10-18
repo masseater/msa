@@ -346,10 +346,16 @@ export const SettingsSchema = Type.Object(
     ),
     orchestrator: Type.Optional(
       Type.Object({
+        database: Type.Optional(
+          Type.String({
+            description:
+              "SQLite file holding tasks, sessions, reports, and notes. Default: <agent dir>/orchestrator.db.",
+          }),
+        ),
         workerModel: Type.Optional(
           Type.String({
             description:
-              'Model of the sessions the orchestrator starts, as "provider/id", unless start_session names one. Default: the orchestrator\'s model.',
+              'Model of the sessions the orchestrator starts, as "provider/id", unless create_task names one. Default: the orchestrator\'s model.',
           }),
         ),
         workerThinkingLevel: Type.Optional(ModelThinkingLevelSchema),

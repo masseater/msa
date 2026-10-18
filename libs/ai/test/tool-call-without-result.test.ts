@@ -9,8 +9,7 @@ type StreamOptionsWithExtras = StreamOptions & Record<string, unknown>;
 import { resolveApiKey } from "./oauth.ts";
 
 // Resolve OAuth tokens at module level (async, runs before tests)
-const oauthTokens = await Promise.all([resolveApiKey("anthropic"), resolveApiKey("openai-codex")]);
-const [anthropicOAuthToken, openaiCodexToken] = oauthTokens;
+const openaiCodexToken = await resolveApiKey("openai-codex");
 
 // Simple calculate tool
 const calculateSchema = Type.Object({
@@ -123,7 +122,7 @@ describe("Tool Call Without Result Tests", () => {
   });
 
   describe.skipIf(!process.env["ANTHROPIC_API_KEY"])("Anthropic Provider", () => {
-    const model = getModel("anthropic", "claude-haiku-4-5");
+    const model = getModel("anthropic-api", "claude-haiku-4-5");
 
     it(
       "should filter out tool calls without corresponding tool results",
@@ -137,18 +136,6 @@ describe("Tool Call Without Result Tests", () => {
   // =========================================================================
   // OAuth-based providers (credentials from ~/.msa/agent/oauth.json)
   // =========================================================================
-
-  describe("Anthropic OAuth Provider", () => {
-    const model = getModel("anthropic", "claude-haiku-4-5");
-
-    it.skipIf(!anthropicOAuthToken)(
-      "should filter out tool calls without corresponding tool results",
-      { retry: 3, timeout: 30000 },
-      async () => {
-        await testToolCallWithoutResult(model, { apiKey: anthropicOAuthToken });
-      },
-    );
-  });
 
   describe("OpenAI Codex Provider", () => {
     it.skipIf(!openaiCodexToken)(

@@ -8,15 +8,16 @@ Extensions, prompt templates, and skills can add commands. The command menu in m
 
 ## Models and settings
 
-| Command                   | Aliases               | Description                                      |
-| ------------------------- | --------------------- | ------------------------------------------------ |
-| `/config`                 | `/settings`, `/theme` | Open settings                                    |
-| `/model [provider/model]` |                       | Select a model                                   |
-| `/effort [level]`         |                       | Set the thinking level                           |
-| `/scoped-models`          |                       | Configure the models used by interactive cycling |
-| `/login [provider]`       |                       | Add provider authentication                      |
-| `/logout`                 |                       | Remove provider authentication                   |
-| `/llama`                  |                       | Manage models on the configured llama.cpp router |
+| Command                   | Aliases               | Description                                                               |
+| ------------------------- | --------------------- | ------------------------------------------------------------------------- |
+| `/config`                 | `/settings`, `/theme` | Open settings                                                             |
+| `/model [provider/model]` |                       | Select a model                                                            |
+| `/effort [level]`         |                       | Set the thinking level                                                    |
+| `/scoped-models`          |                       | Configure the models used by interactive cycling                          |
+| `/login [provider]`       |                       | Add provider authentication                                               |
+| `/logout`                 |                       | Remove provider authentication                                            |
+| `/accounts [kind ...]`    |                       | Manage Claude accounts; see [Claude Code](cli-agents.md#several-accounts) |
+| `/llama`                  |                       | Manage models on the configured llama.cpp router                          |
 
 ## Sessions and context
 

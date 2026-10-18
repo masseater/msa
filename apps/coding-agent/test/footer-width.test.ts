@@ -249,7 +249,7 @@ describe("FooterComponent width handling", () => {
   it("marks explicitly identified subscription auth", () => {
     const session = createSession({
       sessionName: "",
-      provider: "anthropic",
+      provider: "anthropic-api",
       usingSubscription: true,
     });
     const footer = new FooterComponent(session, createFooterData(1));

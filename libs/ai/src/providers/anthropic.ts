@@ -1,20 +1,17 @@
 import { anthropicMessagesApi } from "../api/anthropic-messages.lazy.ts";
-import { lazyOAuth } from "../auth/helpers.ts";
-import { loadAnthropicOAuth } from "../auth/oauth/load.ts";
 import type { ApiKeyAuth } from "../auth/types.ts";
 import {
   ANTHROPIC_API_KEY_ENV,
   ANTHROPIC_AUTH_TOKEN_ENV,
   ANTHROPIC_FEDERATION_RULE_ID_ENV,
   ANTHROPIC_IDENTITY_TOKEN_FILE_ENV,
-  ANTHROPIC_OAUTH_TOKEN_ENV,
   ANTHROPIC_ORGANIZATION_ID_ENV,
   ANTHROPIC_SERVICE_ACCOUNT_ID_ENV,
   ANTHROPIC_WORKSPACE_ID_ENV,
 } from "../env-api-keys.ts";
 import { createProvider, type Provider } from "../models.ts";
 import type { ProviderEnv } from "../types.ts";
-import { ANTHROPIC_MODELS } from "./anthropic.models.ts";
+import { ANTHROPIC_API_MODELS } from "./anthropic-api.models.ts";
 
 function anthropicApiKeyAuth(): ApiKeyAuth {
   return {
@@ -44,11 +41,9 @@ function anthropicApiKeyAuth(): ApiKeyAuth {
         };
       }
 
-      for (const envVar of [ANTHROPIC_OAUTH_TOKEN_ENV, ANTHROPIC_API_KEY_ENV]) {
-        const apiKey = await ctx.env(envVar);
-        signal.throwIfAborted();
-        if (apiKey) return { auth: { apiKey }, source: envVar };
-      }
+      const apiKey = await ctx.env(ANTHROPIC_API_KEY_ENV);
+      signal.throwIfAborted();
+      if (apiKey) return { auth: { apiKey }, source: ANTHROPIC_API_KEY_ENV };
 
       // Workload identity federation: the Anthropic SDK exchanges the identity
       // token for a short-lived access token and refreshes it itself. Last in
@@ -77,18 +72,13 @@ function anthropicApiKeyAuth(): ApiKeyAuth {
 
 export function anthropicProvider(): Provider<"anthropic-messages"> {
   return createProvider({
-    id: "anthropic",
-    name: "Anthropic",
+    id: "anthropic-api",
+    name: "Anthropic API",
     baseUrl: "https://api.anthropic.com",
     auth: {
       apiKey: anthropicApiKeyAuth(),
-      oauth: lazyOAuth({
-        name: "Anthropic (Claude Pro/Max)",
-        isSubscription: true,
-        load: loadAnthropicOAuth,
-      }),
     },
-    models: Object.values(ANTHROPIC_MODELS),
+    models: Object.values(ANTHROPIC_API_MODELS),
     api: anthropicMessagesApi(),
   });
 }

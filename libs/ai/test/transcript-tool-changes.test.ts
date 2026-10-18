@@ -68,7 +68,7 @@ const anthropicNativeModel: Model<"anthropic-messages"> = {
   id: "claude-opus-5",
   name: "Claude Opus 5",
   api: "anthropic-messages",
-  provider: "anthropic",
+  provider: "anthropic-api",
   compat: { supportsMidConvoSystemMessages: true, supportsMidConvoToolChanges: true },
 };
 
@@ -207,7 +207,7 @@ describe("transcript system messages", () => {
       id: "claude-sonnet-4-5",
       name: "Claude Sonnet 4.5",
       api: "anthropic-messages",
-      provider: "anthropic",
+      provider: "anthropic-api",
     };
     const payload = await capturePayload<{
       betas?: string[];
@@ -230,7 +230,7 @@ describe("transcript system messages", () => {
       id: "claude-opus-5",
       name: "Claude Opus 5",
       api: "anthropic-messages",
-      provider: "anthropic",
+      provider: "anthropic-api",
       compat: { supportsMidConvoToolChanges: true },
     };
     const payload = await capturePayload<{

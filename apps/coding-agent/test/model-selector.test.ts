@@ -86,7 +86,7 @@ describe("model selector", () => {
       aborted: false,
       errors: new Map([
         ["openai", new Error("unavailable")],
-        ["anthropic", new Error("unavailable")],
+        ["anthropic-api", new Error("unavailable")],
       ]),
     });
 
@@ -102,7 +102,7 @@ describe("model selector", () => {
     await vi.waitFor(() => {
       const rendered = stripAnsi(selector.render(120).join("\n"));
       expect(rendered).toContain(
-        "Could not refresh 2 model catalogs (openai, anthropic); showing cached models.",
+        "Could not refresh 2 model catalogs (openai, anthropic-api); showing cached models.",
       );
     });
   });

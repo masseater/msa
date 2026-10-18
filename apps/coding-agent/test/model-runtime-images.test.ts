@@ -334,9 +334,9 @@ describe("ModelRuntime image generation", () => {
 
   it("does not add image generation or classification to composed chat-only providers", async () => {
     const runtime = await createRuntime({
-      providers: { anthropic: { headers: { "X-Title": "msa" } } },
+      providers: { "anthropic-api": { headers: { "X-Title": "msa" } } },
     });
-    const provider = runtime.getProvider("anthropic")!;
+    const provider = runtime.getProvider("anthropic-api")!;
     expect(provider.generateImages).toBeUndefined();
     expect(provider.classify).toBeUndefined();
     expect(runtime.getProvider("openrouter")?.generateImages).toBeDefined();

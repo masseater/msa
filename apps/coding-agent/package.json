@@ -72,7 +72,6 @@
     "ignore": "catalog:",
     "jiti": "catalog:",
     "minimatch": "catalog:",
-    "neo4j-driver": "catalog:",
     "proper-lockfile": "catalog:",
     "quickjs-wasi": "catalog:",
     "semver": "catalog:",

@@ -65,13 +65,13 @@ describe("classifyGoalError", () => {
 });
 
 describe("pickEvaluatorModel", () => {
-  const opus = model("anthropic", "claude-opus-4-8", 5, 25);
+  const opus = model("anthropic-api", "claude-opus-4-8", 5, 25);
 
   it("picks the strongest small model of the working model's provider", () => {
     const available = [
       opus,
-      model("anthropic", "claude-haiku-4-5", 1, 5),
-      model("anthropic", "claude-haiku-5-5", 2, 10),
+      model("anthropic-api", "claude-haiku-4-5", 1, 5),
+      model("anthropic-api", "claude-haiku-5-5", 2, 10),
       model("openai", "gpt-5-mini", 0.25, 2),
     ];
     expect(pickEvaluatorModel(opus, available).id).toBe("claude-haiku-5-5");

@@ -331,7 +331,7 @@ describe("SessionManager custom flat session directory", () => {
       role: "assistant",
       content: [{ type: "text", text: `reply to ${label}` }],
       api: "anthropic-messages",
-      provider: "anthropic",
+      provider: "anthropic-api",
       model: "test",
       usage: {
         input: 1,
@@ -478,7 +478,7 @@ describe("SessionManager session file creation", () => {
 
   it("does not create a file for a session with only setup entries", () => {
     const session = SessionManager.create(tempDir, tempDir);
-    session.appendModelChange("anthropic", "claude-sonnet-4-5");
+    session.appendModelChange("anthropic-api", "claude-sonnet-4-5");
     session.appendThinkingLevelChange("off");
 
     expect(existsSync(session.getSessionFile()!)).toBe(false);
@@ -487,7 +487,7 @@ describe("SessionManager session file creation", () => {
   // #10000: the first prompt must survive a first turn that never produces an assistant message
   it("creates the file when the first user message is appended", () => {
     const session = SessionManager.create(tempDir, tempDir);
-    session.appendModelChange("anthropic", "claude-sonnet-4-5");
+    session.appendModelChange("anthropic-api", "claude-sonnet-4-5");
     session.appendMessage(userMsg("first question"));
 
     const file = session.getSessionFile()!;

@@ -223,7 +223,7 @@ export interface LoginOptions {
  * auth from whatever credential ends up stored.
  */
 export interface OAuthAuth {
-  /** Display name, e.g. "Anthropic (Claude Pro/Max)". */
+  /** Display name, e.g. "OpenAI (ChatGPT subscription)". */
   name: string;
 
   /** Whether access through this auth method is backed by a provider subscription. */

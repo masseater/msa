@@ -17,7 +17,7 @@ describe("SessionManager.saveCustomEntry", () => {
       role: "assistant",
       content: [{ type: "text", text: "hi" }],
       api: "anthropic-messages",
-      provider: "anthropic",
+      provider: "anthropic-api",
       model: "test",
       usage: {
         input: 1,

@@ -88,7 +88,7 @@ describe("read line range display", () => {
         role: "assistant",
         content: [{ type: "toolCall", id: "call", name: "read", arguments: args }],
         api: "anthropic-messages",
-        provider: "anthropic",
+        provider: "anthropic-api",
         model: "test-model",
         usage: {
           input: 0,

@@ -10,7 +10,7 @@ const message: AssistantMessage = {
   role: "assistant",
   content: [{ type: "text", text: "survived" }],
   api: "anthropic-messages",
-  provider: "anthropic",
+  provider: "anthropic-api",
   model: "claude-fable-5-1",
   usage: {
     input: 1,
