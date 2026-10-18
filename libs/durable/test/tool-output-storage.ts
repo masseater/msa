@@ -1,5 +1,6 @@
 import { BACKGROUND_CONTEXT as context } from "@msa/chord/context";
 import { Effect } from "effect";
+import { dual } from "effect/Function";
 
 import type { Storage } from "../src/index.ts";
 import { openNodeJsonlStorage } from "../src/storage/jsonl/node.ts";
@@ -10,13 +11,18 @@ import { fileSize, joinPath, listDirectory, pathExists } from "./platform-suppor
 
 export type Backend = "memory" | "sqlite" | "jsonl";
 
-export function openStorage(backend: Backend, path: string): Promise<Storage> {
+function openStorageImpl(backend: Backend, path: string): Promise<Storage> {
   if (backend === "memory") return Promise.resolve(new MemoryStorage());
   if (backend === "sqlite") return Promise.resolve(openNodeSqliteStorage(path));
   return Promise.resolve(openNodeJsonlStorage(path, context));
 }
 
-export function timed(storage: Storage, latencies: number[]): Storage {
+export const openStorage: {
+  (path: string): (backend: Backend) => ReturnType<typeof openStorageImpl>;
+  (backend: Backend, path: string): ReturnType<typeof openStorageImpl>;
+} = dual(2, openStorageImpl);
+
+function timedImpl(storage: Storage, latencies: number[]): Storage {
   return new Proxy(storage, {
     get(target, property) {
       const value = Reflect.get(target, property, target);
@@ -39,6 +45,11 @@ export function timed(storage: Storage, latencies: number[]): Storage {
     },
   });
 }
+
+export const timed: {
+  (latencies: number[]): (storage: Storage) => ReturnType<typeof timedImpl>;
+  (storage: Storage, latencies: number[]): ReturnType<typeof timedImpl>;
+} = dual(2, timedImpl);
 
 export const footprint = Effect.fn("footprint")(function* (backend: Backend, path: string) {
   if (backend === "sqlite") {

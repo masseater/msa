@@ -15,6 +15,7 @@ import {
 } from "@msa/durable";
 import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
+import { dual } from "effect/Function";
 
 import { allEntries, type ChatSetup, openChat } from "./chat-support.ts";
 import { awaited } from "./effect-support.ts";
@@ -23,7 +24,7 @@ import { context } from "./session-support.ts";
 
 export const Count = Type.Object({ count: Type.Number() });
 
-export function returning(
+function returningImpl(
   name: string,
   result: ToolExecutionResult,
   extra: Partial<ToolRegistration> = {},
@@ -36,6 +37,18 @@ export function returning(
     ...extra,
   });
 }
+
+export const returning: {
+  (
+    result: ToolExecutionResult,
+    extra?: Partial<ToolRegistration>,
+  ): (name: string) => ReturnType<typeof returningImpl>;
+  (
+    name: string,
+    result: ToolExecutionResult,
+    extra?: Partial<ToolRegistration>,
+  ): ReturnType<typeof returningImpl>;
+} = dual((args) => typeof args[0] === "string", returningImpl);
 
 export function call(name: string): AssistantMessage {
   return fauxAssistantMessage([fauxToolCall(name, {}, { id: "c1" })], { stopReason: "toolUse" });

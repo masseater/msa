@@ -10,6 +10,7 @@ import {
   UsageDoc,
 } from "@msa/durable";
 import { Effect } from "effect";
+import { dual } from "effect/Function";
 import { expect } from "vite-plus/test";
 
 import { awaited } from "./effect-support.ts";
@@ -59,7 +60,7 @@ export const committed = Effect.fn("committed")(function* (
   };
 });
 
-export function replay(initial: ConversationView, frames: readonly Frame[]): ConversationView {
+function replayImpl(initial: ConversationView, frames: readonly Frame[]): ConversationView {
   let value = initial;
   for (const frame of frames) {
     value = applyImmutable(value, frame.ops);
@@ -67,6 +68,11 @@ export function replay(initial: ConversationView, frames: readonly Frame[]): Con
   }
   return value;
 }
+
+export const replay: {
+  (frames: readonly Frame[]): (initial: ConversationView) => ReturnType<typeof replayImpl>;
+  (initial: ConversationView, frames: readonly Frame[]): ReturnType<typeof replayImpl>;
+} = dual(2, replayImpl);
 
 export const drained = Effect.fn("drained")(function* () {
   yield* Effect.sleep(1);

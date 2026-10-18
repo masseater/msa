@@ -63,13 +63,15 @@ function schemaErrorToolsChat() {
 const checksEveryCall = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-  const chat = codemodeChat([
-    {
-      name: "forever",
-      execute: (_args, _api, callContext) =>
-        runPromise(Effect.suspend(() => awaited(aborted(callContext.abortSignal!)))),
-    },
-  ]);
+  const chat = codemodeChat({
+    globals: [
+      {
+        name: "forever",
+        execute: (_args, _api, callContext) =>
+          runPromise(Effect.suspend(() => awaited(aborted(callContext.abortSignal!)))),
+      },
+    ],
+  });
   const { harness, result } = yield* restart(
     chat,
     `const k = load("k");
@@ -103,7 +105,9 @@ const checksEveryCall = Effect.gen(function* () {
 });
 
 const keepsGlobalUndefined = Effect.gen(function* () {
-  const chat = codemodeChat([{ name: "nothing", execute: () => Promise.resolve(undefined) }]);
+  const chat = codemodeChat({
+    globals: [{ name: "nothing", execute: () => Promise.resolve(undefined) }],
+  });
   const { harness, result } = yield* restart(
     chat,
     `const before = await nothing(); await tools.hold({}); return [before === undefined, (await nothing()) === undefined];`,
@@ -223,23 +227,25 @@ describe("durable code mode", () => {
 const deliversResultOnly = Effect.gen(function* () {
   const storage = new ControlledStorage();
   const seen: string[] = [];
-  const chat = codemodeChat([
-    {
-      name: "first",
-      execute: () => {
-        seen.push("first");
-        storage.failNextCommit(new Error("lost"));
-        return Promise.resolve(1);
+  const chat = codemodeChat({
+    globals: [
+      {
+        name: "first",
+        execute: () => {
+          seen.push("first");
+          storage.failNextCommit(new Error("lost"));
+          return Promise.resolve(1);
+        },
       },
-    },
-    {
-      name: "second",
-      execute: () => {
-        seen.push("second");
-        return Promise.resolve(2);
+      {
+        name: "second",
+        execute: () => {
+          seen.push("second");
+          return Promise.resolve(2);
+        },
       },
-    },
-  ]);
+    ],
+  });
   chat.holds.block = false;
   chat.setup.faux.setResponses([script(`await first(); await second();`), DONE]);
   const { harness, root } = yield* openChat(storage, chat.setup);

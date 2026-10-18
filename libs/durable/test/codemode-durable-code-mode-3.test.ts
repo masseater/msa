@@ -112,19 +112,21 @@ const journalsResultsFinish = Effect.gen(function* () {
 
   const release = deferred();
   let waiting = 0;
-  const chat = codemodeChat([
-    {
-      name: "wait",
-      execute: () =>
-        runPromise(
-          Effect.gen(function* () {
-            if (++waiting === 50) release.resolve();
-            yield* awaited(release.promise);
-            return null;
-          }),
-        ),
-    },
-  ]);
+  const chat = codemodeChat({
+    globals: [
+      {
+        name: "wait",
+        execute: () =>
+          runPromise(
+            Effect.gen(function* () {
+              if (++waiting === 50) release.resolve();
+              yield* awaited(release.promise);
+              return null;
+            }),
+          ),
+      },
+    ],
+  });
   chat.holds.block = false;
   chat.setup.faux.setResponses([
     script(`return (await Promise.all(Array.from({ length: 50 }, () => wait()))).length`),

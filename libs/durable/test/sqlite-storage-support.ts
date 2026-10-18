@@ -3,6 +3,7 @@ import { DatabaseSync } from "node:sqlite";
 import type { JsonValue } from "@msa/chord";
 import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 import { Effect } from "effect";
+import { dual } from "effect/Function";
 
 import type { SqliteStorage } from "../src/storage/sqlite/index.ts";
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
@@ -36,9 +37,25 @@ export const createSqliteStorage = Effect.fn("createSqliteStorage")(function* (
   return { storage, path };
 });
 
-export function entry(id: EntryId, conversationId: ConversationId, data?: JsonValue): EntryRecord {
+function entryImpl(
+  id: EntryId,
+  conversationId: ConversationId,
+  data: JsonValue | undefined,
+): EntryRecord {
   return { id, conversationId, kind: "message", ...(data === undefined ? {} : { data }) };
 }
+
+export const entry: {
+  (
+    conversationId: ConversationId,
+    data: JsonValue | undefined,
+  ): (id: EntryId) => ReturnType<typeof entryImpl>;
+  (
+    id: EntryId,
+    conversationId: ConversationId,
+    data: JsonValue | undefined,
+  ): ReturnType<typeof entryImpl>;
+} = dual(3, entryImpl);
 
 export function createRoot(storage: Storage): Promise<Seq> {
   return Promise.resolve(
@@ -59,7 +76,12 @@ export function pendingTask(id: TaskId<JsonValue>): TaskRecord<JsonValue, JsonVa
   };
 }
 
-export function scalar(db: DatabaseSync, sql: string): number {
+function scalarImpl(db: DatabaseSync, sql: string): number {
   const row = db.prepare(sql).get() as { readonly value: number };
   return row.value;
 }
+
+export const scalar: {
+  (sql: string): (db: DatabaseSync) => ReturnType<typeof scalarImpl>;
+  (db: DatabaseSync, sql: string): ReturnType<typeof scalarImpl>;
+} = dual(2, scalarImpl);

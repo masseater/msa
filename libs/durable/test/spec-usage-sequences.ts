@@ -10,6 +10,7 @@ import {
 } from "@msa/durable";
 import { createRegistry, Harness } from "@msa/durable/harness";
 import { Effect } from "effect";
+import { dual } from "effect/Function";
 
 import { CodingTools, type createEditTool, type createReadTool } from "../src/tools/index.ts";
 import { awaited } from "./effect-support.ts";
@@ -38,7 +39,7 @@ export type SpecExtensions = ReturnType<typeof promptExtensions> &
     readonly Chat: ReturnType<typeof chatExtension>;
   };
 
-export function setupSequences(
+function setupSequencesImpl(
   { haiku, worktree, manager }: SpecNames,
   readTool: SpecTools["readTool"],
 ) {
@@ -75,6 +76,11 @@ export function setupSequences(
     },
   };
 }
+
+export const setupSequences: {
+  (readTool: SpecTools["readTool"]): (arg0: SpecNames) => ReturnType<typeof setupSequencesImpl>;
+  (arg0: SpecNames, readTool: SpecTools["readTool"]): ReturnType<typeof setupSequencesImpl>;
+} = dual(2, setupSequencesImpl);
 
 export function containerSequence({ storage, models, localEnv, containers, context }: SpecNames) {
   return {
@@ -183,7 +189,7 @@ const reloadHost = Effect.fn("reloadHost")(function* (
   registry.uninstall(Skills);
 });
 
-export function hostSequence(names: SpecNames, tools: SpecTools, extensions: SpecExtensions) {
+function hostSequenceImpl(names: SpecNames, tools: SpecTools, extensions: SpecExtensions) {
   return {
     host: () =>
       Effect.runPromise(
@@ -196,7 +202,19 @@ export function hostSequence(names: SpecNames, tools: SpecTools, extensions: Spe
   };
 }
 
-export function taskSequences(
+export const hostSequence: {
+  (
+    tools: SpecTools,
+    extensions: SpecExtensions,
+  ): (names: SpecNames) => ReturnType<typeof hostSequenceImpl>;
+  (
+    names: SpecNames,
+    tools: SpecTools,
+    extensions: SpecExtensions,
+  ): ReturnType<typeof hostSequenceImpl>;
+} = dual(3, hostSequenceImpl);
+
+function taskSequencesImpl(
   { Anchor, name, session, conversationId, message, context }: SpecNames,
   SubagentTools: SpecExtensions["SubagentTools"],
   Follow: ReturnType<typeof followTask>,
@@ -276,3 +294,15 @@ export function taskSequences(
       ),
   };
 }
+
+export const taskSequences: {
+  (
+    SubagentTools: SpecExtensions["SubagentTools"],
+    Follow: ReturnType<typeof followTask>,
+  ): (arg0: SpecNames) => ReturnType<typeof taskSequencesImpl>;
+  (
+    arg0: SpecNames,
+    SubagentTools: SpecExtensions["SubagentTools"],
+    Follow: ReturnType<typeof followTask>,
+  ): ReturnType<typeof taskSequencesImpl>;
+} = dual(3, taskSequencesImpl);

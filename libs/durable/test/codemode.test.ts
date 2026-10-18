@@ -102,7 +102,7 @@ const replaysResultsOrder = Effect.gen(function* () {
 const journalsGlobalsTheir = Effect.gen(function* () {
   let counter = 0;
   const globals: CodemodeGlobal[] = [{ name: "next", execute: () => Promise.resolve(++counter) }];
-  const chat = codemodeChat(globals);
+  const chat = codemodeChat({ globals: globals });
   const { harness, result } = yield* restart(
     chat,
     `const n = await next(); await tools.hold({}); return [n, await next()];`,
@@ -213,7 +213,7 @@ describe("durable code mode", () => {
 const endsCallResumedScript = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-  const chat = codemodeChat([{ name: "next", execute: () => Promise.resolve(1) }]);
+  const chat = codemodeChat({ globals: [{ name: "next", execute: () => Promise.resolve(1) }] });
   const { harness, result } = yield* restart(
     chat,
     `await next(); await tools.hold({});`,

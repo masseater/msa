@@ -256,7 +256,7 @@ const checksRerunCalls = Effect.gen(function* () {
 const endsCallRerun = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-  const chat = codemodeChat([{ name: "pick", execute: () => Promise.resolve(1) }]);
+  const chat = codemodeChat({ globals: [{ name: "pick", execute: () => Promise.resolve(1) }] });
   const { harness, result } = yield* restart(
     chat,
     `if (load("k")) { await pick(); await tools.echo({ text: "new" }); } else { await tools.hold({}); }`,
@@ -297,7 +297,7 @@ describe("durable code mode", () => {
 const endsCallRerunFirst = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-  const chat = codemodeChat([{ name: "pick", execute: () => Promise.resolve(1) }]);
+  const chat = codemodeChat({ globals: [{ name: "pick", execute: () => Promise.resolve(1) }] });
   const { harness, result } = yield* restart(
     chat,
     `const k = load("k");

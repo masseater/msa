@@ -1,5 +1,6 @@
 import { BACKGROUND_CONTEXT as context } from "@msa/chord/context";
 import { Effect } from "effect";
+import { dual } from "effect/Function";
 
 import type { Storage, StorageWrite } from "../src/index.ts";
 import { openNodeJsonlStorage } from "../src/storage/jsonl/node.ts";
@@ -29,13 +30,18 @@ export const directorySize = Effect.fn("directorySize")(function* (path: string)
   return total;
 });
 
-export function openBenchStorage(backend: Backend, directory: string): Promise<Storage> {
+function openBenchStorageImpl(backend: Backend, directory: string): Promise<Storage> {
   return Promise.resolve(
     backend === "sqlite"
       ? openNodeSqliteStorage(joinPath(directory, "session.sqlite"))
       : openNodeJsonlStorage(directory, context),
   );
 }
+
+export const openBenchStorage: {
+  (directory: string): (backend: Backend) => ReturnType<typeof openBenchStorageImpl>;
+  (backend: Backend, directory: string): ReturnType<typeof openBenchStorageImpl>;
+} = dual(2, openBenchStorageImpl);
 
 export function noWrites(): Written {
   return {
@@ -50,7 +56,7 @@ export function noWrites(): Written {
   };
 }
 
-export function meterCommits(
+function meterCommitsImpl(
   storage: Storage,
   meter: { commits: number; readonly written: Written },
   onCommit?: () => void,
@@ -63,3 +69,15 @@ export function meterCommits(
     return commit(writes, commitContext);
   };
 }
+
+export const meterCommits: {
+  (
+    meter: { commits: number; readonly written: Written },
+    onCommit?: () => void,
+  ): (storage: Storage) => ReturnType<typeof meterCommitsImpl>;
+  (
+    storage: Storage,
+    meter: { commits: number; readonly written: Written },
+    onCommit?: () => void,
+  ): ReturnType<typeof meterCommitsImpl>;
+} = dual((args) => typeof args[1] === "object", meterCommitsImpl);

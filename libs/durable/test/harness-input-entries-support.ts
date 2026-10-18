@@ -16,6 +16,7 @@ import {
   LiveDoc,
 } from "@msa/durable";
 import { Effect } from "effect";
+import { dual } from "effect/Function";
 
 import { type ChatSetup, textOf, waitFor } from "./chat-support.ts";
 import { awaited } from "./effect-support.ts";
@@ -45,7 +46,7 @@ export function gated(message: AssistantMessage): {
   return { step, reached: reached.promise, release: () => gate.resolve() };
 }
 
-export function holdTool(setup: ChatSetup, gate: Deferred): void {
+function holdToolImpl(setup: ChatSetup, gate: Deferred): void {
   addTool(
     setup.registry,
     defineTool({
@@ -63,16 +64,26 @@ export function holdTool(setup: ChatSetup, gate: Deferred): void {
   );
 }
 
+export const holdTool: {
+  (gate: Deferred): (setup: ChatSetup) => ReturnType<typeof holdToolImpl>;
+  (setup: ChatSetup, gate: Deferred): ReturnType<typeof holdToolImpl>;
+} = dual(2, holdToolImpl);
+
 export const HOLD = fauxAssistantMessage([fauxToolCall("hold", {}, { id: "c1" })], {
   stopReason: "toolUse",
 });
 
-export function requestLog(requests: string[][], reply: AssistantMessage): FauxResponseStep {
+function requestLogImpl(requests: string[][], reply: AssistantMessage): FauxResponseStep {
   return (request: ModelContext) => {
     requests.push(request.messages.map((message) => `${message.role}:${textOf(message) ?? ""}`));
     return reply;
   };
 }
+
+export const requestLog: {
+  (reply: AssistantMessage): (requests: string[][]) => ReturnType<typeof requestLogImpl>;
+  (requests: string[][], reply: AssistantMessage): ReturnType<typeof requestLogImpl>;
+} = dual(2, requestLogImpl);
 
 export function transcript(entries: readonly EntryRecord[]): unknown[][] {
   return entries

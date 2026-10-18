@@ -7,6 +7,7 @@ import type {
   ToolRegistration,
 } from "@msa/durable";
 import { Cause, Effect, Exit } from "effect";
+import { dual } from "effect/Function";
 
 import { type ExecutionEnv, type FileError, type Result } from "../src/env/index.ts";
 import { NodeExecutionEnv } from "../src/env/node.ts";
@@ -50,7 +51,7 @@ export function fakeApi(env: ExecutionEnv | undefined): {
   return { api, output, diagnostics };
 }
 
-export function run(
+function runImpl(
   tool: ToolRegistration,
   args: JsonValue,
   env: ExecutionEnv | undefined,
@@ -67,6 +68,23 @@ export function run(
     }),
   );
 }
+
+export const run: {
+  (
+    args: JsonValue,
+    env: ExecutionEnv | undefined,
+    context?: Context,
+  ): (tool: ToolRegistration) => ReturnType<typeof runImpl>;
+  (
+    tool: ToolRegistration,
+    args: JsonValue,
+    env: ExecutionEnv | undefined,
+    context?: Context,
+  ): ReturnType<typeof runImpl>;
+} = dual(
+  (args) => typeof args[0] === "object" && args[0] !== null && "execute" in args[0],
+  runImpl,
+);
 
 export const runFailing = Effect.fn("runFailing")(function* (
   tool: ToolRegistration,

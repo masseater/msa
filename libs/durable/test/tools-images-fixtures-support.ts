@@ -3,6 +3,7 @@ import { createRequire } from "node:module";
 import { createNodePhotonImages } from "@msa/durable/images/node";
 import { initSync, PhotonImage } from "@silvia-odwyer/photon/photon_rs.js";
 import { Effect } from "effect";
+import { dual } from "effect/Function";
 
 import { awaited } from "./effect-support.ts";
 import { readBytes } from "./platform-support.ts";
@@ -15,14 +16,19 @@ export const setUpImages = Effect.fn("setUpImages")(function* () {
   return yield* awaited(createNodePhotonImages());
 });
 
-export function pixels(width: number, height: number): Uint8Array {
+function pixelsImpl(width: number, height: number): Uint8Array {
   const rgba = new Uint8Array(width * height * 4);
   for (let index = 0; index < width * height; index++) rgba.set([255, 0, 0, 255], index * 4);
   rgba.set([0, 255, 0, 255], 0);
   return rgba;
 }
 
-export function encodeRgba(
+export const pixels: {
+  (height: number): (width: number) => ReturnType<typeof pixelsImpl>;
+  (width: number, height: number): ReturnType<typeof pixelsImpl>;
+} = dual(2, pixelsImpl);
+
+function encodeRgbaImpl(
   rgba: Uint8Array,
   width: number,
   height: number,
@@ -36,11 +42,30 @@ export function encodeRgba(
   }
 }
 
-export function encode(width: number, height: number, format: "png" | "jpeg"): Uint8Array {
+export const encodeRgba: {
+  (
+    width: number,
+    height: number,
+    format: "png" | "jpeg",
+  ): (rgba: Uint8Array) => ReturnType<typeof encodeRgbaImpl>;
+  (
+    rgba: Uint8Array,
+    width: number,
+    height: number,
+    format: "png" | "jpeg",
+  ): ReturnType<typeof encodeRgbaImpl>;
+} = dual(4, encodeRgbaImpl);
+
+function encodeImpl(width: number, height: number, format: "png" | "jpeg"): Uint8Array {
   return encodeRgba(pixels(width, height), width, height, format);
 }
 
-export function noisyPng(width: number, height: number): Uint8Array {
+export const encode: {
+  (height: number, format: "png" | "jpeg"): (width: number) => ReturnType<typeof encodeImpl>;
+  (width: number, height: number, format: "png" | "jpeg"): ReturnType<typeof encodeImpl>;
+} = dual(3, encodeImpl);
+
+function noisyPngImpl(width: number, height: number): Uint8Array {
   const rgba = new Uint8Array(width * height * 4);
   let seed = 1;
   for (let index = 0; index < rgba.length; index++) {
@@ -50,7 +75,12 @@ export function noisyPng(width: number, height: number): Uint8Array {
   return encodeRgba(rgba, width, height, "png");
 }
 
-export function bmp(width: number, height: number): Uint8Array {
+export const noisyPng: {
+  (height: number): (width: number) => ReturnType<typeof noisyPngImpl>;
+  (width: number, height: number): ReturnType<typeof noisyPngImpl>;
+} = dual(2, noisyPngImpl);
+
+function bmpImpl(width: number, height: number): Uint8Array {
   const row = Math.ceil((width * 3) / 4) * 4;
   const bytes = new Uint8Array(54 + row * height);
   const view = new DataView(bytes.buffer);
@@ -68,7 +98,12 @@ export function bmp(width: number, height: number): Uint8Array {
   return bytes;
 }
 
-export function gif(width = 1, height = 1): Uint8Array {
+export const bmp: {
+  (height: number): (width: number) => ReturnType<typeof bmpImpl>;
+  (width: number, height: number): ReturnType<typeof bmpImpl>;
+} = dual(2, bmpImpl);
+
+function gifImpl(width: number, height: number): Uint8Array {
   const bytes = Uint8Array.from(
     Buffer.from("R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7", "base64"),
   );
@@ -77,7 +112,12 @@ export function gif(width = 1, height = 1): Uint8Array {
   return bytes;
 }
 
-export function tiff(orientation: number, littleEndian: boolean): number[] {
+export const gif: {
+  (height: number): (width: number) => ReturnType<typeof gifImpl>;
+  (width: number, height: number): ReturnType<typeof gifImpl>;
+} = dual(2, gifImpl);
+
+function tiffImpl(orientation: number, littleEndian: boolean): number[] {
   const bytes = new Uint8Array(26);
   const view = new DataView(bytes.buffer);
   bytes.set(littleEndian ? [0x49, 0x49] : [0x4d, 0x4d]);
@@ -91,9 +131,14 @@ export function tiff(orientation: number, littleEndian: boolean): number[] {
   return [...bytes];
 }
 
+export const tiff: {
+  (littleEndian: boolean): (orientation: number) => ReturnType<typeof tiffImpl>;
+  (orientation: number, littleEndian: boolean): ReturnType<typeof tiffImpl>;
+} = dual(2, tiffImpl);
+
 export const EXIF_HEADER = [0x45, 0x78, 0x69, 0x66, 0, 0];
 
-export function withOrientation(
+function withOrientationImpl(
   jpeg: Uint8Array,
   orientation: number,
   options: { little?: boolean; app0?: boolean } = {},
@@ -106,6 +151,18 @@ export function withOrientation(
       : [];
   return new Uint8Array([...jpeg.subarray(0, 2), ...app0, ...app1, ...jpeg.subarray(2)]);
 }
+
+export const withOrientation: {
+  (
+    orientation: number,
+    options?: { little?: boolean; app0?: boolean },
+  ): (jpeg: Uint8Array) => ReturnType<typeof withOrientationImpl>;
+  (
+    jpeg: Uint8Array,
+    orientation: number,
+    options?: { little?: boolean; app0?: boolean },
+  ): ReturnType<typeof withOrientationImpl>;
+} = dual((args) => typeof args[0] === "object" && args[0] !== null, withOrientationImpl);
 
 export function decodedImage(data: string): { width: number; height: number; rgba: Uint8Array } {
   const image = PhotonImage.new_from_byteslice(Uint8Array.from(Buffer.from(data, "base64")));

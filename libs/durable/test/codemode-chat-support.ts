@@ -2,6 +2,7 @@ import { Type } from "@msa/ai";
 import { type CodemodeRun, CodemodeSandbox } from "@msa/codemode";
 import { defineTool, type ToolRegistration } from "@msa/durable";
 import { Effect } from "effect";
+import { dual } from "effect/Function";
 
 import { type CodemodeGlobal, createCodemodeTool } from "../src/codemode/codemode.ts";
 import type { CodemodeNamespace } from "../src/codemode/describe.ts";
@@ -15,13 +16,25 @@ export const Parameters = Type.Object({
   id: Type.Optional(Type.Number()),
 });
 
-export function tool(
+function toolImpl(
   name: string,
   execute: ToolRegistration<typeof Parameters>["execute"],
   replay: "safe" | "unsafe" = "unsafe",
 ) {
   return defineTool({ name, description: name, parameters: Parameters, execute, replay });
 }
+
+export const tool: {
+  (
+    execute: ToolRegistration<typeof Parameters>["execute"],
+    replay?: "safe" | "unsafe",
+  ): (name: string) => ReturnType<typeof toolImpl>;
+  (
+    name: string,
+    execute: ToolRegistration<typeof Parameters>["execute"],
+    replay?: "safe" | "unsafe",
+  ): ReturnType<typeof toolImpl>;
+} = dual((args) => typeof args[0] === "string", toolImpl);
 
 export function countingSandbox() {
   const sandbox = new CodemodeSandbox({ memoryLimitBytes: 64 * 1024 * 1024 });
@@ -120,7 +133,10 @@ export function addSlowTool(registry: ReturnType<typeof chatSetup>["registry"]) 
   return slows;
 }
 
-export function codemodeChat(globals: CodemodeGlobal[] = [], namespaces: CodemodeNamespace[] = []) {
+export function codemodeChat({
+  globals = [],
+  namespaces = [],
+}: { readonly globals?: CodemodeGlobal[]; readonly namespaces?: CodemodeNamespace[] } = {}) {
   const setup = chatSetup();
   const { sandbox, vm } = countingSandbox();
   addTool(setup.registry, createCodemodeTool({ sandbox, globals, namespaces }));

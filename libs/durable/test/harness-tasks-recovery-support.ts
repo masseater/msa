@@ -3,6 +3,7 @@ import { defineTask, type Task, type TaskRuntime } from "@msa/durable";
 import { createRegistry } from "@msa/durable/harness";
 import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
+import { dual } from "effect/Function";
 
 import { awaited } from "./effect-support.ts";
 import { addTask } from "./harness-support.ts";
@@ -35,7 +36,7 @@ export const createIn = Effect.fn("createIn")(function* <S extends { phase: stri
 
 export type Step = { phase: "run" };
 
-export function versioned(
+function versionedImpl(
   version: number,
   result: string,
   migrate?: (
@@ -54,6 +55,26 @@ export function versioned(
   });
 }
 
+export const versioned: {
+  (
+    result: string,
+    migrate?: (
+      input: JsonValue,
+      checkpoint: JsonValue,
+      fromVersion: number,
+    ) => { input: null; checkpoint: Step },
+  ): (version: number) => ReturnType<typeof versionedImpl>;
+  (
+    version: number,
+    result: string,
+    migrate?: (
+      input: JsonValue,
+      checkpoint: JsonValue,
+      fromVersion: number,
+    ) => { input: null; checkpoint: Step },
+  ): ReturnType<typeof versionedImpl>;
+} = dual((args) => typeof args[0] === "number", versionedImpl);
+
 export type Handover = { phase: "a" } | { phase: "b" } | { phase: "c" };
 
 export type Gates = {
@@ -62,7 +83,7 @@ export type Gates = {
   readonly onEnd?: () => void;
 };
 
-export function handoverTask(
+function handoverTaskImpl(
   label: string,
   version: number,
   log: string[],
@@ -109,6 +130,26 @@ export function handoverTask(
     ...(options.migrate === undefined ? {} : { migrate: options.migrate }),
   });
 }
+
+export const handoverTask: {
+  (
+    version: number,
+    log: string[],
+    options?: {
+      readonly gates?: Gates;
+      readonly migrate?: () => { input: null; checkpoint: Handover };
+    },
+  ): (label: string) => ReturnType<typeof handoverTaskImpl>;
+  (
+    label: string,
+    version: number,
+    log: string[],
+    options?: {
+      readonly gates?: Gates;
+      readonly migrate?: () => { input: null; checkpoint: Handover };
+    },
+  ): ReturnType<typeof handoverTaskImpl>;
+} = dual((args) => typeof args[0] === "string", handoverTaskImpl);
 
 export const startHandover = Effect.fn("startHandover")(function* (
   log: string[],

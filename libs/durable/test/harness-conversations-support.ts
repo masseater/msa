@@ -1,5 +1,6 @@
 import { type Conversation, defineDoc, type EntryRecord, type ScanOrder } from "@msa/durable";
 import { Effect } from "effect";
+import { dual } from "effect/Function";
 
 import { awaited } from "./effect-support.ts";
 import { user } from "./harness-support.ts";
@@ -18,7 +19,7 @@ export const NoteDoc = defineDoc<{ text: string }>({
   initial: () => ({ text: "" }),
 });
 
-export function append(conversation: Conversation, text: string): Promise<EntryRecord> {
+function appendImpl(conversation: Conversation, text: string): Promise<EntryRecord> {
   return Promise.resolve(
     conversation.commit(
       (tx) => tx.appendEntry(conversation.id, { kind: "message", model: [user(text)] }),
@@ -26,6 +27,11 @@ export function append(conversation: Conversation, text: string): Promise<EntryR
     ),
   );
 }
+
+export const append: {
+  (text: string): (conversation: Conversation) => ReturnType<typeof appendImpl>;
+  (conversation: Conversation, text: string): ReturnType<typeof appendImpl>;
+} = dual(2, appendImpl);
 
 export const allEntries = Effect.fn("allEntries")(function* (
   conversation: Conversation,

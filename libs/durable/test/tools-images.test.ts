@@ -76,10 +76,10 @@ const returnsSupportedImage = Effect.gen(function* () {
   const result = yield* read("a.png", png);
   expect(result.output).toEqual([{ type: "image", data: toBase64(png), mimeType: "image/png" }]);
   expect(messages(result)).toEqual(["Read image file [image/png]."]);
-  const tiny = yield* read("a.gif", gif());
+  const tiny = yield* read("a.gif", gif(1, 1));
   expect(onlyImage(tiny)).toEqual({
     type: "image",
-    data: toBase64(gif()),
+    data: toBase64(gif(1, 1)),
     mimeType: "image/gif",
   });
 });
@@ -198,7 +198,9 @@ const passesImageNeeds = Effect.gen(function* () {
   const png = encode(8, 6, "png");
   const result = yield* read("a.png", png, { images: processor });
   expect(result.output).toEqual([{ type: "image", data: toBase64(png), mimeType: "image/png" }]);
-  expect(onlyImage(yield* read("a.gif", gif(), { images: processor })).mimeType).toBe("image/gif");
+  expect(onlyImage(yield* read("a.gif", gif(1, 1), { images: processor })).mimeType).toBe(
+    "image/gif",
+  );
 });
 
 const scalesImageDown = Effect.gen(function* () {

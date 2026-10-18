@@ -1,5 +1,6 @@
 import type { ImageContent } from "@msa/ai";
 import { Effect } from "effect";
+import { dual } from "effect/Function";
 import { Type } from "typebox";
 
 import { createRegistry } from "../src/harness/index.ts";
@@ -120,9 +121,14 @@ function scriptTool(scenario: Scenario, probe: Probe) {
   });
 }
 
-export function registryFor(scenario: Scenario, probe: Probe) {
+function registryForImpl(scenario: Scenario, probe: Probe) {
   const registry = createRegistry();
   const tools = [readImageTool(scenario), classifyTool(scenario), scriptTool(scenario, probe)];
   registry.install(defineExtension({ name: "bench", tools }));
   return registry;
 }
+
+export const registryFor: {
+  (probe: Probe): (scenario: Scenario) => ReturnType<typeof registryForImpl>;
+  (scenario: Scenario, probe: Probe): ReturnType<typeof registryForImpl>;
+} = dual(2, registryForImpl);

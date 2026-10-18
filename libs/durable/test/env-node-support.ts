@@ -2,6 +2,7 @@ import { type FileHandle, open } from "node:fs/promises";
 
 import { BACKGROUND_CONTEXT, withAbortSignal } from "@msa/chord/context";
 import { Effect } from "effect";
+import { dual } from "effect/Function";
 import { vi } from "vite-plus/test";
 
 import { type ShellExecOptions } from "../src/env/index.ts";
@@ -37,7 +38,7 @@ export const fileHandlePrototype = Effect.fn("fileHandlePrototype")(function* (p
   return Object.getPrototypeOf(handle) as FileHandle;
 });
 
-export function collectShellOutput(
+function collectShellOutputImpl(
   env: NodeExecutionEnv,
   command: string,
   options: ShellExecOptions | undefined,
@@ -62,6 +63,20 @@ export function collectShellOutput(
     }),
   );
 }
+
+export const collectShellOutput: {
+  (
+    command: string,
+    options: ShellExecOptions | undefined,
+    context: Parameters<NodeExecutionEnv["exec"]>[2],
+  ): (env: NodeExecutionEnv) => ReturnType<typeof collectShellOutputImpl>;
+  (
+    env: NodeExecutionEnv,
+    command: string,
+    options: ShellExecOptions | undefined,
+    context: Parameters<NodeExecutionEnv["exec"]>[2],
+  ): ReturnType<typeof collectShellOutputImpl>;
+} = dual(4, collectShellOutputImpl);
 
 export function toBashSingleQuotedArg(value: string): string {
   return `'${value.replace(/\\/gu, "/").replace(/'/gu, `'"'"'`)}'`;

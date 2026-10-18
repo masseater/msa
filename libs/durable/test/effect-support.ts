@@ -1,4 +1,4 @@
-import { Cause, type Duration, Effect, Exit, type Fiber, Schema } from "effect";
+import { Cause, type Duration, Effect, Exit, Schema } from "effect";
 
 export const awaited = <A>(value: A | PromiseLike<A>): Effect.Effect<A> =>
   Effect.promise(() => Promise.resolve(value));
@@ -35,8 +35,9 @@ export const toJsonText = (value: unknown): Effect.Effect<string> =>
 export const fromJsonText = (text: string): Effect.Effect<unknown> =>
   Effect.orDie(decodeJsonText(text));
 
-export const sampleEvery = (
+export const sampleEvery = Effect.fn("sampleEvery")(function* (
   interval: Duration.Input,
   sample: () => void,
-): Effect.Effect<Fiber.Fiber<never>> =>
-  Effect.forkChild(Effect.forever(Effect.delay(Effect.sync(sample), interval)));
+) {
+  return yield* Effect.forkChild(Effect.forever(Effect.delay(Effect.sync(sample), interval)));
+});

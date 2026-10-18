@@ -8,18 +8,24 @@ import {
 } from "@msa/durable";
 import { Harness } from "@msa/durable/harness";
 import { Effect, Stream } from "effect";
+import { dual } from "effect/Function";
 
 import { waitFor } from "./chat-support.ts";
 import { awaited } from "./effect-support.ts";
 import { context } from "./session-support.ts";
 
-export const heldStream = (start: unknown, final: unknown): ReturnType<Models["streamSimple"]> => {
+function heldStreamImpl(start: unknown, final: unknown): ReturnType<Models["streamSimple"]> {
   const events = Stream.concat(Stream.make(start), Stream.fromEffectDrain(Effect.sleep(300)));
   return {
     [Symbol.asyncIterator]: () => Stream.toAsyncIterable(events)[Symbol.asyncIterator](),
     result: () => Promise.resolve(final),
   } as unknown as ReturnType<Models["streamSimple"]>;
-};
+}
+
+export const heldStream: {
+  (final: unknown): (start: unknown) => ReturnType<typeof heldStreamImpl>;
+  (start: unknown, final: unknown): ReturnType<typeof heldStreamImpl>;
+} = dual(2, heldStreamImpl);
 
 export const invalidFinalStream = (): ReturnType<Models["streamSimple"]> =>
   heldStream(
@@ -32,12 +38,17 @@ export const ERROR_503 = fauxAssistantMessage([], {
   errorMessage: "503 Service Unavailable",
 });
 
-export function live(
+function liveImpl(
   harness: Harness,
   conversation: Conversation,
 ): Promise<Readonly<LiveState> | undefined> {
   return Promise.resolve(harness.snapshot(LiveDoc, conversation.id, context));
 }
+
+export const live: {
+  (conversation: Conversation): (harness: Harness) => ReturnType<typeof liveImpl>;
+  (harness: Harness, conversation: Conversation): ReturnType<typeof liveImpl>;
+} = dual(2, liveImpl);
 
 export const runTask = Effect.fn("runTask")(function* (
   harness: Harness,
@@ -57,7 +68,7 @@ export const runTask = Effect.fn("runTask")(function* (
   return taskId!;
 });
 
-export function withStream(models: Models, streamSimple: Models["streamSimple"]): Models {
+function withStreamImpl(models: Models, streamSimple: Models["streamSimple"]): Models {
   return new Proxy(models, {
     get(target, property) {
       if (property === "streamSimple") return streamSimple;
@@ -66,6 +77,11 @@ export function withStream(models: Models, streamSimple: Models["streamSimple"])
     },
   });
 }
+
+export const withStream: {
+  (streamSimple: Models["streamSimple"]): (models: Models) => ReturnType<typeof withStreamImpl>;
+  (models: Models, streamSimple: Models["streamSimple"]): ReturnType<typeof withStreamImpl>;
+} = dual(2, withStreamImpl);
 
 export function livePublications(harness: Harness): LiveState[] {
   const values: LiveState[] = [];

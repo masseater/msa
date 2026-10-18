@@ -10,6 +10,7 @@ import {
 } from "@msa/durable";
 import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
+import { dual } from "effect/Function";
 import { vi } from "vite-plus/test";
 
 import { awaited, pollUntil } from "./effect-support.ts";
@@ -136,15 +137,20 @@ export const Spawner = defineTask<{ name: string }, { phase: "spawn" }, null>({
     ),
 });
 
-export function open(name: string, ending: Ending): void {
+function openImpl(name: string, ending: Ending): void {
   gate(name).resolve(ending);
 }
+
+export const open: {
+  (ending: Ending): (name: string) => ReturnType<typeof openImpl>;
+  (name: string, ending: Ending): ReturnType<typeof openImpl>;
+} = dual(2, openImpl);
 
 export const directories = new Set<string>();
 
 export type Tree = { owner: TaskId; child: ConversationId; inner: TaskId };
 
-export function ownedChild(
+function ownedChildImpl(
   parent: Conversation,
   name: string,
   options: { background?: boolean; slowInner?: boolean; slowOwner?: boolean } = {},
@@ -181,6 +187,18 @@ export function ownedChild(
     ),
   );
 }
+
+export const ownedChild: {
+  (
+    name: string,
+    options?: { background?: boolean; slowInner?: boolean; slowOwner?: boolean },
+  ): (parent: Conversation) => ReturnType<typeof ownedChildImpl>;
+  (
+    parent: Conversation,
+    name: string,
+    options?: { background?: boolean; slowInner?: boolean; slowOwner?: boolean },
+  ): ReturnType<typeof ownedChildImpl>;
+} = dual((args) => typeof args[0] === "object" && args[0] !== null, ownedChildImpl);
 
 export function gated(message: AssistantMessage): {
   step: FauxResponseStep;

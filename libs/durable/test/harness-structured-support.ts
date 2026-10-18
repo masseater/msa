@@ -19,6 +19,7 @@ import {
 import { watchEvents } from "@msa/durable/harness";
 import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
+import { dual } from "effect/Function";
 
 import { waitFor } from "./chat-support.ts";
 import { awaited } from "./effect-support.ts";
@@ -57,15 +58,28 @@ export function gate(name: string): Deferred<Ending> {
   return found;
 }
 
-export function open(name: string, ending: Ending = "completed"): void {
+function openImpl(name: string, ending: Ending = "completed"): void {
   gate(name).resolve(ending);
 }
 
-export function script(name: string, behavior: Behavior): void {
+export const open: {
+  (ending?: Ending): (name: string) => ReturnType<typeof openImpl>;
+  (name: string, ending?: Ending): ReturnType<typeof openImpl>;
+} = dual(
+  (args) => args.length === 2 || !["completed", "failed", "throw"].includes(args[0]),
+  openImpl,
+);
+
+function scriptImpl(name: string, behavior: Behavior): void {
   behaviors.set(name, behavior);
 }
 
-export function defaultRun(runtime: NodeRuntime, ctx: Context, name: string): Promise<void> {
+export const script: {
+  (behavior: Behavior): (name: string) => ReturnType<typeof scriptImpl>;
+  (name: string, behavior: Behavior): ReturnType<typeof scriptImpl>;
+} = dual(2, scriptImpl);
+
+function defaultRunImpl(runtime: NodeRuntime, ctx: Context, name: string): Promise<void> {
   return Effect.runPromise(
     Effect.gen(function* () {
       const ending = yield* awaited(Promise.race([gate(name).promise, aborted(runtime.signal)]));
@@ -75,11 +89,21 @@ export function defaultRun(runtime: NodeRuntime, ctx: Context, name: string): Pr
   );
 }
 
-export function end(ending: "completed" | "failed", name: string): Next {
+export const defaultRun: {
+  (ctx: Context, name: string): (runtime: NodeRuntime) => ReturnType<typeof defaultRunImpl>;
+  (runtime: NodeRuntime, ctx: Context, name: string): ReturnType<typeof defaultRunImpl>;
+} = dual(3, defaultRunImpl);
+
+function endImpl(ending: "completed" | "failed", name: string): Next {
   return ending === "completed"
     ? { status: "terminal", outcome: { status: "completed", result: name } }
     : { status: "terminal", outcome: { status: "failed", error: { message: `${name} failed` } } };
 }
+
+export const end: {
+  (name: string): (ending: "completed" | "failed") => ReturnType<typeof endImpl>;
+  (ending: "completed" | "failed", name: string): ReturnType<typeof endImpl>;
+} = dual(2, endImpl);
 
 export const Node = defineTask<NodeInput, NodeCheckpoint, string>({
   name: "test.node",
@@ -140,15 +164,25 @@ export function owned(owner: TaskId): TaskOptions {
   return { ownership: { kind: "task", taskId: owner } };
 }
 
-export function spawn(tx: Tx, owner: TaskId, name: string): Promise<TaskId<string>> {
+function spawnImpl(tx: Tx, owner: TaskId, name: string): Promise<TaskId<string>> {
   return tx.createTask(Node, { name }, owned(owner));
 }
 
-export function waitOn(on: readonly TaskId[], policy: JoinPolicy, round = 1): Next {
+export const spawn: {
+  (owner: TaskId, name: string): (tx: Tx) => ReturnType<typeof spawnImpl>;
+  (tx: Tx, owner: TaskId, name: string): ReturnType<typeof spawnImpl>;
+} = dual(3, spawnImpl);
+
+function waitOnImpl(on: readonly TaskId[], policy: JoinPolicy, round = 1): Next {
   return { status: "waiting", checkpoint: { phase: "resume", round }, on, policy };
 }
 
-export function start(
+export const waitOn: {
+  (policy: JoinPolicy, round?: number): (on: readonly TaskId[]) => ReturnType<typeof waitOnImpl>;
+  (on: readonly TaskId[], policy: JoinPolicy, round?: number): ReturnType<typeof waitOnImpl>;
+} = dual((args) => typeof args[0] === "object" && args[0] !== null, waitOnImpl);
+
+function startImpl(
   conversation: Conversation,
   name: string,
   options: TaskOptions = OWN_CONVERSATION,
@@ -157,6 +191,14 @@ export function start(
     conversation.commit((tx) => tx.createTask(Node, { name }, options), context),
   );
 }
+
+export const start: {
+  (
+    name: string,
+    options?: TaskOptions,
+  ): (conversation: Conversation) => ReturnType<typeof startImpl>;
+  (conversation: Conversation, name: string, options?: TaskOptions): ReturnType<typeof startImpl>;
+} = dual((args) => typeof args[0] === "object" && args[0] !== null, startImpl);
 
 export type Opened = {
   harness: Harness;
@@ -176,13 +218,18 @@ export const state = Effect.fn("state")(function* (harness: Harness, id: TaskId)
   return (yield* awaited(harness.getTask(id, context)))!.state;
 });
 
-export function outcomeOf(harness: Harness, id: TaskId): Promise<string> {
+function outcomeOfImpl(harness: Harness, id: TaskId): Promise<string> {
   return Effect.runPromise(
     Effect.gen(function* () {
       return (yield* awaited(harness.waitForTask(id, context))).state.outcome.status;
     }),
   );
 }
+
+export const outcomeOf: {
+  (id: TaskId): (harness: Harness) => ReturnType<typeof outcomeOfImpl>;
+  (harness: Harness, id: TaskId): ReturnType<typeof outcomeOfImpl>;
+} = dual(2, outcomeOfImpl);
 
 export const until = Effect.fn("until")(function* (check: () => boolean | Promise<boolean>) {
   yield* waitFor(check);
@@ -196,7 +243,7 @@ export const sqlitePath = Effect.fn("sqlitePath")(function* () {
   return joinPath(directory, "session.sqlite");
 });
 
-export function parentOf(parent: string, children: readonly string[], policy: JoinPolicy) {
+function parentOfImpl(parent: string, children: readonly string[], policy: JoinPolicy) {
   const found = { ids: [] as TaskId<string>[], outcomes: [] as string[] };
   script(parent, {
     run: (runtime, ctx) =>
@@ -223,6 +270,18 @@ export function parentOf(parent: string, children: readonly string[], policy: Jo
   });
   return found;
 }
+
+export const parentOf: {
+  (
+    children: readonly string[],
+    policy: JoinPolicy,
+  ): (parent: string) => ReturnType<typeof parentOfImpl>;
+  (
+    parent: string,
+    children: readonly string[],
+    policy: JoinPolicy,
+  ): ReturnType<typeof parentOfImpl>;
+} = dual(3, parentOfImpl);
 
 export function blockingTool(name: string): {
   started: Promise<void>;
@@ -252,7 +311,7 @@ export function toolCalls(...ids: readonly [string, string][]) {
   );
 }
 
-export function spawnAndFinish(name: string, child: string): { id?: TaskId } {
+function spawnAndFinishImpl(name: string, child: string): { id?: TaskId } {
   const found: { id?: TaskId } = {};
   script(name, {
     run: (runtime, ctx) =>
@@ -277,6 +336,11 @@ export function spawnAndFinish(name: string, child: string): { id?: TaskId } {
   });
   return found;
 }
+
+export const spawnAndFinish: {
+  (child: string): (name: string) => ReturnType<typeof spawnAndFinishImpl>;
+  (name: string, child: string): ReturnType<typeof spawnAndFinishImpl>;
+} = dual(2, spawnAndFinishImpl);
 
 export const listen = Effect.fn("listen")(function* (harness: Harness, conversation: Conversation) {
   const stream = yield* awaited(watchEvents(harness, conversation.id, context));

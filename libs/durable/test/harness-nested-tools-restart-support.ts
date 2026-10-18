@@ -18,6 +18,7 @@ import {
 } from "@msa/durable";
 import { ToolTask } from "@msa/durable/harness";
 import { Effect } from "effect";
+import { dual } from "effect/Function";
 
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
 import { allEntries, type ChatSetup, openChat } from "./chat-support.ts";
@@ -28,7 +29,7 @@ import { context } from "./session-support.ts";
 
 export const Parameters = Type.Object({ text: Type.Optional(Type.String()) });
 
-export function tool(
+function toolImpl(
   name: string,
   execute: ToolRegistration<typeof Parameters>["execute"],
   extra: Partial<ToolRegistration<typeof Parameters>> = {},
@@ -36,8 +37,20 @@ export function tool(
   return defineTool({ name, description: name, parameters: Parameters, execute, ...extra });
 }
 
-export function call(name: string, id = "c1"): AssistantMessage {
-  return fauxAssistantMessage([fauxToolCall(name, {}, { id })], { stopReason: "toolUse" });
+export const tool: {
+  (
+    execute: ToolRegistration<typeof Parameters>["execute"],
+    extra?: Partial<ToolRegistration<typeof Parameters>>,
+  ): (name: string) => ReturnType<typeof toolImpl>;
+  (
+    name: string,
+    execute: ToolRegistration<typeof Parameters>["execute"],
+    extra?: Partial<ToolRegistration<typeof Parameters>>,
+  ): ReturnType<typeof toolImpl>;
+} = dual((args) => typeof args[0] === "string", toolImpl);
+
+export function call(name: string): AssistantMessage {
+  return fauxAssistantMessage([fauxToolCall(name, {}, { id: "c1" })], { stopReason: "toolUse" });
 }
 
 export const DONE = fauxAssistantMessage([fauxText("done")]);
@@ -75,7 +88,7 @@ export function codes(result: NestedToolExecutionResult | undefined): string[] {
   );
 }
 
-export function spawnThroughBatch(
+function spawnThroughBatchImpl(
   setup: ChatSetup,
   Worker: Task<null, { phase: "work" }, null, object>,
 ) {
@@ -113,6 +126,16 @@ export function spawnThroughBatch(
   setup.faux.setResponses([call("batch"), DONE]);
   return spawned;
 }
+
+export const spawnThroughBatch: {
+  (
+    Worker: Task<null, { phase: "work" }, null, object>,
+  ): (setup: ChatSetup) => ReturnType<typeof spawnThroughBatchImpl>;
+  (
+    setup: ChatSetup,
+    Worker: Task<null, { phase: "work" }, null, object>,
+  ): ReturnType<typeof spawnThroughBatchImpl>;
+} = dual(2, spawnThroughBatchImpl);
 
 export const restartDuring = Effect.fn("restartDuring")(function* (
   path: string,

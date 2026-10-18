@@ -8,6 +8,7 @@ import {
   type TaskRecord,
 } from "@msa/durable";
 import { Effect } from "effect";
+import { dual } from "effect/Function";
 
 import { awaited } from "./effect-support.ts";
 import { context, openTestSession } from "./session-support.ts";
@@ -65,7 +66,7 @@ export function terminal(task: AnyTask): AnyTask {
   };
 }
 
-export function createTask(
+function createTaskImpl(
   session: ReturnType<typeof openTestSession>["session"],
   conversationId: ConversationId,
   withDocument = false,
@@ -90,3 +91,15 @@ export function createTask(
     ),
   );
 }
+
+export const createTask: {
+  (
+    conversationId: ConversationId,
+    withDocument?: boolean,
+  ): (session: ReturnType<typeof openTestSession>["session"]) => ReturnType<typeof createTaskImpl>;
+  (
+    session: ReturnType<typeof openTestSession>["session"],
+    conversationId: ConversationId,
+    withDocument?: boolean,
+  ): ReturnType<typeof createTaskImpl>;
+} = dual((args) => typeof args[0] === "object" && args[0] !== null, createTaskImpl);

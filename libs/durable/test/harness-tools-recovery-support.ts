@@ -16,6 +16,7 @@ import {
   ToolResultEntry,
 } from "@msa/durable";
 import { Effect } from "effect";
+import { dual } from "effect/Function";
 
 import type { ExecutionEnv } from "../src/env/index.ts";
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
@@ -56,7 +57,7 @@ export const open = Effect.fn("open")(function* (
   return opened;
 });
 
-export function tool(
+function toolImpl(
   name: string,
   execute: ToolRegistration["execute"],
   extra: Partial<ToolRegistration> = {},
@@ -64,8 +65,20 @@ export function tool(
   return defineTool({ name, description: name, parameters: Type.Object({}), execute, ...extra });
 }
 
-export function call(name: string, id = "c1"): AssistantMessage {
-  return fauxAssistantMessage([fauxToolCall(name, {}, { id })], { stopReason: "toolUse" });
+export const tool: {
+  (
+    execute: ToolRegistration["execute"],
+    extra?: Partial<ToolRegistration>,
+  ): (name: string) => ReturnType<typeof toolImpl>;
+  (
+    name: string,
+    execute: ToolRegistration["execute"],
+    extra?: Partial<ToolRegistration>,
+  ): ReturnType<typeof toolImpl>;
+} = dual((args) => typeof args[0] === "string", toolImpl);
+
+export function call(name: string): AssistantMessage {
+  return fauxAssistantMessage([fauxToolCall(name, {}, { id: "c1" })], { stopReason: "toolUse" });
 }
 
 export const DONE = fauxAssistantMessage([fauxText("done")]);
@@ -95,7 +108,7 @@ export const toolTaskId = Effect.fn("toolTaskId")(function* (harness: Harness) {
   return id!;
 });
 
-export function blockingTool(name: string, extra: Partial<ToolRegistration> = {}) {
+function blockingToolImpl(name: string, extra: Partial<ToolRegistration> = {}) {
   const started = deferred();
   const state = { runs: 0, blocking: 1 };
   const registration = tool(
@@ -117,3 +130,8 @@ export function blockingTool(name: string, extra: Partial<ToolRegistration> = {}
   );
   return { registration, started, state };
 }
+
+export const blockingTool: {
+  (extra?: Partial<ToolRegistration>): (name: string) => ReturnType<typeof blockingToolImpl>;
+  (name: string, extra?: Partial<ToolRegistration>): ReturnType<typeof blockingToolImpl>;
+} = dual((args) => typeof args[0] === "string", blockingToolImpl);

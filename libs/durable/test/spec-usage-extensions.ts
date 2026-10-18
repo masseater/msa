@@ -13,6 +13,7 @@ import {
 } from "@msa/durable";
 import { GenerationTask, ToolTask } from "@msa/durable/harness";
 import { Effect } from "effect";
+import { dual } from "effect/Function";
 
 import { currentTimeMillis } from "../src/clock.ts";
 import { createBashTool } from "../src/tools/index.ts";
@@ -57,10 +58,7 @@ export function promptExtensions({
   return { ContextFiles, Skills, SkillsV2, Coding, Permissions, Reviewer };
 }
 
-export function bashExtensions(
-  { metrics }: SpecNames,
-  bashTool: ReturnType<typeof createBashTool>,
-) {
+function bashExtensionsImpl({ metrics }: SpecNames, bashTool: ReturnType<typeof createBashTool>) {
   const Timing = defineExtension({
     name: "timing",
     wraps: [
@@ -88,6 +86,16 @@ export function bashExtensions(
   });
   return { Timing, Venv };
 }
+
+export const bashExtensions: {
+  (
+    bashTool: ReturnType<typeof createBashTool>,
+  ): (arg0: SpecNames) => ReturnType<typeof bashExtensionsImpl>;
+  (
+    arg0: SpecNames,
+    bashTool: ReturnType<typeof createBashTool>,
+  ): ReturnType<typeof bashExtensionsImpl>;
+} = dual(2, bashExtensionsImpl);
 
 export function planMode({ writes }: SpecNames) {
   const PlanModeDoc = defineDoc<{ enabled: boolean }>({

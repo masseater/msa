@@ -18,6 +18,7 @@ import {
 } from "@msa/durable";
 import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
+import { dual } from "effect/Function";
 
 import { allEntries, type ChatSetup, openChat } from "./chat-support.ts";
 import { awaited } from "./effect-support.ts";
@@ -29,7 +30,7 @@ export type Echo = ToolRegistration<typeof EchoParameters>;
 
 export type Execute = Echo["execute"];
 
-export function tool(name: string, execute: Execute, extra: Partial<Echo> = {}): Echo {
+function toolImpl(name: string, execute: Execute, extra: Partial<Echo> = {}): Echo {
   return defineTool({
     name,
     description: `The ${name} tool`,
@@ -38,6 +39,11 @@ export function tool(name: string, execute: Execute, extra: Partial<Echo> = {}):
     ...extra,
   });
 }
+
+export const tool: {
+  (execute: Execute, extra?: Partial<Echo>): (name: string) => ReturnType<typeof toolImpl>;
+  (name: string, execute: Execute, extra?: Partial<Echo>): ReturnType<typeof toolImpl>;
+} = dual((args) => typeof args[0] === "string", toolImpl);
 
 export function calls(
   ...list: readonly (readonly [string, Record<string, JsonValue>, string])[]

@@ -17,6 +17,7 @@ import {
 import { ToolTask } from "@msa/durable/harness";
 import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
+import { dual } from "effect/Function";
 
 import { allEntries, type ChatSetup, openChat } from "./chat-support.ts";
 import { awaited } from "./effect-support.ts";
@@ -26,9 +27,14 @@ export const Parameters = Type.Object({ text: Type.Optional(Type.String()) });
 
 export type Tool = ToolRegistration<typeof Parameters>;
 
-export function tool(name: string, execute: Tool["execute"], extra: Partial<Tool> = {}): Tool {
+function toolImpl(name: string, execute: Tool["execute"], extra: Partial<Tool> = {}): Tool {
   return defineTool({ name, description: name, parameters: Parameters, execute, ...extra });
 }
+
+export const tool: {
+  (execute: Tool["execute"], extra?: Partial<Tool>): (name: string) => ReturnType<typeof toolImpl>;
+  (name: string, execute: Tool["execute"], extra?: Partial<Tool>): ReturnType<typeof toolImpl>;
+} = dual((args) => typeof args[0] === "string", toolImpl);
 
 export function echoTool(extra: Partial<Tool> = {}) {
   const state = { runs: 0 };
@@ -43,9 +49,14 @@ export function echoTool(extra: Partial<Tool> = {}) {
   return { registration, state };
 }
 
-export function call(name: string, args: Record<string, string> = {}, id = "c1"): AssistantMessage {
+function callImpl(name: string, args: Record<string, string> = {}, id = "c1"): AssistantMessage {
   return fauxAssistantMessage([fauxToolCall(name, args, { id })], { stopReason: "toolUse" });
 }
+
+export const call: {
+  (args?: Record<string, string>, id?: string): (name: string) => ReturnType<typeof callImpl>;
+  (name: string, args?: Record<string, string>, id?: string): ReturnType<typeof callImpl>;
+} = dual((args) => typeof args[0] === "string", callImpl);
 
 export const DONE = fauxAssistantMessage([fauxText("done")]);
 

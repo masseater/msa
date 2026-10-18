@@ -23,14 +23,15 @@ import {
 } from "@msa/durable";
 import { createRegistry, Harness } from "@msa/durable/harness";
 import { Effect } from "effect";
+import { dual } from "effect/Function";
 
 import { awaited } from "./effect-support.ts";
 import { context } from "./session-support.ts";
 
-export function tool(name: string, description = `${name} tool`): ToolRegistration {
+export function tool(name: string): ToolRegistration {
   return defineTool({
     name,
-    description,
+    description: `${name} tool`,
     parameters: Type.Object({}),
     execute: () => Promise.resolve({ output: [] }),
   });
@@ -64,7 +65,7 @@ export function user(text: string): UserMessage {
   return { role: "user", content: text, timestamp: 1 };
 }
 
-export function assistant(
+function assistantImpl(
   text: string,
   options: { readonly calls?: readonly string[]; readonly stopReason?: StopReason } = {},
 ): AssistantMessage {
@@ -93,12 +94,23 @@ export function assistant(
   };
 }
 
-export function toolResult(id: string, text = `result ${id}`): ToolResultMessage {
+export const assistant: {
+  (options?: {
+    readonly calls?: readonly string[];
+    readonly stopReason?: StopReason;
+  }): (text: string) => ReturnType<typeof assistantImpl>;
+  (
+    text: string,
+    options?: { readonly calls?: readonly string[]; readonly stopReason?: StopReason },
+  ): ReturnType<typeof assistantImpl>;
+} = dual((args) => typeof args[0] === "string", assistantImpl);
+
+export function toolResult(id: string): ToolResultMessage {
   return {
     role: "toolResult",
     toolCallId: id,
     toolName: `tool-${id}`,
-    content: [{ type: "text", text }],
+    content: [{ type: "text", text: `result ${id}` }],
     isError: false,
     timestamp: 3,
   };
@@ -135,42 +147,70 @@ function installOne<Tool extends ToolRegistration>(
   return { dispose: () => registry.uninstall(extension) };
 }
 
-export function addTool<Tool extends ToolRegistration>(
+function addToolImpl<Tool extends ToolRegistration>(
   registry: Registry<Tool>,
   tool: Tool,
-  name = `tool:${tool.name}`,
 ): Installed {
-  return installOne(registry, defineExtension<Tool>({ name, tools: [tool] }));
+  return installOne(registry, defineExtension<Tool>({ name: `tool:${tool.name}`, tools: [tool] }));
 }
 
-export function addTask(
-  registry: Registry,
-  task: AnyTask,
-  name = `task:${task.definition.name}`,
-): Installed {
-  return installOne(registry, defineExtension({ name, tasks: [task] }));
+export const addTool: {
+  <Tool extends ToolRegistration>(tool: Tool): (registry: Registry<Tool>) => Installed;
+  <Tool extends ToolRegistration>(registry: Registry<Tool>, tool: Tool): Installed;
+} = dual(2, addToolImpl);
+
+function addTaskImpl(registry: Registry, task: AnyTask): Installed {
+  return installOne(
+    registry,
+    defineExtension({ name: `task:${task.definition.name}`, tasks: [task] }),
+  );
 }
+
+export const addTask: {
+  (task: AnyTask): (registry: Registry) => ReturnType<typeof addTaskImpl>;
+  (registry: Registry, task: AnyTask): ReturnType<typeof addTaskImpl>;
+} = dual(2, addTaskImpl);
 
 let hookExtensions = 0;
 
-export function addHooks<K extends AnyTask>(
+function addHooksImpl<K extends AnyTask>(
   registry: Registry,
   task: K,
   handlers: Partial<HooksOf<K>>,
-  name = `hooks:${++hookExtensions}`,
-): Installed {
-  return installOne(registry, defineExtension({ name, hooks: [hook(task, handlers)] }));
-}
-
-export function addSection<Tool extends ToolRegistration = ToolRegistration>(
-  registry: Registry<Tool>,
-  key: string,
-  render: PromptSection<Tool>["render"],
-  options?: { readonly tag?: boolean },
-  name = `section:${key}`,
 ): Installed {
   return installOne(
     registry,
-    defineExtension<Tool>({ name, sections: [section(key, render, options)] }),
+    defineExtension({ name: `hooks:${++hookExtensions}`, hooks: [hook(task, handlers)] }),
   );
 }
+
+export const addHooks: {
+  <K extends AnyTask>(task: K, handlers: Partial<HooksOf<K>>): (registry: Registry) => Installed;
+  <K extends AnyTask>(registry: Registry, task: K, handlers: Partial<HooksOf<K>>): Installed;
+} = dual(3, addHooksImpl);
+
+function addSectionImpl(
+  registry: Registry,
+  key: string,
+  render: PromptSection["render"],
+  options?: { readonly tag?: boolean },
+): Installed {
+  return installOne(
+    registry,
+    defineExtension({ name: `section:${key}`, sections: [section(key, render, options)] }),
+  );
+}
+
+export const addSection: {
+  (
+    key: string,
+    render: PromptSection["render"],
+    options?: { readonly tag?: boolean },
+  ): (registry: Registry) => Installed;
+  (
+    registry: Registry,
+    key: string,
+    render: PromptSection["render"],
+    options?: { readonly tag?: boolean },
+  ): Installed;
+} = dual((args) => typeof args[1] === "string", addSectionImpl);

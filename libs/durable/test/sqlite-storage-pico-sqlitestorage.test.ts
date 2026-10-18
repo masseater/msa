@@ -131,7 +131,7 @@ const rollsSqlRows = Effect.gen(function* () {
     expect(
       storage.commit(
         [
-          { type: "entry", value: entry(transientId, ROOT_CONVERSATION_ID) },
+          { type: "entry", value: entry(transientId, ROOT_CONVERSATION_ID, undefined) },
           {
             type: "task",
             value: {
@@ -149,7 +149,10 @@ const rollsSqlRows = Effect.gen(function* () {
   const committedId = yield* awaited(storage.mintId<EntryId>());
   expect(
     yield* awaited(
-      storage.commit([{ type: "entry", value: entry(committedId, ROOT_CONVERSATION_ID) }], context),
+      storage.commit(
+        [{ type: "entry", value: entry(committedId, ROOT_CONVERSATION_ID, undefined) }],
+        context,
+      ),
     ),
   ).toBe(2);
 

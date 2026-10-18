@@ -12,6 +12,7 @@ import { CodemodeSandbox } from "@msa/codemode";
 import { ToolResultEntry, UsageDoc } from "@msa/durable";
 import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
+import { dual } from "effect/Function";
 
 import { createCodemodeExtension } from "../src/codemode/codemode.ts";
 import type { ExecutionEnv } from "../src/env/index.ts";
@@ -64,7 +65,7 @@ export function testModels(): CreateProviderOptions["models"] {
   ];
 }
 
-export function testClassifiers(
+function testClassifiersImpl(
   calls: Calls,
   gate: { readonly open: Deferred<void>; readonly atFour: boolean },
 ): CreateProviderOptions["classifiers"] {
@@ -107,6 +108,17 @@ export function testClassifiers(
     },
   };
 }
+
+export const testClassifiers: {
+  (gate: {
+    readonly open: Deferred<void>;
+    readonly atFour: boolean;
+  }): (calls: Calls) => ReturnType<typeof testClassifiersImpl>;
+  (
+    calls: Calls,
+    gate: { readonly open: Deferred<void>; readonly atFour: boolean },
+  ): ReturnType<typeof testClassifiersImpl>;
+} = dual(2, testClassifiersImpl);
 
 export function testImages(calls: Calls): CreateProviderOptions["images"] {
   return {

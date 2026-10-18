@@ -17,6 +17,7 @@ import {
 } from "@msa/durable";
 import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
+import { dual } from "effect/Function";
 import { expect } from "vite-plus/test";
 
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
@@ -35,9 +36,14 @@ export const sqlitePath = Effect.fn("sqlitePath")(function* () {
   return joinPath(directory, "session.sqlite");
 });
 
-export function text(label: string, tokens: number): string {
+function textImpl(label: string, tokens: number): string {
   return `${label} ${"x".repeat(Math.max(0, tokens * 4 - label.length - 1))}`;
 }
+
+export const text: {
+  (tokens: number): (label: string) => ReturnType<typeof textImpl>;
+  (label: string, tokens: number): ReturnType<typeof textImpl>;
+} = dual(2, textImpl);
 
 export type Request = {
   readonly messages: readonly Message[];
@@ -92,7 +98,7 @@ export function script(setup: ChatSetup): Script {
   return result;
 }
 
-export function gated(gate: Deferred, message: AssistantMessage, reached?: Deferred): Step {
+function gatedImpl(gate: Deferred, message: AssistantMessage, reached?: Deferred): Step {
   return ({ options }) =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -102,6 +108,11 @@ export function gated(gate: Deferred, message: AssistantMessage, reached?: Defer
       }),
     );
 }
+
+export const gated: {
+  (message: AssistantMessage, reached?: Deferred): (gate: Deferred) => ReturnType<typeof gatedImpl>;
+  (gate: Deferred, message: AssistantMessage, reached?: Deferred): ReturnType<typeof gatedImpl>;
+} = dual((args) => "resolve" in args[0], gatedImpl);
 
 export const answer = (content: string) => fauxAssistantMessage(content);
 
@@ -158,7 +169,7 @@ export const history = Effect.fn("history")(function* (chat: Chat) {
 
 export const summary = (content = "SUMMARY") => answer(content);
 
-export function result(chat: Chat, id: TaskId<CompactionResult>) {
+function resultImpl(chat: Chat, id: TaskId<CompactionResult>) {
   return Effect.runPromise(
     Effect.gen(function* () {
       const record = yield* awaited(chat.harness.waitForTask(id, context));
@@ -166,6 +177,11 @@ export function result(chat: Chat, id: TaskId<CompactionResult>) {
     }),
   );
 }
+
+export const result: {
+  (id: TaskId<CompactionResult>): (chat: Chat) => ReturnType<typeof resultImpl>;
+  (chat: Chat, id: TaskId<CompactionResult>): ReturnType<typeof resultImpl>;
+} = dual(2, resultImpl);
 
 export const kinds = Effect.fn("kinds")(function* (conversation: Conversation) {
   return (yield* allEntries(conversation)).map((entry) => entry.kind);

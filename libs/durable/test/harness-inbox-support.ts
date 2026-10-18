@@ -18,6 +18,7 @@ import {
   type ToolExecutionResult,
 } from "@msa/durable";
 import { Effect } from "effect";
+import { dual } from "effect/Function";
 
 import { type ChatSetup, textOf, waitFor } from "./chat-support.ts";
 import { awaited } from "./effect-support.ts";
@@ -49,7 +50,7 @@ export function gated(message: AssistantMessage): {
   return { step, reached: reached.promise, release: () => gate.resolve() };
 }
 
-export function holdTool(
+function holdToolImpl(
   setup: ChatSetup,
   gate: Deferred,
   result: ToolExecutionResult = { output: [] },
@@ -70,6 +71,14 @@ export function holdTool(
     }),
   );
 }
+
+export const holdTool: {
+  (
+    gate: Deferred,
+    result?: ToolExecutionResult,
+  ): (setup: ChatSetup) => ReturnType<typeof holdToolImpl>;
+  (setup: ChatSetup, gate: Deferred, result?: ToolExecutionResult): ReturnType<typeof holdToolImpl>;
+} = dual((args) => "registry" in args[0], holdToolImpl);
 
 export function queuedNote(text: string) {
   return { kind: "note", model: [{ role: "user", content: text, timestamp: 0 }] } as const;

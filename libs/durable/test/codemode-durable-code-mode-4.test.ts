@@ -17,10 +17,10 @@ afterEach(() =>
 );
 
 const findsToolsSearchTools = Effect.gen(function* () {
-  const chat = codemodeChat(
-    [],
-    [{ name: "github", description: "GitHub MCP server", prefix: "mcp__github__" }],
-  );
+  const chat = codemodeChat({
+    globals: [],
+    namespaces: [{ name: "github", description: "GitHub MCP server", prefix: "mcp__github__" }],
+  });
   addTool(
     chat.setup.registry,
     tool("mcp__github__list_issues", () => Promise.resolve({ output: [] })),

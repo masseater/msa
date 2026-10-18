@@ -1,6 +1,7 @@
 import type { Context, JsonValue } from "@msa/chord";
 import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 import { Effect } from "effect";
+import { dual } from "effect/Function";
 
 import { err, FileError, type FileSystem, type Result } from "../src/env/index.ts";
 import { NodeExecutionEnv } from "../src/env/node.ts";
@@ -34,7 +35,7 @@ export const openStorage = Effect.fn("openStorage")(function* (
   return storage;
 });
 
-export function pendingTask(id: TaskId<JsonValue>, phase = "ready"): StoredTask {
+function pendingTaskImpl(id: TaskId<JsonValue>, phase = "ready"): StoredTask {
   return {
     id,
     conversationId: ROOT_CONVERSATION_ID,
@@ -46,6 +47,11 @@ export function pendingTask(id: TaskId<JsonValue>, phase = "ready"): StoredTask 
     abortRequested: false,
   };
 }
+
+export const pendingTask: {
+  (phase?: string): (id: TaskId<JsonValue>) => ReturnType<typeof pendingTaskImpl>;
+  (id: TaskId<JsonValue>, phase?: string): ReturnType<typeof pendingTaskImpl>;
+} = dual((args) => typeof args[0] === "number", pendingTaskImpl);
 
 export function terminalTask(id: TaskId<JsonValue>): StoredTask {
   return {
@@ -66,9 +72,14 @@ export const createRoot = Effect.fn("createRoot")(function* (storage: Storage) {
   );
 });
 
-export function sessionDocument(id: DocumentId, kind = "test.document"): DocumentCreate {
+function sessionDocumentImpl(id: DocumentId, kind = "test.document"): DocumentCreate {
   return { id, kind, scope: { kind: "session" } };
 }
+
+export const sessionDocument: {
+  (kind?: string): (id: DocumentId) => ReturnType<typeof sessionDocumentImpl>;
+  (id: DocumentId, kind?: string): ReturnType<typeof sessionDocumentImpl>;
+} = dual((args) => typeof args[0] === "number", sessionDocumentImpl);
 
 export type Failure = {
   readonly operation: "append" | "flush" | "write" | "rename" | "remove";

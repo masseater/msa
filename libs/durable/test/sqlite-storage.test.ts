@@ -228,7 +228,10 @@ const persistsRecordsSequence = Effect.gen(function* () {
   const entryId = yield* awaited(storage.mintId<EntryId>());
   expect(
     yield* awaited(
-      storage.commit([{ type: "entry", value: entry(entryId, ROOT_CONVERSATION_ID) }], context),
+      storage.commit(
+        [{ type: "entry", value: entry(entryId, ROOT_CONVERSATION_ID, undefined) }],
+        context,
+      ),
     ),
   ).toBe(2);
   yield* awaited(storage.close(context));
@@ -237,7 +240,7 @@ const persistsRecordsSequence = Effect.gen(function* () {
   const reopened = yield* awaited(openNodeSqliteStorage(path));
   openStorages.add(reopened);
   expect(yield* awaited(reopened.entry(entryId, context))).toEqual({
-    entry: entry(entryId, ROOT_CONVERSATION_ID),
+    entry: entry(entryId, ROOT_CONVERSATION_ID, undefined),
     commitSeq: 2,
   });
   expect(yield* awaited(reopened.mintId<EntryId>())).toBe(entryId + 1);

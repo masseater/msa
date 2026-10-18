@@ -10,6 +10,7 @@ import {
 } from "@msa/durable";
 import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
+import { dual } from "effect/Function";
 
 import { chatSetup, openChat, waitFor } from "./chat-support.ts";
 import { awaited } from "./effect-support.ts";
@@ -18,7 +19,7 @@ import { context, documentChanges } from "./session-support.ts";
 
 export type Action = (api: ToolExecutionApi) => void | Promise<void>;
 
-export function drivenTool(
+function drivenToolImpl(
   outputLimits: NonNullable<ToolRegistration["outputLimits"]>,
   actions: ((api: ToolExecutionApi) => Promise<boolean>)[],
   waker: { wake?: () => void },
@@ -49,6 +50,20 @@ export function drivenTool(
     },
   });
 }
+
+export const drivenTool: {
+  (
+    actions: ((api: ToolExecutionApi) => Promise<boolean>)[],
+    waker: { wake?: () => void },
+  ): (
+    outputLimits: NonNullable<ToolRegistration["outputLimits"]>,
+  ) => ReturnType<typeof drivenToolImpl>;
+  (
+    outputLimits: NonNullable<ToolRegistration["outputLimits"]>,
+    actions: ((api: ToolExecutionApi) => Promise<boolean>)[],
+    waker: { wake?: () => void },
+  ): ReturnType<typeof drivenToolImpl>;
+} = dual(3, drivenToolImpl);
 
 export const drive = Effect.fn("drive")(function* (
   outputLimits: NonNullable<ToolRegistration["outputLimits"]> = {},
