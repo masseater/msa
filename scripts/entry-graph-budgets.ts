@@ -43,7 +43,7 @@ const BUDGETS: Readonly<Record<string, Readonly<Record<string, EntryBudget>>>> =
   },
   "libs/durable": {
     ".": {
-      maxFiles: 66,
+      maxFiles: 22,
       forbid: [
         "libs/ai/src/index.ts",
         "libs/ai/src/utils/typebox-helpers.ts",
