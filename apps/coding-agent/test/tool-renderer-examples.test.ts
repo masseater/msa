@@ -1,21 +1,8 @@
-import { tmpdir } from "node:os";
-
 import { getModel } from "@msa/ai/compat";
-import {
-  awaited,
-  runTest,
-  currentTimeMillis,
-  randomSuffixSync,
-  joinPath,
-  pathExists,
-  makeDirectory,
-  removePath,
-} from "@msa/testing";
-import type { TUI } from "@msa/tui";
+import { awaited, joinPath, makeDirectory, makeTempDir, removeDirs, runTest } from "@msa/testing";
 import { Effect } from "effect";
-import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vite-plus/test";
+import { afterEach, beforeAll, describe, expect, it } from "vite-plus/test";
 
-import type { ToolDefinition } from "../src/core/extensions/types.ts";
 import { DefaultResourceLoader } from "../src/core/resource-loader.ts";
 import { createAgentSession } from "../src/core/sdk.ts";
 import { SessionManager } from "../src/core/session-manager.ts";
@@ -25,77 +12,70 @@ import { initTheme } from "../src/modes/interactive/theme/theme.ts";
 
 const examplesDir = joinPath(import.meta.dirname, "../examples/extensions");
 
-describe("tool renderer examples", () => {
-  let tempDir: string;
-  let agentDir: string;
+interface SessionDirs {
+  readonly tempDir: string;
+  readonly agentDir: string;
+}
 
+const tempDirs: string[] = [];
+
+afterEach(() => runTest(removeDirs(tempDirs.splice(0))));
+
+const createSessionDirs: Effect.Effect<SessionDirs> = Effect.gen(function* () {
+  const tempDir = yield* makeTempDir("msa-tool-renderer-example-test-");
+  tempDirs.push(tempDir);
+  const agentDir = joinPath(tempDir, "agent");
+  yield* makeDirectory(agentDir);
+  return { tempDir, agentDir };
+});
+
+type EditToolDefinition = NonNullable<ConstructorParameters<typeof ToolExecutionComponent>[4]>;
+
+const getSessionState = (
+  { tempDir, agentDir }: SessionDirs,
+  extensionPath: string | undefined,
+  tools: string[],
+): Effect.Effect<{ systemPrompt: string; editToolDefinition: EditToolDefinition | undefined }> =>
+  Effect.gen(function* () {
+    const settingsManager = SettingsManager.inMemory();
+    const resourceLoader = new DefaultResourceLoader({
+      cwd: tempDir,
+      agentDir,
+      settingsManager,
+      noExtensions: true,
+      noSkills: true,
+      noPromptTemplates: true,
+      noThemes: true,
+      noContextFiles: true,
+      additionalExtensionPaths: extensionPath === undefined ? [] : [extensionPath],
+    });
+    yield* awaited(resourceLoader.reload());
+    expect(resourceLoader.getExtensions().errors).toEqual([]);
+    const { session } = yield* awaited(
+      createAgentSession({
+        cwd: tempDir,
+        agentDir,
+        model: getModel("anthropic", "claude-sonnet-4-5"),
+        settingsManager,
+        sessionManager: SessionManager.inMemory(tempDir),
+        resourceLoader,
+        tools,
+      }),
+    );
+    try {
+      return {
+        systemPrompt: session.systemPrompt,
+        editToolDefinition: session.getToolDefinition("edit"),
+      };
+    } finally {
+      session.dispose();
+    }
+  });
+
+describe("tool renderer examples", () => {
   beforeAll(() => {
     initTheme("dark");
   });
-
-  beforeEach(() =>
-    runTest(
-      Effect.gen(function* () {
-        tempDir = joinPath(
-          tmpdir(),
-          `msa-tool-renderer-example-test-${currentTimeMillis()}-${randomSuffixSync()}`,
-        );
-        agentDir = joinPath(tempDir, "agent");
-        yield* makeDirectory(agentDir);
-      }),
-    ),
-  );
-
-  afterEach(() =>
-    runTest(
-      Effect.gen(function* () {
-        if (tempDir.length > 0 && (yield* pathExists(tempDir))) {
-          yield* removePath(tempDir);
-        }
-      }),
-    ),
-  );
-
-  function getSessionState(extensionPath: string | undefined, tools: string[]) {
-    return runTest(
-      Effect.gen(function* () {
-        const settingsManager = SettingsManager.inMemory();
-        const resourceLoader = new DefaultResourceLoader({
-          cwd: tempDir,
-          agentDir,
-          settingsManager,
-          noExtensions: true,
-          noSkills: true,
-          noPromptTemplates: true,
-          noThemes: true,
-          noContextFiles: true,
-          additionalExtensionPaths:
-            extensionPath !== undefined && extensionPath.length > 0 ? [extensionPath] : [],
-        });
-        yield* awaited(resourceLoader.reload());
-        expect(resourceLoader.getExtensions().errors).toEqual([]);
-        const { session } = yield* awaited(
-          createAgentSession({
-            cwd: tempDir,
-            agentDir,
-            model: getModel("anthropic", "claude-sonnet-4-5"),
-            settingsManager,
-            sessionManager: SessionManager.inMemory(tempDir),
-            resourceLoader,
-            tools,
-          }),
-        );
-        try {
-          return yield* awaited({
-            systemPrompt: session.systemPrompt,
-            editToolDefinition: session.getToolDefinition("edit"),
-          });
-        } finally {
-          session.dispose();
-        }
-      }),
-    );
-  }
 
   it.each([
     {
@@ -111,8 +91,9 @@ describe("tool renderer examples", () => {
   ])("keeps the system prompt unchanged for the $name example", ({ extensionPath, tools }) =>
     runTest(
       Effect.gen(function* () {
-        const baseline = yield* awaited(getSessionState(undefined, tools));
-        const withRenderer = yield* awaited(getSessionState(extensionPath, tools));
+        const dirs = yield* createSessionDirs;
+        const baseline = yield* getSessionState(dirs, undefined, tools);
+        const withRenderer = yield* getSessionState(dirs, extensionPath, tools);
 
         expect(withRenderer.systemPrompt).toBe(baseline.systemPrompt);
       }),
@@ -122,29 +103,30 @@ describe("tool renderer examples", () => {
   it("keeps minimal mode's edit tool in the default shell", () =>
     runTest(
       Effect.gen(function* () {
-        const minimalMode = yield* awaited(
-          getSessionState(joinPath(examplesDir, "minimal-mode.ts"), ["edit"]),
-        );
+        const dirs = yield* createSessionDirs;
+        const minimalMode = yield* getSessionState(dirs, joinPath(examplesDir, "minimal-mode.ts"), [
+          "edit",
+        ]);
         const editToolDefinition = minimalMode.editToolDefinition;
-        if (!(editToolDefinition !== undefined))
+        if (editToolDefinition === undefined)
           throw new Error("minimal mode did not register the edit tool");
         const { renderShell: _renderShell, ...defaultShellDefinition } = editToolDefinition;
 
-        expect(renderEditTool(editToolDefinition, tempDir)).toEqual(
-          renderEditTool(defaultShellDefinition, tempDir),
+        expect(renderEditTool(editToolDefinition, dirs.tempDir)).toEqual(
+          renderEditTool(defaultShellDefinition, dirs.tempDir),
         );
       }),
     ));
 });
 
-function renderEditTool(definition: ToolDefinition, cwd: string): string[] {
+function renderEditTool(definition: EditToolDefinition, cwd: string): string[] {
   const component = new ToolExecutionComponent(
     "edit",
     "edit-shell-test",
     { path: "notes.txt", oldText: "before", newText: "after" },
     {},
     definition,
-    { requestRender() {} } as unknown as TUI,
+    { requestRender() {} } as unknown as ConstructorParameters<typeof ToolExecutionComponent>[5],
     cwd,
   );
   return component.render(40);
