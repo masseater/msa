@@ -122,6 +122,15 @@ export const testBaseConfig = {
 };
 
 export default defineConfig({
+  test: {
+    projects: [
+      "{apps,libs}/*/vitest.config.ts",
+      "apps/evals/vitest.test.config.ts",
+      "libs/chord",
+      "libs/telemetry",
+    ],
+    reporters: onGitHubActions ? ["dot", "github-actions"] : ["dot"],
+  },
   staged: { "*": "vp check --fix" },
   fmt: {
     ignorePatterns: generated,
@@ -262,7 +271,8 @@ export default defineConfig({
         cache: false,
       },
       test: {
-        command: "vp run --no-cache test:scripts && vp run --no-cache -r test",
+        command:
+          "vp run --no-cache test:scripts && vp test run && vp run --no-cache --filter @msa/tui test",
         cache: false,
       },
       "test-all": {
