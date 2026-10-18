@@ -10,7 +10,7 @@ export function restoreSandboxEnv(): void {
     for (const entry of data.split("\0")) {
       const idx = entry.indexOf("=");
       if (idx > 0) {
-        process.env[entry.slice(0, idx)] = entry.slice(idx + 1);
+        Object.assign(process.env, { [entry.slice(0, idx)]: entry.slice(idx + 1) });
       }
     }
   } catch {}

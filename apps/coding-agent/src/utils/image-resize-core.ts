@@ -104,11 +104,11 @@ export function resizeImageInProcess(
           targetHeight = opts.maxHeight;
         }
 
-        function tryEncodings(
+        const tryEncodings = (
           width: number,
           height: number,
           jpegQualities: number[],
-        ): EncodedCandidate[] {
+        ): EncodedCandidate[] => {
           const resized = photon!.resize(image!, width, height, photon!.SamplingFilter.Lanczos3);
 
           try {
@@ -122,7 +122,7 @@ export function resizeImageInProcess(
           } finally {
             resized.free();
           }
-        }
+        };
 
         const qualitySteps = Array.from(new Set([opts.jpegQuality, 85, 70, 55, 40]));
         let currentWidth = targetWidth;

@@ -178,7 +178,6 @@ Options:
   -a, --approve      Trust project-local files for this command
   -na, --no-approve  Ignore project-local files for this command
 `);
-      return;
   }
 }
 

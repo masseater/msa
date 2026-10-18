@@ -93,6 +93,15 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   });
 }
 
+function parseModelEvent(data: string): LlamaModelEvent | undefined {
+  try {
+    const event = JSON.parse(data) as LlamaModelEvent;
+    return typeof event?.model === "string" && typeof event.event === "string" ? event : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function parseLoadProgress(data: unknown): LlamaProgress | undefined {
   if (typeof data !== "object" || data === null) return undefined;
   const progress = (data as { progress?: unknown }).progress;
@@ -348,13 +357,8 @@ export class LlamaClient {
               .filter((line) => line.startsWith("data:"))
               .map((line) => line.slice(5).trimStart())
               .join("\n");
-            if (data !== "") {
-              try {
-                const event = JSON.parse(data) as LlamaModelEvent;
-                if (typeof event?.model === "string" && typeof event.event === "string")
-                  onEvent(event);
-              } catch {}
-            }
+            const event = data === "" ? undefined : parseModelEvent(data);
+            if (event !== undefined) onEvent(event);
             boundary = buffer.indexOf("\n\n");
           }
         }

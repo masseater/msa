@@ -3,6 +3,7 @@ import * as Effect from "effect/Effect";
 
 import { awaited, awaiting } from "../../core/awaiting.ts";
 import type { ExtensionCommandContext } from "../../core/extensions/types.ts";
+import { toDate } from "../../core/platform.ts";
 import type { AccountKind } from "../accounts/kind.ts";
 import {
   addAccount,
@@ -49,7 +50,7 @@ function describeAccounts(): Promise<string> {
           const state =
             block === undefined
               ? "available"
-              : `blocked until ${new Date(block.until).toLocaleString()} (${block.reason})`;
+              : `blocked until ${toDate(block.until).toLocaleString()} (${block.reason})`;
           return `${index + 1}. ${account.name}  ${auth}  ${loginText}  ${state}${account.auto === false ? "  (not in rotation)" : ""}`;
         })
         .join("\n");

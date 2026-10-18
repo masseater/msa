@@ -680,8 +680,8 @@ export function main(args: string[], options?: MainOptions) {
       const extensionFactories = [...builtInExtensions, ...(options?.extensionFactories ?? [])];
       const offlineMode = args.includes("--offline") || isTruthyEnvFlag(readEnv("MSA_OFFLINE"));
       if (offlineMode) {
-        process.env["MSA_OFFLINE"] = "1";
-        process.env["MSA_SKIP_VERSION_CHECK"] = "1";
+        Object.assign(process.env, { MSA_OFFLINE: "1" });
+        Object.assign(process.env, { MSA_SKIP_VERSION_CHECK: "1" });
       }
 
       if (yield* awaited(runAuthCommand(args))) {
@@ -1141,7 +1141,6 @@ export function main(args: string[], options?: MainOptions) {
         if (exitCode !== 0) {
           process.exitCode = exitCode;
         }
-        return;
       }
     }),
   );

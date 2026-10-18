@@ -46,7 +46,7 @@ function readAccounts(): Account[] {
 export function loadAccounts(): Account[] {
   return readAccounts().map((account) =>
     account.configDir !== undefined && account.configDir !== ""
-      ? { ...account, configDir: expandTildePath(account.configDir) }
+      ? Object.assign({}, account, { configDir: expandTildePath(account.configDir) })
       : account,
   );
 }
@@ -267,6 +267,7 @@ export function loginAccount(account: Account, prompts: LoginPrompts): Promise<v
             cancelled = true;
             child.kill();
           }
+          return undefined;
         });
       };
       child.stdout.on("data", onOutput);

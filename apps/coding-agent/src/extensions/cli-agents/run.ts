@@ -112,10 +112,12 @@ export function streamViaCli<Event>(
               const finished = waitForChildProcess(child).then(
                 (code) => {
                   exitCode = code;
+                  return undefined;
                 },
                 (error: unknown) => {
                   spawnError = String(error);
                   exitCode = -1;
+                  return undefined;
                 },
               );
 
@@ -164,7 +166,8 @@ export function streamViaCli<Event>(
 
         let ok = false;
         let failure = "";
-        for (let attempt = 1; attempt <= SPAWN_ATTEMPTS && !aborted; attempt += 1) {
+        for (let attempt = 1; attempt <= SPAWN_ATTEMPTS; attempt += 1) {
+          if (aborted) break;
           const result = yield* awaited(runAttempt());
           if (result.ok) {
             ok = true;

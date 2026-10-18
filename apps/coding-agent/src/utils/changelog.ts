@@ -107,9 +107,11 @@ export function normalizeChangelogLinks(
   version: string | ChangelogEntry,
 ): string {
   const tag = normalizeTag(version);
-  return markdown.replace(INLINE_MARKDOWN_LINK_RE, (_match, prefix, target, suffix) => {
-    return `${prefix}${normalizeChangelogLinkTarget(target, tag)}${suffix}`;
-  });
+  return markdown.replace(
+    INLINE_MARKDOWN_LINK_RE,
+    (_match, prefix, target, suffix) =>
+      `${prefix}${normalizeChangelogLinkTarget(target, tag)}${suffix}`,
+  );
 }
 
 export function parseChangelog(changelogPath: string): ChangelogEntry[] {

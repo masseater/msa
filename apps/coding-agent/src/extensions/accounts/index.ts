@@ -24,7 +24,7 @@ export default function accountsExtension(msa: ExtensionAPI): void {
       return (
         kind
           ?.complete(trimmed.slice(space).trimStart())
-          ?.map((item) => ({ ...item, value: `${kind.name} ${item.value}` })) ?? null
+          ?.map((item) => Object.assign({}, item, { value: `${kind.name} ${item.value}` })) ?? null
       );
     },
     handler: (args, ctx) =>

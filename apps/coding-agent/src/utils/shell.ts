@@ -143,7 +143,18 @@ export function getShellEnv(): NodeJS.ProcessEnv {
 }
 
 export function sanitizeBinaryOutput(str: string): string {
-  return str.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\uFFF9-\uFFFB]/gu, "");
+  return Array.from(str)
+    .filter((char) => {
+      const code = char.codePointAt(0) ?? 0;
+      return !(
+        code <= 0x08 ||
+        code === 0x0b ||
+        code === 0x0c ||
+        (code >= 0x0e && code <= 0x1f) ||
+        (code >= 0xfff9 && code <= 0xfffb)
+      );
+    })
+    .join("");
 }
 
 const trackedDetachedChildPids = new Set<number>();

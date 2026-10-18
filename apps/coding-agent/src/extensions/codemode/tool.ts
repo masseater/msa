@@ -173,14 +173,16 @@ function selectCatalog(groups: readonly CatalogGroup[], budget: number | undefin
   let remaining = budget;
   let active = queues.filter((queue) => queue.length > 0);
   while (active.length > 0) {
-    active = active.filter((queue) => {
+    const kept: typeof active = [];
+    for (const queue of active) {
       const next = queue[0];
-      if (next === undefined || next.cost > remaining) return false;
+      if (next === undefined || next.cost > remaining) continue;
       remaining -= next.cost;
       shown.add(next.name);
       queue.shift();
-      return queue.length > 0;
-    });
+      if (queue.length > 0) kept.push(queue);
+    }
+    active = kept;
   }
   return shown;
 }

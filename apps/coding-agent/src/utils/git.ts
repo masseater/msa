@@ -127,8 +127,8 @@ function buildGitSource(args: {
 function parseGenericGitUrl(url: string): GitSource | null {
   const { repo: repoWithoutRef, ref } = splitRef(url);
   let repo = repoWithoutRef;
-  let host = "";
-  let path = "";
+  let host: string;
+  let path: string;
 
   const scpLikeMatch = repoWithoutRef.match(/^git@([^:]+):(.+)$/u);
   if (scpLikeMatch !== null) {

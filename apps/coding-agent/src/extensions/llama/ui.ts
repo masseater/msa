@@ -121,7 +121,7 @@ class HuggingFaceSearch extends Container implements Focusable {
   private debounce: Scheduled | undefined;
   private request: AbortController | undefined;
   private closed = false;
-  private _focused = false;
+  private isFocused = false;
 
   constructor(
     tui: TUI,
@@ -146,11 +146,11 @@ class HuggingFaceSearch extends Container implements Focusable {
   }
 
   get focused(): boolean {
-    return this._focused;
+    return this.isFocused;
   }
 
   set focused(value: boolean) {
-    this._focused = value;
+    this.isFocused = value;
     this.input.focused = value;
   }
 
@@ -310,7 +310,7 @@ class LlamaView implements LlamaUi, Focusable {
   private progressPromise: Promise<void> | undefined;
   private progressResolver: (() => void) | undefined;
   private showingProgress = false;
-  private _focused = false;
+  private isFocused = false;
 
   constructor(tui: TUI, theme: Theme, keybindings: KeybindingsManager) {
     this.tui = tui;
@@ -322,11 +322,11 @@ class LlamaView implements LlamaUi, Focusable {
   }
 
   get focused(): boolean {
-    return this._focused;
+    return this.isFocused;
   }
 
   set focused(value: boolean) {
-    this._focused = value;
+    this.isFocused = value;
     if (this.inputTarget !== undefined) this.inputTarget.focused = value;
   }
 
@@ -342,7 +342,7 @@ class LlamaView implements LlamaUi, Focusable {
     this.content = content;
     this.inputHandler = inputHandler;
     this.inputTarget = inputTarget;
-    if (this.inputTarget !== undefined) this.inputTarget.focused = this._focused;
+    if (this.inputTarget !== undefined) this.inputTarget.focused = this.isFocused;
     this.tui.requestRender();
   }
 
@@ -579,12 +579,12 @@ export function runWithProgress<T>(
           (value) => ({ ok: true as const, value }),
           (error: unknown) => ({ ok: false as const, error }),
         );
-      let completed = false;
+      const progress = { completed: false };
       settled.finally(() => {
-        completed = true;
+        progress.completed = true;
       });
 
-      while (!completed) {
+      while (!progress.completed) {
         const outcome = yield* awaited(
           Promise.race([
             settled.then(() => "settled" as const),
@@ -593,7 +593,7 @@ export function runWithProgress<T>(
         );
         if (outcome === "settled") break;
         const stop = yield* awaited(ui.confirm(options.cancelTitle, options.cancelMessage));
-        if (!stop || completed) continue;
+        if (!stop || progress.completed) continue;
         try {
           yield* awaited(options.cancel());
         } finally {

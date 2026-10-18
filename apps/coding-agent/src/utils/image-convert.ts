@@ -84,5 +84,6 @@ export function ensurePngTranscoder(onRegistered: () => void): void {
   });
   void pngTranscoderLoad.then((registered) => {
     if (registered) onRegistered();
+    return undefined;
   });
 }

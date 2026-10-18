@@ -1,6 +1,8 @@
 import { appendFileSync, mkdirSync, renameSync, statSync } from "node:fs";
 import { dirname } from "node:path";
 
+import { nowMs, toDate } from "../../core/platform.ts";
+
 const MAX_LOG_BYTES = 5 * 1024 * 1024;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -19,7 +21,7 @@ function formatData(data: unknown): string {
 export function formatMcpLogMessage(
   server: string,
   params: unknown,
-  now: Date = new Date(),
+  now: Date = toDate(nowMs()),
 ): string {
   const message = isRecord(params) ? params : { data: params };
   const level = typeof message["level"] === "string" ? message["level"] : "info";

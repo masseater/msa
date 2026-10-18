@@ -9,8 +9,8 @@ import { spawnProcessSync } from "./utils/child-process.ts";
 import { normalizePath } from "./utils/paths.ts";
 import { stripBom } from "./utils/text.ts";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+const moduleFilename = fileURLToPath(import.meta.url);
+const moduleDirname = dirname(moduleFilename);
 
 export const isBunBinary =
   import.meta.url.includes("$bunfs") ||
@@ -71,7 +71,9 @@ export function detectInstallMethod(): InstallMethod {
     return "bun-binary";
   }
 
-  const resolvedPath = `${__dirname}\0${process.execPath || ""}`.toLowerCase().replace(/\\/gu, "/");
+  const resolvedPath = `${moduleDirname}\0${process.execPath || ""}`
+    .toLowerCase()
+    .replace(/\\/gu, "/");
 
   if (resolvedPath.includes("/pnpm/") || resolvedPath.includes("/.pnpm/")) {
     return "pnpm";
@@ -344,12 +346,12 @@ function isManagedByGlobalPackageManager(
     (dir): dir is string => dir !== undefined && dir !== "",
   );
   const packageDirCandidates = packageDirs.flatMap((dir) => getPathComparisonCandidates(dir));
-  return getGlobalPackageRoots(method, packageName, npmCommand).some((root) => {
-    return getPathComparisonCandidates(root).some((normalizedRoot) => {
+  return getGlobalPackageRoots(method, packageName, npmCommand).some((root) =>
+    getPathComparisonCandidates(root).some((normalizedRoot) => {
       const rootPrefix = normalizedRoot.endsWith(sep) ? normalizedRoot : `${normalizedRoot}${sep}`;
       return packageDirCandidates.some((packageDir) => packageDir.startsWith(rootPrefix));
-    });
-  });
+    }),
+  );
 }
 
 export function getSelfUpdateCommand(
@@ -431,7 +433,7 @@ export function getPackageDir(): string {
   if (isBunBinary) {
     return dirname(process.execPath);
   }
-  return findNodePackageDir(__dirname);
+  return findNodePackageDir(moduleDirname);
 }
 
 export function getThemesDir(): string {

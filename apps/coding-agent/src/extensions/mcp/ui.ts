@@ -77,7 +77,7 @@ export class McpManagerView implements McpUi, Component, Focusable {
   private content: Container;
   private inputHandler: ((data: string) => void) | undefined;
   private inputTarget: Focusable | undefined;
-  private _focused = false;
+  private isFocused = false;
 
   constructor(tui: TUI, theme: Theme, keybindings: KeybindingsManager) {
     this.tui = tui;
@@ -87,11 +87,11 @@ export class McpManagerView implements McpUi, Component, Focusable {
   }
 
   get focused(): boolean {
-    return this._focused;
+    return this.isFocused;
   }
 
   set focused(value: boolean) {
-    this._focused = value;
+    this.isFocused = value;
     if (this.inputTarget !== undefined) this.inputTarget.focused = value;
   }
 
@@ -104,7 +104,7 @@ export class McpManagerView implements McpUi, Component, Focusable {
     this.content = content;
     this.inputHandler = inputHandler;
     this.inputTarget = inputTarget;
-    if (this.inputTarget !== undefined) this.inputTarget.focused = this._focused;
+    if (this.inputTarget !== undefined) this.inputTarget.focused = this.isFocused;
     this.tui.requestRender();
   }
 

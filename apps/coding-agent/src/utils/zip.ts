@@ -1,6 +1,8 @@
 import { writeFile } from "node:fs/promises";
 import { crc32, deflateRawSync } from "node:zlib";
 
+import { nowMs, toDate } from "../core/platform.ts";
+
 interface ZipEntry {
   name: string;
   data: string | Uint8Array;
@@ -19,7 +21,7 @@ function dosDateTime(date: Date): { time: number; day: number } {
 function createZipArchive(entries: readonly ZipEntry[]): Buffer {
   const files: Buffer[] = [];
   const directory: Buffer[] = [];
-  const { time, day } = dosDateTime(new Date());
+  const { time, day } = dosDateTime(toDate(nowMs()));
   let offset = 0;
 
   for (const entry of entries) {

@@ -1,4 +1,5 @@
 import type { AuthResult } from "@msa/ai";
+import { Data } from "effect";
 
 import { APP_NAME } from "../config.ts";
 import { writeLog } from "../core/platform.ts";
@@ -15,7 +16,13 @@ export interface AuthCommand {
   minExpiryMs?: number;
 }
 
-export class AuthCommandError extends Error {}
+export class AuthCommandError extends Data.TaggedError("AuthCommandError")<{
+  readonly message: string;
+}> {
+  constructor(message: string) {
+    super({ message });
+  }
+}
 
 const AUTH_COMMAND_USAGE: Record<AuthCommandKind, string> = {
   check: `${APP_NAME} auth check --provider <provider> [--json] [--credentials] [--no-refresh]`,

@@ -33,16 +33,18 @@ export function raceWithAbortSignal<T>(
     signal.addEventListener("abort", onAbort, { once: true });
     void operation.then(
       (value) => {
-        if (settled) return;
+        if (settled) return undefined;
         settled = true;
         cleanup();
         resolve(value);
+        return undefined;
       },
       (error: unknown) => {
-        if (settled) return;
+        if (settled) return undefined;
         settled = true;
         cleanup();
         reject(error);
+        return undefined;
       },
     );
     if (signal.aborted) onAbort();

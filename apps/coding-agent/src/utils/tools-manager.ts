@@ -17,7 +17,7 @@ import * as Effect from "effect/Effect";
 
 import { APP_NAME, getBinDir } from "../config.ts";
 import { awaited, awaiting } from "../core/awaiting.ts";
-import { nowMs, readEnv } from "../core/platform.ts";
+import { nowMs, randomUnit, readEnv } from "../core/platform.ts";
 import { fetchWithRetry } from "./management-http.ts";
 
 const TOOLS_DIR = getBinDir();
@@ -302,7 +302,7 @@ function downloadTool(tool: "fd" | "rg"): Promise<string> {
 
       const extractDir = join(
         TOOLS_DIR,
-        `extract_tmp_${config.binaryName}_${process.pid}_${nowMs()}_${Math.random().toString(36).slice(2, 10)}`,
+        `extract_tmp_${config.binaryName}_${process.pid}_${nowMs()}_${randomUnit().toString(36).slice(2, 10)}`,
       );
       mkdirSync(extractDir, { recursive: true });
 

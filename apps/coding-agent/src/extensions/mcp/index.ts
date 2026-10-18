@@ -567,7 +567,7 @@ export function createMcpExtension(options: McpExtensionOptions = {}): Extension
 
     const startConnection = (server: McpServer, after?: Promise<unknown>): Promise<void> => {
       const { signal } = session;
-      const attempt = Symbol();
+      const attempt = Symbol("connection attempt");
       server.attempt = attempt;
       const isCurrent = () =>
         !signal.aborted &&
@@ -591,12 +591,21 @@ export function createMcpExtension(options: McpExtensionOptions = {}): Extension
     const waitForServers = (waiting: readonly McpServer[], signal: AbortSignal | undefined) =>
       Effect.runPromise(
         awaiting(function* () {
-          for (;;) {
-            const ready = waiting.flatMap((server) =>
+          const readyOf = () =>
+            waiting.flatMap((server) =>
               isEnabled(server) && servers.includes(server) && server.ready !== undefined
                 ? [{ server, ready: server.ready }]
                 : [],
             );
+          const unchanged = (ready: ReturnType<typeof readyOf>) =>
+            ready.every(
+              (attempt) =>
+                !isEnabled(attempt.server) ||
+                !servers.includes(attempt.server) ||
+                attempt.ready === attempt.server.ready,
+            );
+          for (;;) {
+            const ready = readyOf();
             if (ready.length === 0 || signal?.aborted === true) return;
             let onAbort: (() => void) | undefined;
             yield* awaited(
@@ -609,16 +618,7 @@ export function createMcpExtension(options: McpExtensionOptions = {}): Extension
               ]),
             );
             if (onAbort !== undefined) signal?.removeEventListener("abort", onAbort);
-            if (
-              (signal?.aborted ?? false) ||
-              ready.every(
-                (attempt) =>
-                  !isEnabled(attempt.server) ||
-                  !servers.includes(attempt.server) ||
-                  attempt.ready === attempt.server.ready,
-              )
-            )
-              return;
+            if ((signal?.aborted ?? false) || unchanged(ready)) return;
           }
         }),
       );
@@ -1225,6 +1225,7 @@ export function createMcpExtension(options: McpExtensionOptions = {}): Extension
       pending = Promise.all(enabled.map((server) => startConnection(server, runtime)))
         .then(() => {
           if (!signal.aborted) reportProblems(ctx);
+          return undefined;
         })
         .catch((error: unknown) => {
           try {
@@ -1278,16 +1279,14 @@ export function createMcpExtension(options: McpExtensionOptions = {}): Extension
 
           const readyServers = servers.filter((server) => isEnabled(server) && server.ready);
           if (readyServers.length === 0) return;
-          let waiting: McpServer[] = [];
           const reach = tool.reachesTools?.(event.input);
-          if (reach !== undefined) {
-            waiting = readyServers.filter((server) => reachesServer(reach, server.entry.name));
-          } else if (RESOURCE_TOOL_NAMES.has(tool.name)) {
-            waiting = readyServers;
-          } else {
-            const owner = toolOwners.get(event.toolName)?.split("\0", 1)[0];
-            waiting = readyServers.filter((server) => server.entry.name === owner);
-          }
+          const owner = toolOwners.get(event.toolName)?.split("\0", 1)[0];
+          const waiting =
+            reach === undefined
+              ? RESOURCE_TOOL_NAMES.has(tool.name)
+                ? readyServers
+                : readyServers.filter((server) => server.entry.name === owner)
+              : readyServers.filter((server) => reachesServer(reach, server.entry.name));
           yield* awaited(waitForServers(waiting, ctx.signal));
         }),
       ),

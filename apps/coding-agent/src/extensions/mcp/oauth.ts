@@ -20,6 +20,7 @@ import {
   parseWwwAuthenticate,
   stepUpScope,
 } from "@msa/mcp/oauth";
+import { Data } from "effect";
 import * as Effect from "effect/Effect";
 import lockfile from "proper-lockfile";
 
@@ -380,10 +381,11 @@ export interface McpSignInPrompt {
   promptForRedirectUrl(signal: AbortSignal): Promise<string | undefined>;
 }
 
-export class McpSignInCancelledError extends Error {
+export class McpSignInCancelledError extends Data.TaggedError("McpSignInCancelledError")<{
+  readonly message: string;
+}> {
   constructor() {
-    super("Sign-in cancelled");
-    this.name = "McpSignInCancelledError";
+    super({ message: "Sign-in cancelled" });
   }
 }
 

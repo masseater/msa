@@ -216,7 +216,7 @@ class Session {
     this.server.server.setRequestHandler(sdk.CallToolRequestSchema, (request) =>
       Effect.runPromise(
         awaitingWith(function* () {
-          const id = request.params._meta?.["claudecode/toolUseId"];
+          const id = request.params["_meta"]?.["claudecode/toolUseId"];
           if (typeof id !== "string") {
             return {
               content: [{ type: "text", text: "tool call without a tool use id" }],
@@ -514,7 +514,7 @@ function pump(
             apiError = event.error;
             continue;
           }
-          message.content.forEach((block, index) => {
+          for (const [index, block] of message.content.entries()) {
             if (block.type === "tool_use" && block.name.startsWith(TOOL_PREFIX)) {
               session.pending.add(block.id);
               calledTools += 1;
@@ -526,7 +526,7 @@ function pump(
             } else if (block.type === "text" && !sawPartials) {
               reply.setText(`${message.id}:${index}`, block.text);
             }
-          });
+          }
         } else if (event.type === "rate_limit_event") {
           const info = event.rate_limit_info;
 
