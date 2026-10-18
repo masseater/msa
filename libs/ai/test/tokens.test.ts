@@ -7,10 +7,6 @@ type StreamOptionsWithExtras = StreamOptions & Record<string, unknown>;
 
 import { hasAzureOpenAICredentials, resolveAzureDeploymentName } from "./azure-utils.ts";
 import { hasBedrockCredentials } from "./bedrock-utils.ts";
-import {
-  hasCloudflareAiGatewayCredentials,
-  hasCloudflareWorkersAICredentials,
-} from "./cloudflare-utils.ts";
 import { resolveApiKey } from "./oauth.ts";
 
 // Resolve OAuth tokens at module level (async, runs before tests)
@@ -53,21 +49,15 @@ async function testTokensOnAbort<TApi extends Api>(
 
   // OpenAI providers, OpenAI Codex, zai, and Amazon Bedrock only send usage in the final chunk,
   // so when aborted they have no token stats. Anthropic and Google send usage information early in the stream.
-  // Kimi reports input tokens but not output tokens on aborted requests.
   if (
     llm.api === "openai-completions" ||
     llm.api === "mistral-conversations" ||
     llm.api === "openai-responses" ||
     llm.api === "azure-openai-responses" ||
     llm.api === "openai-codex-responses" ||
-    llm.provider === "amazon-bedrock" ||
-    llm.provider === "vercel-ai-gateway"
+    llm.provider === "amazon-bedrock"
   ) {
     expect(msg.usage.input).toBe(0);
-    expect(msg.usage.output).toBe(0);
-  } else if (llm.provider === "kimi-coding") {
-    // Kimi reports input tokens early but output tokens only in the final chunk.
-    expect(msg.usage.input).toBeGreaterThan(0);
     expect(msg.usage.output).toBe(0);
   } else {
     expect(msg.usage.input).toBeGreaterThan(0);
@@ -149,80 +139,8 @@ describe("Token Statistics on Abort", () => {
     );
   });
 
-  describe.skipIf(!process.env["XAI_API_KEY"])("xAI Provider", () => {
-    const llm = getModel("xai", "grok-4.3");
-
-    it(
-      "should include token stats when aborted mid-stream",
-      { retry: 3, timeout: 30000 },
-      async () => {
-        await testTokensOnAbort(llm);
-      },
-    );
-  });
-
-  describe.skipIf(!hasCloudflareWorkersAICredentials())("Cloudflare Workers AI Provider", () => {
-    const llm = getModel("cloudflare-workers-ai", "@cf/moonshotai/kimi-k2.6");
-
-    it(
-      "should include token stats when aborted mid-stream",
-      { retry: 3, timeout: 30000 },
-      async () => {
-        await testTokensOnAbort(llm);
-      },
-    );
-  });
-
-  describe.skipIf(!hasCloudflareAiGatewayCredentials())("Cloudflare AI Gateway Provider", () => {
-    const llm = getModel("cloudflare-ai-gateway", "workers-ai/@cf/moonshotai/kimi-k2.6");
-
-    it(
-      "should include token stats when aborted mid-stream",
-      { retry: 3, timeout: 30000 },
-      async () => {
-        await testTokensOnAbort(llm);
-      },
-    );
-  });
-
   describe.skipIf(!process.env["MISTRAL_API_KEY"])("Mistral Provider", () => {
     const llm = getModel("mistral", "devstral-medium-latest");
-
-    it(
-      "should include token stats when aborted mid-stream",
-      { retry: 3, timeout: 30000 },
-      async () => {
-        await testTokensOnAbort(llm);
-      },
-    );
-  });
-
-  describe.skipIf(!process.env["KIMI_API_KEY"])("Kimi For Coding Provider", () => {
-    const llm = getModel("kimi-coding", "kimi-for-coding");
-
-    it(
-      "should include token stats when aborted mid-stream",
-      { retry: 3, timeout: 30000 },
-      async () => {
-        await testTokensOnAbort(llm);
-      },
-    );
-  });
-
-  describe.skipIf(!process.env["META_API_KEY"])("Meta Provider", () => {
-    const llm = getModel("meta", "muse-spark-1.3");
-
-    it(
-      "should include token stats when aborted mid-stream",
-      { retry: 3, timeout: 30000 },
-      async () => {
-        await testTokensOnAbort(llm);
-      },
-    );
-  });
-
-  describe.skipIf(!process.env["AI_GATEWAY_API_KEY"])("Vercel AI Gateway Provider", () => {
-    const llm = getModel("vercel-ai-gateway", "google/gemini-2.5-flash");
 
     it(
       "should include token stats when aborted mid-stream",

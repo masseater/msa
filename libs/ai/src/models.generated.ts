@@ -4,12 +4,8 @@
 import { AMAZON_BEDROCK_CLASSIFIER_MODELS, AMAZON_BEDROCK_IMAGE_MODELS, AMAZON_BEDROCK_MODELS } from "./providers/amazon-bedrock.models.ts";
 import { ANTHROPIC_CLASSIFIER_MODELS, ANTHROPIC_IMAGE_MODELS, ANTHROPIC_MODELS } from "./providers/anthropic.models.ts";
 import { AZURE_CLASSIFIER_MODELS, AZURE_IMAGE_MODELS, AZURE_MODELS } from "./providers/azure.models.ts";
-import { CLOUDFLARE_AI_GATEWAY_CLASSIFIER_MODELS, CLOUDFLARE_AI_GATEWAY_IMAGE_MODELS, CLOUDFLARE_AI_GATEWAY_MODELS } from "./providers/cloudflare-ai-gateway.models.ts";
-import { CLOUDFLARE_WORKERS_AI_CLASSIFIER_MODELS, CLOUDFLARE_WORKERS_AI_IMAGE_MODELS, CLOUDFLARE_WORKERS_AI_MODELS } from "./providers/cloudflare-workers-ai.models.ts";
 import { GOOGLE_CLASSIFIER_MODELS, GOOGLE_IMAGE_MODELS, GOOGLE_MODELS } from "./providers/google.models.ts";
 import { GOOGLE_VERTEX_CLASSIFIER_MODELS, GOOGLE_VERTEX_IMAGE_MODELS, GOOGLE_VERTEX_MODELS } from "./providers/google-vertex.models.ts";
-import { KIMI_CODING_CLASSIFIER_MODELS, KIMI_CODING_IMAGE_MODELS, KIMI_CODING_MODELS } from "./providers/kimi-coding.models.ts";
-import { META_CLASSIFIER_MODELS, META_IMAGE_MODELS, META_MODELS } from "./providers/meta.models.ts";
 import { MISTRAL_CLASSIFIER_MODELS, MISTRAL_IMAGE_MODELS, MISTRAL_MODELS } from "./providers/mistral.models.ts";
 import { OPENAI_CLASSIFIER_MODELS, OPENAI_IMAGE_MODELS, OPENAI_MODELS } from "./providers/openai.models.ts";
 import { OPENAI_CODEX_CLASSIFIER_MODELS, OPENAI_CODEX_IMAGE_MODELS, OPENAI_CODEX_MODELS } from "./providers/openai-codex.models.ts";
@@ -17,20 +13,13 @@ import { OPENCODE_CLASSIFIER_MODELS, OPENCODE_IMAGE_MODELS, OPENCODE_MODELS } fr
 import { OPENCODE_GO_CLASSIFIER_MODELS, OPENCODE_GO_IMAGE_MODELS, OPENCODE_GO_MODELS } from "./providers/opencode-go.models.ts";
 import { OPENROUTER_CLASSIFIER_MODELS, OPENROUTER_IMAGE_MODELS, OPENROUTER_MODELS } from "./providers/openrouter.models.ts";
 import { RADIUS_CLASSIFIER_MODELS, RADIUS_IMAGE_MODELS, RADIUS_MODELS } from "./providers/radius.models.ts";
-import { TYPESAFE_CLASSIFIER_MODELS, TYPESAFE_IMAGE_MODELS, TYPESAFE_MODELS } from "./providers/typesafe.models.ts";
-import { VERCEL_AI_GATEWAY_CLASSIFIER_MODELS, VERCEL_AI_GATEWAY_IMAGE_MODELS, VERCEL_AI_GATEWAY_MODELS } from "./providers/vercel-ai-gateway.models.ts";
-import { XAI_CLASSIFIER_MODELS, XAI_IMAGE_MODELS, XAI_MODELS } from "./providers/xai.models.ts";
 
 export const MODELS: {
 	readonly "amazon-bedrock": typeof AMAZON_BEDROCK_MODELS;
 	readonly "anthropic": typeof ANTHROPIC_MODELS;
 	readonly "azure": typeof AZURE_MODELS;
-	readonly "cloudflare-ai-gateway": typeof CLOUDFLARE_AI_GATEWAY_MODELS;
-	readonly "cloudflare-workers-ai": typeof CLOUDFLARE_WORKERS_AI_MODELS;
 	readonly "google": typeof GOOGLE_MODELS;
 	readonly "google-vertex": typeof GOOGLE_VERTEX_MODELS;
-	readonly "kimi-coding": typeof KIMI_CODING_MODELS;
-	readonly "meta": typeof META_MODELS;
 	readonly "mistral": typeof MISTRAL_MODELS;
 	readonly "openai": typeof OPENAI_MODELS;
 	readonly "openai-codex": typeof OPENAI_CODEX_MODELS;
@@ -38,19 +27,12 @@ export const MODELS: {
 	readonly "opencode-go": typeof OPENCODE_GO_MODELS;
 	readonly "openrouter": typeof OPENROUTER_MODELS;
 	readonly "radius": typeof RADIUS_MODELS;
-	readonly "typesafe": typeof TYPESAFE_MODELS;
-	readonly "vercel-ai-gateway": typeof VERCEL_AI_GATEWAY_MODELS;
-	readonly "xai": typeof XAI_MODELS;
 } = {
 	"amazon-bedrock": AMAZON_BEDROCK_MODELS,
 	"anthropic": ANTHROPIC_MODELS,
 	"azure": AZURE_MODELS,
-	"cloudflare-ai-gateway": CLOUDFLARE_AI_GATEWAY_MODELS,
-	"cloudflare-workers-ai": CLOUDFLARE_WORKERS_AI_MODELS,
 	"google": GOOGLE_MODELS,
 	"google-vertex": GOOGLE_VERTEX_MODELS,
-	"kimi-coding": KIMI_CODING_MODELS,
-	"meta": META_MODELS,
 	"mistral": MISTRAL_MODELS,
 	"openai": OPENAI_MODELS,
 	"openai-codex": OPENAI_CODEX_MODELS,
@@ -58,21 +40,14 @@ export const MODELS: {
 	"opencode-go": OPENCODE_GO_MODELS,
 	"openrouter": OPENROUTER_MODELS,
 	"radius": RADIUS_MODELS,
-	"typesafe": TYPESAFE_MODELS,
-	"vercel-ai-gateway": VERCEL_AI_GATEWAY_MODELS,
-	"xai": XAI_MODELS,
 };
 
 export const IMAGE_MODELS: {
 	readonly "amazon-bedrock": typeof AMAZON_BEDROCK_IMAGE_MODELS;
 	readonly "anthropic": typeof ANTHROPIC_IMAGE_MODELS;
 	readonly "azure": typeof AZURE_IMAGE_MODELS;
-	readonly "cloudflare-ai-gateway": typeof CLOUDFLARE_AI_GATEWAY_IMAGE_MODELS;
-	readonly "cloudflare-workers-ai": typeof CLOUDFLARE_WORKERS_AI_IMAGE_MODELS;
 	readonly "google": typeof GOOGLE_IMAGE_MODELS;
 	readonly "google-vertex": typeof GOOGLE_VERTEX_IMAGE_MODELS;
-	readonly "kimi-coding": typeof KIMI_CODING_IMAGE_MODELS;
-	readonly "meta": typeof META_IMAGE_MODELS;
 	readonly "mistral": typeof MISTRAL_IMAGE_MODELS;
 	readonly "openai": typeof OPENAI_IMAGE_MODELS;
 	readonly "openai-codex": typeof OPENAI_CODEX_IMAGE_MODELS;
@@ -80,19 +55,12 @@ export const IMAGE_MODELS: {
 	readonly "opencode-go": typeof OPENCODE_GO_IMAGE_MODELS;
 	readonly "openrouter": typeof OPENROUTER_IMAGE_MODELS;
 	readonly "radius": typeof RADIUS_IMAGE_MODELS;
-	readonly "typesafe": typeof TYPESAFE_IMAGE_MODELS;
-	readonly "vercel-ai-gateway": typeof VERCEL_AI_GATEWAY_IMAGE_MODELS;
-	readonly "xai": typeof XAI_IMAGE_MODELS;
 } = {
 	"amazon-bedrock": AMAZON_BEDROCK_IMAGE_MODELS,
 	"anthropic": ANTHROPIC_IMAGE_MODELS,
 	"azure": AZURE_IMAGE_MODELS,
-	"cloudflare-ai-gateway": CLOUDFLARE_AI_GATEWAY_IMAGE_MODELS,
-	"cloudflare-workers-ai": CLOUDFLARE_WORKERS_AI_IMAGE_MODELS,
 	"google": GOOGLE_IMAGE_MODELS,
 	"google-vertex": GOOGLE_VERTEX_IMAGE_MODELS,
-	"kimi-coding": KIMI_CODING_IMAGE_MODELS,
-	"meta": META_IMAGE_MODELS,
 	"mistral": MISTRAL_IMAGE_MODELS,
 	"openai": OPENAI_IMAGE_MODELS,
 	"openai-codex": OPENAI_CODEX_IMAGE_MODELS,
@@ -100,21 +68,14 @@ export const IMAGE_MODELS: {
 	"opencode-go": OPENCODE_GO_IMAGE_MODELS,
 	"openrouter": OPENROUTER_IMAGE_MODELS,
 	"radius": RADIUS_IMAGE_MODELS,
-	"typesafe": TYPESAFE_IMAGE_MODELS,
-	"vercel-ai-gateway": VERCEL_AI_GATEWAY_IMAGE_MODELS,
-	"xai": XAI_IMAGE_MODELS,
 };
 
 export const CLASSIFIER_MODELS: {
 	readonly "amazon-bedrock": typeof AMAZON_BEDROCK_CLASSIFIER_MODELS;
 	readonly "anthropic": typeof ANTHROPIC_CLASSIFIER_MODELS;
 	readonly "azure": typeof AZURE_CLASSIFIER_MODELS;
-	readonly "cloudflare-ai-gateway": typeof CLOUDFLARE_AI_GATEWAY_CLASSIFIER_MODELS;
-	readonly "cloudflare-workers-ai": typeof CLOUDFLARE_WORKERS_AI_CLASSIFIER_MODELS;
 	readonly "google": typeof GOOGLE_CLASSIFIER_MODELS;
 	readonly "google-vertex": typeof GOOGLE_VERTEX_CLASSIFIER_MODELS;
-	readonly "kimi-coding": typeof KIMI_CODING_CLASSIFIER_MODELS;
-	readonly "meta": typeof META_CLASSIFIER_MODELS;
 	readonly "mistral": typeof MISTRAL_CLASSIFIER_MODELS;
 	readonly "openai": typeof OPENAI_CLASSIFIER_MODELS;
 	readonly "openai-codex": typeof OPENAI_CODEX_CLASSIFIER_MODELS;
@@ -122,19 +83,12 @@ export const CLASSIFIER_MODELS: {
 	readonly "opencode-go": typeof OPENCODE_GO_CLASSIFIER_MODELS;
 	readonly "openrouter": typeof OPENROUTER_CLASSIFIER_MODELS;
 	readonly "radius": typeof RADIUS_CLASSIFIER_MODELS;
-	readonly "typesafe": typeof TYPESAFE_CLASSIFIER_MODELS;
-	readonly "vercel-ai-gateway": typeof VERCEL_AI_GATEWAY_CLASSIFIER_MODELS;
-	readonly "xai": typeof XAI_CLASSIFIER_MODELS;
 } = {
 	"amazon-bedrock": AMAZON_BEDROCK_CLASSIFIER_MODELS,
 	"anthropic": ANTHROPIC_CLASSIFIER_MODELS,
 	"azure": AZURE_CLASSIFIER_MODELS,
-	"cloudflare-ai-gateway": CLOUDFLARE_AI_GATEWAY_CLASSIFIER_MODELS,
-	"cloudflare-workers-ai": CLOUDFLARE_WORKERS_AI_CLASSIFIER_MODELS,
 	"google": GOOGLE_CLASSIFIER_MODELS,
 	"google-vertex": GOOGLE_VERTEX_CLASSIFIER_MODELS,
-	"kimi-coding": KIMI_CODING_CLASSIFIER_MODELS,
-	"meta": META_CLASSIFIER_MODELS,
 	"mistral": MISTRAL_CLASSIFIER_MODELS,
 	"openai": OPENAI_CLASSIFIER_MODELS,
 	"openai-codex": OPENAI_CODEX_CLASSIFIER_MODELS,
@@ -142,7 +96,4 @@ export const CLASSIFIER_MODELS: {
 	"opencode-go": OPENCODE_GO_CLASSIFIER_MODELS,
 	"openrouter": OPENROUTER_CLASSIFIER_MODELS,
 	"radius": RADIUS_CLASSIFIER_MODELS,
-	"typesafe": TYPESAFE_CLASSIFIER_MODELS,
-	"vercel-ai-gateway": VERCEL_AI_GATEWAY_CLASSIFIER_MODELS,
-	"xai": XAI_CLASSIFIER_MODELS,
 };

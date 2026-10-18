@@ -98,20 +98,6 @@ describe("ModelRuntime auth options", () => {
           type: "oauth",
           provider: expect.objectContaining({ id: "anthropic", name: "Anthropic" }),
         }),
-        expect.objectContaining({
-          type: "api_key",
-          provider: expect.objectContaining({
-            id: "cloudflare-ai-gateway",
-            name: "Cloudflare AI Gateway",
-          }),
-        }),
-        expect.objectContaining({
-          type: "api_key",
-          provider: expect.objectContaining({
-            id: "cloudflare-workers-ai",
-            name: "Cloudflare Workers AI",
-          }),
-        }),
       ]),
     );
     expect(authOptions(runtime, "api_key").every((option) => option.type === "api_key")).toBe(true);

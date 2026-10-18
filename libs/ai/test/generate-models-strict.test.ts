@@ -60,7 +60,7 @@ describe("strict model generation", () => {
 
     expect(result.status).toBe(1);
     expect(`${result.stdout}\n${result.stderr}`).toContain(
-      "Unexpected fetch: https://models.dev/models.json?type=decision",
+      "Unexpected fetch: https://openrouter.ai/api/v1/models",
     );
     expect(
       generatedPaths.map((path) => readFileSync(join(isolatedPackageRoot, path), "utf8")),

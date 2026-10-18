@@ -4,8 +4,6 @@ import type { SettingsManager } from "./settings-manager.ts";
 import { isInstallTelemetryEnabled } from "./telemetry.ts";
 
 const OPENROUTER_HOST = "openrouter.ai";
-const CLOUDFLARE_API_HOST = "api.cloudflare.com";
-const CLOUDFLARE_AI_GATEWAY_HOST = "gateway.ai.cloudflare.com";
 const OPENCODE_HOST = "opencode.ai";
 
 function matchesHost(baseUrl: string, expectedHost: string): boolean {
@@ -18,15 +16,6 @@ function matchesHost(baseUrl: string, expectedHost: string): boolean {
 
 function isOpenRouterModel(model: Model<Api>): boolean {
   return model.provider === "openrouter" || model.baseUrl.includes(OPENROUTER_HOST);
-}
-
-function isCloudflareModel(model: Model<Api>): boolean {
-  return (
-    model.provider === "cloudflare-workers-ai" ||
-    model.provider === "cloudflare-ai-gateway" ||
-    matchesHost(model.baseUrl, CLOUDFLARE_API_HOST) ||
-    matchesHost(model.baseUrl, CLOUDFLARE_AI_GATEWAY_HOST)
-  );
 }
 
 function getDefaultAttributionHeaders(
@@ -42,12 +31,6 @@ function getDefaultAttributionHeaders(
       "HTTP-Referer": "https://pi.dev",
       "X-OpenRouter-Title": "pi",
       "X-OpenRouter-Categories": "cli-agent",
-    };
-  }
-
-  if (isCloudflareModel(model)) {
-    return {
-      "User-Agent": "pi-coding-agent",
     };
   }
 

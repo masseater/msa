@@ -550,7 +550,7 @@ export class SettingsSelectorComponent extends Container {
       {
         id: "install-telemetry",
         label: "Provider attribution",
-        description: "Send attribution headers to OpenRouter and Cloudflare",
+        description: "Send attribution headers to OpenRouter",
         currentValue: config.enableInstallTelemetry ? "true" : "false",
         values: ["true", "false"],
       },

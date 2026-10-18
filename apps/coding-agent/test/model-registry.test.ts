@@ -1268,23 +1268,18 @@ describe("ModelRegistry", () => {
     });
 
     test("stored API key env propagates to request auth and resolves headers", async () => {
-      await authStorage.modify("cloudflare-ai-gateway", async () => ({
+      await authStorage.modify("amazon-bedrock", async () => ({
         type: "api_key",
-        key: "$CLOUDFLARE_API_KEY",
-        env: {
-          CLOUDFLARE_API_KEY: "stored-cf-token",
-          CLOUDFLARE_ACCOUNT_ID: "stored-account",
-          CLOUDFLARE_GATEWAY_ID: "stored-gateway",
-        },
+        env: { AWS_PROFILE: "stored-profile" },
       }));
       writeRawModelsJson({
-        "cloudflare-ai-gateway": {
-          headers: { "x-account": "$CLOUDFLARE_ACCOUNT_ID" },
+        "amazon-bedrock": {
+          headers: { "x-profile": "$AWS_PROFILE" },
         },
       });
 
       const registry = await createModelRegistry(authStorage, modelsJsonPath);
-      const model = registry.getAll().find((m) => m.provider === "cloudflare-ai-gateway");
+      const model = registry.getAll().find((m) => m.provider === "amazon-bedrock");
       expect(model).toBeDefined();
 
       const auth = await registry.getApiKeyAndHeaders(model!);
@@ -1292,16 +1287,8 @@ describe("ModelRegistry", () => {
       expect(auth).toEqual({
         ok: true,
         apiKey: undefined,
-        headers: {
-          "cf-aig-authorization": "Bearer stored-cf-token",
-          Authorization: null,
-          "x-api-key": null,
-          "x-account": "stored-account",
-        },
-        env: {
-          CLOUDFLARE_ACCOUNT_ID: "stored-account",
-          CLOUDFLARE_GATEWAY_ID: "stored-gateway",
-        },
+        headers: { "x-profile": "stored-profile" },
+        env: { AWS_PROFILE: "stored-profile" },
       });
     });
 

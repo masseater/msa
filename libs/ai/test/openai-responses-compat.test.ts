@@ -162,8 +162,8 @@ describe("openai-responses provider defaults", () => {
     });
   });
 
-  it("sets strict mode explicitly for Cloudflare OpenAI Responses tools", async () => {
-    const model = getModel("cloudflare-ai-gateway", "gpt-5.6-sol");
+  it("sets strict mode explicitly for OpenAI Responses tools", async () => {
+    const model = getModel("openai", "gpt-5.6-sol");
     let capturedPayload: CapturedResponsesPayload | undefined;
 
     vi.spyOn(globalThis, "fetch").mockResolvedValue(

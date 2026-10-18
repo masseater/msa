@@ -184,5 +184,5 @@ The built-in extensions are named `builtin:mcp`, `builtin:llama.cpp`, `builtin:c
 | Setting                  | Type    | Default | Description                                                                                |
 | ------------------------ | ------- | ------- | ------------------------------------------------------------------------------------------ |
 | `collapseChangelog`      | boolean | `false` | Show a condensed changelog after an update.                                                |
-| `enableInstallTelemetry` | boolean | `true`  | Send attribution headers to OpenRouter and Cloudflare. Does not control update checks.     |
+| `enableInstallTelemetry` | boolean | `true`  | Send attribution headers to OpenRouter. Does not control update checks.                    |
 | `enableAnalytics`        | boolean | `false` | Opt in to analytics data sharing. Currently used only by the experimental first-run setup. |

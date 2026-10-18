@@ -187,30 +187,6 @@ describe("AI Providers Abort Tests", () => {
     });
   });
 
-  describe.skipIf(!process.env["KIMI_API_KEY"])("Kimi For Coding Provider Abort", () => {
-    const llm = getModel("kimi-coding", "kimi-for-coding");
-
-    it("should abort mid-stream", { retry: 3 }, async () => {
-      await testAbortSignal(llm);
-    });
-
-    it("should handle immediate abort", { retry: 3 }, async () => {
-      await testImmediateAbort(llm);
-    });
-  });
-
-  describe.skipIf(!process.env["AI_GATEWAY_API_KEY"])("Vercel AI Gateway Provider Abort", () => {
-    const llm = getModel("vercel-ai-gateway", "google/gemini-2.5-flash");
-
-    it("should abort mid-stream", { retry: 3 }, async () => {
-      await testAbortSignal(llm);
-    });
-
-    it("should handle immediate abort", { retry: 3 }, async () => {
-      await testImmediateAbort(llm);
-    });
-  });
-
   describe("OpenAI Codex Provider Abort", () => {
     it.skipIf(!openaiCodexToken)("should abort mid-stream", { retry: 3 }, async () => {
       const llm = getModel("openai-codex", "gpt-5.5");

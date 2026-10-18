@@ -41,7 +41,6 @@ export type {
   OpenRouterRouting,
   SessionAffinityFormat,
   ThinkingTokenBudgetField,
-  VercelGatewayRouting,
 } from "./providers/compat-schema.ts";
 export type {
   CacheRetention,
@@ -77,11 +76,7 @@ export type KnownImageApi = "openrouter-images";
 
 export type ImageApi = KnownImageApi | (string & {});
 
-export type KnownClassifierApi =
-  | "typesafe-system-one"
-  | "cloudflare-workers-ai-system-one"
-  | "llama-cpp-classify"
-  | "openai-decisions";
+export type KnownClassifierApi = "typesafe-system-one" | "llama-cpp-classify" | "openai-decisions";
 
 export type ClassifierApi = KnownClassifierApi | (string & {});
 
@@ -94,17 +89,10 @@ export type KnownProvider =
   | "azure"
   | "openai-codex"
   | "radius"
-  | "typesafe"
-  | "xai"
   | "openrouter"
-  | "vercel-ai-gateway"
   | "mistral"
   | "opencode"
-  | "opencode-go"
-  | "kimi-coding"
-  | "meta"
-  | "cloudflare-workers-ai"
-  | "cloudflare-ai-gateway";
+  | "opencode-go";
 export type ProviderId = KnownProvider | string;
 
 export type ToolChoice = "auto" | "none";

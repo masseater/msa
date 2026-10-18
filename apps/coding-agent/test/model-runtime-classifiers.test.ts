@@ -23,18 +23,18 @@ describe("ModelRuntime classifiers", () => {
       modelsPath: null,
       allowModelNetwork: false,
     });
-    const jev = runtime.getModelOfType("classifier", "typesafe", "jev-latest")!;
+    const jev = runtime.getModelOfType("classifier", "opencode", "jev-1.13")!;
     expect(jev.type).toBe("classifier");
-    expect(runtime.getModel("typesafe", "jev-latest")).toBeUndefined();
+    expect(runtime.getModel("opencode", "jev-1.13")).toBeUndefined();
 
     const unconfigured = await runtime.classify(jev, context);
     expect(unconfigured.stopReason).toBe("error");
     expect(unconfigured.errorMessage).toContain("not configured");
 
-    await runtime.setRuntimeApiKey("typesafe", "sk-typesafe");
-    expect(await runtime.getAvailableOfType("classifier", "typesafe")).toEqual([jev]);
+    await runtime.setRuntimeApiKey("opencode", "sk-opencode");
+    expect(await runtime.getAvailableOfType("classifier", "opencode")).toContainEqual(jev);
     const fetch = vi.fn(async (_input: string | URL | Request, init?: RequestInit) => {
-      expect(new Headers(init?.headers).get("authorization")).toBe("Bearer sk-typesafe");
+      expect(new Headers(init?.headers).get("authorization")).toBe("Bearer sk-opencode");
       return Response.json({ answers: { approved: { type: "noul", noul: 0.8 } } });
     });
     const result = await runtime.classify(jev, context, { fetch });

@@ -1,14 +1,14 @@
 import { expectTypeOf, it } from "vite-plus/test";
 
-import { XAI_MODELS } from "../src/providers/xai.models.ts";
+import { OPENAI_MODELS } from "../src/providers/openai.models.ts";
 
 it("derives model API, ID, and provider literals from grouped model data", () => {
-  expectTypeOf(XAI_MODELS["grok-4.5"].api).toEqualTypeOf<"openai-responses">();
-  expectTypeOf(XAI_MODELS["grok-4.5"].id).toEqualTypeOf<"grok-4.5">();
-  expectTypeOf(XAI_MODELS["grok-4.5"].provider).toEqualTypeOf<"xai">();
-  expectTypeOf(XAI_MODELS["grok-4.6"].api).toEqualTypeOf<"openai-responses">();
-  expectTypeOf(XAI_MODELS["grok-4.6"].id).toEqualTypeOf<"grok-4.6">();
-  expectTypeOf(XAI_MODELS["grok-4.7"].api).toEqualTypeOf<"openai-responses">();
-  expectTypeOf(XAI_MODELS["grok-4.7"].id).toEqualTypeOf<"grok-4.7">();
-  expectTypeOf(XAI_MODELS["grok-4.3"].api).toEqualTypeOf<"openai-responses">();
+  expectTypeOf(OPENAI_MODELS["gpt-5.5"].api).toEqualTypeOf<"openai-responses">();
+  expectTypeOf(OPENAI_MODELS["gpt-5.5"].id).toEqualTypeOf<"gpt-5.5">();
+  expectTypeOf(OPENAI_MODELS["gpt-5.5"].provider).toEqualTypeOf<"openai">();
+  expectTypeOf(OPENAI_MODELS["gpt-5.4"].api).toEqualTypeOf<"openai-responses">();
+  expectTypeOf(OPENAI_MODELS["gpt-5.4"].id).toEqualTypeOf<"gpt-5.4">();
+  expectTypeOf(OPENAI_MODELS["gpt-6-sol"].api).toEqualTypeOf<"openai-responses">();
+  expectTypeOf(OPENAI_MODELS["gpt-6-sol"].id).toEqualTypeOf<"gpt-6-sol">();
+  expectTypeOf(OPENAI_MODELS["o3"].api).toEqualTypeOf<"openai-responses">();
 });

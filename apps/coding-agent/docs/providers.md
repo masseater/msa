@@ -28,20 +28,15 @@ msa
 
 This table covers providers with a single primary API-key variable. Providers that need additional configuration or support ambient credentials are covered under [Provider Specific Config](#provider-specific-config).
 
-| Provider                                                        | Environment variable |
-| --------------------------------------------------------------- | -------------------- |
-| Anthropic                                                       | `ANTHROPIC_API_KEY`  |
-| OpenAI                                                          | `OPENAI_API_KEY`     |
-| Google Gemini                                                   | `GEMINI_API_KEY`     |
-| Mistral                                                         | `MISTRAL_API_KEY`    |
-| xAI                                                             | `XAI_API_KEY`        |
-| OpenRouter                                                      | `OPENROUTER_API_KEY` |
-| Vercel AI Gateway                                               | `AI_GATEWAY_API_KEY` |
-| OpenCode Zen and Go                                             | `OPENCODE_API_KEY`   |
-| Radius                                                          | `RADIUS_API_KEY`     |
-| TypeSafe ([classifier models](models.md#use-classifier-models)) | `TYPESAFE_API_KEY`   |
-| Kimi For Coding                                                 | `KIMI_API_KEY`       |
-| Meta                                                            | `META_API_KEY`       |
+| Provider            | Environment variable |
+| ------------------- | -------------------- |
+| Anthropic           | `ANTHROPIC_API_KEY`  |
+| OpenAI              | `OPENAI_API_KEY`     |
+| Google Gemini       | `GEMINI_API_KEY`     |
+| Mistral             | `MISTRAL_API_KEY`    |
+| OpenRouter          | `OPENROUTER_API_KEY` |
+| OpenCode Zen and Go | `OPENCODE_API_KEY`   |
+| Radius              | `RADIUS_API_KEY`     |
 
 Anthropic also recognizes `ANTHROPIC_OAUTH_TOKEN` as an API credential and `ANTHROPIC_AUTH_TOKEN` as bearer authentication.
 
@@ -70,11 +65,10 @@ A stored API-key credential can include an `env` object. Its values take priorit
 
 ```json
 {
-  "cloudflare-workers-ai": {
+  "amazon-bedrock": {
     "type": "api_key",
-    "key": "...",
     "env": {
-      "CLOUDFLARE_ACCOUNT_ID": "account-id"
+      "AWS_PROFILE": "my-profile"
     }
   }
 }
@@ -173,31 +167,6 @@ export AWS_REGION=us-west-2
 ```
 
 msa also supports ECS task credentials and IRSA through the standard `AWS_CONTAINER_CREDENTIALS_*` and `AWS_WEB_IDENTITY_TOKEN_FILE` variables.
-
-### Cloudflare AI Gateway
-
-The gateway requires a token, account ID, and gateway ID:
-
-```bash
-export CLOUDFLARE_API_KEY=...
-export CLOUDFLARE_ACCOUNT_ID=...
-export CLOUDFLARE_GATEWAY_ID=...
-```
-
-The account and gateway IDs can come from the process environment or the credential's `env` object in `auth.json`.
-
-`CLOUDFLARE_API_KEY` authenticates msa to the gateway. Upstream access can use Cloudflare unified billing, credentials stored in the gateway, or an `Authorization` header configured for the provider in `models.json`.
-
-### Cloudflare Workers AI
-
-Workers AI requires a token and account ID:
-
-```bash
-export CLOUDFLARE_API_KEY=...
-export CLOUDFLARE_ACCOUNT_ID=...
-```
-
-The account ID can also be stored in the credential's `env` object.
 
 ### Google Vertex AI
 

@@ -20,8 +20,6 @@ import {
 } from "../src/providers/all.ts";
 import { amazonBedrockProvider } from "../src/providers/amazon-bedrock.ts";
 import { anthropicProvider } from "../src/providers/anthropic.ts";
-import { cloudflareAIGatewayProvider } from "../src/providers/cloudflare-ai-gateway.ts";
-import { cloudflareWorkersAIProvider } from "../src/providers/cloudflare-workers-ai.ts";
 import { fauxAssistantMessage, fauxProvider } from "../src/providers/faux.ts";
 import { googleVertexProvider } from "../src/providers/google-vertex.ts";
 import type {
@@ -244,18 +242,6 @@ describe("builtin providers", () => {
     );
   });
 
-  it("uses API-equivalent implied pricing for Kimi Coding subscription models", () => {
-    const models = builtinModels();
-    const expectedCosts = {
-      k3: { input: 3, output: 15, cacheRead: 0.3, cacheWrite: 0 },
-      "kimi-for-coding-highspeed": { input: 1.9, output: 8, cacheRead: 0.38, cacheWrite: 0 },
-    };
-
-    for (const [modelId, cost] of Object.entries(expectedCosts)) {
-      expect(models.getModel("kimi-coding", modelId)?.cost).toEqual(cost);
-    }
-  });
-
   it("resolves Anthropic bearer auth from env with auth token precedence", async () => {
     const models = createModels({
       authContext: fakeAuthContext({
@@ -334,61 +320,6 @@ describe("builtin providers", () => {
     const unconfigured = createModels({ authContext: fakeAuthContext({}) });
     unconfigured.setProvider(amazonBedrockProvider());
     expect(await unconfigured.getAuth(model.provider)).toBeUndefined();
-  });
-
-  it("requires Cloudflare Workers AI account config and returns scoped env", async () => {
-    const missingAccount = createModels({
-      authContext: fakeAuthContext({ CLOUDFLARE_API_KEY: "cf-key" }),
-    });
-    missingAccount.setProvider(cloudflareWorkersAIProvider());
-    const model = missingAccount.getModels("cloudflare-workers-ai")[0];
-    if (!model) throw new Error("Expected a model");
-    expect(await missingAccount.getAuth(model.provider)).toBeUndefined();
-
-    const configured = createModels({
-      authContext: fakeAuthContext({
-        CLOUDFLARE_API_KEY: "cf-key",
-        CLOUDFLARE_ACCOUNT_ID: "account-id",
-      }),
-    });
-    configured.setProvider(cloudflareWorkersAIProvider());
-    const result = await configured.getAuth(model.provider);
-    expect(result?.auth).toEqual({ apiKey: "cf-key" });
-    expect(result?.env).toEqual({ CLOUDFLARE_ACCOUNT_ID: "account-id" });
-  });
-
-  it("requires Cloudflare AI Gateway account and gateway config and returns scoped env headers", async () => {
-    const missingGateway = createModels({
-      authContext: fakeAuthContext({
-        CLOUDFLARE_API_KEY: "cf-key",
-        CLOUDFLARE_ACCOUNT_ID: "account-id",
-      }),
-    });
-    missingGateway.setProvider(cloudflareAIGatewayProvider());
-    const model = missingGateway.getModels("cloudflare-ai-gateway")[0];
-    if (!model) throw new Error("Expected a model");
-    expect(await missingGateway.getAuth(model.provider)).toBeUndefined();
-
-    const configured = createModels({
-      authContext: fakeAuthContext({
-        CLOUDFLARE_API_KEY: "cf-key",
-        CLOUDFLARE_ACCOUNT_ID: "account-id",
-        CLOUDFLARE_GATEWAY_ID: "gateway-id",
-      }),
-    });
-    configured.setProvider(cloudflareAIGatewayProvider());
-    const result = await configured.getAuth(model.provider);
-    expect(result?.auth).toEqual({
-      headers: {
-        "cf-aig-authorization": "Bearer cf-key",
-        Authorization: null,
-        "x-api-key": null,
-      },
-    });
-    expect(result?.env).toEqual({
-      CLOUDFLARE_ACCOUNT_ID: "account-id",
-      CLOUDFLARE_GATEWAY_ID: "gateway-id",
-    });
   });
 
   it("runs provider-owned Vertex API key and ADC login flows", async () => {

@@ -28,15 +28,9 @@ export const defaultModelPerProvider: Partial<Record<KnownProvider, string>> = {
   google: "gemini-3.1-pro-preview",
   "google-vertex": "gemini-3.1-pro-preview",
   openrouter: "moonshotai/kimi-k2.6",
-  "vercel-ai-gateway": "zai/glm-5.1",
-  xai: "grok-4.7",
   mistral: "devstral-medium-latest",
   opencode: "kimi-k2.6",
   "opencode-go": "kimi-k3",
-  "kimi-coding": "kimi-for-coding",
-  meta: "muse-spark-1.3",
-  "cloudflare-workers-ai": "@cf/moonshotai/kimi-k2.6",
-  "cloudflare-ai-gateway": "workers-ai/@cf/moonshotai/kimi-k2.6",
 };
 
 export interface ScopedModel {
