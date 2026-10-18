@@ -164,7 +164,7 @@ describe("system theme", () => {
     const theme = getThemeByName("system")!;
     expect(theme.appearance).toBe("dark");
     expect(theme.getFgAnsi("text")).toBe("\x1b[39m");
-    expect(theme.getFgAnsi("error")).toMatch(/^\x1b\[38;/);
+    expect(theme.getFgAnsi("error").startsWith("\x1b[38;")).toBe(true);
   });
 
   it("renders faint tokens with SGR 2 and closes it", () => {
