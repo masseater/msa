@@ -1,3 +1,5 @@
+import { Effect } from "effect";
+
 import type { ExtensionAPI } from "@msa/coding-agent";
 
 export default function (msa: ExtensionAPI) {
@@ -7,27 +9,30 @@ export default function (msa: ExtensionAPI) {
     /\b(chmod|chown)\b.*777/iu,
   ];
 
-  msa.on("tool_call", async (event, ctx) => {
-    if (event.toolName !== "bash") return undefined;
+  msa.on("tool_call", (event, ctx) =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        if (event.toolName !== "bash") return undefined;
 
-    const command = event.input.command as string;
-    const isDangerous = dangerousPatterns.some((p) => p.test(command));
+        const command = event.input.command as string;
+        const isDangerous = dangerousPatterns.some((p) => p.test(command));
 
-    if (isDangerous) {
-      if (!ctx.hasUI) {
-        return { block: true, reason: "Dangerous command blocked (no UI for confirmation)" };
-      }
+        if (isDangerous) {
+          if (!ctx.hasUI) {
+            return { block: true, reason: "Dangerous command blocked (no UI for confirmation)" };
+          }
 
-      const choice = await ctx.ui.select(`⚠️ Dangerous command:\n\n  ${command}\n\nAllow?`, [
-        "Yes",
-        "No",
-      ]);
+          const choice = yield* Effect.promise(() =>
+            ctx.ui.select(`⚠️ Dangerous command:\n\n  ${command}\n\nAllow?`, ["Yes", "No"]),
+          );
 
-      if (choice !== "Yes") {
-        return { block: true, reason: "Blocked by user" };
-      }
-    }
+          if (choice !== "Yes") {
+            return { block: true, reason: "Blocked by user" };
+          }
+        }
 
-    return undefined;
-  });
+        return undefined;
+      }),
+    ),
+  );
 }

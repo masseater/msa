@@ -1,3 +1,5 @@
+import { Effect } from "effect";
+
 import type { Message } from "@msa/ai";
 import type {
   ExtensionAPI,
@@ -52,33 +54,41 @@ function editedThisTurn(messages: readonly Message[]): boolean {
     );
 }
 
-async function choosePlanningModel(request: JevRequest, ctx: ExtensionContext): Promise<string> {
-  const previous = request.previous?.model;
-  if (previous?.provider === PROVIDER && (previous.id === SOL || previous.id === TERRA))
-    return previous.id;
+const choosePlanningModel = (request: JevRequest, ctx: ExtensionContext) =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const previous = request.previous?.model;
+      if (previous?.provider === PROVIDER && (previous.id === SOL || previous.id === TERRA))
+        return previous.id;
 
-  const jev = ctx.modelRegistry.findOfType("classifier", "openrouter", "~typesafe/jev-latest");
-  if (jev === undefined) return TERRA;
-  const result = await ctx.modelRegistry.classify(
-    jev,
-    {
-      state: { prompt: lastUserText(request.messages).slice(0, 16_000) },
-      questions: {
-        complexity: {
-          type: "choice",
-          instructions: "How demanding is the software engineering work requested in `prompt`?",
-          criteria: {
-            standard: "Ordinary features, fixes, reviews, or questions",
-            complex: "Subtle design, cross-cutting changes, or hard debugging",
+      const jev = ctx.modelRegistry.findOfType("classifier", "openrouter", "~typesafe/jev-latest");
+      if (jev === undefined) return TERRA;
+      const result = yield* Effect.promise(() =>
+        ctx.modelRegistry.classify(
+          jev,
+          {
+            state: { prompt: lastUserText(request.messages).slice(0, 16_000) },
+            questions: {
+              complexity: {
+                type: "choice",
+                instructions:
+                  "How demanding is the software engineering work requested in `prompt`?",
+                criteria: {
+                  standard: "Ordinary features, fixes, reviews, or questions",
+                  complex: "Subtle design, cross-cutting changes, or hard debugging",
+                },
+              },
+            },
           },
-        },
-      },
-    },
-    { signal: request.signal },
+          { signal: request.signal },
+        ),
+      );
+      const answer = result.stopReason === "stop" ? result.answers["complexity"] : undefined;
+      return answer?.type === "choice" && (answer.probabilities["complex"] ?? 0) >= 0.5
+        ? SOL
+        : TERRA;
+    }),
   );
-  const answer = result.stopReason === "stop" ? result.answers["complexity"] : undefined;
-  return answer?.type === "choice" && (answer.probabilities["complex"] ?? 0) >= 0.5 ? SOL : TERRA;
-}
 
 export default function (msa: ExtensionAPI) {
   msa.registerVirtualModel<JevState>({
@@ -89,18 +99,21 @@ export default function (msa: ExtensionAPI) {
 
     contextWindow: 272_000,
     maxTokens: 128_000,
-    async route(request, ctx) {
-      if (request.reason === "direct") return routeTo(request, ctx, LUNA);
-      const state = request.state;
-      if (state === undefined) {
-        const model = await choosePlanningModel(request, ctx);
-        return routeTo(request, ctx, model, { phase: "planning", model });
-      }
+    route: (request, ctx) =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          if (request.reason === "direct") return routeTo(request, ctx, LUNA);
+          const state = request.state;
+          if (state === undefined) {
+            const model = yield* Effect.promise(() => choosePlanningModel(request, ctx));
+            return routeTo(request, ctx, model, { phase: "planning", model });
+          }
 
-      if (state.phase === "planning" && editedThisTurn(request.messages)) {
-        return routeTo(request, ctx, LUNA, { phase: "implementation", model: LUNA });
-      }
-      return routeTo(request, ctx, state.model);
-    },
+          if (state.phase === "planning" && editedThisTurn(request.messages)) {
+            return routeTo(request, ctx, LUNA, { phase: "implementation", model: LUNA });
+          }
+          return routeTo(request, ctx, state.model);
+        }),
+      ),
   });
 }

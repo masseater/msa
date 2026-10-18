@@ -1,37 +1,27 @@
-import * as fs from "node:fs";
-import * as path from "node:path";
+import { FileSystem, ManagedRuntime, Path } from "effect";
+
+import { NodeServices } from "@effect/platform-node";
 
 import type { ExtensionAPI } from "@msa/coding-agent";
 
-function findMarkdownFiles(dir: string, basePath: string = ""): string[] {
-  const results: string[] = [];
+const runtime = ManagedRuntime.make(NodeServices.layer);
 
-  if (!fs.existsSync(dir)) {
-    return results;
-  }
-
-  const entries = fs.readdirSync(dir, { withFileTypes: true });
-
-  for (const entry of entries) {
-    const relativePath = basePath.length > 0 ? `${basePath}/${entry.name}` : entry.name;
-
-    if (entry.isDirectory()) {
-      results.push(...findMarkdownFiles(path.join(dir, entry.name), relativePath));
-    } else if (entry.isFile() && entry.name.endsWith(".md")) {
-      results.push(relativePath);
-    }
-  }
-
-  return results;
-}
+const findMarkdownFiles = (dir: string): string[] => {
+  const fs = runtime.runSync(FileSystem.FileSystem);
+  const path = runtime.runSync(Path.Path);
+  if (!runtime.runSync(fs.exists(dir))) return [];
+  return runtime
+    .runSync(fs.readDirectory(dir, { recursive: true }))
+    .filter((entry) => entry.endsWith(".md"))
+    .map((entry) => entry.replaceAll(path.sep, "/"));
+};
 
 export default function claudeRulesExtension(msa: ExtensionAPI) {
   let ruleFiles: string[] = [];
-  let rulesDir: string = "";
 
   msa.on("session_start", (_event, ctx) => {
-    rulesDir = path.join(ctx.cwd, ".claude", "rules");
-    ruleFiles = findMarkdownFiles(rulesDir);
+    const path = runtime.runSync(Path.Path);
+    ruleFiles = findMarkdownFiles(path.join(ctx.cwd, ".claude", "rules"));
 
     if (ruleFiles.length > 0) {
       ctx.ui.notify(`Found ${ruleFiles.length} rule(s) in .claude/rules/`, "info");
