@@ -1,7 +1,8 @@
-import { existsSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
-import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+
+import { NodeServices } from "@effect/platform-node";
+import { FileSystem, ManagedRuntime, Path } from "effect";
 
 export interface DoomModule {
   _doomgeneric_Create: (argc: number, argv: number) => void;
@@ -26,122 +27,131 @@ export interface DoomModule {
   getValue: (ptr: number, type: string) => number;
 }
 
+type DoomFactory = (config: unknown) => Promise<DoomModule>;
+
+const runtime = ManagedRuntime.make(NodeServices.layer);
+const pathService = runtime.runSync(Path.Path);
+const fsService = runtime.runSync(FileSystem.FileSystem);
+
+const readText = (file: string): string => runtime.runSync(fsService.readFileString(file));
+const readBytes = (file: string): Uint8Array => runtime.runSync(fsService.readFile(file));
+const fileExists = (file: string): boolean => runtime.runSync(fsService.exists(file));
+
+const loadDoomFactory = (buildDir: string, doomJsPath: string): DoomFactory => {
+  const doomJsCode = readText(doomJsPath);
+  const moduleExports: { exports: unknown } = { exports: {} };
+  const moduleFunc = new Function(
+    "module",
+    "exports",
+    "__dirname",
+    "__filename",
+    "require",
+    doomJsCode,
+  );
+  moduleFunc(moduleExports, moduleExports.exports, buildDir, doomJsPath, createRequire(doomJsPath));
+  return moduleExports.exports as DoomFactory;
+};
+
+const moduleConfig = (buildDir: string, wadArray: number[]) => ({
+  locateFile: (path: string) => (path.endsWith(".wasm") ? pathService.join(buildDir, path) : path),
+  print: () => {},
+  printErr: () => {},
+  preRun: [
+    (module: DoomModule) => {
+      module.FS_createPath("/", "doom", true, true);
+      module.FS_createDataFile("/doom", "doom1.wad", wadArray, true, false);
+    },
+  ],
+});
+
 export class DoomEngine {
   private module: DoomModule | null = null;
-  private frameBufferPtr: number = 0;
+  private frameBufferPtr = 0;
   private initialized = false;
   private wadPath: string;
-  private _width = 640;
-  private _height = 400;
+  private frameWidth = 640;
+  private frameHeight = 400;
 
   constructor(wadPath: string) {
     this.wadPath = wadPath;
   }
 
   get width(): number {
-    return this._width;
+    return this.frameWidth;
   }
 
   get height(): number {
-    return this._height;
+    return this.frameHeight;
   }
 
-  async init(): Promise<void> {
-    const __dirname = dirname(fileURLToPath(import.meta.url));
-    const buildDir = join(__dirname, "doom", "build");
-    const doomJsPath = join(buildDir, "doom.js");
+  init(): Promise<void> {
+    const here = fileURLToPath(new URL(".", import.meta.url));
+    const buildDir = pathService.join(here, "doom", "build");
+    const doomJsPath = pathService.join(buildDir, "doom.js");
 
-    if (!existsSync(doomJsPath)) {
-      throw new Error(`WASM not found at ${doomJsPath}. Run ./doom/build.sh first`);
+    if (!fileExists(doomJsPath)) {
+      return Promise.reject(
+        new Error(`WASM not found at ${doomJsPath}. Run ./doom/build.sh first`),
+      );
     }
 
-    const wadData = readFileSync(this.wadPath);
-    const wadArray = Array.from(new Uint8Array(wadData));
+    const wadArray = Array.from(readBytes(this.wadPath));
+    const createDoomModule = loadDoomFactory(buildDir, doomJsPath);
 
-    const doomJsCode = readFileSync(doomJsPath, "utf-8");
-    const moduleExports: { exports: unknown } = { exports: {} };
-    const nativeRequire = createRequire(doomJsPath);
-    const moduleFunc = new Function(
-      "module",
-      "exports",
-      "__dirname",
-      "__filename",
-      "require",
-      doomJsCode,
-    );
-    moduleFunc(moduleExports, moduleExports.exports, buildDir, doomJsPath, nativeRequire);
-    const createDoomModule = moduleExports.exports as (config: unknown) => Promise<DoomModule>;
-
-    const moduleConfig = {
-      locateFile: (path: string) => {
-        if (path.endsWith(".wasm")) {
-          return join(buildDir, path);
-        }
-        return path;
-      },
-      print: () => {},
-      printErr: () => {},
-      preRun: [
-        (module: DoomModule) => {
-          module.FS_createPath("/", "doom", true, true);
-          module.FS_createDataFile("/doom", "doom1.wad", wadArray, true, false);
-        },
-      ],
-    };
-
-    this.module = await createDoomModule(moduleConfig);
-
-    this.initDoom();
-
-    this.frameBufferPtr = this.module._DG_GetFrameBuffer();
-    this._width = this.module._DG_GetScreenWidth();
-    this._height = this.module._DG_GetScreenHeight();
-    this.initialized = true;
+    return createDoomModule(moduleConfig(buildDir, wadArray)).then((module) => {
+      this.module = module;
+      this.initDoom();
+      this.frameBufferPtr = module["_DG_GetFrameBuffer"]();
+      this.frameWidth = module["_DG_GetScreenWidth"]();
+      this.frameHeight = module["_DG_GetScreenHeight"]();
+      this.initialized = true;
+      return undefined;
+    });
   }
 
   private initDoom(): void {
-    if (this.module === null) return;
+    const module = this.module;
+    if (module === null) return;
 
     const args = ["doom", "-iwad", "/doom/doom1.wad"];
-    const argPtrs: number[] = [];
-
-    for (const arg of args) {
-      const ptr = this.module._malloc(arg.length + 1);
+    const argPtrs = args.map((arg) => {
+      const ptr = module["_malloc"](arg.length + 1);
       for (let i = 0; i < arg.length; i++) {
-        this.module.setValue(ptr + i, arg.charCodeAt(i), "i8");
+        module.setValue(ptr + i, arg.charCodeAt(i), "i8");
       }
-      this.module.setValue(ptr + arg.length, 0, "i8");
-      argPtrs.push(ptr);
-    }
+      module.setValue(ptr + arg.length, 0, "i8");
+      return ptr;
+    });
 
-    const argvPtr = this.module._malloc(argPtrs.length * 4);
+    const argvPtr = module["_malloc"](argPtrs.length * 4);
     for (let i = 0; i < argPtrs.length; i++) {
-      this.module.setValue(argvPtr + i * 4, argPtrs[i]!, "i32");
+      module.setValue(argvPtr + i * 4, argPtrs[i]!, "i32");
     }
 
-    this.module._doomgeneric_Create(args.length, argvPtr);
+    module["_doomgeneric_Create"](args.length, argvPtr);
 
     for (const ptr of argPtrs) {
-      this.module._free(ptr);
+      module["_free"](ptr);
     }
-    this.module._free(argvPtr);
+    module["_free"](argvPtr);
   }
 
   tick(): void {
     if (this.module === null || !this.initialized) return;
-    this.module._doomgeneric_Tick();
+    this.module["_doomgeneric_Tick"]();
   }
 
   getFrameRGBA(): Uint8Array {
     if (this.module === null || !this.initialized) {
-      return new Uint8Array(this._width * this._height * 4);
+      return new Uint8Array(this.frameWidth * this.frameHeight * 4);
     }
 
-    const pixels = this._width * this._height;
+    const pixels = this.frameWidth * this.frameHeight;
     const buffer = new Uint8Array(pixels * 4);
+    const module = this.module;
 
     for (let i = 0; i < pixels; i++) {
-      const argb = this.module.getValue(this.frameBufferPtr + i * 4, "i32");
+      const argb = module.getValue(this.frameBufferPtr + i * 4, "i32");
       const offset = i * 4;
       buffer[offset + 0] = (argb >> 16) & 0xff;
       buffer[offset + 1] = (argb >> 8) & 0xff;
@@ -154,7 +164,7 @@ export class DoomEngine {
 
   pushKey(pressed: boolean, key: number): void {
     if (this.module === null || !this.initialized) return;
-    this.module._DG_PushKeyEvent(pressed ? 1 : 0, key);
+    this.module["_DG_PushKeyEvent"](pressed ? 1 : 0, key);
   }
 
   isInitialized(): boolean {
