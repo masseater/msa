@@ -28,18 +28,21 @@ const isStringLiteralLike = (node: Node | undefined): node is StringLiteralLike 
 const isRelativeJavaScriptSpecifier = (specifier: string): boolean =>
   /^\.\.?\//u.test(specifier) && /\.js(?:[?#].*)?$/u.test(specifier);
 
+const moduleSpecifierOf = (node: Node): Node | undefined =>
+  isImportDeclaration(node) || isExportDeclaration(node) ? node.moduleSpecifier : undefined;
+
+const dynamicImportArgumentOf = (node: Node): Node | undefined =>
+  isCallExpression(node) && node.expression.kind === SyntaxKind.ImportKeyword
+    ? node.arguments[0]
+    : undefined;
+
+const importTypeLiteralOf = (node: Node): Node | undefined =>
+  isImportTypeNode(node) && isLiteralTypeNode(node.argument) ? node.argument.literal : undefined;
+
 const specifierOf = (node: Node): StringLiteralLike | undefined => {
-  if (isImportDeclaration(node) || isExportDeclaration(node)) {
-    return isStringLiteralLike(node.moduleSpecifier) ? node.moduleSpecifier : undefined;
-  }
-  if (isCallExpression(node) && node.expression.kind === SyntaxKind.ImportKeyword) {
-    const [first] = node.arguments;
-    return isStringLiteralLike(first) ? first : undefined;
-  }
-  if (isImportTypeNode(node) && isLiteralTypeNode(node.argument)) {
-    return isStringLiteralLike(node.argument.literal) ? node.argument.literal : undefined;
-  }
-  return undefined;
+  const candidate =
+    moduleSpecifierOf(node) ?? dynamicImportArgumentOf(node) ?? importTypeLiteralOf(node);
+  return isStringLiteralLike(candidate) ? candidate : undefined;
 };
 
 const collectFailures = (sourceFile: SourceFile, displayPath: string): ReadonlyArray<string> => {

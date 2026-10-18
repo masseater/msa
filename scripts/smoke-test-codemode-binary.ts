@@ -114,12 +114,13 @@ const secondTurnChunks = (id: string, marker: string): ReadonlyArray<Record<stri
   }),
 ];
 
+const isChatCompletionsRequest = (request: HttpServerRequest.HttpServerRequest): boolean =>
+  request.method === "POST" && request.url.endsWith("/chat/completions");
+
 const handler = (requestCount: Ref.Ref<number>) =>
   Effect.gen(function* () {
     const request = yield* HttpServerRequest.HttpServerRequest;
-    if (request.method !== "POST" || !request.url.endsWith("/chat/completions")) {
-      return HttpServerResponse.empty({ status: 404 });
-    }
+    if (!isChatCompletionsRequest(request)) return HttpServerResponse.empty({ status: 404 });
     const body = yield* request.text.pipe(Effect.orElseSucceed(() => ""));
     const count = yield* Ref.updateAndGet(requestCount, (value) => value + 1);
     const id = `chatcmpl-codemode-smoke-${count}`;

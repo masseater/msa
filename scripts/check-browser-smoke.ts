@@ -4,6 +4,7 @@ import { Console, Data, Effect } from "effect";
 import { build } from "esbuild";
 import type { BuildOptions, Metafile, Plugin } from "esbuild";
 
+import { EsbuildFilter } from "./esbuild-filter.ts";
 import { Host, runScript } from "./host.ts";
 import type { HostShape } from "./host.ts";
 
@@ -12,13 +13,10 @@ class SmokeCheckError extends Data.TaggedError("SmokeCheckError")<{
   readonly message: string;
 }> {}
 
-const toGoRegExp = (pattern: RegExp): RegExp =>
-  new RegExp(pattern.source, pattern.flags.replace("u", ""));
-
 const generatedCatalogDataPlugin = (host: HostShape, generatedCatalogDataDir: string): Plugin => ({
   name: "generated-model-catalog",
   setup(esbuild) {
-    esbuild.onResolve({ filter: toGoRegExp(/^\.\/data\/[^/]+\.json$/u) }, (args) =>
+    esbuild.onResolve({ filter: new EsbuildFilter(/^\.\/data\/[^/]+\.json$/u) }, (args) =>
       Effect.runPromise(
         Effect.gen(function* () {
           const path = host.resolve(host.dirname(args.importer), args.path);
@@ -30,7 +28,7 @@ const generatedCatalogDataPlugin = (host: HostShape, generatedCatalogDataDir: st
       ),
     );
     esbuild.onLoad(
-      { filter: toGoRegExp(/.*/u), namespace: "empty-generated-model-catalog" },
+      { filter: new EsbuildFilter(/.*/u), namespace: "empty-generated-model-catalog" },
       () => ({
         contents: "{}",
         loader: "json",
@@ -71,6 +69,47 @@ const metafileOf = (result: { readonly metafile?: Metafile | undefined }) =>
 
 const fail = (message: string) => Effect.fail(new SmokeCheckError({ cause: undefined, message }));
 
+const missingInput = (
+  inputs: Metafile["inputs"],
+  required: ReadonlyArray<string>,
+): string | undefined => required.find((input) => findInput(inputs, input) === undefined);
+
+const includedInput = (
+  inputs: Metafile["inputs"],
+  forbidden: ReadonlyArray<string>,
+): string | undefined =>
+  forbidden.map((input) => findInput(inputs, input)).find((found) => found !== undefined);
+
+const DURABLE_REQUIRED_INPUTS = [
+  "libs/durable/src/index.ts",
+  "libs/durable/src/env/index.ts",
+  "libs/durable/src/storage/jsonl/index.ts",
+  "libs/durable/src/storage/jsonl/storage.ts",
+  "libs/durable/src/storage/memory.ts",
+  "libs/durable/src/storage/sqlite/index.ts",
+  "libs/durable/src/storage/sqlite/storage.ts",
+];
+
+const DURABLE_NODE_INPUTS = [
+  "libs/durable/src/env/node.ts",
+  "libs/durable/src/storage/jsonl/node.ts",
+  "libs/durable/src/storage/sqlite/node.ts",
+];
+
+const AGENT_FORBIDDEN_INPUTS = [
+  "libs/ai/src/compat.ts",
+  "libs/ai/src/models.generated.ts",
+  "libs/ai/src/providers/all.ts",
+];
+
+const AI_SDK_PACKAGES = [
+  "@anthropic-ai/sdk",
+  "@aws-sdk/client-bedrock-runtime",
+  "@google/genai",
+  "@mistralai/mistralai",
+  "openai",
+];
+
 const checkDurable = (outfile: string) =>
   Effect.gen(function* () {
     const durableInputs = (yield* metafileOf(
@@ -81,56 +120,32 @@ const checkDurable = (outfile: string) =>
         write: false,
       }),
     )).inputs;
-    for (const expectedInput of [
-      "libs/durable/src/index.ts",
-      "libs/durable/src/env/index.ts",
-      "libs/durable/src/storage/jsonl/index.ts",
-      "libs/durable/src/storage/jsonl/storage.ts",
-      "libs/durable/src/storage/memory.ts",
-      "libs/durable/src/storage/sqlite/index.ts",
-      "libs/durable/src/storage/sqlite/storage.ts",
-    ]) {
-      if (findInput(durableInputs, expectedInput) === undefined) {
-        return yield* fail(`Durable browser bundle does not include ${expectedInput}`);
-      }
+    const missing = missingInput(durableInputs, DURABLE_REQUIRED_INPUTS);
+    if (missing !== undefined) {
+      return yield* fail(`Durable browser bundle does not include ${missing}`);
     }
-    for (const forbiddenInput of [
-      "libs/durable/src/env/node.ts",
-      "libs/durable/src/storage/jsonl/node.ts",
-      "libs/durable/src/storage/sqlite/node.ts",
-    ]) {
-      const nodeAdapter = findInput(durableInputs, forbiddenInput);
-      if (nodeAdapter !== undefined) {
-        return yield* fail(`Durable browser bundle unexpectedly includes ${nodeAdapter}`);
-      }
+    const nodeAdapter = includedInput(durableInputs, DURABLE_NODE_INPUTS);
+    if (nodeAdapter !== undefined) {
+      return yield* fail(`Durable browser bundle unexpectedly includes ${nodeAdapter}`);
     }
   });
 
 const describeFound = (found: ReadonlyArray<string>): string =>
   found.length > 0 ? found.join(", ") : "none";
 
+const isOnly = (values: ReadonlyArray<string>, expected: string): boolean =>
+  values.length === 1 && values[0] === expected;
+
 const checkTreeshakeInputs = (inputs: Metafile["inputs"]) =>
   Effect.gen(function* () {
-    for (const forbiddenInput of [
-      "libs/ai/src/compat.ts",
-      "libs/ai/src/models.generated.ts",
-      "libs/ai/src/providers/all.ts",
-    ]) {
-      const includedInput = findInput(inputs, forbiddenInput);
-      if (includedInput !== undefined) {
-        return yield* fail(
-          `Agent selective-provider bundle unexpectedly includes ${includedInput}`,
-        );
-      }
+    const forbidden = includedInput(inputs, AGENT_FORBIDDEN_INPUTS);
+    if (forbidden !== undefined) {
+      return yield* fail(`Agent selective-provider bundle unexpectedly includes ${forbidden}`);
     }
-    const includedAiSdkPackages = [
-      "@anthropic-ai/sdk",
-      "@aws-sdk/client-bedrock-runtime",
-      "@google/genai",
-      "@mistralai/mistralai",
-      "openai",
-    ].filter((packageName) => includesNodePackage(inputs, packageName));
-    if (includedAiSdkPackages.length !== 1 || includedAiSdkPackages[0] !== "@anthropic-ai/sdk") {
+    const includedAiSdkPackages = AI_SDK_PACKAGES.filter((packageName) =>
+      includesNodePackage(inputs, packageName),
+    );
+    if (!isOnly(includedAiSdkPackages, "@anthropic-ai/sdk")) {
       return yield* fail(
         `Agent selective-provider bundle SDKs: expected only @anthropic-ai/sdk, found ${describeFound(includedAiSdkPackages)}`,
       );
@@ -188,21 +203,25 @@ interface EsbuildMessage {
 const hasErrors = (value: unknown): value is { readonly errors: ReadonlyArray<EsbuildMessage> } =>
   typeof value === "object" && value !== null && "errors" in value && Array.isArray(value.errors);
 
+const describeLocation = (location: EsbuildMessage["location"]): string =>
+  location === undefined || location === null
+    ? ""
+    : `${location.file}:${location.line}:${location.column}`;
+
+const describeMessage = (entry: EsbuildMessage): string =>
+  [describeLocation(entry.location), entry.text].filter((part) => part !== "").join(" ");
+
+const esbuildErrorDetails = (cause: unknown): string =>
+  hasErrors(cause) ? cause.errors.map(describeMessage).join("\n") : "";
+
+const describeCause = (cause: unknown): string =>
+  cause instanceof Error ? (cause.stack ?? cause.message) : String(cause);
+
 const describeFailure = (error: SmokeCheckError): string => {
   const cause = error.cause ?? new Error(error.message);
-  const detailedErrors = hasErrors(cause)
-    ? cause.errors
-        .map((entry) => {
-          const location =
-            entry.location === undefined || entry.location === null
-              ? ""
-              : `${entry.location.file}:${entry.location.line}:${entry.location.column}`;
-          return [location, entry.text].filter((part) => part !== "").join(" ");
-        })
-        .join("\n")
-    : "";
-  const baseError = cause instanceof Error ? (cause.stack ?? cause.message) : String(cause);
-  return [detailedErrors, baseError].filter((part) => part !== "").join("\n\n");
+  return [esbuildErrorDetails(cause), describeCause(cause)]
+    .filter((part) => part !== "")
+    .join("\n\n");
 };
 
 const program = Effect.gen(function* () {

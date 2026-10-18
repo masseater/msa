@@ -24,26 +24,34 @@ const firstExistingFile = (host: HostShape, candidates: ReadonlyArray<string>) =
     return undefined;
   });
 
+const resolveRelative = (host: HostShape, spec: string, fromFile: string) => {
+  const base = host.resolve(host.dirname(fromFile), spec);
+  return firstExistingFile(host, [base, `${base}.ts`, `${base}/index.ts`]);
+};
+
+const resolveWorkspace = (host: HostShape, root: string, spec: string) =>
+  Effect.gen(function* () {
+    const workspace = Object.entries(WORKSPACE).find(
+      ([name]) => spec === name || spec.startsWith(`${name}/`),
+    );
+    if (workspace === undefined) return undefined;
+    const [name, src] = workspace;
+    if (spec === name) return host.resolve(root, src, "index.ts");
+    const tail = spec.slice(name.length + 1);
+    return yield* firstExistingFile(
+      host,
+      [`${tail}.ts`, `${tail}/index.ts`, tail].map((candidate) =>
+        host.resolve(root, src, candidate),
+      ),
+    );
+  });
+
 const resolveSpec = (host: HostShape, root: string, spec: string, fromFile: string) =>
   Effect.gen(function* () {
     if (spec.startsWith("node:")) return undefined;
-    if (spec.startsWith(".")) {
-      const base = host.resolve(host.dirname(fromFile), spec);
-      return yield* firstExistingFile(host, [base, `${base}.ts`, `${base}/index.ts`]);
-    }
-    for (const [name, src] of Object.entries(WORKSPACE)) {
-      if (spec === name) return host.resolve(root, src, "index.ts");
-      if (spec.startsWith(`${name}/`)) {
-        const tail = spec.slice(name.length + 1);
-        return yield* firstExistingFile(
-          host,
-          [`${tail}.ts`, `${tail}/index.ts`, tail].map((candidate) =>
-            host.resolve(root, src, candidate),
-          ),
-        );
-      }
-    }
-    return undefined;
+    return yield* spec.startsWith(".")
+      ? resolveRelative(host, spec, fromFile)
+      : resolveWorkspace(host, root, spec);
   });
 
 const walk = (host: HostShape, root: string, entryFile: string) =>
@@ -87,27 +95,36 @@ const expand = (host: HostShape, root: string, pkgDir: string, entry: string, ta
       });
   });
 
+const fileList = (files: ReadonlyArray<string>): string =>
+  files.map((file) => `    ${file}`).join("\n");
+
+const sizeViolations = (
+  label: string,
+  graph: ReadonlyArray<string>,
+  budget: EntryBudget,
+): ReadonlyArray<string> =>
+  graph.length > budget.maxFiles
+    ? [`${label} reaches ${graph.length} files, budget ${budget.maxFiles}\n${fileList(graph)}`]
+    : [];
+
+const forbiddenViolations = (
+  label: string,
+  graph: ReadonlyArray<string>,
+  budget: EntryBudget,
+): ReadonlyArray<string> =>
+  (budget.forbid ?? []).flatMap((pattern) => {
+    const hit = graph.filter((file) => file.includes(pattern));
+    return hit.length > 0 ? [`${label} must not reach ${pattern}:\n${fileList(hit)}`] : [];
+  });
+
 const budgetViolations = (
   pkgDir: string,
   name: string,
   graph: ReadonlyArray<string>,
   budget: EntryBudget,
 ): ReadonlyArray<string> => {
-  const violations: Array<string> = [];
-  if (graph.length > budget.maxFiles) {
-    violations.push(
-      `${pkgDir} export "${name}" reaches ${graph.length} files, budget ${budget.maxFiles}\n${graph.map((file) => `    ${file}`).join("\n")}`,
-    );
-  }
-  for (const pattern of budget.forbid ?? []) {
-    const hit = graph.filter((file) => file.includes(pattern));
-    if (hit.length > 0) {
-      violations.push(
-        `${pkgDir} export "${name}" must not reach ${pattern}:\n${hit.map((file) => `    ${file}`).join("\n")}`,
-      );
-    }
-  }
-  return violations;
+  const label = `${pkgDir} export "${name}"`;
+  return [...sizeViolations(label, graph, budget), ...forbiddenViolations(label, graph, budget)];
 };
 
 const checkEntry = (
