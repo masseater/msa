@@ -1,5 +1,5 @@
 import type { AzureOpenAIResponsesOptions } from "./api/azure-openai-responses-params.ts";
-import type { OpenAICodexResponsesOptions } from "./api/openai-codex-responses.ts";
+import type { OpenAICodexResponsesOptions } from "./api/openai-codex-options.ts";
 import type { OpenAICompletionsOptions } from "./api/openai-completions.ts";
 import type { OpenAIResponsesOptions } from "./api/openai-responses-config.ts";
 

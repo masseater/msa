@@ -1,7 +1,7 @@
 import type { AzureOpenAIResponsesOptions } from "./api/azure-openai-responses-params.ts";
 import { azureOpenAIResponsesApi } from "./api/azure-openai-responses.lazy.ts";
+import type { OpenAICodexResponsesOptions } from "./api/openai-codex-options.ts";
 import { openAICodexResponsesApi } from "./api/openai-codex-responses.lazy.ts";
-import type { OpenAICodexResponsesOptions } from "./api/openai-codex-responses.ts";
 import { openAICompletionsApi } from "./api/openai-completions.lazy.ts";
 import type { OpenAICompletionsOptions } from "./api/openai-completions.ts";
 import type { OpenAIResponsesOptions } from "./api/openai-responses-config.ts";

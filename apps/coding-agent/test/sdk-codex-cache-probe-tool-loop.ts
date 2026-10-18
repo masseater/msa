@@ -25,10 +25,8 @@ import {
   Type,
 } from "@msa/ai/compat";
 
-import {
-  getOpenAICodexWebSocketDebugStats,
-  streamSimple as streamSimpleOpenAICodexResponses,
-} from "../../../libs/ai/src/api/openai-codex-responses.ts";
+import { streamSimple as streamSimpleOpenAICodexResponses } from "../../../libs/ai/src/api/openai-codex-responses.ts";
+import { getOpenAICodexWebSocketDebugStats } from "../../../libs/ai/src/api/openai-codex-ws-stats.ts";
 import { AuthStorage } from "../src/core/auth-storage.ts";
 import { createExtensionRuntime } from "../src/core/extensions/loader.ts";
 import type { ToolDefinition } from "../src/core/extensions/types.ts";

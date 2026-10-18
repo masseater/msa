@@ -5,12 +5,12 @@ import { Clock, Console, Effect } from "effect";
 import { Type } from "typebox";
 
 import { ModelRuntime } from "../../../apps/coding-agent/src/core/model-runtime.ts";
+import { stream as streamOpenAICodexResponses } from "../src/api/openai-codex-responses.ts";
+import { closeOpenAICodexWebSocketSessions } from "../src/api/openai-codex-ws-cache.ts";
 import {
-  closeOpenAICodexWebSocketSessions,
   getOpenAICodexWebSocketDebugStats,
   resetOpenAICodexWebSocketDebugStats,
-  stream as streamOpenAICodexResponses,
-} from "../src/api/openai-codex-responses.ts";
+} from "../src/api/openai-codex-ws-stats.ts";
 import { getModel, normalizeContext } from "../src/compat.ts";
 import type {
   AssistantMessage,

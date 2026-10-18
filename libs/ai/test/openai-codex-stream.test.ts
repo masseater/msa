@@ -8,12 +8,14 @@ import { Type } from "typebox";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import {
-  closeOpenAICodexWebSocketSessions,
-  getOpenAICodexWebSocketDebugStats,
-  resetOpenAICodexWebSocketDebugStats,
   stream as streamOpenAICodexResponses,
   streamSimple as streamSimpleOpenAICodexResponses,
 } from "../src/api/openai-codex-responses.ts";
+import { closeOpenAICodexWebSocketSessions } from "../src/api/openai-codex-ws-cache.ts";
+import {
+  getOpenAICodexWebSocketDebugStats,
+  resetOpenAICodexWebSocketDebugStats,
+} from "../src/api/openai-codex-ws-stats.ts";
 import type { Api, Context, Model } from "../src/types.ts";
 import { currentTimeMillis } from "../src/utils/clock.ts";
 import { normalizeContext } from "../src/utils/transcript.ts";
