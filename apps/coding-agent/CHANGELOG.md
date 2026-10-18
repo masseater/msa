@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+## [0.0.4] - 2026-10-18
+
+### Added
+
+- `/sessions` can start a session and give it instructions
+- OpenRouter requests send `provider.data_collection: "deny"` by default; set `compat.openRouterRouting.data_collection` to `"allow"` on a model to opt in ([docs](docs/providers.md#openrouter))
+
+### Removed
+
+- Built-in providers other than OpenRouter, Anthropic, OpenAI, and opencode, along with the API implementations only they used (Mistral Conversations, Azure OpenAI Responses, Google Vertex, Bedrock Converse, and the Radius protocol). Add any of them back as a compatible endpoint in `models.json` ([docs](docs/models.md#configure-a-compatible-endpoint))
+
 ## [0.0.3] - 2026-10-17
 
 v0.0.2 was never tagged, so this is the first release after 0.0.1 and also carries the 0.0.2 fixes below.
