@@ -1,8 +1,7 @@
-import { NodeServices } from "@effect/platform-node";
 import { CONFIG_DIR_NAME, type ExtensionAPI, getAgentDir } from "@msa/coding-agent";
-import { Effect, ManagedRuntime, Path } from "effect";
+import { Effect } from "effect";
 
-import { discoverAgents } from "./agents.ts";
+import { discoverAgents, joinPath } from "./agents.ts";
 import { dispatch } from "./dispatch.ts";
 import { renderCall, renderResult } from "./render.ts";
 import {
@@ -12,13 +11,11 @@ import {
   type SingleResult,
 } from "./types.ts";
 
-const pathService = ManagedRuntime.make(NodeServices.layer).runSync(Path.Path);
-
 const description = (): string =>
   [
     "Delegate tasks to specialized subagents with isolated context.",
     "Modes: single (agent + task), parallel (tasks array), chain (sequential with {previous} placeholder).",
-    `Default agent scope is "user" (from ${pathService.join(getAgentDir(), "agents")}).`,
+    `Default agent scope is "user" (from ${joinPath(getAgentDir(), "agents")}).`,
     `To enable project-local agents in ${CONFIG_DIR_NAME}/agents, set agentScope: "both" (or "project").`,
   ].join(" ");
 

@@ -5,6 +5,8 @@ import { dual } from "effect/Function";
 
 const runtime = ManagedRuntime.make(NodeServices.layer);
 const pathService = runtime.runSync(Path.Path);
+
+export const joinPath = (...segments: string[]): string => pathService.join(...segments);
 const fsService = runtime.runSync(FileSystem.FileSystem);
 
 export type AgentScope = "user" | "project" | "both";
