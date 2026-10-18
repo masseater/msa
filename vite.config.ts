@@ -274,8 +274,7 @@ export default defineConfig({
         cache: false,
       },
       test: {
-        command:
-          "vp run --no-cache test:scripts && vp test run && vp run --no-cache --filter @msa/tui test",
+        command: "vp test run && vp run --no-cache --filter @msa/tui test",
         cache: false,
       },
       "test-all": {

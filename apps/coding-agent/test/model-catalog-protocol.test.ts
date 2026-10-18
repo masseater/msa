@@ -4,6 +4,8 @@ import type { AddressInfo } from "node:net";
 import { InMemoryCredentialStore } from "@msa/ai";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vite-plus/test";
 
+import { VERSION } from "../src/config.ts";
+import { ModelRuntime } from "../src/core/model-runtime.ts";
 import {
   getModelCatalogProviderKey,
   MODEL_CATALOG_INDEX_KEY,
@@ -11,13 +13,8 @@ import {
   parseModelCatalogIndex,
   parseModelCatalogRequest,
   selectModelCatalog,
-} from "../../../scripts/model-catalog-protocol.ts";
-import { VERSION } from "../src/config.ts";
-import { ModelRuntime } from "../src/core/model-runtime.ts";
+} from "./model-catalog-protocol.ts";
 import { allowNetwork } from "./test-network-env.ts";
-
-// Runs the current client against the catalog selection pi.dev performs, using
-// the shared protocol in scripts/model-catalog-protocol.ts. Regression test for #9099.
 
 const legacyRevision = `sha256-${"a".repeat(64)}`;
 const mixedApiRevision = `sha256-${"b".repeat(64)}`;
