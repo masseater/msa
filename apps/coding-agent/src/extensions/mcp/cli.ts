@@ -1,5 +1,4 @@
 import { existsSync } from "node:fs";
-import { join } from "node:path";
 import { createInterface } from "node:readline/promises";
 
 import chalk from "chalk";
@@ -8,6 +7,7 @@ import * as Effect from "effect/Effect";
 import { APP_NAME, CONFIG_DIR_NAME } from "../../config.ts";
 import { awaited, awaiting } from "../../core/awaiting.ts";
 import { validateMcpServerConfig } from "../../core/mcp-servers.ts";
+import { join } from "../../core/platform-node.ts";
 import { writeError, writeLog } from "../../core/platform.ts";
 import { ProjectTrustStore } from "../../core/trust-manager.ts";
 import { toErrorMessage } from "../../utils/errors.ts";

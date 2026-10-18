@@ -1,7 +1,9 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { registerHooks } from "node:module";
-import { extname, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+
+import { resolve, sep } from "../core/platform-node.ts";
+import { extname } from "../utils/platform-extra.ts";
 
 interface TsConfig {
   readonly compilerOptions?: {

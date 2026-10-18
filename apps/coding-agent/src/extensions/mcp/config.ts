@@ -1,5 +1,4 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
 
 import { CONFIG_DIR_NAME } from "../../config.ts";
 import {
@@ -8,6 +7,7 @@ import {
   mcpNamespace,
   validateMcpServerConfig,
 } from "../../core/mcp-servers.ts";
+import { dirname, join } from "../../core/platform-node.ts";
 import { toErrorMessage } from "../../utils/errors.ts";
 
 export type {

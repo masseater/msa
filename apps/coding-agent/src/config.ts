@@ -1,12 +1,13 @@
 import { accessSync, constants, existsSync, readFileSync, realpathSync } from "fs";
 import { createRequire } from "module";
 import { homedir } from "os";
-import { basename, dirname, join, resolve, sep, win32 } from "path";
 import { fileURLToPath } from "url";
 
+import { basename, dirname, join, resolve, sep } from "./core/platform-node.ts";
 import { readEnv } from "./core/platform.ts";
 import { spawnProcessSync } from "./utils/child-process.ts";
 import { normalizePath } from "./utils/paths.ts";
+import { windowsBasename, windowsDirname } from "./utils/platform-extra.ts";
 import { stripBom } from "./utils/text.ts";
 
 const moduleFilename = fileURLToPath(import.meta.url);
@@ -94,7 +95,9 @@ export function detectInstallMethod(): InstallMethod {
 function getInferredNpmInstall(): { root: string; prefix: string } | undefined {
   const packageDir = getPackageDir();
   const path =
-    process.platform === "win32" || packageDir.includes("\\") ? win32 : { basename, dirname };
+    process.platform === "win32" || packageDir.includes("\\")
+      ? { basename: windowsBasename, dirname: windowsDirname }
+      : { basename, dirname };
   const parent = path.dirname(packageDir);
   let root: string | undefined;
   if (

@@ -1,5 +1,4 @@
 import { homedir } from "node:os";
-import { basename, join, resolve } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { pathToFileURL } from "node:url";
 
@@ -28,6 +27,7 @@ import * as Effect from "effect/Effect";
 
 import { VERSION } from "../../config.ts";
 import { awaited, awaiting, awaitingWith, performed } from "../../core/awaiting.ts";
+import { basename, join, resolve } from "../../core/platform-node.ts";
 import {
   resolveConfigValueOrThrow,
   resolveHeadersOrThrow,

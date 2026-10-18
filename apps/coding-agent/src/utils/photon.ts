@@ -1,11 +1,11 @@
 import type { PathOrFileDescriptor } from "fs";
 import { createRequire } from "module";
-import * as path from "path";
 import { fileURLToPath } from "url";
 
 import * as Effect from "effect/Effect";
 
 import { awaited, awaiting } from "../core/awaiting.ts";
+import { dirname, join } from "../core/platform-node.ts";
 
 const require = createRequire(import.meta.url);
 const fs = require("fs") as typeof import("fs");
@@ -30,11 +30,11 @@ function pathOrNull(file: PathOrFileDescriptor): string | null {
 }
 
 function getFallbackWasmPaths(): string[] {
-  const execDir = path.dirname(process.execPath);
+  const execDir = dirname(process.execPath);
   return [
-    path.join(execDir, WASM_FILENAME),
-    path.join(execDir, "photon", WASM_FILENAME),
-    path.join(process.cwd(), WASM_FILENAME),
+    join(execDir, WASM_FILENAME),
+    join(execDir, "photon", WASM_FILENAME),
+    join(process.cwd(), WASM_FILENAME),
   ];
 }
 

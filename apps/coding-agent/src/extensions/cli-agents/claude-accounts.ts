@@ -1,6 +1,5 @@
 import { execFile } from "node:child_process";
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 
 import type { SDKAssistantMessageError } from "@anthropic-ai/claude-agent-sdk";
@@ -8,6 +7,7 @@ import * as Effect from "effect/Effect";
 
 import { expandTildePath, getAgentDir } from "../../config.ts";
 import { awaited, awaiting } from "../../core/awaiting.ts";
+import { dirname, join } from "../../core/platform-node.ts";
 import { nowMs, readEnv } from "../../core/platform.ts";
 import { spawnProcess, waitForChildProcess } from "../../utils/child-process.ts";
 import { findExecutableOnPath } from "../../utils/shell.ts";

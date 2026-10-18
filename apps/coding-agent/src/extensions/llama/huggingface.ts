@@ -1,10 +1,10 @@
 import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { join } from "node:path";
 
 import * as Effect from "effect/Effect";
 
 import { awaited, awaiting, awaitingWith } from "../../core/awaiting.ts";
+import { join } from "../../core/platform-node.ts";
 import { fetchResponse } from "../../utils/interop.ts";
 
 const DEFAULT_HUGGING_FACE_URL = "https://huggingface.co";

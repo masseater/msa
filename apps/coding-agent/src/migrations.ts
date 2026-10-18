@@ -7,7 +7,6 @@ import {
   rmSync,
   writeFileSync,
 } from "fs";
-import { dirname, join } from "path";
 
 import chalk from "chalk";
 import * as Effect from "effect/Effect";
@@ -15,6 +14,7 @@ import * as Effect from "effect/Effect";
 import { CONFIG_DIR_NAME, getAgentDir, getBinDir } from "./config.ts";
 import { awaited, awaiting } from "./core/awaiting.ts";
 import { migrateKeybindingsConfig } from "./core/keybindings.ts";
+import { dirname, join } from "./core/platform-node.ts";
 import { writeLog } from "./core/platform.ts";
 import { callbackPromise } from "./utils/interop.ts";
 import { stripBom } from "./utils/text.ts";

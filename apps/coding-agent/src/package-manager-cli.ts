@@ -1,5 +1,3 @@
-import { join } from "node:path";
-
 import chalk from "chalk";
 import * as Effect from "effect/Effect";
 
@@ -22,6 +20,7 @@ import { awaited, awaiting } from "./core/awaiting.ts";
 import type { InlineExtension } from "./core/extensions/types.ts";
 import { ModelRuntime } from "./core/model-runtime.ts";
 import { DefaultPackageManager } from "./core/package-manager.ts";
+import { join } from "./core/platform-node.ts";
 import { writeError, writeLog } from "./core/platform.ts";
 import { type AppMode, resolveProjectTrusted } from "./core/project-trust.ts";
 import { DefaultResourceLoader, isBuiltinExtension } from "./core/resource-loader.ts";

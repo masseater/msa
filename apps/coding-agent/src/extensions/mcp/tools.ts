@@ -1,5 +1,3 @@
-import { createHash } from "node:crypto";
-
 import type { AgentToolResult } from "@msa/agent-core";
 import type { ImageContent, JsonValue, TextContent } from "@msa/ai";
 import {
@@ -22,6 +20,7 @@ import type {
   ToolRenderers,
 } from "../../core/extensions/types.ts";
 import { READ_MCP_RESOURCE_TOOL } from "../../core/mcp-servers.ts";
+import { sha256Hex } from "../../core/platform-node.ts";
 import {
   formatToolCallWithArgs,
   getTextOutput,
@@ -71,7 +70,7 @@ export function createMcpToolName(
 ): string {
   const name = `mcp__${server}__${tool}`.replace(/[^A-Za-z0-9_]/gu, "_");
   if (name.length <= MAX_TOOL_NAME_LENGTH && !isTaken(name)) return name;
-  const hash = createHash("sha256").update(`${server}\0${tool}`).digest("hex").slice(0, 8);
+  const hash = sha256Hex(`${server}\0${tool}`).slice(0, 8);
   return `${name.slice(0, MAX_TOOL_NAME_LENGTH - hash.length - 1)}_${hash}`;
 }
 

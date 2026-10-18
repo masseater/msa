@@ -1,10 +1,10 @@
 import { homedir } from "node:os";
-import { join } from "node:path";
 
 import type { Model, SimpleStreamOptions, TranscriptContext } from "@msa/ai/compat";
 import { getBuiltinModels } from "@msa/ai/providers/all";
 
 import type { ExtensionAPI } from "../../core/extensions/types.ts";
+import { join } from "../../core/platform-node.ts";
 import { readEnv } from "../../core/platform.ts";
 import { streamViaCli, type CliBackend } from "./run.ts";
 import { flattenTranscript } from "./transcript.ts";

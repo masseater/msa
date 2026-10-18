@@ -1,9 +1,9 @@
-import { randomUUID } from "node:crypto";
 import { copyFileSync, existsSync, mkdirSync, renameSync, rmSync } from "node:fs";
-import { basename, dirname, join, relative, resolve, toNamespacedPath } from "node:path";
 
+import { basename, dirname, join, randomUuid, relative, resolve } from "../core/platform-node.ts";
 import { nowMs } from "../core/platform.ts";
 import { getCwdRelativePath } from "./paths.ts";
+import { toNamespacedPath } from "./platform-extra.ts";
 
 const QUARANTINE_DIR_NAME = ".msa-native-quarantine";
 
@@ -71,7 +71,7 @@ export function quarantineWindowsNativeDependencies(packageDir: string): void {
     return;
   }
 
-  const quarantineRunDir = join(quarantineRoot, `${nowMs()}-${process.pid}-${randomUUID()}`);
+  const quarantineRunDir = join(quarantineRoot, `${nowMs()}-${process.pid}-${randomUuid()}`);
   for (const loadedFile of loadedFiles) {
     if (!existsSync(loadedFile)) {
       continue;

@@ -1,6 +1,6 @@
 import { appendFileSync, mkdirSync, renameSync, statSync } from "node:fs";
-import { dirname } from "node:path";
 
+import { dirname } from "../../core/platform-node.ts";
 import { nowMs, toDate } from "../../core/platform.ts";
 
 const MAX_LOG_BYTES = 5 * 1024 * 1024;

@@ -1,5 +1,3 @@
-import { join } from "node:path";
-
 import type { AgentTool } from "@msa/agent-core";
 import type { CodemodeJsonSchema, CodemodeTool } from "@msa/codemode";
 import {
@@ -20,6 +18,7 @@ import type {
   ToolNamespace,
 } from "../../core/extensions/types.ts";
 import type { ModelRegistry } from "../../core/model-registry.ts";
+import { join } from "../../core/platform-node.ts";
 import { SETTINGS_DEFAULTS } from "../../core/settings-defaults.ts";
 import type { CodemodeMode } from "../../core/settings-manager.ts";
 import { wrapToolDefinition } from "../../core/tools/tool-definition-wrapper.ts";

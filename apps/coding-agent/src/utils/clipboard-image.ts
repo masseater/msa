@@ -1,12 +1,11 @@
-import { randomUUID } from "crypto";
 import { readFileSync, unlinkSync } from "fs";
 import { tmpdir } from "os";
-import { join } from "path";
 
 import { getNativeClipboard } from "@msa/tui";
 import * as Effect from "effect/Effect";
 
 import { awaited, awaiting } from "../core/awaiting.ts";
+import { join, randomUuid } from "../core/platform-node.ts";
 import { runClipboardCommand } from "./clipboard-command.ts";
 import { detectSupportedImageMimeType } from "./mime.ts";
 import { loadPhoton } from "./photon.ts";
@@ -125,7 +124,7 @@ function readClipboardImageViaWlPaste(): Promise<ClipboardImage | null | undefin
 function readClipboardImageViaPowerShell(): Promise<ClipboardImage | null> {
   return Effect.runPromise(
     awaiting(function* () {
-      const tmpFile = join(tmpdir(), `msa-wsl-clip-${randomUUID()}.png`);
+      const tmpFile = join(tmpdir(), `msa-wsl-clip-${randomUuid()}.png`);
 
       try {
         const winPathResult = yield* awaited(

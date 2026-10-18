@@ -1,5 +1,4 @@
 import { spawn, type ChildProcess } from "node:child_process";
-import { createHash } from "node:crypto";
 
 import type { Query, SDKMessage, SDKUserMessage } from "@anthropic-ai/claude-agent-sdk";
 import type { ContentBlockParam } from "@anthropic-ai/sdk/resources/messages";
@@ -21,6 +20,7 @@ import * as Effect from "effect/Effect";
 
 import { awaited, awaiting, awaitingWith } from "../../core/awaiting.ts";
 import type { ExtensionAPI } from "../../core/extensions/types.ts";
+import { sha256Hex } from "../../core/platform-node.ts";
 import { nowMs, schedule, type Scheduled } from "../../core/platform.ts";
 import { callbackPromise } from "../../utils/interop.ts";
 import {
@@ -89,7 +89,7 @@ const loadSdk = (() => {
 type Sdk = Awaited<ReturnType<typeof loadSdk>>;
 
 function hash(value: string): string {
-  return createHash("sha256").update(value).digest("hex");
+  return sha256Hex(value);
 }
 
 function replyKey(content: Message["content"]): string {

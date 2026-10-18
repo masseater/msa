@@ -1,9 +1,10 @@
 import { spawn, spawnSync } from "child_process";
 import { existsSync } from "node:fs";
-import { delimiter, join } from "node:path";
 
 import { getBinDir } from "../config.ts";
+import { join } from "../core/platform-node.ts";
 import { readEnv } from "../core/platform.ts";
+import { delimiter } from "./platform-extra.ts";
 
 export interface ShellConfig {
   shell: string;

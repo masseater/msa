@@ -1,11 +1,11 @@
 import { access, readFile, stat } from "node:fs/promises";
-import { resolve } from "path";
 
 import type { ImageContent } from "@msa/ai";
 import chalk from "chalk";
 import * as Effect from "effect/Effect";
 
 import { awaited, awaiting } from "../core/awaiting.ts";
+import { resolve } from "../core/platform-node.ts";
 import { writeError } from "../core/platform.ts";
 import { resolveReadPath } from "../core/tools/path-utils.ts";
 import { toErrorMessage } from "../utils/errors.ts";

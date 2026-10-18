@@ -9,7 +9,6 @@ import {
   rmSync,
 } from "fs";
 import { arch, platform } from "os";
-import { join } from "path";
 import { Readable } from "stream";
 import { pipeline } from "stream/promises";
 
@@ -17,6 +16,7 @@ import * as Effect from "effect/Effect";
 
 import { APP_NAME, getBinDir } from "../config.ts";
 import { awaited, awaiting } from "../core/awaiting.ts";
+import { join } from "../core/platform-node.ts";
 import { nowMs, randomUnit, readEnv } from "../core/platform.ts";
 import { fetchWithRetry } from "./management-http.ts";
 

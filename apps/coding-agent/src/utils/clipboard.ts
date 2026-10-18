@@ -1,12 +1,11 @@
-import { randomUUID } from "node:crypto";
 import { unlinkSync, writeFileSync } from "node:fs";
 import { platform, tmpdir } from "node:os";
-import { join } from "node:path";
 
 import { getNativeClipboard } from "@msa/tui";
 import * as Effect from "effect/Effect";
 
 import { awaited, awaiting } from "../core/awaiting.ts";
+import { join, randomUuid } from "../core/platform-node.ts";
 import { readEnv } from "../core/platform.ts";
 import { runClipboardCommand } from "./clipboard-command.ts";
 import { isWSL } from "./wsl.ts";
@@ -34,7 +33,7 @@ function emitOsc52(text: string): boolean {
 function copyViaWindowsClipboard(text: string): Promise<boolean> {
   return Effect.runPromise(
     awaiting(function* () {
-      const tmpFile = join(tmpdir(), `msa-wsl-clip-${randomUUID()}.txt`);
+      const tmpFile = join(tmpdir(), `msa-wsl-clip-${randomUuid()}.txt`);
       try {
         writeFileSync(tmpFile, text, { encoding: "utf8", mode: 0o600 });
         const winPath = (yield* awaited(

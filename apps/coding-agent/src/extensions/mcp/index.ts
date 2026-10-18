@@ -1,5 +1,3 @@
-import { join, resolve } from "node:path";
-
 import type { SelectItem } from "@msa/tui";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
@@ -16,6 +14,7 @@ import type {
 } from "../../core/extensions/types.ts";
 import { mcpNamespace } from "../../core/mcp-servers.ts";
 import type { ModelRegistry } from "../../core/model-registry.ts";
+import { join, resolve } from "../../core/platform-node.ts";
 import { toErrorMessage } from "../../utils/errors.ts";
 import { callbackPromise } from "../../utils/interop.ts";
 import { openBrowser } from "../../utils/open-browser.ts";

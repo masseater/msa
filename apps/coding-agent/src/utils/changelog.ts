@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "fs";
-import path from "node:path";
 
 import { writeError } from "../core/platform.ts";
+import { posix } from "./platform-extra.ts";
 
 export interface ChangelogEntry {
   major: number;
@@ -48,8 +48,8 @@ function normalizePathPart(value: string): string {
 function resolveRepositoryPath(targetPath: string): string | undefined {
   const normalizedTarget = normalizePathPart(targetPath);
   const joined = normalizedTarget.startsWith("/")
-    ? path.posix.normalize(normalizedTarget.replace(/^\/+/u, ""))
-    : path.posix.normalize(path.posix.join(CHANGELOG_LINK_BASE_PATH, normalizedTarget));
+    ? posix.normalize(normalizedTarget.replace(/^\/+/u, ""))
+    : posix.normalize(posix.join(CHANGELOG_LINK_BASE_PATH, normalizedTarget));
 
   if (joined === "." || joined.startsWith("../") || joined === "..") {
     return undefined;
@@ -63,7 +63,7 @@ function isDirectoryTarget(originalPath: string, repositoryPath: string): boolea
     return true;
   }
 
-  const basename = path.posix.basename(repositoryPath);
+  const basename = posix.basename(repositoryPath);
   return !basename.includes(".");
 }
 

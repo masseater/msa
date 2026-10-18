@@ -1,9 +1,10 @@
 import { realpathSync, statSync } from "node:fs";
 import { homedir } from "node:os";
-import { isAbsolute, join, resolve as nodeResolvePath, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { join, resolve as nodeResolvePath, relative, sep } from "../core/platform-node.ts";
 import { spawnProcessSync } from "./child-process.ts";
+import { isAbsolute } from "./platform-extra.ts";
 
 const UNICODE_SPACES = /[\u00A0\u2000-\u200A\u202F\u205F\u3000]/gu;
 
