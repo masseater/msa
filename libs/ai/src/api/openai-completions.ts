@@ -930,9 +930,6 @@ function buildParams(
 
   if (transcriptTools.requestTools.length > 0) {
     params.tools = convertTools(transcriptTools.requestTools, compat);
-    if (compat.zaiToolStream) {
-      (params as any).tool_stream = true;
-    }
   } else if (hasToolHistory(context.messages)) {
     params.tools = [];
   }
@@ -952,23 +949,7 @@ function buildParams(
   const thinkingTokenBudgetField = resolveThinkingTokenBudgetField(compat);
   const thinkingBudget = resolveClampedThinkingBudget(model, options, params);
 
-  if (compat.thinkingFormat === "zai" && model.reasoning) {
-    const zaiParams = params as Omit<typeof params, "reasoning_effort"> & {
-      thinking?: { type: "enabled" | "disabled"; clear_thinking?: boolean };
-      reasoning_effort?: string;
-    };
-    zaiParams.thinking =
-      options?.reasoningEffort === undefined
-        ? { type: "disabled" }
-        : { type: "enabled", clear_thinking: false };
-    if (options?.reasoningEffort !== undefined && compat.supportsReasoningEffort) {
-      const mappedEffort = model.thinkingLevelMap?.[options.reasoningEffort];
-      const effort = mappedEffort === undefined ? options.reasoningEffort : mappedEffort;
-      if (typeof effort === "string") {
-        zaiParams.reasoning_effort = effort;
-      }
-    }
-  } else if (compat.thinkingFormat === "qwen" && model.reasoning) {
+  if (compat.thinkingFormat === "qwen" && model.reasoning) {
     (params as any).enable_thinking = options?.reasoningEffort !== undefined;
     if (options?.reasoningEffort !== undefined && compat.supportsReasoningEffort) {
       const effort = model.thinkingLevelMap?.[options.reasoningEffort] ?? options.reasoningEffort;
@@ -991,31 +972,6 @@ function buildParams(
     if (chatTemplateKwargs !== undefined) {
       (params as any).chat_template_kwargs = chatTemplateKwargs;
     }
-  } else if (compat.thinkingFormat === "baseten" && model.reasoning) {
-    const basetenParams = params as Omit<typeof params, "reasoning_effort"> & {
-      chat_template_args?: Record<string, ResolvedChatTemplateKwargValue>;
-      reasoning_effort?: string;
-    };
-    const chatTemplateArgs = buildChatTemplateValues(
-      model,
-      options,
-      compat.chatTemplateArgs,
-      thinkingBudget,
-    );
-    if (chatTemplateArgs !== undefined) {
-      basetenParams.chat_template_args = chatTemplateArgs;
-    }
-    if (compat.supportsReasoningEffort) {
-      const requestedEffort = options?.reasoningEffort;
-      const mappedEffort =
-        requestedEffort === undefined
-          ? model.thinkingLevelMap?.off
-          : model.thinkingLevelMap?.[requestedEffort];
-      const effort = mappedEffort === undefined ? requestedEffort : mappedEffort;
-      if (typeof effort === "string") {
-        basetenParams.reasoning_effort = effort;
-      }
-    }
   } else if (compat.thinkingFormat === "deepseek" && model.reasoning) {
     if (options?.reasoningEffort !== undefined) {
       (params as any).thinking = { type: "enabled" };
@@ -1034,25 +990,6 @@ function buildParams(
       };
     } else if (model.thinkingLevelMap?.off !== null) {
       openRouterParams.reasoning = { effort: model.thinkingLevelMap?.off ?? "none" };
-    }
-  } else if (
-    compat.thinkingFormat === "ant-ling" &&
-    model.reasoning &&
-    options?.reasoningEffort !== undefined
-  ) {
-    const effort = model.thinkingLevelMap?.[options.reasoningEffort];
-    if (typeof effort === "string") {
-      (params as typeof params & { reasoning?: { effort: string } }).reasoning = { effort };
-    }
-  } else if (compat.thinkingFormat === "together" && model.reasoning) {
-    const togetherParams = params as Omit<typeof params, "reasoning_effort"> & {
-      reasoning?: { enabled: boolean };
-      reasoning_effort?: string;
-    };
-    togetherParams.reasoning = { enabled: options?.reasoningEffort !== undefined };
-    if (options?.reasoningEffort !== undefined && compat.supportsReasoningEffort) {
-      togetherParams.reasoning_effort =
-        model.thinkingLevelMap?.[options.reasoningEffort] ?? options.reasoningEffort;
     }
   } else if (compat.thinkingFormat === "string-thinking" && model.reasoning) {
     const stringThinkingParams = params as typeof params & { thinking?: string };
@@ -1084,18 +1021,8 @@ function buildParams(
     Object.assign(params, { [thinkingTokenBudgetField]: thinkingBudget });
   }
 
-  if (model.compat?.openRouterRouting !== undefined) {
-    (params as any).provider = model.compat.openRouterRouting;
-  }
-
-  if (model.compat?.vercelGatewayRouting !== undefined) {
-    const routing = model.compat.vercelGatewayRouting;
-    if (routing.only !== undefined || routing.order !== undefined) {
-      const gatewayOptions: Record<string, string[]> = {};
-      if (routing.only !== undefined) gatewayOptions["only"] = routing.only;
-      if (routing.order !== undefined) gatewayOptions["order"] = routing.order;
-      (params as any).providerOptions = { gateway: gatewayOptions };
-    }
+  if (Object.keys(compat.openRouterRouting).length > 0) {
+    (params as any).provider = compat.openRouterRouting;
   }
 
   const samplingParams = resolveSamplingParams(
@@ -1703,54 +1630,13 @@ function detectCompat(model: Model<"openai-completions">): ResolvedOpenAIComplet
   const provider = model.provider;
   const baseUrl = model.baseUrl;
 
-  const isZai =
-    provider === "zai" ||
-    provider === "zai-coding-cn" ||
-    baseUrl.includes("api.z.ai") ||
-    baseUrl.includes("open.bigmodel.cn");
-  const isTogether =
-    provider === "together" ||
-    baseUrl.includes("api.together.ai") ||
-    baseUrl.includes("api.together.xyz");
-  const isMoonshot =
-    provider === "moonshotai" || provider === "moonshotai-cn" || baseUrl.includes("api.moonshot.");
   const isOpenRouter = provider === "openrouter" || baseUrl.includes("openrouter.ai");
-  const isCloudflareWorkersAI =
-    provider === "cloudflare-workers-ai" || baseUrl.includes("api.cloudflare.com");
-  const isCloudflareAiGateway =
-    provider === "cloudflare-ai-gateway" || baseUrl.includes("gateway.ai.cloudflare.com");
-  const isNvidia = provider === "nvidia" || baseUrl.includes("integrate.api.nvidia.com");
-  const isAntLing = provider === "ant-ling" || baseUrl.includes("api.ant-ling.com");
-  const isCerebras = provider === "cerebras" || baseUrl.includes("cerebras.ai");
-  const isDeepSeek = provider === "deepseek" || baseUrl.toLowerCase().includes("deepseek.com");
 
   const isNonStandard =
-    isNvidia ||
-    isCerebras ||
-    provider === "xai" ||
-    baseUrl.includes("api.x.ai") ||
-    isTogether ||
-    baseUrl.includes("chutes.ai") ||
-    isDeepSeek ||
-    isZai ||
-    isMoonshot ||
-    provider === "opencode" ||
-    baseUrl.includes("opencode.ai") ||
-    isCloudflareWorkersAI ||
-    isCloudflareAiGateway ||
-    isAntLing;
+    baseUrl.includes("chutes.ai") || provider === "opencode" || baseUrl.includes("opencode.ai");
 
-  const useMaxTokens =
-    baseUrl.includes("chutes.ai") ||
-    isDeepSeek ||
-    isMoonshot ||
-    isCloudflareAiGateway ||
-    isTogether ||
-    isNvidia ||
-    isAntLing ||
-    isZai;
+  const useMaxTokens = baseUrl.includes("chutes.ai");
 
-  const isGrok = provider === "xai" || baseUrl.includes("api.x.ai");
   const isOpenRouterDeveloperRoleModel =
     isOpenRouter && (model.id.startsWith("anthropic/") || model.id.startsWith("openai/"));
   const cacheControlFormat =
@@ -1759,37 +1645,17 @@ function detectCompat(model: Model<"openai-completions">): ResolvedOpenAIComplet
   return {
     supportsStore: !isNonStandard,
     supportsDeveloperRole: isOpenRouterDeveloperRoleModel || (!isNonStandard && !isOpenRouter),
-    supportsReasoningEffort:
-      !isGrok &&
-      !isZai &&
-      !isMoonshot &&
-      !isTogether &&
-      !isCloudflareAiGateway &&
-      !isNvidia &&
-      !isAntLing,
+    supportsReasoningEffort: true,
     supportsUsageInStreaming: true,
     supportsFinishReason: true,
     maxTokensField: useMaxTokens ? "max_tokens" : "max_completion_tokens",
     requiresToolResultName: false,
     requiresAssistantAfterToolResult: false,
     requiresThinkingAsText: false,
-    requiresReasoningContentOnAssistantMessages: isDeepSeek,
-    thinkingFormat: isDeepSeek
-      ? "deepseek"
-      : isZai
-        ? "zai"
-        : isTogether
-          ? "together"
-          : isAntLing
-            ? "ant-ling"
-            : isOpenRouter
-              ? "openrouter"
-              : "openai",
-    openRouterRouting: {},
-    vercelGatewayRouting: {},
+    requiresReasoningContentOnAssistantMessages: false,
+    thinkingFormat: isOpenRouter ? "openrouter" : "openai",
+    openRouterRouting: isOpenRouter ? { data_collection: "deny" } : {},
     chatTemplateKwargs: {},
-    chatTemplateArgs: {},
-    zaiToolStream: false,
     supportsThinkingTokenBudget: false,
     thinkingTokenBudgetField: undefined,
     supportsStrictMode: false,
@@ -1799,13 +1665,7 @@ function detectCompat(model: Model<"openai-completions">): ResolvedOpenAIComplet
     cacheControlFormat,
     sendSessionAffinityHeaders: isOpenRouter,
     sessionAffinityFormat: isOpenRouter ? "openrouter" : "openai",
-    supportsLongCacheRetention: !(
-      isTogether ||
-      isCloudflareWorkersAI ||
-      isCloudflareAiGateway ||
-      isNvidia ||
-      isAntLing
-    ),
+    supportsLongCacheRetention: true,
   };
 }
 
@@ -1830,11 +1690,8 @@ function getCompat(model: Model<"openai-completions">): ResolvedOpenAICompletion
       model.compat.requiresReasoningContentOnAssistantMessages ??
       detected.requiresReasoningContentOnAssistantMessages,
     thinkingFormat: model.compat.thinkingFormat ?? detected.thinkingFormat,
-    openRouterRouting: model.compat.openRouterRouting ?? {},
-    vercelGatewayRouting: model.compat.vercelGatewayRouting ?? detected.vercelGatewayRouting,
+    openRouterRouting: { ...detected.openRouterRouting, ...model.compat.openRouterRouting },
     chatTemplateKwargs: model.compat.chatTemplateKwargs ?? detected.chatTemplateKwargs,
-    chatTemplateArgs: model.compat.chatTemplateArgs ?? detected.chatTemplateArgs,
-    zaiToolStream: model.compat.zaiToolStream ?? detected.zaiToolStream,
     supportsThinkingTokenBudget:
       model.compat.supportsThinkingTokenBudget ?? detected.supportsThinkingTokenBudget,
     thinkingTokenBudgetField:

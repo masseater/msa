@@ -138,25 +138,24 @@ describe("Models with classifier models", () => {
     ));
 
   it("exposes Jev only through classifier catalog accessors", () => {
-    const jev = getBuiltinClassifierModel("typesafe", "jev-latest");
+    const jev = getBuiltinClassifierModel("opencode", "jev-1.13");
     expect(jev).toMatchObject({
       type: "classifier",
       api: "typesafe-system-one",
-      provider: "typesafe",
-      contextWindow: 64000,
+      provider: "opencode",
+      contextWindow: 32000,
     });
-    expect(getBuiltinClassifierModels("typesafe")).toEqual([jev]);
-    expect(getAllBuiltinModels("typesafe")).toEqual([jev]);
+    expect(getBuiltinClassifierModels("opencode")).toContainEqual(jev);
+    expect(getAllBuiltinModels("opencode")).toContainEqual(jev);
 
     const models = builtinModels();
-    expect(models.getModel("typesafe", "jev-latest")).toBeUndefined();
-    expect(models.getModelOfType("classifier", "typesafe", "jev-latest")).toEqual(jev);
+    expect(models.getModel("opencode", "jev-1.13")).toBeUndefined();
+    expect(models.getModelOfType("classifier", "opencode", "jev-1.13")).toEqual(jev);
   });
 });
 
 describe("Models with classifier models", () => {
   it.each([
-    ["vercel-ai-gateway", "typesafe-ai/jev", "https://ai-gateway.vercel.sh/typesafe/v1/systemone"],
     ["opencode", "jev-1.13", "https://opencode.ai/inference/v1/systemone"],
     ["opencode", "jev-1.13-free", "https://opencode.ai/inference/v1/systemone"],
   ])("routes %s Jev (%s) to its TypeSafe-compatible endpoint", (provider, id, url) =>

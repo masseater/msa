@@ -90,7 +90,6 @@ describe("bug report prompt", () => {
       expect(deliveryLines.some((line) => line.includes("stack trace"))).toBe(true);
 
       deliverySelector.handleInput("j");
-      deliverySelector.handleInput("j");
       deliverySelector.handleInput("\r");
       await report;
       expect(showStatus).toHaveBeenCalledWith("Bug report cancelled");

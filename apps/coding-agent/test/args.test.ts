@@ -497,13 +497,13 @@ describe("parseArgs", () => {
     });
 
     test("rejects patterns in tool modifiers", () => {
-      const result = parseArgs(["-t", "+mcp__radius__*"]);
+      const result = parseArgs(["-t", "+mcp__github__*"]);
       expect(result.tools).toBeUndefined();
       expect(result.diagnostics).toEqual([
         {
           type: "error",
           message:
-            "-t: +name and -name entries take exact tool names, not patterns: +mcp__radius__*",
+            "-t: +name and -name entries take exact tool names, not patterns: +mcp__github__*",
         },
       ]);
     });

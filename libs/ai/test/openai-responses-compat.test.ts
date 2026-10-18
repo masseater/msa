@@ -201,10 +201,10 @@ describe("openai-responses provider defaults", () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
-  it("sets strict mode explicitly for Cloudflare OpenAI Responses tools", () =>
+  it("sets strict mode explicitly for OpenAI Responses tools", () =>
     Effect.runPromise(
       Effect.gen(function* () {
-        const model = getModel("cloudflare-ai-gateway", "gpt-5.6-sol");
+        const model = getModel("openai", "gpt-5.6-sol");
         let capturedPayload: CapturedResponsesPayload | undefined;
 
         vi.spyOn(globalThis, "fetch").mockResolvedValue(

@@ -14,7 +14,6 @@ import type {
   ToolResultMessage,
 } from "../src/types.ts";
 import { StringEnum } from "../src/utils/typebox-helpers.ts";
-import { hasBedrockCredentials } from "./bedrock-utils.ts";
 import { hasValue } from "./env.ts";
 
 const calculatorSchema = Type.Object({
@@ -135,26 +134,6 @@ const assertSecondToolCallWithInterleavedThinking = Effect.fn(
 });
 
 const hasAnthropicCredentials = hasValue(getEnvApiKey("anthropic"));
-
-describe.skipIf(!hasBedrockCredentials())("Amazon Bedrock interleaved thinking", () => {
-  it("should do interleaved thinking on Claude Opus 4.5", { retry: 3 }, () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const llm = getModel("amazon-bedrock", "global.anthropic.claude-opus-4-5-20251101-v1:0");
-        yield* assertSecondToolCallWithInterleavedThinking(llm, "high");
-      }),
-    ),
-  );
-
-  it("should do interleaved thinking on Claude Opus 4.6", { retry: 3 }, () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const llm = getModel("amazon-bedrock", "global.anthropic.claude-opus-4-6-v1");
-        yield* assertSecondToolCallWithInterleavedThinking(llm, "high");
-      }),
-    ),
-  );
-});
 
 describe.skipIf(!hasAnthropicCredentials)("Anthropic interleaved thinking", () => {
   it("should do interleaved thinking on Claude Opus 4.5", { retry: 3 }, () =>

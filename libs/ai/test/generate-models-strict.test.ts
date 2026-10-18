@@ -22,7 +22,7 @@ afterEach(() => {
 });
 
 describe("strict model generation", () => {
-  it("fails before mutating generated data when an Individual model loses tool support", () => {
+  it("fails before mutating generated data when an upstream catalog is unavailable", () => {
     const fixtureRoot = mkdtempSync(join(tmpdir(), "msa-generate-models-"));
     temporaryRoots.push(fixtureRoot);
     const isolatedPackageRoot = join(fixtureRoot, "package");
@@ -32,29 +32,7 @@ describe("strict model generation", () => {
     }
     symlinkSync(join(packageRoot, "node_modules"), join(isolatedPackageRoot, "node_modules"));
     const preloadPath = join(fixtureRoot, "mock-models-dev.mjs");
-    const modelIds = [
-      "deepseek-v4-flash-0731",
-      "deepseek-v4-pro",
-      "deepseek-v4-pro-0813",
-      "glm-5.2",
-      "qwen3.6-flash",
-      "qwen3.7-max",
-      "qwen3.7-plus",
-      "qwen3.8-flash",
-      "qwen3.8-max",
-      "qwen3.8-max-preview",
-    ];
-    const sourceModels = Object.fromEntries(
-      modelIds.map((id) => [
-        id,
-        {
-          id,
-          name: id,
-          tool_call: id !== "deepseek-v4-flash-0731",
-        },
-      ]),
-    );
-    const catalog = { "alibaba-token-plan": { models: sourceModels } };
+    const catalog = {};
     writeFileSync(
       preloadPath,
       `const catalog = ${JSON.stringify(catalog)};\n` +
@@ -68,8 +46,8 @@ describe("strict model generation", () => {
 
     const generatedPaths = [
       "src/models.generated.ts",
-      "src/providers/qwen-token-plan-individual.models.ts",
-      "src/providers/data/qwen-token-plan-individual.json",
+      "src/providers/openai.models.ts",
+      "src/providers/data/openai.json",
       "src/providers/data/.manifest.json",
     ];
     const sourceBefore = generatedPaths.map((path) =>
@@ -91,7 +69,7 @@ describe("strict model generation", () => {
 
     expect(result.status).toBe(1);
     expect(`${result.stdout}\n${result.stderr}`).toContain(
-      "qwen-token-plan-individual model IDs do not match (missing: deepseek-v4-flash-0731)",
+      "Unexpected fetch: https://openrouter.ai/api/v1/models",
     );
     expect(
       generatedPaths.map((path) => readFileSync(join(isolatedPackageRoot, path), "utf8")),

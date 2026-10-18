@@ -166,9 +166,6 @@ function getAnthropicMessagesCompat(
   if (provider === "opencode" && supportsAnthropicMidConvoSystemMessages(modelId)) {
     compat.supportsMidConvoSystemMessages = true;
   }
-  if (provider === "xiaomi" || provider.startsWith("xiaomi-token-plan-")) {
-    compat.allowEmptySignature = true;
-  }
   if ((provider === "opencode" || provider === "opencode-go") && modelId === "qwen3.8-flash") {
     compat.allowEmptySignature = true;
   }

@@ -99,7 +99,7 @@ describe("generated configuration schemas", () => {
         providers: {
           local: {
             compat: {
-              zaiToolStream: true,
+              sendSessionAffinityHeaders: true,
               thinkingTokenBudgetField: "thinking_budget",
               chatTemplateKwargs: { budget: { $var: "thinking.budget" } },
               supportsMidConvoSystemMessages: true,

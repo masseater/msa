@@ -23,7 +23,7 @@ export const AnthropicMessagesCompatSchema = Type.Object(
     }),
     sendSessionAffinityHeaders: optionalCompatBoolean({
       description:
-        "Whether to send x-session-affinity from options.sessionId when caching is enabled. Required for providers like Fireworks that use session affinity for prompt cache routing; requests to the same replica maximize cache hits. Default: true for OpenRouter endpoints, false otherwise.",
+        "Whether to send x-session-affinity from options.sessionId when caching is enabled. Required for providers that use session affinity for prompt cache routing; requests to the same replica maximize cache hits. Default: true for OpenRouter endpoints, false otherwise.",
     }),
     sessionAffinityFormat: Type.Optional(
       Type.Literal("openrouter", {
@@ -34,7 +34,7 @@ export const AnthropicMessagesCompatSchema = Type.Object(
     supportsCacheControlOnTools: Type.Optional(
       Type.Boolean({
         description:
-          "Whether the provider supports Anthropic-style cache_control markers on tool definitions. When false, cache_control is omitted from tool parameters. Some Anthropic-compatible providers, such as Fireworks, do not support this field on tools and may reject or ignore it.",
+          "Whether the provider supports Anthropic-style cache_control markers on tool definitions. When false, cache_control is omitted from tool parameters. Some Anthropic-compatible providers do not support this field on tools and may reject or ignore it.",
         default: true,
       }),
     ),
@@ -97,27 +97,6 @@ export const AnthropicMessagesCompatSchema = Type.Object(
     description: "Compatibility settings for Anthropic Messages-compatible APIs.",
     additionalProperties: true,
   },
-);
-
-export const BedrockCompatSchema = Type.Object(
-  {
-    supportsStrictMode: optionalCompatBoolean({
-      description: "Whether the model supports Bedrock strict tool schemas.",
-      default: false,
-    }),
-  },
-  { description: "Compatibility settings for Amazon Bedrock models.", additionalProperties: true },
-);
-
-export const MistralConversationsCompatSchema = Type.Object(
-  {
-    supportsMidConvoSystemMessages: optionalCompatBoolean({
-      description:
-        "Whether the exact model accepts system messages after the conversation has started. When false, later system messages are folded into the leading system message.",
-      default: false,
-    }),
-  },
-  { description: "Compatibility settings for the Mistral chat API.", additionalProperties: true },
 );
 
 const ProviderCompatPropertyOverrides = {
@@ -204,8 +183,6 @@ const CompatSchemasByApi = {
   "openai-completions": OpenAICompletionsCompatSchema,
   "openai-responses": OpenAIResponsesCompatSchema,
   "anthropic-messages": AnthropicMessagesCompatSchema,
-  "bedrock-converse-stream": BedrockCompatSchema,
-  "mistral-conversations": MistralConversationsCompatSchema,
 } as const;
 
 const ProviderCompatProperties = mergeCompatProperties(
@@ -219,7 +196,3 @@ export const ProviderCompatSchema = Type.Object(ProviderCompatProperties, {
 });
 
 export interface AnthropicMessagesCompat extends Static<typeof AnthropicMessagesCompatSchema> {}
-export interface BedrockCompat extends Static<typeof BedrockCompatSchema> {}
-export interface MistralConversationsCompat extends Static<
-  typeof MistralConversationsCompatSchema
-> {}

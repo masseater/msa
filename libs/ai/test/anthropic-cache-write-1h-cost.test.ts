@@ -102,7 +102,7 @@ describe("Anthropic 1h cache write cost", () => {
   it("prices 1h cache writes reported only in message_delta", () =>
     Effect.runPromise(
       Effect.gen(function* () {
-        const model = getModel("vercel-ai-gateway", "anthropic/claude-haiku-4.5");
+        const model = getModel("anthropic", "claude-haiku-4-5");
         const response = createSseResponse([
           {
             event: "message_start",

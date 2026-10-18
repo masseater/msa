@@ -14,12 +14,7 @@ import type {
   ToolResultMessage,
 } from "../src/types.ts";
 import { currentTimeMillis } from "../src/utils/clock.ts";
-import { hasAzureOpenAICredentials } from "./azure-utils.ts";
-import {
-  hasCloudflareAiGatewayCredentials,
-  hasCloudflareWorkersAICredentials,
-} from "./cloudflare-utils.ts";
-import { envValue, hasEnv, hasValue } from "./env.ts";
+import { hasValue } from "./env.ts";
 import { resolveApiKey } from "./oauth.ts";
 
 const testToolSchema = Type.Object({
@@ -37,12 +32,10 @@ interface ProviderModelPair {
   model: string;
   label: string;
   apiOverride?: Api;
-  upstreamApiKeyEnv?: string;
 }
 
 const PROVIDER_MODEL_PAIRS: ProviderModelPair[] = [
   { provider: "anthropic", model: "claude-sonnet-4-5", label: "anthropic-claude-sonnet-4-5" },
-  { provider: "google", model: "gemini-3-flash-preview", label: "google-gemini-3-flash-preview" },
   {
     provider: "openai",
     model: "gpt-4o-mini",
@@ -50,46 +43,7 @@ const PROVIDER_MODEL_PAIRS: ProviderModelPair[] = [
     apiOverride: "openai-completions",
   },
   { provider: "openai", model: "gpt-5-mini", label: "openai-responses-gpt-5-mini" },
-  { provider: "azure", model: "gpt-4o-mini", label: "azure-gpt-4o-mini" },
   { provider: "openai-codex", model: "gpt-5.5", label: "openai-codex-gpt-5.5" },
-  {
-    provider: "amazon-bedrock",
-    model: "global.anthropic.claude-sonnet-4-5-20250929-v1:0",
-    label: "bedrock-claude-sonnet-4-5",
-  },
-  { provider: "xai", model: "grok-4.3", label: "xai-grok-4.3" },
-  { provider: "cerebras", model: "zai-glm-4.7", label: "cerebras-zai-glm-4.7" },
-  {
-    provider: "cloudflare-workers-ai",
-    model: "@cf/moonshotai/kimi-k2.6",
-    label: "cloudflare-kimi-k2.6",
-  },
-  {
-    provider: "cloudflare-ai-gateway",
-    model: "workers-ai/@cf/moonshotai/kimi-k2.6",
-    label: "cloudflare-gateway-kimi-k2.6",
-  },
-  {
-    provider: "cloudflare-ai-gateway",
-    model: "claude-sonnet-4-5",
-    label: "cloudflare-gateway-claude-sonnet-4-5",
-    upstreamApiKeyEnv: "ANTHROPIC_API_KEY",
-  },
-  {
-    provider: "cloudflare-ai-gateway",
-    model: "gpt-5.1",
-    label: "cloudflare-gateway-gpt-5.1",
-    upstreamApiKeyEnv: "OPENAI_API_KEY",
-  },
-  { provider: "groq", model: "openai/gpt-oss-120b", label: "groq-gpt-oss-120b" },
-  { provider: "huggingface", model: "moonshotai/Kimi-K2.5", label: "huggingface-kimi-k2.5" },
-  { provider: "together", model: "moonshotai/Kimi-K3", label: "together-kimi-k3" },
-  { provider: "baseten", model: "zai-org/GLM-5.2", label: "baseten-glm-5.2" },
-  { provider: "kimi-coding", model: "kimi-for-coding", label: "kimi-for-coding" },
-  { provider: "meta", model: "muse-spark-1.3", label: "meta-muse-spark-1.3" },
-  { provider: "mistral", model: "devstral-medium-latest", label: "mistral-devstral-medium" },
-  { provider: "minimax", model: "MiniMax-M2.7", label: "minimax-m2.7" },
-  { provider: "minimax-cn", model: "MiniMax-M2.7", label: "minimax-m2.7" },
   { provider: "opencode", model: "big-pickle", label: "zen-big-pickle" },
   { provider: "opencode", model: "claude-sonnet-4-5", label: "zen-claude-sonnet-4-5" },
   { provider: "opencode", model: "gemini-3-flash", label: "zen-gemini-3-flash" },
@@ -98,39 +52,6 @@ const PROVIDER_MODEL_PAIRS: ProviderModelPair[] = [
   { provider: "opencode", model: "minimax-m2.1-free", label: "zen-minimax-m2.1-free" },
   { provider: "opencode-go", model: "kimi-k2.5", label: "go-kimi-k2.5" },
   { provider: "opencode-go", model: "minimax-m2.5", label: "go-minimax-m2.5" },
-  { provider: "xiaomi", model: "mimo-v2.6-pro", label: "xiaomi-mimo-v2.6-pro" },
-  {
-    provider: "xiaomi-token-plan-cn",
-    model: "mimo-v2.6-pro",
-    label: "xiaomi-token-plan-cn-mimo-v2.6-pro",
-  },
-  {
-    provider: "xiaomi-token-plan-ams",
-    model: "mimo-v2.6-pro",
-    label: "xiaomi-token-plan-ams-mimo-v2.6-pro",
-  },
-  {
-    provider: "xiaomi-token-plan-sgp",
-    model: "mimo-v2.6-pro",
-    label: "xiaomi-token-plan-sgp-mimo-v2.6-pro",
-  },
-  { provider: "qwen-token-plan", model: "qwen3.7-max", label: "qwen-token-plan-qwen3.7-max" },
-  { provider: "qwen-token-plan-cn", model: "qwen3.7-max", label: "qwen-token-plan-cn-qwen3.7-max" },
-  {
-    provider: "qwen-token-plan-individual",
-    model: "qwen3.8-max",
-    label: "qwen-token-plan-individual-qwen3.8-max",
-  },
-  {
-    provider: "qwen-token-plan-individual",
-    model: "deepseek-v4-flash-0731",
-    label: "qwen-token-plan-individual-deepseek-v4-flash-0731",
-  },
-  {
-    provider: "qwen-token-plan-individual",
-    model: "glm-5.2",
-    label: "qwen-token-plan-individual-glm-5.2",
-  },
 ];
 
 interface CachedContext {
@@ -153,27 +74,7 @@ function getApiKey(provider: string): Promise<string | undefined> {
 }
 
 function hasApiKey(pair: ProviderModelPair): boolean {
-  if (pair.provider === "azure") {
-    return hasAzureOpenAICredentials();
-  }
-  if (pair.provider === "cloudflare-workers-ai") {
-    return hasCloudflareWorkersAICredentials();
-  }
-  if (pair.provider === "cloudflare-ai-gateway") {
-    if (!hasCloudflareAiGatewayCredentials()) return false;
-    return pair.upstreamApiKeyEnv !== undefined && pair.upstreamApiKeyEnv !== ""
-      ? hasEnv(pair.upstreamApiKeyEnv)
-      : true;
-  }
   return hasValue(getEnvApiKey(pair.provider));
-}
-
-function getHeaders(pair: ProviderModelPair): Record<string, string> | undefined {
-  if (pair.upstreamApiKeyEnv === undefined || pair.upstreamApiKeyEnv === "") return undefined;
-  const upstreamApiKey = envValue(pair.upstreamApiKeyEnv);
-  return upstreamApiKey !== undefined && upstreamApiKey !== ""
-    ? { Authorization: `Bearer ${upstreamApiKey}` }
-    : undefined;
 }
 
 function hasAnyApiKey(): boolean {
@@ -220,7 +121,6 @@ async function generateContext(
   };
 
   const supportsReasoning = model.reasoning;
-  const headers = getHeaders(pair);
   let lastPayload: unknown;
   let assistantResponse: AssistantMessage;
   try {
@@ -234,7 +134,6 @@ async function generateContext(
       {
         apiKey,
         reasoning: supportsReasoning ? "high" : undefined,
-        headers,
         onPayload: (payload) => {
           lastPayload = payload;
         },
@@ -296,7 +195,6 @@ async function generateContext(
       {
         apiKey,
         reasoning: supportsReasoning ? "high" : undefined,
-        headers,
         onPayload: (payload) => {
           lastPayload = payload;
         },
@@ -484,7 +382,6 @@ describe.skipIf(!hasAnyApiKey())("Cross-Provider Handoff", () => {
             ? baseModel
             : { ...baseModel, api: targetPair.apiOverride };
         const supportsReasoning = model.reasoning;
-        const headers = getHeaders(targetPair);
 
         console.log(
           `[Target: ${targetPair.label}] Testing with ${otherMessages.length} messages from other providers...`,
@@ -502,7 +399,6 @@ describe.skipIf(!hasAnyApiKey())("Cross-Provider Handoff", () => {
             {
               apiKey,
               reasoning: supportsReasoning ? "high" : undefined,
-              headers,
               onPayload: (payload) => {
                 lastPayload = payload;
               },

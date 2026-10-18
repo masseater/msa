@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -9,9 +9,10 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { defineTool } from "../src/core/extensions/types.ts";
 import { createAgentSession } from "../src/core/sdk.ts";
+import { serializeSessionBranch } from "../src/core/session-export.ts";
 import { SessionManager } from "../src/core/session-manager.ts";
 import { SettingsManager } from "../src/core/settings-manager.ts";
-import { exportSessionForShare } from "../src/modes/interactive/session-share.ts";
+import { createShareTrailingEntries } from "../src/modes/interactive/session-share.ts";
 import { assistantMsg, userMsg } from "./utilities.ts";
 
 describe("JSONL share export", () => {
@@ -80,7 +81,12 @@ describe("JSONL share export", () => {
       ).toBe(false);
 
       const sharePath = join(tempDir, "share.jsonl");
-      exportSessionForShare(sharePath, session);
+      writeFileSync(
+        sharePath,
+        serializeSessionBranch(sessionManager, (parentId, timestamp) =>
+          createShareTrailingEntries(session, parentId, timestamp),
+        ),
+      );
       const records = readFileSync(sharePath, "utf8")
         .trim()
         .split("\n")

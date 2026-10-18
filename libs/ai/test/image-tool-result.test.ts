@@ -12,8 +12,6 @@ import { envValue } from "./env.ts";
 
 type StreamOptionsWithExtras = StreamOptions & Record<string, unknown>;
 
-import { hasAzureOpenAICredentials, resolveAzureDeploymentName } from "./azure-utils.ts";
-import { hasBedrockCredentials } from "./bedrock-utils.ts";
 import { resolveApiKey } from "./oauth.ts";
 
 const oauthTokens = await Promise.all([resolveApiKey("anthropic"), resolveApiKey("openai-codex")]);
@@ -177,21 +175,6 @@ const handleToolWithTextAndImageResult = Effect.fn("handleToolWithTextAndImageRe
 });
 
 describe("Tool Results with Images", () => {
-  describe.skipIf(envValue("GEMINI_API_KEY") === undefined || envValue("GEMINI_API_KEY") === "")(
-    "Google Provider (gemini-2.5-flash)",
-    () => {
-      const llm = getModel("google", "gemini-2.5-flash");
-
-      it("should handle tool result with only image", { retry: 3, timeout: 30000 }, () =>
-        Effect.runPromise(handleToolWithImageResult(llm)),
-      );
-
-      it("should handle tool result with text and image", { retry: 3, timeout: 30000 }, () =>
-        Effect.runPromise(handleToolWithTextAndImageResult(llm)),
-      );
-    },
-  );
-
   describe.skipIf(envValue("OPENAI_API_KEY") === undefined || envValue("OPENAI_API_KEY") === "")(
     "OpenAI Completions Provider (gpt-4o-mini)",
     () => {
@@ -231,26 +214,6 @@ describe("Tool Results with Images", () => {
 });
 
 describe("Tool Results with Images", () => {
-  describe.skipIf(!hasAzureOpenAICredentials())(
-    "Azure OpenAI Responses Provider (gpt-4o-mini)",
-    () => {
-      const llm = getModel("azure", "gpt-4o-mini");
-      const azureDeploymentName = resolveAzureDeploymentName(llm.id);
-      const azureOptions =
-        azureDeploymentName !== undefined && azureDeploymentName !== ""
-          ? { azureDeploymentName }
-          : {};
-
-      it("should handle tool result with only image", { retry: 3, timeout: 30000 }, () =>
-        Effect.runPromise(handleToolWithImageResult(llm, azureOptions)),
-      );
-
-      it("should handle tool result with text and image", { retry: 3, timeout: 30000 }, () =>
-        Effect.runPromise(handleToolWithTextAndImageResult(llm, azureOptions)),
-      );
-    },
-  );
-
   describe.skipIf(
     envValue("ANTHROPIC_API_KEY") === undefined || envValue("ANTHROPIC_API_KEY") === "",
   )("Anthropic Provider (claude-haiku-4-5)", () => {
@@ -281,204 +244,6 @@ describe("Tool Results with Images", () => {
 });
 
 describe("Tool Results with Images", () => {
-  describe.skipIf(envValue("MISTRAL_API_KEY") === undefined || envValue("MISTRAL_API_KEY") === "")(
-    "Mistral Provider (pixtral-12b)",
-    () => {
-      const llm = getModel("mistral", "pixtral-12b");
-
-      it("should handle tool result with only image", { retry: 5, timeout: 30000 }, () =>
-        Effect.runPromise(handleToolWithImageResult(llm)),
-      );
-
-      it("should handle tool result with text and image", { retry: 5, timeout: 30000 }, () =>
-        Effect.runPromise(handleToolWithTextAndImageResult(llm)),
-      );
-    },
-  );
-
-  describe.skipIf(
-    envValue("TOGETHER_API_KEY") === undefined || envValue("TOGETHER_API_KEY") === "",
-  )("Together AI Provider (Kimi-K3)", () => {
-    const llm = getModel("together", "moonshotai/Kimi-K3");
-    const options = { reasoningEffort: "high" } satisfies StreamOptionsWithExtras;
-
-    it("should handle tool result with only image", { retry: 3, timeout: 30000 }, () =>
-      Effect.runPromise(handleToolWithImageResult(llm, options)),
-    );
-
-    it("should handle tool result with text and image", { retry: 3, timeout: 30000 }, () =>
-      Effect.runPromise(handleToolWithTextAndImageResult(llm, options)),
-    );
-  });
-
-  describe.skipIf(envValue("BASETEN_API_KEY") === undefined || envValue("BASETEN_API_KEY") === "")(
-    "Baseten Provider (Kimi-K2.6)",
-    () => {
-      const llm = getModel("baseten", "moonshotai/Kimi-K2.6");
-      const options = { reasoningEffort: "high" } satisfies StreamOptionsWithExtras;
-
-      it("should handle tool result with only image", { retry: 3, timeout: 30000 }, () =>
-        Effect.runPromise(handleToolWithImageResult(llm, options)),
-      );
-
-      it("should handle tool result with text and image", { retry: 3, timeout: 30000 }, () =>
-        Effect.runPromise(handleToolWithTextAndImageResult(llm, options)),
-      );
-    },
-  );
-});
-
-describe("Tool Results with Images", () => {
-  describe.skipIf(envValue("XIAOMI_API_KEY") === undefined || envValue("XIAOMI_API_KEY") === "")(
-    "Xiaomi MiMo (API billing) Provider (mimo-v2.6-pro)",
-    () => {
-      const llm = getModel("xiaomi", "mimo-v2.6-pro");
-
-      it("should handle tool result with only image", { retry: 3, timeout: 30000 }, () =>
-        Effect.runPromise(handleToolWithImageResult(llm)),
-      );
-
-      it.skip("should handle tool result with text and image", { retry: 3, timeout: 30000 }, () =>
-        Effect.runPromise(handleToolWithTextAndImageResult(llm)),
-      );
-    },
-  );
-
-  describe.skipIf(
-    envValue("XIAOMI_TOKEN_PLAN_CN_API_KEY") === undefined ||
-      envValue("XIAOMI_TOKEN_PLAN_CN_API_KEY") === "",
-  )("Xiaomi MiMo Token Plan (CN) Provider (mimo-v2.6-pro)", () => {
-    const llm = getModel("xiaomi-token-plan-cn", "mimo-v2.6-pro");
-
-    it("should handle tool result with only image", { retry: 3, timeout: 30000 }, () =>
-      Effect.runPromise(handleToolWithImageResult(llm)),
-    );
-
-    it.skip("should handle tool result with text and image", { retry: 3, timeout: 30000 }, () =>
-      Effect.runPromise(handleToolWithTextAndImageResult(llm)),
-    );
-  });
-
-  describe.skipIf(
-    envValue("XIAOMI_TOKEN_PLAN_AMS_API_KEY") === undefined ||
-      envValue("XIAOMI_TOKEN_PLAN_AMS_API_KEY") === "",
-  )("Xiaomi MiMo Token Plan (AMS) Provider (mimo-v2.6-pro)", () => {
-    const llm = getModel("xiaomi-token-plan-ams", "mimo-v2.6-pro");
-
-    it("should handle tool result with only image", { retry: 3, timeout: 30000 }, () =>
-      Effect.runPromise(handleToolWithImageResult(llm)),
-    );
-
-    it.skip("should handle tool result with text and image", { retry: 3, timeout: 30000 }, () =>
-      Effect.runPromise(handleToolWithTextAndImageResult(llm)),
-    );
-  });
-});
-
-describe("Tool Results with Images", () => {
-  describe.skipIf(
-    envValue("XIAOMI_TOKEN_PLAN_SGP_API_KEY") === undefined ||
-      envValue("XIAOMI_TOKEN_PLAN_SGP_API_KEY") === "",
-  )("Xiaomi MiMo Token Plan (SGP) Provider (mimo-v2.6-pro)", () => {
-    const llm = getModel("xiaomi-token-plan-sgp", "mimo-v2.6-pro");
-
-    it("should handle tool result with only image", { retry: 3, timeout: 30000 }, () =>
-      Effect.runPromise(handleToolWithImageResult(llm)),
-    );
-
-    it.skip("should handle tool result with text and image", { retry: 3, timeout: 30000 }, () =>
-      Effect.runPromise(handleToolWithTextAndImageResult(llm)),
-    );
-  });
-
-  describe.skipIf(
-    envValue("QWEN_TOKEN_PLAN_API_KEY") === undefined || envValue("QWEN_TOKEN_PLAN_API_KEY") === "",
-  )("Qwen Token Plan Provider (qwen3.7-max)", () => {
-    const llm = getModel("qwen-token-plan", "qwen3.7-max");
-
-    it("should handle tool result with only image", { retry: 3, timeout: 30000 }, () =>
-      Effect.runPromise(handleToolWithImageResult(llm)),
-    );
-
-    it("should handle tool result with text and image", { retry: 3, timeout: 30000 }, () =>
-      Effect.runPromise(handleToolWithTextAndImageResult(llm)),
-    );
-  });
-
-  describe.skipIf(
-    envValue("QWEN_TOKEN_PLAN_API_KEY") === undefined || envValue("QWEN_TOKEN_PLAN_API_KEY") === "",
-  )("Qwen Token Plan Individual Provider (qwen3.8-max)", () => {
-    const llm = getModel("qwen-token-plan-individual", "qwen3.8-max");
-
-    it("should handle tool result with only image", { retry: 3, timeout: 30000 }, () =>
-      Effect.runPromise(handleToolWithImageResult(llm)),
-    );
-
-    it("should handle tool result with text and image", { retry: 3, timeout: 30000 }, () =>
-      Effect.runPromise(handleToolWithTextAndImageResult(llm)),
-    );
-  });
-});
-
-describe("Tool Results with Images", () => {
-  describe.skipIf(
-    envValue("QWEN_TOKEN_PLAN_CN_API_KEY") === undefined ||
-      envValue("QWEN_TOKEN_PLAN_CN_API_KEY") === "",
-  )("Qwen Token Plan (CN) Provider (qwen3.7-max)", () => {
-    const llm = getModel("qwen-token-plan-cn", "qwen3.7-max");
-
-    it("should handle tool result with only image", { retry: 3, timeout: 30000 }, () =>
-      Effect.runPromise(handleToolWithImageResult(llm)),
-    );
-
-    it("should handle tool result with text and image", { retry: 3, timeout: 30000 }, () =>
-      Effect.runPromise(handleToolWithTextAndImageResult(llm)),
-    );
-  });
-
-  describe.skipIf(envValue("KIMI_API_KEY") === undefined || envValue("KIMI_API_KEY") === "")(
-    "Kimi For Coding Provider (kimi-for-coding)",
-    () => {
-      const llm = getModel("kimi-coding", "kimi-for-coding");
-
-      it("should handle tool result with only image", { retry: 3, timeout: 30000 }, () =>
-        Effect.runPromise(handleToolWithImageResult(llm)),
-      );
-
-      it("should handle tool result with text and image", { retry: 3, timeout: 30000 }, () =>
-        Effect.runPromise(handleToolWithTextAndImageResult(llm)),
-      );
-    },
-  );
-
-  describe.skipIf(
-    envValue("AI_GATEWAY_API_KEY") === undefined || envValue("AI_GATEWAY_API_KEY") === "",
-  )("Vercel AI Gateway Provider (google/gemini-2.5-flash)", () => {
-    const llm = getModel("vercel-ai-gateway", "google/gemini-2.5-flash");
-
-    it("should handle tool result with only image", { retry: 3, timeout: 30000 }, () =>
-      Effect.runPromise(handleToolWithImageResult(llm)),
-    );
-
-    it("should handle tool result with text and image", { retry: 3, timeout: 30000 }, () =>
-      Effect.runPromise(handleToolWithTextAndImageResult(llm)),
-    );
-  });
-});
-
-describe("Tool Results with Images", () => {
-  describe.skipIf(!hasBedrockCredentials())("Amazon Bedrock Provider (claude-sonnet-4-5)", () => {
-    const llm = getModel("amazon-bedrock", "global.anthropic.claude-sonnet-4-5-20250929-v1:0");
-
-    it("should handle tool result with only image", { retry: 3, timeout: 30000 }, () =>
-      Effect.runPromise(handleToolWithImageResult(llm)),
-    );
-
-    it("should handle tool result with text and image", { retry: 3, timeout: 30000 }, () =>
-      Effect.runPromise(handleToolWithTextAndImageResult(llm)),
-    );
-  });
-
   describe("Anthropic OAuth Provider (claude-sonnet-4-5)", () => {
     const model = getModel("anthropic", "claude-sonnet-4-5");
 

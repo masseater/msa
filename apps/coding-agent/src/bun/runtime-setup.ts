@@ -1,6 +1,4 @@
-import { bedrockProviderModule } from "@msa/ai/bedrock-provider";
 import { registerBunOAuthFlows } from "@msa/ai/bun-oauth";
-import { setBedrockProviderModule } from "@msa/ai/compat";
 // Bun loads .wasm imports as files: embedded in compiled executables, evaluating to a readable path.
 import quickjsWasmPath from "quickjs-wasi/quickjs.wasm";
 
@@ -10,6 +8,5 @@ export function setupBunRuntime(): void {
   process.title = APP_NAME;
   process.emitWarning = (() => {}) as typeof process.emitWarning;
   registerBunOAuthFlows();
-  setBedrockProviderModule(bedrockProviderModule);
   setEmbeddedQuickJSWasmPath(quickjsWasmPath);
 }

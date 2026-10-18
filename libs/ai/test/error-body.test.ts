@@ -7,9 +7,9 @@ import {
 } from "../src/utils/error-body.ts";
 
 describe("normalizeProviderError", () => {
-  it("extracts status and body from a Mistral-shaped error", () => {
-    const error = Object.assign(new Error("Mistral request failed"), {
-      statusCode: 403,
+  it("extracts status and body from a string-body HTTP error", () => {
+    const error = Object.assign(new Error("Classifier returned 403"), {
+      status: 403,
       body: '{"error":"blocked by gateway WAF"}',
     });
 
@@ -48,64 +48,6 @@ describe("normalizeProviderError", () => {
 });
 
 describe("normalizeProviderError", () => {
-  it("extracts status and body from a Bedrock-shaped ServiceException", () => {
-    const error = Object.assign(new Error("UnknownError"), {
-      name: "UnknownError",
-      $metadata: { httpStatusCode: 403 },
-      $response: { statusCode: 403, body: '{"message":"blocked by gateway WAF"}' },
-    });
-
-    const norm = normalizeProviderError(error);
-
-    expect(norm.status).toBe(403);
-    expect(norm.body).toBe('{"message":"blocked by gateway WAF"}');
-    expect(norm.messageCarriesBody).toBe(false);
-  });
-
-  it("ignores a Bedrock response stream instead of serializing its internals", () => {
-    const error = Object.assign(
-      new Error(
-        "Invocation of model ID anthropic.claude-opus-5 with on-demand throughput isn't supported.",
-      ),
-      {
-        name: "ValidationException",
-        $metadata: { httpStatusCode: 400 },
-        $response: {
-          statusCode: 400,
-          body: { pipe: () => undefined, _events: { close: [null, null] } },
-        },
-      },
-    );
-
-    const norm = normalizeProviderError(error);
-
-    expect(norm.status).toBe(400);
-    expect(norm.body).toBeUndefined();
-    expect(norm.message).toContain("on-demand throughput isn't supported");
-    expect(norm.messageCarriesBody).toBe(true);
-  });
-});
-
-describe("normalizeProviderError", () => {
-  it("ignores a class-instance response body without a pipe method instead of serializing it", () => {
-    class SdkHttpResponseBody {
-      locked = false;
-      state = { storedError: undefined };
-    }
-    const error = Object.assign(new Error("Input is too long for requested model."), {
-      name: "ValidationException",
-      $metadata: { httpStatusCode: 400 },
-      $response: { statusCode: 400, body: new SdkHttpResponseBody() },
-    });
-
-    const norm = normalizeProviderError(error);
-
-    expect(norm.status).toBe(400);
-    expect(norm.body).toBeUndefined();
-    expect(norm.message).toContain("Input is too long");
-    expect(norm.messageCarriesBody).toBe(true);
-  });
-
   it("ignores a class-instance `error` field instead of serializing it", () => {
     class SdkInnerError {
       code = "EPROTO";
@@ -161,7 +103,7 @@ describe("normalizeProviderError", () => {
   it("truncates the body at the cap", () => {
     const longBody = "x".repeat(MAX_PROVIDER_ERROR_BODY_CHARS + 50);
     const error = Object.assign(new Error("failed"), {
-      statusCode: 500,
+      status: 500,
       body: longBody,
     });
 
@@ -173,7 +115,7 @@ describe("normalizeProviderError", () => {
 
   it("sets messageCarriesBody when the message already contains the extracted body", () => {
     const error = Object.assign(new Error("500: upstream exploded"), {
-      statusCode: 500,
+      status: 500,
       body: "upstream exploded",
     });
 

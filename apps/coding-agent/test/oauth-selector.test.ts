@@ -27,9 +27,9 @@ describe("OAuthSelectorComponent", () => {
         },
       },
       {
-        id: "google-vertex",
-        name: "Google Vertex AI",
-        auth: { apiKey: { name: "Google Cloud credentials" } },
+        id: "opencode",
+        name: "OpenCode Zen",
+        auth: { apiKey: { name: "OpenCode API key" } },
       },
     ];
     const loginFlow = new LoginFlow({
@@ -51,10 +51,10 @@ describe("OAuthSelectorComponent", () => {
         method: { name: "Anthropic API key" },
       },
       {
-        id: "google-vertex",
-        name: "Google Vertex AI",
+        id: "opencode",
+        name: "OpenCode Zen",
         authType: "api_key",
-        method: { name: "Google Cloud credentials" },
+        method: { name: "OpenCode API key" },
       },
     ]);
     expect(loginFlow.getProviderOptions("oauth")).toMatchObject([
@@ -65,7 +65,7 @@ describe("OAuthSelectorComponent", () => {
   it("renders an option without compiled auth status as not configured", () => {
     const selector = new OAuthSelectorComponent(
       "login",
-      [{ id: "google", name: "Google", authType: "api_key" }],
+      [{ id: "opencode", name: "OpenCode Zen", authType: "api_key" }],
       () => {},
       () => {},
     );

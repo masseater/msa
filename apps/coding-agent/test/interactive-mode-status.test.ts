@@ -516,7 +516,7 @@ describe("InteractiveMode.createBaseAutocompleteProvider", () => {
           { id: "anthropic", name: "Anthropic", authType: "oauth", subscription: true },
           { id: "anthropic", name: "Anthropic", authType: "api_key", subscription: true },
           { id: "openai", name: "OpenAI", authType: "api_key" },
-          { id: "radius", name: "Radius", authType: "oauth", subscription: false },
+          { id: "openrouter", name: "OpenRouter", authType: "oauth", subscription: false },
         ],
       },
     };
@@ -535,13 +535,16 @@ describe("InteractiveMode.createBaseAutocompleteProvider", () => {
       },
     ]);
 
-    // OAuth sign-in without a subscription, such as Radius, is an account.
-    const radiusLine = "/login radius";
-    const radiusSuggestions = await provider.getSuggestions([radiusLine], 0, radiusLine.length, {
-      signal: new AbortController().signal,
-    });
-    expect(radiusSuggestions?.items).toEqual([
-      { value: "radius", label: "radius", description: "Radius · account" },
+    // OAuth sign-in without a subscription, such as OpenRouter, is an account.
+    const openRouterLine = "/login openrouter";
+    const openRouterSuggestions = await provider.getSuggestions(
+      [openRouterLine],
+      0,
+      openRouterLine.length,
+      { signal: new AbortController().signal },
+    );
+    expect(openRouterSuggestions?.items).toEqual([
+      { value: "openrouter", label: "openrouter", description: "OpenRouter · account" },
     ]);
   });
 });

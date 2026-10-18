@@ -2,11 +2,7 @@ import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { streamSimple as streamAnthropic } from "../src/api/anthropic-messages.ts";
-import { streamSimple as streamAzureOpenAIResponses } from "../src/api/azure-openai-responses.ts";
 import { streamSimple as streamGoogleGenerativeAI } from "../src/api/google-generative-ai.ts";
-import { streamSimple as streamGoogleVertex } from "../src/api/google-vertex.ts";
-import { streamSimple as streamMistral } from "../src/api/mistral-conversations.ts";
-import { streamSimple as streamMsaMessages } from "../src/api/msa-messages.ts";
 import { streamSimple as streamOpenAICodexResponses } from "../src/api/openai-codex-responses.ts";
 import { streamSimple as streamOpenAICompletions } from "../src/api/openai-completions.ts";
 import { streamSimple as streamOpenAIResponses } from "../src/api/openai-responses.ts";
@@ -95,12 +91,6 @@ describe("fetch stream option", () => {
               fetch: custom,
               maxRetries: 0,
             }).result(),
-          () =>
-            streamAzureOpenAIResponses(createModel("azure-openai-responses"), context, {
-              apiKey: "test-key",
-              fetch: custom,
-              maxRetries: 0,
-            }).result(),
         ];
         const { custom, fallback } = mockFetches();
         for (const run of adapters) {
@@ -114,16 +104,10 @@ describe("fetch stream option", () => {
 });
 
 describe("fetch stream option", () => {
-  it("uses fetch for Mistral, Codex SSE, and msa-messages HTTP requests", () =>
+  it("uses fetch for Codex SSE requests", () =>
     Effect.runPromise(
       Effect.gen(function* () {
         const { custom, fallback } = mockFetches();
-        yield* Effect.promise(() =>
-          streamMistral(createModel("mistral-conversations"), context, {
-            apiKey: "test-key",
-            fetch: custom,
-          }).result(),
-        );
         const encodedJson = yield* encodeJson({
           "https://api.openai.com/auth": { chatgpt_account_id: "account" },
         });
@@ -135,13 +119,7 @@ describe("fetch stream option", () => {
             maxRetries: 0,
           }).result(),
         );
-        yield* Effect.promise(() =>
-          streamMsaMessages(createModel("msa-messages"), context, {
-            apiKey: "test-key",
-            fetch: custom,
-          }).result(),
-        );
-        expect(custom).toHaveBeenCalledTimes(3);
+        expect(custom).toHaveBeenCalledTimes(1);
         expect(fallback).not.toHaveBeenCalled();
         expect(globalThis.fetch).toBe(fallback);
       }),
@@ -149,7 +127,7 @@ describe("fetch stream option", () => {
 });
 
 describe("fetch stream option", () => {
-  it("rejects custom fetch for Google adapters instead of silently bypassing it", () =>
+  it("rejects custom fetch for the Google adapter instead of silently bypassing it", () =>
     Effect.runPromise(
       Effect.gen(function* () {
         const { custom, fallback } = mockFetches();
@@ -159,18 +137,9 @@ describe("fetch stream option", () => {
             fetch: custom,
           }).result(),
         );
-        const vertex = yield* Effect.promise(() =>
-          streamGoogleVertex(createModel("google-vertex"), context, {
-            apiKey: "test-key",
-            fetch: custom,
-          }).result(),
-        );
 
         expect(google.errorMessage).toContain(
           "Custom fetch is not supported by the Google Generative AI adapter",
-        );
-        expect(vertex.errorMessage).toContain(
-          "Custom fetch is not supported by the Google Vertex adapter",
         );
         expect(custom).not.toHaveBeenCalled();
         expect(fallback).not.toHaveBeenCalled();
@@ -180,7 +149,7 @@ describe("fetch stream option", () => {
 });
 
 describe("fetch stream option", () => {
-  it("allows Google adapters to receive globalThis.fetch explicitly", () =>
+  it("allows the Google adapter to receive globalThis.fetch explicitly", () =>
     Effect.runPromise(
       Effect.gen(function* () {
         const ambient = vi.fn<FetchFunction>(() =>

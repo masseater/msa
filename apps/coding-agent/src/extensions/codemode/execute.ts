@@ -638,7 +638,7 @@ export async function executeCodemode(
 
 /**
  * Whether `query` names the namespace: its name or one of its aliases, as written or as the same
- * script identifier (`dev-radius` and `dev_radius` are both `dev_radius`).
+ * script identifier (`dev-github` and `dev_github` are both `dev_github`).
  */
 function isNamespaceName(namespace: ToolNamespace, query: string): boolean {
   const queryId = toCodemodeIdentifier(query);
@@ -824,7 +824,7 @@ function createModelGlobals(
       const [type, provider, id] = args as unknown[];
       if (typeof provider !== "string" || typeof id !== "string") {
         throw new Error(
-          `models.getModelOfType(type, provider, id) expects three strings, got (${(args as unknown[]).map(describeValue).join(", ")}). The provider and the id are separate arguments, for example models.getModelOfType("classifier", "typesafe", "jev-latest").`,
+          `models.getModelOfType(type, provider, id) expects three strings, got (${(args as unknown[]).map(describeValue).join(", ")}). The provider and the id are separate arguments, for example models.getModelOfType("classifier", "openrouter", "~typesafe/jev-latest").`,
         );
       }
       const model = models.getModelOfType(toModelType(type), provider, id);

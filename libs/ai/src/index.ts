@@ -6,22 +6,13 @@ export type {
   AnthropicOptions,
   AnthropicThinkingDisplay,
 } from "./api/anthropic-messages.ts";
-export type { AzureOpenAIResponsesOptions } from "./api/azure-openai-responses-params.ts";
-export type { BedrockOptions, BedrockThinkingDisplay } from "./api/bedrock-converse-stream.ts";
 export type { GoogleOptions } from "./api/google-generative-ai.ts";
 export type { GoogleApiThinkingLevel, ResolvedGoogleThinkingLevel } from "./api/google-thinking.ts";
-export type { GoogleVertexOptions } from "./api/google-vertex.ts";
 export * from "./api/lazy.ts";
-export type { MistralOptions } from "./api/mistral-conversations.ts";
 export type { OpenAICodexResponsesOptions } from "./api/openai-codex-options.ts";
 export type { OpenAICodexWebSocketDebugStats } from "./api/openai-codex-ws-stats.ts";
 export type { OpenAICompletionsOptions } from "./api/openai-completions.ts";
 export type { OpenAIResponsesOptions } from "./api/openai-responses-config.ts";
-export type {
-  MsaMessagesEvent,
-  MsaMessagesOptions,
-  MsaMessagesRewriteImpact,
-} from "./api/msa-messages.ts";
 export * from "./auth/context.ts";
 export * from "./auth/credential-store.ts";
 export * from "./auth/helpers.ts";

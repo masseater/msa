@@ -340,6 +340,6 @@ describe("ModelRuntime image generation", () => {
     expect(provider.generateImages).toBeUndefined();
     expect(provider.classify).toBeUndefined();
     expect(runtime.getProvider("openrouter")?.generateImages).toBeDefined();
-    expect(runtime.getProvider("typesafe")?.classify).toBeDefined();
+    expect(runtime.getProvider("opencode")?.classify).toBeDefined();
   });
 });

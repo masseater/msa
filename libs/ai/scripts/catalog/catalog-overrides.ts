@@ -56,23 +56,14 @@ function overrideOpenAiLimits(candidate: Model<any>): void {
     const standardCost = OPENAI_STANDARD_COSTS_BY_ID[candidate.id];
     candidate.cost = withOpenAiLongContextPricing(standardCost ?? candidate.cost);
   }
-  if (candidate.provider === "cloudflare-ai-gateway") {
-    const standardCost = OPENAI_STANDARD_COSTS_BY_ID[candidate.id];
-    if (standardCost !== undefined) candidate.cost = withOpenAiLongContextPricing(standardCost);
-  }
   if (candidate.provider === "openai" && candidate.id === "gpt-5-pro") {
     candidate.maxTokens = 128000;
   }
 }
 
 function overrideGatewayModels(candidate: Model<any>): void {
-  if (
-    (candidate.provider === "openrouter" && OPENROUTER_KIMI_K3_MODEL_IDS.has(candidate.id)) ||
-    (candidate.provider === "vercel-ai-gateway" && candidate.id === "moonshotai/kimi-k3")
-  ) {
-    candidate.maxTokens = KIMI_K3_MAX_TOKENS;
-  }
   if (candidate.provider !== "openrouter") return;
+  if (OPENROUTER_KIMI_K3_MODEL_IDS.has(candidate.id)) candidate.maxTokens = KIMI_K3_MAX_TOKENS;
   if (candidate.id === "moonshotai/kimi-k2.5") {
     candidate.cost.input = 0.41;
     candidate.cost.output = 2.06;

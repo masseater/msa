@@ -253,8 +253,8 @@ describe("durable code mode", () => {
       async (opened, task) => {
         await opened.commit(async (tx) => {
           const run = await tx.doc(CodemodeRunDoc, task);
-          expect(run.start!.deadline).toBe(run.start!.startedAt + 60_000);
-          run.start!.deadline = Date.now();
+          expect(run.start!.deadline).toBeGreaterThan(Date.now());
+          run.start!.deadline = Date.now() - 1;
         }, context);
       },
     );

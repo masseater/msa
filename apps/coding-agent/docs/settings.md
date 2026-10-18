@@ -61,10 +61,9 @@ CLI tool options override this setting for one invocation. `--tools` with only `
 
 ## Sessions and context
 
-| Setting                   | Type                           | Default                 | Description                                                                                                                                                                                                 |
-| ------------------------- | ------------------------------ | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `sessionDir`              | string                         | Agent session directory | Session storage directory. Relative paths resolve from the working directory. `MSA_CODING_AGENT_SESSION_DIR` and `--session-dir` override this setting.                                                     |
-| `sessionShareDestination` | `"auto" \| "gist" \| "radius"` | `"auto"`                | Destination used by `/share`. `auto` uses Radius when authenticated and otherwise creates a GitHub gist. `gist` always uses a gist. `radius` requires Radius authentication and never falls back to a gist. |
+| Setting      | Type   | Default                 | Description                                                                                                                                             |
+| ------------ | ------ | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `sessionDir` | string | Agent session directory | Session storage directory. Relative paths resolve from the working directory. `MSA_CODING_AGENT_SESSION_DIR` and `--session-dir` override this setting. |
 
 ### Compaction
 
@@ -181,8 +180,8 @@ The built-in extensions are named `builtin:mcp`, `builtin:llama.cpp`, `builtin:c
 
 ## Updates and telemetry
 
-| Setting                  | Type    | Default | Description                                                                                         |
-| ------------------------ | ------- | ------- | --------------------------------------------------------------------------------------------------- |
-| `collapseChangelog`      | boolean | `false` | Show a condensed changelog after an update.                                                         |
-| `enableInstallTelemetry` | boolean | `true`  | Send attribution headers to OpenRouter, NVIDIA NIM, and Cloudflare. Does not control update checks. |
-| `enableAnalytics`        | boolean | `false` | Opt in to analytics data sharing. Currently used only by the experimental first-run setup.          |
+| Setting                  | Type    | Default | Description                                                                                |
+| ------------------------ | ------- | ------- | ------------------------------------------------------------------------------------------ |
+| `collapseChangelog`      | boolean | `false` | Show a condensed changelog after an update.                                                |
+| `enableInstallTelemetry` | boolean | `true`  | Send attribution headers to OpenRouter. Does not control update checks.                    |
+| `enableAnalytics`        | boolean | `false` | Opt in to analytics data sharing. Currently used only by the experimental first-run setup. |

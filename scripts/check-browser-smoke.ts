@@ -102,13 +102,7 @@ const AGENT_FORBIDDEN_INPUTS = [
   "libs/ai/src/providers/all.ts",
 ];
 
-const AI_SDK_PACKAGES = [
-  "@anthropic-ai/sdk",
-  "@aws-sdk/client-bedrock-runtime",
-  "@google/genai",
-  "@mistralai/mistralai",
-  "openai",
-];
+const AI_SDK_PACKAGES = ["@anthropic-ai/sdk", "@google/genai", "openai"];
 
 const checkDurable = (outfile: string) =>
   Effect.gen(function* () {

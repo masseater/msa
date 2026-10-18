@@ -1,14 +1,9 @@
 import { Function } from "effect";
 export * from "./api/anthropic-messages.lazy.ts";
-export * from "./api/azure-openai-responses.lazy.ts";
-export * from "./api/bedrock-converse-stream.lazy.ts";
 export * from "./api/google-generative-ai.lazy.ts";
-export * from "./api/google-vertex.lazy.ts";
-export * from "./api/mistral-conversations.lazy.ts";
 export * from "./api/openai-codex-responses.lazy.ts";
 export * from "./api/openai-completions.lazy.ts";
 export * from "./api/openai-responses.lazy.ts";
-export * from "./api/msa-messages.lazy.ts";
 export {
   type ApiProvider,
   type ApiStreamFunction,
@@ -32,7 +27,6 @@ export * from "./providers/images/register-builtins.ts";
 import { getApiProvider } from "./api-provider-registry.ts";
 import { isBuiltinApiProvider, registerBuiltInApiProviders } from "./builtin-api-providers.ts";
 import { getEnvApiKey } from "./env-api-keys.ts";
-import type { ModelsApiStreamOptions } from "./models.ts";
 import {
   builtinModels,
   getBuiltinModel,
@@ -80,13 +74,6 @@ function withEnvApiKey<TOptions extends StreamOptions>(
   return { ...options, apiKey } as TOptions;
 }
 
-function hasResolvedCloudflareAuth(options: StreamOptions | undefined): boolean {
-  return (
-    hasExplicitApiKey(options?.apiKey) ||
-    typeof options?.headers?.["cf-aig-authorization"] === "string"
-  );
-}
-
 function getBuiltinProviderForModel(model: Model<Api>) {
   if (!isBuiltinApiProvider(model.api)) return undefined;
   const provider = compatModels.getProvider(model.provider);
@@ -123,13 +110,6 @@ export const stream: {
     const transcript = normalizeContext(context);
     const builtinProvider = getBuiltinProviderForModel(model);
     if (builtinProvider !== undefined) {
-      if (model.provider.startsWith("cloudflare-") && !hasResolvedCloudflareAuth(options)) {
-        return compatModels.stream(
-          model,
-          transcript,
-          options as ModelsApiStreamOptions<TApi> | undefined,
-        );
-      }
       return builtinProvider.stream(
         model,
         transcript,
@@ -186,9 +166,6 @@ export const streamSimple: {
     const transcript = normalizeContext(context);
     const builtinProvider = getBuiltinProviderForModel(model);
     if (builtinProvider !== undefined) {
-      if (model.provider.startsWith("cloudflare-") && !hasResolvedCloudflareAuth(options)) {
-        return compatModels.streamSimple(model, transcript, options);
-      }
       return builtinProvider.streamSimple(model, transcript, withEnvApiKey(model, options));
     }
     const provider = resolveApiProvider(model.api);

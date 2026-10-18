@@ -39,20 +39,6 @@ const fail = (message: string) => Effect.fail(new ModelDataError({ message }));
 const sha256 = (value: string): Effect.Effect<string> =>
   Effect.map(digest("SHA-256", new TextEncoder().encode(value)), Hex.encode);
 
-export const assertExactModelIds: {
-  (expected: Iterable<string>, actual: Iterable<string>): (label: string) => void;
-  (label: string, expected: Iterable<string>, actual: Iterable<string>): void;
-} = Function.dual(
-  3,
-  function (label: string, expected: Iterable<string>, actual: Iterable<string>): void {
-    const [message] = listMismatch(`${label} model IDs do not match`)({
-      expected: Array.from(new Set(expected)).sort(),
-      actual: Array.from(new Set(actual)).sort(),
-    });
-    if (message !== undefined) throw new Error(message);
-  },
-);
-
 const readJsonObject = Effect.fn("readJsonObject")(function* (path: string, description: string) {
   const files = yield* ScriptFiles;
   const parsed = yield* files.readText(path).pipe(

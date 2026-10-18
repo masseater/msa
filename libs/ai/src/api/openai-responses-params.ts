@@ -113,6 +113,5 @@ export function buildOpenAIResponsesParams(
     effortOverride:
       configurationUpdateEffort === undefined ? undefined : CONFIGURATION_UPDATE_REQUEST_EFFORT,
   });
-  if (model.reasoning && model.provider === "xai") params.include = ["reasoning.encrypted_content"];
   return params;
 }

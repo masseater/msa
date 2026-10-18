@@ -126,65 +126,6 @@ describe.skipIf(
   );
 });
 
-describe.skipIf(envValue("GEMINI_API_KEY") === undefined || envValue("GEMINI_API_KEY") === "")(
-  "Google thinking disable E2E",
-  () => {
-    it("disables thinking for Gemini 2.5", { retry: 2, timeout: 30000 }, () =>
-      Effect.runPromise(expectThinkingDisabledE2E(getModel("google", "gemini-2.5-flash"))),
-    );
-
-    it("disables thinking for Gemini 3.x", { retry: 2, timeout: 30000 }, () =>
-      Effect.runPromise(expectThinkingDisabledE2E(getModel("google", "gemini-3-flash-preview"))),
-    );
-
-    it("does not error when thinking is off for Gemini 3.1 Pro", { retry: 2, timeout: 30000 }, () =>
-      Effect.runPromise(
-        expectThinkingDisabledE2E(getModel("google", "gemini-3.1-pro-preview"), {
-          requestOptions: { maxTokens: 512 },
-          minPongs: 20,
-        }),
-      ),
-    );
-  },
-);
-
-describe("Google Vertex thinking disable E2E", () => {
-  const vertexProject = envValue("GOOGLE_CLOUD_PROJECT") || envValue("GCLOUD_PROJECT");
-  const vertexLocation = envValue("GOOGLE_CLOUD_LOCATION");
-  const vertexApiKey = envValue("GOOGLE_CLOUD_API_KEY");
-  const vertexOptions =
-    vertexApiKey !== undefined && vertexApiKey !== ""
-      ? ({ apiKey: vertexApiKey } satisfies SimpleOptionsWithExtras)
-      : vertexProject !== undefined &&
-          vertexProject !== "" &&
-          vertexLocation !== undefined &&
-          vertexLocation !== ""
-        ? ({ project: vertexProject, location: vertexLocation } satisfies SimpleOptionsWithExtras)
-        : undefined;
-
-  it.skipIf(vertexOptions === undefined)(
-    "disables thinking for Gemini 2.5",
-    { retry: 2, timeout: 30000 },
-    () =>
-      Effect.runPromise(
-        expectThinkingDisabledE2E(getModel("google-vertex", "gemini-2.5-flash"), {
-          requestOptions: vertexOptions,
-        }),
-      ),
-  );
-
-  it.skipIf(vertexOptions === undefined)(
-    "disables thinking for Gemini 3.x",
-    { retry: 2, timeout: 30000 },
-    () =>
-      Effect.runPromise(
-        expectThinkingDisabledE2E(getModel("google-vertex", "gemini-3-flash-preview"), {
-          requestOptions: vertexOptions,
-        }),
-      ),
-  );
-});
-
 describe.skipIf(envValue("OPENAI_API_KEY") === undefined || envValue("OPENAI_API_KEY") === "")(
   "OpenAI thinking disable E2E",
   () => {

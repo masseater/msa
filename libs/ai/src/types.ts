@@ -14,11 +14,7 @@ export type {
   SessionAffinityFormat,
   ThinkingTokenBudgetField,
 } from "./providers/compat-fields-schema.ts";
-export type {
-  AnthropicMessagesCompat,
-  BedrockCompat,
-  MistralConversationsCompat,
-} from "./providers/compat-schema.ts";
+export type { AnthropicMessagesCompat } from "./providers/compat-schema.ts";
 export type {
   OpenAICompletionsCompat,
   OpenAIResponsesCompat,
@@ -26,7 +22,6 @@ export type {
 export type {
   AnthropicAllowedFallbackModel,
   OpenRouterRouting,
-  VercelGatewayRouting,
 } from "./providers/routing-schema.ts";
 export type {
   CacheRetention,
@@ -111,15 +106,10 @@ export type {
 
 export type KnownApi =
   | "openai-completions"
-  | "mistral-conversations"
   | "openai-responses"
-  | "azure-openai-responses"
   | "openai-codex-responses"
   | "anthropic-messages"
-  | "bedrock-converse-stream"
-  | "google-generative-ai"
-  | "google-vertex"
-  | "msa-messages";
+  | "google-generative-ai";
 
 export type Api = KnownApi | (string & {});
 
@@ -127,56 +117,17 @@ export type KnownImageApi = "openrouter-images";
 
 export type ImageApi = KnownImageApi | (string & {});
 
-export type KnownClassifierApi =
-  | "typesafe-system-one"
-  | "cloudflare-workers-ai-system-one"
-  | "llama-cpp-classify"
-  | "openai-decisions";
+export type KnownClassifierApi = "typesafe-system-one" | "llama-cpp-classify" | "openai-decisions";
 
 export type ClassifierApi = KnownClassifierApi | (string & {});
 
 export type KnownProvider =
-  | "amazon-bedrock"
-  | "ant-ling"
   | "anthropic"
-  | "google"
-  | "google-vertex"
   | "openai"
-  | "azure"
   | "openai-codex"
-  | "radius"
-  | "typesafe"
-  | "nvidia"
-  | "deepseek"
-  | "xai"
-  | "groq"
-  | "cerebras"
   | "openrouter"
-  | "vercel-ai-gateway"
-  | "zai"
-  | "zai-coding-cn"
-  | "mistral"
-  | "minimax"
-  | "minimax-cn"
-  | "moonshotai"
-  | "moonshotai-cn"
-  | "huggingface"
-  | "fireworks"
-  | "together"
-  | "baseten"
   | "opencode"
-  | "opencode-go"
-  | "kimi-coding"
-  | "meta"
-  | "cloudflare-workers-ai"
-  | "cloudflare-ai-gateway"
-  | "qwen-token-plan"
-  | "qwen-token-plan-cn"
-  | "qwen-token-plan-individual"
-  | "xiaomi"
-  | "xiaomi-token-plan-cn"
-  | "xiaomi-token-plan-ams"
-  | "xiaomi-token-plan-sgp";
+  | "opencode-go";
 export type ProviderId = KnownProvider | string;
 
 export type ToolChoice = "auto" | "none";

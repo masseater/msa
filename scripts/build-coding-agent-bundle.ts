@@ -112,7 +112,6 @@ const requireInputs = (host: HostShape, layout: Layout) =>
       host.join(layout.codingAgentDistDir, "rpc-entry.js"),
       host.join(layout.codingAgentDistDir, "utils", "image-resize-worker.js"),
       host.join(layout.codingAgentDistDir, "extensions", "codemode", "worker.js"),
-      host.join(layout.aiDistDir, "api", "bedrock-converse-stream.js"),
       host.join(layout.aiDistDir, "auth", "oauth", "anthropic.js"),
     ],
     (entry) =>
@@ -126,15 +125,10 @@ const requireInputs = (host: HostShape, layout: Layout) =>
 
 const lazyEntryPointsOf = (host: HostShape, layout: Layout): Record<string, string> => ({
   anthropic: host.join(layout.aiDistDir, "auth", "oauth", "anthropic.js"),
-  "bedrock-converse-stream": host.join(layout.aiDistDir, "api", "bedrock-converse-stream.js"),
   "image-resize-worker": host.join(layout.codingAgentDistDir, "utils", "image-resize-worker.js"),
-  "kimi-coding": host.join(layout.aiDistDir, "auth", "oauth", "kimi-coding.js"),
-  meta: host.join(layout.aiDistDir, "auth", "oauth", "meta.js"),
   "openai-chatgpt": host.join(layout.aiDistDir, "auth", "oauth", "openai-chatgpt.js"),
   "openai-codex": host.join(layout.aiDistDir, "auth", "oauth", "openai-codex.js"),
   openrouter: host.join(layout.aiDistDir, "auth", "oauth", "openrouter.js"),
-  radius: host.join(layout.aiDistDir, "auth", "oauth", "radius.js"),
-  xai: host.join(layout.aiDistDir, "auth", "oauth", "xai.js"),
 });
 
 const requireOAuthEntries = (
@@ -257,18 +251,11 @@ const program = Effect.gen(function* () {
   const mainMetafile = yield* buildMain(host, layout);
   const locate = (inputSuffix: string) =>
     findContainingOutput({ host, inputSuffix, metafile: mainMetafile, repoRoot: layout.repoRoot });
-  const bedrockLoaderOutput = yield* locate("libs/ai/dist/api/bedrock-converse-stream.lazy.js");
   const oauthLoaderOutput = yield* locate("libs/ai/dist/auth/oauth/load.js");
   const imageResizeOutput = yield* locate("apps/coding-agent/dist/utils/image-resize.js");
   const configOutput = yield* locate("apps/coding-agent/dist/config.js");
-  yield* sameDirectory(
-    host,
-    bedrockLoaderOutput,
-    oauthLoaderOutput,
-    "Bedrock and OAuth lazy loaders were emitted into different directories",
-  );
 
-  const lazyDir = host.dirname(bedrockLoaderOutput);
+  const lazyDir = host.dirname(oauthLoaderOutput);
   const lazyMetafile = yield* buildLazy(host, layout, lazyDir);
   const codemodeMetafile = yield* buildCodemodeWorker(host, layout, lazyDir);
 
@@ -281,7 +268,7 @@ const program = Effect.gen(function* () {
   yield* sameDirectory(
     host,
     configOutput,
-    bedrockLoaderOutput,
+    oauthLoaderOutput,
     "config.ts and the codemode worker were emitted into different directories",
   );
 

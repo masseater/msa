@@ -285,8 +285,8 @@ describe("constrained tool sampling", () => {
       messages: [
         {
           role: "assistant",
-          api: "msa-messages",
-          provider: "radius",
+          api: "openai-completions",
+          provider: "openrouter",
           model: "gpt-other",
           content: [
             {

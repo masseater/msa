@@ -13,9 +13,8 @@ import type {
 } from "../types.ts";
 import { builtinProviders } from "./builtin-providers.ts";
 import modelDataManifest from "./data/.manifest.json" with { type: "json" };
-import { radiusProvider } from "./radius.ts";
 
-export { builtinProviders, radiusProvider };
+export { builtinProviders };
 
 export type BuiltinProvider = keyof typeof MODELS;
 

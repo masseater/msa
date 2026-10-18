@@ -4,15 +4,12 @@ import {
   isAnthropicTemperatureUnsupportedModel,
   mergeAnthropicMessagesCompat,
 } from "./anthropic-metadata.ts";
-import type { ReasoningOptionsRegistry } from "./models-dev.ts";
 import {
   applyGatewayThinkingLevels,
   applyHostedThinkingLevels,
-  fireworksThinkingLevels,
   supportsOpenAiXhigh,
 } from "./thinking-levels-providers.ts";
 import {
-  AZURE_DEEPSEEK_V4_THINKING_LEVEL_MAP,
   DEEPSEEK_V4_FLASH_THINKING_LEVEL_MAP,
   DEEPSEEK_V4_THINKING_LEVEL_MAP,
   mergeThinkingLevelMap,
@@ -35,11 +32,7 @@ const OPENAI_RESPONSES_NONE_REASONING_MODELS = new Set([
 
 const GPT_6_MODEL_IDS = new Set(["gpt-6-astra", "gpt-6-sol", "gpt-6-luna", "gpt-6.1-sol"]);
 
-const OPENAI_RESPONSES_APIS = new Set<Api>([
-  "openai-responses",
-  "azure-openai-responses",
-  "openai-codex-responses",
-]);
+const OPENAI_RESPONSES_APIS = new Set<Api>(["openai-responses", "openai-codex-responses"]);
 
 function supportsOpenAiMax(model: Model<Api>): boolean {
   return (
@@ -62,10 +55,7 @@ function applyGpt6ThinkingLevels(model: Model<any>): void {
 }
 
 function applyOpenAiThinkingLevels(model: Model<any>): void {
-  if (
-    (model.api === "openai-responses" || model.api === "azure-openai-responses") &&
-    model.id.startsWith("gpt-5")
-  ) {
+  if (model.api === "openai-responses" && model.id.startsWith("gpt-5")) {
     mergeThinkingLevelMap(model, { off: null });
   }
   applyGpt6ThinkingLevels(model);
@@ -75,13 +65,6 @@ function applyOpenAiThinkingLevels(model: Model<any>): void {
     OPENAI_RESPONSES_NONE_REASONING_MODELS.has(model.id)
   ) {
     mergeThinkingLevelMap(model, { off: "none" });
-  }
-  if (
-    model.provider === "xai" &&
-    model.api === "openai-responses" &&
-    model.thinkingLevelMap === undefined
-  ) {
-    mergeThinkingLevelMap(model, { off: null, minimal: null });
   }
   if (supportsOpenAiXhigh(model.id)) mergeThinkingLevelMap(model, { xhigh: "xhigh" });
   if (supportsOpenAiMax(model)) mergeThinkingLevelMap(model, { max: "max" });
@@ -128,12 +111,8 @@ function applyAnthropicThinkingLevels(model: Model<any>): void {
 function deepSeekThinkingLevelMap(model: Model<any>) {
   if (model.provider === "openrouter")
     return { ...DEEPSEEK_V4_THINKING_LEVEL_MAP, xhigh: "xhigh", max: null } as const;
-  if (model.provider === "azure") return AZURE_DEEPSEEK_V4_THINKING_LEVEL_MAP;
-  const isDeepSeekHost =
-    model.provider === "deepseek" ||
-    model.provider === "opencode" ||
-    model.provider === "opencode-go";
-  return isDeepSeekHost && model.id.includes("deepseek-v4-flash")
+  const isOpenCode = model.provider === "opencode" || model.provider === "opencode-go";
+  return isOpenCode && model.id.includes("deepseek-v4-flash")
     ? DEEPSEEK_V4_FLASH_THINKING_LEVEL_MAP
     : DEEPSEEK_V4_THINKING_LEVEL_MAP;
 }
@@ -148,16 +127,10 @@ function applyDeepSeekThinkingLevels(model: Model<any>): void {
   }
 }
 
-export function thinkingLevelMetadata(
-  reasoning: ReasoningOptionsRegistry,
-): (model: Model<any>) => void {
-  const applyFireworksThinkingLevels = fireworksThinkingLevels(reasoning);
-  return (model) => {
-    applyOpenAiThinkingLevels(model);
-    applyAnthropicThinkingLevels(model);
-    applyDeepSeekThinkingLevels(model);
-    applyHostedThinkingLevels(model);
-    applyFireworksThinkingLevels(model);
-    applyGatewayThinkingLevels(model);
-  };
+export function applyThinkingLevelMetadata(model: Model<any>): void {
+  applyOpenAiThinkingLevels(model);
+  applyAnthropicThinkingLevels(model);
+  applyDeepSeekThinkingLevels(model);
+  applyHostedThinkingLevels(model);
+  applyGatewayThinkingLevels(model);
 }

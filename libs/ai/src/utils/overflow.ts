@@ -29,13 +29,7 @@ const OVERFLOW_PATTERNS = [
   /token limit exceeded/iu,
 ];
 
-const CEREBRAS_BODYLESS_OVERFLOW_PATTERN = /^4(?:00|13)\s*(?:status code)?\s*\(no body\)/iu;
-
-const NON_OVERFLOW_PATTERNS = [
-  /^(Throttling error|Service unavailable):/iu,
-  /rate limit/iu,
-  /too many requests/iu,
-];
+const NON_OVERFLOW_PATTERNS = [/rate limit/iu, /too many requests/iu];
 
 export const isContextOverflow: {
   (contextWindow?: number): (message: AssistantMessage) => boolean;
@@ -49,16 +43,8 @@ export const isContextOverflow: {
       message.errorMessage !== ""
     ) {
       const isNonOverflow = NON_OVERFLOW_PATTERNS.some((p) => p.test(message.errorMessage!));
-      if (!isNonOverflow) {
-        if (OVERFLOW_PATTERNS.some((p) => p.test(message.errorMessage!))) {
-          return true;
-        }
-        if (
-          message.provider === "cerebras" &&
-          CEREBRAS_BODYLESS_OVERFLOW_PATTERN.test(message.errorMessage)
-        ) {
-          return true;
-        }
+      if (!isNonOverflow && OVERFLOW_PATTERNS.some((p) => p.test(message.errorMessage!))) {
+        return true;
       }
     }
 

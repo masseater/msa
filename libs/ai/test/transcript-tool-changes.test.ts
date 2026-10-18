@@ -385,8 +385,12 @@ describe("transcript system messages", () => {
           id: "kimi-k3",
           name: "Kimi K3",
           api: "openai-completions",
-          provider: "moonshotai",
-          compat: { supportsMidConvoSystemMessages: true, supportsMidConvoToolAdditions: true },
+          provider: "custom",
+          compat: {
+            supportsDeveloperRole: false,
+            supportsMidConvoSystemMessages: true,
+            supportsMidConvoToolAdditions: true,
+          },
         };
         const payload = yield* capturePayload<{
           tools?: Array<{ function?: { name: string } }>;
@@ -417,31 +421,29 @@ describe("transcript system messages", () => {
     tools?: Array<{ function?: { name: string } }>;
     messages: Array<{ role: string; tools?: Array<{ function?: { name: string } }> }>;
   };
-  test.each(["k3", "k3-256k", "kimi-for-coding"] as const)(
-    "anchors additions for Kimi Coding %s",
-    (modelId) =>
-      Effect.runPromise(
-        Effect.gen(function* () {
-          const payload = yield* capturePayload<KimiPayload>(
-            getModel("kimi-coding", modelId),
-            additionContext,
-          );
-
-          expect(payload.tools?.map((value) => value.function?.name)).toEqual(["base_tool"]);
-          expect(
-            payload.messages
-              .find((message) => message.tools)
-              ?.tools?.map((value) => value.function?.name),
-          ).toEqual(["late_tool"]);
-        }),
-      ),
-  );
-
-  test("keeps Kimi Coding Highspeed additions in top-level tools", () =>
+  test.each(["opencode", "opencode-go"] as const)("anchors additions for %s Kimi K3", (provider) =>
     Effect.runPromise(
       Effect.gen(function* () {
         const payload = yield* capturePayload<KimiPayload>(
-          getModel("kimi-coding", "kimi-for-coding-highspeed"),
+          getModel(provider, "kimi-k3"),
+          additionContext,
+        );
+
+        expect(payload.tools?.map((value) => value.function?.name)).toEqual(["base_tool"]);
+        expect(
+          payload.messages
+            .find((message) => message.tools)
+            ?.tools?.map((value) => value.function?.name),
+        ).toEqual(["late_tool"]);
+      }),
+    ),
+  );
+
+  test("keeps OpenRouter Kimi K3 additions in top-level tools", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const payload = yield* capturePayload<KimiPayload>(
+          getModel("openrouter", "moonshotai/kimi-k3"),
           additionContext,
         );
 
@@ -463,8 +465,8 @@ describe("transcript system messages", () => {
           id: "kimi-k2.7-code",
           name: "Kimi K2.7 Code",
           api: "openai-completions",
-          provider: "moonshotai",
-          compat: { supportsMidConvoSystemMessages: true },
+          provider: "custom",
+          compat: { supportsDeveloperRole: false, supportsMidConvoSystemMessages: true },
         };
         const payload = yield* capturePayload<{
           tools?: Array<{ function?: { name: string } }>;

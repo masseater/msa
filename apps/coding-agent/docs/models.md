@@ -119,22 +119,19 @@ OpenAI-compatible APIs support free-form `samplingParams` model defaults and `sa
 }
 ```
 
-msa first clamps unsupported thinking levels, then merges model `samplingParams`, the effective level's override, and request-level `samplingParams` in that order. Later values win per key. Missing levels inherit the model defaults. `modelOverrides` merges per-level entries per key with the base model. These fields apply only to `openai-completions`, `openai-responses`, and `azure-openai-responses`; other APIs ignore them.
+msa first clamps unsupported thinking levels, then merges model `samplingParams`, the effective level's override, and request-level `samplingParams` in that order. Later values win per key. Missing levels inherit the model defaults. `modelOverrides` merges per-level entries per key with the base model. These fields apply only to `openai-completions` and `openai-responses`; other APIs ignore them.
 
 Compatibility settings should describe verified differences in the endpoint's request or response behavior. Do not enable them based only on an endpoint advertising OpenAI or Anthropic compatibility.
 
 ## Use classifier models
 
-Classifier models do not chat. They answer typed questions about JSON state: pick one of several choices, answer yes or no, or give a score, each with probabilities. msa includes TypeSafe's Jev model from these providers, Cloudflare's Clef and Clef Flash models from Workers AI, and OpenAI's GPT-6 Luna through the [Decisions API](https://developers.openai.com/api/docs/guides/decisions):
+Classifier models do not chat. They answer typed questions about JSON state: pick one of several choices, answer yes or no, or give a score, each with probabilities. msa includes TypeSafe's Jev model from these providers and OpenAI's GPT-6 Luna through the [Decisions API](https://developers.openai.com/api/docs/guides/decisions):
 
-| Provider                | Model IDs                                                          | Authentication                                   |
-| ----------------------- | ------------------------------------------------------------------ | ------------------------------------------------ |
-| `typesafe`              | `jev-latest`                                                       | `TYPESAFE_API_KEY`                               |
-| `openrouter`            | `typesafe/jev-1.13`, `~typesafe/jev-latest`                        | `OPENROUTER_API_KEY` or `/login`                 |
-| `cloudflare-workers-ai` | `typesafe/jev`, `@cf/cloudflare/clef`, `@cf/cloudflare/clef-flash` | `CLOUDFLARE_API_KEY` and `CLOUDFLARE_ACCOUNT_ID` |
-| `vercel-ai-gateway`     | `typesafe-ai/jev`                                                  | `AI_GATEWAY_API_KEY`                             |
-| `opencode`              | `jev-1.13`, `jev-1.13-free`                                        | `OPENCODE_API_KEY`                               |
-| `openai`                | `gpt-6-luna`                                                       | `OPENAI_API_KEY`                                 |
+| Provider     | Model IDs                                   | Authentication                   |
+| ------------ | ------------------------------------------- | -------------------------------- |
+| `openrouter` | `typesafe/jev-1.13`, `~typesafe/jev-latest` | `OPENROUTER_API_KEY` or `/login` |
+| `opencode`   | `jev-1.13`, `jev-1.13-free`                 | `OPENCODE_API_KEY`               |
+| `openai`     | `gpt-6-luna`                                | `OPENAI_API_KEY`                 |
 
 Chat models on a [llama.cpp router](llama-cpp.md#classification) are also listed as classifier models.
 
@@ -143,7 +140,7 @@ OpenAI's Decisions API needs an API key. Sign in with ChatGPT credentials do not
 Classifier models do not appear in `/model`. The model reaches them through the [`codemode`](cli.md#enable-codemode) tool, which is off unless an MCP server turned it on. Enable it with `"defaultTools": ["+codemode"]` in [settings](settings.md#tools). Scripts then list classifier models with `models.getAvailableOfType("classifier")` and call `models.classify(model, { state, questions })`:
 
 ```js
-const jev = await models.getModelOfType("classifier", "typesafe", "jev-latest");
+const jev = await models.getModelOfType("classifier", "openrouter", "~typesafe/jev-latest");
 const result = await models.classify(jev, {
   state: { message: "The change works, thanks." },
   questions: {
@@ -159,7 +156,7 @@ return result.answers;
 
 [Codemode](codemode.md#classify) describes the question and answer types.
 
-When the service reports token counts, as all System One services do, `result.usage` carries them with their cost. msa adds the usage of a script's classifier calls to the `codemode` tool result, so it counts toward the session cost in the footer and `/status`. The cost uses the model's catalog price; models without one, such as TypeSafe's direct `jev-latest`, report tokens at no cost.
+When the service reports token counts, as all System One services do, `result.usage` carries them with their cost. msa adds the usage of a script's classifier calls to the `codemode` tool result, so it counts toward the session cost in the footer and `/status`. The cost uses the model's catalog price; models without one, such as llama.cpp classifiers, report tokens at no cost.
 
 Extensions call classifiers through `ctx.modelRegistry.classify()`, without codemode. [Virtual models](virtual-models.md#route-requests) can use them to route requests; see the `jev-router.ts` example.
 

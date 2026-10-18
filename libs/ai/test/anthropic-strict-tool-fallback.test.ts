@@ -8,10 +8,9 @@ import { Type } from "typebox";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import { type AnthropicOptions, stream as streamAnthropic } from "../src/api/anthropic-messages.ts";
-import { stream as streamMsaMessages } from "../src/api/msa-messages.ts";
 import type { Model, Tool, TranscriptContext } from "../src/types.ts";
 import { normalizeContext } from "../src/utils/transcript.ts";
-import { decodeJson, encodeJson } from "./json-codec.ts";
+import { encodeJson } from "./json-codec.ts";
 
 const grammarError =
   "The compiled grammar is too large, which would cause performance issues. Simplify your tool schemas or reduce the number of strict tools.";
@@ -352,52 +351,6 @@ describe("Anthropic preferred strict tool fallback", () => {
           true,
           undefined,
           true,
-        ]);
-      }),
-    ));
-});
-
-describe("Anthropic preferred strict tool fallback", () => {
-  it("preserves prefer through msa-messages so the gateway's Anthropic adapter can fall back", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const effectContext = yield* Effect.context();
-        const { payloads, options } = harness((_payload, attempt) =>
-          attempt === 1 ? errorResponse() : successResponse(),
-        );
-        const transcript = context([tool("lookup", "prefer")]);
-        const gatewayModel: Model<"msa-messages"> = {
-          ...model,
-          api: "msa-messages",
-          provider: "radius",
-          baseUrl: "https://radius.example/v1",
-          compat: undefined,
-        };
-        const result = yield* Effect.promise(() =>
-          streamMsaMessages(gatewayModel, transcript, {
-            apiKey: "radius-test",
-            fetch: (_input, init) =>
-              Effect.runPromiseWith(effectContext)(
-                Effect.gen(function* () {
-                  const request = (yield* decodeJson(init?.body as string)) as {
-                    context: TranscriptContext;
-                  };
-                  expect(request.context).toEqual(yield* decodeJson(yield* encodeJson(transcript)));
-                  const upstream = yield* Effect.promise(() =>
-                    streamAnthropic(model, request.context, options).result(),
-                  );
-                  return new Response(
-                    `data: ${yield* encodeJson({ type: "done", reason: upstream.stopReason, usage: upstream.usage })}\n\n`,
-                    { headers: { "content-type": "text/event-stream" } },
-                  );
-                }),
-              ),
-          }).result(),
-        );
-        expect(result.stopReason).toBe("stop");
-        expect(payloads.map((payload) => (payload.tools as BetaTool[])[0]?.strict)).toEqual([
-          true,
-          undefined,
         ]);
       }),
     ));

@@ -102,32 +102,9 @@ describe("isContextOverflow", () => {
     const message = createErrorMessage("500 `model runner crashed unexpectedly`");
     expect(isContextOverflow(message, 32768)).toBe(false);
   });
-
-  it("only treats bodyless 400 and 413 errors as overflow for Cerebras", () => {
-    for (const errorMessage of ["400 status code (no body)", "413 status code (no body)"]) {
-      expect(isContextOverflow(createErrorMessage(errorMessage, "cerebras"), 131072)).toBe(true);
-      expect(isContextOverflow(createErrorMessage(errorMessage, "opencode-go"), 1000000)).toBe(
-        false,
-      );
-    }
-  });
-
-  it("does not treat Bedrock throttling 'Too many tokens' as overflow", () => {
-    const message = createErrorMessage(
-      "Throttling error: Too many tokens, please wait before trying again.",
-    );
-    expect(isContextOverflow(message, 200000)).toBe(false);
-  });
 });
 
 describe("isContextOverflow", () => {
-  it("does not treat Bedrock service unavailable as overflow", () => {
-    const message = createErrorMessage(
-      "Service unavailable: The service is temporarily unavailable.",
-    );
-    expect(isContextOverflow(message, 200000)).toBe(false);
-  });
-
   it("does not treat generic rate limit errors as overflow", () => {
     const message = createErrorMessage("Rate limit exceeded, please retry after 30 seconds.");
     expect(isContextOverflow(message, 200000)).toBe(false);

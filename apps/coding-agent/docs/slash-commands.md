@@ -37,12 +37,12 @@ Extensions, prompt templates, and skills can add commands. The command menu in m
 
 ## Export and share
 
-| Command              | Aliases     | Description                                         |
-| -------------------- | ----------- | --------------------------------------------------- |
-| `/copy`              |             | Copy the last assistant message                     |
-| `/export [path]`     |             | Export the session as HTML or JSONL                 |
-| `/share`             |             | Upload the session and return a viewer link         |
-| `/bug [description]` | `/feedback` | Prepare a private bug report for the msa developers |
+| Command              | Aliases     | Description                                 |
+| -------------------- | ----------- | ------------------------------------------- |
+| `/copy`              |             | Copy the last assistant message             |
+| `/export [path]`     |             | Export the session as HTML or JSONL         |
+| `/share`             |             | Upload the session and return a viewer link |
+| `/bug [description]` | `/feedback` | Export a bug report as a zip archive        |
 
 Review a session before exporting or sharing it. Sessions can contain prompts, tool arguments, command output, file contents, and credentials exposed during the conversation.
 

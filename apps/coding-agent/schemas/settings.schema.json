@@ -50,24 +50,6 @@
       ],
       "default": "auto"
     },
-    "sessionShareDestination": {
-      "anyOf": [
-        {
-          "type": "string",
-          "const": "auto"
-        },
-        {
-          "type": "string",
-          "const": "gist"
-        },
-        {
-          "type": "string",
-          "const": "radius"
-        }
-      ],
-      "description": "Destination used by /share. \"auto\" uses Radius when authenticated and otherwise creates a GitHub gist.",
-      "default": "auto"
-    },
     "steeringMode": {
       "anyOf": [
         {
@@ -302,7 +284,7 @@
     },
     "enableInstallTelemetry": {
       "type": "boolean",
-      "description": "Send attribution headers to OpenRouter, NVIDIA NIM, and Cloudflare.",
+      "description": "Send attribution headers to OpenRouter.",
       "default": true
     },
     "enableAnalytics": {

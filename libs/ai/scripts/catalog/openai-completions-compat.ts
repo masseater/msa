@@ -1,5 +1,4 @@
 import type { Api, Model, OpenAICompletionsCompat } from "../../src/types.ts";
-import { TOGETHER_REASONING_ONLY_MODELS } from "./together.ts";
 
 export type OpenAICompletionsResolvedCompat = Required<
   Omit<
@@ -27,10 +26,7 @@ const OPENAI_COMPLETIONS_DEFAULT_COMPAT: OpenAICompletionsResolvedCompat = {
   requiresReasoningContentOnAssistantMessages: false,
   thinkingFormat: "openai",
   openRouterRouting: {},
-  vercelGatewayRouting: {},
   chatTemplateKwargs: {},
-  chatTemplateArgs: {},
-  zaiToolStream: false,
   supportsStrictMode: false,
   supportsOpenAIGrammarTools: false,
   supportsMidConvoSystemMessages: false,
@@ -39,148 +35,26 @@ const OPENAI_COMPLETIONS_DEFAULT_COMPAT: OpenAICompletionsResolvedCompat = {
   supportsLongCacheRetention: true,
 };
 
-interface HostTraits {
-  readonly isZai: boolean;
-  readonly isTogether: boolean;
-  readonly isMoonshot: boolean;
-  readonly isOpenRouter: boolean;
-  readonly isCloudflareWorkersAI: boolean;
-  readonly isCloudflareAiGateway: boolean;
-  readonly isNvidia: boolean;
-  readonly isAntLing: boolean;
-  readonly isCerebras: boolean;
-  readonly isDeepSeek: boolean;
-  readonly isGrok: boolean;
-  readonly isChutes: boolean;
-  readonly isOpenCode: boolean;
-}
-
-function hostTraits({ provider, baseUrl }: Model<"openai-completions">): HostTraits {
-  return {
-    isZai:
-      provider === "zai" ||
-      provider === "zai-coding-cn" ||
-      baseUrl.includes("api.z.ai") ||
-      baseUrl.includes("open.bigmodel.cn"),
-    isTogether:
-      provider === "together" ||
-      baseUrl.includes("api.together.ai") ||
-      baseUrl.includes("api.together.xyz"),
-    isMoonshot:
-      provider === "moonshotai" ||
-      provider === "moonshotai-cn" ||
-      baseUrl.includes("api.moonshot."),
-    isOpenRouter: provider === "openrouter" || baseUrl.includes("openrouter.ai"),
-    isCloudflareWorkersAI:
-      provider === "cloudflare-workers-ai" || baseUrl.includes("api.cloudflare.com"),
-    isCloudflareAiGateway:
-      provider === "cloudflare-ai-gateway" || baseUrl.includes("gateway.ai.cloudflare.com"),
-    isNvidia: provider === "nvidia" || baseUrl.includes("integrate.api.nvidia.com"),
-    isAntLing: provider === "ant-ling" || baseUrl.includes("api.ant-ling.com"),
-    isCerebras: provider === "cerebras" || baseUrl.includes("cerebras.ai"),
-    isDeepSeek: provider === "deepseek" || baseUrl.toLowerCase().includes("deepseek.com"),
-    isGrok: provider === "xai" || baseUrl.includes("api.x.ai"),
-    isChutes: baseUrl.includes("chutes.ai"),
-    isOpenCode: provider === "opencode" || baseUrl.includes("opencode.ai"),
-  };
-}
-
-function isNonStandardHost(traits: HostTraits): boolean {
-  return (
-    traits.isNvidia ||
-    traits.isCerebras ||
-    traits.isGrok ||
-    traits.isTogether ||
-    traits.isChutes ||
-    traits.isDeepSeek ||
-    traits.isZai ||
-    traits.isMoonshot ||
-    traits.isOpenCode ||
-    traits.isCloudflareWorkersAI ||
-    traits.isCloudflareAiGateway ||
-    traits.isAntLing
-  );
-}
-
-function usesMaxTokens(traits: HostTraits): boolean {
-  return (
-    traits.isChutes ||
-    traits.isDeepSeek ||
-    traits.isMoonshot ||
-    traits.isCloudflareAiGateway ||
-    traits.isTogether ||
-    traits.isNvidia ||
-    traits.isAntLing ||
-    traits.isZai
-  );
-}
-
-function thinkingFormatFor(
-  traits: HostTraits,
-  model: Model<"openai-completions">,
-): OpenAICompletionsResolvedCompat["thinkingFormat"] {
-  if (traits.isDeepSeek) return "deepseek";
-  if (traits.isZai) return "zai";
-  if (traits.isTogether && !TOGETHER_REASONING_ONLY_MODELS.has(model.id)) return "together";
-  if (traits.isAntLing) return "ant-ling";
-  if (traits.isOpenRouter) return "openrouter";
-  return "openai";
-}
-
-function hostCapabilities(traits: HostTraits, model: Model<"openai-completions">) {
-  const isNonStandard = isNonStandardHost(traits);
-  const isOpenRouterDeveloperRoleModel =
-    traits.isOpenRouter && (model.id.startsWith("anthropic/") || model.id.startsWith("openai/"));
-  return {
-    supportsStore: !isNonStandard,
-    supportsDeveloperRole:
-      isOpenRouterDeveloperRoleModel || (!isNonStandard && !traits.isOpenRouter),
-    supportsReasoningEffort:
-      !traits.isGrok &&
-      !traits.isZai &&
-      !traits.isMoonshot &&
-      !traits.isTogether &&
-      !traits.isCloudflareAiGateway &&
-      !traits.isNvidia &&
-      !traits.isAntLing,
-    maxTokensField: usesMaxTokens(traits)
-      ? ("max_tokens" as const)
-      : ("max_completion_tokens" as const),
-    supportsStrictMode:
-      !traits.isMoonshot &&
-      !traits.isTogether &&
-      !traits.isCloudflareAiGateway &&
-      !traits.isNvidia &&
-      !traits.isCerebras,
-    supportsLongCacheRetention: !(
-      traits.isTogether ||
-      traits.isCloudflareWorkersAI ||
-      traits.isCloudflareAiGateway ||
-      traits.isNvidia ||
-      traits.isAntLing
-    ),
-  };
-}
-
 export function detectOpenAICompletionsCompat(
   model: Model<"openai-completions">,
 ): OpenAICompletionsResolvedCompat {
-  const traits = hostTraits(model);
-  const capabilities = hostCapabilities(traits, model);
+  const { provider, baseUrl } = model;
+  const isOpenRouter = provider === "openrouter" || baseUrl.includes("openrouter.ai");
+  const isChutes = baseUrl.includes("chutes.ai");
+  const isNonStandard = isChutes || provider === "opencode" || baseUrl.includes("opencode.ai");
+  const isOpenRouterDeveloperRoleModel =
+    isOpenRouter && (model.id.startsWith("anthropic/") || model.id.startsWith("openai/"));
   const cacheControlFormat =
-    model.provider === "openrouter" && /^~?anthropic\//u.test(model.id) ? "anthropic" : undefined;
+    provider === "openrouter" && /^~?anthropic\//u.test(model.id) ? "anthropic" : undefined;
   return {
     ...OPENAI_COMPLETIONS_DEFAULT_COMPAT,
-    supportsStore: capabilities.supportsStore,
-    supportsDeveloperRole: capabilities.supportsDeveloperRole,
-    supportsReasoningEffort: capabilities.supportsReasoningEffort,
-    maxTokensField: capabilities.maxTokensField,
-    requiresReasoningContentOnAssistantMessages: traits.isDeepSeek,
-    thinkingFormat: thinkingFormatFor(traits, model),
-    supportsStrictMode: capabilities.supportsStrictMode,
+    supportsStore: !isNonStandard,
+    supportsDeveloperRole: isOpenRouterDeveloperRoleModel || (!isNonStandard && !isOpenRouter),
+    maxTokensField: isChutes ? "max_tokens" : "max_completion_tokens",
+    thinkingFormat: isOpenRouter ? "openrouter" : "openai",
+    supportsStrictMode: true,
     ...(cacheControlFormat === undefined ? {} : { cacheControlFormat }),
-    sendSessionAffinityHeaders: traits.isOpenRouter,
-    supportsLongCacheRetention: capabilities.supportsLongCacheRetention,
+    sendSessionAffinityHeaders: isOpenRouter,
   };
 }
 

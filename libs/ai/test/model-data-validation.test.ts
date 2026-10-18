@@ -2,7 +2,6 @@ import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
-  assertExactModelIds,
   createModelDataManifest,
   MODEL_DATA_MANIFEST_FILE,
   MODEL_DATA_SCHEMA_VERSION,
@@ -39,20 +38,6 @@ const rewriteManifest = (fixture: ModelDataFixture, field: string, value: unknow
       [field]: value,
     });
   });
-
-describe("exact generated allowlists", () => {
-  it("rejects a missing upstream model from an exact generated allowlist", () => {
-    expect(() =>
-      assertExactModelIds("qwen-token-plan-individual", ["model-a", "model-b"], ["model-a"]),
-    ).toThrow("qwen-token-plan-individual model IDs do not match (missing: model-b)");
-  });
-
-  it("rejects an unexpected model from an exact generated allowlist", () => {
-    expect(() => assertExactModelIds("test-provider", ["model-a"], ["model-a", "model-b"])).toThrow(
-      "test-provider model IDs do not match (extra: model-b)",
-    );
-  });
-});
 
 describe("generated model data structure", () => {
   it("reads and validates API-grouped model data", () =>

@@ -4,7 +4,6 @@ import { describe, expect, expectTypeOf, it } from "vite-plus/test";
 
 import {
   AnthropicMessagesCompatSchema,
-  BedrockCompatSchema,
   ProviderCompatSchema,
 } from "../src/providers/compat-schema.ts";
 import {
@@ -32,7 +31,6 @@ describe("compatibility schemas", () => {
     const anthropicDefaults = Compile(AnthropicMessagesCompatSchema).Default({});
     expect(anthropicDefaults).not.toHaveProperty("sendSessionAffinityHeaders");
     expect(anthropicDefaults).toMatchObject({ supportsLongCacheRetention: true });
-    expect(Compile(BedrockCompatSchema).Default({})).toMatchObject({ supportsStrictMode: false });
   });
 
   it("does not assign API-specific defaults to the provider superset", () => {

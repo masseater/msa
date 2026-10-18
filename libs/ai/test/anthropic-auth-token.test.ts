@@ -80,12 +80,12 @@ const anthropicModel: Model<"anthropic-messages"> = {
   maxTokens: 4096,
 };
 
-const kimiCodingModel: Model<"anthropic-messages"> = {
+const compatibleModel: Model<"anthropic-messages"> = {
   ...anthropicModel,
-  id: "kimi-for-coding",
-  name: "Kimi For Coding",
-  provider: "kimi-coding",
-  baseUrl: "https://api.kimi.com/coding",
+  id: "custom-model",
+  name: "Custom Model",
+  provider: "custom",
+  baseUrl: "https://example.test/anthropic",
 };
 
 afterEach(() => {
@@ -269,8 +269,8 @@ describe("Anthropic-compatible user agents", () => {
     Effect.runPromise(
       Effect.gen(function* () {
         yield* Effect.promise(() =>
-          streamAnthropic(kimiCodingModel, context, {
-            apiKey: "kimi-key",
+          streamAnthropic(compatibleModel, context, {
+            apiKey: "custom-key",
             headers: { "User-Agent": "custom-client" },
           }).result(),
         );

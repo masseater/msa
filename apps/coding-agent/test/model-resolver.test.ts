@@ -260,7 +260,6 @@ const referenceCases: ReferenceCase[] = [
   },
 
   {
-    // Like `mistral/codestral` -> mistral/codestral-latest despite gateway id `mistral/codestral`
     name: "named provider's usable fuzzy match beats a raw id elsewhere",
     text: "anthropic/claude-opus",
     usable: ["anthropic"],
@@ -428,7 +427,7 @@ describe("resolveModelScopeWithDiagnostics", () => {
     const registry = {
       getAvailable: () => [
         ...allModels,
-        { ...mockModels[1], provider: "azure" },
+        { ...mockModels[1], provider: "opencode" },
         { ...mockModels[1], provider: "openai-codex", id: "gpt-4o-mini" },
       ],
     } as unknown as Parameters<typeof resolveModelScopeWithDiagnostics>[1];
@@ -446,7 +445,7 @@ describe("resolveModelScopeWithDiagnostics", () => {
         ]),
       ).toEqual(
         expect.arrayContaining([
-          ["azure/gpt-4o", thinkingLevel],
+          ["opencode/gpt-4o", thinkingLevel],
           ["openai/gpt-4o", thinkingLevel],
         ]),
       );
@@ -455,7 +454,7 @@ describe("resolveModelScopeWithDiagnostics", () => {
         {
           type: "warning",
           code: "ambiguous",
-          message: `Pattern "${pattern}" matches several providers: azure, openai. Use provider/id to choose one.`,
+          message: `Pattern "${pattern}" matches several providers: openai, opencode. Use provider/id to choose one.`,
           pattern,
         },
       ]);
@@ -568,14 +567,14 @@ describe("resolveCliModel", () => {
       id: "anthropic/claude-opus-5.5",
       provider: "openrouter",
     };
-    const vercel = {
+    const gateway = {
       ...mockModels[0],
       id: "anthropic/claude-opus-5.5",
-      provider: "vercel-ai-gateway",
+      provider: "custom-gateway",
     };
     const registry = (configured: string[]) =>
       ({
-        getModels: () => [direct, openrouter, vercel],
+        getModels: () => [direct, openrouter, gateway],
         hasConfiguredAuth: (provider: string) => configured.includes(provider),
       }) as unknown as Parameters<typeof resolveCliModel>[0]["modelRuntime"];
 
@@ -584,10 +583,10 @@ describe("resolveCliModel", () => {
         ["anthropic/claude-opus-5.5", undefined],
         ["anthropic/claude-opus-5.5:high", "high"],
       ] as const) {
-        const result = resolveCliModel({ cliModel, modelRuntime: registry(["vercel-ai-gateway"]) });
+        const result = resolveCliModel({ cliModel, modelRuntime: registry(["custom-gateway"]) });
 
         expect(result.error).toBeUndefined();
-        expect(result.model?.provider).toBe("vercel-ai-gateway");
+        expect(result.model?.provider).toBe("custom-gateway");
         expect(result.thinkingLevel).toBe(thinkingLevel);
       }
     });
@@ -600,7 +599,7 @@ describe("resolveCliModel", () => {
 
       expect(result.model).toBeUndefined();
       expect(result.error).toContain(
-        "openrouter/anthropic/claude-opus-5.5, vercel-ai-gateway/anthropic/claude-opus-5.5",
+        "custom-gateway/anthropic/claude-opus-5.5, openrouter/anthropic/claude-opus-5.5",
       );
       expect(result.error).toContain(
         "No matching provider is authenticated. Use --provider or provider/model.",
@@ -611,7 +610,7 @@ describe("resolveCliModel", () => {
       const result = resolveCliModel({
         cliModel: "anthropic/claude-opus-5.5",
         inlineApiKey: true,
-        modelRuntime: registry(["vercel-ai-gateway"]),
+        modelRuntime: registry(["custom-gateway"]),
       });
 
       expect(result.model).toBeUndefined();
@@ -748,15 +747,6 @@ describe("default model selection", () => {
     expect(defaultModelPerProvider["openai-codex"]).toBe("gpt-6.1-sol");
   });
 
-  test("zai, minimax, cerebras, and ant-ling defaults track current models", () => {
-    expect(defaultModelPerProvider.zai).toBe("glm-5.3");
-    expect(defaultModelPerProvider["zai-coding-cn"]).toBe("glm-5.3");
-    expect(defaultModelPerProvider.minimax).toBe("MiniMax-M2.7");
-    expect(defaultModelPerProvider["minimax-cn"]).toBe("MiniMax-M2.7");
-    expect(defaultModelPerProvider.cerebras).toBe("gpt-oss-120b");
-    expect(defaultModelPerProvider["ant-ling"]).toBe("Ring-2.6-1T");
-  });
-
   test("built-in chat providers have defaults in their generated catalogs", () => {
     for (const provider of getBuiltinProviders()) {
       const chatModels = getBuiltinModels(provider);
@@ -775,25 +765,13 @@ describe("default model selection", () => {
     }
   });
 
-  test("ai-gateway default tracks current model", () => {
-    expect(defaultModelPerProvider["vercel-ai-gateway"]).toBe("zai/glm-5.1");
-  });
-
-  test("xai default tracks current model", () => {
-    expect(defaultModelPerProvider.xai).toBe("grok-4.7");
-  });
-
-  test("qwen token plan individual default tracks current model", () => {
-    expect(defaultModelPerProvider["qwen-token-plan-individual"]).toBe("qwen3.8-max");
-  });
-
-  test("findInitialModel selects ai-gateway default when available", async () => {
-    const aiGatewayModel: Model<"anthropic-messages"> = {
+  test("findInitialModel selects an available gateway model", async () => {
+    const gatewayModel: Model<"anthropic-messages"> = {
       id: "anthropic/claude-opus-4-6",
       name: "Claude Opus 4.6",
       api: "anthropic-messages",
-      provider: "vercel-ai-gateway",
-      baseUrl: "https://ai-gateway.vercel.sh",
+      provider: "custom-gateway",
+      baseUrl: "https://gateway.example.test",
       reasoning: true,
       input: ["text", "image"],
       cost: { input: 5, output: 15, cacheRead: 0.5, cacheWrite: 5 },
@@ -802,7 +780,7 @@ describe("default model selection", () => {
     };
 
     const registry = {
-      getAvailableSnapshot: () => [aiGatewayModel],
+      getAvailableSnapshot: () => [gatewayModel],
     } as unknown as Parameters<typeof findInitialModel>[0]["modelRuntime"];
 
     const result = await findInitialModel({
@@ -811,7 +789,7 @@ describe("default model selection", () => {
       modelRuntime: registry,
     });
 
-    expect(result.model?.provider).toBe("vercel-ai-gateway");
+    expect(result.model?.provider).toBe("custom-gateway");
     expect(result.model?.id).toBe("anthropic/claude-opus-4-6");
   });
 

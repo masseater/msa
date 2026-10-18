@@ -246,13 +246,13 @@ describe("Anthropic workload identity federation", () => {
   it("does not federate other anthropic-messages providers", () =>
     Effect.runPromise(
       Effect.gen(function* () {
-        const kimi: Model<"anthropic-messages"> = {
+        const custom: Model<"anthropic-messages"> = {
           ...anthropicModel,
-          provider: "kimi-coding",
-          baseUrl: "https://api.kimi.com/coding",
+          provider: "custom",
+          baseUrl: "https://example.test/anthropic",
         };
         const message = yield* Effect.promise(() =>
-          streamAnthropic(kimi, context, { env: federationEnv }).result(),
+          streamAnthropic(custom, context, { env: federationEnv }).result(),
         );
 
         expect(message.stopReason).toBe("error");

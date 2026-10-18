@@ -86,31 +86,12 @@ describe("ModelRuntime auth options", () => {
       expect.arrayContaining([
         expect.objectContaining({
           type: "api_key",
-          provider: expect.objectContaining({ id: "amazon-bedrock", name: "Amazon Bedrock" }),
-          method: expect.objectContaining({ name: "AWS credentials or bearer token" }),
-        }),
-        expect.objectContaining({
-          type: "api_key",
-          provider: expect.objectContaining({ id: "google-vertex", name: "Google Vertex AI" }),
-          method: expect.objectContaining({ name: "Google Cloud credentials" }),
+          provider: expect.objectContaining({ id: "openrouter", name: "OpenRouter" }),
+          method: expect.objectContaining({ name: "OpenRouter API key" }),
         }),
         expect.objectContaining({
           type: "oauth",
           provider: expect.objectContaining({ id: "anthropic", name: "Anthropic" }),
-        }),
-        expect.objectContaining({
-          type: "api_key",
-          provider: expect.objectContaining({
-            id: "cloudflare-ai-gateway",
-            name: "Cloudflare AI Gateway",
-          }),
-        }),
-        expect.objectContaining({
-          type: "api_key",
-          provider: expect.objectContaining({
-            id: "cloudflare-workers-ai",
-            name: "Cloudflare Workers AI",
-          }),
         }),
       ]),
     );
@@ -154,12 +135,6 @@ describe("ModelRuntime auth options", () => {
           refresh: "",
           expires: Number.MAX_SAFE_INTEGER,
         },
-        radius: {
-          type: "oauth",
-          access: "radius-access",
-          refresh: "radius-refresh",
-          expires: Date.now() + 60 * 60_000,
-        },
       }),
       modelsPath: null,
     });
@@ -168,8 +143,6 @@ describe("ModelRuntime auth options", () => {
     expect(runtime.isUsingSubscription("anthropic")).toBe(true);
     expect(runtime.isUsingOAuth("openrouter")).toBe(true);
     expect(runtime.isUsingSubscription("openrouter")).toBe(false);
-    expect(runtime.isUsingOAuth("radius")).toBe(true);
-    expect(runtime.isUsingSubscription("radius")).toBe(false);
   });
 
   it("constructs an API key method for an extension API-key provider", async () => {

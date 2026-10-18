@@ -42,10 +42,7 @@ const OPENAI_MID_CONVO_EFFORT_MODEL_IDS = new Set([
 ]);
 
 export function applyStrictToolCompatMetadata(model: Model<Api>): void {
-  if (
-    (model.provider === "openai" || model.provider === "cloudflare-ai-gateway") &&
-    model.api === "openai-responses"
-  ) {
+  if (model.provider === "openai" && model.api === "openai-responses") {
     model.compat = {
       ...(model.compat as OpenAIResponsesCompat | undefined),
       supportsStrictMode: true,
@@ -55,19 +52,9 @@ export function applyStrictToolCompatMetadata(model: Model<Api>): void {
   }
 }
 
-const OPENAI_GRAMMAR_TOOL_PROVIDERS = new Set([
-  "openai",
-  "openai-codex",
-  "azure",
-  "opencode",
-  "cloudflare-ai-gateway",
-]);
+const OPENAI_GRAMMAR_TOOL_PROVIDERS = new Set(["openai", "openai-codex", "opencode"]);
 
-const OPENAI_GRAMMAR_TOOL_APIS = new Set<Api>([
-  "openai-responses",
-  "azure-openai-responses",
-  "openai-codex-responses",
-]);
+const OPENAI_GRAMMAR_TOOL_APIS = new Set<Api>(["openai-responses", "openai-codex-responses"]);
 
 export function applyOpenAIGrammarToolCompatMetadata(model: Model<Api>): void {
   if (
@@ -100,20 +87,11 @@ export function applyOpenAIToolSearchMetadata(model: Model<Api>): void {
 export function applyOpenAICompletionsTranscriptMetadata(model: Model<Api>): void {
   if (model.api !== "openai-completions") return;
   const isKimiK3 =
-    (model.provider.startsWith("moonshot") && model.id === "kimi-k3") ||
-    (model.provider === "fireworks" && model.id.includes("kimi-k3")) ||
-    ((model.provider === "opencode" || model.provider === "opencode-go") && model.id === "kimi-k3");
-  const isMoonshotKimiK2 =
-    model.provider.startsWith("moonshot") &&
-    (model.id === "kimi-k2.6" ||
-      model.id === "kimi-k2.7-code" ||
-      model.id === "kimi-k2.7-code-highspeed");
+    (model.provider === "opencode" || model.provider === "opencode-go") && model.id === "kimi-k3";
   const isTextOnly =
-    isMoonshotKimiK2 ||
-    (model.provider === "deepseek" && model.id === "deepseek-v4-pro") ||
-    (model.provider === "openrouter" &&
-      model.id.startsWith("openai/") &&
-      OPENAI_MID_CONVO_SYSTEM_MESSAGE_MODEL_IDS.has(model.id.slice("openai/".length)));
+    model.provider === "openrouter" &&
+    model.id.startsWith("openai/") &&
+    OPENAI_MID_CONVO_SYSTEM_MESSAGE_MODEL_IDS.has(model.id.slice("openai/".length));
   if (!isKimiK3 && !isTextOnly) return;
   model.compat = {
     ...(model.compat as OpenAICompletionsCompat | undefined),

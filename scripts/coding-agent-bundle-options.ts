@@ -1,5 +1,3 @@
-import { createRequire } from "node:module";
-
 import type { BuildOptions, Plugin } from "esbuild";
 
 import { EsbuildFilter } from "./esbuild-filter.ts";
@@ -43,33 +41,6 @@ const lazyJitiPlugin: Plugin = {
   },
 };
 
-const httpsProxyAgentDirectory = (repoRoot: string): string => {
-  const resolved = createRequire(`${repoRoot}/libs/ai/package.json`).resolve("https-proxy-agent");
-  return resolved.slice(0, resolved.lastIndexOf("/"));
-};
-
-const httpsProxyAgentNamedExportPlugin = (repoRoot: string): Plugin => ({
-  name: "https-proxy-agent-named-export",
-  setup(esbuild) {
-    esbuild.onResolve({ filter: new EsbuildFilter(/^https-proxy-agent$/u) }, (args) =>
-      args.kind === "dynamic-import"
-        ? { namespace: "https-proxy-agent-named-export", path: args.path }
-        : undefined,
-    );
-    esbuild.onLoad(
-      {
-        filter: new EsbuildFilter(/^https-proxy-agent$/u),
-        namespace: "https-proxy-agent-named-export",
-      },
-      () => ({
-        contents: 'export { HttpsProxyAgent } from "https-proxy-agent";',
-        loader: "js",
-        resolveDir: httpsProxyAgentDirectory(repoRoot),
-      }),
-    );
-  },
-});
-
 const unbannedBuildOptions = (repoRoot: string): BuildOptions => ({
   absWorkingDir: repoRoot,
   bundle: true,
@@ -82,7 +53,7 @@ const unbannedBuildOptions = (repoRoot: string): BuildOptions => ({
   minifySyntax: true,
   minifyWhitespace: true,
   platform: "node",
-  plugins: [lazyJitiPlugin, httpsProxyAgentNamedExportPlugin(repoRoot)],
+  plugins: [lazyJitiPlugin],
   sourcemap: false,
   target: "node22.19",
   tsconfigRaw: { compilerOptions: {} },

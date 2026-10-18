@@ -7,18 +7,10 @@ import type {
   ImageModel,
   Model,
 } from "../../src/types.ts";
-import { fetchAiGatewayModels } from "./ai-gateway.ts";
 import { loadModelsDevModels } from "./models-dev-catalog.ts";
 import type { ReasoningOptionsRegistry } from "./models-dev.ts";
-import {
-  fetchModelsDevClassifierModels,
-  fetchOpenRouterModels,
-  fetchRadiusModels,
-} from "./remote-catalogs.ts";
-import {
-  CLOUDFLARE_WORKERS_AI_CLASSIFIER_MODELS,
-  OPENCODE_CLASSIFIER_MODELS,
-} from "./static-models.ts";
+import { fetchOpenRouterModels } from "./remote-catalogs.ts";
+import { OPENCODE_CLASSIFIER_MODELS } from "./static-models.ts";
 import { OPENAI_CLASSIFIER_MODELS } from "./static-openai-models.ts";
 
 export interface UpstreamModels {
@@ -30,19 +22,13 @@ export interface UpstreamModels {
 
 export const loadUpstreamModels = Effect.fn("loadUpstreamModels")(function* (strict: boolean) {
   const modelsDev = yield* loadModelsDevModels(strict);
-  const modelsDevClassifiers = yield* fetchModelsDevClassifierModels(strict);
   const openRouter = yield* fetchOpenRouterModels(strict);
-  const aiGateway = yield* fetchAiGatewayModels(strict);
-  const radius = yield* fetchRadiusModels(strict);
   return {
-    chat: [...modelsDev.models, ...openRouter.chat, ...aiGateway.chat, ...radius],
+    chat: [...modelsDev.models, ...openRouter.chat],
     images: openRouter.images,
     classifiers: [
-      ...modelsDevClassifiers,
       ...openRouter.classifiers,
-      ...aiGateway.classifiers,
       ...OPENCODE_CLASSIFIER_MODELS,
-      ...CLOUDFLARE_WORKERS_AI_CLASSIFIER_MODELS,
       ...OPENAI_CLASSIFIER_MODELS,
     ],
     reasoning: modelsDev.reasoning,

@@ -3,18 +3,11 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { findEnvKeys, getEnvApiKey } from "../src/env-api-keys.ts";
 import { envValue } from "./env.ts";
 
-const originalZaiCodingCnApiKey = envValue("ZAI_CODING_CN_API_KEY");
 const originalAnthropicAuthToken = envValue("ANTHROPIC_AUTH_TOKEN");
 const originalAnthropicOauthToken = envValue("ANTHROPIC_OAUTH_TOKEN");
 const originalAnthropicApiKey = envValue("ANTHROPIC_API_KEY");
 
 afterEach(() => {
-  if (originalZaiCodingCnApiKey === undefined) {
-    vi.stubEnv("ZAI_CODING_CN_API_KEY", undefined);
-  } else {
-    vi.stubEnv("ZAI_CODING_CN_API_KEY", originalZaiCodingCnApiKey);
-  }
-
   if (originalAnthropicAuthToken === undefined) {
     vi.stubEnv("ANTHROPIC_AUTH_TOKEN", undefined);
   } else {
@@ -35,13 +28,6 @@ afterEach(() => {
 });
 
 describe("environment API keys", () => {
-  it("resolves ZAI China Coding Plan credentials from ZAI_CODING_CN_API_KEY", () => {
-    vi.stubEnv("ZAI_CODING_CN_API_KEY", "zai-coding-cn-token");
-
-    expect(findEnvKeys("zai-coding-cn")).toEqual(["ZAI_CODING_CN_API_KEY"]);
-    expect(getEnvApiKey("zai-coding-cn")).toBe("zai-coding-cn-token");
-  });
-
   it("reports ANTHROPIC_AUTH_TOKEN but preserves OAuth token API key lookup", () => {
     vi.stubEnv("ANTHROPIC_AUTH_TOKEN", "auth-token");
     vi.stubEnv("ANTHROPIC_OAUTH_TOKEN", "oauth-token");

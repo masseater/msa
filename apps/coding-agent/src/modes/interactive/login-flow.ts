@@ -1,33 +1,23 @@
-import * as path from "node:path";
-
 import type { AuthEvent, AuthPrompt } from "@msa/ai";
 import type { Model } from "@msa/ai/compat";
 import type { TUI } from "@msa/tui";
 
-import { APP_NAME, getAgentDir, getAuthPath, getDocsPath } from "../../config.ts";
+import { APP_NAME, getAuthPath } from "../../config.ts";
 import type { AgentSession } from "../../core/agent-session.ts";
 import { type ExternalService, findExternalService } from "../../core/external-services.ts";
-import type { McpHttpServerConfig } from "../../core/mcp-servers.ts";
 import { defaultModelPerProvider } from "../../core/model-resolver.ts";
 import { CredentialSynchronizationError } from "../../core/model-runtime.ts";
-import { RADIUS_MCP_URL, RADIUS_PROVIDER_ID } from "../../core/radius.ts";
-import { addMcpServerConfig, loadMcpConfig } from "../../extensions/mcp/config.ts";
 import { toErrorMessage } from "../../utils/errors.ts";
 import { ExtensionSelectorComponent } from "./components/extension-selector.ts";
 import { LoginDialogComponent } from "./components/login-dialog.ts";
 import {
   type AuthSelectorProvider,
-  formatAuthSelectorProviderStatus,
   formatAuthSelectorProviderType,
   OAuthSelectorComponent,
 } from "./components/oauth-selector.ts";
-import { createLoginMenuSelector } from "./components/radius-login-selector.ts";
 import type { EditorSlot } from "./editor-slot.ts";
 import type { ProgramStatusReporter } from "./program-status-reporter.ts";
 import { theme } from "./theme/theme.ts";
-
-const RADIUS_LOGIN_INTRO =
-  "Radius is a service crafted for msa by the builders of msa, Earendil Works";
 
 const LOGIN_CANCELLED = "Login cancelled";
 const CREDENTIAL_TIMEOUT_MS = 15_000;
@@ -118,7 +108,6 @@ export interface LoginFlowHost {
   showError(message: string): void;
   /** Refreshes the UI that depends on which providers have credentials. */
   refreshAuthState(): void;
-  reload(): Promise<void>;
 }
 
 /** The `/login` and `/logout` dialogs: provider selection, credential prompts, and post-login model selection. */
@@ -307,14 +296,6 @@ export class LoginFlow {
 
   private showAuthTypeSelector(providerOptions?: AuthSelectorProvider[]): void {
     const { host } = this;
-    // The top-level selector offers Radius directly, as its last option.
-    const radiusOption = providerOptions
-      ? undefined
-      : this.getProviderOptions("oauth").find((provider) => provider.id === RADIUS_PROVIDER_ID);
-    const radiusText = radiusOption ? `Sign in with ${radiusOption.name}` : undefined;
-    const radiusLabel = radiusOption
-      ? `${radiusText}${formatAuthSelectorProviderStatus(radiusOption)}`
-      : undefined;
     const oauthProvider = providerOptions?.find((provider) => provider.authType === "oauth");
     const oauthLoginLabel =
       oauthProvider?.method && "loginLabel" in oauthProvider.method
@@ -333,7 +314,6 @@ export class LoginFlow {
     if (availableAuthTypes.has("oauth")) options.push(subscriptionLabel);
     if (availableAuthTypes.has("api_key")) options.push(apiKeyLabel);
     if (serviceLabel) options.push(serviceLabel);
-    if (radiusLabel) options.push(radiusLabel);
 
     if (options.length === 0) {
       host.showStatus("No login methods available.");
@@ -358,10 +338,6 @@ export class LoginFlow {
           void this.showServiceSelector();
           return;
         }
-        if (radiusOption && option === radiusLabel) {
-          void this.startProviderLogin(radiusOption, () => this.showAuthTypeSelector());
-          return;
-        }
         const authType = option === subscriptionLabel ? "oauth" : "api_key";
         if (!providerOptions) {
           this.showProviderSelector(authType);
@@ -378,17 +354,7 @@ export class LoginFlow {
         done();
         host.ui.requestRender();
       };
-      const selector =
-        radiusLabel && radiusText
-          ? createLoginMenuSelector(
-              host.ui,
-              title,
-              options,
-              { label: radiusLabel, text: radiusText },
-              onSelect,
-              onCancel,
-            )
-          : new ExtensionSelectorComponent(title, options, onSelect, onCancel);
+      const selector = new ExtensionSelectorComponent(title, options, onSelect, onCancel);
       return { component: selector, focus: selector, dispose: () => selector.dispose() };
     });
   }
@@ -611,10 +577,7 @@ export class LoginFlow {
           selectionError = `${actionLabel}, but no models are available for that provider. Use /model to select a model.`;
         } else {
           const defaultModelId = defaultModelPerProvider[providerId];
-          // Radius catalogs vary by account; prefer balanced, then use catalog order.
-          selectedModel =
-            providerModels.find((model) => model.id === defaultModelId) ??
-            (providerId === "radius" ? providerModels[0] : undefined);
+          selectedModel = providerModels.find((model) => model.id === defaultModelId);
           if (!selectedModel) {
             selectionError = `${actionLabel}, but its default model "${defaultModelId}" is not available. Use /model to select a model.`;
           } else {
@@ -705,13 +668,6 @@ export class LoginFlow {
     const { host } = this;
     const previousModel = host.session.model;
     const dialog = new LoginDialogComponent(host.ui, providerId, () => {}, providerName);
-    if (method === "api_key" && providerId === "amazon-bedrock") {
-      dialog.showDetails([
-        theme.fg("text", "You can also use an AWS profile, IAM keys, or role-based credentials."),
-        theme.fg("muted", "See:"),
-        theme.fg("accent", `  ${path.join(getDocsPath(), "providers.md")}`),
-      ]);
-    }
     host.editorSlot.show(dialog);
 
     const actionLabel =
@@ -720,9 +676,6 @@ export class LoginFlow {
       await this.loginProvider(dialog, providerId, providerName, method);
       host.editorSlot.restoreEditor();
       await this.completeProviderAuthentication(providerId, providerName, method, previousModel);
-      if (method === "oauth" && providerId === RADIUS_PROVIDER_ID) {
-        this.offerRadiusMcpServer(providerId, providerName);
-      }
     } catch (error: unknown) {
       host.editorSlot.restoreEditor();
       const message = toErrorMessage(error);
@@ -754,7 +707,7 @@ export class LoginFlow {
         method,
         {
           signal: dialog.signal,
-          prompt: (prompt) => this.showAuthPrompt(dialog, prompt, providerId),
+          prompt: (prompt) => this.showAuthPrompt(dialog, prompt),
           notify: (event) => notifyAuthDialog(dialog, event),
         },
         { getDeviceId: () => host.session.settingsManager.getOrCreateDeviceId() },
@@ -764,14 +717,10 @@ export class LoginFlow {
     }
   }
 
-  private async showAuthPrompt(
-    dialog: LoginDialogComponent,
-    prompt: AuthPrompt,
-    providerId: string,
-  ): Promise<string> {
+  private async showAuthPrompt(dialog: LoginDialogComponent, prompt: AuthPrompt): Promise<string> {
     let response: Promise<string>;
     if (prompt.type === "select") {
-      response = this.showAuthSelect(dialog, prompt, providerId);
+      response = this.showAuthSelect(dialog, prompt);
     } else if (prompt.type === "manual_code") {
       response = dialog.showManualInput(prompt.message);
     } else {
@@ -795,7 +744,6 @@ export class LoginFlow {
   private showAuthSelect(
     dialog: LoginDialogComponent,
     prompt: Extract<AuthPrompt, { type: "select" }>,
-    providerId: string,
   ): Promise<string> {
     const { host } = this;
     return new Promise((resolve, reject) => {
@@ -812,63 +760,8 @@ export class LoginFlow {
           host.editorSlot.show(dialog);
           reject(new Error(LOGIN_CANCELLED));
         },
-        { description: providerId === RADIUS_PROVIDER_ID ? RADIUS_LOGIN_INTRO : undefined },
       );
       host.editorSlot.show(selector);
-    });
-  }
-
-  /**
-   * Offer to point the Radius MCP server in the global mcp.json at the Radius login, adding the server
-   * when missing. Nothing is asked when a global server already uses this login.
-   */
-  private offerRadiusMcpServer(providerId: string, providerName: string): void {
-    const { host } = this;
-    const mcpPath = path.join(getAgentDir(), "mcp.json");
-    const normalizeUrl = (url: string) => url.replace(/\/+$/u, "");
-    const { servers } = loadMcpConfig({
-      agentDir: getAgentDir(),
-      cwd: host.session.sessionManager.getCwd(),
-      projectTrusted: false,
-    });
-    const existing = servers.find(
-      (server) =>
-        "url" in server.config && normalizeUrl(server.config.url) === normalizeUrl(RADIUS_MCP_URL),
-    );
-    if (existing && "url" in existing.config && existing.config.auth?.provider === providerId)
-      return;
-
-    let name = existing?.name ?? "radius";
-    if (!existing && servers.some((server) => server.name === name)) name = "radius-mcp";
-    const config: McpHttpServerConfig =
-      existing && "url" in existing.config
-        ? { ...existing.config, auth: { provider: providerId } }
-        : { url: RADIUS_MCP_URL, auth: { provider: providerId } };
-    // `auth` replaces the MCP OAuth sign-in.
-    delete config.oauth;
-
-    host.editorSlot.showSelector((done) => {
-      const selector = new ExtensionSelectorComponent(
-        `Configure ${providerName} MCP in ${mcpPath}?`,
-        ["Yes", "No"],
-        (option) => {
-          done();
-          if (option !== "Yes") return;
-          try {
-            addMcpServerConfig(mcpPath, name, config);
-          } catch (error: unknown) {
-            host.showError(`Could not update ${mcpPath}: ${toErrorMessage(error)}`);
-            return;
-          }
-          // The MCP extension reads mcp.json when the session starts.
-          void host.reload();
-        },
-        () => {
-          done();
-          host.ui.requestRender();
-        },
-      );
-      return { component: selector, focus: selector };
     });
   }
 }

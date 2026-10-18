@@ -84,6 +84,7 @@ jobs:
           go-version: stable
           cache: false
       - if: steps.target.outputs.stale != 'true'
+        id: claude
         uses: anthropics/claude-code-action@1d6de8cb0c237e7c15e9e1bdf973826ebae490cc # v1.0.248
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
@@ -101,6 +102,9 @@ jobs:
             --max-turns 200
             --model claude-opus-5-5
             --allowedTools "Edit,MultiEdit,Write,Read,Glob,Grep,LS,Bash"
+      - if: failure() && steps.claude.outcome == 'failure'
+        run: |
+          jq -r '.[] | select(.type == "result" and .is_error) | "::error::Claude failed: \(.result)"' "$RUNNER_TEMP/claude-execution-output.json"
       - if: steps.target.outputs.stale != 'true'
         env:
           BRANCH: ${{ steps.target.outputs.branch }}

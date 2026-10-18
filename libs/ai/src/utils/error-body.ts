@@ -9,12 +9,9 @@ export interface NormalizedProviderError {
 }
 
 type SdkErrorShape = Error & {
-  statusCode?: unknown;
   status?: unknown;
   body?: unknown;
   error?: unknown;
-  $metadata?: { httpStatusCode?: unknown };
-  $response?: { statusCode?: unknown; body?: unknown };
 };
 
 export function normalizeProviderError(error: unknown): NormalizedProviderError {
@@ -36,10 +33,7 @@ export function normalizeProviderError(error: unknown): NormalizedProviderError 
 }
 
 function extractStatus(error: SdkErrorShape): number | undefined {
-  if (typeof error.statusCode === "number") return error.statusCode;
   if (typeof error.status === "number") return error.status;
-  if (typeof error.$metadata?.httpStatusCode === "number") return error.$metadata.httpStatusCode;
-  if (typeof error.$response?.statusCode === "number") return error.$response.statusCode;
   return undefined;
 }
 
@@ -54,20 +48,7 @@ function extractBody(error: SdkErrorShape): string | undefined {
 function pickBodyText(error: SdkErrorShape): string | undefined {
   if (typeof error.body === "string") return error.body;
   if (isPlainNonEmptyObject(error.error)) return safeJsonStringify(error.error);
-  const responseBody = error.$response?.body;
-  if (typeof responseBody === "string") return responseBody;
-  if (isReadableStreamLike(responseBody)) return undefined;
-  if (isPlainNonEmptyObject(responseBody)) return safeJsonStringify(responseBody);
   return undefined;
-}
-
-function isReadableStreamLike(value: unknown): boolean {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    "pipe" in value &&
-    typeof value.pipe === "function"
-  );
 }
 
 function isPlainNonEmptyObject(value: unknown): boolean {

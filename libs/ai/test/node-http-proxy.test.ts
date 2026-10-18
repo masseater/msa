@@ -45,20 +45,18 @@ describe("node HTTP proxy resolution", () => {
   it("respects NO_PROXY exclusions", () => {
     resetProxyEnv();
     vi.stubEnv("HTTPS_PROXY", "http://proxy.example:8080");
-    vi.stubEnv("NO_PROXY", "bedrock-runtime.us-east-1.amazonaws.com");
+    vi.stubEnv("NO_PROXY", "chatgpt.com");
 
-    expect(
-      resolveHttpProxyUrlForTarget("https://bedrock-runtime.us-east-1.amazonaws.com"),
-    ).toBeUndefined();
+    expect(resolveHttpProxyUrlForTarget("https://chatgpt.com")).toBeUndefined();
   });
 
   it("resolves HTTP and HTTPS proxy URLs", () => {
     resetProxyEnv();
     vi.stubEnv("HTTPS_PROXY", "http://proxy.example:8080");
 
-    expect(
-      resolveHttpProxyUrlForTarget("https://bedrock-runtime.us-east-1.amazonaws.com")?.toString(),
-    ).toBe("http://proxy.example:8080/");
+    expect(resolveHttpProxyUrlForTarget("https://chatgpt.com")?.toString()).toBe(
+      "http://proxy.example:8080/",
+    );
   });
 
   it("prefers scoped proxy env aliases before process env aliases", () => {
@@ -66,7 +64,7 @@ describe("node HTTP proxy resolution", () => {
     vi.stubEnv("https_proxy", "http://process-proxy.example:8080");
 
     expect(
-      resolveHttpProxyUrlForTarget("https://bedrock-runtime.us-east-1.amazonaws.com", {
+      resolveHttpProxyUrlForTarget("https://chatgpt.com", {
         HTTPS_PROXY: "http://scoped-proxy.example:8080",
       })?.toString(),
     ).toBe("http://scoped-proxy.example:8080/");
@@ -76,9 +74,9 @@ describe("node HTTP proxy resolution", () => {
     resetProxyEnv();
     vi.stubEnv("HTTPS_PROXY", "socks5://proxy.example:1080");
 
-    expect(() =>
-      resolveHttpProxyUrlForTarget("https://bedrock-runtime.us-east-1.amazonaws.com"),
-    ).toThrow(UNSUPPORTED_PROXY_PROTOCOL_MESSAGE);
+    expect(() => resolveHttpProxyUrlForTarget("https://chatgpt.com")).toThrow(
+      UNSUPPORTED_PROXY_PROTOCOL_MESSAGE,
+    );
   });
 });
 

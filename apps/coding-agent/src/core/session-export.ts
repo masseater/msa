@@ -33,18 +33,14 @@ export function serializeSessionBranch(
   return `${entries.map((entry) => JSON.stringify(entry)).join("\n")}\n`;
 }
 
-/** Write the current session branch and optional export-only entries as JSONL. */
-export function exportSessionToJsonl(
-  sessionManager: SessionManager,
-  outputPath?: string,
-  createTrailingEntries?: TrailingEntries,
-): string {
+/** Write the current session branch as JSONL. */
+export function exportSessionToJsonl(sessionManager: SessionManager, outputPath?: string): string {
   const filePath = resolvePath(
     outputPath ?? `session-${new Date().toISOString().replace(/[:.]/g, "-")}.jsonl`,
     process.cwd(),
   );
   const dir = dirname(filePath);
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-  writeFileSync(filePath, serializeSessionBranch(sessionManager, createTrailingEntries));
+  writeFileSync(filePath, serializeSessionBranch(sessionManager));
   return filePath;
 }

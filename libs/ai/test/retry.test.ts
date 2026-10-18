@@ -93,14 +93,14 @@ describe("provider retry classification", () => {
     ).toBe(true);
   });
 
-  it.each([
-    "The service is temporarily unavailable. Please retry later.",
-    "Service unavailable: The service is temporarily unavailable.",
-  ])("matches service unavailable wording: %s", (errorMessage) => {
-    expect(
-      isRetryableAssistantError(fauxAssistantMessage("", { stopReason: "error", errorMessage })),
-    ).toBe(true);
-  });
+  it.each(["The service is temporarily unavailable. Please retry later."])(
+    "matches service unavailable wording: %s",
+    (errorMessage) => {
+      expect(
+        isRetryableAssistantError(fauxAssistantMessage("", { stopReason: "error", errorMessage })),
+      ).toBe(true);
+    },
+  );
 
   it("matches OpenAI Responses streams that end before terminal events", () => {
     expect(

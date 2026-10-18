@@ -1,8 +1,4 @@
-import type {
-  AnthropicMessagesCompat,
-  BedrockCompat,
-  MistralConversationsCompat,
-} from "./providers/compat-schema.ts";
+import type { AnthropicMessagesCompat } from "./providers/compat-schema.ts";
 import type {
   ModelCost,
   ModelInputLimits,
@@ -47,15 +43,11 @@ export interface Model<TApi extends Api> extends BaseModel<TApi> {
   compat?:
     | (TApi extends "openai-completions"
         ? OpenAICompletionsCompat
-        : TApi extends "openai-responses" | "azure-openai-responses" | "openai-codex-responses"
+        : TApi extends "openai-responses" | "openai-codex-responses"
           ? OpenAIResponsesCompat
           : TApi extends "anthropic-messages"
             ? AnthropicMessagesCompat
-            : TApi extends "bedrock-converse-stream"
-              ? BedrockCompat
-              : TApi extends "mistral-conversations"
-                ? MistralConversationsCompat
-                : never)
+            : never)
     | undefined;
 }
 

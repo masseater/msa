@@ -20,15 +20,6 @@ export const DEEPSEEK_V4_FLASH_THINKING_LEVEL_MAP = {
   low: "low",
 } as const;
 
-export const AZURE_DEEPSEEK_V4_THINKING_LEVEL_MAP = {
-  minimal: null,
-  low: "low",
-  medium: "medium",
-  high: "high",
-  xhigh: null,
-  max: null,
-} as const;
-
 export const mergeThinkingLevelMap: {
   (map: ThinkingLevelMap): (model: Model<any>) => void;
   (model: Model<any>, map: ThinkingLevelMap): void;

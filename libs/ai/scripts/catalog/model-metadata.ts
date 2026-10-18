@@ -24,7 +24,7 @@ import {
   applyOpenAIToolSearchMetadata,
   applyStrictToolCompatMetadata,
 } from "./openai-metadata.ts";
-import { thinkingLevelMetadata } from "./thinking-levels.ts";
+import { applyThinkingLevelMetadata } from "./thinking-levels.ts";
 import { mergeThinkingLevelMap } from "./thinking-maps.ts";
 
 const DEFAULT_IMAGE_RESIZE = {
@@ -38,13 +38,7 @@ function supportsDirectReasoningEffort(model: Model<Api>): boolean {
   if (model.api === "anthropic-messages") {
     return (model.compat as AnthropicMessagesCompat | undefined)?.forceAdaptiveThinking === true;
   }
-  if (
-    model.api === "openai-responses" ||
-    model.api === "azure-openai-responses" ||
-    model.api === "openai-codex-responses"
-  ) {
-    return true;
-  }
+  if (model.api === "openai-responses" || model.api === "openai-codex-responses") return true;
   if (model.api !== "openai-completions") return false;
 
   const compat = {
@@ -65,13 +59,9 @@ export function applyImageInputMetadata(model: AnyModel): void {
             maxPerRequest: model.type !== "image" && model.contextWindow === 200000 ? 100 : 600,
           },
         }
-      : model.provider === "amazon-bedrock"
-        ? { images: { maxPerMessage: 20 } }
-        : model.provider === "openai"
-          ? { maxRequestBytes: 512 * 1024 * 1024, images: { maxPerRequest: 1500 } }
-          : model.provider === "google"
-            ? { maxRequestBytes: 20 * 1024 * 1024, images: { maxPerRequest: 3600 } }
-            : undefined;
+      : model.provider === "openai"
+        ? { maxRequestBytes: 512 * 1024 * 1024, images: { maxPerRequest: 1500 } }
+        : undefined;
   const configuredImages = model.inputLimits?.images;
   model.inputLimits = {
     ...providerLimits,
@@ -98,7 +88,7 @@ export function modelMetadata(reasoning: ReasoningOptionsRegistry): (model: Mode
     applyOpenAICompletionsCompatMetadata,
     applyAnthropicMessagesCompatMetadata,
     reasoningOptionMetadata(reasoning),
-    thinkingLevelMetadata(reasoning),
+    applyThinkingLevelMetadata,
     applyStrictToolCompatMetadata,
     applyOpenAIGrammarToolCompatMetadata,
     applyOpenAIToolSearchMetadata,

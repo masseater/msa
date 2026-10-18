@@ -36,7 +36,7 @@ The result starts with `Script completed` or `Script failed`, the wall time, and
 
 ## Call tools
 
-Every tool the session can call is a method of `tools`, named by its identifier: characters that are not valid in a JavaScript identifier become `_`, so the MCP tool `mcp__dev-radius__search` is `tools.mcp__dev_radius__search`. Each method takes one object with the tool's arguments.
+Every tool the session can call is a method of `tools`, named by its identifier: characters that are not valid in a JavaScript identifier become `_`, so the MCP tool `mcp__dev-github__search` is `tools.mcp__dev_github__search`. Each method takes one object with the tool's arguments.
 
 What a call resolves to depends on the tool:
 
@@ -92,7 +92,7 @@ declare const models: {
 
 `classify()` and `generateImages()` use only the `provider` and `id` of `model`, so `{ provider, id }` works as well. They do not throw on provider errors: check `stopReason` and `errorMessage`. At most four such calls run at once per script; more calls wait for a free slot, so `Promise.all()` over many items is fine. Their usage is added to the `codemode` tool result and counts toward the session cost.
 
-Model IDs differ between providers, for example `typesafe/jev-latest` and `openrouter/typesafe/jev-1.13`. Use `models.getAvailableOfType(type)` to find the IDs that work with the current credentials.
+Model IDs differ between providers, for example `opencode/jev-1.13` and `openrouter/typesafe/jev-1.13`. Use `models.getAvailableOfType(type)` to find the IDs that work with the current credentials.
 
 ### Classify
 
@@ -138,7 +138,7 @@ type ModelUsage = { input: number; output: number; totalTokens: number; cost: { 
 Classify several items by calling `classify()` once per item. This script sorts feedback messages, for example ones a tool returned earlier in the script:
 
 ```js
-const jev = await models.getModelOfType("classifier", "typesafe", "jev-latest");
+const jev = await models.getModelOfType("classifier", "openrouter", "~typesafe/jev-latest");
 const results = await Promise.all(
   messages.map((message) =>
     models.classify(jev, {

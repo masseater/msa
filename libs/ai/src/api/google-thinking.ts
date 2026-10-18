@@ -4,7 +4,7 @@ import { Function } from "effect";
 import { clampThinkingLevel } from "../models.ts";
 import type { Model, ThinkingLevel } from "../types.ts";
 
-export type GoogleApiType = "google-generative-ai" | "google-vertex";
+export type GoogleApiType = "google-generative-ai";
 
 export type GoogleApiThinkingLevel =
   | "THINKING_LEVEL_UNSPECIFIED"

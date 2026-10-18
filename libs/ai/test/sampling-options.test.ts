@@ -132,7 +132,7 @@ describe("sampling params", () => {
       }),
     ));
 
-  it.each(["openai-completions", "openai-responses", "azure-openai-responses"] as const)(
+  it.each(["openai-completions", "openai-responses"] as const)(
     "applies model-level sampling params with request keys taking precedence for %s",
     (api) =>
       Effect.runPromise(
@@ -215,7 +215,7 @@ describe("sampling params", () => {
 });
 
 describe("sampling params", () => {
-  it.each(["openai-completions", "openai-responses", "azure-openai-responses"] as const)(
+  it.each(["openai-completions", "openai-responses"] as const)(
     "applies thinking-level params between model and request params for %s",
     (api) =>
       Effect.runPromise(
@@ -239,7 +239,7 @@ describe("sampling params", () => {
       ),
   );
 
-  it.each(["openai-responses", "azure-openai-responses"] as const)(
+  it.each(["openai-responses"] as const)(
     "uses medium sampling params for summary-only %s requests",
     (api) =>
       Effect.runPromise(

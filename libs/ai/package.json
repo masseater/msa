@@ -6,7 +6,6 @@
     "ai",
     "anthropic",
     "api",
-    "bedrock",
     "gemini",
     "llm",
     "openai",
@@ -62,10 +61,6 @@
       "types": "./dist/oauth.d.ts",
       "import": "./dist/oauth.js"
     },
-    "./bedrock-provider": {
-      "types": "./dist/bedrock-provider.d.ts",
-      "import": "./dist/bedrock-provider.js"
-    },
     "./bun-oauth": {
       "types": "./dist/bun-oauth.d.ts",
       "import": "./dist/bun-oauth.js"
@@ -83,15 +78,10 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "catalog:",
-    "@aws-sdk/client-bedrock-runtime": "catalog:",
     "@effect/platform-node": "catalog:",
     "@google/genai": "catalog:",
     "@msa/telemetry": "workspace:*",
-    "@smithy/node-http-handler": "catalog:",
-    "@smithy/types": "4.19.0",
     "effect": "catalog:stack",
-    "http-proxy-agent": "catalog:",
-    "https-proxy-agent": "catalog:",
     "openai": "catalog:",
     "partial-json": "catalog:",
     "typebox": "catalog:"

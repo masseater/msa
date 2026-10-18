@@ -132,26 +132,6 @@ export const OpenRouterRoutingSchema = Type.Object(
   },
 );
 
-export const VercelGatewayRoutingSchema = Type.Object(
-  {
-    only: Type.Optional(
-      Type.Array(Type.String(), {
-        description:
-          'List of provider slugs to exclusively use for this request, for example ["bedrock", "anthropic"].',
-      }),
-    ),
-    order: Type.Optional(
-      Type.Array(Type.String(), {
-        description: 'List of provider slugs to try in order, for example ["anthropic", "openai"].',
-      }),
-    ),
-  },
-  {
-    description:
-      "Vercel AI Gateway routing preferences. Controls which upstream providers the gateway routes requests to. See https://vercel.com/docs/ai-gateway/models-and-providers/provider-options.",
-  },
-);
-
 export const AnthropicAllowedFallbackModelSchema = Type.Object(
   {
     provider: Type.String({ minLength: 1 }),
@@ -162,7 +142,6 @@ export const AnthropicAllowedFallbackModelSchema = Type.Object(
 );
 
 export interface OpenRouterRouting extends Static<typeof OpenRouterRoutingSchema> {}
-export interface VercelGatewayRouting extends Static<typeof VercelGatewayRoutingSchema> {}
 export interface AnthropicAllowedFallbackModel extends Static<
   typeof AnthropicAllowedFallbackModelSchema
 > {}

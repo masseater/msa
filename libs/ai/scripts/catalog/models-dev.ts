@@ -42,14 +42,6 @@ export interface ModelsDevProvider {
   models?: Record<string, ModelsDevModel>;
 }
 
-export interface ModelsDevMetadata {
-  id: string;
-  type?: string;
-  name: string;
-  limit?: { context?: number };
-  modalities?: { input?: string[] };
-}
-
 export type ModelsDevCatalog = Record<string, ModelsDevProvider>;
 
 export type ThinkingLevelMap = NonNullable<Model<any>["thinkingLevelMap"]>;
@@ -58,23 +50,18 @@ export type ReasoningOptionsRegistry = Map<string, ModelsDevReasoningOption[]>;
 
 export interface ModelsDevSource {
   readonly data: ModelsDevCatalog;
-  readonly strict: boolean;
   readonly remember: (provider: string, id: string, source: ModelsDevModel) => void;
 }
 
-export function createModelsDevSource({
-  data,
-  strict,
-}: {
-  readonly data: ModelsDevCatalog;
-  readonly strict: boolean;
-}): { readonly source: ModelsDevSource; readonly reasoning: ReasoningOptionsRegistry } {
+export function createModelsDevSource(data: ModelsDevCatalog): {
+  readonly source: ModelsDevSource;
+  readonly reasoning: ReasoningOptionsRegistry;
+} {
   const reasoning: ReasoningOptionsRegistry = new Map();
   return {
     reasoning,
     source: {
       data,
-      strict,
       remember: (provider, id, model) => {
         if (model.reasoning_options !== undefined)
           reasoning.set(`${provider}:${id}`, model.reasoning_options);

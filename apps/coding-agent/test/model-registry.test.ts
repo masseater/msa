@@ -190,20 +190,20 @@ describe("ModelRegistry", () => {
       });
 
       const registry = await createModelRegistry(authStorage, modelsJsonPath);
-      const googleModels = getModelsForProvider(registry, "google");
+      const opencodeModels = getModelsForProvider(registry, "opencode");
 
-      // Google models should still have their original baseUrl
-      expect(googleModels.length).toBeGreaterThan(0);
-      expect(googleModels[0]?.baseUrl).not.toBe("https://my-proxy.example.com/v1");
+      // opencode models should still have their original baseUrl
+      expect(opencodeModels.length).toBeGreaterThan(0);
+      expect(opencodeModels[0]?.baseUrl).not.toBe("https://my-proxy.example.com/v1");
     });
 
     test("can mix baseUrl override and models merge", async () => {
       writeRawModelsJson({
         // baseUrl-only for anthropic
         anthropic: overrideConfig("https://anthropic-proxy.example.com/v1"),
-        // Add custom model for google (merged with built-ins)
-        google: providerConfig(
-          "https://google-proxy.example.com/v1",
+        // Add custom model for opencode (merged with built-ins)
+        opencode: providerConfig(
+          "https://opencode-proxy.example.com/v1",
           [{ id: "gemini-custom" }],
           "google-generative-ai",
         ),
@@ -216,10 +216,10 @@ describe("ModelRegistry", () => {
       expect(anthropicModels.length).toBeGreaterThan(1);
       expect(anthropicModels[0]?.baseUrl).toBe("https://anthropic-proxy.example.com/v1");
 
-      // Google: built-ins plus custom model
-      const googleModels = getModelsForProvider(registry, "google");
-      expect(googleModels.length).toBeGreaterThan(1);
-      expect(googleModels.some((m) => m.id === "gemini-custom")).toBe(true);
+      // opencode: built-ins plus custom model
+      const opencodeModels = getModelsForProvider(registry, "opencode");
+      expect(opencodeModels.length).toBeGreaterThan(1);
+      expect(opencodeModels.some((m) => m.id === "gemini-custom")).toBe(true);
     });
 
     test("refresh() picks up baseUrl override changes", async () => {
@@ -339,7 +339,7 @@ describe("ModelRegistry", () => {
 
       const registry = await createModelRegistry(authStorage, modelsJsonPath);
 
-      expect(getModelsForProvider(registry, "google").length).toBeGreaterThan(0);
+      expect(getModelsForProvider(registry, "opencode").length).toBeGreaterThan(0);
       expect(getModelsForProvider(registry, "openai").length).toBeGreaterThan(0);
     });
 
@@ -504,20 +504,6 @@ describe("ModelRegistry", () => {
                 },
               },
             },
-            {
-              id: "args-model",
-              reasoning: true,
-              input: ["text"],
-              cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-              contextWindow: 1000,
-              maxTokens: 100,
-              compat: {
-                thinkingFormat: "baseten",
-                chatTemplateArgs: {
-                  enable_thinking: { $var: "thinking.enabled" },
-                },
-              },
-            },
           ],
         },
       });
@@ -526,19 +512,12 @@ describe("ModelRegistry", () => {
       const kwargsCompat = registry.find("demo", "kwargs-model")?.compat as
         | OpenAICompletionsCompat
         | undefined;
-      const argsCompat = registry.find("demo", "args-model")?.compat as
-        | OpenAICompletionsCompat
-        | undefined;
 
       expect(registry.getError()).toBeUndefined();
       expect(kwargsCompat?.thinkingFormat).toBe("chat-template");
       expect(kwargsCompat?.chatTemplateKwargs).toEqual({
         preserve_thinking: true,
         thinking: { $var: "thinking.enabled" },
-      });
-      expect(argsCompat?.thinkingFormat).toBe("baseten");
-      expect(argsCompat?.chatTemplateArgs).toEqual({
-        enable_thinking: { $var: "thinking.enabled" },
       });
     });
 
@@ -1182,7 +1161,6 @@ describe("ModelRegistry", () => {
 
       expect(registry.getProviderDisplayName("openai")).toBe("OpenAI");
       expect(registry.getProviderDisplayName("openai-codex")).toBe("OpenAI Codex (legacy)");
-      expect(registry.getProviderDisplayName("zai")).toBe("Z.AI");
       expect(registry.getProviderDisplayName("unknown-provider")).toBe("unknown-provider");
 
       registry.registerProvider("named-provider", {
@@ -1290,40 +1268,28 @@ describe("ModelRegistry", () => {
     });
 
     test("stored API key env propagates to request auth and resolves headers", async () => {
-      await authStorage.modify("cloudflare-ai-gateway", async () => ({
+      await authStorage.modify("openrouter", async () => ({
         type: "api_key",
-        key: "$CLOUDFLARE_API_KEY",
-        env: {
-          CLOUDFLARE_API_KEY: "stored-cf-token",
-          CLOUDFLARE_ACCOUNT_ID: "stored-account",
-          CLOUDFLARE_GATEWAY_ID: "stored-gateway",
-        },
+        key: "stored-openrouter-key",
+        env: { OPENROUTER_TEAM: "stored-team" },
       }));
       writeRawModelsJson({
-        "cloudflare-ai-gateway": {
-          headers: { "x-account": "$CLOUDFLARE_ACCOUNT_ID" },
+        openrouter: {
+          headers: { "x-team": "$OPENROUTER_TEAM" },
         },
       });
 
       const registry = await createModelRegistry(authStorage, modelsJsonPath);
-      const model = registry.getAll().find((m) => m.provider === "cloudflare-ai-gateway");
+      const model = registry.getAll().find((m) => m.provider === "openrouter");
       expect(model).toBeDefined();
 
       const auth = await registry.getApiKeyAndHeaders(model!);
 
       expect(auth).toEqual({
         ok: true,
-        apiKey: undefined,
-        headers: {
-          "cf-aig-authorization": "Bearer stored-cf-token",
-          Authorization: null,
-          "x-api-key": null,
-          "x-account": "stored-account",
-        },
-        env: {
-          CLOUDFLARE_ACCOUNT_ID: "stored-account",
-          CLOUDFLARE_GATEWAY_ID: "stored-gateway",
-        },
+        apiKey: "stored-openrouter-key",
+        headers: { "x-team": "stored-team" },
+        env: { OPENROUTER_TEAM: "stored-team" },
       });
     });
 
