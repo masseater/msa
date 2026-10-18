@@ -1433,6 +1433,16 @@ export class SettingsManager {
     };
   }
 
+  /** Seconds between checks of a watched pull request, as milliseconds. */
+  getPrWatchIntervalMs(): number {
+    const seconds = this.settings.prWatch?.intervalSeconds;
+    const value =
+      typeof seconds === "number" && Number.isFinite(seconds) && seconds >= 5
+        ? seconds
+        : SETTINGS_DEFAULTS.prWatch.intervalSeconds;
+    return Math.round(value * 1000);
+  }
+
   getEnabledModels(): string[] | undefined {
     return this.settings.enabledModels;
   }

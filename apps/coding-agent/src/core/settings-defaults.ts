@@ -73,6 +73,9 @@ export const SETTINGS_DEFAULTS = {
     mode: "on",
     inlineBudget: 3000,
   },
+  prWatch: {
+    intervalSeconds: 45,
+  },
   cacheWarming: "streaming",
   tuiMode: "fullscreen",
   fullscreenExitOutput: "transcript",

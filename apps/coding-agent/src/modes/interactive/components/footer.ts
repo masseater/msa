@@ -7,6 +7,7 @@ import { areExperimentalFeaturesEnabled } from "../../../core/experimental.ts";
 import type { ContextUsage } from "../../../core/extensions/types.ts";
 import type { ReadonlyFooterDataProvider } from "../../../core/footer-data-provider.ts";
 import { describeGoalIndicator } from "../../../core/goal.ts";
+import { describePrWatchIndicator } from "../../../core/pr-watch/summary.ts";
 import {
   addUsageToTotals,
   createUsageTotals,
@@ -318,6 +319,11 @@ export class FooterComponent implements Component {
           theme.fg("dim", "..."),
         ),
       );
+    }
+
+    const prWatch = describePrWatchIndicator(this.session.prWatch);
+    if (prWatch) {
+      lines.push(truncateToWidth(theme.fg("dim", prWatch), width, theme.fg("dim", "...")));
     }
 
     const tasks = viewHelpers.describeTaskCounts(this.session.orchestrator?.snapshot.tasks ?? []);
