@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import type { RefreshModelsContext } from "../src/models.ts";
 import type { OpenRouterModel } from "../src/providers/openrouter-api.ts";
-import { personalizeOpenRouterCatalog } from "../src/providers/openrouter.ts";
+import { personalizeOpenRouterCatalog } from "../src/providers/openrouter-user-models.ts";
 import type { AnyModel, ClassifierModel, ImageModel, Model } from "../src/types.ts";
 
 const zeroCost = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };

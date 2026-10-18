@@ -58,7 +58,7 @@ import {
   type StreamOptions,
 } from "@msa/ai";
 import * as builtinProviderCatalog from "@msa/ai/providers/all";
-import { personalizeOpenRouterCatalog } from "@msa/ai/providers/openrouter";
+import { personalizeOpenRouterCatalog } from "@msa/ai/providers/openrouter-user-models";
 import {
   assertChatModel,
   assertClassifierInputSupported,

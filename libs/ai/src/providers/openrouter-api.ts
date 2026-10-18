@@ -1,5 +1,7 @@
 import type { ModelCost, ModelCostTier } from "../types.ts";
 
+export const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
+
 export interface OpenRouterPricing {
   prompt?: string;
   completion?: string;
