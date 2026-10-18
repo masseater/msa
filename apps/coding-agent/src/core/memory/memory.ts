@@ -77,9 +77,9 @@ export function parseMemoryCommand(text: string): MemoryCommand | undefined {
     case "stats":
       return { kind: "stats" };
     case "search":
-      return tail !== "" ? { kind: "search", query: tail } : { kind: "status" };
+      return tail === "" ? { kind: "status" } : { kind: "search", query: tail };
     case "forget":
-      return tail !== "" ? { kind: "forget", id: tail } : { kind: "status" };
+      return tail === "" ? { kind: "status" } : { kind: "forget", id: tail };
     default:
       return { kind: "search", query: args };
   }
@@ -232,7 +232,7 @@ export class MemoryService {
       const embedding = await this.embedQuery(query, signal);
       const scores = this.ensureStore().search({
         text: query,
-        ...(embedding !== undefined ? { embedding } : {}),
+        ...(embedding === undefined ? {} : { embedding }),
         project: this.project,
         limit: this.settings.recall.limit,
         minScore: this.settings.recall.minScore,
@@ -262,9 +262,9 @@ export class MemoryService {
       kind,
       scope,
       project: this.project,
-      ...(embedding !== undefined
-        ? { embedding, embeddingModel: this.settings.embedding.model }
-        : {}),
+      ...(embedding === undefined
+        ? {}
+        : { embedding, embeddingModel: this.settings.embedding.model }),
     });
     return {
       ...result,
@@ -279,7 +279,7 @@ export class MemoryService {
     const embedding = await this.embedQuery(query);
     return this.ensureStore().search({
       text: query,
-      ...(embedding !== undefined ? { embedding } : {}),
+      ...(embedding === undefined ? {} : { embedding }),
       project: this.project,
       limit,
       minScore: EXPLICIT_SEARCH_MIN_SCORE,
@@ -324,7 +324,7 @@ export class MemoryService {
       .join(", ");
     return [
       `Total: ${stats.total} (${stats.embedded} embedded)`,
-      kinds !== "" ? `Kinds: ${kinds}` : "Kinds: none",
+      kinds === "" ? "Kinds: none" : `Kinds: ${kinds}`,
       `Projects: ${stats.projects}`,
       `Database: ${this.settings.database}`,
     ].join("\n");

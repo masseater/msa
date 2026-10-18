@@ -166,7 +166,7 @@ export class Orchestrator {
     const worker = this.workers.get(id);
     if (worker !== undefined) {
       const streaming = worker.state.streamingMessage;
-      return streaming !== undefined ? [...worker.messages, streaming] : worker.messages;
+      return streaming === undefined ? worker.messages : [...worker.messages, streaming];
     }
     const sessionFile = this.snapshot.find((node) => node.id === id)?.sessionFile;
     if (sessionFile === undefined || sessionFile === "") return [];
@@ -439,7 +439,7 @@ export class Orchestrator {
         (message): message is AssistantMessage => message.role === "assistant",
       );
       let status: SessionStatus = "completed";
-      let report = last !== undefined ? contentText(last.content, "\n").trim() : "";
+      let report = last === undefined ? "" : contentText(last.content, "\n").trim();
       if (error !== undefined) {
         status = "failed";
         report = toErrorMessage(error);
@@ -460,7 +460,7 @@ export class Orchestrator {
         status !== "completed" && waiting.length > 0
           ? `Waiting on it: ${waiting.map((other) => other.id).join(", ")}. Send it a message to rerun it, or stop them.`
           : undefined,
-        report !== "" ? `<session-report>\n${truncate(report)}\n</session-report>` : undefined,
+        report === "" ? undefined : `<session-report>\n${truncate(report)}\n</session-report>`,
       ];
       this.options.report(lines.filter(Boolean).join("\n\n"), {
         sessionId: id,

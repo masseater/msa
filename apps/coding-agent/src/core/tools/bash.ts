@@ -152,7 +152,7 @@ export function createLocalShellOperations(
         const signalCode = child.signalCode;
         return {
           exitCode:
-            exitCode ?? (signalCode !== null ? 128 + (osConstants.signals[signalCode] ?? 0) : 1),
+            exitCode ?? (signalCode === null ? 1 : 128 + (osConstants.signals[signalCode] ?? 0)),
         };
       } finally {
         if (child.pid !== undefined && child.pid !== 0) untrackDetachedChildPid(child.pid);
@@ -202,7 +202,7 @@ function resolveSpawnContext(
     if (ctx.thinkingLevel !== undefined) env["MSA_REASONING_LEVEL"] = ctx.thinkingLevel;
   }
   const baseContext: BashSpawnContext = { command, cwd, env };
-  return spawnHook !== undefined ? spawnHook(baseContext) : baseContext;
+  return spawnHook === undefined ? baseContext : spawnHook(baseContext);
 }
 
 export interface BashToolOptions {
@@ -354,7 +354,7 @@ export function createShellToolDefinition(
       };
 
       const appendStatus = (text: string, status: string) =>
-        `${text !== "" ? `${text}\n\n` : ""}${status}`;
+        `${text === "" ? "" : `${text}\n\n`}${status}`;
       const startedAt = performance.now();
 
       try {

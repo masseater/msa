@@ -1,57 +1,50 @@
-import { realpath } from "node:fs/promises";
-import { resolve } from "node:path";
+import { Deferred, Effect, FileSystem, Semaphore } from "effect";
+import { dual } from "effect/Function";
 
-const fileMutationQueues = new Map<string, Promise<void>>();
-let registrationQueue = Promise.resolve();
+import { isMissingPath, pathOperations, platformRuntime } from "../platform/index.ts";
 
-function isMissingPathError(error: unknown): boolean {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "code" in error &&
-    (error.code === "ENOENT" || error.code === "ENOTDIR")
+const fileMutationQueues = new Map<string, Deferred.Deferred<void>>();
+const registration = Semaphore.makeUnsafe(1);
+
+const mutationQueueKey = (filePath: string) => {
+  const resolvedPath = pathOperations.resolve(filePath);
+  return FileSystem.FileSystem.use((fs) => fs.realPath(resolvedPath)).pipe(
+    Effect.catch((error) =>
+      isMissingPath(error) ? Effect.succeed(resolvedPath) : Effect.die(error),
+    ),
   );
-}
+};
 
-async function getMutationQueueKey(filePath: string): Promise<string> {
-  const resolvedPath = resolve(filePath);
-  try {
-    return await realpath(resolvedPath);
-  } catch (error) {
-    if (isMissingPathError(error)) {
-      return resolvedPath;
-    }
-    throw error;
-  }
-}
-
-export async function withFileMutationQueue<T>(filePath: string, fn: () => Promise<T>): Promise<T> {
-  const registration = registrationQueue.then(async () => {
-    const key = await getMutationQueueKey(filePath);
-    const currentQueue = fileMutationQueues.get(key) ?? Promise.resolve();
-
-    let releaseNext!: () => void;
-    const nextQueue = new Promise<void>((resolveQueue) => {
-      releaseNext = resolveQueue;
-    });
-    const chainedQueue = currentQueue.then(() => nextQueue);
-    fileMutationQueues.set(key, chainedQueue);
-
-    return { key, currentQueue, chainedQueue, releaseNext };
-  });
-  registrationQueue = registration.then(
-    () => undefined,
-    () => undefined,
+const enqueue = (filePath: string) =>
+  registration.withPermits(1)(
+    Effect.gen(function* () {
+      const key = yield* mutationQueueKey(filePath);
+      const previous = fileMutationQueues.get(key);
+      const next = yield* Deferred.make<void>();
+      fileMutationQueues.set(key, next);
+      return { key, previous, next };
+    }),
   );
 
-  const { key, currentQueue, chainedQueue, releaseNext } = await registration;
-  await currentQueue;
-  try {
-    return await fn();
-  } finally {
-    releaseNext();
-    if (fileMutationQueues.get(key) === chainedQueue) {
-      fileMutationQueues.delete(key);
-    }
-  }
-}
+const withMutationQueue = Effect.fn("withFileMutationQueue")(function* <A>(
+  filePath: string,
+  run: () => Promise<A>,
+) {
+  const { key, previous, next } = yield* enqueue(filePath);
+  if (previous !== undefined) yield* Deferred.await(previous);
+  return yield* Effect.promise(run).pipe(
+    Effect.ensuring(
+      Effect.suspend(() => {
+        if (fileMutationQueues.get(key) === next) fileMutationQueues.delete(key);
+        return Deferred.succeed(next, undefined);
+      }),
+    ),
+  );
+});
+
+export const withFileMutationQueue: {
+  <T>(fn: () => Promise<T>): (filePath: string) => Promise<T>;
+  <T>(filePath: string, fn: () => Promise<T>): Promise<T>;
+} = dual(2, <T>(filePath: string, fn: () => Promise<T>): Promise<T> =>
+  platformRuntime.runPromise(withMutationQueue(filePath, fn)),
+);

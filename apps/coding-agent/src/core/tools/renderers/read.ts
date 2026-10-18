@@ -37,7 +37,7 @@ const COMPACT_RESOURCE_FILE_NAMES = new Set([
 type ReadRenderArgs = { path?: string; file_path?: string; offset?: unknown; limit?: unknown };
 function styledReadLineRange(args: ReadRenderArgs | undefined, theme: Theme): string {
   const range = formatReadLineRange(args?.offset, args?.limit);
-  return range !== "" ? theme.fg("warning", range) : "";
+  return range === "" ? "" : theme.fg("warning", range);
 }
 function formatReadCall(args: ReadRenderArgs | undefined, theme: Theme, cwd: string): string {
   const pathDisplay = renderToolPath(str(args?.file_path ?? args?.path), theme, cwd);
@@ -165,13 +165,13 @@ export const readRenderers: Pick<
   renderCall(rawArgs, theme, context) {
     const args = rawArgs as ReadRenderArgs | undefined;
     const text = (context.lastComponent as Text | undefined) ?? new Text("", 0, 0);
-    const classification = !context.expanded
-      ? getCompactReadClassification(args, context.cwd)
-      : undefined;
+    const classification = context.expanded
+      ? undefined
+      : getCompactReadClassification(args, context.cwd);
     text.setText(
-      classification !== undefined
-        ? formatCompactReadCall(classification, args, theme)
-        : formatReadCall(args, theme, context.cwd),
+      classification === undefined
+        ? formatReadCall(args, theme, context.cwd)
+        : formatCompactReadCall(classification, args, theme),
     );
     return text;
   },

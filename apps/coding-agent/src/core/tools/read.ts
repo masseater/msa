@@ -71,9 +71,9 @@ export interface ReadToolOptions {
 function toReadOutput(content: (TextContent | ImageContent)[]): ReadToolOutput {
   const text = content.find((block) => block.type === "text")?.text ?? "";
   const image = content.find((block) => block.type === "image");
-  return image !== undefined
-    ? { type: "image", data: image.data, mimeType: image.mimeType, note: text }
-    : text;
+  return image === undefined
+    ? text
+    : { type: "image", data: image.data, mimeType: image.mimeType, note: text };
 }
 
 function getNonVisionImageNote(model: Model<Api> | undefined): string | undefined {
@@ -128,9 +128,9 @@ export function createReadToolDefinition(
             await ops.access(absolutePath);
             if (aborted) return;
             const mimeType =
-              ops.detectImageMimeType !== undefined
-                ? await ops.detectImageMimeType(absolutePath)
-                : undefined;
+              ops.detectImageMimeType === undefined
+                ? undefined
+                : await ops.detectImageMimeType(absolutePath);
             let content: (TextContent | ImageContent)[];
             let details: ReadToolDetails | undefined;
             const nonVisionImageNote = getNonVisionImageNote(ctx?.model);

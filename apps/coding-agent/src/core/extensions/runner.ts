@@ -292,7 +292,7 @@ function restoreSystemMessages(
 ): AgentMessage[] {
   if (sameMessages(returned, visible)) return current;
   const head = getCurrentSystemMessage(current);
-  return head !== undefined ? [head, ...returned] : returned;
+  return head === undefined ? returned : [head, ...returned];
 }
 
 export async function emitProjectTrustEvent(
@@ -562,7 +562,7 @@ export class ExtensionRunner {
   }
 
   setUIContext(uiContext?: ExtensionUIContext, mode: ExtensionMode = "print"): void {
-    this.uiContext = uiContext !== undefined ? this.wrapUIPromptContext(uiContext) : noOpUIContext;
+    this.uiContext = uiContext === undefined ? noOpUIContext : this.wrapUIPromptContext(uiContext);
     this.mode = mode;
   }
 
@@ -796,7 +796,7 @@ export class ExtensionRunner {
 
   getMarkdownTransformers(): MarkdownTransformer[] {
     return this.extensions.flatMap((ext) =>
-      ext.markdownTransformer !== undefined ? [ext.markdownTransformer] : [],
+      ext.markdownTransformer === undefined ? [] : [ext.markdownTransformer],
     );
   }
 
@@ -807,7 +807,7 @@ export class ExtensionRunner {
     const resolvers = this.extensions.flatMap((ext) => ext.toolRenderers ?? []);
     const resolve = (index: number): ToolRenderers | undefined => {
       const resolver = resolvers[index];
-      return resolver !== undefined ? resolver(toolName, () => resolve(index + 1)) : base();
+      return resolver === undefined ? base() : resolver(toolName, () => resolve(index + 1));
     };
     return resolve(0);
   }

@@ -84,8 +84,8 @@ export function createMemoryToolDefinition(
           }
           const outcome = await service.save({
             content,
-            ...(kind !== undefined ? { kind } : {}),
-            ...(scope !== undefined ? { scope } : {}),
+            ...(kind === undefined ? {} : { kind }),
+            ...(scope === undefined ? {} : { scope }),
           });
           const lines = [
             outcome.created

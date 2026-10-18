@@ -8,7 +8,7 @@ export function formatListResult(
   noun: string,
   theme: Theme,
 ): string {
-  const lines = output !== "" ? output.split("\n") : [];
+  const lines = output === "" ? [] : output.split("\n");
   if (!expanded) {
     if (lines.length === 0) return "";
     const truncated = warnings.length > 0 ? ", truncated" : "";

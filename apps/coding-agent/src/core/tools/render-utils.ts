@@ -39,7 +39,7 @@ export function formatReadLineRange(offset: unknown, limit: unknown): string {
   const count = parseLineNumber(limit);
   if (count === undefined) return "";
   const end = start + count - 1;
-  return `:${start}${end !== 0 ? `-${end}` : ""}`;
+  return `:${start}${end === 0 ? "" : `-${end}`}`;
 }
 
 export function replaceTabs(text: string): string {
@@ -77,7 +77,7 @@ export function getTextOutput(
         return imageFallback(mimeType, dims);
       })
       .join("\n");
-    output = output !== "" ? `${output}\n${imageIndicators}` : imageIndicators;
+    output = output === "" ? imageIndicators : `${output}\n${imageIndicators}`;
   }
 
   return output;

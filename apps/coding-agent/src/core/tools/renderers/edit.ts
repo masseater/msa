@@ -200,9 +200,9 @@ export const editRenderers: Pick<ToolDefinition<any, any>, "renderCall" | "rende
     const component = getEditCallRenderComponent(context.state, context.lastComponent);
     const previewInput = getRenderablePreviewInput(args as RenderableEditArgs | undefined);
     const argsKey =
-      previewInput !== null
-        ? JSON.stringify({ path: previewInput.path, edits: previewInput.edits })
-        : undefined;
+      previewInput === null
+        ? undefined
+        : JSON.stringify({ path: previewInput.path, edits: previewInput.edits });
 
     if (component.previewArgsKey !== argsKey) {
       component.preview = undefined;
@@ -235,11 +235,11 @@ export const editRenderers: Pick<ToolDefinition<any, any>, "renderCall" | "rende
     const callComponent = context.state.callComponent;
     const previewInput = getRenderablePreviewInput(context.args as RenderableEditArgs | undefined);
     const argsKey =
-      previewInput !== null
-        ? JSON.stringify({ path: previewInput.path, edits: previewInput.edits })
-        : undefined;
+      previewInput === null
+        ? undefined
+        : JSON.stringify({ path: previewInput.path, edits: previewInput.edits });
     const typedResult = result as EditToolResultLike;
-    const resultDiff = !context.isError ? typedResult.details?.diff : undefined;
+    const resultDiff = context.isError ? undefined : typedResult.details?.diff;
     let changed = false;
     if (callComponent) {
       if (typeof resultDiff === "string") {

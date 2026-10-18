@@ -208,7 +208,7 @@ export function estimateProjectedContextTokens(
   }
 
   const currentSystem = getCurrentSystemMessage(projection.messages);
-  let tokens = currentSystem !== undefined ? estimateTokens(currentSystem) : 0;
+  let tokens = currentSystem === undefined ? 0 : estimateTokens(currentSystem);
   for (const message of projection.messages) {
     if (message.role !== "system") tokens += estimateTokens(message);
   }
@@ -544,9 +544,9 @@ export async function completeSummarization(
     sessionId: options.sessionId ?? uuidv7(),
   };
   const produce = async (): Promise<AssistantMessage> =>
-    streamFn !== undefined
-      ? (await streamFn(model, context, requestOptions)).result()
-      : completeSimple(model, context, requestOptions);
+    streamFn === undefined
+      ? completeSimple(model, context, requestOptions)
+      : (await streamFn(model, context, requestOptions)).result();
   return retryAssistantCall(produce, retry, requestOptions.signal, callbacks);
 }
 
@@ -936,9 +936,9 @@ export async function compact(
     );
     summary = `${historyText}\n\n---\n\n**Turn Context (split turn):**\n\n${turnPrefixResult.text}`;
     summaryUsage =
-      historyUsage !== undefined
-        ? combineUsage(historyUsage, turnPrefixResult.usage)
-        : turnPrefixResult.usage;
+      historyUsage === undefined
+        ? turnPrefixResult.usage
+        : combineUsage(historyUsage, turnPrefixResult.usage);
   } else {
     const result = await generateSummaryWithUsage(
       messagesToSummarize,

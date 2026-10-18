@@ -125,7 +125,7 @@ export class Neo4jSessionGraph implements SessionGraph {
        RETURN s, collect(d.id) AS dependsOn`,
       { id },
     );
-    return records[0] !== undefined ? toNodeWithDependencies(records[0]) : undefined;
+    return records[0] === undefined ? undefined : toNodeWithDependencies(records[0]);
   }
 
   async list(project: string): Promise<SessionNodeWithDependencies[]> {

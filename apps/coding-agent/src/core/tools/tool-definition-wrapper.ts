@@ -1,4 +1,5 @@
 import type { AgentTool } from "@msa/agent-core";
+import { dual } from "effect/Function";
 
 import type { ExtensionToolContext, ToolDefinition } from "../extensions/types.ts";
 
@@ -7,40 +8,52 @@ export type ToolContextFactory = (
   signal: AbortSignal | undefined,
 ) => ExtensionToolContext;
 
-export function wrapToolDefinition<TDetails = unknown>(
+const wrapToolDefinitionImpl = <TDetails = unknown>(
   definition: ToolDefinition<any, TDetails>,
   ctxFactory?: ToolContextFactory,
-): AgentTool<any, TDetails> {
-  return {
-    name: definition.name,
-    label: definition.label,
-    description: definition.description,
-    parameters: definition.parameters,
-    ...(definition.outputSchema !== undefined ? { outputSchema: definition.outputSchema } : {}),
-    ...(definition.constrainedSampling !== undefined
-      ? { constrainedSampling: definition.constrainedSampling }
-      : {}),
-    ...(definition.prepareArguments !== undefined
-      ? { prepareArguments: definition.prepareArguments }
-      : {}),
-    ...(definition.executionMode !== undefined ? { executionMode: definition.executionMode } : {}),
-    execute: (toolCallId, params, signal, onUpdate, ctx?: ExtensionToolContext) =>
-      definition.execute(
-        toolCallId,
-        params,
-        signal,
-        onUpdate,
-        ctx ?? (ctxFactory?.(toolCallId, signal) as ExtensionToolContext),
-      ),
-  };
-}
+): AgentTool<any, TDetails> => ({
+  name: definition.name,
+  label: definition.label,
+  description: definition.description,
+  parameters: definition.parameters,
+  ...(definition.outputSchema === undefined ? {} : { outputSchema: definition.outputSchema }),
+  ...(definition.constrainedSampling === undefined
+    ? {}
+    : { constrainedSampling: definition.constrainedSampling }),
+  ...(definition.prepareArguments === undefined
+    ? {}
+    : { prepareArguments: definition.prepareArguments }),
+  ...(definition.executionMode === undefined ? {} : { executionMode: definition.executionMode }),
+  execute: (toolCallId, params, signal, onUpdate, ctx?: ExtensionToolContext) =>
+    definition.execute(
+      toolCallId,
+      params,
+      signal,
+      onUpdate,
+      ctx ?? (ctxFactory?.(toolCallId, signal) as ExtensionToolContext),
+    ),
+});
 
-export function wrapToolDefinitions(
-  definitions: ToolDefinition<any, any>[],
-  ctxFactory?: ToolContextFactory,
-): AgentTool<any>[] {
-  return definitions.map((definition) => wrapToolDefinition(definition, ctxFactory));
-}
+const isDefinitionFirst = (args: IArguments): boolean => typeof args[0] !== "function";
+
+export const wrapToolDefinition: {
+  <TDetails = unknown>(
+    ctxFactory?: ToolContextFactory,
+  ): (definition: ToolDefinition<any, TDetails>) => AgentTool<any, TDetails>;
+  <TDetails = unknown>(
+    definition: ToolDefinition<any, TDetails>,
+    ctxFactory?: ToolContextFactory,
+  ): AgentTool<any, TDetails>;
+} = dual(isDefinitionFirst, wrapToolDefinitionImpl);
+
+export const wrapToolDefinitions: {
+  (ctxFactory?: ToolContextFactory): (definitions: ToolDefinition<any, any>[]) => AgentTool<any>[];
+  (definitions: ToolDefinition<any, any>[], ctxFactory?: ToolContextFactory): AgentTool<any>[];
+} = dual(
+  (args) => Array.isArray(args[0]),
+  (definitions: ToolDefinition<any, any>[], ctxFactory?: ToolContextFactory): AgentTool<any>[] =>
+    definitions.map((definition) => wrapToolDefinitionImpl(definition, ctxFactory)),
+);
 
 export function createToolDefinitionFromAgentTool(
   tool: AgentTool<any>,
@@ -54,7 +67,7 @@ export function createToolDefinitionFromAgentTool(
     constrainedSampling: tool.constrainedSampling,
     prepareArguments: tool.prepareArguments,
     executionMode: tool.executionMode,
-    execute: async (toolCallId, params, signal, onUpdate) =>
+    execute: (toolCallId, params, signal, onUpdate) =>
       tool.execute(toolCallId, params, signal, onUpdate),
   };
 }

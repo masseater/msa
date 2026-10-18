@@ -13,7 +13,7 @@ function formatFindCall(
 ): string {
   const pattern = str(args?.pattern);
   const rawPath = str(args?.path);
-  const path = rawPath !== null ? shortenPath(rawPath || ".") : null;
+  const path = rawPath === null ? null : shortenPath(rawPath || ".");
   const limit = args?.limit;
   const invalidArg = invalidArgText(theme);
   let text =

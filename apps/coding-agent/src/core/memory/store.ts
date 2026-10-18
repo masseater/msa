@@ -138,7 +138,7 @@ function toRecord(row: MemoryRow): MemoryRecord {
     updatedAt: row.updated_at,
     useCount: row.use_count,
     lastUsedAt: row.last_used_at,
-    embedding: row.embedding !== null ? decodeVector(row.embedding) : null,
+    embedding: row.embedding === null ? null : decodeVector(row.embedding),
     embeddingModel: row.embedding_model,
   };
 }
@@ -235,7 +235,7 @@ export class MemoryStore {
     const existing = this.statement(
       `SELECT * FROM memories WHERE content = ? AND scope = ? AND project IS ?`,
     ).get(content, input.scope, project) as unknown as MemoryRow | undefined;
-    const embedding = input.embedding !== undefined ? encodeVector(input.embedding) : null;
+    const embedding = input.embedding === undefined ? null : encodeVector(input.embedding);
     if (existing !== undefined) {
       this.statement(
         `UPDATE memories SET updated_at = ?, embedding = COALESCE(?, embedding),
@@ -329,7 +329,7 @@ export class MemoryStore {
     const row = this.statement(`SELECT * FROM memories WHERE id = ?`).get(id) as unknown as
       | MemoryRow
       | undefined;
-    return row !== undefined ? toRecord(row) : undefined;
+    return row === undefined ? undefined : toRecord(row);
   }
 
   listStale(embeddingModel: string, limit: number): MemoryRecord[] {
