@@ -200,7 +200,7 @@ const resumesRetryBackoffStep1 = Effect.gen(function* () {
 });
 
 const resumesRetryBackoff = Effect.gen(function* () {
-  const { runPromise, path, setup } = yield* resumesRetryBackoffStep1;
+  const { path, setup } = yield* resumesRetryBackoffStep1;
   let now = 1_000;
   setup.now = () => now;
   setup.faux.setResponses([
@@ -214,13 +214,11 @@ const resumesRetryBackoff = Effect.gen(function* () {
   opened.harness.resume();
   setup.settings.retry = { enabled: true, maxRetries: 2, baseDelayMs: 60_000 };
   const id = (yield* awaited(opened.root.submit({ type: "input", content: "hi" }, context))).id;
-  yield* waitFor(() =>
-    runPromise(
-      Effect.gen(function* () {
-        const live = yield* awaited(opened.harness.snapshot(LiveDoc, opened.root.id, context));
-        return live?.generation?.retry !== undefined;
-      }),
-    ),
+  yield* waitFor(
+    Effect.gen(function* () {
+      const live = yield* awaited(opened.harness.snapshot(LiveDoc, opened.root.id, context));
+      return live?.generation?.retry !== undefined;
+    }),
   );
   const taskId = yield* runTaskId(opened.harness);
   yield* awaited(opened.harness.close(context));

@@ -72,8 +72,6 @@ describe("compaction recovery", () => {
 });
 
 const resumesRetryBackoff = Effect.gen(function* () {
-  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
   const path = yield* sqlitePath();
   let chat = yield* awaited(first(path));
   let now = currentTimeMillis();
@@ -81,12 +79,10 @@ const resumesRetryBackoff = Effect.gen(function* () {
   chat.setup.settings.retry = { enabled: true, maxRetries: 2, baseDelayMs: 60_000 };
   chat.faux.summaries.push(failure("overloaded"));
   const id = yield* awaited(chat.root.compact(undefined, context));
-  yield* waitFor(() =>
-    runPromise(
-      Effect.gen(function* () {
-        return (yield* awaited(live(chat))).compactions?.[0]?.retry !== undefined;
-      }),
-    ),
+  yield* waitFor(
+    Effect.gen(function* () {
+      return (yield* awaited(live(chat))).compactions?.[0]?.retry !== undefined;
+    }),
   );
   expect((yield* awaited(chat.harness.getTask(id, context)))?.state).toMatchObject({
     checkpoint: { phase: "retry", attempt: 1 },

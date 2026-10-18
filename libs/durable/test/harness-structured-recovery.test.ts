@@ -184,18 +184,14 @@ describe("recovery", () => {
 });
 
 const reopensCheckoutWaiting = Effect.gen(function* () {
-  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
   const path = yield* sqlitePath();
   const found = parentOf("checkout", ["p1", "p2"], "failFast");
   let opened = yield* openNodes(yield* awaited(openNodeSqliteStorage(path)));
   const parent = yield* awaited(start(opened.root, "checkout"));
-  yield* until(() =>
-    runPromise(
-      Effect.gen(function* () {
-        return (yield* state(opened.harness, parent)).status === "waiting";
-      }),
-    ),
+  yield* until(
+    Effect.gen(function* () {
+      return (yield* state(opened.harness, parent)).status === "waiting";
+    }),
   );
   yield* until(() => log.includes("run:p1") && log.includes("run:p2"));
   yield* awaited(opened.harness.close(context));

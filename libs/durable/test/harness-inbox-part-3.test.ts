@@ -170,8 +170,6 @@ describe("usage", () => {
 });
 
 const countsFailedAttempts = Effect.gen(function* () {
-  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
   const { setup, spent, harness, root } = yield* retryingUsageChat();
   setup.settings.retry = { enabled: true, maxRetries: 1, baseDelayMs: 1 };
   yield* awaited(
@@ -182,15 +180,13 @@ const countsFailedAttempts = Effect.gen(function* () {
   });
 
   const input = yield* awaited(root.submit({ type: "input", content: "b" }, context));
-  yield* waitFor(() =>
-    runPromise(
-      Effect.gen(function* () {
-        return (
-          (yield* awaited(harness.snapshot(LiveDoc, root.id, context)))?.generation?.message !==
-          undefined
-        );
-      }),
-    ),
+  yield* waitFor(
+    Effect.gen(function* () {
+      return (
+        (yield* awaited(harness.snapshot(LiveDoc, root.id, context)))?.generation?.message !==
+        undefined
+      );
+    }),
   );
   yield* awaited(
     harness.abortTask(

@@ -135,12 +135,10 @@ const resumesOnceEveryStep1 = Effect.gen(function* () {
   });
   const parent = yield* awaited(start(root, "parent"));
   yield* until(() => found.ids.length === 5);
-  yield* until(() =>
-    runPromise(
-      Effect.gen(function* () {
-        return (yield* state(harness, parent)).status === "waiting";
-      }),
-    ),
+  yield* until(
+    Effect.gen(function* () {
+      return (yield* state(harness, parent)).status === "waiting";
+    }),
   );
   open("ok");
   open("fails", "failed");
@@ -168,17 +166,13 @@ describe("waiting", () => {
     it(`fails fast when a child ends ${ending === "throw" ? "faulted" : "failed"}: its live siblings are aborted, the parent is not`, () =>
       Effect.runPromise(
         Effect.gen(function* () {
-          const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
           const { harness, root } = yield* openNodes();
           const found = parentOf("checkout", ["p1", "p2", "p3", "p4"], "failFast");
           const parent = yield* awaited(start(root, "checkout"));
-          yield* until(() =>
-            runPromise(
-              Effect.gen(function* () {
-                return (yield* state(harness, parent)).status === "waiting";
-              }),
-            ),
+          yield* until(
+            Effect.gen(function* () {
+              return (yield* state(harness, parent)).status === "waiting";
+            }),
           );
           open("p2", ending);
           expect(yield* awaited(outcomeOf(harness, parent))).toBe("completed");
@@ -228,12 +222,10 @@ const failsFastHeld = Effect.gen(function* () {
   ]).toEqual([false, true, false]);
   expect(yield* awaited(marked(parent))).toBe(false);
   expect((yield* state(harness, spawned.outside!)).status).toBe("running");
-  yield* until(() =>
-    runPromise(
-      Effect.gen(function* () {
-        return (yield* state(harness, parent)).status === "completing";
-      }),
-    ),
+  yield* until(
+    Effect.gen(function* () {
+      return (yield* state(harness, parent)).status === "completing";
+    }),
   );
   open("outside");
   expect(yield* awaited(outcomeOf(harness, parent))).toBe("completed");

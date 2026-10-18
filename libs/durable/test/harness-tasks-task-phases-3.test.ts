@@ -113,8 +113,8 @@ const readsCommittedDocuments = Effect.gen(function* () {
     fork: "asOf",
     initial: () => ({ text: "" }),
   });
-  let captured: StepRuntime<null> | undefined;
   const seen: unknown[] = [];
+  let captured: StepRuntime<null> | undefined;
   const Reader = oneStep("test.reader", (_task, runtime, ctx) =>
     runPromise(
       Effect.gen(function* () {

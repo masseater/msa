@@ -145,17 +145,15 @@ const placesHookSummaryStep1 = Effect.gen(function* () {
   });
   yield* history(chat);
   const id = yield* awaited(chat.root.compact(undefined, context));
-  return { runPromise, chat, childGate, id };
+  return { chat, childGate, id };
 });
 
 const placesHookSummary = Effect.gen(function* () {
-  const { runPromise, chat, childGate, id } = yield* placesHookSummaryStep1;
-  yield* waitFor(() =>
-    runPromise(
-      Effect.gen(function* () {
-        return (yield* awaited(chat.harness.getTask(id, context)))?.state.status === "completing";
-      }),
-    ),
+  const { chat, childGate, id } = yield* placesHookSummaryStep1;
+  yield* waitFor(
+    Effect.gen(function* () {
+      return (yield* awaited(chat.harness.getTask(id, context)))?.state.status === "completing";
+    }),
   );
   expect((yield* kinds(chat.root)).at(-1)).toBe("msa.compaction");
   expect((yield* awaited(live(chat))).compactions).toBeUndefined();
@@ -223,8 +221,6 @@ function defineChildTask(gate: Deferred) {
 }
 
 const reportsStartEnd = Effect.gen(function* () {
-  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
   const chat = yield* open();
   yield* history(chat);
   chat.setup.settings.retry = { enabled: true, maxRetries: 2, baseDelayMs: 60_000 };
@@ -237,12 +233,10 @@ const reportsStartEnd = Effect.gen(function* () {
   });
   chat.faux.summaries.push(failure("overloaded"));
   const id = yield* awaited(chat.root.compact(undefined, context));
-  yield* waitFor(() =>
-    runPromise(
-      Effect.gen(function* () {
-        return (yield* awaited(live(chat))).compactions?.[0]?.retry !== undefined;
-      }),
-    ),
+  yield* waitFor(
+    Effect.gen(function* () {
+      return (yield* awaited(live(chat))).compactions?.[0]?.retry !== undefined;
+    }),
   );
   const late = yield* awaited(watchEvents(chat.harness, chat.root.id, context));
   expect(late.snapshot.compactions).toEqual([

@@ -35,17 +35,13 @@ afterEach(() =>
 );
 
 const marksHeldCompleted = Effect.gen(function* () {
-  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
   const { harness, root } = yield* openNodes();
   const child = spawnAndFinish("held", "child");
   const held = yield* awaited(start(root, "held"));
-  yield* until(() =>
-    runPromise(
-      Effect.gen(function* () {
-        return (yield* state(harness, held)).status === "completing";
-      }),
-    ),
+  yield* until(
+    Effect.gen(function* () {
+      return (yield* state(harness, held)).status === "completing";
+    }),
   );
   yield* awaited(root.abort(context));
   expect(yield* awaited(outcomeOf(harness, child.id!))).toBe("aborted");
@@ -74,12 +70,10 @@ const marksAwaitsOnly = Effect.gen(function* () {
   const first = yield* awaited(start(root, "first", background));
   yield* until(() => log.includes("run:first"));
   const aborting = root.abort(context, { background: true });
-  yield* until(() =>
-    runPromise(
-      Effect.gen(function* () {
-        return (yield* awaited(harness.getTask(first, context)))!.abortRequested;
-      }),
-    ),
+  yield* until(
+    Effect.gen(function* () {
+      return (yield* awaited(harness.getTask(first, context)))!.abortRequested;
+    }),
   );
   const later = yield* awaited(start(root, "later", background));
   open("abort.first");

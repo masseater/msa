@@ -19,14 +19,7 @@ const ordersRuntimeCommits = Effect.gen(function* () {
   const Detached = oneStep<string>("test.detached", (_task, runtime) => {
     held = storage.holdCommits();
     void harnessRef!.commit(
-      (tx) =>
-        runPromise(
-          Effect.asVoid(
-            Effect.suspend(() =>
-              awaited(tx.appendEntry(runtime.conversationId, { kind: "blocker" })),
-            ),
-          ),
-        ),
+      (tx) => tx.appendEntry(runtime.conversationId, { kind: "blocker" }).then(() => undefined),
       context,
     );
     before = runtime.commit(() => completed("before"), context);
@@ -64,15 +57,16 @@ describe("task runtime", () => {
     Effect.runPromise(ordersRuntimeCommits));
 });
 
+const LateNotes = defineDoc<{ text: string }>({
+  kind: "test.late-watch",
+  version: 1,
+  scope: "session",
+  initial: () => ({ text: "" }),
+});
+
 const stopsWatchAcquisition = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-  const Notes = defineDoc<{ text: string }>({
-    kind: "test.late-watch",
-    version: 1,
-    scope: "session",
-    initial: () => ({ text: "" }),
-  });
   const storage = new ControlledStorage();
   let watching: Promise<unknown> | undefined;
   let held: ReturnType<ControlledStorage["holdCommits"]> | undefined;
@@ -80,21 +74,14 @@ const stopsWatchAcquisition = Effect.gen(function* () {
   const Late = oneStep("test.late-watch", (_task, runtime) => {
     held = storage.holdCommits();
     void harnessRef!.commit(
-      (tx) =>
-        runPromise(
-          Effect.asVoid(
-            Effect.suspend(() =>
-              awaited(tx.appendEntry(runtime.conversationId, { kind: "blocker" })),
-            ),
-          ),
-        ),
+      (tx) => tx.appendEntry(runtime.conversationId, { kind: "blocker" }).then(() => undefined),
       context,
     );
     void runPromise(
       Effect.sleep(1).pipe(
         Effect.andThen(
           Effect.sync(() => {
-            watching = runtime.watchDoc(Notes, context).catch((error: unknown) => error);
+            watching = runtime.watchDoc(LateNotes, context).catch((error: unknown) => error);
           }),
         ),
       ),
@@ -107,11 +94,10 @@ const stopsWatchAcquisition = Effect.gen(function* () {
   yield* awaited(
     harness.commit(
       (tx) =>
-        runPromise(
-          Effect.gen(function* () {
-            (yield* awaited(tx.doc(Notes))).text = "x";
-          }),
-        ),
+        tx.doc(LateNotes).then((notes) => {
+          notes.text = "x";
+          return undefined;
+        }),
       context,
     ),
   );

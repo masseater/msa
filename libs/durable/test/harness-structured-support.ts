@@ -22,6 +22,7 @@ import { Effect } from "effect";
 import { dual } from "effect/Function";
 
 import {
+  type Check,
   waitFor,
   awaited,
   joinPath,
@@ -237,7 +238,7 @@ export const outcomeOf: {
   (harness: Harness, id: TaskId): ReturnType<typeof outcomeOfImpl>;
 } = dual(2, outcomeOfImpl);
 
-export const until = Effect.fn("until")(function* (check: () => boolean | Promise<boolean>) {
+export const until = Effect.fn("until")(function* (check: Check) {
   yield* waitFor(check);
 });
 

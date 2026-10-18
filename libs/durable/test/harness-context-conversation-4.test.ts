@@ -106,9 +106,7 @@ const doesNotKeep = Effect.gen(function* () {
         ),
     },
     abort: (_task, runtime, taskContext) =>
-      runPromise(
-        Effect.asVoid(Effect.suspend(() => awaited(runtime.commit(() => ABORTED, taskContext)))),
-      ),
+      runtime.commit(() => ABORTED, taskContext).then(() => undefined),
   });
   const rows: Record<string, number> = {};
   const Probe = probeTask((name, load) =>

@@ -38,8 +38,6 @@ afterEach(() =>
 );
 
 const failsHarnessFailed = Effect.gen(function* () {
-  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
   let reject: TaskId | undefined;
   const failure = new Error("disk gone");
   class Failing extends ControlledStorage {
@@ -64,12 +62,10 @@ const failsHarnessFailed = Effect.gen(function* () {
   const { harness, root, reports } = yield* openNodes(storage);
   spawnAndFinish("parent", "child");
   const parent = yield* awaited(start(root, "parent"));
-  yield* until(() =>
-    runPromise(
-      Effect.gen(function* () {
-        return (yield* state(harness, parent)).status === "completing";
-      }),
-    ),
+  yield* until(
+    Effect.gen(function* () {
+      return (yield* state(harness, parent)).status === "completing";
+    }),
   );
   reject = parent;
   open("child");

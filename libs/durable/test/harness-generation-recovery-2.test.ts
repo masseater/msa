@@ -17,8 +17,6 @@ afterEach(() =>
 );
 
 const resumesPollingDeferred = Effect.gen(function* () {
-  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
   const path = yield* sqlitePath();
   const setup = chatSetup({ deferred: { pollAfterMs: 60_000 } });
   let now = 1_000;
@@ -28,13 +26,11 @@ const resumesPollingDeferred = Effect.gen(function* () {
   opened.harness.resume();
   setup.settings.stream = { deferred: true };
   const id = (yield* awaited(opened.root.submit({ type: "input", content: "hi" }, context))).id;
-  yield* waitFor(() =>
-    runPromise(
-      Effect.gen(function* () {
-        const live = yield* awaited(opened.harness.snapshot(LiveDoc, opened.root.id, context));
-        return live?.generation?.deferred !== undefined;
-      }),
-    ),
+  yield* waitFor(
+    Effect.gen(function* () {
+      const live = yield* awaited(opened.harness.snapshot(LiveDoc, opened.root.id, context));
+      return live?.generation?.deferred !== undefined;
+    }),
   );
   const taskId = yield* runTaskId(opened.harness);
   yield* awaited(opened.harness.close(context));

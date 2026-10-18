@@ -18,8 +18,6 @@ import { allEntries, chatSetup, waitFor, awaited, addTool, dirnameOf, context } 
 afterEach(removeDirectories);
 
 const answersRealBash = Effect.gen(function* () {
-  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
   const path = yield* sqlitePath();
   const env = new NodeExecutionEnv({ cwd: dirnameOf(path) });
   const setup = chatSetup();
@@ -35,14 +33,12 @@ const answersRealBash = Effect.gen(function* () {
   ]);
   let opened = yield* open(path, setup, env);
   const id = (yield* awaited(opened.root.submit({ type: "input", content: "go" }, context))).id;
-  yield* waitFor(() =>
-    runPromise(
-      Effect.gen(function* () {
-        const slot = (yield* awaited(opened.harness.snapshot(LiveDoc, opened.root.id, context)))
-          ?.tools?.[0];
-        return slot?.output === "started\n";
-      }),
-    ),
+  yield* waitFor(
+    Effect.gen(function* () {
+      const slot = (yield* awaited(opened.harness.snapshot(LiveDoc, opened.root.id, context)))
+        ?.tools?.[0];
+      return slot?.output === "started\n";
+    }),
   );
   yield* awaited(opened.harness.close(context));
 

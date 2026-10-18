@@ -1,4 +1,4 @@
-import { defineDoc, type EntryId } from "@msa/durable";
+import { defineDoc } from "@msa/durable";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -10,7 +10,7 @@ import {
 import { documentWrites } from "./session-checkpoints-migrations-support.ts";
 import { context, createConversation, openTestSession } from "./session-support.ts";
 
-const selectsIncarnationAlive = Effect.gen(function* () {
+const selectsIncarnationAliveStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const Doc = defineDoc<{ value: string }>({
@@ -34,40 +34,50 @@ const selectsIncarnationAlive = Effect.gen(function* () {
       context,
     ),
   );
-  let createdAt!: EntryId;
-  let retiredAt!: EntryId;
-  let recreatedAt!: EntryId;
-  yield* awaited(
+  const createdAt = yield* awaited(
     session.commit(
       (tx) =>
         runPromise(
           Effect.gen(function* () {
-            createdAt = (yield* awaited(tx.appendEntry(conversationId, { kind: "create" }))).id;
+            const createdAt = (yield* awaited(tx.appendEntry(conversationId, { kind: "create" })))
+              .id;
             (yield* awaited(tx.doc(Doc, conversationId))).value = "old";
+            return createdAt;
           }),
         ),
       context,
     ),
   );
-  yield* awaited(
+  return { runPromise, Doc, session, conversationId, beforeCreation, createdAt };
+});
+
+const selectsIncarnationAliveStep2 = Effect.gen(function* () {
+  const { runPromise, Doc, session, conversationId, beforeCreation, createdAt } =
+    yield* selectsIncarnationAliveStep1;
+  const retiredAt = yield* awaited(
     session.commit(
       (tx) =>
         runPromise(
           Effect.gen(function* () {
-            retiredAt = (yield* awaited(tx.appendEntry(conversationId, { kind: "retire" }))).id;
+            const retiredAt = (yield* awaited(tx.appendEntry(conversationId, { kind: "retire" })))
+              .id;
             yield* awaited(tx.retireDoc(Doc, conversationId));
+            return retiredAt;
           }),
         ),
       context,
     ),
   );
-  yield* awaited(
+  const recreatedAt = yield* awaited(
     session.commit(
       (tx) =>
         runPromise(
           Effect.gen(function* () {
-            recreatedAt = (yield* awaited(tx.appendEntry(conversationId, { kind: "recreate" }))).id;
+            const recreatedAt = (yield* awaited(
+              tx.appendEntry(conversationId, { kind: "recreate" }),
+            )).id;
             (yield* awaited(tx.doc(Doc, conversationId))).value = "new";
+            return recreatedAt;
           }),
         ),
       context,
@@ -86,6 +96,11 @@ const selectsIncarnationAlive = Effect.gen(function* () {
   expect(yield* awaited(session.snapshotAsOf(Doc, conversationId, recreatedAt, context))).toEqual({
     value: "new",
   });
+  return { Doc, session, conversationId, recreatedAt };
+});
+
+const selectsIncarnationAlive = Effect.gen(function* () {
+  const { Doc, session, conversationId, recreatedAt } = yield* selectsIncarnationAliveStep2;
   yield* awaited(session.close(context));
   yield* awaited(
     expect(session.snapshotAsOf(Doc, conversationId, recreatedAt, context)).rejects.toThrow(

@@ -20,8 +20,6 @@ afterEach(() =>
 );
 
 const keepsUsageTotals = Effect.gen(function* () {
-  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
   const { directory, path } = yield* makeTempFile("msa-durable-usage-", "session.sqlite");
   directories.add(directory);
   const setup = chatSetup({ tokensPerSecond: 200, tokenSize: { min: 1, max: 1 } });
@@ -32,15 +30,13 @@ const keepsUsageTotals = Effect.gen(function* () {
   );
   yield* awaited(opened.root.submit({ type: "input", content: "b" }, context));
   const live = opened.harness;
-  yield* waitFor(() =>
-    runPromise(
-      Effect.gen(function* () {
-        return (
-          (yield* awaited(live.snapshot(LiveDoc, opened.root.id, context)))?.generation?.message !==
-          undefined
-        );
-      }),
-    ),
+  yield* waitFor(
+    Effect.gen(function* () {
+      return (
+        (yield* awaited(live.snapshot(LiveDoc, opened.root.id, context)))?.generation?.message !==
+        undefined
+      );
+    }),
   );
   yield* awaited(opened.harness.close(context));
   opened = yield* openChat(yield* awaited(openNodeSqliteStorage(path)), setup);

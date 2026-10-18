@@ -89,12 +89,10 @@ const keepsWaitingTask = Effect.gen(function* () {
   const waiter = yield* awaited(
     root.commit((tx) => tx.createTask(versioned(1), { on: [other] }, OWN_CONVERSATION), context),
   );
-  yield* until(() =>
-    runPromise(
-      Effect.gen(function* () {
-        return (yield* state(harness, waiter)).status === "waiting";
-      }),
-    ),
+  yield* until(
+    Effect.gen(function* () {
+      return (yield* state(harness, waiter)).status === "waiting";
+    }),
   );
   registration.dispose();
   open("other");
@@ -118,20 +116,16 @@ const keepsWaitingTask = Effect.gen(function* () {
 });
 
 const orphansAbortedWaiting = Effect.gen(function* () {
-  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
   const { harness, root, registry } = yield* openNodes();
   const registration = addTask(registry, versioned(1));
   const other = yield* awaited(start(root, "other"));
   const waiter = yield* awaited(
     root.commit((tx) => tx.createTask(versioned(1), { on: [other] }, OWN_CONVERSATION), context),
   );
-  yield* until(() =>
-    runPromise(
-      Effect.gen(function* () {
-        return (yield* state(harness, waiter)).status === "waiting";
-      }),
-    ),
+  yield* until(
+    Effect.gen(function* () {
+      return (yield* state(harness, waiter)).status === "waiting";
+    }),
   );
   registration.dispose();
   expect(yield* awaited(harness.abortTask(waiter, context))).toBe("marked");
@@ -207,16 +201,14 @@ const neverMigratesHeldStep2 = Effect.gen(function* () {
 });
 
 const neverMigratesHeld = Effect.gen(function* () {
-  const { runPromise, harness, root, registry, reports, holder } = yield* neverMigratesHeldStep2;
+  const { harness, root, registry, reports, holder } = yield* neverMigratesHeldStep2;
   const parent = yield* awaited(
     root.commit((tx) => tx.createTask(holder(1), null, OWN_CONVERSATION), context),
   );
-  yield* until(() =>
-    runPromise(
-      Effect.gen(function* () {
-        return (yield* state(harness, parent)).status === "completing";
-      }),
-    ),
+  yield* until(
+    Effect.gen(function* () {
+      return (yield* state(harness, parent)).status === "completing";
+    }),
   );
   addTask(registry, holder(2));
   open("child");
@@ -238,12 +230,10 @@ const treatsHeldTask = Effect.gen(function* () {
   const { harness, root } = yield* openNodes();
   spawnAndFinish("held", "child");
   const held = yield* awaited(start(root, "held"));
-  yield* until(() =>
-    runPromise(
-      Effect.gen(function* () {
-        return (yield* state(harness, held)).status === "completing";
-      }),
-    ),
+  yield* until(
+    Effect.gen(function* () {
+      return (yield* state(harness, held)).status === "completing";
+    }),
   );
   let rejection = "";
   script("reader", {
@@ -261,12 +251,10 @@ const treatsHeldTask = Effect.gen(function* () {
       ),
   });
   const reader = yield* awaited(start(root, "reader"));
-  yield* until(() =>
-    runPromise(
-      Effect.gen(function* () {
-        return (yield* state(harness, reader)).status === "waiting";
-      }),
-    ),
+  yield* until(
+    Effect.gen(function* () {
+      return (yield* state(harness, reader)).status === "waiting";
+    }),
   );
   expect(rejection).toBe(`Task ${held} is not terminal`);
   open("child");

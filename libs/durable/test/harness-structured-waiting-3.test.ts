@@ -50,33 +50,25 @@ const holdsFinishedTask = Effect.gen(function* () {
   let child: TaskId | undefined;
   script("parent", {
     run: (runtime, ctx) =>
-      runPromise(
-        Effect.gen(function* () {
-          const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
-          yield* awaited(
-            runtime.commit(
-              (tx) =>
-                runPromise(
-                  Effect.gen(function* () {
-                    (yield* awaited(tx.doc(TaskNotes, runtime.taskId))).text = "notes";
-                    child = yield* awaited(spawn(tx, runtime.taskId, "child"));
-                    return { status: "running", checkpoint: { phase: "resume", round: 1 } };
-                  }),
-                ),
-              ctx,
+      runtime
+        .commit(
+          (tx) =>
+            runPromise(
+              Effect.gen(function* () {
+                (yield* awaited(tx.doc(TaskNotes, runtime.taskId))).text = "notes";
+                child = yield* awaited(spawn(tx, runtime.taskId, "child"));
+                return { status: "running", checkpoint: { phase: "resume", round: 1 } };
+              }),
             ),
-          );
-        }),
-      ),
+          ctx,
+        )
+        .then(() => undefined),
   });
   const parent = yield* awaited(start(root, "parent"));
-  yield* until(() =>
-    runPromise(
-      Effect.gen(function* () {
-        return (yield* state(harness, parent)).status === "completing";
-      }),
-    ),
+  yield* until(
+    Effect.gen(function* () {
+      return (yield* state(harness, parent)).status === "completing";
+    }),
   );
   expect(yield* state(harness, parent)).toEqual({
     status: "completing",
@@ -122,43 +114,35 @@ const keepsHoldingOrdinaryStep2 = Effect.gen(function* () {
   let conversation: ConversationId | undefined;
   script("parent", {
     run: (runtime, ctx) =>
-      runPromise(
-        Effect.gen(function* () {
-          const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
-          yield* awaited(
-            runtime.commit(
-              (tx) =>
-                runPromise(
-                  Effect.gen(function* () {
-                    conversation = (yield* awaited(
-                      tx.createConversation({
-                        ownership: { kind: "task", taskId: runtime.taskId },
-                      }),
-                    )).id;
-                    yield* awaited(
-                      tx.createTask(
-                        Node,
-                        { name: "first" },
-                        { ...OWN_CONVERSATION, conversationId: conversation },
-                      ),
-                    );
-                    return { status: "running", checkpoint: { phase: "resume", round: 1 } };
+      runtime
+        .commit(
+          (tx) =>
+            runPromise(
+              Effect.gen(function* () {
+                conversation = (yield* awaited(
+                  tx.createConversation({
+                    ownership: { kind: "task", taskId: runtime.taskId },
                   }),
-                ),
-              ctx,
+                )).id;
+                yield* awaited(
+                  tx.createTask(
+                    Node,
+                    { name: "first" },
+                    { ...OWN_CONVERSATION, conversationId: conversation },
+                  ),
+                );
+                return { status: "running", checkpoint: { phase: "resume", round: 1 } };
+              }),
             ),
-          );
-        }),
-      ),
+          ctx,
+        )
+        .then(() => undefined),
   });
   const parent = yield* awaited(start(root, "parent"));
-  yield* until(() =>
-    runPromise(
-      Effect.gen(function* () {
-        return (yield* state(harness, parent)).status === "completing";
-      }),
-    ),
+  yield* until(
+    Effect.gen(function* () {
+      return (yield* state(harness, parent)).status === "completing";
+    }),
   );
   const child = (yield* awaited(harness.conversation(conversation!, context)))!;
   return { harness, parent, child };
@@ -194,24 +178,18 @@ const abortsWorkBelow = Effect.fn("abortsWorkBelow")(function* (
   let child: TaskId | undefined;
   script("parent", {
     run: (runtime, ctx) =>
-      runPromise(
-        Effect.gen(function* () {
-          const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
-          yield* awaited(
-            runtime.commit(
-              (tx) =>
-                runPromise(
-                  Effect.gen(function* () {
-                    child = yield* awaited(spawn(tx, runtime.taskId, "child"));
-                    return { status: "running", checkpoint: { phase: "resume", round: 1 } };
-                  }),
-                ),
-              ctx,
+      runtime
+        .commit(
+          (tx) =>
+            runPromise(
+              Effect.gen(function* () {
+                child = yield* awaited(spawn(tx, runtime.taskId, "child"));
+                return { status: "running", checkpoint: { phase: "resume", round: 1 } };
+              }),
             ),
-          );
-        }),
-      ),
+          ctx,
+        )
+        .then(() => undefined),
     resume: (runtime, ctx) =>
       runPromise(
         Effect.gen(function* () {
@@ -243,32 +221,24 @@ const onlyMarksCompleting = Effect.gen(function* () {
   let child: TaskId | undefined;
   script("parent", {
     run: (runtime, ctx) =>
-      runPromise(
-        Effect.gen(function* () {
-          const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
-          yield* awaited(
-            runtime.commit(
-              (tx) =>
-                runPromise(
-                  Effect.gen(function* () {
-                    child = yield* awaited(spawn(tx, runtime.taskId, "child"));
-                    return { status: "running", checkpoint: { phase: "resume", round: 1 } };
-                  }),
-                ),
-              ctx,
+      runtime
+        .commit(
+          (tx) =>
+            runPromise(
+              Effect.gen(function* () {
+                child = yield* awaited(spawn(tx, runtime.taskId, "child"));
+                return { status: "running", checkpoint: { phase: "resume", round: 1 } };
+              }),
             ),
-          );
-        }),
-      ),
+          ctx,
+        )
+        .then(() => undefined),
   });
   const parent = yield* awaited(start(root, "parent"));
-  yield* until(() =>
-    runPromise(
-      Effect.gen(function* () {
-        return (yield* state(harness, parent)).status === "completing";
-      }),
-    ),
+  yield* until(
+    Effect.gen(function* () {
+      return (yield* state(harness, parent)).status === "completing";
+    }),
   );
   expect(yield* awaited(harness.abortTask(parent, context))).toBe("marked");
   expect(yield* awaited(outcomeOf(harness, child!))).toBe("aborted");

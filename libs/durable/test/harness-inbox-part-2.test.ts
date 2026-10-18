@@ -236,15 +236,12 @@ const writesLastHandoffStep1 = Effect.gen(function* () {
   yield* toolRunning(harness, root);
   const f = yield* awaited(root.submit({ type: "input", content: "f" }, context));
   secondGate.resolve();
-  yield* waitFor(() =>
-    runPromise(
-      Effect.gen(function* () {
-        return (
-          (yield* awaited(harness.snapshot(LiveDoc, root.id, context)))?.tools?.[1]?.status ===
-          "done"
-        );
-      }),
-    ),
+  yield* waitFor(
+    Effect.gen(function* () {
+      return (
+        (yield* awaited(harness.snapshot(LiveDoc, root.id, context)))?.tools?.[1]?.status === "done"
+      );
+    }),
   );
   firstGate.resolve();
   yield* awaited(f.wait(context));

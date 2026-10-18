@@ -86,12 +86,10 @@ const driveStep1 = Effect.fn("driveStep1")(function* (
     }
   });
   const submission = yield* awaited(root.submit({ type: "input", content: "go" }, context));
-  yield* waitFor(() =>
-    runPromise(
-      Effect.gen(function* () {
-        return (yield* awaited(live(harness)))?.tools?.[0]?.status === "running";
-      }),
-    ),
+  yield* waitFor(
+    Effect.gen(function* () {
+      return (yield* awaited(live(harness)))?.tools?.[0]?.status === "running";
+    }),
   );
   const push = (action: (api: ToolExecutionApi) => Promise<boolean>): void => {
     actions.push(action);

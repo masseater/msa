@@ -235,21 +235,16 @@ describe("tool rounds", () => {
 });
 
 const keepsRunControlStep1 = Effect.gen(function* () {
-  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
   const { setup, faulted, failure, storage, harness, root } = yield* faultedGenerationSetup();
   faulted.opened = harness;
   const submission = yield* awaited(root.submit({ type: "input", content: "hi" }, context));
-  yield* waitFor(() =>
-    runPromise(
-      Effect.gen(function* () {
-        const generation = (yield* awaited(harness.snapshot(LiveDoc, root.id, context)))?.run
-          ?.taskId;
-        return (
-          generation !== undefined && (yield* state(harness, generation)).status === "completing"
-        );
-      }),
-    ),
+  yield* waitFor(
+    Effect.gen(function* () {
+      const generation = (yield* awaited(harness.snapshot(LiveDoc, root.id, context)))?.run?.taskId;
+      return (
+        generation !== undefined && (yield* state(harness, generation)).status === "completing"
+      );
+    }),
   );
   const generation = (yield* awaited(harness.snapshot(LiveDoc, root.id, context)))!.run!.taskId;
   expect(yield* state(harness, generation)).toMatchObject({

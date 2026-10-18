@@ -98,22 +98,18 @@ const followsNoWait = Effect.gen(function* () {
       context,
     ),
   );
-  yield* until(() =>
-    runPromise(
-      Effect.gen(function* () {
-        return (yield* state(harness, ids["b"]!)).status === "waiting";
-      }),
-    ),
+  yield* until(
+    Effect.gen(function* () {
+      return (yield* state(harness, ids["b"]!)).status === "waiting";
+    }),
   );
   expect(yield* awaited(harness.abortTask(ids["b"]!, context))).toBe("marked");
   yield* until(() => log.includes("abort:c"));
   aWaits.resolve();
-  yield* until(() =>
-    runPromise(
-      Effect.gen(function* () {
-        return (yield* state(harness, ids["a"]!)).status === "waiting";
-      }),
-    ),
+  yield* until(
+    Effect.gen(function* () {
+      return (yield* state(harness, ids["a"]!)).status === "waiting";
+    }),
   );
   cleanup.resolve();
   expect(yield* awaited(outcomeOf(harness, ids["b"]!))).toBe("aborted");
@@ -220,13 +216,11 @@ const keepsRunningPhasesStep1 = Effect.gen(function* () {
 });
 
 const keepsRunningPhases = Effect.gen(function* () {
-  const { runPromise, harness, ids, parent } = yield* keepsRunningPhasesStep1;
-  yield* until(() =>
-    runPromise(
-      Effect.gen(function* () {
-        return (yield* state(harness, parent)).status === "waiting";
-      }),
-    ),
+  const { harness, ids, parent } = yield* keepsRunningPhasesStep1;
+  yield* until(
+    Effect.gen(function* () {
+      return (yield* state(harness, parent)).status === "waiting";
+    }),
   );
   open("b");
   expect(yield* settled(harness.waitForTask(ids[1]!, context))).toBe(true);

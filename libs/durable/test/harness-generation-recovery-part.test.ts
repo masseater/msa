@@ -30,7 +30,7 @@ const failsNoModelStep1 = Effect.gen(function* () {
 });
 
 const failsNoModel = Effect.gen(function* () {
-  const { runPromise, path, setup, busy } = yield* failsNoModelStep1;
+  const { path, setup, busy } = yield* failsNoModelStep1;
   let opened = yield* open(path, setup);
   opened.harness.resume();
   const requesting = (yield* awaited(
@@ -55,13 +55,11 @@ const failsNoModel = Effect.gen(function* () {
   opened.harness.resume();
   const polling = (yield* awaited(opened.root.submit({ type: "input", content: "two" }, context)))
     .id;
-  yield* waitFor(() =>
-    runPromise(
-      Effect.gen(function* () {
-        const live = yield* awaited(opened.harness.snapshot(LiveDoc, opened.root.id, context));
-        return live?.generation?.deferred !== undefined;
-      }),
-    ),
+  yield* waitFor(
+    Effect.gen(function* () {
+      const live = yield* awaited(opened.harness.snapshot(LiveDoc, opened.root.id, context));
+      return live?.generation?.deferred !== undefined;
+    }),
   );
   yield* awaited(opened.harness.close(context));
 

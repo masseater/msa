@@ -60,12 +60,10 @@ const waitsAllSettledTasks = Effect.gen(function* () {
       ),
   });
   const parent = yield* awaited(start(root, "parent"));
-  yield* until(() =>
-    runPromise(
-      Effect.gen(function* () {
-        return (yield* state(harness, parent)).status === "waiting";
-      }),
-    ),
+  yield* until(
+    Effect.gen(function* () {
+      return (yield* state(harness, parent)).status === "waiting";
+    }),
   );
   open("live", "failed");
   expect(yield* awaited(outcomeOf(harness, parent))).toBe("completed");

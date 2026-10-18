@@ -67,8 +67,6 @@ function chain(harness: () => Harness, name: string, child: string): { id?: Task
 }
 
 const runsAbortHandlers = Effect.gen(function* () {
-  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
   let opened: Opened | undefined;
   const b = chain(() => opened!.harness, "a", "b");
   const c = chain(() => opened!.harness, "b", "c");
@@ -76,12 +74,10 @@ const runsAbortHandlers = Effect.gen(function* () {
   const { harness, root } = opened;
   const a = yield* awaited(start(root, "a"));
   yield* until(() => log.includes("run:c"));
-  yield* until(() =>
-    runPromise(
-      Effect.gen(function* () {
-        return (yield* state(harness, c.id!)).status === "running";
-      }),
-    ),
+  yield* until(
+    Effect.gen(function* () {
+      return (yield* state(harness, c.id!)).status === "running";
+    }),
   );
   expect(yield* awaited(harness.abortTask(a, context))).toBe("marked");
   expect(yield* awaited(outcomeOf(harness, a))).toBe("aborted");
@@ -97,20 +93,16 @@ const runsAbortHandlers = Effect.gen(function* () {
 });
 
 const doesNotWait = Effect.gen(function* () {
-  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
   const { harness, root } = yield* openNodes();
   const other = yield* awaited(start(root, "other"));
   script("parent", {
     run: (runtime, ctx) => runtime.commit(() => waitOn([other], "allSettled"), ctx),
   });
   const parent = yield* awaited(start(root, "parent"));
-  yield* until(() =>
-    runPromise(
-      Effect.gen(function* () {
-        return (yield* state(harness, parent)).status === "waiting";
-      }),
-    ),
+  yield* until(
+    Effect.gen(function* () {
+      return (yield* state(harness, parent)).status === "waiting";
+    }),
   );
   yield* awaited(harness.abortTask(parent, context));
   expect(yield* awaited(outcomeOf(harness, parent))).toBe("aborted");
@@ -156,12 +148,10 @@ const reportsAbortMarked = Effect.gen(function* () {
       ),
   });
   const parent = yield* awaited(start(root, "parent"));
-  yield* until(() =>
-    runPromise(
-      Effect.gen(function* () {
-        return (yield* state(harness, parent)).status === "waiting";
-      }),
-    ),
+  yield* until(
+    Effect.gen(function* () {
+      return (yield* state(harness, parent)).status === "waiting";
+    }),
   );
   yield* awaited(harness.abortTask(parent, context));
   yield* until(() => log.includes("abort:child"));

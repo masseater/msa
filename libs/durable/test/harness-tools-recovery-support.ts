@@ -100,16 +100,12 @@ export function text(message: ToolResultMessage | undefined): string {
 }
 
 export const toolTaskId = Effect.fn("toolTaskId")(function* (harness: Harness) {
-  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
   let id: TaskId | undefined;
-  yield* waitFor(() =>
-    runPromise(
-      Effect.gen(function* () {
-        id = (yield* awaited(harness.snapshot(LiveDoc, 1 as never, context)))?.tools?.[0]?.taskId;
-        return id !== undefined;
-      }),
-    ),
+  yield* waitFor(
+    Effect.gen(function* () {
+      id = (yield* awaited(harness.snapshot(LiveDoc, 1 as never, context)))?.tools?.[0]?.taskId;
+      return id !== undefined;
+    }),
   );
   return id!;
 });

@@ -113,16 +113,12 @@ export const toolRunning = Effect.fn("toolRunning")(function* (
   harness: Harness,
   root: Conversation,
 ) {
-  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
-  yield* waitFor(() =>
-    runPromise(
-      Effect.gen(function* () {
-        return (
-          (yield* awaited(harness.snapshot(LiveDoc, root.id, context)))?.tools?.[0]?.status ===
-          "running"
-        );
-      }),
-    ),
+  yield* waitFor(
+    Effect.gen(function* () {
+      return (
+        (yield* awaited(harness.snapshot(LiveDoc, root.id, context)))?.tools?.[0]?.status ===
+        "running"
+      );
+    }),
   );
 });

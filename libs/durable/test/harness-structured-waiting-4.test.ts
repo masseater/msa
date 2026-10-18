@@ -66,12 +66,10 @@ const letsBackgroundTask = Effect.gen(function* () {
       context,
     ),
   );
-  yield* until(() =>
-    runPromise(
-      Effect.gen(function* () {
-        return (yield* state(harness, background)).status === "waiting";
-      }),
-    ),
+  yield* until(
+    Effect.gen(function* () {
+      return (yield* state(harness, background)).status === "waiting";
+    }),
   );
   open("owner");
   expect(yield* awaited(outcomeOf(harness, background))).toBe("completed");
@@ -121,17 +119,15 @@ const rejectsCycleHoldStep1 = Effect.gen(function* () {
       ),
   });
   ids["orchestrator"] = yield* awaited(start(root, "orchestrator"));
-  return { runPromise, harness, root, ids };
+  return { harness, root, ids };
 });
 
 const rejectsCycleHold = Effect.gen(function* () {
-  const { runPromise, harness, root, ids } = yield* rejectsCycleHoldStep1;
-  yield* until(() =>
-    runPromise(
-      Effect.gen(function* () {
-        return (yield* state(harness, ids["orchestrator"]!)).status === "completing";
-      }),
-    ),
+  const { harness, root, ids } = yield* rejectsCycleHoldStep1;
+  yield* until(
+    Effect.gen(function* () {
+      return (yield* state(harness, ids["orchestrator"]!)).status === "completing";
+    }),
   );
   ids["reviewer"] = yield* awaited(start(root, "reviewer"));
   const outcomes = yield* awaited(

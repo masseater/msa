@@ -90,18 +90,9 @@ const backgroundWorkSetup = Effect.fn("backgroundWorkSetup")(function* () {
         ),
     },
     abort: (_task, runtime, abortContext) =>
-      runPromise(
-        Effect.asVoid(
-          Effect.suspend(() =>
-            awaited(
-              runtime.commit(
-                () => ({ status: "terminal", outcome: { status: "aborted" } }),
-                abortContext,
-              ),
-            ),
-          ),
-        ),
-      ),
+      runtime
+        .commit(() => ({ status: "terminal", outcome: { status: "aborted" } }), abortContext)
+        .then(() => undefined),
   });
   setup.registry.install(defineExtension({ name: "background", tasks: [Background] }));
   return { path, setup, started, Background };

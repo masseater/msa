@@ -23,6 +23,7 @@ import {
   flush,
   completed,
   countingReader,
+  type Deferred,
   deferred,
   eventually,
   openTasks,
@@ -64,41 +65,30 @@ describe("definition handover", () => {
     Effect.runPromise(keepsRunningUnder));
 });
 
-const rejectsRuntimeCommit = Effect.gen(function* () {
-  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+type HandoverSeen = {
+  held?: ReturnType<ControlledStorage["holdCommits"]>;
+  oldRuntime?: TaskRuntime<null, Handover, null, object>;
+  harness?: OpenHarness;
+};
 
-  const log: string[] = [];
-  const gate = deferred();
-  const storage = new ControlledStorage();
-  let held: ReturnType<ControlledStorage["holdCommits"]> | undefined;
-  let oldRuntime: TaskRuntime<null, Handover, null, object> | undefined;
-  let harnessRef: OpenHarness | undefined;
-  const registry = createRegistry();
-  const Old = defineTask<null, Handover, null>({
+const queuedHandoverTask = (gate: Deferred, storage: ControlledStorage, seen: HandoverSeen) =>
+  defineTask<null, Handover, null>({
     name: "test.handover",
     version: 1,
     initial: () => ({ phase: "a" }),
     phases: {
       a: (task, runtime, ctx) =>
-        runPromise(
+        Effect.runPromise(
           Effect.gen(function* () {
-            const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
-            oldRuntime = runtime;
+            seen.oldRuntime = runtime;
             yield* awaited(gate.promise);
             yield* awaited(
               runtime.commit(() => ({ status: "running", checkpoint: { phase: "b" } }), ctx),
             );
-            held = storage.holdCommits();
-            void harnessRef!.commit(
+            seen.held = storage.holdCommits();
+            void seen.harness!.commit(
               (tx) =>
-                runPromise(
-                  Effect.asVoid(
-                    Effect.suspend(() =>
-                      awaited(tx.appendEntry(task.conversationId, { kind: "blocker" })),
-                    ),
-                  ),
-                ),
+                tx.appendEntry(task.conversationId, { kind: "blocker" }).then(() => undefined),
               ctx,
             );
           }),
@@ -108,19 +98,27 @@ const rejectsRuntimeCommit = Effect.gen(function* () {
     },
     abort: () => Promise.resolve(),
   });
+
+const rejectsRuntimeCommit = Effect.gen(function* () {
+  const log: string[] = [];
+  const gate = deferred();
+  const storage = new ControlledStorage();
+  const seen: HandoverSeen = {};
+  const registry = createRegistry();
+  const Old = queuedHandoverTask(gate, storage, seen);
   addTask(registry, Old);
   const { harness } = yield* openTasks(storage, [], { registry });
-  harnessRef = harness;
+  seen.harness = harness;
   const id = yield* createIn(harness, Old);
   harness.resume();
-  yield* eventually(() => oldRuntime !== undefined);
+  yield* eventually(() => seen.oldRuntime !== undefined);
   addTask(registry, handoverTask("new", 1, log));
   gate.resolve();
-  yield* eventually(() => held !== undefined);
-  yield* awaited(held!.entered);
+  yield* eventually(() => seen.held !== undefined);
+  yield* awaited(seen.held!.entered);
   yield* flush;
-  const late = oldRuntime!.commit(() => completed(null), context);
-  held!.release();
+  const late = seen.oldRuntime!.commit(() => completed(null), context);
+  seen.held!.release();
   yield* awaited(expect(late).rejects.toThrow("invocation has ended"));
   yield* awaited(harness.waitForTask(id, context));
   expect(log).toEqual(["new:b start", "new:b end", "new:c"]);

@@ -193,8 +193,6 @@ describe("generation", () => {
 });
 
 const commitsNoPartial = Effect.gen(function* () {
-  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
   const base = chatSetup();
   const handle = {
     provider: "faux",
@@ -212,12 +210,10 @@ const commitsNoPartial = Effect.gen(function* () {
   const { harness, root } = yield* openChat(new MemoryStorage(), setup);
   const values = livePublications(harness);
   const submission = yield* awaited(root.submit({ type: "input", content: "hi" }, context));
-  yield* waitFor(() =>
-    runPromise(
-      Effect.gen(function* () {
-        return (yield* awaited(live(harness, root)))?.generation?.deferred !== undefined;
-      }),
-    ),
+  yield* waitFor(
+    Effect.gen(function* () {
+      return (yield* awaited(live(harness, root)))?.generation?.deferred !== undefined;
+    }),
   );
   expect(values.some((value) => value.generation?.message !== undefined)).toBe(false);
   yield* awaited(harness.abortTask((yield* awaited(live(harness, root)))!.run!.taskId, context));

@@ -40,8 +40,6 @@ afterEach(() =>
 );
 
 const keepsBackgroundSummaryStep1 = Effect.gen(function* () {
-  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
   const chat = yield* open({ contextWindow: 2000 });
   yield* history(chat);
   chat.setup.settings.compaction = BACKGROUND;
@@ -60,12 +58,10 @@ const keepsBackgroundSummaryStep1 = Effect.gen(function* () {
     chat.root.submit({ type: "input", content: text("u4", 100) }, context),
   );
   yield* awaited(Promise.all([failed.promise, summaryReached.promise]));
-  yield* waitFor(() =>
-    runPromise(
-      Effect.gen(function* () {
-        return (yield* awaited(live(chat))).generation?.retry !== undefined;
-      }),
-    ),
+  yield* waitFor(
+    Effect.gen(function* () {
+      return (yield* awaited(live(chat))).generation?.retry !== undefined;
+    }),
   );
   const [background] = yield* compactionTasks(chat);
   summaryGate.resolve();

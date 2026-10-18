@@ -54,16 +54,12 @@ export const runTask = Effect.fn("runTask")(function* (
   harness: Harness,
   conversation: Conversation,
 ) {
-  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
   let taskId: TaskId | undefined;
-  yield* waitFor(() =>
-    runPromise(
-      Effect.gen(function* () {
-        taskId = (yield* awaited(live(harness, conversation)))?.run?.taskId;
-        return taskId !== undefined;
-      }),
-    ),
+  yield* waitFor(
+    Effect.gen(function* () {
+      taskId = (yield* awaited(live(harness, conversation)))?.run?.taskId;
+      return taskId !== undefined;
+    }),
   );
   return taskId!;
 });

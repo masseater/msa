@@ -142,7 +142,7 @@ describe("Session conversation document forks", () => {
     Effect.runPromise(coalescesTypedMigration));
 });
 
-const copiesIncarnationAlive = Effect.gen(function* () {
+const copiesIncarnationAliveStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const Doc = defineDoc<{ value: string }>({
@@ -155,40 +155,46 @@ const copiesIncarnationAlive = Effect.gen(function* () {
   });
   const { session } = openTestSession();
   const parentId = yield* awaited(createConversation(session));
-  let oldAt!: EntryId;
-  let retiredAt!: EntryId;
-  let newAt!: EntryId;
-  yield* awaited(
+  const oldAt = yield* awaited(
     session.commit(
       (tx) =>
         runPromise(
           Effect.gen(function* () {
-            oldAt = (yield* awaited(tx.appendEntry(parentId, { kind: "old" }))).id;
+            const oldAt = (yield* awaited(tx.appendEntry(parentId, { kind: "old" }))).id;
             (yield* awaited(tx.doc(Doc, parentId))).value = "old";
+            return oldAt;
           }),
         ),
       context,
     ),
   );
-  yield* awaited(
+  const retiredAt = yield* awaited(
     session.commit(
       (tx) =>
         runPromise(
           Effect.gen(function* () {
-            retiredAt = (yield* awaited(tx.appendEntry(parentId, { kind: "retired" }))).id;
+            const retiredAt = (yield* awaited(tx.appendEntry(parentId, { kind: "retired" }))).id;
             yield* awaited(tx.retireDoc(Doc, parentId));
+            return retiredAt;
           }),
         ),
       context,
     ),
   );
-  yield* awaited(
+  return { runPromise, Doc, session, parentId, oldAt, retiredAt };
+});
+
+const copiesIncarnationAlive = Effect.gen(function* () {
+  const { runPromise, Doc, session, parentId, oldAt, retiredAt } =
+    yield* copiesIncarnationAliveStep1;
+  const newAt = yield* awaited(
     session.commit(
       (tx) =>
         runPromise(
           Effect.gen(function* () {
-            newAt = (yield* awaited(tx.appendEntry(parentId, { kind: "new" }))).id;
+            const newAt = (yield* awaited(tx.appendEntry(parentId, { kind: "new" }))).id;
             (yield* awaited(tx.doc(Doc, parentId))).value = "new";
+            return newAt;
           }),
         ),
       context,

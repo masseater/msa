@@ -93,7 +93,7 @@ const letsToolOwnsStep1 = Effect.gen(function* () {
 });
 
 const letsToolOwns = Effect.gen(function* () {
-  const { runPromise, setup } = yield* letsToolOwnsStep1;
+  const { setup } = yield* letsToolOwnsStep1;
   setup.faux.setResponses([
     toolCalls(["delegate", "c1"]),
     fauxAssistantMessage([fauxText("done")]),
@@ -101,15 +101,12 @@ const letsToolOwns = Effect.gen(function* () {
   const { harness, root } = yield* openChat(new MemoryStorage(), setup);
   const { stream, events } = yield* listen(harness, root);
   const submission = yield* awaited(root.submit({ type: "input", content: "go" }, context));
-  yield* waitFor(() =>
-    runPromise(
-      Effect.gen(function* () {
-        return (
-          (yield* awaited(harness.snapshot(LiveDoc, root.id, context)))?.tools?.[0]?.status ===
-          "done"
-        );
-      }),
-    ),
+  yield* waitFor(
+    Effect.gen(function* () {
+      return (
+        (yield* awaited(harness.snapshot(LiveDoc, root.id, context)))?.tools?.[0]?.status === "done"
+      );
+    }),
   );
   const live = (yield* awaited(harness.snapshot(LiveDoc, root.id, context)))!;
   const tool = live.tools![0]!.taskId!;

@@ -51,23 +51,18 @@ describe("generation", () => {
 });
 
 const convertsCommittedPartial = Effect.gen(function* () {
-  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
   const setup = chatSetup({ tokensPerSecond: 20, tokenSize: { min: 1, max: 1 } });
   setup.faux.setResponses([fauxAssistantMessage("x".repeat(400))]);
   const { harness, root } = yield* openChat(new MemoryStorage(), setup);
   harness.resume();
   const submission = yield* awaited(root.submit({ type: "input", content: "hi" }, context));
   const taskId = yield* runTask(harness, root);
-  yield* waitFor(() =>
-    runPromise(
-      Effect.gen(function* () {
-        return (
-          textOf((yield* awaited(live(harness, root)))?.generation?.message as Message) !==
-          undefined
-        );
-      }),
-    ),
+  yield* waitFor(
+    Effect.gen(function* () {
+      return (
+        textOf((yield* awaited(live(harness, root)))?.generation?.message as Message) !== undefined
+      );
+    }),
   );
   const partial = (yield* awaited(live(harness, root)))!.generation!.message!;
   expect(yield* awaited(harness.abortTask(taskId, context))).toBe("marked");
@@ -88,8 +83,6 @@ const convertsCommittedPartial = Effect.gen(function* () {
 });
 
 const cancelsDeferredResponse = Effect.gen(function* () {
-  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
   const setup = chatSetup({ deferred: { pendingFetches: 100, pollAfterMs: 60_000 } });
   setup.faux.setResponses([fauxAssistantMessage("never")]);
   setup.settings.stream = { deferred: true };
@@ -97,12 +90,10 @@ const cancelsDeferredResponse = Effect.gen(function* () {
   harness.resume();
   const submission = yield* awaited(root.submit({ type: "input", content: "hi" }, context));
   const taskId = yield* runTask(harness, root);
-  yield* waitFor(() =>
-    runPromise(
-      Effect.gen(function* () {
-        return (yield* awaited(live(harness, root)))?.generation?.deferred !== undefined;
-      }),
-    ),
+  yield* waitFor(
+    Effect.gen(function* () {
+      return (yield* awaited(live(harness, root)))?.generation?.deferred !== undefined;
+    }),
   );
   yield* awaited(harness.abortTask(taskId, context));
   expect(yield* awaited(submission.wait(context))).toMatchObject({
@@ -123,8 +114,6 @@ describe("generation", () => {
 });
 
 const reportsFailedDeferred = Effect.gen(function* () {
-  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
   const base = chatSetup({ deferred: { pendingFetches: 100, pollAfterMs: 60_000 } });
   base.faux.setResponses([fauxAssistantMessage("never")]);
   const models = new Proxy(base.models, {
@@ -141,12 +130,10 @@ const reportsFailedDeferred = Effect.gen(function* () {
   harness.resume();
   const submission = yield* awaited(root.submit({ type: "input", content: "hi" }, context));
   const taskId = yield* runTask(harness, root);
-  yield* waitFor(() =>
-    runPromise(
-      Effect.gen(function* () {
-        return (yield* awaited(live(harness, root)))?.generation?.deferred !== undefined;
-      }),
-    ),
+  yield* waitFor(
+    Effect.gen(function* () {
+      return (yield* awaited(live(harness, root)))?.generation?.deferred !== undefined;
+    }),
   );
   yield* awaited(harness.abortTask(taskId, context));
   expect(yield* awaited(submission.wait(context))).toMatchObject({

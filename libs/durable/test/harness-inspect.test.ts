@@ -190,8 +190,6 @@ function expectPausedStates(
 }
 
 const derivesEveryLive = Effect.gen(function* () {
-  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
   const gate = deferred();
   const { harness, ids, counts } = yield* openInspected(gate);
 
@@ -203,16 +201,14 @@ const derivesEveryLive = Effect.gen(function* () {
   yield* eventually(() => counts.migrations === 1);
   yield* awaited(harness.waitForTask(ids.migrating, context));
   let running = yield* awaited(harness.inspect(context));
-  yield* waitFor(() =>
-    runPromise(
-      Effect.gen(function* () {
-        running = yield* awaited(harness.inspect(context));
-        return (
-          stateOf(running.tasks, ids.gate)?.kind === "running" &&
-          stateOf(running.tasks, ids.dependent)?.kind === "waiting"
-        );
-      }),
-    ),
+  yield* waitFor(
+    Effect.gen(function* () {
+      running = yield* awaited(harness.inspect(context));
+      return (
+        stateOf(running.tasks, ids.gate)?.kind === "running" &&
+        stateOf(running.tasks, ids.dependent)?.kind === "waiting"
+      );
+    }),
   );
   expect(stateOf(running.tasks, ids.dependent)).toEqual({ kind: "waiting", on: [ids.gate] });
   expect(running.scheduling).toBe("running");

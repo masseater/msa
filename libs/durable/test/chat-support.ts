@@ -95,23 +95,15 @@ export function textOf(message: Message | undefined): string | undefined {
   return text?.type === "text" ? text.text : undefined;
 }
 
-export const waitFor = Effect.fn("waitFor")(function* (
-  check: () => boolean | Promise<boolean>,
-  timeoutMs = 5000,
-) {
-  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+export type Check = Effect.Effect<boolean> | (() => boolean | Promise<boolean>);
 
+export const waitFor = Effect.fn("waitFor")(function* (check: Check, timeoutMs = 5000) {
+  const probe = Effect.isEffect(check) ? check : Effect.suspend(() => awaited(check()));
   const deadline = currentTimeMillis() + timeoutMs;
-  const poll = (): Promise<void> =>
-    runPromise(
-      Effect.gen(function* () {
-        if (yield* awaited(check())) return;
-        if (currentTimeMillis() > deadline) throw new Error("Condition was not reached");
-        yield* Effect.sleep(5);
-        yield* awaited(poll());
-      }),
-    );
-  yield* awaited(poll());
+  while (!(yield* probe)) {
+    if (currentTimeMillis() > deadline) throw new Error("Condition was not reached");
+    yield* Effect.sleep(5);
+  }
 });
 
 export function unanswered(): { readonly step: FauxResponseStep; readonly reached: Promise<void> } {

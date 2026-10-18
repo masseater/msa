@@ -128,12 +128,10 @@ const rejectsNewOwnedStep1 = Effect.gen(function* () {
       ),
   });
   const parent = yield* awaited(start(root, "parent"));
-  yield* until(() =>
-    runPromise(
-      Effect.gen(function* () {
-        return (yield* state(harness, parent)).status === "completing";
-      }),
-    ),
+  yield* until(
+    Effect.gen(function* () {
+      return (yield* state(harness, parent)).status === "completing";
+    }),
   );
   const createChild = () => root.commit((tx) => spawn(tx, parent, "late"), context);
   const createConversation = () =>
@@ -249,12 +247,10 @@ const cannotCreateChild = Effect.gen(function* () {
       ),
   });
   const host = yield* awaited(start(root, "host"));
-  yield* until(() =>
-    runPromise(
-      Effect.gen(function* () {
-        return (yield* state(harness, host)).status === "completing";
-      }),
-    ),
+  yield* until(
+    Effect.gen(function* () {
+      return (yield* state(harness, host)).status === "completing";
+    }),
   );
   expect(yield* settled(harness.waitForTask(host, context))).toBe(false);
   open("inner");

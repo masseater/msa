@@ -62,19 +62,15 @@ const ordinaryWorkIdle = Effect.gen(function* () {
 });
 
 const enablesSchedulingRight = Effect.gen(function* () {
-  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
   const setup = chatSetup();
   const faux = script(setup);
   const { harness, root } = yield* openChat(new MemoryStorage(), setup);
   setup.settings.compaction = { ...MANUAL, keepRecentTokens: 10 };
   const id = yield* awaited(root.compact(undefined, context));
-  yield* waitFor(() =>
-    runPromise(
-      Effect.gen(function* () {
-        return (yield* awaited(harness.getTask(id, context)))?.state.status === "terminal";
-      }),
-    ),
+  yield* waitFor(
+    Effect.gen(function* () {
+      return (yield* awaited(harness.getTask(id, context)))?.state.status === "terminal";
+    }),
   );
   expect((yield* awaited(harness.getTask(id, context)))?.state).toMatchObject({
     outcome: { status: "completed", result: {} },

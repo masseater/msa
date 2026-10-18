@@ -36,12 +36,11 @@ afterEach(() =>
   ),
 );
 
-const cascadesThroughTask = Effect.gen(function* () {
+const cascadesThroughTaskStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const { harness, root } = yield* openNodes();
   let b: TaskId | undefined;
-  let x: TaskId | undefined;
   script("a", {
     run: (runtime, ctx) =>
       runtime.commit(
@@ -55,6 +54,12 @@ const cascadesThroughTask = Effect.gen(function* () {
         ctx,
       ),
   });
+  return { runPromise, harness, root };
+});
+
+const cascadesThroughTask = Effect.gen(function* () {
+  const { runPromise, harness, root } = yield* cascadesThroughTaskStep1;
+  let x: TaskId | undefined;
   script("b", {
     run: (runtime, ctx) =>
       runPromise(
