@@ -13,7 +13,7 @@ export class EmbeddingClient {
   private dimension: number | undefined;
 
   constructor(options: EmbeddingClientOptions) {
-    this.endpoint = `${options.baseUrl.replace(/\/+$/, "")}/embeddings`;
+    this.endpoint = `${options.baseUrl.replace(/\/+$/u, "")}/embeddings`;
     this.model = options.model;
     this.apiKey = options.apiKey;
     this.timeoutMs = options.timeoutMs;

@@ -1,0 +1,71 @@
+import { getReadmePath } from "../../../config.ts";
+import { formatPathRelativeToCwdOrAbsolute } from "../../../utils/paths.ts";
+import { pathOperations } from "../../platform/index.ts";
+import { resolveToCwd } from "../path-utils.ts";
+import { str } from "../render-utils.ts";
+
+export interface CompactReadClassification {
+  kind: "docs" | "resource" | "skill";
+  label: string;
+}
+const COMPACT_RESOURCE_FILE_NAMES = new Set([
+  "AGENTS.override.md",
+  "AGENTS.md",
+  "AGENTS.MD",
+  "CLAUDE.md",
+  "CLAUDE.MD",
+]);
+type ClassificationArgs = { path?: string; file_path?: string };
+
+function toPosixPath(filePath: string): string {
+  return filePath.split(pathOperations.sep).join("/");
+}
+function getMsaDocsClassification(absolutePath: string): CompactReadClassification | undefined {
+  const packageRoot = pathOperations.dirname(getReadmePath());
+  const relativePath = pathOperations.relative(
+    pathOperations.resolve(packageRoot),
+    pathOperations.resolve(absolutePath),
+  );
+  if (
+    relativePath === "" ||
+    relativePath === ".." ||
+    relativePath.startsWith(`..${pathOperations.sep}`) ||
+    pathOperations.isAbsolute(relativePath)
+  ) {
+    return undefined;
+  }
+
+  const label = toPosixPath(relativePath);
+  if (label === "README.md" || label.startsWith("docs/") || label.startsWith("examples/")) {
+    return { kind: "docs", label };
+  }
+  return undefined;
+}
+export function getCompactReadClassification({
+  args,
+  cwd,
+}: {
+  args: ClassificationArgs | undefined;
+  cwd: string;
+}): CompactReadClassification | undefined {
+  const rawPath = str(args?.file_path ?? args?.path);
+  if (rawPath === null || rawPath === "") return undefined;
+
+  const absolutePath = resolveToCwd(rawPath, cwd);
+  const fileName = pathOperations.basename(absolutePath);
+  if (fileName === "SKILL.md") {
+    return {
+      kind: "skill",
+      label: pathOperations.basename(pathOperations.dirname(absolutePath)) || fileName,
+    };
+  }
+
+  const docsClassification = getMsaDocsClassification(absolutePath);
+  if (docsClassification !== undefined) return docsClassification;
+
+  if (COMPACT_RESOURCE_FILE_NAMES.has(fileName)) {
+    return { kind: "resource", label: formatPathRelativeToCwdOrAbsolute(absolutePath, cwd) };
+  }
+
+  return undefined;
+}

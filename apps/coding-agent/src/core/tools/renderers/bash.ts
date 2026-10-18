@@ -36,6 +36,42 @@ function formatShellCall(
     !expanded && lines.length > 1 ? theme.fg("muted", ` (+${lines.length - 1} lines)`) : "";
   return theme.fg("toolTitle", theme.bold(`${prompt} ${shown}`)) + more + timeoutSuffix;
 }
+type BashResultDetails = BashToolDetails | undefined;
+
+function stripFullOutputFooter(output: string, details: BashResultDetails, isPartial: boolean) {
+  const fullOutputPath = details?.fullOutputPath;
+  if (
+    isPartial ||
+    details?.truncation?.truncated !== true ||
+    fullOutputPath === undefined ||
+    fullOutputPath === "" ||
+    !output.endsWith("]")
+  ) {
+    return output;
+  }
+  const footerStart = output.lastIndexOf("\n\n[");
+  return footerStart !== -1 && output.slice(footerStart).includes(fullOutputPath)
+    ? output.slice(0, footerStart).trimEnd()
+    : output;
+}
+
+function truncationWarnings(details: BashResultDetails): string[] {
+  const warnings: string[] = [];
+  const fullOutputPath = details?.fullOutputPath;
+  const truncation = details?.truncation;
+  if (fullOutputPath !== undefined && fullOutputPath !== "") {
+    warnings.push(`Full output: ${fullOutputPath}`);
+  }
+  if (truncation?.truncated === true) {
+    warnings.push(
+      truncation.truncatedBy === "lines"
+        ? `Truncated: showing ${truncation.outputLines} of ${truncation.totalLines} lines`
+        : `Truncated: ${truncation.outputLines} lines shown (${formatSize(truncation.maxBytes ?? DEFAULT_MAX_BYTES)} limit)`,
+    );
+  }
+  return warnings;
+}
+
 function rebuildBashResultRenderComponent(
   component: Container,
   result: {
@@ -47,22 +83,11 @@ function rebuildBashResultRenderComponent(
   timerText: string | undefined,
 ): void {
   component.clear();
-
-  let output = getTextOutput(result as any, showImages).trim();
-  const truncation = result.details?.truncation;
-  const fullOutputPath = result.details?.fullOutputPath;
-  if (
-    !options.isPartial &&
-    truncation?.truncated === true &&
-    fullOutputPath !== undefined &&
-    fullOutputPath !== "" &&
-    output.endsWith("]")
-  ) {
-    const footerStart = output.lastIndexOf("\n\n[");
-    if (footerStart !== -1 && output.slice(footerStart).includes(fullOutputPath)) {
-      output = output.slice(0, footerStart).trimEnd();
-    }
-  }
+  const output = stripFullOutputFooter(
+    getTextOutput(result as any, showImages).trim(),
+    result.details,
+    options.isPartial,
+  );
 
   if (!options.expanded) {
     component.addChild(new Spacer(1));
@@ -78,22 +103,8 @@ function rebuildBashResultRenderComponent(
     component.addChild(new Text(`\n${styledOutput}`, 0, 0));
   }
 
-  if (truncation?.truncated === true || (fullOutputPath !== undefined && fullOutputPath !== "")) {
-    const warnings: string[] = [];
-    if (fullOutputPath !== undefined && fullOutputPath !== "") {
-      warnings.push(`Full output: ${fullOutputPath}`);
-    }
-    if (truncation?.truncated === true) {
-      if (truncation.truncatedBy === "lines") {
-        warnings.push(
-          `Truncated: showing ${truncation.outputLines} of ${truncation.totalLines} lines`,
-        );
-      } else {
-        warnings.push(
-          `Truncated: ${truncation.outputLines} lines shown (${formatSize(truncation.maxBytes ?? DEFAULT_MAX_BYTES)} limit)`,
-        );
-      }
-    }
+  const warnings = truncationWarnings(result.details);
+  if (warnings.length > 0) {
     component.addChild(new Text(`\n${theme.fg("warning", `[${warnings.join(". ")}]`)}`, 0, 0));
   }
 

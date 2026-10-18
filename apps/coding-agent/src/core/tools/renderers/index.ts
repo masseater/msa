@@ -1,5 +1,6 @@
+import { Function as Fn } from "effect";
+
 import type { ToolRenderers } from "../../extensions/types.ts";
-import type { ToolName } from "../index.ts";
 import { createShellRenderers } from "./bash.ts";
 import { editRenderers } from "./edit.ts";
 import { findRenderers } from "./find.ts";
@@ -11,7 +12,17 @@ import { writeRenderers } from "./write.ts";
 
 export type { ToolRenderers };
 
-type RenderedToolName = ToolName | "web_search" | "web_fetch";
+type RenderedToolName =
+  | "read"
+  | "bash"
+  | "powershell"
+  | "edit"
+  | "write"
+  | "grep"
+  | "find"
+  | "ls"
+  | "web_search"
+  | "web_fetch";
 
 export {
   createShellRenderers,
@@ -40,16 +51,28 @@ export function createAllToolRenderers(): Record<RenderedToolName, ToolRenderers
   };
 }
 
-export function withBuiltInRenderers<TDefinition extends ToolRenderers>(
+type WithBuiltIn = <TDefinition extends ToolRenderers>(
   toolName: string,
   definition: TDefinition | undefined,
-): TDefinition | ToolRenderers | undefined {
+) => TDefinition | ToolRenderers | undefined;
+
+const withBuiltInRenderersImpl: WithBuiltIn = (toolName, definition) => {
   const builtIn = createAllToolRenderers()[toolName as RenderedToolName];
   if (definition === undefined) return builtIn;
-  if (!builtIn) return definition;
+  if (builtIn === undefined) return definition;
   return {
     ...definition,
     renderCall: definition.renderCall ?? builtIn.renderCall,
     renderResult: definition.renderResult ?? builtIn.renderResult,
   };
-}
+};
+
+export const withBuiltInRenderers: {
+  <TDefinition extends ToolRenderers>(
+    definition: TDefinition | undefined,
+  ): (toolName: string) => TDefinition | ToolRenderers | undefined;
+  <TDefinition extends ToolRenderers>(
+    toolName: string,
+    definition: TDefinition | undefined,
+  ): TDefinition | ToolRenderers | undefined;
+} = Fn.dual(2, withBuiltInRenderersImpl);

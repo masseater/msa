@@ -1,13 +1,21 @@
 import { expandHint } from "../../../modes/interactive/components/keybinding-hints.ts";
 import type { Theme } from "../../../modes/interactive/theme/theme.ts";
 
-export function formatListResult(
-  output: string,
-  warnings: string[],
-  expanded: boolean,
-  noun: string,
-  theme: Theme,
-): string {
+interface ListResultInput {
+  output: string;
+  warnings: string[];
+  expanded: boolean;
+  noun: string;
+  theme: Theme;
+}
+
+export function formatListResult({
+  output,
+  warnings,
+  expanded,
+  noun,
+  theme,
+}: ListResultInput): string {
   const lines = output === "" ? [] : output.split("\n");
   if (!expanded) {
     if (lines.length === 0) return "";

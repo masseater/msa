@@ -40,11 +40,11 @@ function color256ToHex(index: number): string {
 
 function escapeHtml(text: string): string {
   return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
+    .replace(/&/gu, "&amp;")
+    .replace(/</gu, "&lt;")
+    .replace(/>/gu, "&gt;")
+    .replace(/"/gu, "&quot;")
+    .replace(/'/gu, "&#039;");
 }
 
 interface TextStyle {
@@ -159,7 +159,7 @@ function applySgrCode(params: number[], style: TextStyle): void {
   }
 }
 
-const ANSI_REGEX = /\x1b\[([\d;]*)m/g;
+const ANSI_REGEX = /\x1b\[([\d;]*)m/gu;
 
 export function ansiToHtml(text: string): string {
   const style = createEmptyStyle();

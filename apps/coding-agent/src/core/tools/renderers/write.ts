@@ -118,7 +118,7 @@ function formatWriteCall(
           highlightCode(replaceTabs(normalizeDisplayText(fileContent)), lang))
         : normalizeDisplayText(fileContent).split("\n");
     const lines = trimTrailingEmptyLines(renderedLines);
-    const count = normalizeDisplayText(fileContent).replace(/\n+$/, "").split("\n").length;
+    const count = normalizeDisplayText(fileContent).replace(/\n+$/u, "").split("\n").length;
     text += options.expanded
       ? `\n\n${lines.map((line) => (lang !== undefined && lang !== "" ? line : theme.fg("toolOutput", replaceTabs(line)))).join("\n")}`
       : `\n${expandHint(`${count} ${count === 1 ? "line" : "lines"}`)}`;
@@ -154,12 +154,12 @@ export const writeRenderers: Pick<ToolDefinition<any, any>, "renderCall" | "rend
     const component =
       (context.lastComponent as WriteCallRenderComponent | undefined) ??
       new WriteCallRenderComponent();
-    if (fileContent !== null) {
+    if (fileContent === null) {
+      component.cache = undefined;
+    } else {
       component.cache = context.argsComplete
         ? rebuildWriteHighlightCacheFull(rawPath, fileContent)
         : updateWriteHighlightCacheIncremental(component.cache, rawPath, fileContent);
-    } else {
-      component.cache = undefined;
     }
     component.setText(
       formatWriteCall(

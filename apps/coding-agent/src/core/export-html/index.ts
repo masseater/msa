@@ -37,7 +37,7 @@ export interface ExportOptions {
 }
 
 function parseColor(color: string): { r: number; g: number; b: number } | undefined {
-  const hexMatch = color.match(/^#([0-9a-fA-F]{2})([0-9a-fA-F]{2})([0-9a-fA-F]{2})$/);
+  const hexMatch = color.match(/^#([0-9a-fA-F]{2})([0-9a-fA-F]{2})([0-9a-fA-F]{2})$/u);
   const [, hexR, hexG, hexB] = hexMatch ?? [];
   if (hexR !== undefined && hexG !== undefined && hexB !== undefined) {
     return {
@@ -46,7 +46,7 @@ function parseColor(color: string): { r: number; g: number; b: number } | undefi
       b: Number.parseInt(hexB, 16),
     };
   }
-  const rgbMatch = color.match(/^rgb\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)$/);
+  const rgbMatch = color.match(/^rgb\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)$/u);
   const [, rgbR, rgbG, rgbB] = rgbMatch ?? [];
   if (rgbR !== undefined && rgbG !== undefined && rgbB !== undefined) {
     return {

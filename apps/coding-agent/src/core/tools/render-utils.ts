@@ -2,27 +2,32 @@ import { pathToFileURL } from "node:url";
 
 import type { ImageContent, TextContent } from "@msa/ai";
 import { getCapabilities, getImageDimensions, hyperlink, imageFallback } from "@msa/tui";
+import { Effect, type Fiber, Function as Fn, Predicate } from "effect";
 
 import type { Theme } from "../../modes/interactive/theme/theme.ts";
 import { stripAnsi } from "../../utils/ansi.ts";
 import { abbreviateHomePath, resolvePath } from "../../utils/paths.ts";
 import { sanitizeBinaryOutput } from "../../utils/shell.ts";
 import type { ToolRenderContext } from "../extensions/types.ts";
+import { currentTimeMillis, platformRuntime } from "../platform/index.ts";
 
 export function shortenPath(path: unknown): string {
   if (typeof path !== "string") return "";
   return abbreviateHomePath(path);
 }
 
-export function linkPath(styledText: string, rawPath: string, cwd: string): string {
+export const linkPath: {
+  (rawPath: string, cwd: string): (styledText: string) => string;
+  (styledText: string, rawPath: string, cwd: string): string;
+} = Fn.dual(3, (styledText: string, rawPath: string, cwd: string): string => {
   if (!getCapabilities().hyperlinks) return styledText;
   const absolutePath = resolvePath(rawPath, cwd);
   return hyperlink(styledText, pathToFileURL(absolutePath).href);
-}
+});
 
 export function str(value: unknown): string | null {
   if (typeof value === "string") return value;
-  if (value == null) return "";
+  if (Predicate.isNullish(value)) return "";
   return null;
 }
 
@@ -31,38 +36,43 @@ function parseLineNumber(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
-export function formatReadLineRange(offset: unknown, limit: unknown): string {
-  if (offset == null && limit == null) return "";
-  const start = offset == null ? 1 : parseLineNumber(offset);
+export const formatReadLineRange: {
+  (limit: unknown): (offset: unknown) => string;
+  (offset: unknown, limit: unknown): string;
+} = Fn.dual(2, (offset: unknown, limit: unknown): string => {
+  if (Predicate.isNullish(offset) && Predicate.isNullish(limit)) return "";
+  const start = Predicate.isNullish(offset) ? 1 : parseLineNumber(offset);
   if (start === undefined) return "";
-  if (limit == null) return `:${start}`;
+  if (Predicate.isNullish(limit)) return `:${start}`;
   const count = parseLineNumber(limit);
   if (count === undefined) return "";
   const end = start + count - 1;
   return `:${start}${end === 0 ? "" : `-${end}`}`;
-}
+});
 
 export function replaceTabs(text: string): string {
-  return text.replace(/\t/g, "   ");
+  return text.replace(/\t/gu, "   ");
 }
 
 export function normalizeDisplayText(text: string): string {
-  return text.replace(/\r/g, "");
+  return text.replace(/\r/gu, "");
 }
 
-export function getTextOutput(
-  result:
-    | { content: Array<{ type: string; text?: string; data?: string; mimeType?: string }> }
-    | undefined,
-  showImages: boolean,
-): string {
+type TextOutputSource =
+  | { content: Array<{ type: string; text?: string; data?: string; mimeType?: string }> }
+  | undefined;
+
+export const getTextOutput: {
+  (showImages: boolean): (result: TextOutputSource) => string;
+  (result: TextOutputSource, showImages: boolean): string;
+} = Fn.dual(2, (result: TextOutputSource, showImages: boolean): string => {
   if (result === undefined) return "";
 
   const textBlocks = result.content.filter((c) => c.type === "text");
   const imageBlocks = result.content.filter((c) => c.type === "image");
 
   let output = textBlocks
-    .map((c) => sanitizeBinaryOutput(stripAnsi(c.text || "")).replace(/\r/g, ""))
+    .map((c) => sanitizeBinaryOutput(stripAnsi(c.text || "")).replace(/\r/gu, ""))
     .join("\n");
 
   const caps = getCapabilities();
@@ -84,7 +94,7 @@ export function getTextOutput(
   }
 
   return output;
-}
+});
 
 export type ToolRenderResultLike<TDetails> = {
   content: (TextContent | ImageContent)[];
@@ -93,14 +103,12 @@ export type ToolRenderResultLike<TDetails> = {
 
 const COLLAPSED_ARGS_CHARS = 100;
 
-export function formatToolCallWithArgs(
-  title: string,
-  args: unknown,
-  theme: Theme,
-  expanded: boolean,
-): string {
+export const formatToolCallWithArgs: {
+  (args: unknown, theme: Theme, expanded: boolean): (title: string) => string;
+  (title: string, args: unknown, theme: Theme, expanded: boolean): string;
+} = Fn.dual(4, (title: string, args: unknown, theme: Theme, expanded: boolean): string => {
   const header = theme.fg("toolTitle", theme.bold(title));
-  if (args == null) return header;
+  if (Predicate.isNullish(args)) return header;
   const entries =
     typeof args === "object" && !Array.isArray(args)
       ? Object.entries(args)
@@ -110,7 +118,7 @@ export function formatToolCallWithArgs(
     const lines = entries.map(([key, value]) => {
       const text =
         typeof value === "string" ? value : (JSON.stringify(value, null, 2) ?? String(value));
-      return `  ${key}: ${replaceTabs(text).replace(/\r/g, "").split("\n").join("\n    ")}`;
+      return `  ${key}: ${replaceTabs(text).replace(/\r/gu, "").split("\n").join("\n    ")}`;
     });
     return `${header}\n${theme.fg("muted", lines.join("\n"))}`;
   }
@@ -120,7 +128,7 @@ export function formatToolCallWithArgs(
   const preview =
     pairs.length > COLLAPSED_ARGS_CHARS ? `${pairs.slice(0, COLLAPSED_ARGS_CHARS - 3)}...` : pairs;
   return `${header} ${theme.fg("muted", preview)}`;
-}
+});
 
 export function formatToolDuration(ms: number): string {
   const seconds = ms / 1000;
@@ -137,51 +145,67 @@ export function formatToolDuration(ms: number): string {
 interface ToolTimerState {
   startedAt?: number;
   endedAt?: number | undefined;
-  interval?: ReturnType<typeof setInterval> | undefined;
+  interval?: Fiber.Fiber<never> | undefined;
 }
 
 export function startToolTimer(context: ToolRenderContext<ToolTimerState>): void {
   const state = context.state;
   if (context.executionStarted && state.startedAt === undefined) {
-    state.startedAt = Date.now();
+    state.startedAt = currentTimeMillis();
     state.endedAt = undefined;
   }
 }
 
-export function toolTimerText(
-  context: ToolRenderContext<ToolTimerState>,
-  isPartial: boolean,
-): string | undefined {
-  const state = context.state;
-  if (state.startedAt !== undefined && isPartial && state.interval === undefined) {
-    state.interval = setInterval(() => context.invalidate(), 1000);
-  }
-  if (!isPartial || context.isError) {
-    state.endedAt ??= Date.now();
-    if (state.interval !== undefined) {
-      clearInterval(state.interval);
-      state.interval = undefined;
+const startTicker = (context: ToolRenderContext<ToolTimerState>): Fiber.Fiber<never> =>
+  platformRuntime.runFork(
+    Effect.sleep(1000).pipe(
+      Effect.andThen(Effect.sync(() => context.invalidate())),
+      Effect.forever,
+    ),
+  );
+
+export const toolTimerText: {
+  (isPartial: boolean): (context: ToolRenderContext<ToolTimerState>) => string | undefined;
+  (context: ToolRenderContext<ToolTimerState>, isPartial: boolean): string | undefined;
+} = Fn.dual(
+  2,
+  (context: ToolRenderContext<ToolTimerState>, isPartial: boolean): string | undefined => {
+    const state = context.state;
+    if (state.startedAt !== undefined && isPartial && state.interval === undefined) {
+      state.interval = startTicker(context);
     }
-  }
-  if (!isPartial && context.durationMs !== undefined)
-    return `Took ${formatToolDuration(context.durationMs)}`;
-  if (state.startedAt === undefined) return undefined;
-  const endTime = state.endedAt ?? Date.now();
-  return `${isPartial ? "Elapsed" : "Took"} ${formatToolDuration(endTime - state.startedAt)}`;
-}
+    if (!isPartial || context.isError) {
+      state.endedAt ??= currentTimeMillis();
+      if (state.interval !== undefined) {
+        state.interval.interruptUnsafe();
+        state.interval = undefined;
+      }
+    }
+    if (!isPartial && context.durationMs !== undefined)
+      return `Took ${formatToolDuration(context.durationMs)}`;
+    if (state.startedAt === undefined) return undefined;
+    const endTime = state.endedAt ?? currentTimeMillis();
+    return `${isPartial ? "Elapsed" : "Took"} ${formatToolDuration(endTime - state.startedAt)}`;
+  },
+);
 
 export function invalidArgText(theme: Theme): string {
   return theme.fg("error", "[invalid arg]");
 }
 
-export function renderToolPath(
-  rawPath: string | null,
-  theme: Theme,
-  cwd: string,
-  options?: { emptyFallback?: string },
-): string {
-  if (rawPath === null) return invalidArgText(theme);
-  const value = rawPath || options?.emptyFallback;
-  if (value === undefined || value === "") return theme.fg("toolOutput", "...");
-  return linkPath(theme.fg("accent", shortenPath(value)), value, cwd);
+interface RenderToolPathOptions {
+  emptyFallback?: string;
 }
+
+export const renderToolPath: {
+  (theme: Theme, cwd: string, options?: RenderToolPathOptions): (rawPath: string | null) => string;
+  (rawPath: string | null, theme: Theme, cwd: string, options?: RenderToolPathOptions): string;
+} = Fn.dual(
+  (args) => typeof args[1] !== "string",
+  (rawPath: string | null, theme: Theme, cwd: string, options?: RenderToolPathOptions): string => {
+    if (rawPath === null) return invalidArgText(theme);
+    const value = rawPath === "" ? options?.emptyFallback : rawPath;
+    if (value === undefined || value === "") return theme.fg("toolOutput", "...");
+    return linkPath(theme.fg("accent", shortenPath(value)), value, cwd);
+  },
+);

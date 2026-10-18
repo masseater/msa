@@ -22,6 +22,7 @@ import { resolveToCwd } from "./path-utils.ts";
 import { type EditRenderState, editRenderers } from "./renderers/edit.ts";
 import { type CwdFactory, cwdFactory, wrapToolDefinition } from "./tool-definition-wrapper.ts";
 
+export type { EditOperations } from "./edit-apply.ts";
 export { type EditToolInput, editToolSystemPromptContribution } from "./edit-input.ts";
 
 export interface EditToolDetails {

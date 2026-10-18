@@ -1,19 +1,14 @@
-import { basename, dirname, isAbsolute, relative, resolve as resolvePath, sep } from "node:path";
-
 import type { ImageContent, TextContent } from "@msa/ai";
 import { Text } from "@msa/tui";
 
-import { getReadmePath } from "../../../config.ts";
 import { expandHint, keyText } from "../../../modes/interactive/components/keybinding-hints.ts";
 import {
   getLanguageFromPath,
   highlightCode,
   type Theme,
 } from "../../../modes/interactive/theme/theme.ts";
-import { formatPathRelativeToCwdOrAbsolute } from "../../../utils/paths.ts";
 import type { ToolDefinition, ToolRenderResultOptions } from "../../extensions/types.ts";
-import { resolveToCwd } from "../path-utils.ts";
-import type { ReadToolDetails } from "../read.ts";
+import type { ReadToolDetails } from "../read-content.ts";
 import {
   formatReadLineRange,
   getTextOutput,
@@ -22,18 +17,11 @@ import {
   str,
 } from "../render-utils.ts";
 import { DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES, formatSize } from "../truncate.ts";
+import {
+  type CompactReadClassification,
+  getCompactReadClassification,
+} from "./read-classification.ts";
 
-interface CompactReadClassification {
-  kind: "docs" | "resource" | "skill";
-  label: string;
-}
-const COMPACT_RESOURCE_FILE_NAMES = new Set([
-  "AGENTS.override.md",
-  "AGENTS.md",
-  "AGENTS.MD",
-  "CLAUDE.md",
-  "CLAUDE.MD",
-]);
 type ReadRenderArgs = { path?: string; file_path?: string; offset?: unknown; limit?: unknown };
 function styledReadLineRange(args: ReadRenderArgs | undefined, theme: Theme): string {
   const range = formatReadLineRange(args?.offset, args?.limit);
@@ -49,49 +37,6 @@ function trimTrailingEmptyLines(lines: string[]): string[] {
     end--;
   }
   return lines.slice(0, end);
-}
-function toPosixPath(filePath: string): string {
-  return filePath.split(sep).join("/");
-}
-function getMsaDocsClassification(absolutePath: string): CompactReadClassification | undefined {
-  const packageRoot = dirname(getReadmePath());
-  const relativePath = relative(resolvePath(packageRoot), resolvePath(absolutePath));
-  if (
-    relativePath === "" ||
-    relativePath === ".." ||
-    relativePath.startsWith(`..${sep}`) ||
-    isAbsolute(relativePath)
-  ) {
-    return undefined;
-  }
-
-  const label = toPosixPath(relativePath);
-  if (label === "README.md" || label.startsWith("docs/") || label.startsWith("examples/")) {
-    return { kind: "docs", label };
-  }
-  return undefined;
-}
-function getCompactReadClassification(
-  args: ReadRenderArgs | undefined,
-  cwd: string,
-): CompactReadClassification | undefined {
-  const rawPath = str(args?.file_path ?? args?.path);
-  if (rawPath === null || rawPath === "") return undefined;
-
-  const absolutePath = resolveToCwd(rawPath, cwd);
-  const fileName = basename(absolutePath);
-  if (fileName === "SKILL.md") {
-    return { kind: "skill", label: basename(dirname(absolutePath)) || fileName };
-  }
-
-  const docsClassification = getMsaDocsClassification(absolutePath);
-  if (docsClassification !== undefined) return docsClassification;
-
-  if (COMPACT_RESOURCE_FILE_NAMES.has(fileName)) {
-    return { kind: "resource", label: formatPathRelativeToCwdOrAbsolute(absolutePath, cwd) };
-  }
-
-  return undefined;
 }
 function formatCompactReadCall(
   classification: CompactReadClassification,
@@ -168,7 +113,7 @@ export const readRenderers: Pick<
     const text = (context.lastComponent as Text | undefined) ?? new Text("", 0, 0);
     const classification = context.expanded
       ? undefined
-      : getCompactReadClassification(args, context.cwd);
+      : getCompactReadClassification({ args, cwd: context.cwd });
     text.setText(
       classification === undefined
         ? formatReadCall(args, theme, context.cwd)

@@ -43,7 +43,7 @@ function formatGrepResult(
     warnings.push(`${formatSize(truncation.maxBytes ?? DEFAULT_MAX_BYTES)} limit`);
   if (result.details?.linesTruncated === true) warnings.push("some lines truncated");
   const output = getTextOutput(result, showImages).trim();
-  return formatListResult(output, warnings, options.expanded, "lines", theme);
+  return formatListResult({ output, warnings, expanded: options.expanded, noun: "lines", theme });
 }
 
 export const grepRenderers: Pick<ToolDefinition<any, any>, "renderCall" | "renderResult"> = {

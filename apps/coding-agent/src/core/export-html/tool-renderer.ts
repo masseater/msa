@@ -23,7 +23,7 @@ export interface ToolHtmlRenderer {
   ): { collapsed?: string; expanded?: string } | undefined;
 }
 
-const ANSI_ESCAPE_REGEX = /\x1b\[[\d;]*m/g;
+const ANSI_ESCAPE_REGEX = /\x1b\[[\d;]*m/gu;
 
 function isBlankRenderedLine(line: string): boolean {
   return line.replace(ANSI_ESCAPE_REGEX, "").trim().length === 0;

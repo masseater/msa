@@ -36,7 +36,7 @@ function formatLsResult(
   if (truncation?.truncated === true)
     warnings.push(`${formatSize(truncation.maxBytes ?? DEFAULT_MAX_BYTES)} limit`);
   const output = getTextOutput(result, showImages).trim();
-  return formatListResult(output, warnings, options.expanded, "entries", theme);
+  return formatListResult({ output, warnings, expanded: options.expanded, noun: "entries", theme });
 }
 
 export const lsRenderers: Pick<ToolDefinition<any, any>, "renderCall" | "renderResult"> = {

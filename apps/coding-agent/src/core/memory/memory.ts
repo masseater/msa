@@ -65,11 +65,11 @@ export type MemoryCommand =
   | { kind: "forget"; id: string };
 
 export function parseMemoryCommand(text: string): MemoryCommand | undefined {
-  const match = /^\/memory(?:\s+([\s\S]*))?$/.exec(text.trim());
+  const match = /^\/memory(?:\s+([\s\S]*))?$/u.exec(text.trim());
   if (match === null) return undefined;
   const args = (match[1] ?? "").trim();
   if (args === "") return { kind: "status" };
-  const [head = "", ...rest] = args.split(/\s+/);
+  const [head = "", ...rest] = args.split(/\s+/u);
   const tail = rest.join(" ").trim();
   switch (head) {
     case "list":
@@ -90,7 +90,7 @@ export function isMemoryKind(value: string): value is MemoryKind {
 }
 
 function truncate(text: string, max = 160): string {
-  const line = text.replace(/\s+/g, " ").trim();
+  const line = text.replace(/\s+/gu, " ").trim();
   return line.length > max ? `${line.slice(0, max)}…` : line;
 }
 

@@ -42,7 +42,7 @@ function formatFindResult(
   if (truncation?.truncated === true)
     warnings.push(`${formatSize(truncation.maxBytes ?? DEFAULT_MAX_BYTES)} limit`);
   const output = getTextOutput(result, showImages).trim();
-  return formatListResult(output, warnings, options.expanded, "files", theme);
+  return formatListResult({ output, warnings, expanded: options.expanded, noun: "files", theme });
 }
 
 export const findRenderers: Pick<ToolDefinition<any, any>, "renderCall" | "renderResult"> = {

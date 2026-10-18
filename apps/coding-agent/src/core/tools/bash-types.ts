@@ -1,3 +1,4 @@
+import type { Fiber } from "effect";
 import { type Static, Type } from "typebox";
 
 import { getShellEnv } from "../../utils/shell.ts";
@@ -90,7 +91,7 @@ export interface BashToolOptions {
 export type BashRenderState = {
   startedAt: number | undefined;
   endedAt: number | undefined;
-  interval: NodeJS.Timeout | undefined;
+  interval: Fiber.Fiber<never> | undefined;
 };
 
 export interface ShellToolConfig {
