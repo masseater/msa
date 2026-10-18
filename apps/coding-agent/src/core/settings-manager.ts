@@ -5,13 +5,16 @@ import { dirname, join } from "path";
 import type { ThinkingLevel } from "@msa/agent-core";
 import type { Model } from "@msa/ai";
 import type { ScrollViewScrollbar, TerminalCapabilities, WheelScrollLines } from "@msa/tui";
+import * as Effect from "effect/Effect";
 import lockfile from "proper-lockfile";
 
 import { CONFIG_DIR_NAME, getAgentDir } from "../config.ts";
 import { normalizePath, resolvePath } from "../utils/paths.ts";
 import { stripBom } from "../utils/text.ts";
+import { awaited, awaitingWith } from "./awaiting.ts";
 import { DEFAULT_HTTP_IDLE_TIMEOUT_MS, parseHttpIdleTimeoutMs } from "./http-dispatcher.ts";
 import type { ResolvedMemorySettings } from "./memory/memory.ts";
+import { nowMs } from "./platform.ts";
 import { SETTINGS_DEFAULTS } from "./settings-defaults.ts";
 import type {
   CacheWarmingMode,
@@ -216,8 +219,8 @@ export class FileSettingsStorage implements SettingsStorage {
           throw error;
         }
         lastError = error;
-        const start = Date.now();
-        while (Date.now() - start < delayMs) {}
+        const start = nowMs();
+        while (nowMs() - start < delayMs) {}
       }
     }
 
@@ -518,36 +521,40 @@ export class SettingsManager {
     this.settings = deepMergeSettings(this.globalSettings, this.projectSettings);
   }
 
-  async reload(): Promise<void> {
-    await this.writeQueue;
-    const globalLoad = SettingsManager.tryLoadFromStorage(this.storage, "global");
-    if (globalLoad.error === null) {
-      this.globalSettings = globalLoad.settings;
-      this.globalSettingsLoadError = null;
-    } else {
-      this.globalSettingsLoadError = globalLoad.error;
-      this.recordError("global", globalLoad.error);
-    }
+  reload(): Promise<void> {
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        yield* awaited(this.writeQueue);
+        const globalLoad = SettingsManager.tryLoadFromStorage(this.storage, "global");
+        if (globalLoad.error === null) {
+          this.globalSettings = globalLoad.settings;
+          this.globalSettingsLoadError = null;
+        } else {
+          this.globalSettingsLoadError = globalLoad.error;
+          this.recordError("global", globalLoad.error);
+        }
 
-    this.modifiedFields.clear();
-    this.modifiedNestedFields.clear();
-    this.modifiedProjectFields.clear();
-    this.modifiedProjectNestedFields.clear();
+        this.modifiedFields.clear();
+        this.modifiedNestedFields.clear();
+        this.modifiedProjectFields.clear();
+        this.modifiedProjectNestedFields.clear();
 
-    const projectLoad = SettingsManager.tryLoadFromStorage(
-      this.storage,
-      "project",
-      this.projectTrusted,
+        const projectLoad = SettingsManager.tryLoadFromStorage(
+          this.storage,
+          "project",
+          this.projectTrusted,
+        );
+        if (projectLoad.error === null) {
+          this.projectSettings = projectLoad.settings;
+          this.projectSettingsLoadError = null;
+        } else {
+          this.projectSettingsLoadError = projectLoad.error;
+          this.recordError("project", projectLoad.error);
+        }
+
+        this.settings = deepMergeSettings(this.globalSettings, this.projectSettings);
+      }, this),
     );
-    if (projectLoad.error === null) {
-      this.projectSettings = projectLoad.settings;
-      this.projectSettingsLoadError = null;
-    } else {
-      this.projectSettingsLoadError = projectLoad.error;
-      this.recordError("project", projectLoad.error);
-    }
-
-    this.settings = deepMergeSettings(this.globalSettings, this.projectSettings);
   }
 
   applyOverrides(overrides: Partial<Settings>): void {
@@ -722,8 +729,12 @@ export class SettingsManager {
     this.saveProjectSettings(projectSettings);
   }
 
-  async flush(): Promise<void> {
-    await this.writeQueue;
+  flush(): Promise<void> {
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        yield* awaited(this.writeQueue);
+      }, this),
+    );
   }
 
   drainErrors(): SettingsError[] {

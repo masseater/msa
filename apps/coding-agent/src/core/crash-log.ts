@@ -3,6 +3,7 @@ import { dirname, join } from "node:path";
 
 import { getAgentDir, VERSION } from "../config.ts";
 import type { Extension } from "./extensions/types.ts";
+import { nowMs } from "./platform.ts";
 import { isSyntheticPath } from "./source-info.ts";
 
 export interface CrashRecord {
@@ -163,10 +164,7 @@ export function recordCrash(
   }
 }
 
-export function takeUnnotifiedCrash(
-  path = crashLogPath(),
-  now = Date.now(),
-): CrashRecord | undefined {
+export function takeUnnotifiedCrash(path = crashLogPath(), now = nowMs()): CrashRecord | undefined {
   const records = readCrashLog(path);
   const crash = [...records]
     .reverse()

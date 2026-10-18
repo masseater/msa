@@ -8,8 +8,11 @@ import {
   type Usage,
 } from "@msa/ai";
 import { getProviderEnvValue } from "@msa/ai/utils/provider-env";
+import * as Effect from "effect/Effect";
 
+import { awaited, awaitingWith } from "./awaiting.ts";
 import type { ModelRuntime } from "./model-runtime.ts";
+import { nowMs } from "./platform.ts";
 import type { SessionEntry, SessionManager, UsageEntry } from "./session-manager.ts";
 import type { CacheWarmingMode } from "./settings-manager.ts";
 
@@ -130,8 +133,8 @@ export class CacheWarmer {
     models: Pick<ModelRuntime, "streamSimple">,
     sessionManager: Pick<SessionManager, "appendUsage" | "getBranch">,
     getMode: () => CacheWarmingMode,
-    decide: (event: CacheWarmingDecisionEvent) => Promise<CacheWarmingAction> = async (event) =>
-      event.action,
+    decide: (event: CacheWarmingDecisionEvent) => Promise<CacheWarmingAction> = (event) =>
+      Effect.runPromise(Effect.sync(() => event.action)),
   ) {
     this.models = models;
     this.sessionManager = sessionManager;
@@ -189,7 +192,7 @@ export class CacheWarmer {
       ttlMs,
       delayMs,
       refreshDeadlineAt: 0,
-      startedAt: Date.now(),
+      startedAt: nowMs(),
       controller: new AbortController(),
       phase: "streaming",
       nextWarmAt: 0,
@@ -207,7 +210,7 @@ export class CacheWarmer {
     }
     run.phase = "idle";
     const deadline = run.startedAt + MAX_IDLE_WARMING_AGE_MS;
-    if (run.nextWarmAt > deadline || Date.now() >= deadline) {
+    if (run.nextWarmAt > deadline || nowMs() >= deadline) {
       this.stop("30-minute idle safety limit reached");
     }
   }
@@ -241,11 +244,11 @@ export class CacheWarmer {
 
   private schedule(run: ActiveRun): void {
     run.extensionOverride = false;
-    run.nextWarmAt = Date.now() + run.delayMs;
+    run.nextWarmAt = nowMs() + run.delayMs;
     run.refreshDeadlineAt = run.nextWarmAt + Math.floor((run.ttlMs - run.delayMs) / 2);
     const deadline =
       run.startedAt + (run.phase === "idle" ? MAX_IDLE_WARMING_AGE_MS : MAX_WARMING_AGE_MS);
-    if (run.nextWarmAt > deadline || Date.now() >= deadline) {
+    if (run.nextWarmAt > deadline || nowMs() >= deadline) {
       this.stop(
         run.phase === "idle"
           ? "30-minute idle safety limit reached"
@@ -253,65 +256,73 @@ export class CacheWarmer {
       );
       return;
     }
-    run.timer = setTimeout(() => void this.refresh(run), Math.max(0, run.nextWarmAt - Date.now()));
+    run.timer = setTimeout(() => void this.refresh(run), Math.max(0, run.nextWarmAt - nowMs()));
     run.timer.unref?.();
   }
 
-  private async refresh(run: ActiveRun): Promise<void> {
-    run.timer = undefined;
-    if (!this.validateRun(run)) return;
-    if (this.refreshDeadlineMissed(run)) return;
-    const decision = this.evaluate(run);
-    const { warmCost, missCost, continuationProbability } = decision;
-    let action = decision.action;
-    try {
-      action = await this.decide({
-        type: "cache_warming_decision",
-        warmCost,
-        missCost,
-        continuationProbability,
-        action,
-      });
-    } catch {}
-    if (!this.validateRun(run) || this.refreshDeadlineMissed(run)) return;
-    const extensionOverride = action !== decision.action;
-    if (action === "stop") {
-      const reason = extensionOverride
-        ? "stopped by extension"
-        : decision.economicsAvailable
-          ? "expected savings below threshold"
-          : "cache economics unavailable";
-      this.stop(reason, { decision, extensionOverride });
-      return;
-    }
+  private refresh(run: ActiveRun): Promise<void> {
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        run.timer = undefined;
+        if (!this.validateRun(run)) return;
+        if (this.refreshDeadlineMissed(run)) return;
+        const decision = this.evaluate(run);
+        const { warmCost, missCost, continuationProbability } = decision;
+        let action = decision.action;
+        try {
+          action = yield* awaited(
+            this.decide({
+              type: "cache_warming_decision",
+              warmCost,
+              missCost,
+              continuationProbability,
+              action,
+            }),
+          );
+        } catch {}
+        if (!this.validateRun(run) || this.refreshDeadlineMissed(run)) return;
+        const extensionOverride = action !== decision.action;
+        if (action === "stop") {
+          const reason = extensionOverride
+            ? "stopped by extension"
+            : decision.economicsAvailable
+              ? "expected savings below threshold"
+              : "cache economics unavailable";
+          this.stop(reason, { decision, extensionOverride });
+          return;
+        }
 
-    run.extensionOverride = extensionOverride;
-    try {
-      const message = await this.models
-        .streamSimple(run.model, run.context, {
-          ...run.options,
-          maxTokens: 1,
-          maxRetries: 0,
-          signal: run.controller.signal,
-        })
-        .result();
-      if (!this.validateRun(run)) return;
-      if (message.stopReason !== "error" && message.stopReason !== "aborted") {
-        const entry = this.sessionManager.appendUsage(
-          "cache_warm",
-          message.provider,
-          message.responseModel ?? message.model,
-          message.usage,
-          extensionOverride ? "extension override" : undefined,
-        );
-        this.onWarmed?.(entry);
-      }
-    } catch {}
-    if (this.run === run) this.schedule(run);
+        run.extensionOverride = extensionOverride;
+        try {
+          const message = yield* awaited(
+            this.models
+              .streamSimple(run.model, run.context, {
+                ...run.options,
+                maxTokens: 1,
+                maxRetries: 0,
+                signal: run.controller.signal,
+              })
+              .result(),
+          );
+          if (!this.validateRun(run)) return;
+          if (message.stopReason !== "error" && message.stopReason !== "aborted") {
+            const entry = this.sessionManager.appendUsage(
+              "cache_warm",
+              message.provider,
+              message.responseModel ?? message.model,
+              message.usage,
+              extensionOverride ? "extension override" : undefined,
+            );
+            this.onWarmed?.(entry);
+          }
+        } catch {}
+        if (this.run === run) this.schedule(run);
+      }, this),
+    );
   }
 
   private refreshDeadlineMissed(run: ActiveRun): boolean {
-    if (Date.now() <= run.refreshDeadlineAt) return false;
+    if (nowMs() <= run.refreshDeadlineAt) return false;
     this.stop("cache refresh deadline missed");
     return true;
   }
@@ -386,7 +397,7 @@ function formatCacheWarmingDecisionTime(nextWarmAt: number | undefined, now: num
   return `Decision in ${parts.join(" ")}`;
 }
 
-export function formatCacheWarmingStatus(status: CacheWarmingStatus, now = Date.now()): string {
+export function formatCacheWarmingStatus(status: CacheWarmingStatus, now = nowMs()): string {
   const decision = status.decision;
   if (
     decision === undefined ||

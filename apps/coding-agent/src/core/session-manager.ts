@@ -30,9 +30,11 @@ import {
   type UserMessage,
   uuidv7,
 } from "@msa/ai";
+import * as Effect from "effect/Effect";
 
 import { APP_NAME, getAgentDir as getDefaultAgentDir, getSessionsDir } from "../config.ts";
 import { normalizePath, resolvePath } from "../utils/paths.ts";
+import { awaited, awaiting, performed } from "./awaiting.ts";
 import {
   type BashExecutionMessage,
   type CustomMessage,
@@ -723,89 +725,101 @@ function getMessageActivityTime(entry: SessionMessageEntry): number | undefined 
   return Number.isNaN(t) ? undefined : t;
 }
 
-async function buildSessionInfo(
+function buildSessionInfo(
   filePath: string,
   signal?: AbortSignal,
   fileStats?: Stats,
-): Promise<SessionInfo | null> {
-  try {
-    const stats = fileStats ?? (await stat(filePath));
-    let header: SessionHeader | null = null;
-    let messageCount = 0;
-    let firstMessage = "";
-    const allMessages: string[] = [];
-    let name: string | undefined;
-    let lastActivityTime: number | undefined;
+): Effect.Effect<SessionInfo | null> {
+  return awaiting(function* () {
+    try {
+      const stats = fileStats ?? (yield* awaited(stat(filePath)));
+      let header: SessionHeader | null = null;
+      let messageCount = 0;
+      let firstMessage = "";
+      const allMessages: string[] = [];
+      let name: string | undefined;
+      let lastActivityTime: number | undefined;
 
-    const rl = createInterface({
-      input: createReadStream(filePath, { encoding: "utf8", signal }),
-      crlfDelay: Infinity,
-    });
+      const rl = createInterface({
+        input: createReadStream(filePath, { encoding: "utf8", signal }),
+        crlfDelay: Infinity,
+      });
 
-    for await (const line of rl) {
-      const entry = parseSessionEntryLine(line);
-      if (entry === null) continue;
+      const lines = rl[Symbol.asyncIterator]();
+      try {
+        for (
+          let next = yield* awaited(lines.next());
+          next.done !== true;
+          next = yield* awaited(lines.next())
+        ) {
+          const line = next.value;
+          const entry = parseSessionEntryLine(line);
+          if (entry === null) continue;
 
-      if (header === null) {
-        if (entry.type !== "session") return null;
-        header = entry;
-        continue;
+          if (header === null) {
+            if (entry.type !== "session") return null;
+            header = entry;
+            continue;
+          }
+
+          if (entry.type === "session_info") {
+            name = entry.name?.trim() || undefined;
+          }
+
+          if (entry.type !== "message") continue;
+          messageCount++;
+
+          const activityTime = getMessageActivityTime(entry);
+          if (typeof activityTime === "number") {
+            lastActivityTime = Math.max(lastActivityTime ?? 0, activityTime);
+          }
+
+          const message = entry.message;
+          if (!isMessageWithContent(message)) continue;
+          if (message.role !== "user" && message.role !== "assistant") continue;
+
+          const textContent = extractTextContent(message);
+          if (textContent === "") continue;
+
+          allMessages.push(textContent);
+          if (firstMessage === "" && message.role === "user") {
+            firstMessage = textContent;
+          }
+        }
+      } finally {
+        yield* awaited(lines.return?.());
       }
 
-      if (entry.type === "session_info") {
-        name = entry.name?.trim() || undefined;
-      }
+      if (header === null) return null;
 
-      if (entry.type !== "message") continue;
-      messageCount++;
+      const cwd = typeof header.cwd === "string" ? header.cwd : "";
+      const parentSessionPath = header.parentSession;
+      const headerTime =
+        typeof header.timestamp === "string" ? new Date(header.timestamp).getTime() : NaN;
+      const modified =
+        typeof lastActivityTime === "number" && lastActivityTime > 0
+          ? new Date(lastActivityTime)
+          : Number.isNaN(headerTime)
+            ? stats.mtime
+            : new Date(headerTime);
 
-      const activityTime = getMessageActivityTime(entry);
-      if (typeof activityTime === "number") {
-        lastActivityTime = Math.max(lastActivityTime ?? 0, activityTime);
-      }
-
-      const message = entry.message;
-      if (!isMessageWithContent(message)) continue;
-      if (message.role !== "user" && message.role !== "assistant") continue;
-
-      const textContent = extractTextContent(message);
-      if (textContent === "") continue;
-
-      allMessages.push(textContent);
-      if (firstMessage === "" && message.role === "user") {
-        firstMessage = textContent;
-      }
+      return {
+        path: filePath,
+        id: header.id,
+        cwd,
+        name,
+        parentSessionPath,
+        created: new Date(header.timestamp),
+        modified,
+        messageCount,
+        firstMessage: firstMessage || "(no messages)",
+        allMessagesText: allMessages.join(" "),
+      };
+    } catch {
+      signal?.throwIfAborted();
+      return null;
     }
-
-    if (header === null) return null;
-
-    const cwd = typeof header.cwd === "string" ? header.cwd : "";
-    const parentSessionPath = header.parentSession;
-    const headerTime =
-      typeof header.timestamp === "string" ? new Date(header.timestamp).getTime() : NaN;
-    const modified =
-      typeof lastActivityTime === "number" && lastActivityTime > 0
-        ? new Date(lastActivityTime)
-        : Number.isNaN(headerTime)
-          ? stats.mtime
-          : new Date(headerTime);
-
-    return {
-      path: filePath,
-      id: header.id,
-      cwd,
-      name,
-      parentSessionPath,
-      created: new Date(header.timestamp),
-      modified,
-      messageCount,
-      firstMessage: firstMessage || "(no messages)",
-      allMessagesText: allMessages.join(" "),
-    };
-  } catch {
-    signal?.throwIfAborted();
-    return null;
-  }
+  });
 }
 
 export type SessionListProgress = (
@@ -824,23 +838,30 @@ interface SessionFileCandidate {
   stats?: Stats;
 }
 
-async function mapWithConcurrency<T, R>(
+function mapWithConcurrency<T, R>(
   items: T[],
   limit: number,
   map: (item: T, index: number) => Promise<R>,
   signal?: AbortSignal,
-): Promise<R[]> {
-  const results = new Array<R>(items.length);
-  let nextIndex = 0;
-  const worker = async (): Promise<void> => {
-    while (nextIndex < items.length) {
-      signal?.throwIfAborted();
-      const index = nextIndex++;
-      results[index] = await map(items[index]!, index);
-    }
-  };
-  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, () => worker()));
-  return results;
+): Effect.Effect<R[]> {
+  return awaiting(function* () {
+    const results = new Array<R>(items.length);
+    let nextIndex = 0;
+    const worker = (): Promise<void> =>
+      Effect.runPromise(
+        awaiting(function* () {
+          while (nextIndex < items.length) {
+            signal?.throwIfAborted();
+            const index = nextIndex++;
+            results[index] = yield* awaited(map(items[index]!, index));
+          }
+        }),
+      );
+    yield* awaited(
+      Promise.all(Array.from({ length: Math.min(limit, items.length) }, () => worker())),
+    );
+    return results;
+  });
 }
 
 function sortSessionInfos(sessions: SessionInfo[]): SessionInfo[] {
@@ -852,57 +873,66 @@ function buildSessionInfosWithConcurrency(
   onLoaded: (info: SessionInfo | null, index: number) => void,
   signal?: AbortSignal,
 ): Promise<(SessionInfo | null)[]> {
-  return mapWithConcurrency(
-    files,
-    MAX_CONCURRENT_SESSION_INFO_LOADS,
-    async (file, index) => {
-      const info = await buildSessionInfo(file.path, signal, file.stats);
-      onLoaded(info, index);
-      return info;
-    },
-    signal,
+  return Effect.runPromise(
+    mapWithConcurrency(
+      files,
+      MAX_CONCURRENT_SESSION_INFO_LOADS,
+      (file, index) =>
+        Effect.runPromise(
+          awaiting(function* () {
+            const info = yield* performed(buildSessionInfo(file.path, signal, file.stats));
+            onLoaded(info, index);
+            return info;
+          }),
+        ),
+      signal,
+    ),
   );
 }
 
-async function listSessionsFromDir(
+function listSessionsFromDir(
   dir: string,
   onProgress?: SessionListProgress,
   signal?: AbortSignal,
-): Promise<SessionInfo[]> {
-  signal?.throwIfAborted();
-  if (!existsSync(dir)) return [];
-
-  try {
-    const dirEntries = await readdir(dir);
-    const files = dirEntries
-      .filter((file) => file.endsWith(".jsonl"))
-      .sort((a, b) => b.localeCompare(a))
-      .map((file) => ({ path: join(dir, file) }));
-    const total = files.length;
-    const partialSessions: SessionInfo[] = [];
-    let loaded = 0;
-    const results = await buildSessionInfosWithConcurrency(
-      files,
-      (info) => {
-        loaded++;
-        if (info !== null) partialSessions.push(info);
-        const publishPartial =
-          loaded === 1 ||
-          loaded % CURRENT_SESSION_LIST_PUBLISH_INTERVAL === 0 ||
-          loaded === files.length;
-        onProgress?.(
-          loaded,
-          total,
-          publishPartial ? sortSessionInfos([...partialSessions]) : undefined,
-        );
-      },
-      signal,
-    );
-    return results.filter((info): info is SessionInfo => info !== null);
-  } catch {
+): Effect.Effect<SessionInfo[]> {
+  return awaiting(function* () {
     signal?.throwIfAborted();
-    return [];
-  }
+    if (!existsSync(dir)) return [];
+
+    try {
+      const dirEntries = yield* awaited(readdir(dir));
+      const files = dirEntries
+        .filter((file) => file.endsWith(".jsonl"))
+        .sort((a, b) => b.localeCompare(a))
+        .map((file) => ({ path: join(dir, file) }));
+      const total = files.length;
+      const partialSessions: SessionInfo[] = [];
+      let loaded = 0;
+      const results = yield* awaited(
+        buildSessionInfosWithConcurrency(
+          files,
+          (info) => {
+            loaded++;
+            if (info !== null) partialSessions.push(info);
+            const publishPartial =
+              loaded === 1 ||
+              loaded % CURRENT_SESSION_LIST_PUBLISH_INTERVAL === 0 ||
+              loaded === files.length;
+            onProgress?.(
+              loaded,
+              total,
+              publishPartial ? sortSessionInfos([...partialSessions]) : undefined,
+            );
+          },
+          signal,
+        ),
+      );
+      return results.filter((info): info is SessionInfo => info !== null);
+    } catch {
+      signal?.throwIfAborted();
+      return [];
+    }
+  });
 }
 
 export class SessionManager {
@@ -1697,133 +1727,154 @@ export class SessionManager {
     return undefined;
   }
 
-  static async list(
+  static list(
     cwd: string,
     sessionDir?: string,
     onProgress?: SessionListProgress,
     signal?: AbortSignal,
   ): Promise<SessionInfo[]> {
-    const dir =
-      sessionDir !== undefined && sessionDir !== ""
-        ? normalizePath(sessionDir)
-        : getDefaultSessionDir(cwd);
-    const filterCwd = sessionDir !== undefined && dir !== getDefaultSessionDirPath(cwd);
-    const resolvedCwd = resolvePath(cwd);
-    const includeSession = (session: SessionInfo) =>
-      !filterCwd || sessionCwdMatches(session.cwd, resolvedCwd);
-    const progress: SessionListProgress | undefined =
-      onProgress === undefined
-        ? undefined
-        : (loaded, total, partialSessions) =>
-            onProgress(loaded, total, partialSessions?.filter(includeSession));
-    const sessions = (await listSessionsFromDir(dir, progress, signal)).filter(includeSession);
-    return sortSessionInfos(sessions);
+    return Effect.runPromise(
+      awaiting(function* () {
+        const dir =
+          sessionDir !== undefined && sessionDir !== ""
+            ? normalizePath(sessionDir)
+            : getDefaultSessionDir(cwd);
+        const filterCwd = sessionDir !== undefined && dir !== getDefaultSessionDirPath(cwd);
+        const resolvedCwd = resolvePath(cwd);
+        const includeSession = (session: SessionInfo) =>
+          !filterCwd || sessionCwdMatches(session.cwd, resolvedCwd);
+        const progress: SessionListProgress | undefined =
+          onProgress === undefined
+            ? undefined
+            : (loaded, total, partialSessions) =>
+                onProgress(loaded, total, partialSessions?.filter(includeSession));
+        const sessions = (yield* performed(listSessionsFromDir(dir, progress, signal))).filter(
+          includeSession,
+        );
+        return sortSessionInfos(sessions);
+      }),
+    );
   }
 
-  static async listAll(
-    onProgress?: SessionListProgress,
-    signal?: AbortSignal,
-  ): Promise<SessionInfo[]>;
-  static async listAll(
+  static listAll(onProgress?: SessionListProgress, signal?: AbortSignal): Promise<SessionInfo[]>;
+  static listAll(
     sessionDir?: string,
     onProgress?: SessionListProgress,
     signal?: AbortSignal,
   ): Promise<SessionInfo[]>;
-  static async listAll(
+  static listAll(
     sessionDirOrOnProgress?: string | SessionListProgress,
     onProgressOrSignal?: SessionListProgress | AbortSignal,
     signal?: AbortSignal,
   ): Promise<SessionInfo[]> {
-    const customSessionDir =
-      typeof sessionDirOrOnProgress === "string"
-        ? normalizePath(sessionDirOrOnProgress)
-        : undefined;
-    const progress =
-      typeof sessionDirOrOnProgress === "function"
-        ? sessionDirOrOnProgress
-        : typeof onProgressOrSignal === "function"
-          ? onProgressOrSignal
-          : undefined;
-    const abortSignal =
-      typeof sessionDirOrOnProgress === "string" || typeof onProgressOrSignal === "function"
-        ? signal
-        : (onProgressOrSignal ?? signal);
-    abortSignal?.throwIfAborted();
-    if (customSessionDir !== undefined && customSessionDir !== "") {
-      return sortSessionInfos(await listSessionsFromDir(customSessionDir, progress, abortSignal));
-    }
-
-    const sessionsDir = getSessionsDir();
-
-    try {
-      if (!existsSync(sessionsDir)) return [];
-      const entries = await readdir(sessionsDir, { withFileTypes: true });
-      const dirs = entries
-        .filter((entry) => entry.isDirectory() || entry.isSymbolicLink())
-        .map((entry) => join(sessionsDir, entry.name));
-
-      const dirFiles = await mapWithConcurrency(
-        dirs,
-        MAX_CONCURRENT_SESSION_DISCOVERY_LOADS,
-        async (dir) => {
-          try {
-            return (await readdir(dir))
-              .filter((file) => file.endsWith(".jsonl"))
-              .map((file) => join(dir, file));
-          } catch {
-            return [];
-          }
-        },
-        abortSignal,
-      );
-      const allFiles = dirFiles.flat();
-      const candidates = await mapWithConcurrency(
-        allFiles,
-        MAX_CONCURRENT_SESSION_DISCOVERY_LOADS,
-        async (path): Promise<SessionFileCandidate> => {
-          try {
-            return { path, stats: await stat(path) };
-          } catch {
-            return { path };
-          }
-        },
-        abortSignal,
-      );
-      candidates.sort(
-        (a, b) =>
-          (b.stats?.mtimeMs ?? Number.NEGATIVE_INFINITY) -
-            (a.stats?.mtimeMs ?? Number.NEGATIVE_INFINITY) ||
-          basename(b.path).localeCompare(basename(a.path)),
-      );
-
-      const totalFiles = candidates.length;
-      let loaded = 0;
-      let firstCandidateLoaded = false;
-      const partialSessions: SessionInfo[] = [];
-      const results = await buildSessionInfosWithConcurrency(
-        candidates,
-        (info, index) => {
-          loaded++;
-          if (index === 0) firstCandidateLoaded = true;
-          if (info !== null) partialSessions.push(info);
-          const publishPartial =
-            firstCandidateLoaded &&
-            (index === 0 ||
-              loaded % ALL_SESSION_LIST_PUBLISH_INTERVAL === 0 ||
-              loaded === totalFiles);
-          progress?.(
-            loaded,
-            totalFiles,
-            publishPartial ? sortSessionInfos([...partialSessions]) : undefined,
+    return Effect.runPromise(
+      awaiting(function* () {
+        const customSessionDir =
+          typeof sessionDirOrOnProgress === "string"
+            ? normalizePath(sessionDirOrOnProgress)
+            : undefined;
+        const progress =
+          typeof sessionDirOrOnProgress === "function"
+            ? sessionDirOrOnProgress
+            : typeof onProgressOrSignal === "function"
+              ? onProgressOrSignal
+              : undefined;
+        const abortSignal =
+          typeof sessionDirOrOnProgress === "string" || typeof onProgressOrSignal === "function"
+            ? signal
+            : (onProgressOrSignal ?? signal);
+        abortSignal?.throwIfAborted();
+        if (customSessionDir !== undefined && customSessionDir !== "") {
+          return sortSessionInfos(
+            yield* performed(listSessionsFromDir(customSessionDir, progress, abortSignal)),
           );
-        },
-        abortSignal,
-      );
+        }
 
-      return sortSessionInfos(results.filter((info): info is SessionInfo => info !== null));
-    } catch {
-      abortSignal?.throwIfAborted();
-      return [];
-    }
+        const sessionsDir = getSessionsDir();
+
+        try {
+          if (!existsSync(sessionsDir)) return [];
+          const entries = yield* awaited(readdir(sessionsDir, { withFileTypes: true }));
+          const dirs = entries
+            .filter((entry) => entry.isDirectory() || entry.isSymbolicLink())
+            .map((entry) => join(sessionsDir, entry.name));
+
+          const dirFiles = yield* performed(
+            mapWithConcurrency(
+              dirs,
+              MAX_CONCURRENT_SESSION_DISCOVERY_LOADS,
+              (dir) =>
+                Effect.runPromise(
+                  awaiting(function* () {
+                    try {
+                      return (yield* awaited(readdir(dir)))
+                        .filter((file) => file.endsWith(".jsonl"))
+                        .map((file) => join(dir, file));
+                    } catch {
+                      return [];
+                    }
+                  }),
+                ),
+              abortSignal,
+            ),
+          );
+          const allFiles = dirFiles.flat();
+          const candidates = yield* performed(
+            mapWithConcurrency(
+              allFiles,
+              MAX_CONCURRENT_SESSION_DISCOVERY_LOADS,
+              (path): Promise<SessionFileCandidate> =>
+                Effect.runPromise(
+                  awaiting(function* () {
+                    try {
+                      return { path, stats: yield* awaited(stat(path)) };
+                    } catch {
+                      return { path };
+                    }
+                  }),
+                ),
+              abortSignal,
+            ),
+          );
+          candidates.sort(
+            (a, b) =>
+              (b.stats?.mtimeMs ?? Number.NEGATIVE_INFINITY) -
+                (a.stats?.mtimeMs ?? Number.NEGATIVE_INFINITY) ||
+              basename(b.path).localeCompare(basename(a.path)),
+          );
+
+          const totalFiles = candidates.length;
+          let loaded = 0;
+          let firstCandidateLoaded = false;
+          const partialSessions: SessionInfo[] = [];
+          const results = yield* awaited(
+            buildSessionInfosWithConcurrency(
+              candidates,
+              (info, index) => {
+                loaded++;
+                if (index === 0) firstCandidateLoaded = true;
+                if (info !== null) partialSessions.push(info);
+                const publishPartial =
+                  firstCandidateLoaded &&
+                  (index === 0 ||
+                    loaded % ALL_SESSION_LIST_PUBLISH_INTERVAL === 0 ||
+                    loaded === totalFiles);
+                progress?.(
+                  loaded,
+                  totalFiles,
+                  publishPartial ? sortSessionInfos([...partialSessions]) : undefined,
+                );
+              },
+              abortSignal,
+            ),
+          );
+
+          return sortSessionInfos(results.filter((info): info is SessionInfo => info !== null));
+        } catch {
+          abortSignal?.throwIfAborted();
+          return [];
+        }
+      }),
+    );
   }
 }

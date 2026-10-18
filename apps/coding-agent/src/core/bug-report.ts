@@ -3,10 +3,12 @@ import * as os from "node:os";
 import type { AgentMessage, StreamFn, ThinkingLevel } from "@msa/agent-core";
 import { contentText, normalizeContext, type RetryPolicy, uuidv7 } from "@msa/ai";
 import type { Api, Model, Provider, SimpleStreamOptions } from "@msa/ai/compat";
+import * as Effect from "effect/Effect";
 
 import { VERSION } from "../config.ts";
 import { getMsaUserAgent } from "../utils/user-agent.ts";
 import { writeZipArchive } from "../utils/zip.ts";
+import { awaited, awaiting } from "./awaiting.ts";
 import {
   completeSummarization,
   estimateTokens,
@@ -17,6 +19,7 @@ import type { CrashRecord } from "./crash-log.ts";
 import type { Extension } from "./extensions/types.ts";
 import { convertToLlm } from "./messages.ts";
 import type { ModelRuntime } from "./model-runtime.ts";
+import { nowMs } from "./platform.ts";
 import type { ReadonlySessionManager } from "./session-manager.ts";
 import type { Settings } from "./settings-manager.ts";
 
@@ -350,53 +353,61 @@ interface GenerateBugReportSummaryOptions {
   sessionId?: string;
 }
 
-export async function generateBugReportSummary(
+export function generateBugReportSummary(
   options: GenerateBugReportSummaryOptions,
 ): Promise<string> {
-  const { model } = options;
-  const contextWindow = model.contextWindow > 0 ? model.contextWindow : 128_000;
-  const messages = selectMessages(options.messages, Math.floor(contextWindow * 0.6));
-  const hint = options.hint?.trim();
-  const prompt = [
-    messages.length < options.messages.length
-      ? `Note: only the last ${messages.length} of ${options.messages.length} messages are shown.`
-      : undefined,
-    `<conversation>\n${serializeConversation(convertToLlm(messages))}\n</conversation>`,
-    hint !== undefined && hint !== "" ? `<user-report>\n${hint}\n</user-report>` : undefined,
-    BUG_SUMMARY_INSTRUCTIONS,
-  ]
-    .filter((part) => part !== undefined)
-    .join("\n\n");
-  const requestOptions: SimpleStreamOptions = {
-    maxTokens: Math.min(4096, model.maxTokens > 0 ? model.maxTokens : Number.POSITIVE_INFINITY),
-    signal: options.signal,
-    apiKey: options.apiKey,
-    headers: options.headers,
-    env: options.env,
-    sessionId: options.sessionId,
-    ...(model.reasoning && options.thinkingLevel !== undefined && options.thinkingLevel !== "off"
-      ? { reasoning: options.thinkingLevel }
-      : {}),
-  };
-  const response = await completeSummarization(
-    model,
-    normalizeContext({
-      systemPrompt: BUG_SUMMARY_SYSTEM_PROMPT,
-      messages: [
-        { role: "user", content: [{ type: "text", text: prompt }], timestamp: Date.now() },
-      ],
+  return Effect.runPromise(
+    awaiting(function* () {
+      const { model } = options;
+      const contextWindow = model.contextWindow > 0 ? model.contextWindow : 128_000;
+      const messages = selectMessages(options.messages, Math.floor(contextWindow * 0.6));
+      const hint = options.hint?.trim();
+      const prompt = [
+        messages.length < options.messages.length
+          ? `Note: only the last ${messages.length} of ${options.messages.length} messages are shown.`
+          : undefined,
+        `<conversation>\n${serializeConversation(convertToLlm(messages))}\n</conversation>`,
+        hint !== undefined && hint !== "" ? `<user-report>\n${hint}\n</user-report>` : undefined,
+        BUG_SUMMARY_INSTRUCTIONS,
+      ]
+        .filter((part) => part !== undefined)
+        .join("\n\n");
+      const requestOptions: SimpleStreamOptions = {
+        maxTokens: Math.min(4096, model.maxTokens > 0 ? model.maxTokens : Number.POSITIVE_INFINITY),
+        signal: options.signal,
+        apiKey: options.apiKey,
+        headers: options.headers,
+        env: options.env,
+        sessionId: options.sessionId,
+        ...(model.reasoning &&
+        options.thinkingLevel !== undefined &&
+        options.thinkingLevel !== "off"
+          ? { reasoning: options.thinkingLevel }
+          : {}),
+      };
+      const response = yield* awaited(
+        completeSummarization(
+          model,
+          normalizeContext({
+            systemPrompt: BUG_SUMMARY_SYSTEM_PROMPT,
+            messages: [
+              { role: "user", content: [{ type: "text", text: prompt }], timestamp: nowMs() },
+            ],
+          }),
+          requestOptions,
+          options.streamFn,
+          options.retry,
+        ),
+      );
+      if (response.stopReason === "aborted") throw new Error("Bug report summary was cancelled");
+      const failure = getSummarizationFailure(response, "Bug report summary");
+      if (failure !== undefined && failure !== "") throw new Error(failure);
+      if (response.content.some((block) => block.type === "toolCall")) {
+        throw new Error("Bug report summary attempted to call a tool");
+      }
+      const text = contentText(response.content, "\n").trim();
+      if (text === "") throw new Error("Bug report summary was empty");
+      return text;
     }),
-    requestOptions,
-    options.streamFn,
-    options.retry,
   );
-  if (response.stopReason === "aborted") throw new Error("Bug report summary was cancelled");
-  const failure = getSummarizationFailure(response, "Bug report summary");
-  if (failure !== undefined && failure !== "") throw new Error(failure);
-  if (response.content.some((block) => block.type === "toolCall")) {
-    throw new Error("Bug report summary attempted to call a tool");
-  }
-  const text = contentText(response.content, "\n").trim();
-  if (text === "") throw new Error("Bug report summary was empty");
-  return text;
 }

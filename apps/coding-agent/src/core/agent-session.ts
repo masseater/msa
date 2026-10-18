@@ -42,6 +42,7 @@ import {
   resetApiProviders,
   streamSimple,
 } from "@msa/ai/compat";
+import * as Effect from "effect/Effect";
 
 import { getThemeByName, theme } from "../modes/interactive/theme/theme.ts";
 import { toErrorMessage } from "../utils/errors.ts";
@@ -49,6 +50,7 @@ import { stripFrontmatter } from "../utils/frontmatter.ts";
 import { processImage } from "../utils/image-process.ts";
 import { normalizeToolResultImages } from "../utils/tool-result-images.ts";
 import { formatNoApiKeyFoundMessage, formatNoModelSelectedMessage } from "./auth-guidance.ts";
+import { awaited, awaitingWith, performed } from "./awaiting.ts";
 import { type BashResult, executeBashWithOperations } from "./bash-executor.ts";
 import { generateBugReportSummary } from "./bug-report.ts";
 import type { CacheWarmer, CacheWarmingStatus } from "./cache-warmer.ts";
@@ -139,6 +141,7 @@ import {
   type WorkerSession,
 } from "./orchestrator/orchestrator.ts";
 import { createOrchestratorToolDefinitions } from "./orchestrator/tools.ts";
+import { nowMs } from "./platform.ts";
 import { expandPromptTemplate, type PromptTemplate } from "./prompt-templates.ts";
 import type { ResourceExtensionPaths, ResourceLoader } from "./resource-loader.ts";
 import { exportSessionToJsonl } from "./session-export.ts";
@@ -502,7 +505,7 @@ export class AgentSession {
             message,
             (this.modelForMessage(message) ?? this.model)?.contextWindow ?? 0,
           ),
-        evaluate: (prompt, signal) => this.evaluateGoal(prompt, signal),
+        evaluate: (prompt, signal) => Effect.runPromise(this.evaluateGoal(prompt, signal)),
         record: (data) => this.recordGoalEntry(data),
         queueContinue: (text) =>
           this.agent.followUp({
@@ -510,7 +513,7 @@ export class AgentSession {
             customType: GOAL_CONTINUE_MESSAGE_TYPE,
             content: text,
             display: false,
-            timestamp: Date.now(),
+            timestamp: nowMs(),
           }),
         changed: () => this.emit({ type: "goal_changed", goal: this.goalInternal.snapshot }),
       },
@@ -566,97 +569,101 @@ export class AgentSession {
     return this.modelRuntimeInternal;
   }
 
-  private async getRequiredRequestAuth(
+  private getRequiredRequestAuth(
     model: Model<any>,
     signal?: AbortSignal,
-  ): Promise<{
+  ): Effect.Effect<{
     model: Model<any>;
     apiKey?: string | undefined;
     headers?: Record<string, string> | undefined;
     env?: Record<string, string> | undefined;
   }> {
-    let result: AuthResult | undefined;
-    try {
-      result = await this.modelRuntimeInternal.getAuth(
-        model,
-        signal === undefined ? {} : { signal },
-      );
-    } catch (error) {
-      const cause = error instanceof Error ? error.cause : undefined;
-      if (cause instanceof Error && cause.message === "authHeader requires a resolved API key") {
-        throw new Error(formatNoApiKeyFoundMessage(model.provider), { cause: error });
+    return awaitingWith(function* () {
+      let result: AuthResult | undefined;
+      try {
+        result = yield* awaited(
+          this.modelRuntimeInternal.getAuth(model, signal === undefined ? {} : { signal }),
+        );
+      } catch (error) {
+        const cause = error instanceof Error ? error.cause : undefined;
+        if (cause instanceof Error && cause.message === "authHeader requires a resolved API key") {
+          throw new Error(formatNoApiKeyFoundMessage(model.provider), { cause: error });
+        }
+        throw error;
       }
-      throw error;
-    }
-    if (
-      result !== undefined &&
-      ((result.auth.apiKey ?? "") !== "" || result.auth.headers !== undefined)
-    ) {
-      const requestModel =
-        result.auth.baseUrl !== undefined && result.auth.baseUrl !== ""
-          ? { ...model, baseUrl: result.auth.baseUrl }
-          : model;
-      return {
-        model: requestModel,
-        apiKey: result.auth.apiKey,
-        headers: withoutDeletedHeaders(result.auth.headers),
-        env: result.env,
-      };
-    }
+      if (
+        result !== undefined &&
+        ((result.auth.apiKey ?? "") !== "" || result.auth.headers !== undefined)
+      ) {
+        const requestModel =
+          result.auth.baseUrl !== undefined && result.auth.baseUrl !== ""
+            ? { ...model, baseUrl: result.auth.baseUrl }
+            : model;
+        return {
+          model: requestModel,
+          apiKey: result.auth.apiKey,
+          headers: withoutDeletedHeaders(result.auth.headers),
+          env: result.env,
+        };
+      }
 
-    const isOAuth = this.modelRuntimeInternal.isUsingOAuth(model.provider);
-    if (isOAuth) {
-      throw new Error(
-        `Authentication failed for "${model.provider}". ` +
-          `Credentials may have expired or network is unavailable. ` +
-          `Run '/login ${model.provider}' to re-authenticate.`,
-      );
-    }
-    throw new Error(formatNoApiKeyFoundMessage(model.provider));
+      const isOAuth = this.modelRuntimeInternal.isUsingOAuth(model.provider);
+      if (isOAuth) {
+        throw new Error(
+          `Authentication failed for "${model.provider}". ` +
+            `Credentials may have expired or network is unavailable. ` +
+            `Run '/login ${model.provider}' to re-authenticate.`,
+        );
+      }
+      throw new Error(formatNoApiKeyFoundMessage(model.provider));
+    }, this);
   }
 
-  private async getSummarizationRequestAuth(
+  private getSummarizationRequestAuth(
     selectedModel: Model<any>,
     signal?: AbortSignal,
-  ): Promise<{
+  ): Effect.Effect<{
     model: Model<any>;
     apiKey?: string | undefined;
     headers?: Record<string, string> | undefined;
     env?: Record<string, string> | undefined;
     thinkingLevel: ThinkingLevel;
   }> {
-    const { model, thinkingLevel } = isVirtualModel(selectedModel)
-      ? await this.modelRuntimeInternal.resolveModel(selectedModel, convertToLlm(this.messages), {
-          reason: "direct",
-          thinkingLevel: this.thinkingLevel,
-          signal,
-        })
-      : { model: selectedModel, thinkingLevel: this.thinkingLevel };
-    if (this.agent.streamFunction === streamSimple) {
-      return { ...(await this.getRequiredRequestAuth(model, signal)), thinkingLevel };
-    }
+    return awaitingWith(function* () {
+      const { model, thinkingLevel } = isVirtualModel(selectedModel)
+        ? yield* awaited(
+            this.modelRuntimeInternal.resolveModel(selectedModel, convertToLlm(this.messages), {
+              reason: "direct",
+              thinkingLevel: this.thinkingLevel,
+              signal,
+            }),
+          )
+        : { model: selectedModel, thinkingLevel: this.thinkingLevel };
+      if (this.agent.streamFunction === streamSimple) {
+        return { ...(yield* performed(this.getRequiredRequestAuth(model, signal))), thinkingLevel };
+      }
 
-    try {
-      const result = await this.modelRuntimeInternal.getAuth(
-        model,
-        signal === undefined ? {} : { signal },
-      );
-      if (result === undefined) return { model, thinkingLevel };
-      const requestModel =
-        result.auth.baseUrl !== undefined && result.auth.baseUrl !== ""
-          ? { ...model, baseUrl: result.auth.baseUrl }
-          : model;
-      return {
-        model: requestModel,
-        apiKey: result.auth.apiKey,
-        headers: withoutDeletedHeaders(result.auth.headers),
-        env: result.env,
-        thinkingLevel,
-      };
-    } catch (error) {
-      if (signal?.aborted === true) throw error;
-      return { model, thinkingLevel };
-    }
+      try {
+        const result = yield* awaited(
+          this.modelRuntimeInternal.getAuth(model, signal === undefined ? {} : { signal }),
+        );
+        if (result === undefined) return { model, thinkingLevel };
+        const requestModel =
+          result.auth.baseUrl !== undefined && result.auth.baseUrl !== ""
+            ? { ...model, baseUrl: result.auth.baseUrl }
+            : model;
+        return {
+          model: requestModel,
+          apiKey: result.auth.apiKey,
+          headers: withoutDeletedHeaders(result.auth.headers),
+          env: result.env,
+          thinkingLevel,
+        };
+      } catch (error) {
+        if (signal?.aborted === true) throw error;
+        return { model, thinkingLevel };
+      }
+    }, this);
   }
 
   private modelForMessage(message: AssistantMessage): Model<any> | undefined {
@@ -687,120 +694,137 @@ export class AgentSession {
   }
 
   private installAgentToolHooks(): void {
-    this.agent.beforeToolCall = (context) => this.beforeToolCall(context);
-    this.agent.afterToolCall = (context) => this.afterToolCall(context);
+    this.agent.beforeToolCall = (context) => Effect.runPromise(this.beforeToolCall(context));
+    this.agent.afterToolCall = (context) => Effect.runPromise(this.afterToolCall(context));
   }
 
-  private async beforeToolCall(
+  private beforeToolCall(
     { toolCall, args }: BeforeToolCallContext,
     parentToolCallId?: string,
-  ): Promise<BeforeToolCallResult | undefined> {
-    const runner = this.extensionRunnerInternal;
-    if (!runner.hasHandlers("tool_call")) {
-      return undefined;
-    }
-
-    try {
-      return await runner.emitToolCall({
-        type: "tool_call",
-        toolName: toolCall.name,
-        toolCallId: toolCall.id,
-        ...(parentToolCallId !== undefined && parentToolCallId !== "" ? { parentToolCallId } : {}),
-        input: args as Record<string, unknown>,
-      });
-    } catch (err) {
-      if (err instanceof Error) {
-        throw err;
+  ): Effect.Effect<BeforeToolCallResult | undefined> {
+    return awaitingWith(function* () {
+      const runner = this.extensionRunnerInternal;
+      if (!runner.hasHandlers("tool_call")) {
+        return undefined;
       }
-      throw new Error(`Extension failed, blocking execution: ${String(err)}`, { cause: err });
-    }
+
+      try {
+        return yield* awaited(
+          runner.emitToolCall({
+            type: "tool_call",
+            toolName: toolCall.name,
+            toolCallId: toolCall.id,
+            ...(parentToolCallId !== undefined && parentToolCallId !== ""
+              ? { parentToolCallId }
+              : {}),
+            input: args as Record<string, unknown>,
+          }),
+        );
+      } catch (err) {
+        if (err instanceof Error) {
+          throw err;
+        }
+        throw new Error(`Extension failed, blocking execution: ${String(err)}`, { cause: err });
+      }
+    }, this);
   }
 
-  private async afterToolCall(
+  private afterToolCall(
     { toolCall, args, result, isError }: AfterToolCallContext,
     parentToolCallId?: string,
-  ): Promise<AfterToolCallResult | undefined> {
-    const runner = this.extensionRunnerInternal;
-    const hookResult = runner.hasHandlers("tool_result")
-      ? await runner.emitToolResult({
-          type: "tool_result",
-          toolName: toolCall.name,
-          toolCallId: toolCall.id,
-          ...(parentToolCallId !== undefined && parentToolCallId !== ""
-            ? { parentToolCallId }
-            : {}),
-          input: args as Record<string, unknown>,
-          content: result.content,
-          details: result.details,
-          ...(result.structuredContent === undefined
-            ? {}
-            : { structuredContent: result.structuredContent }),
-          isError,
-          usage: result.usage,
-        })
-      : undefined;
+  ): Effect.Effect<AfterToolCallResult | undefined> {
+    return awaitingWith(function* () {
+      const runner = this.extensionRunnerInternal;
+      const hookResult = runner.hasHandlers("tool_result")
+        ? yield* awaited(
+            runner.emitToolResult({
+              type: "tool_result",
+              toolName: toolCall.name,
+              toolCallId: toolCall.id,
+              ...(parentToolCallId !== undefined && parentToolCallId !== ""
+                ? { parentToolCallId }
+                : {}),
+              input: args as Record<string, unknown>,
+              content: result.content,
+              details: result.details,
+              ...(result.structuredContent === undefined
+                ? {}
+                : { structuredContent: result.structuredContent }),
+              isError,
+              usage: result.usage,
+            }),
+          )
+        : undefined;
 
-    const content = hookResult?.content ?? result.content ?? [];
-    const resizeOptions = this.limitsModel()?.inputLimits?.images?.resize;
-    const normalizedContent = await normalizeToolResultImages(content, {
-      autoResizeImages: this.settingsManager.getImageAutoResize(),
-      ...(resizeOptions === undefined ? {} : { resizeOptions }),
-    });
+      const content = hookResult?.content ?? result.content ?? [];
+      const resizeOptions = this.limitsModel()?.inputLimits?.images?.resize;
+      const normalizedContent = yield* awaited(
+        normalizeToolResultImages(content, {
+          autoResizeImages: this.settingsManager.getImageAutoResize(),
+          ...(resizeOptions === undefined ? {} : { resizeOptions }),
+        }),
+      );
 
-    if (hookResult === undefined && normalizedContent === content) {
-      return undefined;
-    }
+      if (hookResult === undefined && normalizedContent === content) {
+        return undefined;
+      }
 
-    const details = hookResult?.details;
-    const structuredContent =
-      hookResult === undefined ? result.structuredContent : hookResult.structuredContent;
-    const usage = hookResult?.usage;
-    return {
-      content: normalizedContent,
-      ...(details === undefined ? {} : { details }),
-      ...(structuredContent === undefined ? {} : { structuredContent }),
-      isError: hookResult?.isError ?? isError,
-      ...(usage === undefined ? {} : { usage }),
-    };
+      const details = hookResult?.details;
+      const structuredContent =
+        hookResult === undefined ? result.structuredContent : hookResult.structuredContent;
+      const usage = hookResult?.usage;
+      return {
+        content: normalizedContent,
+        ...(details === undefined ? {} : { details }),
+        ...(structuredContent === undefined ? {} : { structuredContent }),
+        isError: hookResult?.isError ?? isError,
+        ...(usage === undefined ? {} : { usage }),
+      };
+    }, this);
   }
 
-  private async executeNestedToolCall(
+  private executeNestedToolCall(
     parentToolCallId: string,
     name: string,
     args: unknown,
     options: ExecuteToolOptions,
-  ): Promise<AgentToolCallOutcome> {
-    this.nestedToolCalls ??= new NestedToolCallRunner({
-      getTools: () => this.getCallableTools(),
-      isSequential: () => this.agent.toolExecution === "sequential",
-      runToolCall: (toolCall, parentId, signal, onUpdate) => {
-        const assistantMessage = this.findLastAssistantMessage();
-        if (assistantMessage === undefined) {
-          return Promise.resolve({
-            toolCall,
-            result: {
-              content: [{ type: "text", text: "No assistant message issued this call" }],
-              details: {},
-            },
-            isError: true,
+  ): Effect.Effect<AgentToolCallOutcome> {
+    return awaitingWith(function* () {
+      this.nestedToolCalls ??= new NestedToolCallRunner({
+        getTools: () => this.getCallableTools(),
+        isSequential: () => this.agent.toolExecution === "sequential",
+        runToolCall: (toolCall, parentId, signal, onUpdate) => {
+          const assistantMessage = this.findLastAssistantMessage();
+          if (assistantMessage === undefined) {
+            return Promise.resolve({
+              toolCall,
+              result: {
+                content: [{ type: "text", text: "No assistant message issued this call" }],
+                details: {},
+              },
+              isError: true,
+            });
+          }
+          return runToolCall(toolCall, {
+            tools: this.getCallableTools(),
+            assistantMessage,
+            context: { messages: this.agent.state.messages, tools: this.agent.state.tools },
+            beforeToolCall: (context) => Effect.runPromise(this.beforeToolCall(context, parentId)),
+            afterToolCall: (context) => Effect.runPromise(this.afterToolCall(context, parentId)),
+            ...(signal === undefined ? {} : { signal }),
+            onUpdate,
           });
-        }
-        return runToolCall(toolCall, {
-          tools: this.getCallableTools(),
-          assistantMessage,
-          context: { messages: this.agent.state.messages, tools: this.agent.state.tools },
-          beforeToolCall: (context) => this.beforeToolCall(context, parentId),
-          afterToolCall: (context) => this.afterToolCall(context, parentId),
-          ...(signal === undefined ? {} : { signal }),
-          onUpdate,
-        });
-      },
-      emit: async (event) => {
-        await this.extensionRunnerInternal.emit(event);
-        this.emit(event);
-      },
-    });
-    return this.nestedToolCalls.execute(parentToolCallId, name, args, options);
+        },
+        emit: (event) =>
+          Effect.runPromise(
+            awaitingWith(function* () {
+              yield* awaited(this.extensionRunnerInternal.emit(event));
+              this.emit(event);
+            }, this),
+          ),
+      });
+      return yield* awaited(this.nestedToolCalls.execute(parentToolCallId, name, args, options));
+    }, this);
   }
 
   private exceedsCompactionThreshold(model: Model<any>, projection: SessionProjection): boolean {
@@ -812,140 +836,161 @@ export class AgentSession {
     );
   }
 
-  private async compactBeforeNextAssistantResponse(context: AgentContext): Promise<AgentContext> {
-    const projection = this.sessionManager.buildSessionProjection();
-    const model = this.model;
-    if (
-      model === undefined ||
-      isVirtualModel(model) ||
-      !this.exceedsCompactionThreshold(model, projection)
-    ) {
-      return { ...context, messages: projection.messages };
-    }
-    await this.runAutoCompaction("threshold", false);
-    return { ...context, messages: this.sessionManager.buildSessionProjection().messages };
+  private compactBeforeNextAssistantResponse(context: AgentContext): Effect.Effect<AgentContext> {
+    return awaitingWith(function* () {
+      const projection = this.sessionManager.buildSessionProjection();
+      const model = this.model;
+      if (
+        model === undefined ||
+        isVirtualModel(model) ||
+        !this.exceedsCompactionThreshold(model, projection)
+      ) {
+        return { ...context, messages: projection.messages };
+      }
+      yield* awaited(this.runAutoCompaction("threshold", false));
+      return { ...context, messages: this.sessionManager.buildSessionProjection().messages };
+    }, this);
   }
 
   private installAgentRequestProjection(): void {
     const previousPrepareRequest = this.agent.prepareRequest;
-    this.agent.prepareRequest = async (request, signal) => {
-      const failed = this.failedResponse;
-      this.failedResponse = undefined;
-      const prepare = async () => {
-        const projection = this.sessionManager.buildSessionProjection();
-        const canonicalContext = {
-          ...request.context,
-          messages: projection.messages,
-          tools: this.agent.state.tools.slice(),
-        };
-        const previous = await previousPrepareRequest?.(
-          {
-            ...request,
-            context: canonicalContext,
-            model: this.agent.state.model,
-            thinkingLevel: this.agent.state.thinkingLevel,
-          },
-          signal,
-        );
-        return { previous, context: previous?.context ?? canonicalContext, projection };
-      };
-      let { previous, context, projection } = await prepare();
-      const model = previous?.model ?? this.agent.state.model;
-      const thinkingLevel = previous?.thinkingLevel ?? this.agent.state.thinkingLevel;
-      if (!isVirtualModel(model)) return { ...previous, context, model, thinkingLevel };
+    this.agent.prepareRequest = (request, signal) =>
+      Effect.runPromise(
+        awaitingWith(function* () {
+          const failed = this.failedResponse;
+          this.failedResponse = undefined;
+          const prepare = () =>
+            Effect.runPromise(
+              awaitingWith(function* () {
+                const projection = this.sessionManager.buildSessionProjection();
+                const canonicalContext = {
+                  ...request.context,
+                  messages: projection.messages,
+                  tools: this.agent.state.tools.slice(),
+                };
+                const previous = yield* awaited(
+                  previousPrepareRequest?.(
+                    {
+                      ...request,
+                      context: canonicalContext,
+                      model: this.agent.state.model,
+                      thinkingLevel: this.agent.state.thinkingLevel,
+                    },
+                    signal,
+                  ),
+                );
+                return { previous, context: previous?.context ?? canonicalContext, projection };
+              }, this),
+            );
+          let { previous, context, projection } = yield* awaited(prepare());
+          const model = previous?.model ?? this.agent.state.model;
+          const thinkingLevel = previous?.thinkingLevel ?? this.agent.state.thinkingLevel;
+          if (!isVirtualModel(model)) return { ...previous, context, model, thinkingLevel };
 
-      const lastResponse = context.messages.findLastIndex(
-        (message) => message.role === "assistant",
+          const lastResponse = context.messages.findLastIndex(
+            (message) => message.role === "assistant",
+          );
+          const userTurn = context.messages
+            .slice(lastResponse + 1)
+            .some((message) => message.role === "user");
+          const state = getVirtualModelState(
+            this.sessionManager.getBranch(),
+            model.provider,
+            model.id,
+          );
+          const route = yield* awaited(
+            this.modelRuntimeInternal.resolveModel(model, convertToLlm(context.messages), {
+              reason: failed === undefined ? (userTurn ? "user" : "continuation") : "retry",
+              thinkingLevel,
+              signal,
+              failed,
+              state,
+            }),
+          );
+          if (route.state !== undefined && route.state !== state) {
+            const data: VirtualModelStateData = {
+              provider: model.provider,
+              modelId: model.id,
+              state: route.state,
+            };
+            const entry = this.sessionManager.getEntry(
+              this.sessionManager.appendCustomEntry(VIRTUAL_MODEL_STATE_ENTRY, data),
+            );
+            if (entry !== undefined) this.emit({ type: "entry_appended", entry });
+          }
+          if (this.exceedsCompactionThreshold(route.model, projection)) {
+            yield* awaited(this.runAutoCompaction("threshold", false));
+            ({ previous, context } = yield* awaited(prepare()));
+          }
+          return { ...previous, context, model: route.model, thinkingLevel: route.thinkingLevel };
+        }, this),
       );
-      const userTurn = context.messages
-        .slice(lastResponse + 1)
-        .some((message) => message.role === "user");
-      const state = getVirtualModelState(this.sessionManager.getBranch(), model.provider, model.id);
-      const route = await this.modelRuntimeInternal.resolveModel(
-        model,
-        convertToLlm(context.messages),
-        {
-          reason: failed === undefined ? (userTurn ? "user" : "continuation") : "retry",
-          thinkingLevel,
-          signal,
-          failed,
-          state,
-        },
-      );
-      if (route.state !== undefined && route.state !== state) {
-        const data: VirtualModelStateData = {
-          provider: model.provider,
-          modelId: model.id,
-          state: route.state,
-        };
-        const entry = this.sessionManager.getEntry(
-          this.sessionManager.appendCustomEntry(VIRTUAL_MODEL_STATE_ENTRY, data),
-        );
-        if (entry !== undefined) this.emit({ type: "entry_appended", entry });
-      }
-      if (this.exceedsCompactionThreshold(route.model, projection)) {
-        await this.runAutoCompaction("threshold", false);
-        ({ previous, context } = await prepare());
-      }
-      return { ...previous, context, model: route.model, thinkingLevel: route.thinkingLevel };
-    };
   }
 
-  private async dispatchTurnEndBoundary(
+  private dispatchTurnEndBoundary(
     message: AssistantMessage,
     toolResults: ToolResultMessage[],
-  ): Promise<boolean> {
-    this.lastActivityOutcome =
-      message.stopReason === "aborted"
-        ? "aborted"
-        : message.stopReason === "error"
-          ? "error"
-          : "completed";
-    const messageEntryId = this.findPersistedMessageEntryId(message);
-    if (!this.extensionRunnerInternal.hasHandlers("turn_end")) return false;
-    if (messageEntryId === undefined || messageEntryId === "") {
-      this.extensionRunnerInternal.emitError({
-        extensionPath: "<boundary>",
-        event: "turn_end",
-        error: "turn_end could not resolve the persisted assistant entry ID",
+  ): Effect.Effect<boolean> {
+    return awaitingWith(function* () {
+      this.lastActivityOutcome =
+        message.stopReason === "aborted"
+          ? "aborted"
+          : message.stopReason === "error"
+            ? "error"
+            : "completed";
+      const messageEntryId = this.findPersistedMessageEntryId(message);
+      if (!this.extensionRunnerInternal.hasHandlers("turn_end")) return false;
+      if (messageEntryId === undefined || messageEntryId === "") {
+        this.extensionRunnerInternal.emitError({
+          extensionPath: "<boundary>",
+          event: "turn_end",
+          error: "turn_end could not resolve the persisted assistant entry ID",
+        });
+        return false;
+      }
+      const toolResultEntryIds = toolResults.flatMap((result) => {
+        const entryId = this.findPersistedMessageEntryId(result);
+        return entryId !== undefined && entryId !== "" ? [entryId] : [];
       });
-      return false;
-    }
-    const toolResultEntryIds = toolResults.flatMap((result) => {
-      const entryId = this.findPersistedMessageEntryId(result);
-      return entryId !== undefined && entryId !== "" ? [entryId] : [];
-    });
-    const boundary = await this.extensionRunnerInternal.emitBoundary(
-      {
-        type: "turn_end",
-        turnIndex: this.turnIndex,
-        message,
-        toolResults,
-        messageEntryId,
-        toolResultEntryIds,
-        outcome: this.lastActivityOutcome,
-      },
-      (entries) => this.buildBoundaryContext(entries, "turn_end"),
-    );
-    this.commitBoundaryDrafts(boundary.entries);
-    if (boundary.continue && !this.buildBoundaryContext([], "turn_end").canContinue) {
-      this.reportInvalidBoundaryContinuation("turn_end");
-      return false;
-    }
-    return boundary.continue;
+      const boundary = yield* awaited(
+        this.extensionRunnerInternal.emitBoundary(
+          {
+            type: "turn_end",
+            turnIndex: this.turnIndex,
+            message,
+            toolResults,
+            messageEntryId,
+            toolResultEntryIds,
+            outcome: this.lastActivityOutcome,
+          },
+          (entries) => this.buildBoundaryContext(entries, "turn_end"),
+        ),
+      );
+      this.commitBoundaryDrafts(boundary.entries);
+      if (boundary.continue && !this.buildBoundaryContext([], "turn_end").canContinue) {
+        this.reportInvalidBoundaryContinuation("turn_end");
+        return false;
+      }
+      return boundary.continue;
+    }, this);
   }
 
   private installAgentBoundaryHooks(): void {
     const previousFinishTurn = this.agent.finishTurn;
-    this.agent.finishTurn = async (turn, signal) => {
-      this.boundaryDispatchedMessages.add(turn.message);
-      const extensionContinue = await this.dispatchTurnEndBoundary(turn.message, turn.toolResults);
-      const previousDecision = await previousFinishTurn?.(turn, signal);
-      if (previousDecision?.action === "end") return previousDecision;
-      if (extensionContinue || previousDecision?.action === "continue")
-        return { action: "continue" };
-      return undefined;
-    };
+    this.agent.finishTurn = (turn, signal) =>
+      Effect.runPromise(
+        awaitingWith(function* () {
+          this.boundaryDispatchedMessages.add(turn.message);
+          const extensionContinue = yield* performed(
+            this.dispatchTurnEndBoundary(turn.message, turn.toolResults),
+          );
+          const previousDecision = yield* awaited(previousFinishTurn?.(turn, signal));
+          if (previousDecision?.action === "end") return previousDecision;
+          if (extensionContinue || previousDecision?.action === "continue")
+            return { action: "continue" } as const;
+          return undefined;
+        }, this),
+      );
   }
 
   private installAgentNextTurnRefresh(): void {
@@ -953,41 +998,50 @@ export class AgentSession {
       this.agent.prepareNextTurnWithContext ??
       (this.agent.prepareNextTurn === undefined
         ? undefined
-        : async (_turn: PrepareNextTurnContext, signal?: AbortSignal) =>
-            await this.agent.prepareNextTurn?.(signal));
-    this.agent.prepareNextTurnWithContext = async (turn, signal) => {
-      const context = await this.compactBeforeNextAssistantResponse(turn.context);
-      const previousSnapshot = await previousPrepareNextTurnWithContext?.(
-        { ...turn, context },
-        signal,
-      );
-      const nextContext = previousSnapshot?.context ?? context;
-      const runOptions = this.runSystemPromptOptions ?? this.baseSystemPromptOptions;
-      const options = normalizeBuildSystemPromptOptions({
-        ...runOptions,
-        selectedTools: this.getActiveToolNames(),
-        toolSnippets: { ...this.baseSystemPromptOptions.toolSnippets, ...runOptions.toolSnippets },
-        toolGuidelines: {
-          ...this.baseSystemPromptOptions.toolGuidelines,
-          ...runOptions.toolGuidelines,
-        },
-      });
-      const updateMessage = this.preparePromptAndToolLoadout(options, nextContext.messages);
-      this.runSystemPromptOptions = options;
+        : (_turn: PrepareNextTurnContext, signal?: AbortSignal) =>
+            Effect.runPromise(
+              awaitingWith(function* () {
+                return yield* awaited(this.agent.prepareNextTurn?.(signal));
+              }, this),
+            ));
+    this.agent.prepareNextTurnWithContext = (turn, signal) =>
+      Effect.runPromise(
+        awaitingWith(function* () {
+          const context = yield* performed(this.compactBeforeNextAssistantResponse(turn.context));
+          const previousSnapshot = yield* awaited(
+            previousPrepareNextTurnWithContext?.({ ...turn, context }, signal),
+          );
+          const nextContext = previousSnapshot?.context ?? context;
+          const runOptions = this.runSystemPromptOptions ?? this.baseSystemPromptOptions;
+          const options = normalizeBuildSystemPromptOptions({
+            ...runOptions,
+            selectedTools: this.getActiveToolNames(),
+            toolSnippets: {
+              ...this.baseSystemPromptOptions.toolSnippets,
+              ...runOptions.toolSnippets,
+            },
+            toolGuidelines: {
+              ...this.baseSystemPromptOptions.toolGuidelines,
+              ...runOptions.toolGuidelines,
+            },
+          });
+          const updateMessage = this.preparePromptAndToolLoadout(options, nextContext.messages);
+          this.runSystemPromptOptions = options;
 
-      return {
-        ...previousSnapshot,
-        context: {
-          ...nextContext,
-          tools: this.agent.state.tools.slice(),
-        },
-        ...(updateMessage === undefined
-          ? {}
-          : { messages: [...(previousSnapshot?.messages ?? []), updateMessage] }),
-        model: this.agent.state.model,
-        thinkingLevel: this.agent.state.thinkingLevel,
-      };
-    };
+          return {
+            ...previousSnapshot,
+            context: {
+              ...nextContext,
+              tools: this.agent.state.tools.slice(),
+            },
+            ...(updateMessage === undefined
+              ? {}
+              : { messages: [...(previousSnapshot?.messages ?? []), updateMessage] }),
+            model: this.agent.state.model,
+            thinkingLevel: this.agent.state.thinkingLevel,
+          };
+        }, this),
+      );
   }
 
   private refreshFinalizedContext(): void {
@@ -1111,12 +1165,16 @@ export class AgentSession {
     });
   }
 
-  private async emitSessionCompactFailed(
+  private emitSessionCompactFailed(
     event: Omit<SessionCompactFailedEvent, "type">,
-  ): Promise<void> {
-    if (this.extensionRunnerInternal.hasHandlers("session_compact_failed")) {
-      await this.extensionRunnerInternal.emit({ type: "session_compact_failed", ...event });
-    }
+  ): Effect.Effect<void> {
+    return awaitingWith(function* () {
+      if (this.extensionRunnerInternal.hasHandlers("session_compact_failed")) {
+        yield* awaited(
+          this.extensionRunnerInternal.emit({ type: "session_compact_failed", ...event }),
+        );
+      }
+    }, this);
   }
 
   private getIdleWaitPromise(): Promise<void> {
@@ -1138,116 +1196,121 @@ export class AgentSession {
     resolve();
   }
 
-  private async emitAgentSettled(): Promise<void> {
-    this.cacheWarmer?.onAgentSettled();
-    this.isAgentRunActive = false;
-    this.isEmittingAgentSettled = true;
-    try {
-      const aborted = this.agentRunAbortRequested;
-      await this.extensionRunnerInternal.emit({ type: "agent_settled", aborted });
-      this.emit({ type: "agent_settled", aborted });
-    } finally {
-      this.isEmittingAgentSettled = false;
-    }
-
-    const deferred = this.deferredSettledActions.splice(0);
-    if (deferred.length > 0) {
+  private emitAgentSettled(): Effect.Effect<void> {
+    return awaitingWith(function* () {
+      this.cacheWarmer?.onAgentSettled();
+      this.isAgentRunActive = false;
+      this.isEmittingAgentSettled = true;
       try {
-        for (const action of deferred) await action();
+        const aborted = this.agentRunAbortRequested;
+        yield* awaited(this.extensionRunnerInternal.emit({ type: "agent_settled", aborted }));
+        this.emit({ type: "agent_settled", aborted });
       } finally {
-        this.resolveIdleWaitIfIdle();
+        this.isEmittingAgentSettled = false;
       }
-      return;
-    }
-    this.resolveIdleWaitIfIdle();
+
+      const deferred = this.deferredSettledActions.splice(0);
+      if (deferred.length > 0) {
+        try {
+          for (const action of deferred) yield* awaited(action());
+        } finally {
+          this.resolveIdleWaitIfIdle();
+        }
+        return;
+      }
+      this.resolveIdleWaitIfIdle();
+    }, this);
   }
 
-  private handleAgentEvent = async (event: AgentEvent): Promise<void> => {
-    if (event.type === "agent_start" && this.agentRunAbortRequested) this.agent.abort();
-    if (this.nestedToolCalls !== undefined) {
-      if (event.type === "message_start" && event.message.role === "toolResult") {
-        const message = event.message;
-        const summary = this.nestedToolCalls.takeRecord(message.toolCallId);
-        if (summary?.calls !== undefined) message.nestedCalls = summary.calls;
-        if (summary?.usage !== undefined) {
-          message.usage =
-            message.usage === undefined
-              ? summary.usage
-              : combineUsage(message.usage, summary.usage);
-        }
-      } else if (event.type === "agent_end") {
-        this.nestedToolCalls.clear();
-      }
-    }
-    if (event.type === "tool_execution_start") this.goalInternal.noteToolUse();
-    if (event.type === "message_start" && event.message.role === "user") {
-      this.overflowRecoveryAttempted = false;
-      const messageText = contentText(event.message.content, "");
-      if (messageText !== "") {
-        const steeringIndex = this.steeringMessages.indexOf(messageText);
-        if (steeringIndex === -1) {
-          const followUpIndex = this.followUpMessages.indexOf(messageText);
-          if (followUpIndex !== -1) {
-            this.followUpMessages.splice(followUpIndex, 1);
-            this.emitQueueUpdate();
+  private handleAgentEvent = (event: AgentEvent): Promise<void> =>
+    Effect.runPromise(
+      awaitingWith(function* () {
+        if (event.type === "agent_start" && this.agentRunAbortRequested) this.agent.abort();
+        if (this.nestedToolCalls !== undefined) {
+          if (event.type === "message_start" && event.message.role === "toolResult") {
+            const message = event.message;
+            const summary = this.nestedToolCalls.takeRecord(message.toolCallId);
+            if (summary?.calls !== undefined) message.nestedCalls = summary.calls;
+            if (summary?.usage !== undefined) {
+              message.usage =
+                message.usage === undefined
+                  ? summary.usage
+                  : combineUsage(message.usage, summary.usage);
+            }
+          } else if (event.type === "agent_end") {
+            this.nestedToolCalls.clear();
           }
-        } else {
-          this.steeringMessages.splice(steeringIndex, 1);
-          this.emitQueueUpdate();
         }
-      }
-    }
-
-    await this.emitExtensionEvent(event);
-    this.emit(
-      event.type === "agent_end"
-        ? { ...event, willRetry: this.willRetryAfterAgentEnd(event) }
-        : event,
-    );
-
-    if (event.type === "message_end") {
-      let entryId: string | undefined;
-      if (event.message.role === "custom") {
-        entryId = this.sessionManager.appendCustomMessageEntry(
-          event.message.customType,
-          event.message.content,
-          event.message.display,
-          event.message.details,
-        );
-      } else if (
-        event.message.role === "system" ||
-        event.message.role === "user" ||
-        event.message.role === "assistant" ||
-        event.message.role === "toolResult"
-      ) {
-        entryId = this.sessionManager.appendMessage(event.message);
-      }
-      if (entryId !== undefined && entryId !== "")
-        this.entryIdsByMessage.set(event.message, entryId);
-
-      if (event.message.role === "assistant") {
-        const assistantMsg = event.message as AssistantMessage;
-        this.lastAssistantMessage = assistantMsg;
-        if (assistantMsg.stopReason !== "error" && assistantMsg.stopReason !== "length") {
+        if (event.type === "tool_execution_start") this.goalInternal.noteToolUse();
+        if (event.type === "message_start" && event.message.role === "user") {
           this.overflowRecoveryAttempted = false;
+          const messageText = contentText(event.message.content, "");
+          if (messageText !== "") {
+            const steeringIndex = this.steeringMessages.indexOf(messageText);
+            if (steeringIndex === -1) {
+              const followUpIndex = this.followUpMessages.indexOf(messageText);
+              if (followUpIndex !== -1) {
+                this.followUpMessages.splice(followUpIndex, 1);
+                this.emitQueueUpdate();
+              }
+            } else {
+              this.steeringMessages.splice(steeringIndex, 1);
+              this.emitQueueUpdate();
+            }
+          }
         }
 
-        if (assistantMsg.stopReason !== "error" && this.retryAttemptInternal > 0) {
-          this.emit({
-            type: "auto_retry_end",
-            success: true,
-            attempt: this.retryAttemptInternal,
-          });
-          this.retryAttemptInternal = 0;
-        }
-      }
-    }
+        yield* awaited(this.emitExtensionEvent(event));
+        this.emit(
+          event.type === "agent_end"
+            ? { ...event, willRetry: this.willRetryAfterAgentEnd(event) }
+            : event,
+        );
 
-    if (event.type === "turn_end") {
-      this.lastAssistantToolResults = event.toolResults;
-      this.flushPendingCustomMessages();
-    }
-  };
+        if (event.type === "message_end") {
+          let entryId: string | undefined;
+          if (event.message.role === "custom") {
+            entryId = this.sessionManager.appendCustomMessageEntry(
+              event.message.customType,
+              event.message.content,
+              event.message.display,
+              event.message.details,
+            );
+          } else if (
+            event.message.role === "system" ||
+            event.message.role === "user" ||
+            event.message.role === "assistant" ||
+            event.message.role === "toolResult"
+          ) {
+            entryId = this.sessionManager.appendMessage(event.message);
+          }
+          if (entryId !== undefined && entryId !== "")
+            this.entryIdsByMessage.set(event.message, entryId);
+
+          if (event.message.role === "assistant") {
+            const assistantMsg = event.message as AssistantMessage;
+            this.lastAssistantMessage = assistantMsg;
+            if (assistantMsg.stopReason !== "error" && assistantMsg.stopReason !== "length") {
+              this.overflowRecoveryAttempted = false;
+            }
+
+            if (assistantMsg.stopReason !== "error" && this.retryAttemptInternal > 0) {
+              this.emit({
+                type: "auto_retry_end",
+                success: true,
+                attempt: this.retryAttemptInternal,
+              });
+              this.retryAttemptInternal = 0;
+            }
+          }
+        }
+
+        if (event.type === "turn_end") {
+          this.lastAssistantToolResults = event.toolResults;
+          this.flushPendingCustomMessages();
+        }
+      }, this),
+    );
 
   private willRetryAfterAgentEnd(event: Extract<AgentEvent, { type: "agent_end" }>): boolean {
     if (this.agentRunAbortRequested) return false;
@@ -1332,85 +1395,93 @@ export class AgentSession {
     Object.assign(targetRecord, replacement);
   }
 
-  private async emitExtensionEvent(event: AgentEvent): Promise<void> {
-    if (event.type === "agent_start") {
-      this.turnIndex = 0;
-      await this.extensionRunnerInternal.emit({ type: "agent_start" });
-    } else if (event.type === "agent_end") {
-      await this.extensionRunnerInternal.emit({ type: "agent_end", messages: event.messages });
-    } else if (event.type === "turn_start") {
-      const extensionEvent: TurnStartEvent = {
-        type: "turn_start",
-        turnIndex: this.turnIndex,
-        timestamp: Date.now(),
-      };
-      await this.extensionRunnerInternal.emit(extensionEvent);
-    } else if (event.type === "turn_end") {
-      if (
-        event.message.role === "assistant" &&
-        !this.boundaryDispatchedMessages.delete(event.message)
-      ) {
-        await this.dispatchTurnEndBoundary(event.message, event.toolResults);
-      }
-      this.turnIndex++;
-    } else if (event.type === "message_start") {
-      const extensionEvent: MessageStartEvent = {
-        type: "message_start",
-        message: event.message,
-      };
-      await this.extensionRunnerInternal.emit(extensionEvent);
-    } else if (event.type === "message_update") {
-      const extensionEvent: MessageUpdateEvent = {
-        type: "message_update",
-        message: event.message,
-        assistantMessageEvent: event.assistantMessageEvent,
-      };
-      await this.extensionRunnerInternal.emit(extensionEvent);
-    } else if (event.type === "message_end") {
-      const extensionEvent: MessageEndEvent = {
-        type: "message_end",
-        message: event.message,
-      };
-      const replacement = await this.extensionRunnerInternal.emitMessageEnd(extensionEvent);
-      if (replacement !== undefined) {
-        const normalized =
-          (replacement.role === "user" ||
-            replacement.role === "assistant" ||
-            replacement.role === "toolResult" ||
-            replacement.role === "custom") &&
-          replacement.content == null
-            ? ({ ...replacement, content: [] } as AgentMessage)
-            : replacement;
-        this.replaceMessageInPlace(event.message, normalized);
-      }
-    } else if (event.type === "tool_execution_start") {
-      const extensionEvent: ToolExecutionStartEvent = {
-        type: "tool_execution_start",
-        toolCallId: event.toolCallId,
-        toolName: event.toolName,
-        args: event.args,
-      };
-      await this.extensionRunnerInternal.emit(extensionEvent);
-    } else if (event.type === "tool_execution_update") {
-      const extensionEvent: ToolExecutionUpdateEvent = {
-        type: "tool_execution_update",
-        toolCallId: event.toolCallId,
-        toolName: event.toolName,
-        args: event.args,
-        partialResult: event.partialResult,
-      };
-      await this.extensionRunnerInternal.emit(extensionEvent);
-    } else if (event.type === "tool_execution_end") {
-      const extensionEvent: ToolExecutionEndEvent = {
-        type: "tool_execution_end",
-        toolCallId: event.toolCallId,
-        toolName: event.toolName,
-        result: event.result,
-        isError: event.isError,
-        ...(event.durationMs === undefined ? {} : { durationMs: event.durationMs }),
-      };
-      await this.extensionRunnerInternal.emit(extensionEvent);
-    }
+  private emitExtensionEvent(event: AgentEvent): Promise<void> {
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        if (event.type === "agent_start") {
+          this.turnIndex = 0;
+          yield* awaited(this.extensionRunnerInternal.emit({ type: "agent_start" }));
+        } else if (event.type === "agent_end") {
+          yield* awaited(
+            this.extensionRunnerInternal.emit({ type: "agent_end", messages: event.messages }),
+          );
+        } else if (event.type === "turn_start") {
+          const extensionEvent: TurnStartEvent = {
+            type: "turn_start",
+            turnIndex: this.turnIndex,
+            timestamp: nowMs(),
+          };
+          yield* awaited(this.extensionRunnerInternal.emit(extensionEvent));
+        } else if (event.type === "turn_end") {
+          if (
+            event.message.role === "assistant" &&
+            !this.boundaryDispatchedMessages.delete(event.message)
+          ) {
+            yield* performed(this.dispatchTurnEndBoundary(event.message, event.toolResults));
+          }
+          this.turnIndex++;
+        } else if (event.type === "message_start") {
+          const extensionEvent: MessageStartEvent = {
+            type: "message_start",
+            message: event.message,
+          };
+          yield* awaited(this.extensionRunnerInternal.emit(extensionEvent));
+        } else if (event.type === "message_update") {
+          const extensionEvent: MessageUpdateEvent = {
+            type: "message_update",
+            message: event.message,
+            assistantMessageEvent: event.assistantMessageEvent,
+          };
+          yield* awaited(this.extensionRunnerInternal.emit(extensionEvent));
+        } else if (event.type === "message_end") {
+          const extensionEvent: MessageEndEvent = {
+            type: "message_end",
+            message: event.message,
+          };
+          const replacement = yield* awaited(
+            this.extensionRunnerInternal.emitMessageEnd(extensionEvent),
+          );
+          if (replacement !== undefined) {
+            const normalized =
+              (replacement.role === "user" ||
+                replacement.role === "assistant" ||
+                replacement.role === "toolResult" ||
+                replacement.role === "custom") &&
+              replacement.content == null
+                ? ({ ...replacement, content: [] } as AgentMessage)
+                : replacement;
+            this.replaceMessageInPlace(event.message, normalized);
+          }
+        } else if (event.type === "tool_execution_start") {
+          const extensionEvent: ToolExecutionStartEvent = {
+            type: "tool_execution_start",
+            toolCallId: event.toolCallId,
+            toolName: event.toolName,
+            args: event.args,
+          };
+          yield* awaited(this.extensionRunnerInternal.emit(extensionEvent));
+        } else if (event.type === "tool_execution_update") {
+          const extensionEvent: ToolExecutionUpdateEvent = {
+            type: "tool_execution_update",
+            toolCallId: event.toolCallId,
+            toolName: event.toolName,
+            args: event.args,
+            partialResult: event.partialResult,
+          };
+          yield* awaited(this.extensionRunnerInternal.emit(extensionEvent));
+        } else if (event.type === "tool_execution_end") {
+          const extensionEvent: ToolExecutionEndEvent = {
+            type: "tool_execution_end",
+            toolCallId: event.toolCallId,
+            toolName: event.toolName,
+            result: event.result,
+            isError: event.isError,
+            ...(event.durationMs === undefined ? {} : { durationMs: event.durationMs }),
+          };
+          yield* awaited(this.extensionRunnerInternal.emit(extensionEvent));
+        }
+      }, this),
+    );
   }
 
   subscribe(listener: AgentSessionEventListener): () => void {
@@ -1739,54 +1810,60 @@ export class AgentSession {
     );
     return sections === undefined
       ? undefined
-      : { role: "system", content: "", sections, timestamp: Date.now() };
+      : { role: "system", content: "", sections, timestamp: nowMs() };
   }
 
   private installHiddenDeclarationsProjection(): void {
     const previousTransformContext = this.agent.transformContext;
-    this.agent.transformContext = async (messages, signal) => {
-      const transformed =
-        previousTransformContext === undefined
-          ? messages
-          : await previousTransformContext(messages, signal);
-      const hidden = this.hiddenDeclarations;
-      if (hidden.size === 0) return transformed;
-      return transformed.map((message) => {
-        if (
-          message.role !== "system" ||
-          (message.toolsAdded === undefined && message.toolsRemoved === undefined)
-        )
-          return message;
-        const { toolsAdded, toolsRemoved, ...rest } = message;
-        const added = toolsAdded?.filter((tool) => !hidden.has(tool.name)) ?? [];
-        const removed = toolsRemoved?.filter((tool) => !hidden.has(tool.name)) ?? [];
-        return {
-          ...rest,
-          ...(added.length > 0 ? { toolsAdded: added } : {}),
-          ...(removed.length > 0 ? { toolsRemoved: removed } : {}),
-        };
-      });
-    };
+    this.agent.transformContext = (messages, signal) =>
+      Effect.runPromise(
+        awaitingWith(function* () {
+          const transformed =
+            previousTransformContext === undefined
+              ? messages
+              : yield* awaited(previousTransformContext(messages, signal));
+          const hidden = this.hiddenDeclarations;
+          if (hidden.size === 0) return transformed;
+          return transformed.map((message) => {
+            if (
+              message.role !== "system" ||
+              (message.toolsAdded === undefined && message.toolsRemoved === undefined)
+            )
+              return message;
+            const { toolsAdded, toolsRemoved, ...rest } = message;
+            const added = toolsAdded?.filter((tool) => !hidden.has(tool.name)) ?? [];
+            const removed = toolsRemoved?.filter((tool) => !hidden.has(tool.name)) ?? [];
+            return {
+              ...rest,
+              ...(added.length > 0 ? { toolsAdded: added } : {}),
+              ...(removed.length > 0 ? { toolsRemoved: removed } : {}),
+            };
+          });
+        }, this),
+      );
   }
 
   private installAgentForcedPromptProjection(): void {
     const previousTransformContext = this.agent.transformContext;
-    this.agent.transformContext = async (messages, signal) => {
-      const transformed =
-        previousTransformContext === undefined
-          ? messages
-          : await previousTransformContext(messages, signal);
-      const forced = this.runSystemPromptOptions?.forceSystemPrompt;
-      if (forced === undefined) return transformed;
-      const current = getCurrentSystemMessage(transformed);
-      const head: SystemMessage = {
-        role: "system",
-        content: forced,
-        ...(current?.toolsAdded === undefined ? {} : { toolsAdded: current.toolsAdded }),
-        timestamp: current?.timestamp ?? Date.now(),
-      };
-      return [head, ...transformed.filter((message) => message.role !== "system")];
-    };
+    this.agent.transformContext = (messages, signal) =>
+      Effect.runPromise(
+        awaitingWith(function* () {
+          const transformed =
+            previousTransformContext === undefined
+              ? messages
+              : yield* awaited(previousTransformContext(messages, signal));
+          const forced = this.runSystemPromptOptions?.forceSystemPrompt;
+          if (forced === undefined) return transformed;
+          const current = getCurrentSystemMessage(transformed);
+          const head: SystemMessage = {
+            role: "system",
+            content: forced,
+            ...(current?.toolsAdded === undefined ? {} : { toolsAdded: current.toolsAdded }),
+            timestamp: current?.timestamp ?? nowMs(),
+          };
+          return [head, ...transformed.filter((message) => message.role !== "system")];
+        }, this),
+      );
   }
 
   private restoreToolsFromTranscript(modifiers: readonly string[] = []): void {
@@ -1801,334 +1878,366 @@ export class AgentSession {
     this.setActiveTools(names);
   }
 
-  private async startRun(trigger: BeforeAgentStartTrigger, onStarted?: () => void): Promise<void> {
-    this.isAgentRunActive = true;
-    this.agentRunAbortRequested = false;
-    let messages: AgentMessage[];
-    try {
-      messages = await this.prepareRun(trigger);
-    } catch (error) {
-      this.isAgentRunActive = false;
+  private startRun(trigger: BeforeAgentStartTrigger, onStarted?: () => void): Effect.Effect<void> {
+    return awaitingWith(function* () {
+      this.isAgentRunActive = true;
+      this.agentRunAbortRequested = false;
+      let messages: AgentMessage[];
+      try {
+        messages = yield* performed(this.prepareRun(trigger));
+      } catch (error) {
+        this.isAgentRunActive = false;
+        this.flushPendingBashMessages();
+        this.flushPendingCustomMessages();
+        this.resolveIdleWaitIfIdle();
+        throw error;
+      }
       this.flushPendingBashMessages();
       this.flushPendingCustomMessages();
-      this.resolveIdleWaitIfIdle();
-      throw error;
-    }
-    this.flushPendingBashMessages();
-    this.flushPendingCustomMessages();
-    onStarted?.();
+      onStarted?.();
 
-    this.failedResponse = undefined;
-    this.recordSelection();
-    this.pendingToolNames.clear();
-    this.goalInternal.resetGuards();
-    try {
-      await this.agent.prompt(messages);
-      while (!this.agentRunAbortRequested) {
-        if (await this.handlePostAgentRun()) {
-          if (this.agentRunAbortRequested) break;
-          await this.agent.continue();
-          continue;
-        }
-        if (this.agentRunAbortRequested) break;
-        const continueRun =
-          (await this.runBeforeSettleBoundary()) ||
-          (!this.agentRunAbortRequested && (await this.goalInternal.afterRun()));
-        if (!continueRun || this.agentRunAbortRequested) break;
-        await this.agent.continue();
-      }
-    } finally {
-      if (this.agentRunAbortRequested) this.finishCancelledRetry();
       this.failedResponse = undefined;
-      this.runSystemPromptOptions = undefined;
-      this.flushPendingBashMessages();
-      this.flushPendingCustomMessages();
-      await this.emitAgentSettled();
-    }
+      this.recordSelection();
+      this.pendingToolNames.clear();
+      this.goalInternal.resetGuards();
+      try {
+        yield* awaited(this.agent.prompt(messages));
+        while (!this.agentRunAbortRequested) {
+          if (yield* performed(this.handlePostAgentRun())) {
+            if (this.agentRunAbortRequested) break;
+            yield* awaited(this.agent.continue());
+            continue;
+          }
+          if (this.agentRunAbortRequested) break;
+          const continueRun =
+            (yield* performed(this.runBeforeSettleBoundary())) ||
+            (!this.agentRunAbortRequested && (yield* awaited(this.goalInternal.afterRun())));
+          if (!continueRun || this.agentRunAbortRequested) break;
+          yield* awaited(this.agent.continue());
+        }
+      } finally {
+        if (this.agentRunAbortRequested) this.finishCancelledRetry();
+        this.failedResponse = undefined;
+        this.runSystemPromptOptions = undefined;
+        this.flushPendingBashMessages();
+        this.flushPendingCustomMessages();
+        yield* performed(this.emitAgentSettled());
+      }
+    }, this);
   }
 
-  private async prepareRun(trigger: BeforeAgentStartTrigger): Promise<AgentMessage[]> {
-    const lastAssistant = this.findLastAssistantMessage();
-    if (lastAssistant !== undefined) {
-      await this.checkCompaction(lastAssistant, false);
-    }
+  private prepareRun(trigger: BeforeAgentStartTrigger): Effect.Effect<AgentMessage[]> {
+    return awaitingWith(function* () {
+      const lastAssistant = this.findLastAssistantMessage();
+      if (lastAssistant !== undefined) {
+        yield* awaited(this.checkCompaction(lastAssistant, false));
+      }
 
-    const selectedToolsBefore = this.baseSystemPromptOptions.selectedTools;
-    const result = await this.extensionRunnerInternal.emitBeforeAgentStart(
-      trigger,
-      this.baseSystemPromptOptions,
-    );
-    const handlerEditedTools =
-      result.systemPromptOptions.selectedTools.length !== selectedToolsBefore.length ||
-      result.systemPromptOptions.selectedTools.some(
-        (name, index) => name !== selectedToolsBefore[index],
+      const selectedToolsBefore = this.baseSystemPromptOptions.selectedTools;
+      const result = yield* awaited(
+        this.extensionRunnerInternal.emitBeforeAgentStart(trigger, this.baseSystemPromptOptions),
       );
-    if (!handlerEditedTools) result.systemPromptOptions.selectedTools = this.getActiveToolNames();
+      const handlerEditedTools =
+        result.systemPromptOptions.selectedTools.length !== selectedToolsBefore.length ||
+        result.systemPromptOptions.selectedTools.some(
+          (name, index) => name !== selectedToolsBefore[index],
+        );
+      if (!handlerEditedTools) result.systemPromptOptions.selectedTools = this.getActiveToolNames();
 
-    const messages: AgentMessage[] = [];
-    if (trigger.messageType === "custom") {
-      messages.push(trigger.message);
-    } else {
-      const normalized = await this.normalizePromptImages(trigger.images);
-      const text =
-        normalized.hints.length > 0
-          ? `${trigger.prompt}\n\n${normalized.hints.join("\n")}`
-          : trigger.prompt;
-      messages.push({
-        role: "user",
-        content: [{ type: "text", text }, ...normalized.images],
-        timestamp: Date.now(),
-      });
-      if (this.memoryInternal !== undefined) {
-        const recalled = await this.memoryInternal.recall(trigger.prompt);
-        if (recalled.length > 0) {
-          messages.unshift({
-            role: "custom",
-            customType: MEMORY_RECALL_MESSAGE_TYPE,
-            content: formatRecallBlock(recalled),
-            display: false,
-            timestamp: Date.now(),
-          });
+      const messages: AgentMessage[] = [];
+      if (trigger.messageType === "custom") {
+        messages.push(trigger.message);
+      } else {
+        const normalized = yield* performed(this.normalizePromptImages(trigger.images));
+        const text =
+          normalized.hints.length > 0
+            ? `${trigger.prompt}\n\n${normalized.hints.join("\n")}`
+            : trigger.prompt;
+        messages.push({
+          role: "user",
+          content: [{ type: "text", text }, ...normalized.images],
+          timestamp: nowMs(),
+        });
+        if (this.memoryInternal !== undefined) {
+          const recalled = yield* awaited(this.memoryInternal.recall(trigger.prompt));
+          if (recalled.length > 0) {
+            messages.unshift({
+              role: "custom",
+              customType: MEMORY_RECALL_MESSAGE_TYPE,
+              content: formatRecallBlock(recalled),
+              display: false,
+              timestamp: nowMs(),
+            });
+          }
         }
       }
-    }
-    messages.push(...this.pendingNextTurnMessages);
-    this.pendingNextTurnMessages = [];
-    for (const msg of result.messages) {
-      messages.push({
-        role: "custom",
-        customType: msg.customType,
-        content: msg.content ?? [],
-        display: msg.display,
-        details: msg.details,
-        timestamp: Date.now(),
-      });
-    }
-    const updateMessage = this.preparePromptAndToolLoadout(result.systemPromptOptions);
-    this.runSystemPromptOptions = result.systemPromptOptions;
-    if (updateMessage !== undefined) messages.unshift(updateMessage);
-    return messages;
+      messages.push(...this.pendingNextTurnMessages);
+      this.pendingNextTurnMessages = [];
+      for (const msg of result.messages) {
+        messages.push({
+          role: "custom",
+          customType: msg.customType,
+          content: msg.content ?? [],
+          display: msg.display,
+          details: msg.details,
+          timestamp: nowMs(),
+        });
+      }
+      const updateMessage = this.preparePromptAndToolLoadout(result.systemPromptOptions);
+      this.runSystemPromptOptions = result.systemPromptOptions;
+      if (updateMessage !== undefined) messages.unshift(updateMessage);
+      return messages;
+    }, this);
   }
 
-  private async handlePostAgentRun(): Promise<boolean> {
-    const message = this.lastAssistantMessage;
-    const toolResults = this.lastAssistantToolResults;
-    this.lastAssistantMessage = undefined;
-    this.lastAssistantToolResults = [];
-    if (this.agentRunAbortRequested) {
-      this.finishCancelledRetry();
-      return false;
-    }
-    if (message === undefined) return this.agent.hasQueuedMessages();
-
-    if (this.isRetryableError(message) && (await this.prepareRetry(message))) {
-      if (this.agentRunAbortRequested) this.finishCancelledRetry();
-      this.failedResponse = message;
-      return !this.agentRunAbortRequested;
-    }
-    if (this.agentRunAbortRequested) {
-      this.finishCancelledRetry();
-      return false;
-    }
-
-    if (message.stopReason === "error" && this.retryAttemptInternal > 0) {
-      this.emit({
-        type: "auto_retry_end",
-        success: false,
-        attempt: this.retryAttemptInternal,
-        finalError: message.errorMessage,
-      });
-      this.retryAttemptInternal = 0;
-    }
-
-    if (await this.checkCompaction(message, true, toolResults)) {
-      return !this.agentRunAbortRequested;
-    }
-
-    return !this.agentRunAbortRequested && this.agent.hasQueuedMessages();
-  }
-
-  private async runBeforeSettleBoundary(): Promise<boolean> {
-    if (!this.extensionRunnerInternal.hasHandlers("agent_before_settle"))
-      return this.agent.hasQueuedMessages();
-    this.isBeforeSettle = true;
-    this.abortDuringBeforeSettle = false;
-    try {
-      const result = await this.extensionRunnerInternal.emitBoundary(
-        { type: "agent_before_settle", outcome: this.lastActivityOutcome },
-        (entries) => this.buildBoundaryContext(entries, "agent_before_settle"),
-      );
-      this.commitBoundaryDrafts(result.entries);
-      this.flushPendingCustomMessages();
-      const finalContext = this.buildBoundaryContext([], "agent_before_settle");
-      if (this.abortDuringBeforeSettle) return false;
-      const shouldContinue = result.continue || this.agent.hasQueuedMessages();
-      if (shouldContinue && !finalContext.canContinue) {
-        if (result.continue) this.reportInvalidBoundaryContinuation("agent_before_settle");
+  private handlePostAgentRun(): Effect.Effect<boolean> {
+    return awaitingWith(function* () {
+      const message = this.lastAssistantMessage;
+      const toolResults = this.lastAssistantToolResults;
+      this.lastAssistantMessage = undefined;
+      this.lastAssistantToolResults = [];
+      if (this.agentRunAbortRequested) {
+        this.finishCancelledRetry();
         return false;
       }
-      return shouldContinue;
-    } finally {
-      this.isBeforeSettle = false;
-    }
+      if (message === undefined) return this.agent.hasQueuedMessages();
+
+      if (this.isRetryableError(message) && (yield* performed(this.prepareRetry(message)))) {
+        if (this.agentRunAbortRequested) this.finishCancelledRetry();
+        this.failedResponse = message;
+        return !this.agentRunAbortRequested;
+      }
+      if (this.agentRunAbortRequested) {
+        this.finishCancelledRetry();
+        return false;
+      }
+
+      if (message.stopReason === "error" && this.retryAttemptInternal > 0) {
+        this.emit({
+          type: "auto_retry_end",
+          success: false,
+          attempt: this.retryAttemptInternal,
+          finalError: message.errorMessage,
+        });
+        this.retryAttemptInternal = 0;
+      }
+
+      if (yield* awaited(this.checkCompaction(message, true, toolResults))) {
+        return !this.agentRunAbortRequested;
+      }
+
+      return !this.agentRunAbortRequested && this.agent.hasQueuedMessages();
+    }, this);
   }
 
-  private async runInputHandlers(
+  private runBeforeSettleBoundary(): Effect.Effect<boolean> {
+    return awaitingWith(function* () {
+      if (!this.extensionRunnerInternal.hasHandlers("agent_before_settle"))
+        return this.agent.hasQueuedMessages();
+      this.isBeforeSettle = true;
+      this.abortDuringBeforeSettle = false;
+      try {
+        const result = yield* awaited(
+          this.extensionRunnerInternal.emitBoundary(
+            { type: "agent_before_settle", outcome: this.lastActivityOutcome },
+            (entries) => this.buildBoundaryContext(entries, "agent_before_settle"),
+          ),
+        );
+        this.commitBoundaryDrafts(result.entries);
+        this.flushPendingCustomMessages();
+        const finalContext = this.buildBoundaryContext([], "agent_before_settle");
+        if (this.abortDuringBeforeSettle) return false;
+        const shouldContinue = result.continue || this.agent.hasQueuedMessages();
+        if (shouldContinue && !finalContext.canContinue) {
+          if (result.continue) this.reportInvalidBoundaryContinuation("agent_before_settle");
+          return false;
+        }
+        return shouldContinue;
+      } finally {
+        this.isBeforeSettle = false;
+      }
+    }, this);
+  }
+
+  private runInputHandlers(
     text: string,
     images: ImageContent[] | undefined,
     source: InputSource,
     streamingBehavior?: "steer" | "followUp",
-  ): Promise<{ text: string; images: ImageContent[] | undefined } | undefined> {
-    if (!this.extensionRunnerInternal.hasHandlers("input")) {
-      return { text, images };
-    }
-
-    const inputResult = await this.extensionRunnerInternal.emitInput(
-      text,
-      images,
-      source,
-      streamingBehavior,
-    );
-    if (inputResult.action === "handled") {
-      return undefined;
-    }
-    if (inputResult.action === "transform") {
-      return { text: inputResult.text, images: inputResult.images ?? images };
-    }
-    return { text, images };
-  }
-
-  private async normalizePromptImages(
-    images: ImageContent[] | undefined,
-  ): Promise<{ images: ImageContent[]; hints: string[] }> {
-    if (images === undefined) return { images: [], hints: [] };
-
-    const normalizedImages: ImageContent[] = [];
-    const hints: string[] = [];
-    for (const image of images) {
-      const processed = await processImage(Buffer.from(image.data, "base64"), image.mimeType, {
-        autoResizeImages: this.settingsManager.getImageAutoResize(),
-        resizeOptions: this.limitsModel()?.inputLimits?.images?.resize,
-      });
-      if (!processed.ok) {
-        hints.push(processed.message);
-        continue;
+  ): Effect.Effect<{ text: string; images: ImageContent[] | undefined } | undefined> {
+    return awaitingWith(function* () {
+      if (!this.extensionRunnerInternal.hasHandlers("input")) {
+        return { text, images };
       }
-      normalizedImages.push({ type: "image", data: processed.data, mimeType: processed.mimeType });
-      hints.push(...processed.hints);
-    }
-    return { images: normalizedImages, hints };
-  }
 
-  async prompt(text: string, options?: PromptOptions): Promise<void> {
-    if (this.isEmittingAgentSettled) {
-      this.deferredSettledActions.push(async () => await this.prompt(text, options));
-      return;
-    }
-    const expandPromptTemplates = options?.expandPromptTemplates ?? true;
-    const preflightResult = options?.preflightResult;
-    const goalCommand = expandPromptTemplates ? parseGoalCommand(text) : undefined;
-    if (goalCommand !== undefined) {
-      await this.runGoalCommand(goalCommand, options);
-      return;
-    }
-    const memoryCommand = expandPromptTemplates ? parseMemoryCommand(text) : undefined;
-    if (memoryCommand !== undefined) {
-      await this.runMemoryCommand(memoryCommand, options);
-      return;
-    }
-    if (expandPromptTemplates && text.startsWith("/")) {
-      const handled = await this.tryExecuteExtensionCommand(text);
-      if (handled) {
-        preflightResult?.("handled");
-        return;
-      }
-    }
-
-    if (this.compactionAbortController !== undefined) {
-      throw new Error(
-        "Cannot submit a prompt while compaction is in progress. Wait for compaction to finish and retry.",
+      const inputResult = yield* awaited(
+        this.extensionRunnerInternal.emitInput(text, images, source, streamingBehavior),
       );
-    }
+      if (inputResult.action === "handled") {
+        return undefined;
+      }
+      if (inputResult.action === "transform") {
+        return { text: inputResult.text, images: inputResult.images ?? images };
+      }
+      return { text, images };
+    }, this);
+  }
 
-    const processedInput = await this.runInputHandlers(
-      text,
-      options?.images,
-      options?.source ?? "interactive",
-      this.isStreaming ? options?.streamingBehavior : undefined,
-    );
-    if (processedInput === undefined) {
-      preflightResult?.("handled");
-      return;
-    }
-    const { text: currentText, images: currentImages } = processedInput;
+  private normalizePromptImages(
+    images: ImageContent[] | undefined,
+  ): Effect.Effect<{ images: ImageContent[]; hints: string[] }> {
+    return awaitingWith(function* () {
+      if (images === undefined) return { images: [], hints: [] };
 
-    let expandedText = currentText;
-    if (expandPromptTemplates) {
-      expandedText = this.expandSkillCommand(expandedText);
-      expandedText = expandPromptTemplate(expandedText, [...this.promptTemplates]);
-    }
-
-    if (this.isStreaming) {
-      if (options?.streamingBehavior === undefined) {
-        throw new Error(
-          "Agent is already processing. Specify streamingBehavior ('steer' or 'followUp') to queue the message.",
+      const normalizedImages: ImageContent[] = [];
+      const hints: string[] = [];
+      for (const image of images) {
+        const processed = yield* awaited(
+          processImage(Buffer.from(image.data, "base64"), image.mimeType, {
+            autoResizeImages: this.settingsManager.getImageAutoResize(),
+            resizeOptions: this.limitsModel()?.inputLimits?.images?.resize,
+          }),
         );
+        if (!processed.ok) {
+          hints.push(processed.message);
+          continue;
+        }
+        normalizedImages.push({
+          type: "image",
+          data: processed.data,
+          mimeType: processed.mimeType,
+        });
+        hints.push(...processed.hints);
       }
-      if (options.streamingBehavior === "followUp") {
-        await this.queueFollowUp(expandedText, currentImages);
-      } else {
-        await this.queueSteer(expandedText, currentImages);
-      }
-      preflightResult?.("queued");
-      return;
-    }
+      return { images: normalizedImages, hints };
+    }, this);
+  }
 
-    if (this.model === undefined) {
-      throw new Error(formatNoModelSelectedMessage());
-    }
+  prompt(text: string, options?: PromptOptions): Promise<void> {
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        if (this.isEmittingAgentSettled) {
+          this.deferredSettledActions.push(() =>
+            Effect.runPromise(
+              awaitingWith(function* () {
+                return yield* awaited(this.prompt(text, options));
+              }, this),
+            ),
+          );
+          return;
+        }
+        const expandPromptTemplates = options?.expandPromptTemplates ?? true;
+        const preflightResult = options?.preflightResult;
+        const goalCommand = expandPromptTemplates ? parseGoalCommand(text) : undefined;
+        if (goalCommand !== undefined) {
+          yield* performed(this.runGoalCommand(goalCommand, options));
+          return;
+        }
+        const memoryCommand = expandPromptTemplates ? parseMemoryCommand(text) : undefined;
+        if (memoryCommand !== undefined) {
+          yield* performed(this.runMemoryCommand(memoryCommand, options));
+          return;
+        }
+        if (expandPromptTemplates && text.startsWith("/")) {
+          const handled = yield* performed(this.tryExecuteExtensionCommand(text));
+          if (handled) {
+            preflightResult?.("handled");
+            return;
+          }
+        }
 
-    const hasConfiguredAuth =
-      this.modelRuntimeInternal.hasConfiguredAuth(this.model.provider) ||
-      (await this.modelRuntimeInternal.checkAuth(this.model.provider)) !== undefined;
-    if (!hasConfiguredAuth) {
-      const isOAuth = this.modelRuntimeInternal.isUsingOAuth(this.model.provider);
-      if (isOAuth) {
-        throw new Error(
-          `Authentication failed for "${this.model.provider}". ` +
-            `Credentials may have expired or network is unavailable. ` +
-            `Run '/login ${this.model.provider}' to re-authenticate.`,
+        if (this.compactionAbortController !== undefined) {
+          throw new Error(
+            "Cannot submit a prompt while compaction is in progress. Wait for compaction to finish and retry.",
+          );
+        }
+
+        const processedInput = yield* performed(
+          this.runInputHandlers(
+            text,
+            options?.images,
+            options?.source ?? "interactive",
+            this.isStreaming ? options?.streamingBehavior : undefined,
+          ),
         );
-      }
-      throw new Error(formatNoApiKeyFoundMessage(this.model.provider));
-    }
+        if (processedInput === undefined) {
+          preflightResult?.("handled");
+          return;
+        }
+        const { text: currentText, images: currentImages } = processedInput;
 
-    await this.startRun({ messageType: "user", prompt: expandedText, images: currentImages }, () =>
-      preflightResult?.("started"),
+        let expandedText = currentText;
+        if (expandPromptTemplates) {
+          expandedText = this.expandSkillCommand(expandedText);
+          expandedText = expandPromptTemplate(expandedText, [...this.promptTemplates]);
+        }
+
+        if (this.isStreaming) {
+          if (options?.streamingBehavior === undefined) {
+            throw new Error(
+              "Agent is already processing. Specify streamingBehavior ('steer' or 'followUp') to queue the message.",
+            );
+          }
+          if (options.streamingBehavior === "followUp") {
+            yield* performed(this.queueFollowUp(expandedText, currentImages));
+          } else {
+            yield* performed(this.queueSteer(expandedText, currentImages));
+          }
+          preflightResult?.("queued");
+          return;
+        }
+
+        if (this.model === undefined) {
+          throw new Error(formatNoModelSelectedMessage());
+        }
+
+        const hasConfiguredAuth =
+          this.modelRuntimeInternal.hasConfiguredAuth(this.model.provider) ||
+          (yield* awaited(this.modelRuntimeInternal.checkAuth(this.model.provider))) !== undefined;
+        if (!hasConfiguredAuth) {
+          const isOAuth = this.modelRuntimeInternal.isUsingOAuth(this.model.provider);
+          if (isOAuth) {
+            throw new Error(
+              `Authentication failed for "${this.model.provider}". ` +
+                `Credentials may have expired or network is unavailable. ` +
+                `Run '/login ${this.model.provider}' to re-authenticate.`,
+            );
+          }
+          throw new Error(formatNoApiKeyFoundMessage(this.model.provider));
+        }
+
+        yield* performed(
+          this.startRun({ messageType: "user", prompt: expandedText, images: currentImages }, () =>
+            preflightResult?.("started"),
+          ),
+        );
+      }, this),
     );
   }
 
-  private async tryExecuteExtensionCommand(text: string): Promise<boolean> {
-    const spaceIndex = text.indexOf(" ");
-    const commandName = spaceIndex === -1 ? text.slice(1) : text.slice(1, spaceIndex);
-    const args = spaceIndex === -1 ? "" : text.slice(spaceIndex + 1);
+  private tryExecuteExtensionCommand(text: string): Effect.Effect<boolean> {
+    return awaitingWith(function* () {
+      const spaceIndex = text.indexOf(" ");
+      const commandName = spaceIndex === -1 ? text.slice(1) : text.slice(1, spaceIndex);
+      const args = spaceIndex === -1 ? "" : text.slice(spaceIndex + 1);
 
-    const command = this.extensionRunnerInternal.getCommand(commandName);
-    if (command === undefined || this.isSkillCommand(text)) return false;
+      const command = this.extensionRunnerInternal.getCommand(commandName);
+      if (command === undefined || this.isSkillCommand(text)) return false;
 
-    const ctx = this.extensionRunnerInternal.createCommandContext();
+      const ctx = this.extensionRunnerInternal.createCommandContext();
 
-    try {
-      await command.handler(args, ctx);
-      return true;
-    } catch (err) {
-      this.extensionRunnerInternal.emitError({
-        extensionPath: `command:${commandName}`,
-        event: "command",
-        error: toErrorMessage(err),
-      });
-      return true;
-    }
+      try {
+        yield* awaited(command.handler(args, ctx));
+        return true;
+      } catch (err) {
+        this.extensionRunnerInternal.emitError({
+          extensionPath: `command:${commandName}`,
+          event: "command",
+          error: toErrorMessage(err),
+        });
+        return true;
+      }
+    }, this);
   }
 
   private isSkillCommand(text: string): boolean {
@@ -2161,73 +2270,88 @@ export class AgentSession {
     }
   }
 
-  private async queueUserInput(
+  private queueUserInput(
     text: string,
     images: ImageContent[] | undefined,
     behavior: "steer" | "followUp",
     source: InputSource,
-  ): Promise<QueuedInputDisposition> {
-    if (text.startsWith("/")) {
-      this.throwIfExtensionCommand(text);
-    }
+  ): Effect.Effect<QueuedInputDisposition> {
+    return awaitingWith(function* () {
+      if (text.startsWith("/")) {
+        this.throwIfExtensionCommand(text);
+      }
 
-    const processedInput = await this.runInputHandlers(
-      text,
-      images,
-      source,
-      this.isStreaming ? behavior : undefined,
+      const processedInput = yield* performed(
+        this.runInputHandlers(text, images, source, this.isStreaming ? behavior : undefined),
+      );
+      if (processedInput === undefined) return "handled";
+
+      let expandedText = this.expandSkillCommand(processedInput.text);
+      expandedText = expandPromptTemplate(expandedText, [...this.promptTemplates]);
+
+      if (behavior === "steer") {
+        yield* performed(this.queueSteer(expandedText, processedInput.images));
+      } else {
+        yield* performed(this.queueFollowUp(expandedText, processedInput.images));
+      }
+      return "queued";
+    }, this);
+  }
+
+  steer(
+    text: string,
+    images?: ImageContent[],
+    options?: { source?: InputSource },
+  ): Promise<QueuedInputDisposition> {
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        return yield* performed(
+          this.queueUserInput(text, images, "steer", options?.source ?? "interactive"),
+        );
+      }, this),
     );
-    if (processedInput === undefined) return "handled";
-
-    let expandedText = this.expandSkillCommand(processedInput.text);
-    expandedText = expandPromptTemplate(expandedText, [...this.promptTemplates]);
-
-    if (behavior === "steer") {
-      await this.queueSteer(expandedText, processedInput.images);
-    } else {
-      await this.queueFollowUp(expandedText, processedInput.images);
-    }
-    return "queued";
   }
 
-  async steer(
+  followUp(
     text: string,
     images?: ImageContent[],
     options?: { source?: InputSource },
   ): Promise<QueuedInputDisposition> {
-    return this.queueUserInput(text, images, "steer", options?.source ?? "interactive");
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        return yield* performed(
+          this.queueUserInput(text, images, "followUp", options?.source ?? "interactive"),
+        );
+      }, this),
+    );
   }
 
-  async followUp(
-    text: string,
-    images?: ImageContent[],
-    options?: { source?: InputSource },
-  ): Promise<QueuedInputDisposition> {
-    return this.queueUserInput(text, images, "followUp", options?.source ?? "interactive");
-  }
-
-  private async queueSteer(text: string, images?: ImageContent[]): Promise<void> {
-    this.steeringMessages.push(text);
-    this.emitQueueUpdate();
-    const content: (TextContent | ImageContent)[] = [{ type: "text", text }];
-    if (images !== undefined) {
-      content.push(...images);
-    }
-    this.agent.steer({
-      role: "user",
-      content,
-      timestamp: Date.now(),
+  private queueSteer(text: string, images?: ImageContent[]): Effect.Effect<void> {
+    return Effect.sync(() => {
+      this.steeringMessages.push(text);
+      this.emitQueueUpdate();
+      const content: (TextContent | ImageContent)[] = [{ type: "text", text }];
+      if (images !== undefined) {
+        content.push(...images);
+      }
+      this.agent.steer({
+        role: "user",
+        content,
+        timestamp: nowMs(),
+      });
     });
   }
 
-  private async queueFollowUp(text: string, images?: ImageContent[]): Promise<void> {
-    this.followUpMessages.push(text);
-    this.emitQueueUpdate();
-    const content: (TextContent | ImageContent)[] = [{ type: "text", text }];
-    if (images !== undefined) {
-      content.push(...images);
-    }
-    this.agent.followUp({ role: "user", content, timestamp: Date.now() });
+  private queueFollowUp(text: string, images?: ImageContent[]): Effect.Effect<void> {
+    return Effect.sync(() => {
+      this.followUpMessages.push(text);
+      this.emitQueueUpdate();
+      const content: (TextContent | ImageContent)[] = [{ type: "text", text }];
+      if (images !== undefined) {
+        content.push(...images);
+      }
+      this.agent.followUp({ role: "user", content, timestamp: nowMs() });
+    });
   }
 
   private throwIfExtensionCommand(text: string): void {
@@ -2242,39 +2366,47 @@ export class AgentSession {
     }
   }
 
-  async sendCustomMessage<T = unknown>(
+  sendCustomMessage<T = unknown>(
     message: Pick<CustomMessage<T>, "customType" | "content" | "display" | "details">,
     options?: { triggerTurn?: boolean; deliverAs?: "steer" | "followUp" | "nextTurn" },
   ): Promise<void> {
-    const appMessage = {
-      role: "custom" as const,
-      customType: message.customType,
-      content: message.content ?? [],
-      display: message.display,
-      details: message.details,
-      timestamp: Date.now(),
-    } satisfies CustomMessage<T>;
-    if (options?.deliverAs === "nextTurn") {
-      this.pendingNextTurnMessages.push(appMessage);
-    } else if (this.isStreaming && options?.triggerTurn !== false) {
-      if (options?.deliverAs === "followUp") {
-        this.agent.followUp(appMessage);
-      } else {
-        this.agent.steer(appMessage);
-      }
-    } else if (options?.triggerTurn === true) {
-      if (this.isEmittingAgentSettled) {
-        this.deferredSettledActions.push(
-          async () => await this.sendCustomMessage(message, options),
-        );
-        return;
-      }
-      await this.startRun({ messageType: "custom", message: appMessage });
-    } else if (this.isStreaming) {
-      this.pendingCustomMessages.push(appMessage);
-    } else {
-      this.appendCustomMessage(appMessage);
-    }
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        const appMessage = {
+          role: "custom" as const,
+          customType: message.customType,
+          content: message.content ?? [],
+          display: message.display,
+          details: message.details,
+          timestamp: nowMs(),
+        } satisfies CustomMessage<T>;
+        if (options?.deliverAs === "nextTurn") {
+          this.pendingNextTurnMessages.push(appMessage);
+        } else if (this.isStreaming && options?.triggerTurn !== false) {
+          if (options?.deliverAs === "followUp") {
+            this.agent.followUp(appMessage);
+          } else {
+            this.agent.steer(appMessage);
+          }
+        } else if (options?.triggerTurn === true) {
+          if (this.isEmittingAgentSettled) {
+            this.deferredSettledActions.push(() =>
+              Effect.runPromise(
+                awaitingWith(function* () {
+                  return yield* awaited(this.sendCustomMessage(message, options));
+                }, this),
+              ),
+            );
+            return;
+          }
+          yield* performed(this.startRun({ messageType: "custom", message: appMessage }));
+        } else if (this.isStreaming) {
+          this.pendingCustomMessages.push(appMessage);
+        } else {
+          this.appendCustomMessage(appMessage);
+        }
+      }, this),
+    );
   }
 
   private appendCustomMessage(appMessage: CustomMessage): void {
@@ -2299,35 +2431,41 @@ export class AgentSession {
     }
   }
 
-  async sendUserMessage(
+  sendUserMessage(
     content: string | (TextContent | ImageContent)[],
     options?: { deliverAs?: "steer" | "followUp"; expandPromptTemplates?: boolean },
   ): Promise<void> {
-    let text: string;
-    let images: ImageContent[] | undefined;
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        let text: string;
+        let images: ImageContent[] | undefined;
 
-    if (typeof content === "string") {
-      text = content;
-    } else {
-      const textParts: string[] = [];
-      images = [];
-      for (const part of content) {
-        if (part.type === "text") {
-          textParts.push(part.text);
+        if (typeof content === "string") {
+          text = content;
         } else {
-          images.push(part);
+          const textParts: string[] = [];
+          images = [];
+          for (const part of content) {
+            if (part.type === "text") {
+              textParts.push(part.text);
+            } else {
+              images.push(part);
+            }
+          }
+          text = textParts.join("\n");
+          if (images.length === 0) images = undefined;
         }
-      }
-      text = textParts.join("\n");
-      if (images.length === 0) images = undefined;
-    }
 
-    await this.prompt(text, {
-      expandPromptTemplates: options?.expandPromptTemplates ?? false,
-      streamingBehavior: options?.deliverAs,
-      images,
-      source: "extension",
-    });
+        yield* awaited(
+          this.prompt(text, {
+            expandPromptTemplates: options?.expandPromptTemplates ?? false,
+            streamingBehavior: options?.deliverAs,
+            images,
+            source: "extension",
+          }),
+        );
+      }, this),
+    );
   }
 
   clearQueue(): { steering: string[]; followUp: string[] } {
@@ -2356,24 +2494,32 @@ export class AgentSession {
     return this.resourceLoaderInternal;
   }
 
-  async abort(): Promise<void> {
-    if (this.isAgentRunActive) {
-      this.agentRunAbortRequested = true;
-    }
-    this.abortRetry();
-    this.abortCompaction();
-    this.abortBranchSummary();
-    this.goalInternal.abort();
-    if (this.isBeforeSettle) this.abortDuringBeforeSettle = true;
-    this.agent.abort();
-    await this.waitForIdle();
+  abort(): Promise<void> {
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        if (this.isAgentRunActive) {
+          this.agentRunAbortRequested = true;
+        }
+        this.abortRetry();
+        this.abortCompaction();
+        this.abortBranchSummary();
+        this.goalInternal.abort();
+        if (this.isBeforeSettle) this.abortDuringBeforeSettle = true;
+        this.agent.abort();
+        yield* awaited(this.waitForIdle());
+      }, this),
+    );
   }
 
-  async waitForIdle(): Promise<void> {
-    if (this.isIdle) {
-      return;
-    }
-    await this.getIdleWaitPromise();
+  waitForIdle(): Promise<void> {
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        if (this.isIdle) {
+          return;
+        }
+        yield* awaited(this.getIdleWaitPromise());
+      }, this),
+    );
   }
 
   get orchestrator(): Orchestrator | undefined {
@@ -2396,22 +2542,26 @@ export class AgentSession {
     return this.goalInternal.clear();
   }
 
-  private async runGoalCommand(command: GoalCommand, options?: PromptOptions): Promise<void> {
-    if (command.kind === "set") {
-      this.goalInternal.set(command.condition);
-      const goal = this.goalInternal.snapshot;
-      if (goal === undefined) return;
-      await this.prompt(goal.condition, {
-        ...options,
-        expandPromptTemplates: false,
-        streamingBehavior: options?.streamingBehavior ?? "steer",
-      });
-      return;
-    }
-    if (command.kind === "status" || !this.goalInternal.clear()) {
-      this.emit({ type: "goal_status", goal: this.goalInternal.snapshot });
-    }
-    options?.preflightResult?.("handled");
+  private runGoalCommand(command: GoalCommand, options?: PromptOptions): Effect.Effect<void> {
+    return awaitingWith(function* () {
+      if (command.kind === "set") {
+        this.goalInternal.set(command.condition);
+        const goal = this.goalInternal.snapshot;
+        if (goal === undefined) return;
+        yield* awaited(
+          this.prompt(goal.condition, {
+            ...options,
+            expandPromptTemplates: false,
+            streamingBehavior: options?.streamingBehavior ?? "steer",
+          }),
+        );
+        return;
+      }
+      if (command.kind === "status" || !this.goalInternal.clear()) {
+        this.emit({ type: "goal_status", goal: this.goalInternal.snapshot });
+      }
+      options?.preflightResult?.("handled");
+    }, this);
   }
 
   private recordGoalEntry(data: GoalEntryData): void {
@@ -2421,34 +2571,36 @@ export class AgentSession {
     if (entry !== undefined) this.emit({ type: "entry_appended", entry });
   }
 
-  private async runMemoryCommand(command: MemoryCommand, options?: PromptOptions): Promise<void> {
-    const memory = this.memoryInternal;
-    let text: string;
-    if (memory === undefined) {
-      text = "Memory is disabled (settings: memory.enabled).";
-    } else {
-      switch (command.kind) {
-        case "status":
-          text = memory.describeStatus();
-          break;
-        case "stats":
-          text = memory.describeStats();
-          break;
-        case "list":
-          text = formatMemoryList(memory.list(20));
-          break;
-        case "search":
-          text = formatSearchResults(await memory.search(command.query, 10));
-          break;
-        case "forget":
-          text = memory.forget(command.id)
-            ? `Forgot memory ${command.id}.`
-            : `No memory with id ${command.id}.`;
-          break;
+  private runMemoryCommand(command: MemoryCommand, options?: PromptOptions): Effect.Effect<void> {
+    return awaitingWith(function* () {
+      const memory = this.memoryInternal;
+      let text: string;
+      if (memory === undefined) {
+        text = "Memory is disabled (settings: memory.enabled).";
+      } else {
+        switch (command.kind) {
+          case "status":
+            text = memory.describeStatus();
+            break;
+          case "stats":
+            text = memory.describeStats();
+            break;
+          case "list":
+            text = formatMemoryList(memory.list(20));
+            break;
+          case "search":
+            text = formatSearchResults(yield* awaited(memory.search(command.query, 10)));
+            break;
+          case "forget":
+            text = memory.forget(command.id)
+              ? `Forgot memory ${command.id}.`
+              : `No memory with id ${command.id}.`;
+            break;
+        }
       }
-    }
-    this.emit({ type: "memory_status", text });
-    options?.preflightResult?.("handled");
+      this.emit({ type: "memory_status", text });
+      options?.preflightResult?.("handled");
+    }, this);
   }
 
   private totalSessionTokens(): number {
@@ -2503,75 +2655,88 @@ export class AgentSession {
     return pickEvaluatorModel(current, available);
   }
 
-  private async evaluateGoal(prompt: string, signal: AbortSignal): Promise<string> {
-    const {
-      model,
-      thinkingLevel: _thinkingLevel,
-      ...credentials
-    } = await this.getSummarizationRequestAuth(this.goalEvaluatorModel(), signal);
-    const response = await completeSummarization(
-      model,
-      normalizeContext({
-        systemPrompt: GOAL_EVALUATOR_SYSTEM_PROMPT,
-        messages: [
-          { role: "user", content: [{ type: "text", text: prompt }], timestamp: Date.now() },
-        ],
-      }),
-      {
-        ...credentials,
-        maxTokens: Math.min(2048, model.maxTokens > 0 ? model.maxTokens : 2048),
-        signal,
-        sessionId: this.sessionId,
-      },
-      this.agent.streamFunction,
-      this.settingsManager.getRetrySettings(),
-    );
-    if (response.usage !== undefined) {
-      const entry = this.sessionManager.appendUsage(
-        "goal_evaluation",
-        response.provider,
-        response.model,
-        response.usage,
+  private evaluateGoal(prompt: string, signal: AbortSignal): Effect.Effect<string> {
+    return awaitingWith(function* () {
+      const {
+        model,
+        thinkingLevel: _thinkingLevel,
+        ...credentials
+      } = yield* performed(this.getSummarizationRequestAuth(this.goalEvaluatorModel(), signal));
+      const response = yield* awaited(
+        completeSummarization(
+          model,
+          normalizeContext({
+            systemPrompt: GOAL_EVALUATOR_SYSTEM_PROMPT,
+            messages: [
+              { role: "user", content: [{ type: "text", text: prompt }], timestamp: nowMs() },
+            ],
+          }),
+          {
+            ...credentials,
+            maxTokens: Math.min(2048, model.maxTokens > 0 ? model.maxTokens : 2048),
+            signal,
+            sessionId: this.sessionId,
+          },
+          this.agent.streamFunction,
+          this.settingsManager.getRetrySettings(),
+        ),
       );
-      this.emit({ type: "entry_appended", entry });
-    }
-    if (response.stopReason === "aborted") throw new Error("cancelled");
-    if (response.stopReason === "error") throw new Error(response.errorMessage || "Unknown error");
-    if (response.stopReason === "length") throw new Error("the response hit the token cap");
-    return contentText(response.content, "\n").trim();
+      if (response.usage !== undefined) {
+        const entry = this.sessionManager.appendUsage(
+          "goal_evaluation",
+          response.provider,
+          response.model,
+          response.usage,
+        );
+        this.emit({ type: "entry_appended", entry });
+      }
+      if (response.stopReason === "aborted") throw new Error("cancelled");
+      if (response.stopReason === "error")
+        throw new Error(response.errorMessage || "Unknown error");
+      if (response.stopReason === "length") throw new Error("the response hit the token cap");
+      return contentText(response.content, "\n").trim();
+    }, this);
   }
 
-  private async emitModelSelect(
+  private emitModelSelect(
     nextModel: Model<any>,
     previousModel: Model<any> | undefined,
     source: "set" | "cycle" | "restore",
-  ): Promise<void> {
-    if (modelsAreEqual(previousModel, nextModel)) return;
-    await this.extensionRunnerInternal.emit({
-      type: "model_select",
-      model: nextModel,
-      previousModel,
-      source,
-    });
+  ): Effect.Effect<void> {
+    return awaitingWith(function* () {
+      if (modelsAreEqual(previousModel, nextModel)) return;
+      yield* awaited(
+        this.extensionRunnerInternal.emit({
+          type: "model_select",
+          model: nextModel,
+          previousModel,
+          source,
+        }),
+      );
+    }, this);
   }
 
-  async setModel(model: Model<any>, options: ModelMutationOptions = {}): Promise<void> {
-    if ((await this.modelRuntimeInternal.checkAuth(model.provider)) === undefined) {
-      throw new Error(`No API key for ${model.provider}/${model.id}`);
-    }
+  setModel(model: Model<any>, options: ModelMutationOptions = {}): Promise<void> {
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        if ((yield* awaited(this.modelRuntimeInternal.checkAuth(model.provider))) === undefined) {
+          throw new Error(`No API key for ${model.provider}/${model.id}`);
+        }
 
-    const previousModel = this.model;
-    const thinkingLevel = this.getThinkingLevelForModelSwitch(model);
-    this.agent.state.model = model;
-    this.sessionManager.appendModelChange(model.provider, model.id);
-    if (options.persist === true) {
-      this.settingsManager.setDefaultModelAndProvider(model.provider, model.id);
-      this.addPersistedDefaultToNonEmptyScope(model);
-    }
+        const previousModel = this.model;
+        const thinkingLevel = this.getThinkingLevelForModelSwitch(model);
+        this.agent.state.model = model;
+        this.sessionManager.appendModelChange(model.provider, model.id);
+        if (options.persist === true) {
+          this.settingsManager.setDefaultModelAndProvider(model.provider, model.id);
+          this.addPersistedDefaultToNonEmptyScope(model);
+        }
 
-    this.setThinkingLevel(thinkingLevel);
+        this.setThinkingLevel(thinkingLevel);
 
-    await this.emitModelSelect(model, previousModel, "set");
+        yield* performed(this.emitModelSelect(model, previousModel, "set"));
+      }, this),
+    );
   }
 
   private addPersistedDefaultToNonEmptyScope(model: Model<any>): void {
@@ -2589,85 +2754,93 @@ export class AgentSession {
     this.settingsManager.setEnabledModels([...enabledModels, modelReference]);
   }
 
-  async cycleModel(
+  cycleModel(
     direction: "forward" | "backward" = "forward",
     options: ModelMutationOptions = {},
   ): Promise<ModelCycleResult | undefined> {
-    if (this.scopedModelsInternal.length > 0) {
-      return this.cycleScopedModel(direction, options);
-    }
-    return this.cycleAvailableModel(direction, options);
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        if (this.scopedModelsInternal.length > 0) {
+          return yield* performed(this.cycleScopedModel(direction, options));
+        }
+        return yield* performed(this.cycleAvailableModel(direction, options));
+      }, this),
+    );
   }
 
-  private async cycleScopedModel(
+  private cycleScopedModel(
     direction: "forward" | "backward",
     options: ModelMutationOptions,
-  ): Promise<ModelCycleResult | undefined> {
-    const availableIds = new Set(
-      this.modelRuntimeInternal
-        .getAvailableSnapshot()
-        .map((model) => `${model.provider}\0${model.id}`),
-    );
-    const scopedModels = this.scopedModelsInternal.filter((scoped) =>
-      availableIds.has(`${scoped.model.provider}\0${scoped.model.id}`),
-    );
-    if (scopedModels.length <= 1) return undefined;
+  ): Effect.Effect<ModelCycleResult | undefined> {
+    return awaitingWith(function* () {
+      const availableIds = new Set(
+        this.modelRuntimeInternal
+          .getAvailableSnapshot()
+          .map((model) => `${model.provider}\0${model.id}`),
+      );
+      const scopedModels = this.scopedModelsInternal.filter((scoped) =>
+        availableIds.has(`${scoped.model.provider}\0${scoped.model.id}`),
+      );
+      if (scopedModels.length <= 1) return undefined;
 
-    const currentModel = this.model;
-    let currentIndex = scopedModels.findIndex((sm) => modelsAreEqual(sm.model, currentModel));
+      const currentModel = this.model;
+      let currentIndex = scopedModels.findIndex((sm) => modelsAreEqual(sm.model, currentModel));
 
-    if (currentIndex === -1) currentIndex = 0;
-    const len = scopedModels.length;
-    const nextIndex =
-      direction === "forward" ? (currentIndex + 1) % len : (currentIndex - 1 + len) % len;
-    const next = scopedModels[nextIndex];
-    if (next === undefined) return undefined;
-    const thinkingLevel = this.getThinkingLevelForModelSwitch(next.model, next.thinkingLevel);
+      if (currentIndex === -1) currentIndex = 0;
+      const len = scopedModels.length;
+      const nextIndex =
+        direction === "forward" ? (currentIndex + 1) % len : (currentIndex - 1 + len) % len;
+      const next = scopedModels[nextIndex];
+      if (next === undefined) return undefined;
+      const thinkingLevel = this.getThinkingLevelForModelSwitch(next.model, next.thinkingLevel);
 
-    this.agent.state.model = next.model;
-    this.sessionManager.appendModelChange(next.model.provider, next.model.id);
-    if (options.persist === true) {
-      this.settingsManager.setDefaultModelAndProvider(next.model.provider, next.model.id);
-      this.addPersistedDefaultToNonEmptyScope(next.model);
-    }
+      this.agent.state.model = next.model;
+      this.sessionManager.appendModelChange(next.model.provider, next.model.id);
+      if (options.persist === true) {
+        this.settingsManager.setDefaultModelAndProvider(next.model.provider, next.model.id);
+        this.addPersistedDefaultToNonEmptyScope(next.model);
+      }
 
-    this.setThinkingLevel(thinkingLevel);
+      this.setThinkingLevel(thinkingLevel);
 
-    await this.emitModelSelect(next.model, currentModel, "cycle");
+      yield* performed(this.emitModelSelect(next.model, currentModel, "cycle"));
 
-    return { model: next.model, thinkingLevel: this.thinkingLevel, isScoped: true };
+      return { model: next.model, thinkingLevel: this.thinkingLevel, isScoped: true };
+    }, this);
   }
 
-  private async cycleAvailableModel(
+  private cycleAvailableModel(
     direction: "forward" | "backward",
     options: ModelMutationOptions,
-  ): Promise<ModelCycleResult | undefined> {
-    const availableModels = this.modelRuntimeInternal.getAvailableSnapshot();
-    if (availableModels.length <= 1) return undefined;
+  ): Effect.Effect<ModelCycleResult | undefined> {
+    return awaitingWith(function* () {
+      const availableModels = this.modelRuntimeInternal.getAvailableSnapshot();
+      if (availableModels.length <= 1) return undefined;
 
-    const currentModel = this.model;
-    let currentIndex = availableModels.findIndex((m) => modelsAreEqual(m, currentModel));
+      const currentModel = this.model;
+      let currentIndex = availableModels.findIndex((m) => modelsAreEqual(m, currentModel));
 
-    if (currentIndex === -1) currentIndex = 0;
-    const len = availableModels.length;
-    const nextIndex =
-      direction === "forward" ? (currentIndex + 1) % len : (currentIndex - 1 + len) % len;
-    const nextModel = availableModels[nextIndex];
-    if (nextModel === undefined) return undefined;
+      if (currentIndex === -1) currentIndex = 0;
+      const len = availableModels.length;
+      const nextIndex =
+        direction === "forward" ? (currentIndex + 1) % len : (currentIndex - 1 + len) % len;
+      const nextModel = availableModels[nextIndex];
+      if (nextModel === undefined) return undefined;
 
-    const thinkingLevel = this.getThinkingLevelForModelSwitch(nextModel);
-    this.agent.state.model = nextModel;
-    this.sessionManager.appendModelChange(nextModel.provider, nextModel.id);
-    if (options.persist === true) {
-      this.settingsManager.setDefaultModelAndProvider(nextModel.provider, nextModel.id);
-      this.addPersistedDefaultToNonEmptyScope(nextModel);
-    }
+      const thinkingLevel = this.getThinkingLevelForModelSwitch(nextModel);
+      this.agent.state.model = nextModel;
+      this.sessionManager.appendModelChange(nextModel.provider, nextModel.id);
+      if (options.persist === true) {
+        this.settingsManager.setDefaultModelAndProvider(nextModel.provider, nextModel.id);
+        this.addPersistedDefaultToNonEmptyScope(nextModel);
+      }
 
-    this.setThinkingLevel(thinkingLevel);
+      this.setThinkingLevel(thinkingLevel);
 
-    await this.emitModelSelect(nextModel, currentModel, "cycle");
+      yield* performed(this.emitModelSelect(nextModel, currentModel, "cycle"));
 
-    return { model: nextModel, thinkingLevel: this.thinkingLevel, isScoped: false };
+      return { model: nextModel, thinkingLevel: this.thinkingLevel, isScoped: false };
+    }, this);
   }
 
   setThinkingLevel(level: ThinkingLevel, options: ModelMutationOptions = {}): void {
@@ -2763,28 +2936,32 @@ export class AgentSession {
     this.settingsManager.setFollowUpMode(mode);
   }
 
-  private async runDefaultCompaction(
+  private runDefaultCompaction(
     preparation: CompactionPreparation,
     model: Model<any>,
     customInstructions: string | undefined,
     signal: AbortSignal,
     reason: "manual" | "threshold" | "overflow",
-  ): Promise<CompactionResult> {
-    const request = await this.getSummarizationRequestAuth(model, signal);
-    return compact(
-      preparation,
-      request.model,
-      request.apiKey,
-      request.headers,
-      customInstructions,
-      signal,
-      request.thinkingLevel,
-      this.agent.streamFunction,
-      request.env,
-      this.settingsManager.getRetrySettings(),
-      this.summarizationRetryCallbacks({ source: "compaction", reason }),
-      undefined,
-    );
+  ): Effect.Effect<CompactionResult> {
+    return awaitingWith(function* () {
+      const request = yield* performed(this.getSummarizationRequestAuth(model, signal));
+      return yield* awaited(
+        compact(
+          preparation,
+          request.model,
+          request.apiKey,
+          request.headers,
+          customInstructions,
+          signal,
+          request.thinkingLevel,
+          this.agent.streamFunction,
+          request.env,
+          this.settingsManager.getRetrySettings(),
+          this.summarizationRetryCallbacks({ source: "compaction", reason }),
+          undefined,
+        ),
+      );
+    }, this);
   }
 
   private clearManualCompactionState(): void {
@@ -2792,155 +2969,167 @@ export class AgentSession {
     this.resolveIdleWaitIfIdle();
   }
 
-  async compact(customInstructions?: string): Promise<CompactionResult> {
-    await this.abort();
-    this.compactionAbortController = new AbortController();
-    this.emit({ type: "compaction_start", reason: "manual" });
-    let fromExtension = false;
-    let cancelledByExtension = false;
+  compact(customInstructions?: string): Promise<CompactionResult> {
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        yield* awaited(this.abort());
+        this.compactionAbortController = new AbortController();
+        this.emit({ type: "compaction_start", reason: "manual" });
+        let fromExtension = false;
+        let cancelledByExtension = false;
 
-    try {
-      const model = this.model;
-      if (model === undefined) {
-        throw new Error(formatNoModelSelectedMessage());
-      }
+        try {
+          const model = this.model;
+          if (model === undefined) {
+            throw new Error(formatNoModelSelectedMessage());
+          }
 
-      const settings = this.settingsManager.getCompactionSettings(model);
-      const pathEntries = this.sessionManager.getBranch();
+          const settings = this.settingsManager.getCompactionSettings(model);
+          const pathEntries = this.sessionManager.getBranch();
 
-      const preparation = prepareCompaction(pathEntries, settings);
-      if (preparation === undefined) {
-        const lastEntry = pathEntries[pathEntries.length - 1];
-        if (lastEntry?.type === "compaction") {
-          throw new Error("Already compacted");
+          const preparation = prepareCompaction(pathEntries, settings);
+          if (preparation === undefined) {
+            const lastEntry = pathEntries[pathEntries.length - 1];
+            if (lastEntry?.type === "compaction") {
+              throw new Error("Already compacted");
+            }
+            throw new Error("Nothing to compact (session too small)");
+          }
+
+          let extensionCompaction: CompactionResult | undefined;
+
+          if (this.extensionRunnerInternal.hasHandlers("session_before_compact")) {
+            const result = (yield* awaited(
+              this.extensionRunnerInternal.emit({
+                type: "session_before_compact",
+                preparation,
+                branchEntries: pathEntries,
+                customInstructions,
+                reason: "manual",
+                willRetry: false,
+                signal: this.compactionAbortController.signal,
+              }),
+            )) as SessionBeforeCompactResult | undefined;
+
+            if (result?.cancel === true) {
+              cancelledByExtension = true;
+              throw new Error("Compaction cancelled");
+            }
+
+            if (result?.compaction !== undefined) {
+              extensionCompaction = result.compaction;
+              fromExtension = true;
+            }
+          }
+
+          let summary: string;
+          let firstKeptEntryId: string;
+          let tokensBefore: number;
+          let usage: Usage | undefined;
+          let details: unknown;
+
+          if (extensionCompaction === undefined) {
+            const result = yield* performed(
+              this.runDefaultCompaction(
+                preparation,
+                model,
+                customInstructions,
+                this.compactionAbortController.signal,
+                "manual",
+              ),
+            );
+            summary = result.summary;
+            firstKeptEntryId = result.firstKeptEntryId;
+            tokensBefore = result.tokensBefore;
+            usage = result.usage;
+            details = result.details;
+          } else {
+            summary = extensionCompaction.summary;
+            firstKeptEntryId = extensionCompaction.firstKeptEntryId;
+            tokensBefore = extensionCompaction.tokensBefore;
+            usage = extensionCompaction.usage;
+            details = extensionCompaction.details;
+          }
+
+          if (this.compactionAbortController.signal.aborted) {
+            throw new Error("Compaction cancelled");
+          }
+
+          this.sessionManager.appendCompaction(
+            summary,
+            firstKeptEntryId,
+            tokensBefore,
+            details,
+            fromExtension,
+            usage,
+          );
+          const newEntries = this.sessionManager.getEntries();
+          this.refreshFinalizedContext();
+          const estimatedTokensAfter = estimateMessagesTokens(
+            this.sessionManager.buildSessionProjection().messages,
+          );
+
+          const savedCompactionEntry = newEntries.find(
+            (e) => e.type === "compaction" && e.summary === summary,
+          ) as CompactionEntry | undefined;
+
+          if (savedCompactionEntry !== undefined) {
+            yield* awaited(
+              this.extensionRunnerInternal.emit({
+                type: "session_compact",
+                compactionEntry: savedCompactionEntry,
+                fromExtension,
+                reason: "manual",
+                willRetry: false,
+              }),
+            );
+          }
+
+          const compactionResult: CompactionResult = {
+            summary,
+            firstKeptEntryId,
+            tokensBefore,
+            estimatedTokensAfter,
+            usage,
+            details,
+          };
+          this.clearManualCompactionState();
+          this.emit({
+            type: "compaction_end",
+            reason: "manual",
+            result: compactionResult,
+            aborted: false,
+            willRetry: false,
+          });
+          return compactionResult;
+        } catch (error) {
+          const message = toErrorMessage(error);
+          const aborted = this.compactionAbortController.signal.aborted || cancelledByExtension;
+          const errorMessage = aborted ? undefined : `Compaction failed: ${message}`;
+          this.clearManualCompactionState();
+          this.emit({
+            type: "compaction_end",
+            reason: "manual",
+            result: undefined,
+            aborted,
+            willRetry: false,
+            errorMessage,
+          });
+          yield* performed(
+            this.emitSessionCompactFailed({
+              reason: "manual",
+              errorMessage,
+              aborted,
+              willRetry: false,
+              fromExtension,
+            }),
+          );
+          throw error;
+        } finally {
+          this.clearManualCompactionState();
         }
-        throw new Error("Nothing to compact (session too small)");
-      }
-
-      let extensionCompaction: CompactionResult | undefined;
-
-      if (this.extensionRunnerInternal.hasHandlers("session_before_compact")) {
-        const result = (await this.extensionRunnerInternal.emit({
-          type: "session_before_compact",
-          preparation,
-          branchEntries: pathEntries,
-          customInstructions,
-          reason: "manual",
-          willRetry: false,
-          signal: this.compactionAbortController.signal,
-        })) as SessionBeforeCompactResult | undefined;
-
-        if (result?.cancel === true) {
-          cancelledByExtension = true;
-          throw new Error("Compaction cancelled");
-        }
-
-        if (result?.compaction !== undefined) {
-          extensionCompaction = result.compaction;
-          fromExtension = true;
-        }
-      }
-
-      let summary: string;
-      let firstKeptEntryId: string;
-      let tokensBefore: number;
-      let usage: Usage | undefined;
-      let details: unknown;
-
-      if (extensionCompaction === undefined) {
-        const result = await this.runDefaultCompaction(
-          preparation,
-          model,
-          customInstructions,
-          this.compactionAbortController.signal,
-          "manual",
-        );
-        summary = result.summary;
-        firstKeptEntryId = result.firstKeptEntryId;
-        tokensBefore = result.tokensBefore;
-        usage = result.usage;
-        details = result.details;
-      } else {
-        summary = extensionCompaction.summary;
-        firstKeptEntryId = extensionCompaction.firstKeptEntryId;
-        tokensBefore = extensionCompaction.tokensBefore;
-        usage = extensionCompaction.usage;
-        details = extensionCompaction.details;
-      }
-
-      if (this.compactionAbortController.signal.aborted) {
-        throw new Error("Compaction cancelled");
-      }
-
-      this.sessionManager.appendCompaction(
-        summary,
-        firstKeptEntryId,
-        tokensBefore,
-        details,
-        fromExtension,
-        usage,
-      );
-      const newEntries = this.sessionManager.getEntries();
-      this.refreshFinalizedContext();
-      const estimatedTokensAfter = estimateMessagesTokens(
-        this.sessionManager.buildSessionProjection().messages,
-      );
-
-      const savedCompactionEntry = newEntries.find(
-        (e) => e.type === "compaction" && e.summary === summary,
-      ) as CompactionEntry | undefined;
-
-      if (savedCompactionEntry !== undefined) {
-        await this.extensionRunnerInternal.emit({
-          type: "session_compact",
-          compactionEntry: savedCompactionEntry,
-          fromExtension,
-          reason: "manual",
-          willRetry: false,
-        });
-      }
-
-      const compactionResult: CompactionResult = {
-        summary,
-        firstKeptEntryId,
-        tokensBefore,
-        estimatedTokensAfter,
-        usage,
-        details,
-      };
-      this.clearManualCompactionState();
-      this.emit({
-        type: "compaction_end",
-        reason: "manual",
-        result: compactionResult,
-        aborted: false,
-        willRetry: false,
-      });
-      return compactionResult;
-    } catch (error) {
-      const message = toErrorMessage(error);
-      const aborted = this.compactionAbortController.signal.aborted || cancelledByExtension;
-      const errorMessage = aborted ? undefined : `Compaction failed: ${message}`;
-      this.clearManualCompactionState();
-      this.emit({
-        type: "compaction_end",
-        reason: "manual",
-        result: undefined,
-        aborted,
-        willRetry: false,
-        errorMessage,
-      });
-      await this.emitSessionCompactFailed({
-        reason: "manual",
-        errorMessage,
-        aborted,
-        willRetry: false,
-        fromExtension,
-      });
-      throw error;
-    } finally {
-      this.clearManualCompactionState();
-    }
+      }, this),
+    );
   }
 
   abortCompaction(): void {
@@ -2952,289 +3141,310 @@ export class AgentSession {
     this.branchSummaryAbortController?.abort();
   }
 
-  private async checkCompaction(
+  private checkCompaction(
     assistantMessage: AssistantMessage,
     skipAbortedCheck = true,
     toolResults: AgentMessage[] = [],
   ): Promise<boolean> {
-    const settings = this.settingsManager.getCompactionSettings(this.model);
-    if (!settings.enabled) return false;
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        const settings = this.settingsManager.getCompactionSettings(this.model);
+        if (!settings.enabled) return false;
 
-    if (skipAbortedCheck && assistantMessage.stopReason === "aborted") return false;
+        if (skipAbortedCheck && assistantMessage.stopReason === "aborted") return false;
 
-    const messageModel = this.modelForMessage(assistantMessage);
-    const sameModel = messageModel !== undefined;
-    const contextWindow = (messageModel ?? this.model)?.contextWindow ?? 0;
+        const messageModel = this.modelForMessage(assistantMessage);
+        const sameModel = messageModel !== undefined;
+        const contextWindow = (messageModel ?? this.model)?.contextWindow ?? 0;
 
-    const compactionEntry = getLatestCompactionEntry(this.sessionManager.getBranch());
-    const assistantIsFromBeforeCompaction =
-      compactionEntry !== null &&
-      assistantMessage.timestamp <= new Date(compactionEntry.timestamp).getTime();
-    if (assistantIsFromBeforeCompaction) {
-      return false;
-    }
-
-    const currentProjection = this.sessionManager.buildSessionProjection();
-    const assistantEntryId = this.findPersistedMessageEntryId(assistantMessage);
-    const assistantIsProjected =
-      assistantEntryId === undefined ||
-      currentProjection.entries.some(
-        (entry) =>
-          entry.sourceEntry.id === assistantEntryId &&
-          entry.messages.some((message) => message.role === "assistant"),
-      );
-    const branch = this.sessionManager.getBranch();
-    const assistantIndex =
-      assistantEntryId !== undefined && assistantEntryId !== ""
-        ? branch.findIndex((entry) => entry.id === assistantEntryId)
-        : -1;
-    const entriesAfterAssistant = assistantIndex >= 0 ? branch.slice(assistantIndex + 1) : [];
-    const hasPostAssistantContextEdit = entriesAfterAssistant.some(
-      (entry) => entry.type === "context_edit",
-    );
-    const latestAssistantEdit = entriesAfterAssistant
-      .filter(
-        (entry): entry is ContextEditEntry =>
-          entry.type === "context_edit" && entry.targetId === assistantEntryId,
-      )
-      .at(-1);
-    const assistantRetainedForExplicitRecovery =
-      assistantEntryId === undefined ||
-      (!entriesAfterAssistant.some((entry) => entry.type === "compaction") &&
-        latestAssistantEdit?.replacement !== null);
-    const assistantUsageMatchesProjection = assistantIsProjected && !hasPostAssistantContextEdit;
-    const explicitOverflow =
-      assistantMessage.stopReason === "error" && isContextOverflow(assistantMessage);
-    const contextOverflow =
-      sameModel &&
-      ((explicitOverflow && assistantRetainedForExplicitRecovery) ||
-        (assistantUsageMatchesProjection && isContextOverflow(assistantMessage, contextWindow)));
-    const recoverableLength =
-      sameModel &&
-      assistantIsProjected &&
-      isRecoverableLength(assistantMessage, messageModel.maxTokens);
-    if (contextOverflow || recoverableLength) {
-      const willRetry = assistantMessage.stopReason !== "stop";
-
-      if (!willRetry) {
-        return await this.runAutoCompaction("overflow", false);
-      }
-
-      if (this.overflowRecoveryAttempted) {
-        const errorMessage = contextOverflow
-          ? "Context overflow recovery failed after one compact-and-retry attempt. Try reducing context or switching to a larger-context model."
-          : "Truncated response recovery failed after one compact-and-retry attempt.";
-        this.emit({
-          type: "compaction_end",
-          reason: "overflow",
-          result: undefined,
-          aborted: false,
-          willRetry: false,
-          errorMessage,
-        });
-        await this.emitSessionCompactFailed({
-          reason: "overflow",
-          errorMessage,
-          aborted: false,
-          willRetry: false,
-          fromExtension: false,
-        });
-        return false;
-      }
-
-      this.overflowRecoveryAttempted = true;
-      this.omitRecoveryAttempt(assistantMessage, toolResults);
-      const retry = await this.runAutoCompaction("overflow", willRetry);
-      if (retry) this.failedResponse = assistantMessage;
-      return retry;
-    }
-
-    let contextTokens: number;
-    const projection = currentProjection;
-    const hasContextEdits = projection.entries.some(
-      (entry) => entry.sourceEntry.type === "context_edit",
-    );
-    const directContextTokens =
-      assistantMessage.usage !== undefined ? calculateContextTokens(assistantMessage.usage) : 0;
-    if (hasContextEdits) {
-      contextTokens = estimateProjectedContextTokens(projection, branch).tokens;
-    } else if (assistantMessage.stopReason === "error" || directContextTokens === 0) {
-      const messages = this.agent.state.messages;
-      const estimate = estimateContextTokens(messages);
-      if (estimate.lastUsageIndex !== null) {
-        const usageMsg = messages[estimate.lastUsageIndex];
-        if (
+        const compactionEntry = getLatestCompactionEntry(this.sessionManager.getBranch());
+        const assistantIsFromBeforeCompaction =
           compactionEntry !== null &&
-          usageMsg?.role === "assistant" &&
-          (usageMsg as AssistantMessage).timestamp <= new Date(compactionEntry.timestamp).getTime()
-        ) {
+          assistantMessage.timestamp <= new Date(compactionEntry.timestamp).getTime();
+        if (assistantIsFromBeforeCompaction) {
           return false;
         }
-      }
-      contextTokens = estimate.tokens;
-    } else {
-      contextTokens = directContextTokens;
-    }
-    if (shouldCompact(contextTokens, contextWindow, settings)) {
-      return await this.runAutoCompaction("threshold", false);
-    }
-    return false;
+
+        const currentProjection = this.sessionManager.buildSessionProjection();
+        const assistantEntryId = this.findPersistedMessageEntryId(assistantMessage);
+        const assistantIsProjected =
+          assistantEntryId === undefined ||
+          currentProjection.entries.some(
+            (entry) =>
+              entry.sourceEntry.id === assistantEntryId &&
+              entry.messages.some((message) => message.role === "assistant"),
+          );
+        const branch = this.sessionManager.getBranch();
+        const assistantIndex =
+          assistantEntryId !== undefined && assistantEntryId !== ""
+            ? branch.findIndex((entry) => entry.id === assistantEntryId)
+            : -1;
+        const entriesAfterAssistant = assistantIndex >= 0 ? branch.slice(assistantIndex + 1) : [];
+        const hasPostAssistantContextEdit = entriesAfterAssistant.some(
+          (entry) => entry.type === "context_edit",
+        );
+        const latestAssistantEdit = entriesAfterAssistant
+          .filter(
+            (entry): entry is ContextEditEntry =>
+              entry.type === "context_edit" && entry.targetId === assistantEntryId,
+          )
+          .at(-1);
+        const assistantRetainedForExplicitRecovery =
+          assistantEntryId === undefined ||
+          (!entriesAfterAssistant.some((entry) => entry.type === "compaction") &&
+            latestAssistantEdit?.replacement !== null);
+        const assistantUsageMatchesProjection =
+          assistantIsProjected && !hasPostAssistantContextEdit;
+        const explicitOverflow =
+          assistantMessage.stopReason === "error" && isContextOverflow(assistantMessage);
+        const contextOverflow =
+          sameModel &&
+          ((explicitOverflow && assistantRetainedForExplicitRecovery) ||
+            (assistantUsageMatchesProjection &&
+              isContextOverflow(assistantMessage, contextWindow)));
+        const recoverableLength =
+          sameModel &&
+          assistantIsProjected &&
+          isRecoverableLength(assistantMessage, messageModel.maxTokens);
+        if (contextOverflow || recoverableLength) {
+          const willRetry = assistantMessage.stopReason !== "stop";
+
+          if (!willRetry) {
+            return yield* awaited(this.runAutoCompaction("overflow", false));
+          }
+
+          if (this.overflowRecoveryAttempted) {
+            const errorMessage = contextOverflow
+              ? "Context overflow recovery failed after one compact-and-retry attempt. Try reducing context or switching to a larger-context model."
+              : "Truncated response recovery failed after one compact-and-retry attempt.";
+            this.emit({
+              type: "compaction_end",
+              reason: "overflow",
+              result: undefined,
+              aborted: false,
+              willRetry: false,
+              errorMessage,
+            });
+            yield* performed(
+              this.emitSessionCompactFailed({
+                reason: "overflow",
+                errorMessage,
+                aborted: false,
+                willRetry: false,
+                fromExtension: false,
+              }),
+            );
+            return false;
+          }
+
+          this.overflowRecoveryAttempted = true;
+          this.omitRecoveryAttempt(assistantMessage, toolResults);
+          const retry = yield* awaited(this.runAutoCompaction("overflow", willRetry));
+          if (retry) this.failedResponse = assistantMessage;
+          return retry;
+        }
+
+        let contextTokens: number;
+        const projection = currentProjection;
+        const hasContextEdits = projection.entries.some(
+          (entry) => entry.sourceEntry.type === "context_edit",
+        );
+        const directContextTokens =
+          assistantMessage.usage === undefined ? 0 : calculateContextTokens(assistantMessage.usage);
+        if (hasContextEdits) {
+          contextTokens = estimateProjectedContextTokens(projection, branch).tokens;
+        } else if (assistantMessage.stopReason === "error" || directContextTokens === 0) {
+          const messages = this.agent.state.messages;
+          const estimate = estimateContextTokens(messages);
+          if (estimate.lastUsageIndex !== null) {
+            const usageMsg = messages[estimate.lastUsageIndex];
+            if (
+              compactionEntry !== null &&
+              usageMsg?.role === "assistant" &&
+              (usageMsg as AssistantMessage).timestamp <=
+                new Date(compactionEntry.timestamp).getTime()
+            ) {
+              return false;
+            }
+          }
+          contextTokens = estimate.tokens;
+        } else {
+          contextTokens = directContextTokens;
+        }
+        if (shouldCompact(contextTokens, contextWindow, settings)) {
+          return yield* awaited(this.runAutoCompaction("threshold", false));
+        }
+        return false;
+      }, this),
+    );
   }
 
-  private async runAutoCompaction(
+  private runAutoCompaction(
     reason: "overflow" | "threshold",
     willRetry: boolean,
   ): Promise<boolean> {
-    const model = this.model;
-    const settings = this.settingsManager.getCompactionSettings(model);
-    let abortController: AbortController | undefined;
-    let started = false;
-    let fromExtension = false;
-    let cancelledByExtension = false;
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        const model = this.model;
+        const settings = this.settingsManager.getCompactionSettings(model);
+        let abortController: AbortController | undefined;
+        let started = false;
+        let fromExtension = false;
+        let cancelledByExtension = false;
 
-    try {
-      if (model === undefined) {
-        return false;
-      }
+        try {
+          if (model === undefined) {
+            return false;
+          }
 
-      const pathEntries = this.sessionManager.getBranch();
-      const preparation = prepareCompaction(pathEntries, settings);
-      if (preparation === undefined) {
-        return false;
-      }
+          const pathEntries = this.sessionManager.getBranch();
+          const preparation = prepareCompaction(pathEntries, settings);
+          if (preparation === undefined) {
+            return false;
+          }
 
-      abortController = new AbortController();
-      this.autoCompactionAbortController = abortController;
-      started = true;
-      this.emit({ type: "compaction_start", reason });
-      abortController.signal.throwIfAborted();
+          abortController = new AbortController();
+          this.autoCompactionAbortController = abortController;
+          started = true;
+          this.emit({ type: "compaction_start", reason });
+          abortController.signal.throwIfAborted();
 
-      let extensionCompaction: CompactionResult | undefined;
+          let extensionCompaction: CompactionResult | undefined;
 
-      if (this.extensionRunnerInternal.hasHandlers("session_before_compact")) {
-        const extensionResult = (await this.extensionRunnerInternal.emit({
-          type: "session_before_compact",
-          preparation,
-          branchEntries: pathEntries,
-          customInstructions: undefined,
-          reason,
-          willRetry,
-          signal: abortController.signal,
-        })) as SessionBeforeCompactResult | undefined;
+          if (this.extensionRunnerInternal.hasHandlers("session_before_compact")) {
+            const extensionResult = (yield* awaited(
+              this.extensionRunnerInternal.emit({
+                type: "session_before_compact",
+                preparation,
+                branchEntries: pathEntries,
+                customInstructions: undefined,
+                reason,
+                willRetry,
+                signal: abortController.signal,
+              }),
+            )) as SessionBeforeCompactResult | undefined;
 
-        if (extensionResult?.cancel === true) {
-          cancelledByExtension = true;
-          throw new Error("Compaction cancelled");
+            if (extensionResult?.cancel === true) {
+              cancelledByExtension = true;
+              throw new Error("Compaction cancelled");
+            }
+
+            if (extensionResult?.compaction !== undefined) {
+              extensionCompaction = extensionResult.compaction;
+              fromExtension = true;
+            }
+          }
+          abortController.signal.throwIfAborted();
+
+          let summary: string;
+          let firstKeptEntryId: string;
+          let tokensBefore: number;
+          let usage: Usage | undefined;
+          let details: unknown;
+
+          if (extensionCompaction === undefined) {
+            const compactResult = yield* performed(
+              this.runDefaultCompaction(
+                preparation,
+                model,
+                undefined,
+                abortController.signal,
+                reason,
+              ),
+            );
+            summary = compactResult.summary;
+            firstKeptEntryId = compactResult.firstKeptEntryId;
+            tokensBefore = compactResult.tokensBefore;
+            usage = compactResult.usage;
+            details = compactResult.details;
+          } else {
+            summary = extensionCompaction.summary;
+            firstKeptEntryId = extensionCompaction.firstKeptEntryId;
+            tokensBefore = extensionCompaction.tokensBefore;
+            usage = extensionCompaction.usage;
+            details = extensionCompaction.details;
+          }
+          abortController.signal.throwIfAborted();
+
+          this.sessionManager.appendCompaction(
+            summary,
+            firstKeptEntryId,
+            tokensBefore,
+            details,
+            fromExtension,
+            usage,
+          );
+          const newEntries = this.sessionManager.getEntries();
+          this.refreshFinalizedContext();
+          const estimatedTokensAfter = estimateMessagesTokens(
+            this.sessionManager.buildSessionProjection().messages,
+          );
+
+          const savedCompactionEntry = newEntries.find(
+            (e) => e.type === "compaction" && e.summary === summary,
+          ) as CompactionEntry | undefined;
+
+          if (savedCompactionEntry !== undefined) {
+            yield* awaited(
+              this.extensionRunnerInternal.emit({
+                type: "session_compact",
+                compactionEntry: savedCompactionEntry,
+                fromExtension,
+                reason,
+                willRetry,
+              }),
+            );
+          }
+
+          const result: CompactionResult = {
+            summary,
+            firstKeptEntryId,
+            tokensBefore,
+            estimatedTokensAfter,
+            usage,
+            details,
+          };
+          this.emit({ type: "compaction_end", reason, result, aborted: false, willRetry });
+
+          if (willRetry) return true;
+
+          return this.agent.hasQueuedMessages();
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "compaction failed";
+          const aborted = abortController?.signal.aborted === true || cancelledByExtension;
+          if (started) {
+            const errorMessage = aborted
+              ? undefined
+              : reason === "overflow"
+                ? `Context overflow recovery failed: ${message}`
+                : `Auto-compaction failed: ${message}`;
+            this.emit({
+              type: "compaction_end",
+              reason,
+              result: undefined,
+              aborted,
+              willRetry: false,
+              errorMessage,
+            });
+            yield* performed(
+              this.emitSessionCompactFailed({
+                reason,
+                errorMessage,
+                aborted,
+                willRetry: false,
+                fromExtension,
+              }),
+            );
+          }
+          return false;
+        } finally {
+          if (this.autoCompactionAbortController === abortController) {
+            this.autoCompactionAbortController = undefined;
+          }
+          this.resolveIdleWaitIfIdle();
         }
-
-        if (extensionResult?.compaction !== undefined) {
-          extensionCompaction = extensionResult.compaction;
-          fromExtension = true;
-        }
-      }
-      abortController.signal.throwIfAborted();
-
-      let summary: string;
-      let firstKeptEntryId: string;
-      let tokensBefore: number;
-      let usage: Usage | undefined;
-      let details: unknown;
-
-      if (extensionCompaction === undefined) {
-        const compactResult = await this.runDefaultCompaction(
-          preparation,
-          model,
-          undefined,
-          abortController.signal,
-          reason,
-        );
-        summary = compactResult.summary;
-        firstKeptEntryId = compactResult.firstKeptEntryId;
-        tokensBefore = compactResult.tokensBefore;
-        usage = compactResult.usage;
-        details = compactResult.details;
-      } else {
-        summary = extensionCompaction.summary;
-        firstKeptEntryId = extensionCompaction.firstKeptEntryId;
-        tokensBefore = extensionCompaction.tokensBefore;
-        usage = extensionCompaction.usage;
-        details = extensionCompaction.details;
-      }
-      abortController.signal.throwIfAborted();
-
-      this.sessionManager.appendCompaction(
-        summary,
-        firstKeptEntryId,
-        tokensBefore,
-        details,
-        fromExtension,
-        usage,
-      );
-      const newEntries = this.sessionManager.getEntries();
-      this.refreshFinalizedContext();
-      const estimatedTokensAfter = estimateMessagesTokens(
-        this.sessionManager.buildSessionProjection().messages,
-      );
-
-      const savedCompactionEntry = newEntries.find(
-        (e) => e.type === "compaction" && e.summary === summary,
-      ) as CompactionEntry | undefined;
-
-      if (savedCompactionEntry !== undefined) {
-        await this.extensionRunnerInternal.emit({
-          type: "session_compact",
-          compactionEntry: savedCompactionEntry,
-          fromExtension,
-          reason,
-          willRetry,
-        });
-      }
-
-      const result: CompactionResult = {
-        summary,
-        firstKeptEntryId,
-        tokensBefore,
-        estimatedTokensAfter,
-        usage,
-        details,
-      };
-      this.emit({ type: "compaction_end", reason, result, aborted: false, willRetry });
-
-      if (willRetry) return true;
-
-      return this.agent.hasQueuedMessages();
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "compaction failed";
-      const aborted = abortController?.signal.aborted === true || cancelledByExtension;
-      if (started) {
-        const errorMessage = aborted
-          ? undefined
-          : reason === "overflow"
-            ? `Context overflow recovery failed: ${message}`
-            : `Auto-compaction failed: ${message}`;
-        this.emit({
-          type: "compaction_end",
-          reason,
-          result: undefined,
-          aborted,
-          willRetry: false,
-          errorMessage,
-        });
-        await this.emitSessionCompactFailed({
-          reason,
-          errorMessage,
-          aborted,
-          willRetry: false,
-          fromExtension,
-        });
-      }
-      return false;
-    } finally {
-      if (this.autoCompactionAbortController === abortController) {
-        this.autoCompactionAbortController = undefined;
-      }
-      this.resolveIdleWaitIfIdle();
-    }
+      }, this),
+    );
   }
 
   setAutoCompactionEnabled(enabled: boolean): void {
@@ -3245,54 +3455,63 @@ export class AgentSession {
     return this.settingsManager.getCompactionEnabled();
   }
 
-  async bindExtensions(bindings: ExtensionBindings): Promise<void> {
-    if (bindings.uiContext !== undefined) {
-      this.extensionUIContext = bindings.uiContext;
-    }
-    if (bindings.mode !== undefined) {
-      this.extensionMode = bindings.mode;
-    }
-    if (bindings.commandContextActions !== undefined) {
-      this.extensionCommandContextActions = bindings.commandContextActions;
-    }
-    if (bindings.abortHandler !== undefined) {
-      this.extensionAbortHandler = bindings.abortHandler;
-    }
-    if (bindings.shutdownHandler !== undefined) {
-      this.extensionShutdownHandler = bindings.shutdownHandler;
-    }
-    if (bindings.onError !== undefined) {
-      this.extensionErrorListener = bindings.onError;
-    }
+  bindExtensions(bindings: ExtensionBindings): Promise<void> {
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        if (bindings.uiContext !== undefined) {
+          this.extensionUIContext = bindings.uiContext;
+        }
+        if (bindings.mode !== undefined) {
+          this.extensionMode = bindings.mode;
+        }
+        if (bindings.commandContextActions !== undefined) {
+          this.extensionCommandContextActions = bindings.commandContextActions;
+        }
+        if (bindings.abortHandler !== undefined) {
+          this.extensionAbortHandler = bindings.abortHandler;
+        }
+        if (bindings.shutdownHandler !== undefined) {
+          this.extensionShutdownHandler = bindings.shutdownHandler;
+        }
+        if (bindings.onError !== undefined) {
+          this.extensionErrorListener = bindings.onError;
+        }
 
-    this.applyExtensionBindings(this.extensionRunnerInternal);
-    await this.extensionRunnerInternal.emit(this.sessionStartEvent);
-    this.extensionRunnerInternal.reportUnhandledMcpServers();
-    await this.extendResourcesFromExtensions(
-      this.sessionStartEvent.reason === "reload" ? "reload" : "startup",
+        this.applyExtensionBindings(this.extensionRunnerInternal);
+        yield* awaited(this.extensionRunnerInternal.emit(this.sessionStartEvent));
+        this.extensionRunnerInternal.reportUnhandledMcpServers();
+        yield* performed(
+          this.extendResourcesFromExtensions(
+            this.sessionStartEvent.reason === "reload" ? "reload" : "startup",
+          ),
+        );
+      }, this),
     );
   }
 
-  private async extendResourcesFromExtensions(reason: "startup" | "reload"): Promise<void> {
-    if (!this.extensionRunnerInternal.hasHandlers("resources_discover")) {
-      return;
-    }
+  private extendResourcesFromExtensions(reason: "startup" | "reload"): Effect.Effect<void> {
+    return awaitingWith(function* () {
+      if (!this.extensionRunnerInternal.hasHandlers("resources_discover")) {
+        return;
+      }
 
-    const { skillPaths, promptPaths, themePaths } =
-      await this.extensionRunnerInternal.emitResourcesDiscover(this.cwd, reason);
+      const { skillPaths, promptPaths, themePaths } = yield* awaited(
+        this.extensionRunnerInternal.emitResourcesDiscover(this.cwd, reason),
+      );
 
-    if (skillPaths.length === 0 && promptPaths.length === 0 && themePaths.length === 0) {
-      return;
-    }
+      if (skillPaths.length === 0 && promptPaths.length === 0 && themePaths.length === 0) {
+        return;
+      }
 
-    const extensionPaths: ResourceExtensionPaths = {
-      skillPaths: this.buildExtensionResourcePaths(skillPaths),
-      promptPaths: this.buildExtensionResourcePaths(promptPaths),
-      themePaths: this.buildExtensionResourcePaths(themePaths),
-    };
+      const extensionPaths: ResourceExtensionPaths = {
+        skillPaths: this.buildExtensionResourcePaths(skillPaths),
+        promptPaths: this.buildExtensionResourcePaths(promptPaths),
+        themePaths: this.buildExtensionResourcePaths(themePaths),
+      };
 
-    this.resourceLoaderInternal.extendResources(extensionPaths);
-    this.rebuildSystemPrompt(this.getActiveToolNames());
+      this.resourceLoaderInternal.extendResources(extensionPaths);
+      this.rebuildSystemPrompt(this.getActiveToolNames());
+    }, this);
   }
 
   private buildExtensionResourcePaths(
@@ -3415,9 +3634,7 @@ export class AgentSession {
         setSessionName: (name) => {
           this.setSessionName(name);
         },
-        getSessionName: () => {
-          return this.sessionManager.getSessionName();
-        },
+        getSessionName: () => this.sessionManager.getSessionName(),
         setLabel: (entryId, label) => {
           this.sessionManager.appendLabelChange(entryId, label);
         },
@@ -3427,11 +3644,14 @@ export class AgentSession {
         setActiveTools: (toolNames) => this.setActiveToolsByName(toolNames),
         refreshTools: () => this.refreshToolRegistry(),
         getCommands,
-        setModel: async (model) => {
-          if (!this.modelRuntimeInternal.hasConfiguredAuth(model.provider)) return false;
-          await this.setModel(model);
-          return true;
-        },
+        setModel: (model) =>
+          Effect.runPromise(
+            awaitingWith(function* () {
+              if (!this.modelRuntimeInternal.hasConfiguredAuth(model.provider)) return false;
+              yield* awaited(this.setModel(model));
+              return true;
+            }, this),
+          ),
         getThinkingLevel: () => this.thinkingLevel,
         setThinkingLevel: (level) => this.setThinkingLevel(level),
       },
@@ -3454,20 +3674,23 @@ export class AgentSession {
         },
         getContextUsage: () => this.getContextUsage(),
         compact: (options) => {
-          void (async () => {
-            try {
-              const result = await this.compact(options?.customInstructions);
-              options?.onComplete?.(result);
-            } catch (error) {
-              const err = error instanceof Error ? error : new Error(String(error));
-              options?.onError?.(err);
-            }
-          })();
+          void (() =>
+            Effect.runPromise(
+              awaitingWith(function* () {
+                try {
+                  const result = yield* awaited(this.compact(options?.customInstructions));
+                  options?.onComplete?.(result);
+                } catch (error) {
+                  const err = error instanceof Error ? error : new Error(String(error));
+                  options?.onError?.(err);
+                }
+              }, this),
+            ))();
         },
         getSystemPrompt: () => this.systemPrompt,
         getSystemPromptOptions: () => this.baseSystemPromptOptions,
         executeTool: (callerId, name, args, options) =>
-          this.executeNestedToolCall(callerId, name, args, options),
+          Effect.runPromise(this.executeNestedToolCall(callerId, name, args, options)),
         getCallableTools: () => this.getCallableTools(),
       },
       {
@@ -3721,42 +3944,52 @@ export class AgentSession {
     });
   }
 
-  async reload(options?: { beforeSessionStart?: () => void | Promise<void> }): Promise<void> {
-    const oldRunner = this.extensionRunnerInternal;
-    const previousFlagValues = oldRunner.getFlagValues();
-    await emitSessionShutdownEvent(oldRunner, { type: "session_shutdown", reason: "reload" });
-    oldRunner.invalidate();
-    const getDefaultTools = () =>
-      this.usesDefaultTools
-        ? applyToolModifiers(
-            this.settingsManager.getDefaultTools() ?? DEFAULT_TOOL_NAMES,
-            this.defaultToolModifiers,
-          )
-        : [];
-    const previousDefaultTools = new Set(getDefaultTools());
-    await this.settingsManager.reload();
-    this.syncQueueModesFromSettings();
-    resetApiProviders();
-    await this.resourceLoaderInternal.reload();
-    const addedDefaultTools = getDefaultTools().filter((name) => !previousDefaultTools.has(name));
-    for (const name of this.getActiveToolNames()) this.pendingToolNames.add(name);
-    this.buildRuntime({
-      activeToolNames: [...this.getActiveToolNames(), ...addedDefaultTools],
-      flagValues: previousFlagValues,
-      includeAllExtensionTools: true,
-    });
+  reload(options?: { beforeSessionStart?: () => void | Promise<void> }): Promise<void> {
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        const oldRunner = this.extensionRunnerInternal;
+        const previousFlagValues = oldRunner.getFlagValues();
+        yield* awaited(
+          emitSessionShutdownEvent(oldRunner, { type: "session_shutdown", reason: "reload" }),
+        );
+        oldRunner.invalidate();
+        const getDefaultTools = () =>
+          this.usesDefaultTools
+            ? applyToolModifiers(
+                this.settingsManager.getDefaultTools() ?? DEFAULT_TOOL_NAMES,
+                this.defaultToolModifiers,
+              )
+            : [];
+        const previousDefaultTools = new Set(getDefaultTools());
+        yield* awaited(this.settingsManager.reload());
+        this.syncQueueModesFromSettings();
+        resetApiProviders();
+        yield* awaited(this.resourceLoaderInternal.reload());
+        const addedDefaultTools = getDefaultTools().filter(
+          (name) => !previousDefaultTools.has(name),
+        );
+        for (const name of this.getActiveToolNames()) this.pendingToolNames.add(name);
+        this.buildRuntime({
+          activeToolNames: [...this.getActiveToolNames(), ...addedDefaultTools],
+          flagValues: previousFlagValues,
+          includeAllExtensionTools: true,
+        });
 
-    const hasBindings =
-      this.extensionUIContext ||
-      this.extensionCommandContextActions ||
-      this.extensionShutdownHandler ||
-      this.extensionErrorListener;
-    if (hasBindings !== undefined) {
-      await options?.beforeSessionStart?.();
-      await this.extensionRunnerInternal.emit({ type: "session_start", reason: "reload" });
-      this.extensionRunnerInternal.reportUnhandledMcpServers();
-      await this.extendResourcesFromExtensions("reload");
-    }
+        const hasBindings =
+          this.extensionUIContext ||
+          this.extensionCommandContextActions ||
+          this.extensionShutdownHandler ||
+          this.extensionErrorListener;
+        if (hasBindings !== undefined) {
+          yield* awaited(options?.beforeSessionStart?.());
+          yield* awaited(
+            this.extensionRunnerInternal.emit({ type: "session_start", reason: "reload" }),
+          );
+          this.extensionRunnerInternal.reportUnhandledMcpServers();
+          yield* performed(this.extendResourcesFromExtensions("reload"));
+        }
+      }, this),
+    );
   }
 
   private isRetryableError(message: AssistantMessage): boolean {
@@ -3806,42 +4039,44 @@ export class AgentSession {
     });
   }
 
-  private async prepareRetry(message: AssistantMessage): Promise<boolean> {
-    const settings = this.settingsManager.getRetrySettings();
-    if (!settings.enabled) {
-      return false;
-    }
+  private prepareRetry(message: AssistantMessage): Effect.Effect<boolean> {
+    return awaitingWith(function* () {
+      const settings = this.settingsManager.getRetrySettings();
+      if (!settings.enabled) {
+        return false;
+      }
 
-    this.retryAttemptInternal++;
+      this.retryAttemptInternal++;
 
-    if (this.retryAttemptInternal > settings.maxRetries) {
-      this.retryAttemptInternal--;
-      return false;
-    }
+      if (this.retryAttemptInternal > settings.maxRetries) {
+        this.retryAttemptInternal--;
+        return false;
+      }
 
-    const delayMs = retryDelayMs(settings, this.retryAttemptInternal);
+      const delayMs = retryDelayMs(settings, this.retryAttemptInternal);
 
-    this.emit({
-      type: "auto_retry_start",
-      attempt: this.retryAttemptInternal,
-      maxAttempts: settings.maxRetries,
-      delayMs,
-      errorMessage: message.errorMessage || "Unknown error",
-    });
+      this.emit({
+        type: "auto_retry_start",
+        attempt: this.retryAttemptInternal,
+        maxAttempts: settings.maxRetries,
+        delayMs,
+        errorMessage: message.errorMessage || "Unknown error",
+      });
 
-    this.omitRecoveryAttempt(message);
+      this.omitRecoveryAttempt(message);
 
-    this.retryAbortController = new AbortController();
-    try {
-      await delay(delayMs, undefined, { signal: this.retryAbortController.signal });
-    } catch {
-      this.finishCancelledRetry();
-      return false;
-    } finally {
-      this.retryAbortController = undefined;
-    }
+      this.retryAbortController = new AbortController();
+      try {
+        yield* awaited(delay(delayMs, undefined, { signal: this.retryAbortController.signal }));
+      } catch {
+        this.finishCancelledRetry();
+        return false;
+      } finally {
+        this.retryAbortController = undefined;
+      }
 
-    return true;
+      return true;
+    }, this);
   }
 
   abortRetry(): void {
@@ -3860,7 +4095,7 @@ export class AgentSession {
     this.settingsManager.setRetryEnabled(enabled);
   }
 
-  async executeBash(
+  executeBash(
     command: string,
     onChunk?: (chunk: string) => void,
     options?: {
@@ -3869,33 +4104,39 @@ export class AgentSession {
       operations?: BashOperations | undefined;
     },
   ): Promise<BashResult> {
-    const abortController = new AbortController();
-    this.bashAbortControllers.add(abortController);
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        const abortController = new AbortController();
+        this.bashAbortControllers.add(abortController);
 
-    const prefix = this.settingsManager.getShellCommandPrefix();
-    const shellPath = this.settingsManager.getShellPath();
-    const resolvedCommand =
-      prefix !== undefined && prefix !== "" ? `${prefix}\n${command}` : command;
+        const prefix = this.settingsManager.getShellCommandPrefix();
+        const shellPath = this.settingsManager.getShellPath();
+        const resolvedCommand =
+          prefix !== undefined && prefix !== "" ? `${prefix}\n${command}` : command;
 
-    try {
-      const result = await executeBashWithOperations(
-        resolvedCommand,
-        this.sessionManager.getCwd(),
-        options?.operations ?? createLocalBashOperations({ shellPath }),
-        {
-          onChunk: (delta) => {
-            onChunk?.(delta);
-            this.emit({ type: "bash_execution_update", id: options?.id, delta });
-          },
-          signal: abortController.signal,
-        },
-      );
+        try {
+          const result = yield* awaited(
+            executeBashWithOperations(
+              resolvedCommand,
+              this.sessionManager.getCwd(),
+              options?.operations ?? createLocalBashOperations({ shellPath }),
+              {
+                onChunk: (delta) => {
+                  onChunk?.(delta);
+                  this.emit({ type: "bash_execution_update", id: options?.id, delta });
+                },
+                signal: abortController.signal,
+              },
+            ),
+          );
 
-      this.recordBashResult(command, result, options);
-      return result;
-    } finally {
-      this.bashAbortControllers.delete(abortController);
-    }
+          this.recordBashResult(command, result, options);
+          return result;
+        } finally {
+          this.bashAbortControllers.delete(abortController);
+        }
+      }, this),
+    );
   }
 
   recordBashResult(
@@ -3911,7 +4152,7 @@ export class AgentSession {
       cancelled: result.cancelled,
       truncated: result.truncated,
       fullOutputPath: result.fullOutputPath,
-      timestamp: Date.now(),
+      timestamp: nowMs(),
       excludeFromContext: options?.excludeFromContext,
     };
 
@@ -3957,7 +4198,7 @@ export class AgentSession {
     void this.extensionRunnerInternal.emit(event);
   }
 
-  async navigateTree(
+  navigateTree(
     targetId: string,
     options: {
       summarize?: boolean | undefined;
@@ -3971,181 +4212,192 @@ export class AgentSession {
     aborted?: boolean;
     summaryEntry?: BranchSummaryEntry | undefined;
   }> {
-    if (this.isStreaming) {
-      throw new Error(
-        "Wait for the current response to finish before navigating the session tree.",
-      );
-    }
-    if (this.isCompacting) {
-      throw new Error(
-        "Wait for the current compaction or tree navigation to finish before navigating the session tree.",
-      );
-    }
-
-    const oldLeafId = this.sessionManager.getLeafId();
-
-    if (targetId === oldLeafId) {
-      return { cancelled: false };
-    }
-
-    if (options.summarize === true && this.model === undefined) {
-      throw new Error("No model available for summarization");
-    }
-
-    const targetEntry = this.sessionManager.getEntry(targetId);
-    if (targetEntry === undefined) {
-      throw new Error(`Entry ${targetId} not found`);
-    }
-
-    const { entries: entriesToSummarize, commonAncestorId } = collectEntriesForBranchSummary(
-      this.sessionManager,
-      oldLeafId,
-      targetId,
-    );
-
-    let customInstructions = options.customInstructions;
-    let replaceInstructions = options.replaceInstructions;
-    let label = options.label;
-
-    const preparation: TreePreparation = {
-      targetId,
-      oldLeafId,
-      commonAncestorId,
-      entriesToSummarize,
-      userWantsSummary: options.summarize ?? false,
-      customInstructions,
-      replaceInstructions,
-      label,
-    };
-
-    this.branchSummaryAbortController = new AbortController();
-
-    try {
-      let extensionSummary: { summary: string; details?: unknown; usage?: Usage } | undefined;
-      let fromExtension = false;
-
-      if (this.extensionRunnerInternal.hasHandlers("session_before_tree")) {
-        const result = (await this.extensionRunnerInternal.emit({
-          type: "session_before_tree",
-          preparation,
-          signal: this.branchSummaryAbortController.signal,
-        })) as SessionBeforeTreeResult | undefined;
-
-        if (result?.cancel === true) {
-          return { cancelled: true };
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        if (this.isStreaming) {
+          throw new Error(
+            "Wait for the current response to finish before navigating the session tree.",
+          );
+        }
+        if (this.isCompacting) {
+          throw new Error(
+            "Wait for the current compaction or tree navigation to finish before navigating the session tree.",
+          );
         }
 
-        if (result?.summary !== undefined && options.summarize === true) {
-          extensionSummary = result.summary;
-          fromExtension = true;
+        const oldLeafId = this.sessionManager.getLeafId();
+
+        if (targetId === oldLeafId) {
+          return { cancelled: false };
         }
 
-        if (result?.customInstructions !== undefined) {
-          customInstructions = result.customInstructions;
+        if (options.summarize === true && this.model === undefined) {
+          throw new Error("No model available for summarization");
         }
-        if (result?.replaceInstructions !== undefined) {
-          replaceInstructions = result.replaceInstructions;
-        }
-        if (result?.label !== undefined) {
-          label = result.label;
-        }
-      }
 
-      let summaryText: string | undefined;
-      let summaryDetails: unknown;
-      let summaryUsage: Usage | undefined;
-      if (
-        options.summarize === true &&
-        entriesToSummarize.length > 0 &&
-        extensionSummary === undefined
-      ) {
-        const signal = this.branchSummaryAbortController.signal;
-        const branchSummarySettings = this.settingsManager.getBranchSummarySettings();
-        const result = await generateBranchSummary(entriesToSummarize, {
-          ...(await this.getSummarizationRequestAuth(this.model!, signal)),
-          signal,
+        const targetEntry = this.sessionManager.getEntry(targetId);
+        if (targetEntry === undefined) {
+          throw new Error(`Entry ${targetId} not found`);
+        }
+
+        const { entries: entriesToSummarize, commonAncestorId } = collectEntriesForBranchSummary(
+          this.sessionManager,
+          oldLeafId,
+          targetId,
+        );
+
+        let customInstructions = options.customInstructions;
+        let replaceInstructions = options.replaceInstructions;
+        let label = options.label;
+
+        const preparation: TreePreparation = {
+          targetId,
+          oldLeafId,
+          commonAncestorId,
+          entriesToSummarize,
+          userWantsSummary: options.summarize ?? false,
           customInstructions,
           replaceInstructions,
-          reserveTokens: branchSummarySettings.reserveTokens,
-          streamFn: this.agent.streamFunction,
-          retry: this.settingsManager.getRetrySettings(),
-          callbacks: this.summarizationRetryCallbacks({ source: "branchSummary" }),
-        });
-        if (result.aborted === true) {
-          return { cancelled: true, aborted: true };
-        }
-        if (result.error !== undefined && result.error !== "") {
-          throw new Error(result.error);
-        }
-        summaryText = result.summary;
-        summaryUsage = result.usage;
-        summaryDetails = {
-          readFiles: result.readFiles || [],
-          modifiedFiles: result.modifiedFiles || [],
+          label,
         };
-      } else if (extensionSummary !== undefined) {
-        summaryText = extensionSummary.summary;
-        summaryDetails = extensionSummary.details;
-        summaryUsage = extensionSummary.usage;
-      }
 
-      let newLeafId: string | null;
-      let editorText: string | undefined;
+        this.branchSummaryAbortController = new AbortController();
 
-      if (targetEntry.type === "message" && targetEntry.message.role === "user") {
-        newLeafId = targetEntry.parentId;
-        editorText = contentText(targetEntry.message.content, "");
-      } else if (targetEntry.type === "custom_message") {
-        newLeafId = targetEntry.parentId;
-        editorText = contentText(targetEntry.content, "");
-      } else {
-        newLeafId = targetId;
-      }
+        try {
+          let extensionSummary: { summary: string; details?: unknown; usage?: Usage } | undefined;
+          let fromExtension = false;
 
-      let summaryEntry: BranchSummaryEntry | undefined;
-      if (summaryText !== undefined && summaryText !== "") {
-        const summaryId = this.sessionManager.branchWithSummary(
-          newLeafId,
-          summaryText,
-          summaryDetails,
-          fromExtension,
-          summaryUsage,
-        );
-        summaryEntry = this.sessionManager.getEntry(summaryId) as BranchSummaryEntry;
+          if (this.extensionRunnerInternal.hasHandlers("session_before_tree")) {
+            const result = (yield* awaited(
+              this.extensionRunnerInternal.emit({
+                type: "session_before_tree",
+                preparation,
+                signal: this.branchSummaryAbortController.signal,
+              }),
+            )) as SessionBeforeTreeResult | undefined;
 
-        if (label !== undefined && label !== "") {
-          this.sessionManager.appendLabelChange(summaryId, label);
+            if (result?.cancel === true) {
+              return { cancelled: true };
+            }
+
+            if (result?.summary !== undefined && options.summarize === true) {
+              extensionSummary = result.summary;
+              fromExtension = true;
+            }
+
+            if (result?.customInstructions !== undefined) {
+              customInstructions = result.customInstructions;
+            }
+            if (result?.replaceInstructions !== undefined) {
+              replaceInstructions = result.replaceInstructions;
+            }
+            if (result?.label !== undefined) {
+              label = result.label;
+            }
+          }
+
+          let summaryText: string | undefined;
+          let summaryDetails: unknown;
+          let summaryUsage: Usage | undefined;
+          if (
+            options.summarize === true &&
+            entriesToSummarize.length > 0 &&
+            extensionSummary === undefined
+          ) {
+            const signal = this.branchSummaryAbortController.signal;
+            const branchSummarySettings = this.settingsManager.getBranchSummarySettings();
+            const result = yield* awaited(
+              generateBranchSummary(entriesToSummarize, {
+                ...(yield* performed(this.getSummarizationRequestAuth(this.model!, signal))),
+                signal,
+                customInstructions,
+                replaceInstructions,
+                reserveTokens: branchSummarySettings.reserveTokens,
+                streamFn: this.agent.streamFunction,
+                retry: this.settingsManager.getRetrySettings(),
+                callbacks: this.summarizationRetryCallbacks({ source: "branchSummary" }),
+              }),
+            );
+            if (result.aborted === true) {
+              return { cancelled: true, aborted: true };
+            }
+            if (result.error !== undefined && result.error !== "") {
+              throw new Error(result.error);
+            }
+            summaryText = result.summary;
+            summaryUsage = result.usage;
+            summaryDetails = {
+              readFiles: result.readFiles || [],
+              modifiedFiles: result.modifiedFiles || [],
+            };
+          } else if (extensionSummary !== undefined) {
+            summaryText = extensionSummary.summary;
+            summaryDetails = extensionSummary.details;
+            summaryUsage = extensionSummary.usage;
+          }
+
+          let newLeafId: string | null;
+          let editorText: string | undefined;
+
+          if (targetEntry.type === "message" && targetEntry.message.role === "user") {
+            newLeafId = targetEntry.parentId;
+            editorText = contentText(targetEntry.message.content, "");
+          } else if (targetEntry.type === "custom_message") {
+            newLeafId = targetEntry.parentId;
+            editorText = contentText(targetEntry.content, "");
+          } else {
+            newLeafId = targetId;
+          }
+
+          let summaryEntry: BranchSummaryEntry | undefined;
+          if (summaryText !== undefined && summaryText !== "") {
+            const summaryId = this.sessionManager.branchWithSummary(
+              newLeafId,
+              summaryText,
+              summaryDetails,
+              fromExtension,
+              summaryUsage,
+            );
+            summaryEntry = this.sessionManager.getEntry(summaryId) as BranchSummaryEntry;
+
+            if (label !== undefined && label !== "") {
+              this.sessionManager.appendLabelChange(summaryId, label);
+            }
+          } else if (newLeafId === null) {
+            this.sessionManager.resetLeaf();
+          } else {
+            this.sessionManager.branch(newLeafId);
+          }
+
+          if (
+            label !== undefined &&
+            label !== "" &&
+            (summaryText === undefined || summaryText === "")
+          ) {
+            this.sessionManager.appendLabelChange(targetId, label);
+          }
+
+          this.refreshFinalizedContext();
+          this.restoreToolsFromTranscript();
+
+          yield* awaited(
+            this.extensionRunnerInternal.emit({
+              type: "session_tree",
+              newLeafId: this.sessionManager.getLeafId(),
+              oldLeafId,
+              summaryEntry,
+              fromExtension:
+                summaryText !== undefined && summaryText !== "" ? fromExtension : undefined,
+            }),
+          );
+
+          return { editorText, cancelled: false, summaryEntry };
+        } finally {
+          this.branchSummaryAbortController = undefined;
+          this.resolveIdleWaitIfIdle();
         }
-      } else if (newLeafId === null) {
-        this.sessionManager.resetLeaf();
-      } else {
-        this.sessionManager.branch(newLeafId);
-      }
-
-      if (
-        label !== undefined &&
-        label !== "" &&
-        (summaryText === undefined || summaryText === "")
-      ) {
-        this.sessionManager.appendLabelChange(targetId, label);
-      }
-
-      this.refreshFinalizedContext();
-      this.restoreToolsFromTranscript();
-
-      await this.extensionRunnerInternal.emit({
-        type: "session_tree",
-        newLeafId: this.sessionManager.getLeafId(),
-        oldLeafId,
-        summaryEntry,
-        fromExtension: summaryText !== undefined && summaryText !== "" ? fromExtension : undefined,
-      });
-
-      return { editorText, cancelled: false, summaryEntry };
-    } finally {
-      this.branchSummaryAbortController = undefined;
-      this.resolveIdleWaitIfIdle();
-    }
+      }, this),
+    );
   }
 
   getUserMessagesForForking(): Array<{ entryId: string; text: string }> {
@@ -4265,49 +4517,63 @@ export class AgentSession {
     };
   }
 
-  async exportToHtml(
+  exportToHtml(
     outputPath?: string,
     options: { themeName?: string | undefined } = {},
   ): Promise<string> {
-    const themeName = [options.themeName, this.settingsManager.getTheme()].find(
-      (candidate) => candidate !== undefined && getThemeByName(candidate) !== undefined,
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        const themeName = [options.themeName, this.settingsManager.getTheme()].find(
+          (candidate) => candidate !== undefined && getThemeByName(candidate) !== undefined,
+        );
+
+        const toolRenderer: ToolHtmlRenderer = createToolHtmlRenderer({
+          getToolRenderers: (name) =>
+            this.extensionRunnerInternal.resolveToolRenderers(name, () =>
+              this.getToolDefinition(name),
+            ),
+          theme,
+          cwd: this.sessionManager.getCwd(),
+        });
+
+        return yield* awaited(
+          exportSessionToHtml(this.sessionManager, this.state, {
+            outputPath,
+            themeName,
+            toolRenderer,
+          }),
+        );
+      }, this),
     );
-
-    const toolRenderer: ToolHtmlRenderer = createToolHtmlRenderer({
-      getToolRenderers: (name) =>
-        this.extensionRunnerInternal.resolveToolRenderers(name, () => this.getToolDefinition(name)),
-      theme,
-      cwd: this.sessionManager.getCwd(),
-    });
-
-    return await exportSessionToHtml(this.sessionManager, this.state, {
-      outputPath,
-      themeName,
-      toolRenderer,
-    });
   }
 
   exportToJsonl(outputPath?: string): string {
     return exportSessionToJsonl(this.sessionManager, outputPath);
   }
 
-  async summarizeForBugReport(options: {
+  summarizeForBugReport(options: {
     hint?: string | undefined;
     signal: AbortSignal;
   }): Promise<string> {
-    const model = this.model;
-    if (model === undefined) {
-      throw new Error("No model selected");
-    }
-    return generateBugReportSummary({
-      ...(await this.getSummarizationRequestAuth(model, options.signal)),
-      messages: this.messages,
-      hint: options.hint,
-      signal: options.signal,
-      streamFn: this.agent.streamFunction,
-      retry: this.settingsManager.getRetrySettings(),
-      sessionId: this.sessionId,
-    });
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        const model = this.model;
+        if (model === undefined) {
+          throw new Error("No model selected");
+        }
+        return yield* awaited(
+          generateBugReportSummary({
+            ...(yield* performed(this.getSummarizationRequestAuth(model, options.signal))),
+            messages: this.messages,
+            hint: options.hint,
+            signal: options.signal,
+            streamFn: this.agent.streamFunction,
+            retry: this.settingsManager.getRetrySettings(),
+            sessionId: this.sessionId,
+          }),
+        );
+      }, this),
+    );
   }
 
   getLastAssistantText(): string | undefined {

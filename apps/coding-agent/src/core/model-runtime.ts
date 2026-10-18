@@ -67,11 +67,13 @@ import {
   classifierErrorResult,
   imageErrorResult,
 } from "@msa/ai/utils/model-operations";
+import * as Effect from "effect/Effect";
 
 import { getAgentDir } from "../config.ts";
 import { operationSignal, raceWithAbortSignal } from "../utils/abort.ts";
 import { toErrorMessage } from "../utils/errors.ts";
 import { AuthStorage as DefaultAuthStorage } from "./auth-storage.ts";
+import { awaited, awaiting, awaitingWith, performed } from "./awaiting.ts";
 import { ModelConfig } from "./model-config.ts";
 import { FileModelsStore, InMemoryCodingAgentModelsStore } from "./models-store.ts";
 import {
@@ -214,69 +216,76 @@ export class ModelRuntime implements Models {
     this.rebuildProviders();
   }
 
-  static async create(options: CreateModelRuntimeOptions = {}): Promise<ModelRuntime> {
-    const credentials = new RuntimeCredentials(
-      options.credentials ?? DefaultAuthStorage.create(options.authPath),
-    );
-    const modelsPath =
-      options.modelsPath === null
-        ? undefined
-        : (options.modelsPath ?? join(getAgentDir(), "models.json"));
-    const config = await ModelConfig.load(modelsPath);
-    const modelsStore =
-      options.modelsStore ??
-      (modelsPath !== undefined && modelsPath !== ""
-        ? new FileModelsStore(
-            options.modelsStorePath ?? join(dirname(modelsPath), "models-store.json"),
-          )
-        : new InMemoryCodingAgentModelsStore());
-    const builtinModelDataGeneratedAt = builtinProviderCatalog.getBuiltinModelDataGeneratedAt();
-    const providers = builtinProviderCatalog.builtinProviders().map((provider) => {
-      if (provider.id === "openrouter") {
-        return withPersonalizedCatalog(
-          provider,
-          personalizeOpenRouterCatalog,
-          options.catalogBaseUrl,
-          builtinModelDataGeneratedAt,
+  static create(options: CreateModelRuntimeOptions = {}): Promise<ModelRuntime> {
+    return Effect.runPromise(
+      awaiting(function* () {
+        const credentials = new RuntimeCredentials(
+          options.credentials ?? DefaultAuthStorage.create(options.authPath),
         );
-      }
-      return withRemoteCatalog(provider, options.catalogBaseUrl, builtinModelDataGeneratedAt);
-    });
-    const runtime = new ModelRuntime(
-      credentials,
-      config,
-      modelsPath,
-      modelsStore,
-      providers,
-      process.env["MSA_OFFLINE"] === undefined,
-    );
-    runtime.rebuildProviders();
-    const refreshFromNetwork = runtime.modelNetworkEnabled && options.allowModelNetwork === true;
-    const controller =
-      refreshFromNetwork && options.modelRefreshTimeoutMs !== undefined
-        ? new AbortController()
-        : undefined;
-    const timeout =
-      controller === undefined
-        ? undefined
-        : setTimeout(() => controller.abort(), options.modelRefreshTimeoutMs);
-    const signal =
-      controller === undefined
-        ? options.signal
-        : options.signal === undefined
-          ? controller.signal
-          : AbortSignal.any([options.signal, controller.signal]);
-    try {
-      if (options.refreshOnCreate !== false) {
-        await runtime.refresh({
-          allowNetwork: refreshFromNetwork,
-          ...(signal === undefined ? {} : { signal }),
+        const modelsPath =
+          options.modelsPath === null
+            ? undefined
+            : (options.modelsPath ?? join(getAgentDir(), "models.json"));
+        const config = yield* awaited(ModelConfig.load(modelsPath));
+        const modelsStore =
+          options.modelsStore ??
+          (modelsPath !== undefined && modelsPath !== ""
+            ? new FileModelsStore(
+                options.modelsStorePath ?? join(dirname(modelsPath), "models-store.json"),
+              )
+            : new InMemoryCodingAgentModelsStore());
+        const builtinModelDataGeneratedAt = builtinProviderCatalog.getBuiltinModelDataGeneratedAt();
+        const providers = builtinProviderCatalog.builtinProviders().map((provider) => {
+          if (provider.id === "openrouter") {
+            return withPersonalizedCatalog(
+              provider,
+              personalizeOpenRouterCatalog,
+              options.catalogBaseUrl,
+              builtinModelDataGeneratedAt,
+            );
+          }
+          return withRemoteCatalog(provider, options.catalogBaseUrl, builtinModelDataGeneratedAt);
         });
-      }
-    } finally {
-      if (timeout !== undefined) clearTimeout(timeout);
-    }
-    return runtime;
+        const runtime = new ModelRuntime(
+          credentials,
+          config,
+          modelsPath,
+          modelsStore,
+          providers,
+          process.env["MSA_OFFLINE"] === undefined,
+        );
+        runtime.rebuildProviders();
+        const refreshFromNetwork =
+          runtime.modelNetworkEnabled && options.allowModelNetwork === true;
+        const controller =
+          refreshFromNetwork && options.modelRefreshTimeoutMs !== undefined
+            ? new AbortController()
+            : undefined;
+        const timeout =
+          controller === undefined
+            ? undefined
+            : setTimeout(() => controller.abort(), options.modelRefreshTimeoutMs);
+        const signal =
+          controller === undefined
+            ? options.signal
+            : options.signal === undefined
+              ? controller.signal
+              : AbortSignal.any([options.signal, controller.signal]);
+        try {
+          if (options.refreshOnCreate !== false) {
+            yield* awaited(
+              runtime.refresh({
+                allowNetwork: refreshFromNetwork,
+                ...(signal === undefined ? {} : { signal }),
+              }),
+            );
+          }
+        } finally {
+          if (timeout !== undefined) clearTimeout(timeout);
+        }
+        return runtime;
+      }),
+    );
   }
 
   private providerIds(): Set<string> {
@@ -334,41 +343,51 @@ export class ModelRuntime implements Models {
     };
   }
 
-  private async runAvailabilityRefresh(
+  private runAvailabilityRefresh(
     seq: number,
     errorSeq: number,
     signal: AbortSignal,
-  ): Promise<void> {
-    const providers = this.models.getProviders();
-    const [available, checks, credentials] = await Promise.all([
-      this.models.getAvailable(undefined, { signal }),
-      Promise.all(
-        providers.map(async (provider): Promise<[string, AuthCheck | undefined]> => [
-          provider.id,
-          await this.models.checkAuth(provider.id, { signal }),
+  ): Effect.Effect<void> {
+    return awaitingWith(function* () {
+      const providers = this.models.getProviders();
+      const [available, checks, credentials] = yield* awaited(
+        Promise.all([
+          this.models.getAvailable(undefined, { signal }),
+          Promise.all(
+            providers.map((provider): Promise<[string, AuthCheck | undefined]> =>
+              Effect.runPromise(
+                awaitingWith(function* () {
+                  return [
+                    provider.id,
+                    yield* awaited(this.models.checkAuth(provider.id, { signal })),
+                  ];
+                }, this),
+              ),
+            ),
+          ),
+          this.credentials.list({ signal }),
         ]),
-      ),
-      this.credentials.list({ signal }),
-    ]);
-    if (seq !== this.availabilityRefreshSeq) {
-      const latest = this.latestAvailabilityRefresh;
-      if (latest !== undefined && latest.seq > seq) await latest.pass;
-      return;
-    }
-    const auth = new Map(checks);
-    const configuredProviders = new Set(
-      checks
-        .filter((entry): entry is [string, AuthCheck] => entry[1] !== undefined)
-        .map(([providerId]) => providerId),
-    );
-    this.snapshot = {
-      all: [...this.models.getModels()],
-      available: [...available],
-      configuredProviders,
-      storedProviders: new Set(credentials.map((entry) => entry.providerId)),
-      auth,
-    };
-    if (errorSeq === this.availabilityErrorSeq) this.availabilityError = undefined;
+      );
+      if (seq !== this.availabilityRefreshSeq) {
+        const latest = this.latestAvailabilityRefresh;
+        if (latest !== undefined && latest.seq > seq) yield* awaited(latest.pass);
+        return;
+      }
+      const auth = new Map(checks);
+      const configuredProviders = new Set(
+        checks
+          .filter((entry): entry is [string, AuthCheck] => entry[1] !== undefined)
+          .map(([providerId]) => providerId),
+      );
+      this.snapshot = {
+        all: [...this.models.getModels()],
+        available: [...available],
+        configuredProviders,
+        storedProviders: new Set(credentials.map((entry) => entry.providerId)),
+        auth,
+      };
+      if (errorSeq === this.availabilityErrorSeq) this.availabilityError = undefined;
+    }, this);
   }
 
   private queueAvailabilityRefresh(signal?: AbortSignal): Promise<void> {
@@ -378,7 +397,9 @@ export class ModelRuntime implements Models {
     }
     const errorSeq = ++this.availabilityErrorSeq;
     const effectiveSignal = operationSignal(signal);
-    const pass = this.runAvailabilityRefresh(seq, errorSeq, effectiveSignal).catch((error) => {
+    const pass = Effect.runPromise(
+      this.runAvailabilityRefresh(seq, errorSeq, effectiveSignal),
+    ).catch((error) => {
       if (errorSeq === this.availabilityErrorSeq && !effectiveSignal.aborted) {
         this.availabilityError = toErrorMessage(error);
       }
@@ -388,61 +409,65 @@ export class ModelRuntime implements Models {
     return pass;
   }
 
-  private async refreshProviderAvailability(
+  private refreshProviderAvailability(
     providerId: string,
     signal: AbortSignal,
-  ): Promise<void> {
-    ++this.availabilityRefreshSeq;
-    const providerSeq = (this.providerAvailabilitySeq.get(providerId) ?? 0) + 1;
-    this.providerAvailabilitySeq.set(providerId, providerSeq);
-    const errorSeq = ++this.availabilityErrorSeq;
-    try {
-      const [available, auth, credential] = await Promise.all([
-        this.models.getAvailable(providerId, { signal }),
-        this.models.checkAuth(providerId, { signal }),
-        this.credentials.read(providerId, { signal }),
-      ]);
-      signal.throwIfAborted();
-      if (this.providerAvailabilitySeq.get(providerId) !== providerSeq) return;
-      const configuredProviders = new Set(this.snapshot.configuredProviders);
-      const storedProviders = new Set(this.snapshot.storedProviders);
-      const authByProvider = new Map(this.snapshot.auth);
-      if (auth === undefined) {
-        configuredProviders.delete(providerId);
-        authByProvider.delete(providerId);
-      } else {
-        configuredProviders.add(providerId);
-        authByProvider.set(providerId, auth);
+  ): Effect.Effect<void> {
+    return awaitingWith(function* () {
+      ++this.availabilityRefreshSeq;
+      const providerSeq = (this.providerAvailabilitySeq.get(providerId) ?? 0) + 1;
+      this.providerAvailabilitySeq.set(providerId, providerSeq);
+      const errorSeq = ++this.availabilityErrorSeq;
+      try {
+        const [available, auth, credential] = yield* awaited(
+          Promise.all([
+            this.models.getAvailable(providerId, { signal }),
+            this.models.checkAuth(providerId, { signal }),
+            this.credentials.read(providerId, { signal }),
+          ]),
+        );
+        signal.throwIfAborted();
+        if (this.providerAvailabilitySeq.get(providerId) !== providerSeq) return;
+        const configuredProviders = new Set(this.snapshot.configuredProviders);
+        const storedProviders = new Set(this.snapshot.storedProviders);
+        const authByProvider = new Map(this.snapshot.auth);
+        if (auth === undefined) {
+          configuredProviders.delete(providerId);
+          authByProvider.delete(providerId);
+        } else {
+          configuredProviders.add(providerId);
+          authByProvider.set(providerId, auth);
+        }
+        if (credential === undefined) storedProviders.delete(providerId);
+        else storedProviders.add(providerId);
+        const all = [...this.models.getModels()];
+        const availableById = new Map(
+          [
+            ...this.snapshot.available.filter((model) => model.provider !== providerId),
+            ...available,
+          ].map((model) => [`${model.provider}\0${model.id}`, model]),
+        );
+        this.snapshot = {
+          all,
+          available: all.flatMap(
+            (model) => availableById.get(`${model.provider}\0${model.id}`) ?? [],
+          ),
+          configuredProviders,
+          storedProviders,
+          auth: authByProvider,
+        };
+        if (errorSeq === this.availabilityErrorSeq) this.availabilityError = undefined;
+      } catch (error) {
+        if (
+          this.providerAvailabilitySeq.get(providerId) === providerSeq &&
+          errorSeq === this.availabilityErrorSeq &&
+          !signal.aborted
+        ) {
+          this.availabilityError = toErrorMessage(error);
+        }
+        throw error;
       }
-      if (credential === undefined) storedProviders.delete(providerId);
-      else storedProviders.add(providerId);
-      const all = [...this.models.getModels()];
-      const availableById = new Map(
-        [
-          ...this.snapshot.available.filter((model) => model.provider !== providerId),
-          ...available,
-        ].map((model) => [`${model.provider}\0${model.id}`, model]),
-      );
-      this.snapshot = {
-        all,
-        available: all.flatMap(
-          (model) => availableById.get(`${model.provider}\0${model.id}`) ?? [],
-        ),
-        configuredProviders,
-        storedProviders,
-        auth: authByProvider,
-      };
-      if (errorSeq === this.availabilityErrorSeq) this.availabilityError = undefined;
-    } catch (error) {
-      if (
-        this.providerAvailabilitySeq.get(providerId) === providerSeq &&
-        errorSeq === this.availabilityErrorSeq &&
-        !signal.aborted
-      ) {
-        this.availabilityError = toErrorMessage(error);
-      }
-      throw error;
-    }
+    }, this);
   }
 
   getProviders(): readonly Provider[] {
@@ -495,32 +520,37 @@ export class ModelRuntime implements Models {
     return this.models.getAllAvailable(providerId, options);
   }
 
-  async checkAuth(
-    providerId: string,
-    options?: AuthOperationOptions,
-  ): Promise<AuthCheck | undefined> {
-    return this.models.checkAuth(providerId, options);
+  checkAuth(providerId: string, options?: AuthOperationOptions): Promise<AuthCheck | undefined> {
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        return yield* awaited(this.models.checkAuth(providerId, options));
+      }, this),
+    );
   }
 
-  async getAvailable(
+  getAvailable(
     providerId?: string,
     options?: AuthOperationOptions,
   ): Promise<readonly Model<Api>[]> {
-    if (providerId !== undefined && providerId !== "") {
-      const errorSeq = ++this.availabilityErrorSeq;
-      try {
-        const available = await this.models.getAvailable(providerId, options);
-        if (errorSeq === this.availabilityErrorSeq) this.availabilityError = undefined;
-        return available;
-      } catch (error) {
-        if (errorSeq === this.availabilityErrorSeq && options?.signal?.aborted !== true) {
-          this.availabilityError = toErrorMessage(error);
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        if (providerId !== undefined && providerId !== "") {
+          const errorSeq = ++this.availabilityErrorSeq;
+          try {
+            const available = yield* awaited(this.models.getAvailable(providerId, options));
+            if (errorSeq === this.availabilityErrorSeq) this.availabilityError = undefined;
+            return available;
+          } catch (error) {
+            if (errorSeq === this.availabilityErrorSeq && options?.signal?.aborted !== true) {
+              this.availabilityError = toErrorMessage(error);
+            }
+            throw error;
+          }
         }
-        throw error;
-      }
-    }
-    await this.queueAvailabilityRefresh(options?.signal);
-    return this.snapshot.available;
+        yield* awaited(this.queueAvailabilityRefresh(options?.signal));
+        return this.snapshot.available;
+      }, this),
+    );
   }
 
   getAvailableSnapshot(): readonly Model<Api>[] {
@@ -581,26 +611,31 @@ export class ModelRuntime implements Models {
     overrides?: ModelRuntimeAuthOverrides,
   ): Promise<AuthResult | undefined>;
   getAuth(model: AnyModel, overrides?: ModelRuntimeAuthOverrides): Promise<AuthResult | undefined>;
-  async getAuth(
+  getAuth(
     providerOrModel: string | AnyModel,
     overrides: ModelRuntimeAuthOverrides = {},
   ): Promise<AuthResult | undefined> {
-    if (typeof providerOrModel === "string") return this.models.getAuth(providerOrModel, overrides);
-    const resolution = await this.models.getAuth(providerOrModel, overrides);
-    if (resolution === undefined) return undefined;
-    const configuredHeaders = resolveConfiguredModelHeaders(
-      providerOrModel,
-      this.config.getProvider(providerOrModel.provider),
-      this.extensionProviders.get(providerOrModel.provider),
-      { ...(resolution.env ?? {}), ...(overrides.env ?? {}) },
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        if (typeof providerOrModel === "string")
+          return yield* awaited(this.models.getAuth(providerOrModel, overrides));
+        const resolution = yield* awaited(this.models.getAuth(providerOrModel, overrides));
+        if (resolution === undefined) return undefined;
+        const configuredHeaders = resolveConfiguredModelHeaders(
+          providerOrModel,
+          this.config.getProvider(providerOrModel.provider),
+          this.extensionProviders.get(providerOrModel.provider),
+          { ...(resolution.env ?? {}), ...(overrides.env ?? {}) },
+        );
+        return {
+          ...resolution,
+          auth: {
+            ...resolution.auth,
+            headers: mergeHeaders(resolution.auth.headers, configuredHeaders),
+          },
+        };
+      }, this),
     );
-    return {
-      ...resolution,
-      auth: {
-        ...resolution.auth,
-        headers: mergeHeaders(resolution.auth.headers, configuredHeaders),
-      },
-    };
   }
 
   private enqueueCredentialOperation<T>(
@@ -613,12 +648,15 @@ export class ModelRuntime implements Models {
     const started = new Promise<void>((resolve) => {
       markStarted = resolve;
     });
-    const operation = (async () => {
-      await previous.catch(() => {});
-      signal.throwIfAborted();
-      markStarted?.();
-      return task();
-    })();
+    const operation = (() =>
+      Effect.runPromise(
+        awaiting(function* () {
+          yield* awaited(previous.catch(() => {}));
+          signal.throwIfAborted();
+          markStarted?.();
+          return yield* awaited(task());
+        }),
+      ))();
     const tail = operation.catch(() => {});
     this.credentialOperations.set(providerId, tail);
     void tail.then(() => {
@@ -628,31 +666,35 @@ export class ModelRuntime implements Models {
     return raceWithAbortSignal(started, signal).then(() => operation);
   }
 
-  private async synchronizeCredentialState(
+  private synchronizeCredentialState(
     providerId: string,
     operation: CredentialSynchronizationOperation,
     credential: Credential | undefined,
     signal: AbortSignal,
-  ): Promise<void> {
-    try {
-      signal.throwIfAborted();
-      this.recomposeProvider(providerId);
-      const compositionError = this.compositionErrors.get(providerId);
-      if (compositionError !== undefined && compositionError !== "")
-        throw new Error(compositionError);
-      const result = await this.models.refresh({
-        allowNetwork: false,
-        providers: [providerId],
-        signal,
-      });
-      if (result.aborted) signal.throwIfAborted();
-      const refreshError = result.errors.get(providerId);
-      if (refreshError !== undefined) throw refreshError;
-      this.updateModelSnapshot();
-      await this.refreshProviderAvailability(providerId, signal);
-    } catch (cause) {
-      throw new CredentialSynchronizationError(providerId, operation, credential, { cause });
-    }
+  ): Effect.Effect<void> {
+    return awaitingWith(function* () {
+      try {
+        signal.throwIfAborted();
+        this.recomposeProvider(providerId);
+        const compositionError = this.compositionErrors.get(providerId);
+        if (compositionError !== undefined && compositionError !== "")
+          throw new Error(compositionError);
+        const result = yield* awaited(
+          this.models.refresh({
+            allowNetwork: false,
+            providers: [providerId],
+            signal,
+          }),
+        );
+        if (result.aborted) signal.throwIfAborted();
+        const refreshError = result.errors.get(providerId);
+        if (refreshError !== undefined) throw refreshError;
+        this.updateModelSnapshot();
+        yield* performed(this.refreshProviderAvailability(providerId, signal));
+      } catch (cause) {
+        throw new CredentialSynchronizationError(providerId, operation, credential, { cause });
+      }
+    }, this);
   }
 
   setRuntimeApiKey(
@@ -661,23 +703,35 @@ export class ModelRuntime implements Models {
     options: AuthOperationOptions = {},
   ): Promise<void> {
     const signal = operationSignal(options.signal);
-    return this.enqueueCredentialOperation(providerId, signal, async () => {
-      this.credentials.setRuntimeApiKey(providerId, apiKey);
-      await this.synchronizeCredentialState(
-        providerId,
-        "setRuntimeApiKey",
-        { type: "api_key", key: apiKey },
-        signal,
-      );
-    });
+    return this.enqueueCredentialOperation(providerId, signal, () =>
+      Effect.runPromise(
+        awaitingWith(function* () {
+          this.credentials.setRuntimeApiKey(providerId, apiKey);
+          yield* performed(
+            this.synchronizeCredentialState(
+              providerId,
+              "setRuntimeApiKey",
+              { type: "api_key", key: apiKey },
+              signal,
+            ),
+          );
+        }, this),
+      ),
+    );
   }
 
   removeRuntimeApiKey(providerId: string, options: AuthOperationOptions = {}): Promise<void> {
     const signal = operationSignal(options.signal);
-    return this.enqueueCredentialOperation(providerId, signal, async () => {
-      this.credentials.removeRuntimeApiKey(providerId);
-      await this.synchronizeCredentialState(providerId, "removeRuntimeApiKey", undefined, signal);
-    });
+    return this.enqueueCredentialOperation(providerId, signal, () =>
+      Effect.runPromise(
+        awaitingWith(function* () {
+          this.credentials.removeRuntimeApiKey(providerId);
+          yield* performed(
+            this.synchronizeCredentialState(providerId, "removeRuntimeApiKey", undefined, signal),
+          );
+        }, this),
+      ),
+    );
   }
 
   listCredentials(options?: AuthOperationOptions): Promise<readonly CredentialInfo[]> {
@@ -700,7 +754,7 @@ export class ModelRuntime implements Models {
       : { configured: true, source: "environment", label: check.source };
   }
 
-  private async prepareRequest<
+  private prepareRequest<
     TModel extends AnyModel,
     TOptions extends ProviderRequestOptions<TModel> & ModelsRequestTransforms,
   >(
@@ -711,40 +765,47 @@ export class ModelRuntime implements Models {
     model: TModel;
     options: Omit<TOptions, "transformHeaders"> & ProviderRequestOptions<TModel>;
   }> {
-    const provider = this.models.getProvider(model.provider);
-    if (provider === undefined)
-      throw new ModelsError("provider", `Unknown provider: ${model.provider}`);
-    const resolution = await this.getAuth(model, {
-      apiKey: options?.apiKey,
-      env: options?.env,
-      ...(options?.signal === undefined ? {} : { signal: options.signal }),
-    });
-    if (resolution === undefined)
-      throw new ModelsError("auth", `Provider is not configured: ${model.provider}`);
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        const provider = this.models.getProvider(model.provider);
+        if (provider === undefined)
+          throw new ModelsError("provider", `Unknown provider: ${model.provider}`);
+        const resolution = yield* awaited(
+          this.getAuth(model, {
+            apiKey: options?.apiKey,
+            env: options?.env,
+            ...(options?.signal === undefined ? {} : { signal: options.signal }),
+          }),
+        );
+        if (resolution === undefined)
+          throw new ModelsError("auth", `Provider is not configured: ${model.provider}`);
 
-    const { transformHeaders, ...rawProviderOptions } = options ?? {};
-    const providerOptions = rawProviderOptions as Omit<TOptions, "transformHeaders"> &
-      ProviderRequestOptions<TModel>;
-    let headers = mergeHeaders(resolution.auth.headers, providerOptions.headers);
-    if (transformHeaders !== undefined) headers = await transformHeaders(headers ?? {});
-    const env =
-      resolution.env !== undefined || providerOptions.env !== undefined
-        ? { ...(resolution.env ?? {}), ...(providerOptions.env ?? {}) }
-        : undefined;
-    const requestModel: TModel =
-      resolution.auth.baseUrl !== undefined && resolution.auth.baseUrl !== ""
-        ? { ...model, baseUrl: resolution.auth.baseUrl }
-        : model;
-    return {
-      provider,
-      model: requestModel,
-      options: {
-        ...providerOptions,
-        apiKey: providerOptions.apiKey ?? resolution.auth.apiKey,
-        headers,
-        env,
-      } as Omit<TOptions, "transformHeaders"> & ProviderRequestOptions<TModel>,
-    };
+        const { transformHeaders, ...rawProviderOptions } = options ?? {};
+        const providerOptions = rawProviderOptions as Omit<TOptions, "transformHeaders"> &
+          ProviderRequestOptions<TModel>;
+        let headers = mergeHeaders(resolution.auth.headers, providerOptions.headers);
+        if (transformHeaders !== undefined)
+          headers = yield* awaited(transformHeaders(headers ?? {}));
+        const env =
+          resolution.env !== undefined || providerOptions.env !== undefined
+            ? { ...(resolution.env ?? {}), ...(providerOptions.env ?? {}) }
+            : undefined;
+        const requestModel: TModel =
+          resolution.auth.baseUrl !== undefined && resolution.auth.baseUrl !== ""
+            ? { ...model, baseUrl: resolution.auth.baseUrl }
+            : model;
+        return {
+          provider,
+          model: requestModel,
+          options: {
+            ...providerOptions,
+            apiKey: providerOptions.apiKey ?? resolution.auth.apiKey,
+            headers,
+            env,
+          } as Omit<TOptions, "transformHeaders"> & ProviderRequestOptions<TModel>,
+        };
+      }, this),
+    );
   }
 
   stream<TApi extends Api>(
@@ -753,18 +814,24 @@ export class ModelRuntime implements Models {
     options?: ModelsApiStreamOptions<TApi>,
   ): AssistantMessageEventStream {
     const transcript = normalizeContext(context);
-    return lazyStream(model, async () => {
-      assertChatModel(model);
-      const prepared = await this.prepareRequest(
-        model,
-        options as (StreamOptions & ModelsRequestTransforms) | undefined,
-      );
-      return prepared.provider.stream(
-        prepared.model,
-        transcript,
-        prepared.options as ApiStreamOptions<TApi>,
-      );
-    });
+    return lazyStream(model, () =>
+      Effect.runPromise(
+        awaitingWith(function* () {
+          assertChatModel(model);
+          const prepared = yield* awaited(
+            this.prepareRequest(
+              model,
+              options as (StreamOptions & ModelsRequestTransforms) | undefined,
+            ),
+          );
+          return prepared.provider.stream(
+            prepared.model,
+            transcript,
+            prepared.options as ApiStreamOptions<TApi>,
+          );
+        }, this),
+      ),
+    );
   }
 
   complete<TApi extends Api>(
@@ -782,32 +849,47 @@ export class ModelRuntime implements Models {
   ): AssistantMessageEventStream {
     const transcript = normalizeContext(context);
     if (isVirtualModel(model)) {
-      return lazyStream(model, async () => {
-        const route = await this.resolveModel(model, transcript.messages, {
-          reason: "direct",
-          thinkingLevel: options?.reasoning ?? "off",
-          signal: options?.signal,
-        });
-        const { maxTokens: limit } = route.model;
-        const maxTokens =
-          options?.maxTokens !== undefined && options?.maxTokens !== 0 && limit > 0
-            ? Math.min(options.maxTokens, limit)
-            : options?.maxTokens;
-        const reasoning = route.thinkingLevel === "off" ? undefined : route.thinkingLevel;
-        const { apiKey, headers, env, ...rest } = options ?? {};
-        const auth = route.model.provider === model.provider ? { apiKey, headers, env } : {};
-        return this.streamSimple(route.model, context, { ...rest, ...auth, maxTokens, reasoning });
-      });
-    }
-    return lazyStream(model, async () => {
-      assertChatModel(model);
-      const prepared = await this.prepareRequest(model, options);
-      return prepared.provider.streamSimple(
-        prepared.model,
-        transcript,
-        prepared.options as SimpleStreamOptions,
+      return lazyStream(model, () =>
+        Effect.runPromise(
+          awaitingWith(function* () {
+            const route = yield* awaited(
+              this.resolveModel(model, transcript.messages, {
+                reason: "direct",
+                thinkingLevel: options?.reasoning ?? "off",
+                signal: options?.signal,
+              }),
+            );
+            const { maxTokens: limit } = route.model;
+            const maxTokens =
+              options?.maxTokens !== undefined && options?.maxTokens !== 0 && limit > 0
+                ? Math.min(options.maxTokens, limit)
+                : options?.maxTokens;
+            const reasoning = route.thinkingLevel === "off" ? undefined : route.thinkingLevel;
+            const { apiKey, headers, env, ...rest } = options ?? {};
+            const auth = route.model.provider === model.provider ? { apiKey, headers, env } : {};
+            return this.streamSimple(route.model, context, {
+              ...rest,
+              ...auth,
+              maxTokens,
+              reasoning,
+            });
+          }, this),
+        ),
       );
-    });
+    }
+    return lazyStream(model, () =>
+      Effect.runPromise(
+        awaitingWith(function* () {
+          assertChatModel(model);
+          const prepared = yield* awaited(this.prepareRequest(model, options));
+          return prepared.provider.streamSimple(
+            prepared.model,
+            transcript,
+            prepared.options as SimpleStreamOptions,
+          );
+        }, this),
+      ),
+    );
   }
 
   completeSimple(
@@ -823,98 +905,124 @@ export class ModelRuntime implements Models {
     handle: DeferredHandle,
     options?: ModelsDeferredFetchOptions,
   ): AssistantMessageEventStream {
-    return lazyStream(model, async () => {
-      assertChatModel(model);
-      const prepared = await this.prepareRequest(model, options);
-      if (prepared.provider.fetchDeferred === undefined) {
-        throw new ModelsError(
-          "provider",
-          `Provider ${model.provider} does not support deferred responses`,
-        );
-      }
-      return prepared.provider.fetchDeferred(
-        prepared.model,
-        handle,
-        prepared.options as DeferredFetchOptions,
-      );
-    });
+    return lazyStream(model, () =>
+      Effect.runPromise(
+        awaitingWith(function* () {
+          assertChatModel(model);
+          const prepared = yield* awaited(this.prepareRequest(model, options));
+          if (prepared.provider.fetchDeferred === undefined) {
+            throw new ModelsError(
+              "provider",
+              `Provider ${model.provider} does not support deferred responses`,
+            );
+          }
+          return prepared.provider.fetchDeferred(
+            prepared.model,
+            handle,
+            prepared.options as DeferredFetchOptions,
+          );
+        }, this),
+      ),
+    );
   }
 
-  async fetchDeferred(
+  fetchDeferred(
     model: Model<Api>,
     handle: DeferredHandle,
     options?: ModelsDeferredFetchOptions,
   ): Promise<AssistantMessage> {
-    return this.streamDeferred(model, handle, options).result();
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        return yield* awaited(this.streamDeferred(model, handle, options).result());
+      }, this),
+    );
   }
 
-  async cancelDeferred(
+  cancelDeferred(
     model: Model<Api>,
     handle: DeferredHandle,
     options?: ModelsDeferredCancelOptions,
   ): Promise<void> {
-    assertChatModel(model);
-    const prepared = await this.prepareRequest(model, options);
-    if (prepared.provider.cancelDeferred === undefined) {
-      throw new ModelsError(
-        "provider",
-        `Provider ${model.provider} does not support deferred responses`,
-      );
-    }
-    await prepared.provider.cancelDeferred(
-      prepared.model,
-      handle,
-      prepared.options as DeferredCancelOptions,
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        assertChatModel(model);
+        const prepared = yield* awaited(this.prepareRequest(model, options));
+        if (prepared.provider.cancelDeferred === undefined) {
+          throw new ModelsError(
+            "provider",
+            `Provider ${model.provider} does not support deferred responses`,
+          );
+        }
+        yield* awaited(
+          prepared.provider.cancelDeferred(
+            prepared.model,
+            handle,
+            prepared.options as DeferredCancelOptions,
+          ),
+        );
+      }, this),
     );
   }
 
-  async generateImages(
+  generateImages(
     model: ImageModel<ImageApi>,
     context: ImagesContext,
     options?: ModelsImagesOptions,
   ): Promise<AssistantImages> {
-    try {
-      assertImageModel(model);
-      const prepared = await this.prepareRequest(model, options);
-      if (prepared.provider.generateImages === undefined) {
-        throw new ModelsError(
-          "provider",
-          `Provider ${model.provider} does not support image generation`,
-        );
-      }
-      return await prepared.provider.generateImages(
-        prepared.model,
-        context,
-        prepared.options as ImagesOptions,
-      );
-    } catch (error) {
-      return imageErrorResult(model, error, options?.signal?.aborted);
-    }
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        try {
+          assertImageModel(model);
+          const prepared = yield* awaited(this.prepareRequest(model, options));
+          if (prepared.provider.generateImages === undefined) {
+            throw new ModelsError(
+              "provider",
+              `Provider ${model.provider} does not support image generation`,
+            );
+          }
+          return yield* awaited(
+            prepared.provider.generateImages(
+              prepared.model,
+              context,
+              prepared.options as ImagesOptions,
+            ),
+          );
+        } catch (error) {
+          return imageErrorResult(model, error, options?.signal?.aborted);
+        }
+      }, this),
+    );
   }
 
-  async classify(
+  classify(
     model: ClassifierModel<ClassifierApi>,
     context: ClassifierContext,
     options?: ModelsClassifierOptions,
   ): Promise<ClassifierResult> {
-    try {
-      assertClassifierModel(model);
-      assertClassifierInputSupported(model, context);
-      const prepared = await this.prepareRequest(model, options);
-      if (prepared.provider.classify === undefined) {
-        throw new ModelsError(
-          "provider",
-          `Provider ${model.provider} does not support classification`,
-        );
-      }
-      return await prepared.provider.classify(
-        prepared.model,
-        context,
-        prepared.options as ClassifierOptions,
-      );
-    } catch (error) {
-      return classifierErrorResult(model, error, options?.signal?.aborted);
-    }
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        try {
+          assertClassifierModel(model);
+          assertClassifierInputSupported(model, context);
+          const prepared = yield* awaited(this.prepareRequest(model, options));
+          if (prepared.provider.classify === undefined) {
+            throw new ModelsError(
+              "provider",
+              `Provider ${model.provider} does not support classification`,
+            );
+          }
+          return yield* awaited(
+            prepared.provider.classify(
+              prepared.model,
+              context,
+              prepared.options as ClassifierOptions,
+            ),
+          );
+        } catch (error) {
+          return classifierErrorResult(model, error, options?.signal?.aborted);
+        }
+      }, this),
+    );
   }
 
   login(
@@ -924,64 +1032,91 @@ export class ModelRuntime implements Models {
     options?: LoginOptions,
   ): Promise<Credential> {
     const signal = operationSignal(interaction.signal);
-    return this.enqueueCredentialOperation(providerId, signal, async () => {
-      const credential = await this.models.login(
-        providerId,
-        type,
-        { ...interaction, signal },
-        options,
-      );
-      await this.synchronizeCredentialState(providerId, "login", credential, signal);
-      return credential;
-    });
+    return this.enqueueCredentialOperation(providerId, signal, () =>
+      Effect.runPromise(
+        awaitingWith(function* () {
+          const credential = yield* awaited(
+            this.models.login(providerId, type, { ...interaction, signal }, options),
+          );
+          yield* performed(
+            this.synchronizeCredentialState(providerId, "login", credential, signal),
+          );
+          return credential;
+        }, this),
+      ),
+    );
   }
 
   logout(providerId: string, options: AuthOperationOptions = {}): Promise<void> {
     const signal = operationSignal(options.signal);
-    return this.enqueueCredentialOperation(providerId, signal, async () => {
-      await this.models.logout(providerId, { signal });
-      await this.synchronizeCredentialState(providerId, "logout", undefined, signal);
-    });
+    return this.enqueueCredentialOperation(providerId, signal, () =>
+      Effect.runPromise(
+        awaitingWith(function* () {
+          yield* awaited(this.models.logout(providerId, { signal }));
+          yield* performed(
+            this.synchronizeCredentialState(providerId, "logout", undefined, signal),
+          );
+        }, this),
+      ),
+    );
   }
 
-  async refresh(options: ModelsRefreshOptions = {}): Promise<ModelsRefreshResult> {
-    this.config = await ModelConfig.load(this.modelsPath);
-    if (options.providers === undefined) {
-      this.rebuildProviders();
-    } else {
-      for (const providerId of new Set(options.providers)) this.recomposeProvider(providerId);
-      this.updateModelSnapshot();
-    }
-    const refreshOptions = {
-      ...options,
-      allowNetwork: options.allowNetwork ?? this.modelNetworkEnabled,
-    };
-    const result = ((await this.models.refresh(refreshOptions)) as
-      | ModelsRefreshResult
-      | undefined) ?? {
-      aborted: refreshOptions.signal?.aborted ?? false,
-      errors: new Map(),
-    };
-    const errors = new Map(result.errors);
-    this.updateModelSnapshot();
-    if (options.providers === undefined) {
-      try {
-        await this.queueAvailabilityRefresh(options.signal);
-      } catch {}
-    } else {
-      await Promise.all(
-        [...new Set(options.providers)].map(async (providerId) => {
+  refresh(options: ModelsRefreshOptions = {}): Promise<ModelsRefreshResult> {
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        this.config = yield* awaited(ModelConfig.load(this.modelsPath));
+        if (options.providers === undefined) {
+          this.rebuildProviders();
+        } else {
+          for (const providerId of new Set(options.providers)) this.recomposeProvider(providerId);
+          this.updateModelSnapshot();
+        }
+        const refreshOptions = {
+          ...options,
+          allowNetwork: options.allowNetwork ?? this.modelNetworkEnabled,
+        };
+        const result = ((yield* awaited(this.models.refresh(refreshOptions))) as
+          | ModelsRefreshResult
+          | undefined) ?? {
+          aborted: refreshOptions.signal?.aborted ?? false,
+          errors: new Map(),
+        };
+        const errors = new Map(result.errors);
+        this.updateModelSnapshot();
+        if (options.providers === undefined) {
           try {
-            await this.refreshProviderAvailability(providerId, operationSignal(options.signal));
-          } catch (error) {
-            if (options.signal?.aborted !== true) {
-              errors.set(providerId, error instanceof Error ? error : new Error(String(error)));
-            }
-          }
-        }),
-      );
-    }
-    return { aborted: result.aborted || (options.signal?.aborted ?? false), errors };
+            yield* awaited(this.queueAvailabilityRefresh(options.signal));
+          } catch {}
+        } else {
+          yield* awaited(
+            Promise.all(
+              [...new Set(options.providers)].map((providerId) =>
+                Effect.runPromise(
+                  awaitingWith(function* () {
+                    try {
+                      yield* performed(
+                        this.refreshProviderAvailability(
+                          providerId,
+                          operationSignal(options.signal),
+                        ),
+                      );
+                    } catch (error) {
+                      if (options.signal?.aborted !== true) {
+                        errors.set(
+                          providerId,
+                          error instanceof Error ? error : new Error(String(error)),
+                        );
+                      }
+                    }
+                  }, this),
+                ),
+              ),
+            ),
+          );
+        }
+        return { aborted: result.aborted || (options.signal?.aborted ?? false), errors };
+      }, this),
+    );
   }
 
   registerNativeProvider(provider: Provider): void {
@@ -1089,7 +1224,7 @@ export class ModelRuntime implements Models {
     void this.refresh({ allowNetwork: false });
   }
 
-  async resolveModel(
+  resolveModel(
     model: Model<Api>,
     messages: readonly Message[],
     options: {
@@ -1100,31 +1235,44 @@ export class ModelRuntime implements Models {
       state?: unknown;
     },
   ): Promise<ModelRoute> {
-    const name = `Virtual model ${model.provider}/${model.id}`;
-    const virtual = this.virtualModels.get(model.provider)?.get(model.id);
-    if (virtual === undefined) throw new Error(`${name} is not registered.`);
-    const { failed, ...request } = options;
-    const latest = findLatestResponse(messages);
-    const previousModel = latest && this.getPhysicalModel(latest.provider, latest.model);
-    const failedModel = failed && this.getPhysicalModel(failed.provider, failed.model);
-    const route = await virtual.route({
-      ...request,
-      model,
-      previous: previousModel && { model: previousModel, thinkingLevel: latest?.thinkingLevel },
-      failed: failedModel &&
-        failed && { model: failedModel, thinkingLevel: failed.thinkingLevel, message: failed },
-      messages,
-    });
-    const target = this.getPhysicalModel(route.model.provider, route.model.id);
-    const routed = `${name} routed to ${route.model.provider}/${route.model.id}`;
-    if (target === undefined) throw new Error(`${routed}, which is not a physical model.`);
-    if (!this.hasConfiguredAuth(target.provider))
-      throw new Error(`${routed}, which has no credentials.`);
-    return {
-      model: target,
-      thinkingLevel: clampThinkingLevel(target, route.thinkingLevel),
-      state: route.state,
-    };
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        const name = `Virtual model ${model.provider}/${model.id}`;
+        const virtual = this.virtualModels.get(model.provider)?.get(model.id);
+        if (virtual === undefined) throw new Error(`${name} is not registered.`);
+        const { failed, ...request } = options;
+        const latest = findLatestResponse(messages);
+        const previousModel = latest && this.getPhysicalModel(latest.provider, latest.model);
+        const failedModel = failed && this.getPhysicalModel(failed.provider, failed.model);
+        const route = yield* awaited(
+          virtual.route({
+            ...request,
+            model,
+            previous: previousModel && {
+              model: previousModel,
+              thinkingLevel: latest?.thinkingLevel,
+            },
+            failed: failedModel &&
+              failed && {
+                model: failedModel,
+                thinkingLevel: failed.thinkingLevel,
+                message: failed,
+              },
+            messages,
+          }),
+        );
+        const target = this.getPhysicalModel(route.model.provider, route.model.id);
+        const routed = `${name} routed to ${route.model.provider}/${route.model.id}`;
+        if (target === undefined) throw new Error(`${routed}, which is not a physical model.`);
+        if (!this.hasConfiguredAuth(target.provider))
+          throw new Error(`${routed}, which has no credentials.`);
+        return {
+          model: target,
+          thinkingLevel: clampThinkingLevel(target, route.thinkingLevel),
+          state: route.state,
+        };
+      }, this),
+    );
   }
 
   getPhysicalModel(providerId: string, modelId: string): Model<Api> | undefined {

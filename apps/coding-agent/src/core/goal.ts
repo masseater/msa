@@ -2,10 +2,13 @@ import { setTimeout as delay } from "node:timers/promises";
 
 import type { AgentMessage } from "@msa/agent-core";
 import type { Api, AssistantMessage, Model } from "@msa/ai/compat";
+import * as Effect from "effect/Effect";
 
 import { toErrorMessage } from "../utils/errors.ts";
+import { awaited, awaitingWith, performed } from "./awaiting.ts";
 import { serializeConversation } from "./compaction/utils.ts";
 import { convertToLlm } from "./messages.ts";
+import { nowMs } from "./platform.ts";
 import type { SessionEntry } from "./session-manager.ts";
 
 export const GOAL_ENTRY_TYPE = "msa.goal";
@@ -371,27 +374,32 @@ export class GoalLoop {
     this.abortController?.abort();
   }
 
-  async afterRun(): Promise<boolean> {
-    const goal = this.active;
-    if (goal === undefined) return false;
-    const last = this.host.lastAssistant();
-    if (last?.stopReason === "aborted") return false;
-    const controller = new AbortController();
-    this.abortController = controller;
-    try {
-      if (last?.stopReason === "error") return await this.afterError(goal, last, controller.signal);
-      goal.errorTurns = 0;
-      goal.rateLimitWaits = 0;
-      return await this.evaluate(goal, controller.signal);
-    } finally {
-      if (this.abortController === controller) this.abortController = undefined;
-    }
+  afterRun(): Promise<boolean> {
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        const goal = this.active;
+        if (goal === undefined) return false;
+        const last = this.host.lastAssistant();
+        if (last?.stopReason === "aborted") return false;
+        const controller = new AbortController();
+        this.abortController = controller;
+        try {
+          if (last?.stopReason === "error")
+            return yield* performed(this.afterError(goal, last, controller.signal));
+          goal.errorTurns = 0;
+          goal.rateLimitWaits = 0;
+          return yield* awaited(this.evaluate(goal, controller.signal));
+        } finally {
+          if (this.abortController === controller) this.abortController = undefined;
+        }
+      }, this),
+    );
   }
 
   private start(condition: string): ActiveGoal {
     return {
       condition,
-      startedAt: Date.now(),
+      startedAt: nowMs(),
       tokenBaseline: this.host.totalTokens(),
       turns: 0,
       evaluating: false,
@@ -415,104 +423,110 @@ export class GoalLoop {
     return false;
   }
 
-  private async afterError(
+  private afterError(
     goal: ActiveGoal,
     message: AssistantMessage,
     signal: AbortSignal,
-  ): Promise<boolean> {
-    const error = message.errorMessage || "Unknown error";
-    const kind = classifyGoalError(message, this.host.isContextOverflow(message));
-    if (kind === "fatal") {
-      this.end({ event: "failed", condition: goal.condition, reason: error });
-      return false;
-    }
-    if (kind === "rate_limit") {
-      goal.rateLimitWaits++;
-      const delayMs = Math.min(
-        RATE_LIMIT_BASE_DELAY_MS * 2 ** (goal.rateLimitWaits - 1),
-        RATE_LIMIT_MAX_DELAY_MS,
-      );
-      this.host.record({ event: "waiting", condition: goal.condition, reason: error, delayMs });
-      try {
-        await delay(delayMs, undefined, { signal });
-      } catch {
+  ): Effect.Effect<boolean> {
+    return awaitingWith(function* () {
+      const error = message.errorMessage || "Unknown error";
+      const kind = classifyGoalError(message, this.host.isContextOverflow(message));
+      if (kind === "fatal") {
+        this.end({ event: "failed", condition: goal.condition, reason: error });
         return false;
       }
-      if (this.active !== goal) return false;
-    } else {
-      goal.errorTurns++;
-      if (goal.errorTurns >= GOAL_ERROR_TURN_LIMIT) {
-        return this.pause(goal, `${goal.errorTurns} turns in a row failed: ${error}`);
+      if (kind === "rate_limit") {
+        goal.rateLimitWaits++;
+        const delayMs = Math.min(
+          RATE_LIMIT_BASE_DELAY_MS * 2 ** (goal.rateLimitWaits - 1),
+          RATE_LIMIT_MAX_DELAY_MS,
+        );
+        this.host.record({ event: "waiting", condition: goal.condition, reason: error, delayMs });
+        try {
+          yield* awaited(delay(delayMs, undefined, { signal }));
+        } catch {
+          return false;
+        }
+        if (this.active !== goal) return false;
+      } else {
+        goal.errorTurns++;
+        if (goal.errorTurns >= GOAL_ERROR_TURN_LIMIT) {
+          return this.pause(goal, `${goal.errorTurns} turns in a row failed: ${error}`);
+        }
       }
-    }
-    this.host.queueContinue(
-      `The previous attempt ended with an error: ${error}\n\nContinue working toward the goal:\n${goal.condition}`,
-    );
-    return true;
+      this.host.queueContinue(
+        `The previous attempt ended with an error: ${error}\n\nContinue working toward the goal:\n${goal.condition}`,
+      );
+      return true;
+    }, this);
   }
 
-  private async evaluate(goal: ActiveGoal, signal: AbortSignal): Promise<boolean> {
-    const toolUsed = goal.toolUsed;
-    goal.toolUsed = false;
-    const turn = goal.turns + 1;
-    const prompt = buildGoalEvaluationPrompt({
-      condition: goal.condition,
-      messages: this.host.messages(),
-      turn,
-      elapsedMs: Date.now() - goal.startedAt,
-    });
-    goal.evaluating = true;
-    this.host.changed();
-    let evaluation: GoalEvaluation | undefined;
-    try {
-      const text = await this.host.evaluate(prompt, signal);
-      evaluation = parseGoalEvaluation(text);
-      if (evaluation === undefined)
-        throw new Error(`Evaluator returned no verdict: ${text.slice(0, 200)}`);
-    } catch (error) {
-      goal.evaluating = false;
-      if (signal.aborted || this.active !== goal) {
+  private evaluate(goal: ActiveGoal, signal: AbortSignal): Promise<boolean> {
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        const toolUsed = goal.toolUsed;
+        goal.toolUsed = false;
+        const turn = goal.turns + 1;
+        const prompt = buildGoalEvaluationPrompt({
+          condition: goal.condition,
+          messages: this.host.messages(),
+          turn,
+          elapsedMs: nowMs() - goal.startedAt,
+        });
+        goal.evaluating = true;
         this.host.changed();
-        return false;
-      }
-      const reason = toErrorMessage(error);
-      return this.pause(goal, `Goal evaluation failed: ${reason}`);
-    }
-    goal.evaluating = false;
-    if (signal.aborted || this.active !== goal) {
-      this.host.changed();
-      return false;
-    }
-    goal.turns = turn;
-    goal.lastEvaluation = evaluation;
+        let evaluation: GoalEvaluation | undefined;
+        try {
+          const text = yield* awaited(this.host.evaluate(prompt, signal));
+          evaluation = parseGoalEvaluation(text);
+          if (evaluation === undefined)
+            throw new Error(`Evaluator returned no verdict: ${text.slice(0, 200)}`);
+        } catch (error) {
+          goal.evaluating = false;
+          if (signal.aborted || this.active !== goal) {
+            this.host.changed();
+            return false;
+          }
+          const reason = toErrorMessage(error);
+          return this.pause(goal, `Goal evaluation failed: ${reason}`);
+        }
+        goal.evaluating = false;
+        if (signal.aborted || this.active !== goal) {
+          this.host.changed();
+          return false;
+        }
+        goal.turns = turn;
+        goal.lastEvaluation = evaluation;
 
-    if (evaluation.verdict !== "not_met") {
-      this.end({
-        event: evaluation.verdict,
-        condition: goal.condition,
-        reason: evaluation.reason,
-        turns: goal.turns,
-        elapsedMs: Date.now() - goal.startedAt,
-        tokens: Math.max(0, this.host.totalTokens() - goal.tokenBaseline),
-      });
-      return false;
-    }
+        if (evaluation.verdict !== "not_met") {
+          this.end({
+            event: evaluation.verdict,
+            condition: goal.condition,
+            reason: evaluation.reason,
+            turns: goal.turns,
+            elapsedMs: nowMs() - goal.startedAt,
+            tokens: Math.max(0, this.host.totalTokens() - goal.tokenBaseline),
+          });
+          return false;
+        }
 
-    this.host.record({
-      event: "evaluated",
-      condition: goal.condition,
-      reason: evaluation.reason,
-      turn,
-    });
-    goal.idleTurns = toolUsed ? 0 : goal.idleTurns + 1;
-    if (goal.idleTurns >= GOAL_NO_PROGRESS_TURN_LIMIT) {
-      goal.idleTurns = 0;
-      return this.pause(goal, `No tool calls in ${GOAL_NO_PROGRESS_TURN_LIMIT} turns in a row`);
-    }
-    this.host.changed();
-    this.host.queueContinue(
-      `The goal is not met yet: ${evaluation.reason}\n\nKeep working until this condition holds:\n${goal.condition}`,
+        this.host.record({
+          event: "evaluated",
+          condition: goal.condition,
+          reason: evaluation.reason,
+          turn,
+        });
+        goal.idleTurns = toolUsed ? 0 : goal.idleTurns + 1;
+        if (goal.idleTurns >= GOAL_NO_PROGRESS_TURN_LIMIT) {
+          goal.idleTurns = 0;
+          return this.pause(goal, `No tool calls in ${GOAL_NO_PROGRESS_TURN_LIMIT} turns in a row`);
+        }
+        this.host.changed();
+        this.host.queueContinue(
+          `The goal is not met yet: ${evaluation.reason}\n\nKeep working until this condition holds:\n${goal.condition}`,
+        );
+        return true;
+      }, this),
     );
-    return true;
   }
 }

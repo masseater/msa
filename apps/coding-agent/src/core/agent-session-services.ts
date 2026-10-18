@@ -2,10 +2,12 @@ import { join } from "node:path";
 
 import type { ThinkingLevel } from "@msa/agent-core";
 import type { Model } from "@msa/ai";
+import * as Effect from "effect/Effect";
 
 import { getAgentDir } from "../config.ts";
 import { toErrorMessage } from "../utils/errors.ts";
 import { resolvePath } from "../utils/paths.ts";
+import { awaited, awaiting } from "./awaiting.ts";
 import type { SessionStartEvent, ToolDefinition } from "./extensions/index.ts";
 import { ModelRuntime } from "./model-runtime.ts";
 import {
@@ -114,102 +116,114 @@ function applyExtensionFlagValues(
   return diagnostics;
 }
 
-export async function createAgentSessionServices(
+export function createAgentSessionServices(
   options: CreateAgentSessionServicesOptions,
 ): Promise<AgentSessionServices> {
-  const cwd = resolvePath(options.cwd);
-  const agentDir =
-    options.agentDir !== undefined && options.agentDir !== ""
-      ? resolvePath(options.agentDir)
-      : getAgentDir();
-  const modelRuntime =
-    options.modelRuntime ??
-    (await ModelRuntime.create({
-      authPath: join(agentDir, "auth.json"),
-      modelsPath: join(agentDir, "models.json"),
-      signal: options.modelRuntimeSignal,
-    }));
-  const settingsManager = options.settingsManager ?? SettingsManager.create(cwd, agentDir);
-  const resourceLoader = new DefaultResourceLoader({
-    ...(options.resourceLoaderOptions ?? {}),
-    cwd,
-    agentDir,
-    settingsManager,
-  });
-  await resourceLoader.reload(options.resourceLoaderReloadOptions);
+  return Effect.runPromise(
+    awaiting(function* () {
+      const cwd = resolvePath(options.cwd);
+      const agentDir =
+        options.agentDir !== undefined && options.agentDir !== ""
+          ? resolvePath(options.agentDir)
+          : getAgentDir();
+      const modelRuntime =
+        options.modelRuntime ??
+        (yield* awaited(
+          ModelRuntime.create({
+            authPath: join(agentDir, "auth.json"),
+            modelsPath: join(agentDir, "models.json"),
+            signal: options.modelRuntimeSignal,
+          }),
+        ));
+      const settingsManager = options.settingsManager ?? SettingsManager.create(cwd, agentDir);
+      const resourceLoader = new DefaultResourceLoader({
+        ...(options.resourceLoaderOptions ?? {}),
+        cwd,
+        agentDir,
+        settingsManager,
+      });
+      yield* awaited(resourceLoader.reload(options.resourceLoaderReloadOptions));
 
-  const diagnostics: AgentSessionRuntimeDiagnostic[] = [];
-  const extensionsResult = resourceLoader.getExtensions();
-  for (const { name, config, extensionPath } of extensionsResult.runtime
-    .pendingProviderRegistrations) {
-    try {
-      modelRuntime.registerProvider(name, config);
-    } catch (error) {
-      const message = toErrorMessage(error);
-      diagnostics.push({
-        type: "error",
-        message: `Extension "${extensionPath}" error: ${message}`,
-      });
-    }
-  }
-  extensionsResult.runtime.pendingProviderRegistrations = [];
-  for (const { provider, extensionPath } of extensionsResult.runtime
-    .pendingNativeProviderRegistrations) {
-    try {
-      modelRuntime.registerNativeProvider(provider);
-    } catch (error) {
-      const message = toErrorMessage(error);
-      diagnostics.push({
-        type: "error",
-        message: `Extension "${extensionPath}" error: ${message}`,
-      });
-    }
-  }
-  extensionsResult.runtime.pendingNativeProviderRegistrations = [];
-  for (const { definition, extensionPath } of extensionsResult.runtime
-    .pendingVirtualModelRegistrations) {
-    try {
-      modelRuntime.registerVirtualModel(definition);
-    } catch (error) {
-      const message = toErrorMessage(error);
-      diagnostics.push({
-        type: "error",
-        message: `Extension "${extensionPath}" error: ${message}`,
-      });
-    }
-  }
-  extensionsResult.runtime.pendingVirtualModelRegistrations = [];
-  await modelRuntime.refresh({ allowNetwork: false });
-  diagnostics.push(...applyExtensionFlagValues(resourceLoader, options.extensionFlagValues));
+      const diagnostics: AgentSessionRuntimeDiagnostic[] = [];
+      const extensionsResult = resourceLoader.getExtensions();
+      for (const { name, config, extensionPath } of extensionsResult.runtime
+        .pendingProviderRegistrations) {
+        try {
+          modelRuntime.registerProvider(name, config);
+        } catch (error) {
+          const message = toErrorMessage(error);
+          diagnostics.push({
+            type: "error",
+            message: `Extension "${extensionPath}" error: ${message}`,
+          });
+        }
+      }
+      extensionsResult.runtime.pendingProviderRegistrations = [];
+      for (const { provider, extensionPath } of extensionsResult.runtime
+        .pendingNativeProviderRegistrations) {
+        try {
+          modelRuntime.registerNativeProvider(provider);
+        } catch (error) {
+          const message = toErrorMessage(error);
+          diagnostics.push({
+            type: "error",
+            message: `Extension "${extensionPath}" error: ${message}`,
+          });
+        }
+      }
+      extensionsResult.runtime.pendingNativeProviderRegistrations = [];
+      for (const { definition, extensionPath } of extensionsResult.runtime
+        .pendingVirtualModelRegistrations) {
+        try {
+          modelRuntime.registerVirtualModel(definition);
+        } catch (error) {
+          const message = toErrorMessage(error);
+          diagnostics.push({
+            type: "error",
+            message: `Extension "${extensionPath}" error: ${message}`,
+          });
+        }
+      }
+      extensionsResult.runtime.pendingVirtualModelRegistrations = [];
+      yield* awaited(modelRuntime.refresh({ allowNetwork: false }));
+      diagnostics.push(...applyExtensionFlagValues(resourceLoader, options.extensionFlagValues));
 
-  return {
-    cwd,
-    agentDir,
-    modelRuntime,
-    settingsManager,
-    resourceLoader,
-    diagnostics,
-  };
+      return {
+        cwd,
+        agentDir,
+        modelRuntime,
+        settingsManager,
+        resourceLoader,
+        diagnostics,
+      };
+    }),
+  );
 }
 
-export async function createAgentSessionFromServices(
+export function createAgentSessionFromServices(
   options: CreateAgentSessionFromServicesOptions,
 ): Promise<CreateAgentSessionResult> {
-  return createAgentSession({
-    cwd: options.services.cwd,
-    agentDir: options.services.agentDir,
-    modelRuntime: options.services.modelRuntime,
-    settingsManager: options.services.settingsManager,
-    resourceLoader: options.services.resourceLoader,
-    sessionManager: options.sessionManager,
-    model: options.model,
-    thinkingLevel: options.thinkingLevel,
-    scopedModels: options.scopedModels,
-    tools: options.tools,
-    excludeTools: options.excludeTools,
-    noTools: options.noTools,
-    customTools: options.customTools,
-    sessionStartEvent: options.sessionStartEvent,
-    orchestrator: options.orchestrator,
-  });
+  return Effect.runPromise(
+    awaiting(function* () {
+      return yield* awaited(
+        createAgentSession({
+          cwd: options.services.cwd,
+          agentDir: options.services.agentDir,
+          modelRuntime: options.services.modelRuntime,
+          settingsManager: options.services.settingsManager,
+          resourceLoader: options.services.resourceLoader,
+          sessionManager: options.sessionManager,
+          model: options.model,
+          thinkingLevel: options.thinkingLevel,
+          scopedModels: options.scopedModels,
+          tools: options.tools,
+          excludeTools: options.excludeTools,
+          noTools: options.noTools,
+          customTools: options.customTools,
+          sessionStartEvent: options.sessionStartEvent,
+          orchestrator: options.orchestrator,
+        }),
+      );
+    }),
+  );
 }

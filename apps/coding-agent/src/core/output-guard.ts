@@ -1,3 +1,6 @@
+import * as Effect from "effect/Effect";
+
+import { awaited, awaiting, performed } from "./awaiting.ts";
 interface StdoutTakeoverState {
   rawStdoutWrite: (chunk: string, callback?: (error?: Error | null) => void) => boolean;
   rawStderrWrite: (chunk: string, callback?: (error?: Error | null) => void) => boolean;
@@ -17,29 +20,35 @@ function getRawStdoutWrite(): StdoutTakeoverState["rawStdoutWrite"] {
   return process.stdout.write.bind(process.stdout) as StdoutTakeoverState["rawStdoutWrite"];
 }
 
-async function writeRawStdoutChunk(text: string): Promise<void> {
-  while (true) {
-    try {
-      await new Promise<void>((resolve, reject) => {
-        try {
-          getRawStdoutWrite()(text, (error) => {
-            if (error !== undefined && error !== null) reject(error);
-            else resolve();
-          });
-        } catch (error) {
-          reject(error instanceof Error ? error : new Error(String(error)));
+function writeRawStdoutChunk(text: string): Effect.Effect<void> {
+  return awaiting(function* () {
+    while (true) {
+      try {
+        yield* awaited(
+          new Promise<void>((resolve, reject) => {
+            try {
+              getRawStdoutWrite()(text, (error) => {
+                if (error !== undefined && error !== null) reject(error);
+                else resolve();
+              });
+            } catch (error) {
+              reject(error instanceof Error ? error : new Error(String(error)));
+            }
+          }),
+        );
+        return;
+      } catch (error) {
+        const writeError = error instanceof Error ? error : new Error(String(error));
+        const code = (writeError as Error & { code?: unknown }).code;
+        if (code !== "ENOBUFS" && code !== "EAGAIN" && code !== "EWOULDBLOCK") {
+          throw writeError;
         }
-      });
-      return;
-    } catch (error) {
-      const writeError = error instanceof Error ? error : new Error(String(error));
-      const code = (writeError as Error & { code?: unknown }).code;
-      if (code !== "ENOBUFS" && code !== "EAGAIN" && code !== "EWOULDBLOCK") {
-        throw writeError;
+        yield* awaited(
+          new Promise<void>((resolve) => setTimeout(resolve, RAW_STDOUT_RETRY_DELAY_MS)),
+        );
       }
-      await new Promise<void>((resolve) => setTimeout(resolve, RAW_STDOUT_RETRY_DELAY_MS));
     }
-  }
+  });
 }
 
 export function takeOverStdout(): void {
@@ -90,23 +99,31 @@ export function writeRawStdout(text: string): void {
   if (text.length === 0) {
     return;
   }
-  rawStdoutWriteTail = rawStdoutWriteTail.then(() => writeRawStdoutChunk(text));
+  rawStdoutWriteTail = rawStdoutWriteTail.then(() => Effect.runPromise(writeRawStdoutChunk(text)));
   void rawStdoutWriteTail.catch(() => {
     process.exit(1);
   });
 }
 
-export async function waitForRawStdoutBackpressure(): Promise<void> {
-  while (true) {
-    const tail = rawStdoutWriteTail;
-    await tail;
-    if (tail === rawStdoutWriteTail) {
-      return;
-    }
-  }
+export function waitForRawStdoutBackpressure(): Promise<void> {
+  return Effect.runPromise(
+    awaiting(function* () {
+      while (true) {
+        const tail = rawStdoutWriteTail;
+        yield* awaited(tail);
+        if (tail === rawStdoutWriteTail) {
+          return;
+        }
+      }
+    }),
+  );
 }
 
-export async function flushRawStdout(): Promise<void> {
-  await waitForRawStdoutBackpressure();
-  await writeRawStdoutChunk("");
+export function flushRawStdout(): Promise<void> {
+  return Effect.runPromise(
+    awaiting(function* () {
+      yield* awaited(waitForRawStdoutBackpressure());
+      yield* performed(writeRawStdoutChunk(""));
+    }),
+  );
 }

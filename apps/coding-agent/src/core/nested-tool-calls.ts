@@ -12,7 +12,9 @@ import type {
   TextContent,
   Usage,
 } from "@msa/ai";
+import * as Effect from "effect/Effect";
 
+import { awaited, awaitingWith } from "./awaiting.ts";
 import { combineUsage } from "./usage-totals.ts";
 
 export const NESTED_CALL_LIMITS = {
@@ -157,84 +159,96 @@ export class NestedToolCallRunner {
     this.host = host;
   }
 
-  async execute(
+  execute(
     callerId: string,
     name: string,
     args: unknown,
     options: NestedToolCallOptions = {},
   ): Promise<AgentToolCallOutcome> {
-    let scope = this.scopes.get(callerId);
-    if (scope === undefined) {
-      scope = { recorder: new NestedCallRecorder(), nextId: 1, holdsQueue: false };
-      this.scopes.set(callerId, scope);
-    }
-    const toolCall: AgentToolCall = {
-      type: "toolCall",
-      id: `${callerId}/${scope.nextId++}`,
-      name,
-      arguments: (args ?? {}) as AgentToolCall["arguments"],
-    };
-    const record = scope.recorder.start(toolCall);
-    await this.host.emit({
-      type: "tool_execution_start",
-      toolCallId: toolCall.id,
-      toolName: name,
-      args: toolCall.arguments,
-      parentToolCallId: callerId,
-    });
-
-    const exclusive =
-      !scope.holdsQueue &&
-      (this.host.isSequential() ||
-        this.host.getTools().find((tool) => tool.name === name)?.executionMode === "sequential");
-    let release: (() => void) | undefined;
-    if (exclusive) {
-      const previous = this.queueTail;
-      this.queueTail = new Promise((resolve) => {
-        release = resolve;
-      });
-      await previous;
-    }
-    this.scopes.set(toolCall.id, {
-      recorder: scope.recorder,
-      nextId: 1,
-      holdsQueue: scope.holdsQueue || exclusive,
-    });
-    let outcome: AgentToolCallOutcome;
-    try {
-      outcome = await this.host.runToolCall(
-        toolCall,
-        callerId,
-        options.signal,
-        async (partialResult) => {
-          options.onUpdate?.(partialResult);
-          await this.host.emit({
-            type: "tool_execution_update",
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        let scope = this.scopes.get(callerId);
+        if (scope === undefined) {
+          scope = { recorder: new NestedCallRecorder(), nextId: 1, holdsQueue: false };
+          this.scopes.set(callerId, scope);
+        }
+        const toolCall: AgentToolCall = {
+          type: "toolCall",
+          id: `${callerId}/${scope.nextId++}`,
+          name,
+          arguments: (args ?? {}) as AgentToolCall["arguments"],
+        };
+        const record = scope.recorder.start(toolCall);
+        yield* awaited(
+          this.host.emit({
+            type: "tool_execution_start",
             toolCallId: toolCall.id,
             toolName: name,
             args: toolCall.arguments,
-            partialResult,
             parentToolCallId: callerId,
-          });
-        },
-      );
-    } finally {
-      this.scopes.delete(toolCall.id);
-      release?.();
-    }
+          }),
+        );
 
-    scope.recorder.finish(record, outcome.isError, textOf(outcome.result));
-    if (outcome.result.usage !== undefined) scope.recorder.addUsage(outcome.result.usage);
-    await this.host.emit({
-      type: "tool_execution_end",
-      toolCallId: toolCall.id,
-      toolName: name,
-      result: outcome.result,
-      isError: outcome.isError,
-      ...(outcome.durationMs === undefined ? {} : { durationMs: outcome.durationMs }),
-      parentToolCallId: callerId,
-    });
-    return outcome;
+        const exclusive =
+          !scope.holdsQueue &&
+          (this.host.isSequential() ||
+            this.host.getTools().find((tool) => tool.name === name)?.executionMode ===
+              "sequential");
+        let release: (() => void) | undefined;
+        if (exclusive) {
+          const previous = this.queueTail;
+          this.queueTail = new Promise((resolve) => {
+            release = resolve;
+          });
+          yield* awaited(previous);
+        }
+        this.scopes.set(toolCall.id, {
+          recorder: scope.recorder,
+          nextId: 1,
+          holdsQueue: scope.holdsQueue || exclusive,
+        });
+        let outcome: AgentToolCallOutcome;
+        try {
+          outcome = yield* awaited(
+            this.host.runToolCall(toolCall, callerId, options.signal, (partialResult) =>
+              Effect.runPromise(
+                awaitingWith(function* () {
+                  options.onUpdate?.(partialResult);
+                  yield* awaited(
+                    this.host.emit({
+                      type: "tool_execution_update",
+                      toolCallId: toolCall.id,
+                      toolName: name,
+                      args: toolCall.arguments,
+                      partialResult,
+                      parentToolCallId: callerId,
+                    }),
+                  );
+                }, this),
+              ),
+            ),
+          );
+        } finally {
+          this.scopes.delete(toolCall.id);
+          release?.();
+        }
+
+        scope.recorder.finish(record, outcome.isError, textOf(outcome.result));
+        if (outcome.result.usage !== undefined) scope.recorder.addUsage(outcome.result.usage);
+        yield* awaited(
+          this.host.emit({
+            type: "tool_execution_end",
+            toolCallId: toolCall.id,
+            toolName: name,
+            result: outcome.result,
+            isError: outcome.isError,
+            ...(outcome.durationMs === undefined ? {} : { durationMs: outcome.durationMs }),
+            parentToolCallId: callerId,
+          }),
+        );
+        return outcome;
+      }, this),
+    );
   }
 
   takeRecord(toolCallId: string): NestedCallSummary | undefined {

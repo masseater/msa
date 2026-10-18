@@ -1,3 +1,6 @@
+import * as Effect from "effect/Effect";
+
+import { awaited, awaiting } from "./awaiting.ts";
 import type { ToolDefinition } from "./extensions/types.ts";
 import { createWebFetchToolDefinition } from "./tools/web-fetch.ts";
 import { createWebSearchToolDefinition } from "./tools/web-search.ts";
@@ -35,21 +38,33 @@ const treg: ExternalService = {
   id: "treg",
   name: "treg",
   purpose: "web search and page reading",
-  async status() {
-    const cli = findTregCli();
-    return cli === undefined
-      ? { installed: false, install: TREG_INSTALL_COMMAND }
-      : { installed: true, signedIn: cli.signedIn };
+  status() {
+    return Effect.runPromise(
+      Effect.sync(() => {
+        const cli = findTregCli();
+        return cli === undefined
+          ? { installed: false, install: TREG_INSTALL_COMMAND }
+          : { installed: true, signedIn: cli.signedIn };
+      }),
+    );
   },
-  async login(interaction, signal) {
-    const cli = findTregCli();
-    if (cli === undefined)
-      throw new Error(`treg is not installed. Install it with: ${TREG_INSTALL_COMMAND}`);
-    await loginTreg(cli.command, (page) => interaction.showPage(page), signal);
+  login(interaction, signal) {
+    return Effect.runPromise(
+      awaiting(function* () {
+        const cli = findTregCli();
+        if (cli === undefined)
+          throw new Error(`treg is not installed. Install it with: ${TREG_INSTALL_COMMAND}`);
+        yield* awaited(loginTreg(cli.command, (page) => interaction.showPage(page), signal));
+      }),
+    );
   },
-  async logout() {
-    const cli = findTregCli();
-    if (cli !== undefined) await logoutTreg(cli.command);
+  logout() {
+    return Effect.runPromise(
+      awaiting(function* () {
+        const cli = findTregCli();
+        if (cli !== undefined) yield* awaited(logoutTreg(cli.command));
+      }),
+    );
   },
   tools() {
     const options = findTreg();

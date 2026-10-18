@@ -8,6 +8,7 @@ import { CONFIG_DIR_NAME } from "../config.ts";
 import { toErrorMessage } from "../utils/errors.ts";
 import { canonicalizePath, resolvePath } from "../utils/paths.ts";
 import { stripBom } from "../utils/text.ts";
+import { nowMs } from "./platform.ts";
 
 export type ProjectTrustDecision = boolean | null;
 
@@ -167,8 +168,8 @@ function acquireTrustLockSync(path: string): () => void {
         throw error;
       }
       lastError = error;
-      const start = Date.now();
-      while (Date.now() - start < delayMs) {}
+      const start = nowMs();
+      while (nowMs() - start < delayMs) {}
     }
   }
 

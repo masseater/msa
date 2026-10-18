@@ -27,7 +27,9 @@ import {
 } from "@msa/ai";
 import { getApiProvider } from "@msa/ai/compat";
 import { classifierErrorResult, imageErrorResult } from "@msa/ai/utils/model-operations";
+import * as Effect from "effect/Effect";
 
+import { awaited, awaiting, performed } from "./awaiting.ts";
 import type {
   ModelConfig,
   ModelsJsonModel,
@@ -397,24 +399,35 @@ function adaptOAuth(config: ExtensionOAuthConfig): OAuthAuth {
   return {
     name: config.name,
     isSubscription: config.isSubscription,
-    login: async (callbacks) => {
-      const credential = await config.login({
-        onAuth: (info) => callbacks.notify({ type: "auth_url", ...info }),
-        onDeviceCode: (info) => callbacks.notify({ type: "device_code", ...info }),
-        onPrompt: (prompt) => callbacks.prompt({ type: "text", ...prompt }),
-        onProgress: (message) => callbacks.notify({ type: "progress", message }),
-        onManualCodeInput: () =>
-          callbacks.prompt({ type: "manual_code", message: "Paste the authorization code" }),
-        onSelect: (prompt) => callbacks.prompt({ type: "select", ...prompt }),
-        signal: callbacks.signal,
-      });
-      return { ...credential, type: "oauth" };
-    },
-    refresh: async (credential, signal) => ({
-      ...(await config.refreshToken(credential, signal)),
-      type: "oauth",
-    }),
-    toAuth: async (credential) => ({ apiKey: config.getApiKey(credential) }),
+    login: (callbacks) =>
+      Effect.runPromise(
+        awaiting(function* () {
+          const credential = yield* awaited(
+            config.login({
+              onAuth: (info) => callbacks.notify({ type: "auth_url", ...info }),
+              onDeviceCode: (info) => callbacks.notify({ type: "device_code", ...info }),
+              onPrompt: (prompt) => callbacks.prompt({ type: "text", ...prompt }),
+              onProgress: (message) => callbacks.notify({ type: "progress", message }),
+              onManualCodeInput: () =>
+                callbacks.prompt({ type: "manual_code", message: "Paste the authorization code" }),
+              onSelect: (prompt) => callbacks.prompt({ type: "select", ...prompt }),
+              signal: callbacks.signal,
+            }),
+          );
+          return { ...credential, type: "oauth" };
+        }),
+      ),
+    refresh: (credential, signal) =>
+      Effect.runPromise(
+        awaiting(function* () {
+          return {
+            ...(yield* awaited(config.refreshToken(credential, signal))),
+            type: "oauth",
+          };
+        }),
+      ),
+    toAuth: (credential) =>
+      Effect.runPromise(Effect.sync(() => ({ apiKey: config.getApiKey(credential) }))),
   };
 }
 
@@ -450,18 +463,20 @@ function configuredHeaders(
   return { ...config?.headers, ...extension?.headers };
 }
 
-async function configContextEnv(
+function configContextEnv(
   values: readonly string[],
   ctx: AuthContext,
   explicit?: Record<string, string>,
-): Promise<Record<string, string> | undefined> {
-  const env = { ...explicit };
-  for (const name of new Set(values.flatMap(getConfigValueEnvVarNames))) {
-    if (env[name] !== undefined) continue;
-    const value = await ctx.env(name);
-    if (value !== undefined) env[name] = value;
-  }
-  return Object.keys(env).length > 0 ? env : undefined;
+): Effect.Effect<Record<string, string> | undefined> {
+  return awaiting(function* () {
+    const env = { ...explicit };
+    for (const name of new Set(values.flatMap(getConfigValueEnvVarNames))) {
+      if (env[name] !== undefined) continue;
+      const value = yield* awaited(ctx.env(name));
+      if (value !== undefined) env[name] = value;
+    }
+    return Object.keys(env).length > 0 ? env : undefined;
+  });
 }
 
 function composeApiKeyAuth(
@@ -480,63 +495,81 @@ function composeApiKeyAuth(
     name: inherited?.name ?? "API key",
     login:
       inherited?.login ??
-      (async (interaction: AuthInteraction) => ({
-        type: "api_key",
-        key: await interaction.prompt({ type: "secret", message: "Enter API key" }),
-      })),
-    check: async (input) => {
-      if (input.credential !== undefined) {
-        if (inherited?.check !== undefined) return inherited.check(input);
-        if (input.credential.key !== undefined && input.credential.key !== "")
-          return { type: "api_key", source: "stored credential" };
-        const resolved = await inherited?.resolve(input);
-        return resolved === undefined ? undefined : { type: "api_key", source: resolved.source };
-      }
-      if (rawKey !== undefined) {
-        if (isCommandConfigValue(rawKey)) return { type: "api_key", source: "configured API key" };
-        const envNames = getConfigValueEnvVarNames(rawKey);
-        for (const name of envNames) {
-          if ((await input.ctx.env(name)) === undefined) return undefined;
-        }
-        return { type: "api_key", source: "configured API key" };
-      }
-      if (inherited?.check !== undefined) return inherited.check(input);
-      const resolved = await inherited?.resolve(input);
-      return resolved === undefined ? undefined : { type: "api_key", source: resolved.source };
-    },
-    resolve: async (input) => {
-      let result: AuthResult | undefined;
-      if (input.credential !== undefined) {
-        result =
-          inherited === undefined
-            ? input.credential.key !== undefined && input.credential.key !== ""
-              ? {
-                  auth: { apiKey: input.credential.key },
-                  env: input.credential.env,
-                  source: "stored credential",
-                }
-              : undefined
-            : await inherited.resolve(input);
-      } else if (rawKey === undefined) {
-        result = await inherited?.resolve(input);
-      } else {
-        const env = await configContextEnv([rawKey], input.ctx);
-        const key = resolveConfigValueOrThrow(rawKey, `API key for provider "${providerId}"`, env);
-        result =
-          inherited === undefined
-            ? { auth: { apiKey: key }, source: "configured API key" }
-            : await inherited.resolve({ ...input, credential: { type: "api_key", key } });
-      }
-      if (result === undefined) return undefined;
-      const explicitEnv = { ...(input.credential?.env ?? {}), ...(result.env ?? {}) };
-      const headerEnv = await configContextEnv(
-        Object.values(rawHeaders ?? {}),
-        input.ctx,
-        explicitEnv,
-      );
-      const headers = resolveHeadersOrThrow(rawHeaders, `provider "${providerId}"`, headerEnv);
-      return { ...result, auth: withConfiguredAuth(result.auth, headers, authHeader) };
-    },
+      ((interaction: AuthInteraction) =>
+        Effect.runPromise(
+          awaiting(function* () {
+            return {
+              type: "api_key",
+              key: yield* awaited(interaction.prompt({ type: "secret", message: "Enter API key" })),
+            };
+          }),
+        )),
+    check: (input) =>
+      Effect.runPromise(
+        awaiting(function* () {
+          if (input.credential !== undefined) {
+            if (inherited?.check !== undefined) return yield* awaited(inherited.check(input));
+            if (input.credential.key !== undefined && input.credential.key !== "")
+              return { type: "api_key", source: "stored credential" };
+            const resolved = yield* awaited(inherited?.resolve(input));
+            return resolved === undefined
+              ? undefined
+              : { type: "api_key", source: resolved.source };
+          }
+          if (rawKey !== undefined) {
+            if (isCommandConfigValue(rawKey))
+              return { type: "api_key", source: "configured API key" };
+            const envNames = getConfigValueEnvVarNames(rawKey);
+            for (const name of envNames) {
+              if ((yield* awaited(input.ctx.env(name))) === undefined) return undefined;
+            }
+            return { type: "api_key", source: "configured API key" };
+          }
+          if (inherited?.check !== undefined) return yield* awaited(inherited.check(input));
+          const resolved = yield* awaited(inherited?.resolve(input));
+          return resolved === undefined ? undefined : { type: "api_key", source: resolved.source };
+        }),
+      ),
+    resolve: (input) =>
+      Effect.runPromise(
+        awaiting(function* () {
+          let result: AuthResult | undefined;
+          if (input.credential !== undefined) {
+            result =
+              inherited === undefined
+                ? input.credential.key !== undefined && input.credential.key !== ""
+                  ? {
+                      auth: { apiKey: input.credential.key },
+                      env: input.credential.env,
+                      source: "stored credential",
+                    }
+                  : undefined
+                : yield* awaited(inherited.resolve(input));
+          } else if (rawKey === undefined) {
+            result = yield* awaited(inherited?.resolve(input));
+          } else {
+            const env = yield* performed(configContextEnv([rawKey], input.ctx));
+            const key = resolveConfigValueOrThrow(
+              rawKey,
+              `API key for provider "${providerId}"`,
+              env,
+            );
+            result =
+              inherited === undefined
+                ? { auth: { apiKey: key }, source: "configured API key" }
+                : yield* awaited(
+                    inherited.resolve({ ...input, credential: { type: "api_key", key } }),
+                  );
+          }
+          if (result === undefined) return undefined;
+          const explicitEnv = { ...(input.credential?.env ?? {}), ...(result.env ?? {}) };
+          const headerEnv = yield* performed(
+            configContextEnv(Object.values(rawHeaders ?? {}), input.ctx, explicitEnv),
+          );
+          const headers = resolveHeadersOrThrow(rawHeaders, `provider "${providerId}"`, headerEnv);
+          return { ...result, auth: withConfiguredAuth(result.auth, headers, authHeader) };
+        }),
+      ),
   };
 }
 
@@ -552,16 +585,19 @@ function composeOAuthAuth(
   const authHeader = extension?.authHeader ?? config?.authHeader ?? false;
   return {
     ...oauth,
-    toAuth: async (credential) => {
-      const auth = await oauth.toAuth(credential);
-      const env = credential["env"];
-      const headers = resolveHeadersOrThrow(
-        rawHeaders,
-        `provider "${providerId}"`,
-        typeof env === "object" && env !== null ? (env as Record<string, string>) : undefined,
-      );
-      return withConfiguredAuth(auth, headers, authHeader);
-    },
+    toAuth: (credential) =>
+      Effect.runPromise(
+        awaiting(function* () {
+          const auth = yield* awaited(oauth.toAuth(credential));
+          const env = credential["env"];
+          const headers = resolveHeadersOrThrow(
+            rawHeaders,
+            `provider "${providerId}"`,
+            typeof env === "object" && env !== null ? (env as Record<string, string>) : undefined,
+          );
+          return withConfiguredAuth(auth, headers, authHeader);
+        }),
+      ),
   };
 }
 
@@ -649,21 +685,26 @@ export function composeModelProvider(
     options: StreamOptions | undefined,
     simple: boolean,
   ): AssistantMessageEventStream =>
-    lazyStream(model, async () => {
-      if (extension?.streamSimple !== undefined && model.api === extension.api) {
-        return extension.streamSimple(model, context, options as SimpleStreamOptions);
-      }
-      if (base !== undefined && supportsBaseApi(model)) {
-        return simple
-          ? base.streamSimple(model, context, options as SimpleStreamOptions)
-          : base.stream(model, context, options);
-      }
-      const api = getApiProvider(model.api);
-      if (api === undefined) throw new Error(`No API provider registered for api: ${model.api}`);
-      return simple
-        ? api.streamSimple(model, context, options as SimpleStreamOptions)
-        : api.stream(model, context, options);
-    });
+    lazyStream(model, () =>
+      Effect.runPromise(
+        Effect.sync(() => {
+          if (extension?.streamSimple !== undefined && model.api === extension.api) {
+            return extension.streamSimple(model, context, options as SimpleStreamOptions);
+          }
+          if (base !== undefined && supportsBaseApi(model)) {
+            return simple
+              ? base.streamSimple(model, context, options as SimpleStreamOptions)
+              : base.stream(model, context, options);
+          }
+          const api = getApiProvider(model.api);
+          if (api === undefined)
+            throw new Error(`No API provider registered for api: ${model.api}`);
+          return simple
+            ? api.streamSimple(model, context, options as SimpleStreamOptions)
+            : api.stream(model, context, options);
+        }),
+      ),
+    );
 
   const provider: Provider = {
     id: providerId,
@@ -680,31 +721,36 @@ export function composeModelProvider(
     extension?.refreshModels !== undefined ||
     extension?.oauth?.modifyModels !== undefined
       ? {
-          refreshModels: async (context: RefreshModelsContext) => {
-            await base?.refreshModels?.(context);
-            let refreshed: NonNullable<ProviderConfigInput["models"]> | undefined;
-            if (extension?.refreshModels !== undefined)
-              refreshed = await extension.refreshModels(context);
-            if (context.signal.aborted) return;
-            const oauthCredential =
-              context.credential?.type === "oauth" ? context.credential : undefined;
-            await context.publish({
-              update: () => {
-                if (refreshed !== undefined) {
-                  applyExtension(
-                    providerId,
-                    applyModelsJson(providerId, getAllProviderModels(base), config),
-                    {
-                      ...extension,
-                      models: refreshed,
+          refreshModels: (context: RefreshModelsContext) =>
+            Effect.runPromise(
+              awaiting(function* () {
+                yield* awaited(base?.refreshModels?.(context));
+                let refreshed: NonNullable<ProviderConfigInput["models"]> | undefined;
+                if (extension?.refreshModels !== undefined)
+                  refreshed = yield* awaited(extension.refreshModels(context));
+                if (context.signal.aborted) return;
+                const oauthCredential =
+                  context.credential?.type === "oauth" ? context.credential : undefined;
+                yield* awaited(
+                  context.publish({
+                    update: () => {
+                      if (refreshed !== undefined) {
+                        applyExtension(
+                          providerId,
+                          applyModelsJson(providerId, getAllProviderModels(base), config),
+                          {
+                            ...extension,
+                            models: refreshed,
+                          },
+                        );
+                        refreshedExtensionModels = refreshed;
+                      }
+                      extensionOAuthCredential = oauthCredential;
                     },
-                  );
-                  refreshedExtensionModels = refreshed;
-                }
-                extensionOAuthCredential = oauthCredential;
-              },
-            });
-          },
+                  }),
+                );
+              }),
+            ),
         }
       : {}),
     ...(base?.filterModels === undefined

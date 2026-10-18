@@ -1,5 +1,10 @@
 import { EventEmitter } from "node:events";
 
+import * as Effect from "effect/Effect";
+
+import { awaited, awaiting } from "./awaiting.ts";
+import { writeError } from "./platform.ts";
+
 export interface EventBus {
   emit(channel: string, data: unknown): void;
   on(channel: string, handler: (data: unknown) => void): () => void;
@@ -16,13 +21,16 @@ export function createEventBus(): EventBusController {
       emitter.emit(channel, data);
     },
     on: (channel, handler) => {
-      const safeHandler = async (data: unknown) => {
-        try {
-          await handler(data);
-        } catch (err) {
-          console.error(`Event handler error (${channel}):`, err);
-        }
-      };
+      const safeHandler = (data: unknown) =>
+        Effect.runPromise(
+          awaiting(function* () {
+            try {
+              yield* awaited(handler(data));
+            } catch (err) {
+              writeError(`Event handler error (${channel}):`, err);
+            }
+          }),
+        );
       emitter.on(channel, safeHandler);
       return () => emitter.off(channel, safeHandler);
     },

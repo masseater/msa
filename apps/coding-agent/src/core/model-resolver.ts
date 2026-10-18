@@ -7,11 +7,14 @@ import {
   modelsAreEqual,
 } from "@msa/ai";
 import chalk from "chalk";
+import * as Effect from "effect/Effect";
 import { minimatch } from "minimatch";
 
 import { isValidThinkingLevel } from "../cli/args.ts";
+import { awaited, awaiting } from "./awaiting.ts";
 import { DEFAULT_THINKING_LEVEL } from "./defaults.ts";
 import type { ModelRuntime } from "./model-runtime.ts";
+import { writeError, writeLog, writeWarn } from "./platform.ts";
 
 export const defaultModelPerProvider: Partial<Record<KnownProvider, string>> = {
   anthropic: "claude-opus-4-8",
@@ -357,28 +360,37 @@ export function resolveModelScopeFromModels(
   return { scopedModels, diagnostics };
 }
 
-export async function resolveModelScopeWithDiagnostics(
+export function resolveModelScopeWithDiagnostics(
   patterns: string[],
   modelRuntime: ModelRuntime,
   options?: AuthOperationOptions,
 ): Promise<ResolveModelScopeResult> {
-  return resolveModelScopeFromModels(patterns, await modelRuntime.getAvailable(undefined, options));
+  return Effect.runPromise(
+    awaiting(function* () {
+      return resolveModelScopeFromModels(
+        patterns,
+        yield* awaited(modelRuntime.getAvailable(undefined, options)),
+      );
+    }),
+  );
 }
 
-export async function resolveModelScope(
+export function resolveModelScope(
   patterns: string[],
   modelRuntime: ModelRuntime,
   options?: AuthOperationOptions,
 ): Promise<ScopedModel[]> {
-  const { scopedModels, diagnostics } = await resolveModelScopeWithDiagnostics(
-    patterns,
-    modelRuntime,
-    options,
+  return Effect.runPromise(
+    awaiting(function* () {
+      const { scopedModels, diagnostics } = yield* awaited(
+        resolveModelScopeWithDiagnostics(patterns, modelRuntime, options),
+      );
+      for (const diagnostic of diagnostics) {
+        writeWarn(chalk.yellow(`Warning: ${diagnostic.message}`));
+      }
+      return scopedModels;
+    }),
   );
-  for (const diagnostic of diagnostics) {
-    console.warn(chalk.yellow(`Warning: ${diagnostic.message}`));
-  }
-  return scopedModels;
 }
 
 export interface ResolveCliModelResult {
@@ -489,7 +501,7 @@ export interface InitialModelResult {
   fallbackMessage: string | undefined;
 }
 
-export async function findInitialModel(options: {
+export function findInitialModel(options: {
   scopedModels: ScopedModel[];
   isContinuing: boolean;
   defaultProvider?: string | undefined;
@@ -498,136 +510,155 @@ export async function findInitialModel(options: {
   modelThinkingLevels?: Record<string, ThinkingLevel> | undefined;
   modelRuntime: ModelRuntime;
 }): Promise<InitialModelResult> {
-  const {
-    scopedModels,
-    isContinuing,
-    defaultProvider,
-    defaultModelId,
-    defaultThinkingLevel,
-    modelThinkingLevels,
-    modelRuntime,
-  } = options;
+  return Effect.runPromise(
+    Effect.sync(() => {
+      const {
+        scopedModels,
+        isContinuing,
+        defaultProvider,
+        defaultModelId,
+        defaultThinkingLevel,
+        modelThinkingLevels,
+        modelRuntime,
+      } = options;
 
-  let model: Model<Api> | undefined;
-  let thinkingLevel: ThinkingLevel = DEFAULT_THINKING_LEVEL;
+      let model: Model<Api> | undefined;
+      let thinkingLevel: ThinkingLevel = DEFAULT_THINKING_LEVEL;
 
-  const scopedModel = scopedModels[0];
-  if (scopedModel !== undefined && !isContinuing) {
-    const perModel = modelThinkingLevels?.[`${scopedModel.model.provider}/${scopedModel.model.id}`];
-    return {
-      model: scopedModel.model,
-      thinkingLevel:
-        scopedModel.thinkingLevel ?? perModel ?? defaultThinkingLevel ?? DEFAULT_THINKING_LEVEL,
-      fallbackMessage: undefined,
-    };
-  }
-
-  if (
-    defaultProvider !== undefined &&
-    defaultProvider !== "" &&
-    defaultModelId !== undefined &&
-    defaultModelId !== ""
-  ) {
-    const found = modelRuntime.getModel(defaultProvider, defaultModelId);
-    if (found !== undefined && modelRuntime.hasConfiguredAuth(found.provider)) {
-      model = found;
-      const perModel = modelThinkingLevels?.[`${defaultProvider}/${defaultModelId}`];
-      if (perModel !== undefined) {
-        thinkingLevel = perModel;
-      } else if (defaultThinkingLevel !== undefined) {
-        thinkingLevel = defaultThinkingLevel;
+      const scopedModel = scopedModels[0];
+      if (scopedModel !== undefined && !isContinuing) {
+        const perModel =
+          modelThinkingLevels?.[`${scopedModel.model.provider}/${scopedModel.model.id}`];
+        return {
+          model: scopedModel.model,
+          thinkingLevel:
+            scopedModel.thinkingLevel ?? perModel ?? defaultThinkingLevel ?? DEFAULT_THINKING_LEVEL,
+          fallbackMessage: undefined,
+        };
       }
-      return { model, thinkingLevel, fallbackMessage: undefined };
-    }
-  }
 
-  const availableModels = [...modelRuntime.getAvailableSnapshot()];
-
-  if (availableModels.length > 0) {
-    for (const provider of Object.keys(defaultModelPerProvider) as KnownProvider[]) {
-      const defaultId = defaultModelPerProvider[provider];
-      const match = availableModels.find((m) => m.provider === provider && m.id === defaultId);
-      if (match !== undefined) {
-        return { model: match, thinkingLevel: DEFAULT_THINKING_LEVEL, fallbackMessage: undefined };
+      if (
+        defaultProvider !== undefined &&
+        defaultProvider !== "" &&
+        defaultModelId !== undefined &&
+        defaultModelId !== ""
+      ) {
+        const found = modelRuntime.getModel(defaultProvider, defaultModelId);
+        if (found !== undefined && modelRuntime.hasConfiguredAuth(found.provider)) {
+          model = found;
+          const perModel = modelThinkingLevels?.[`${defaultProvider}/${defaultModelId}`];
+          if (perModel !== undefined) {
+            thinkingLevel = perModel;
+          } else if (defaultThinkingLevel !== undefined) {
+            thinkingLevel = defaultThinkingLevel;
+          }
+          return { model, thinkingLevel, fallbackMessage: undefined };
+        }
       }
-    }
 
-    return {
-      model: availableModels[0],
-      thinkingLevel: DEFAULT_THINKING_LEVEL,
-      fallbackMessage: undefined,
-    };
-  }
+      const availableModels = [...modelRuntime.getAvailableSnapshot()];
 
-  return { model: undefined, thinkingLevel: DEFAULT_THINKING_LEVEL, fallbackMessage: undefined };
+      if (availableModels.length > 0) {
+        for (const provider of Object.keys(defaultModelPerProvider) as KnownProvider[]) {
+          const defaultId = defaultModelPerProvider[provider];
+          const match = availableModels.find((m) => m.provider === provider && m.id === defaultId);
+          if (match !== undefined) {
+            return {
+              model: match,
+              thinkingLevel: DEFAULT_THINKING_LEVEL,
+              fallbackMessage: undefined,
+            };
+          }
+        }
+
+        return {
+          model: availableModels[0],
+          thinkingLevel: DEFAULT_THINKING_LEVEL,
+          fallbackMessage: undefined,
+        };
+      }
+
+      return {
+        model: undefined,
+        thinkingLevel: DEFAULT_THINKING_LEVEL,
+        fallbackMessage: undefined,
+      };
+    }),
+  );
 }
 
-export async function restoreModelFromSession(
+export function restoreModelFromSession(
   savedProvider: string,
   savedModelId: string,
   currentModel: Model<Api> | undefined,
   shouldPrintMessages: boolean,
   modelRuntime: ModelRuntime,
 ): Promise<{ model: Model<Api> | undefined; fallbackMessage: string | undefined }> {
-  const restoredModel = modelRuntime.getModel(savedProvider, savedModelId);
+  return Effect.runPromise(
+    Effect.sync(() => {
+      const restoredModel = modelRuntime.getModel(savedProvider, savedModelId);
 
-  const hasConfiguredAuth =
-    restoredModel === undefined ? false : modelRuntime.hasConfiguredAuth(restoredModel.provider);
+      const hasConfiguredAuth =
+        restoredModel === undefined
+          ? false
+          : modelRuntime.hasConfiguredAuth(restoredModel.provider);
 
-  if (restoredModel !== undefined && hasConfiguredAuth) {
-    if (shouldPrintMessages) {
-      console.log(chalk.dim(`Restored model: ${savedProvider}/${savedModelId}`));
-    }
-    return { model: restoredModel, fallbackMessage: undefined };
-  }
-
-  const reason = restoredModel === undefined ? "model no longer exists" : "no auth configured";
-
-  if (shouldPrintMessages) {
-    console.error(
-      chalk.yellow(
-        `Warning: Could not restore model ${savedProvider}/${savedModelId} (${reason}).`,
-      ),
-    );
-  }
-
-  if (currentModel !== undefined) {
-    if (shouldPrintMessages) {
-      console.log(chalk.dim(`Falling back to: ${currentModel.provider}/${currentModel.id}`));
-    }
-    return {
-      model: currentModel,
-      fallbackMessage: `Could not restore model ${savedProvider}/${savedModelId} (${reason}). Using ${currentModel.provider}/${currentModel.id}.`,
-    };
-  }
-
-  const availableModels = [...modelRuntime.getAvailableSnapshot()];
-
-  const firstAvailableModel = availableModels[0];
-  if (firstAvailableModel !== undefined) {
-    let fallbackModel: Model<Api> | undefined;
-    for (const provider of Object.keys(defaultModelPerProvider) as KnownProvider[]) {
-      const defaultId = defaultModelPerProvider[provider];
-      const match = availableModels.find((m) => m.provider === provider && m.id === defaultId);
-      if (match !== undefined) {
-        fallbackModel = match;
-        break;
+      if (restoredModel !== undefined && hasConfiguredAuth) {
+        if (shouldPrintMessages) {
+          writeLog(chalk.dim(`Restored model: ${savedProvider}/${savedModelId}`));
+        }
+        return { model: restoredModel, fallbackMessage: undefined };
       }
-    }
 
-    if (fallbackModel === undefined) {
-      fallbackModel = firstAvailableModel;
-    }
+      const reason = restoredModel === undefined ? "model no longer exists" : "no auth configured";
 
-    if (shouldPrintMessages) {
-      console.log(chalk.dim(`Falling back to: ${fallbackModel.provider}/${fallbackModel.id}`));
-    }
+      if (shouldPrintMessages) {
+        writeError(
+          chalk.yellow(
+            `Warning: Could not restore model ${savedProvider}/${savedModelId} (${reason}).`,
+          ),
+        );
+      }
 
-    return {
-      model: fallbackModel,
-      fallbackMessage: `Could not restore model ${savedProvider}/${savedModelId} (${reason}). Using ${fallbackModel.provider}/${fallbackModel.id}.`,
-    };
-  }
+      if (currentModel !== undefined) {
+        if (shouldPrintMessages) {
+          writeLog(chalk.dim(`Falling back to: ${currentModel.provider}/${currentModel.id}`));
+        }
+        return {
+          model: currentModel,
+          fallbackMessage: `Could not restore model ${savedProvider}/${savedModelId} (${reason}). Using ${currentModel.provider}/${currentModel.id}.`,
+        };
+      }
 
-  return { model: undefined, fallbackMessage: undefined };
+      const availableModels = [...modelRuntime.getAvailableSnapshot()];
+
+      const firstAvailableModel = availableModels[0];
+      if (firstAvailableModel !== undefined) {
+        let fallbackModel: Model<Api> | undefined;
+        for (const provider of Object.keys(defaultModelPerProvider) as KnownProvider[]) {
+          const defaultId = defaultModelPerProvider[provider];
+          const match = availableModels.find((m) => m.provider === provider && m.id === defaultId);
+          if (match !== undefined) {
+            fallbackModel = match;
+            break;
+          }
+        }
+
+        if (fallbackModel === undefined) {
+          fallbackModel = firstAvailableModel;
+        }
+
+        if (shouldPrintMessages) {
+          writeLog(chalk.dim(`Falling back to: ${fallbackModel.provider}/${fallbackModel.id}`));
+        }
+
+        return {
+          model: fallbackModel,
+          fallbackMessage: `Could not restore model ${savedProvider}/${savedModelId} (${reason}). Using ${fallbackModel.provider}/${fallbackModel.id}.`,
+        };
+      }
+
+      return { model: undefined, fallbackMessage: undefined };
+    }),
+  );
 }

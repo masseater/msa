@@ -10,7 +10,10 @@ import {
 } from "fs";
 import { dirname, join, resolve } from "path";
 
+import * as Effect from "effect/Effect";
+
 import { closeWatcher, FS_WATCH_RETRY_DELAY_MS, watchWithErrorHandler } from "../utils/fs-watch.ts";
+import { awaited, awaitingWith, performed } from "./awaiting.ts";
 
 export type GitPaths = {
   repoDir: string;
@@ -204,34 +207,36 @@ export class FooterDataProvider {
     }
     this.refreshTimer = setTimeout(() => {
       this.refreshTimer = null;
-      void this.refreshGitBranchAsync();
+      void Effect.runPromise(this.refreshGitBranchAsync());
     }, FooterDataProvider.WATCH_DEBOUNCE_MS);
   }
 
-  private async refreshGitBranchAsync(): Promise<void> {
-    if (this.disposed) return;
-    if (this.refreshInFlight) {
-      this.refreshPending = true;
-      return;
-    }
-
-    this.refreshInFlight = true;
-    try {
-      const nextBranch = await this.resolveGitBranchAsync();
+  private refreshGitBranchAsync(): Effect.Effect<void> {
+    return awaitingWith(function* () {
       if (this.disposed) return;
-      if (this.cachedBranch !== undefined && this.cachedBranch !== nextBranch) {
-        this.cachedBranch = nextBranch;
-        this.notifyBranchChange();
+      if (this.refreshInFlight) {
+        this.refreshPending = true;
         return;
       }
-      this.cachedBranch = nextBranch;
-    } finally {
-      this.refreshInFlight = false;
-      if (this.refreshPending && !this.disposed) {
-        this.refreshPending = false;
-        this.scheduleRefresh();
+
+      this.refreshInFlight = true;
+      try {
+        const nextBranch = yield* performed(this.resolveGitBranchAsync());
+        if (this.disposed) return;
+        if (this.cachedBranch !== undefined && this.cachedBranch !== nextBranch) {
+          this.cachedBranch = nextBranch;
+          this.notifyBranchChange();
+          return;
+        }
+        this.cachedBranch = nextBranch;
+      } finally {
+        this.refreshInFlight = false;
+        if (this.refreshPending && !this.disposed) {
+          this.refreshPending = false;
+          this.scheduleRefresh();
+        }
       }
-    }
+    }, this);
   }
 
   private resolveGitBranchSync(): string | null {
@@ -250,20 +255,22 @@ export class FooterDataProvider {
     }
   }
 
-  private async resolveGitBranchAsync(): Promise<string | null> {
-    try {
-      if (this.gitPaths === undefined || this.gitPaths === null) return null;
-      const content = readFileSync(this.gitPaths.headPath, "utf8").trim();
-      if (content.startsWith("ref: refs/heads/")) {
-        const branch = content.slice(16);
-        return branch === ".invalid"
-          ? ((await resolveBranchWithGitAsync(this.gitPaths.repoDir)) ?? "detached")
-          : branch;
+  private resolveGitBranchAsync(): Effect.Effect<string | null> {
+    return awaitingWith(function* () {
+      try {
+        if (this.gitPaths === undefined || this.gitPaths === null) return null;
+        const content = readFileSync(this.gitPaths.headPath, "utf8").trim();
+        if (content.startsWith("ref: refs/heads/")) {
+          const branch = content.slice(16);
+          return branch === ".invalid"
+            ? ((yield* awaited(resolveBranchWithGitAsync(this.gitPaths.repoDir))) ?? "detached")
+            : branch;
+        }
+        return "detached";
+      } catch {
+        return null;
       }
-      return "detached";
-    } catch {
-      return null;
-    }
+    }, this);
   }
 
   private clearGitWatchers(): void {

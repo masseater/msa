@@ -12,6 +12,7 @@ import {
   type Provider,
   type ThinkingLevelMap,
 } from "@msa/ai";
+import * as Effect from "effect/Effect";
 
 import type { SessionEntry } from "./session-manager.ts";
 
@@ -163,9 +164,15 @@ export function createVirtualModel(definition: Omit<VirtualModelDefinition, "rou
 }
 
 function unroutedStream(model: Model<Api>): AssistantMessageEventStream {
-  return lazyStream(model, async () => {
-    throw new Error(`Virtual model ${model.provider}/${model.id} must be routed before streaming`);
-  });
+  return lazyStream(model, () =>
+    Effect.runPromise(
+      Effect.sync(() => {
+        throw new Error(
+          `Virtual model ${model.provider}/${model.id} must be routed before streaming`,
+        );
+      }),
+    ),
+  );
 }
 
 export function withVirtualModels(
@@ -178,7 +185,10 @@ export function withVirtualModels(
       id: providerId,
       name: providerId,
       auth: {
-        apiKey: { name: "Virtual model", resolve: async () => ({ auth: {}, source: "virtual" }) },
+        apiKey: {
+          name: "Virtual model",
+          resolve: () => Effect.runPromise(Effect.sync(() => ({ auth: {}, source: "virtual" }))),
+        },
       },
       getModels: () => virtualModels,
       stream: unroutedStream,
