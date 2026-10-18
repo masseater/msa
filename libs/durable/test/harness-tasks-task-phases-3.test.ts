@@ -102,38 +102,41 @@ describe("task runtime", () => {
     Effect.runPromise(rejectsRuntimeOperations));
 });
 
+const RuntimeNotes = defineDoc<{ text: string }>({
+  kind: "test.runtime-notes",
+  version: 1,
+  scope: "conversation",
+  history: "rewindable",
+  fork: "asOf",
+  initial: () => ({ text: "" }),
+});
+
+const readThroughRuntime = Effect.fn("readThroughRuntime")(function* (
+  runtime: StepRuntime<null>,
+  ctx: Context,
+) {
+  const id = runtime.conversationId;
+  const [first, second] = [...(yield* awaited(runtime.context(id, ctx))).entries].map(
+    (entry) => entry.id,
+  );
+  return [
+    (yield* awaited(runtime.snapshot(RuntimeNotes, id, ctx)))?.text,
+    (yield* awaited(runtime.snapshotAsOf(RuntimeNotes, id, first!, ctx)))?.text,
+    (yield* awaited(runtime.context(id, ctx, { at: first! }))).entries.length,
+    (yield* awaited(runtime.context(id, ctx, { at: second! }))).messages.length,
+  ];
+});
+
 const readsCommittedDocuments = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-  const Notes = defineDoc<{ text: string }>({
-    kind: "test.runtime-notes",
-    version: 1,
-    scope: "conversation",
-    history: "rewindable",
-    fork: "asOf",
-    initial: () => ({ text: "" }),
-  });
   const seen: unknown[] = [];
   let captured: StepRuntime<null> | undefined;
   const Reader = oneStep("test.reader", (_task, runtime, ctx) =>
     runPromise(
       Effect.gen(function* () {
         captured = runtime;
-        const [first, second] = [
-          ...(yield* awaited(runtime.context(runtime.conversationId, ctx))).entries,
-        ].map((entry) => entry.id);
-        seen.push((yield* awaited(runtime.snapshot(Notes, runtime.conversationId, ctx)))?.text);
-        seen.push(
-          (yield* awaited(runtime.snapshotAsOf(Notes, runtime.conversationId, first!, ctx)))?.text,
-        );
-        seen.push(
-          (yield* awaited(runtime.context(runtime.conversationId, ctx, { at: first! }))).entries
-            .length,
-        );
-        seen.push(
-          (yield* awaited(runtime.context(runtime.conversationId, ctx, { at: second! }))).messages
-            .length,
-        );
+        seen.push(...(yield* readThroughRuntime(runtime, ctx)));
         seen.push(runtime.now());
         runtime.report(new Error("reported"));
         yield* awaited(runtime.commit(() => completed(null), ctx));
@@ -147,7 +150,7 @@ const readsCommittedDocuments = Effect.gen(function* () {
         (tx) =>
           runPromise(
             Effect.gen(function* () {
-              (yield* awaited(tx.doc(Notes, root.id))).text = text;
+              (yield* awaited(tx.doc(RuntimeNotes, root.id))).text = text;
               yield* awaited(tx.appendEntry(root.id, { kind: "message", model: [user(text)] }));
             }),
           ),
@@ -162,7 +165,9 @@ const readsCommittedDocuments = Effect.gen(function* () {
   expect(reports).toEqual([new Error("reported")]);
   yield* flush;
   yield* awaited(
-    expect(captured!.snapshot(Notes, root.id, context)).rejects.toThrow("invocation has ended"),
+    expect(captured!.snapshot(RuntimeNotes, root.id, context)).rejects.toThrow(
+      "invocation has ended",
+    ),
   );
   yield* awaited(
     expect(captured!.context(root.id, context)).rejects.toThrow("invocation has ended"),

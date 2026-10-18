@@ -44,32 +44,27 @@ afterEach(() =>
 );
 
 const holdsFinishedTask = Effect.gen(function* () {
-  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
   const { harness, root } = yield* openNodes();
   let child: TaskId | undefined;
   script("parent", {
     run: (runtime, ctx) =>
-      runtime
-        .commit(
-          (tx) =>
-            runPromise(
-              Effect.gen(function* () {
-                (yield* awaited(tx.doc(TaskNotes, runtime.taskId))).text = "notes";
-                child = yield* awaited(spawn(tx, runtime.taskId, "child"));
-                return { status: "running", checkpoint: { phase: "resume", round: 1 } };
-              }),
-            ),
-          ctx,
-        )
-        .then(() => undefined),
+      runtime.commit(
+        (tx) =>
+          tx
+            .doc(TaskNotes, runtime.taskId)
+            .then((notes) => {
+              notes.text = "notes";
+              return spawn(tx, runtime.taskId, "child");
+            })
+            .then((spawned) => {
+              child = spawned;
+              return { status: "running", checkpoint: { phase: "resume", round: 1 } } as const;
+            }),
+        ctx,
+      ),
   });
   const parent = yield* awaited(start(root, "parent"));
-  yield* until(
-    Effect.gen(function* () {
-      return (yield* state(harness, parent)).status === "completing";
-    }),
-  );
+  yield* until(Effect.map(state(harness, parent), (current) => current.status === "completing"));
   expect(yield* state(harness, parent)).toEqual({
     status: "completing",
     outcome: { status: "completed", result: "parent" },

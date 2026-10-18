@@ -82,6 +82,31 @@ describe("conversation context", () => {
     Effect.runPromise(freezesKeptEntries));
 });
 
+type CountingSetup = Effect.Success<ReturnType<typeof countingSetup>>;
+
+const lateContextTask = (options: {
+  readonly hold: CountingSetup["hold"];
+  readonly scan: Promise<void>;
+  readonly root: CountingSetup["root"];
+  readonly seen: { late?: Promise<unknown> };
+}) =>
+  defineTask<Record<string, never>, { phase: "run" }, null>({
+    name: "test.context-late",
+    version: 1,
+    initial: () => ({ phase: "run" }),
+    phases: {
+      run: (_task, runtime, taskContext) => {
+        options.hold.scan = options.scan;
+        options.seen.late = runtime
+          .context(options.root.id, taskContext)
+          .catch((error: unknown) => error);
+        return runtime.commit(() => DONE, taskContext).then(() => undefined);
+      },
+    },
+    abort: (_task, runtime, taskContext) =>
+      runtime.commit(() => ABORTED, taskContext).then(() => undefined),
+  });
+
 const doesNotKeep = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
@@ -90,24 +115,8 @@ const doesNotKeep = Effect.gen(function* () {
   });
   const scans = Promise.withResolvers<void>();
   const probeStart = Promise.withResolvers<void>();
-  let late: Promise<unknown> | undefined;
-  const Late = defineTask<Record<string, never>, { phase: "run" }, null>({
-    name: "test.context-late",
-    version: 1,
-    initial: () => ({ phase: "run" }),
-    phases: {
-      run: (_task, runtime, taskContext) =>
-        runPromise(
-          Effect.gen(function* () {
-            hold.scan = scans.promise;
-            late = runtime.context(root.id, taskContext).catch((error: unknown) => error);
-            yield* awaited(runtime.commit(() => DONE, taskContext));
-          }),
-        ),
-    },
-    abort: (_task, runtime, taskContext) =>
-      runtime.commit(() => ABORTED, taskContext).then(() => undefined),
-  });
+  const seen: { late?: Promise<unknown> } = {};
+  const Late = lateContextTask({ hold, scan: scans.promise, root, seen });
   const rows: Record<string, number> = {};
   const Probe = probeTask((name, load) =>
     runPromise(
@@ -130,7 +139,7 @@ const doesNotKeep = Effect.gen(function* () {
     harness.commit((tx) => tx.createTask(Probe, { name: "probe" }, options), context),
   );
   scans.resolve();
-  yield* awaited(late);
+  yield* awaited(seen.late);
   probeStart.resolve();
   expect((yield* awaited(harness.waitForTask(probeId, context))).state.outcome).toEqual(
     DONE.outcome,
