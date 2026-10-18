@@ -42,6 +42,7 @@
           "@effect/platform-node/NodeHttpClient#layerUndici",
           "@effect/platform-node/NodeHttpServer#layerTest",
           "@effect/platform-node/NodePath#layer",
+          "@effect/platform-node/NodePath#layerPosix",
           "@effect/platform-node/NodeRuntime#runMain",
           "@effect/platform-node/NodeServices#layer",
           "effect/Crypto#Crypto",
