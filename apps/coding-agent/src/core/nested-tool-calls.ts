@@ -64,17 +64,18 @@ export class NestedCallRecorder {
   }
 
   finish(record: NestedToolCallRecord | undefined, isError: boolean, errorText: string): void {
-    if (!record) return;
+    if (record === undefined) return;
     record.status = isError ? "error" : "ok";
     record.durationMs = Math.round(
       performance.now() - (this.startedAt.get(record) ?? performance.now()),
     );
     this.startedAt.delete(record);
-    if (isError && errorText) record.error = errorText.slice(0, NESTED_CALL_LIMITS.maxErrorChars);
+    if (isError && errorText !== "")
+      record.error = errorText.slice(0, NESTED_CALL_LIMITS.maxErrorChars);
   }
 
   addUsage(usage: Usage): void {
-    this.usage = this.usage ? combineUsage(this.usage, usage) : usage;
+    this.usage = this.usage === undefined ? usage : combineUsage(this.usage, usage);
   }
 
   get totalUsage(): Usage | undefined {
@@ -163,7 +164,7 @@ export class NestedToolCallRunner {
     options: NestedToolCallOptions = {},
   ): Promise<AgentToolCallOutcome> {
     let scope = this.scopes.get(callerId);
-    if (!scope) {
+    if (scope === undefined) {
       scope = { recorder: new NestedCallRecorder(), nextId: 1, holdsQueue: false };
       this.scopes.set(callerId, scope);
     }
@@ -223,7 +224,7 @@ export class NestedToolCallRunner {
     }
 
     scope.recorder.finish(record, outcome.isError, textOf(outcome.result));
-    if (outcome.result.usage) scope.recorder.addUsage(outcome.result.usage);
+    if (outcome.result.usage !== undefined) scope.recorder.addUsage(outcome.result.usage);
     await this.host.emit({
       type: "tool_execution_end",
       toolCallId: toolCall.id,
@@ -239,7 +240,7 @@ export class NestedToolCallRunner {
   takeRecord(toolCallId: string): NestedCallSummary | undefined {
     const scope = this.scopes.get(toolCallId);
     this.scopes.delete(toolCallId);
-    if (!scope) return undefined;
+    if (scope === undefined) return undefined;
     return { calls: scope.recorder.snapshot(), usage: scope.recorder.totalUsage };
   }
 

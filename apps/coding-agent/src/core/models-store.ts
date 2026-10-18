@@ -33,7 +33,7 @@ export class InMemoryCodingAgentModelsStore implements ModelsStore {
   ): Promise<ModelsStoreEntry | undefined> {
     options?.signal?.throwIfAborted();
     const entry = this.entries.get(providerId);
-    return entry ? structuredClone(entry) : undefined;
+    return entry === undefined ? undefined : structuredClone(entry);
   }
 
   async write(
@@ -63,13 +63,15 @@ export class FileModelsStore implements ModelsStore {
       sharedModelsFileReadState?.path === this.path
         ? sharedModelsFileReadState.readState
         : { data: {} };
-    if (!sharedModelsFileReadState) {
+    if (sharedModelsFileReadState === undefined) {
       sharedModelsFileReadState = { path: this.path, readState: this.readState };
     }
   }
 
   private parse(content: string | undefined): StoredModels {
-    return content ? (JSON.parse(stripBom(content)) as StoredModels) : {};
+    return content !== undefined && content !== ""
+      ? (JSON.parse(stripBom(content)) as StoredModels)
+      : {};
   }
 
   private updateReadState(
@@ -99,7 +101,7 @@ export class FileModelsStore implements ModelsStore {
     options?.signal?.throwIfAborted();
     const revision = getFileRevision(this.path);
     if (revision !== undefined && revision === readState.revision) return readState.data;
-    if (!readState.reload) {
+    if (readState.reload === undefined) {
       const controller = new AbortController();
       const reload: ModelsFileReload = {
         controller,
@@ -136,7 +138,7 @@ export class FileModelsStore implements ModelsStore {
   ): Promise<ModelsStoreEntry | undefined> {
     const entry = (await this.readLatest(this.readState, options))[providerId];
     options?.signal?.throwIfAborted();
-    return entry ? structuredClone(entry) : undefined;
+    return entry === undefined ? undefined : structuredClone(entry);
   }
 
   async write(
@@ -151,7 +153,7 @@ export class FileModelsStore implements ModelsStore {
       latest = current;
       return { result: undefined, next: JSON.stringify(current, null, 2) };
     }, options);
-    if (latest) this.updateReadState(this.readState, latest);
+    if (latest !== undefined) this.updateReadState(this.readState, latest);
   }
 
   async delete(providerId: string, options?: ModelsStoreOperationOptions): Promise<void> {
@@ -162,6 +164,6 @@ export class FileModelsStore implements ModelsStore {
       latest = current;
       return { result: undefined, next: JSON.stringify(current, null, 2) };
     }, options);
-    if (latest) this.updateReadState(this.readState, latest);
+    if (latest !== undefined) this.updateReadState(this.readState, latest);
   }
 }

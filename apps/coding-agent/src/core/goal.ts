@@ -28,9 +28,9 @@ export type GoalCommand =
 
 export function parseGoalCommand(text: string): GoalCommand | undefined {
   const match = /^\/goal(?:\s+([\s\S]*))?$/.exec(text.trim());
-  if (!match) return undefined;
+  if (match === null) return undefined;
   const args = (match[1] ?? "").trim();
-  if (!args) return { kind: "status" };
+  if (args === "") return { kind: "status" };
   if (CLEAR_WORDS.has(args.toLowerCase())) return { kind: "clear" };
   return { kind: "set", condition: args };
 }
@@ -140,7 +140,7 @@ export function pickEvaluatorModel(
   for (const model of available) {
     if (model.provider !== current.provider || !SMALL_TIER_PATTERN.test(model.id)) continue;
     if (price(model) > price(current)) continue;
-    if (!best || price(model) > price(best)) best = model;
+    if (best === undefined || price(model) > price(best)) best = model;
   }
   return best ?? current;
 }
@@ -196,7 +196,8 @@ export function parseGoalEvaluation(text: string): GoalEvaluation | undefined {
   if (typeof verdict !== "string" || !VERDICTS.has(verdict)) return undefined;
   return {
     verdict: verdict as GoalVerdict,
-    reason: typeof reason === "string" && reason.trim() ? reason.trim() : "(no reason given)",
+    reason:
+      typeof reason === "string" && reason.trim() !== "" ? reason.trim() : "(no reason given)",
   };
 }
 
@@ -258,7 +259,7 @@ export function describeGoalEntry(
 }
 
 export function describeGoalStatus(goal: GoalSnapshot | undefined, now: number): string[] {
-  if (!goal) return ["No active goal"];
+  if (goal === undefined) return ["No active goal"];
   const lines = [
     "◎ /goal active",
     goal.condition,
@@ -266,7 +267,7 @@ export function describeGoalStatus(goal: GoalSnapshot | undefined, now: number):
     `${formatGoalDuration(now - goal.startedAt)} · ${turnCount(goal.turns)} evaluated · ${formatTokenCount(goal.tokens)} tokens`,
   ];
   if (goal.evaluating) lines.push("Evaluating…");
-  if (goal.lastEvaluation) lines.push(`Last verdict: ${goal.lastEvaluation.reason}`);
+  if (goal.lastEvaluation !== undefined) lines.push(`Last verdict: ${goal.lastEvaluation.reason}`);
   return lines;
 }
 
@@ -317,25 +318,26 @@ export class GoalLoop {
 
   constructor(host: GoalHost, restoredCondition?: string) {
     this.host = host;
-    if (restoredCondition) this.active = this.start(restoredCondition);
+    if (restoredCondition !== undefined && restoredCondition !== "")
+      this.active = this.start(restoredCondition);
   }
 
   get snapshot(): GoalSnapshot | undefined {
     const goal = this.active;
-    if (!goal) return undefined;
+    if (goal === undefined) return undefined;
     return {
       condition: goal.condition,
       startedAt: goal.startedAt,
       turns: goal.turns,
       tokens: Math.max(0, this.host.totalTokens() - goal.tokenBaseline),
-      ...(goal.lastEvaluation ? { lastEvaluation: goal.lastEvaluation } : {}),
+      ...(goal.lastEvaluation === undefined ? {} : { lastEvaluation: goal.lastEvaluation }),
       evaluating: goal.evaluating,
     };
   }
 
   set(condition: string): void {
     const trimmed = condition.trim();
-    if (!trimmed) throw new Error("Goal condition is empty");
+    if (trimmed === "") throw new Error("Goal condition is empty");
     if (trimmed.length > MAX_GOAL_CONDITION_LENGTH) {
       throw new Error(
         `Goal condition is ${trimmed.length} characters; the limit is ${MAX_GOAL_CONDITION_LENGTH}`,
@@ -349,17 +351,17 @@ export class GoalLoop {
 
   clear(): boolean {
     const goal = this.active;
-    if (!goal) return false;
+    if (goal === undefined) return false;
     this.end({ event: "cleared", condition: goal.condition });
     return true;
   }
 
   noteToolUse(): void {
-    if (this.active) this.active.toolUsed = true;
+    if (this.active !== undefined) this.active.toolUsed = true;
   }
 
   resetGuards(): void {
-    if (!this.active) return;
+    if (this.active === undefined) return;
     this.active.idleTurns = 0;
     this.active.errorTurns = 0;
     this.active.rateLimitWaits = 0;
@@ -371,7 +373,7 @@ export class GoalLoop {
 
   async afterRun(): Promise<boolean> {
     const goal = this.active;
-    if (!goal) return false;
+    if (goal === undefined) return false;
     const last = this.host.lastAssistant();
     if (last?.stopReason === "aborted") return false;
     const controller = new AbortController();
@@ -465,7 +467,8 @@ export class GoalLoop {
     try {
       const text = await this.host.evaluate(prompt, signal);
       evaluation = parseGoalEvaluation(text);
-      if (!evaluation) throw new Error(`Evaluator returned no verdict: ${text.slice(0, 200)}`);
+      if (evaluation === undefined)
+        throw new Error(`Evaluator returned no verdict: ${text.slice(0, 200)}`);
     } catch (error) {
       goal.evaluating = false;
       if (signal.aborted || this.active !== goal) {

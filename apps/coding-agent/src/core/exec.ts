@@ -45,7 +45,7 @@ export async function execCommand(
       }
     };
 
-    if (options?.signal) {
+    if (options?.signal !== undefined) {
       if (options.signal.aborted) {
         killProcess();
       } else {
@@ -53,7 +53,7 @@ export async function execCommand(
       }
     }
 
-    if (options?.timeout && options.timeout > 0) {
+    if (options?.timeout !== undefined && options?.timeout !== 0 && options.timeout > 0) {
       timeoutId = setTimeout(() => {
         killProcess();
       }, options.timeout);
@@ -69,15 +69,15 @@ export async function execCommand(
 
     waitForChildProcess(proc)
       .then((code) => {
-        if (timeoutId) clearTimeout(timeoutId);
-        if (options?.signal) {
+        if (timeoutId !== undefined) clearTimeout(timeoutId);
+        if (options?.signal !== undefined) {
           options.signal.removeEventListener("abort", killProcess);
         }
         resolve({ stdout, stderr, code: code ?? 0, killed });
       })
       .catch((_err) => {
-        if (timeoutId) clearTimeout(timeoutId);
-        if (options?.signal) {
+        if (timeoutId !== undefined) clearTimeout(timeoutId);
+        if (options?.signal !== undefined) {
           options.signal.removeEventListener("abort", killProcess);
         }
         resolve({ stdout, stderr, code: 1, killed });

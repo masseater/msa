@@ -109,7 +109,9 @@ export function getBranchSelection(
       const response = { provider: entry.message.provider, modelId: entry.message.model };
       const change = findLastModelChange(branch, i);
       const model = change && getModel(change.provider, change.modelId);
-      return change && model && isVirtualModel(model) ? change : response;
+      return change !== undefined && model !== undefined && isVirtualModel(model)
+        ? change
+        : response;
     }
   }
   return undefined;
@@ -171,7 +173,7 @@ export function withVirtualModels(
   provider: Provider | undefined,
   virtualModels: readonly Model<Api>[],
 ): Provider {
-  if (!provider) {
+  if (provider === undefined) {
     return {
       id: providerId,
       name: providerId,
@@ -202,14 +204,14 @@ export function withVirtualModels(
       const real = physical(models);
       return [...(filterModels?.(real, credential) ?? real), ...virtual(models)];
     },
-    ...(filterAllModels
-      ? {
+    ...(filterAllModels === undefined
+      ? {}
+      : {
           filterAllModels: (models, credential) => [
             ...filterAllModels(physical(models), credential),
             ...virtual(models),
           ],
-        }
-      : {}),
+        }),
     stream: (model, context, options) =>
       isVirtualModel(model) ? unroutedStream(model) : provider.stream(model, context, options),
     streamSimple: (model, context, options) =>

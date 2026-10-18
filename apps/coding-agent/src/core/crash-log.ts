@@ -57,7 +57,7 @@ function stackContainsPath(
   includeDescendants: boolean,
 ): boolean {
   const target = normalizeStackPath(targetPath);
-  if (!target || isSyntheticPath(target)) return false;
+  if (target === "" || isSyntheticPath(target)) return false;
   const caseInsensitive = /^[a-z]:\//iu.test(target);
   const haystack = caseInsensitive ? stack.toLowerCase() : stack;
   const needle = caseInsensitive ? target.toLowerCase() : target;
@@ -76,7 +76,7 @@ export function findExtensionStackMatches(
   stack: string | undefined,
   extensions: readonly ExtensionStackMetadata[],
 ): string[] {
-  if (!stack) return [];
+  if (stack === undefined || stack === "") return [];
   const normalizedStack = stack
     .split("\n")
     .slice(1)
@@ -102,20 +102,22 @@ export function findExtensionStackMatches(
     const packageRoot =
       extension.sourceInfo.origin === "package" &&
       !singleFilePackage &&
-      extension.sourceInfo.baseDir
+      extension.sourceInfo.baseDir !== undefined &&
+      extension.sourceInfo.baseDir !== ""
         ? extension.sourceInfo.baseDir
         : undefined;
     const slashIndex = resolvedPath.lastIndexOf("/");
     const directoryEntry = /\/index\.[cm]?[jt]s$/u.test(resolvedPath);
-    const matched = packageRoot
-      ? stackContainsPath(normalizedStack, packageRoot, true)
-      : directoryEntry && slashIndex !== -1
-        ? stackContainsPath(normalizedStack, resolvedPath.slice(0, slashIndex), true)
-        : stackContainsPath(normalizedStack, resolvedPath, false);
+    const matched =
+      packageRoot !== undefined && packageRoot !== ""
+        ? stackContainsPath(normalizedStack, packageRoot, true)
+        : directoryEntry && slashIndex !== -1
+          ? stackContainsPath(normalizedStack, resolvedPath.slice(0, slashIndex), true)
+          : stackContainsPath(normalizedStack, resolvedPath, false);
     if (!matched) continue;
 
     const label =
-      extension.sourceInfo.origin === "package" && extension.sourceInfo.source
+      extension.sourceInfo.origin === "package" && extension.sourceInfo.source !== ""
         ? extension.sourceInfo.source
         : extension.path;
     if (!seen.has(label)) {
@@ -141,8 +143,16 @@ export function recordCrash(
       timestamp: new Date().toISOString(),
       version: VERSION,
       kind: crash.kind,
-      message: error instanceof Error ? error.message || error.name : String(error),
-      stack: error instanceof Error && error.stack ? error.stack : null,
+      message:
+        error instanceof Error
+          ? error.message === ""
+            ? error.name
+            : error.message
+          : String(error),
+      stack:
+        error instanceof Error && error.stack !== undefined && error.stack !== ""
+          ? error.stack
+          : null,
       sessionFile: crash.sessionFile ?? null,
       cwd: crash.cwd,
     };
@@ -160,11 +170,11 @@ export function takeUnnotifiedCrash(
   const records = readCrashLog(path);
   const crash = [...records]
     .reverse()
-    .find((record) => !record.notified && now - Date.parse(record.timestamp) <= MAX_AGE);
-  if (!crash) return undefined;
+    .find((record) => record.notified !== true && now - Date.parse(record.timestamp) <= MAX_AGE);
+  if (crash === undefined) return undefined;
   try {
     writeCrashLog(
-      records.map((record) => (record.notified ? record : { ...record, notified: true })),
+      records.map((record) => (record.notified === true ? record : { ...record, notified: true })),
       path,
     );
   } catch {}

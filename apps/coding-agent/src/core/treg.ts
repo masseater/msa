@@ -47,7 +47,7 @@ function spawnRunner(command: string): TregRunner {
     const child = spawnProcess(command, args, {
       stdio: ["ignore", "pipe", "pipe"],
       windowsHide: true,
-      ...(signal ? { signal } : {}),
+      ...(signal === undefined ? {} : { signal }),
     });
     let stdout = "";
     let stderr = "";
@@ -62,7 +62,7 @@ function spawnRunner(command: string): TregRunner {
 const CliConfig = Schema.fromJsonString(Schema.Struct({ logged_in: Schema.Boolean }));
 
 function isSignedIn(command: string, env: NodeJS.ProcessEnv): boolean {
-  if (env["TREG_TOKEN"]?.trim()) return true;
+  if ((env["TREG_TOKEN"]?.trim() ?? "") !== "") return true;
   const { stdout } = spawnProcessSync(command, ["config"], {
     encoding: "utf8",
     timeout: 10_000,
@@ -81,7 +81,9 @@ export function findTregCli(
   env: NodeJS.ProcessEnv = process.env,
 ): { command: string; signedIn: boolean } | undefined {
   const command = find("treg");
-  return command ? { command, signedIn: isSignedIn(command, env) } : undefined;
+  return command !== null && command !== ""
+    ? { command, signedIn: isSignedIn(command, env) }
+    : undefined;
 }
 
 export function findTreg(
@@ -89,7 +91,7 @@ export function findTreg(
   env: NodeJS.ProcessEnv = process.env,
 ): TregOptions | undefined {
   const cli = findTregCli(find, env);
-  return cli?.signedIn ? { run: spawnRunner(cli.command) } : undefined;
+  return cli?.signedIn === true ? { run: spawnRunner(cli.command) } : undefined;
 }
 
 export interface TregSignInPage {
@@ -106,18 +108,18 @@ export async function loginTreg(
     stdio: ["ignore", "pipe", "pipe"],
     windowsHide: true,
     env: { ...process.env, PYTHONUNBUFFERED: "1" },
-    ...(signal ? { signal } : {}),
+    ...(signal === undefined ? {} : { signal }),
   });
   let output = "";
   let shown = false;
   const onOutput = (chunk: string) => {
     output = (output + chunk).slice(-4_000);
     const url = /https:\/\/\S+/.exec(output)?.[0];
-    if (shown || !url) return;
+    if (shown || url === undefined || url === "") return;
     const code = /matches:\s*(\S+)/.exec(output)?.[1];
-    if (!code && !/Waiting/.test(output)) return;
+    if ((code === undefined || code === "") && !/Waiting/.test(output)) return;
     shown = true;
-    onPage(code ? { url, code } : { url });
+    onPage(code !== undefined && code !== "" ? { url, code } : { url });
   };
   child.stdout?.setEncoding("utf8").on("data", onOutput);
   child.stderr?.setEncoding("utf8").on("data", onOutput);
@@ -191,7 +193,12 @@ export async function callTreg(
   }
   const routed = decoded.value;
   const tregResult: TregResult = { output: routed.output ?? {} };
-  if (routed._treg?.served_by) tregResult.servedBy = routed._treg.served_by;
+  if (
+    routed._treg?.served_by !== undefined &&
+    routed._treg?.served_by !== null &&
+    routed._treg?.served_by !== ""
+  )
+    tregResult.servedBy = routed._treg.served_by;
   if (meta.charged_micro !== undefined) tregResult.costMicro = meta.charged_micro;
   return tregResult;
 }
@@ -200,7 +207,7 @@ export function pickString(row: unknown, ...keys: string[]): string | undefined 
   if (typeof row !== "object" || row === null) return undefined;
   for (const key of keys) {
     const value = (row as Record<string, unknown>)[key];
-    if (typeof value === "string" && value.trim()) return value.trim();
+    if (typeof value === "string" && value.trim() !== "") return value.trim();
   }
   return undefined;
 }

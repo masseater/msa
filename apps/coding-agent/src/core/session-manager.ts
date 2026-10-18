@@ -255,7 +255,7 @@ function migrateV1ToV2(entries: FileEntry[]): void {
       const comp = entry as CompactionEntry & { firstKeptEntryIndex?: number };
       if (typeof comp.firstKeptEntryIndex === "number") {
         const targetEntry = entries[comp.firstKeptEntryIndex];
-        if (targetEntry && targetEntry.type !== "session") {
+        if (targetEntry !== undefined && targetEntry.type !== "session") {
           comp.firstKeptEntryId = targetEntry.id;
         }
         delete comp.firstKeptEntryIndex;
@@ -273,7 +273,7 @@ function migrateV2ToV3(entries: FileEntry[]): void {
 
     if (entry.type === "message") {
       const msgEntry = entry as SessionMessageEntry;
-      if (msgEntry.message && (msgEntry.message as { role: string }).role === "hookMessage") {
+      if ((msgEntry.message as { role: string }).role === "hookMessage") {
         (msgEntry.message as { role: string }).role = "custom";
       }
     }
@@ -301,7 +301,7 @@ export function parseSessionEntries(content: string): FileEntry[] {
   const lines = content.trim().split("\n");
 
   for (const line of lines) {
-    if (!line.trim()) continue;
+    if (line.trim() === "") continue;
     try {
       const entry = JSON.parse(line) as FileEntry;
       entries.push(entry);
@@ -325,7 +325,7 @@ function buildEntryIndex(
   entries: SessionEntry[],
   byId?: Map<string, SessionEntry>,
 ): Map<string, SessionEntry> {
-  if (byId) return byId;
+  if (byId !== undefined) return byId;
   const index = new Map<string, SessionEntry>();
   for (const entry of entries) {
     index.set(entry.id, entry);
@@ -343,19 +343,22 @@ function buildSessionPath(
   if (leafId === null) {
     return [];
   }
-  if (leafId) {
+  if (leafId !== undefined && leafId !== "") {
     leaf = index.get(leafId);
   }
   leaf ??= entries[entries.length - 1];
-  if (!leaf) {
+  if (leaf === undefined) {
     return [];
   }
 
   const path: SessionEntry[] = [];
   let current: SessionEntry | undefined = leaf;
-  while (current) {
+  while (current !== undefined) {
     path.push(current);
-    current = current.parentId ? index.get(current.parentId) : undefined;
+    current =
+      current.parentId !== null && current.parentId !== ""
+        ? index.get(current.parentId)
+        : undefined;
   }
   path.reverse();
   return path;
@@ -403,7 +406,7 @@ export function sessionEntryToContextMessages(entry: SessionEntry): AgentMessage
       ),
     ];
   }
-  if (entry.type === "branch_summary" && entry.summary) {
+  if (entry.type === "branch_summary" && entry.summary !== "") {
     return [createBranchSummaryMessage(entry.summary, entry.fromId, entry.timestamp)];
   }
   if (entry.type === "compaction") {
@@ -412,7 +415,7 @@ export function sessionEntryToContextMessages(entry: SessionEntry): AgentMessage
       entry.tokensBefore,
       entry.timestamp,
     );
-    return entry.systemMessage ? [entry.systemMessage, summary] : [summary];
+    return entry.systemMessage === undefined ? [summary] : [entry.systemMessage, summary];
   }
   return [];
 }
@@ -431,7 +434,7 @@ export function buildContextEntries(
     }
   }
 
-  if (!compaction) {
+  if (compaction === null) {
     return path;
   }
 
@@ -461,7 +464,7 @@ function projectContextEntry(
   edit: ContextEditEntry | undefined,
 ): AgentMessage[] {
   const messages = sessionEntryToContextMessages(entry);
-  if (!edit) return messages;
+  if (edit === undefined) return messages;
   const replacement = edit.replacement;
   if (replacement === null) return [];
 
@@ -546,7 +549,7 @@ class SessionHeaderScanLimitError extends Error {
 }
 
 function parseSessionEntryLine(line: string): FileEntry | null {
-  if (!line.trim()) return null;
+  if (line.trim() === "") return null;
   try {
     return JSON.parse(line) as FileEntry;
   } catch {
@@ -574,7 +577,7 @@ export function loadEntriesFromFile(filePath: string): FileEntry[] {
       let newlineIndex = pending.indexOf("\n", lineStart);
       while (newlineIndex !== -1) {
         const entry = parseSessionEntryLine(pending.slice(lineStart, newlineIndex));
-        if (entry) entries.push(entry);
+        if (entry !== null) entries.push(entry);
         lineStart = newlineIndex + 1;
         newlineIndex = pending.indexOf("\n", lineStart);
       }
@@ -583,7 +586,7 @@ export function loadEntriesFromFile(filePath: string): FileEntry[] {
 
     pending += decoder.end();
     const finalEntry = parseSessionEntryLine(pending);
-    if (finalEntry) entries.push(finalEntry);
+    if (finalEntry !== null) entries.push(finalEntry);
   } finally {
     closeSync(fd);
   }
@@ -594,14 +597,14 @@ export function loadEntriesFromFile(filePath: string): FileEntry[] {
     return [];
   }
 
-  if (pending) appendFileSync(resolvedFilePath, "\n");
+  if (pending !== "") appendFileSync(resolvedFilePath, "\n");
   return entries;
 }
 
 function parseSessionHeaderCandidate(line: string): SessionHeader | null | undefined {
-  if (!line.trim()) return undefined;
+  if (line.trim() === "") return undefined;
   const entry = parseSessionEntryLine(line);
-  if (!entry) return undefined;
+  if (entry === null) return undefined;
   if (entry.type !== "session" || typeof (entry as { id?: unknown }).id !== "string") return null;
   return entry;
 }
@@ -667,7 +670,7 @@ function sessionCwdMatches(cwd: string | undefined, resolvedCwd: string): boolea
 
 export function findMostRecentSession(sessionDir: string, cwd?: string): string | null {
   const resolvedSessionDir = normalizePath(sessionDir);
-  const resolvedCwd = cwd ? resolvePath(cwd) : undefined;
+  const resolvedCwd = cwd !== undefined && cwd !== "" ? resolvePath(cwd) : undefined;
   try {
     const files = readdirSync(resolvedSessionDir)
       .filter((file) => file.endsWith(".jsonl"))
@@ -677,7 +680,12 @@ export function findMostRecentSession(sessionDir: string, cwd?: string): string 
 
     for (const { path } of files) {
       const header = readSessionHeaderForDiscovery(path);
-      if (header && (!resolvedCwd || sessionCwdMatches(getSessionHeaderCwd(header), resolvedCwd)))
+      if (
+        header !== null &&
+        (resolvedCwd === undefined ||
+          resolvedCwd === "" ||
+          sessionCwdMatches(getSessionHeaderCwd(header), resolvedCwd))
+      )
         return path;
     }
     return null;
@@ -736,9 +744,9 @@ async function buildSessionInfo(
 
     for await (const line of rl) {
       const entry = parseSessionEntryLine(line);
-      if (!entry) continue;
+      if (entry === null) continue;
 
-      if (!header) {
+      if (header === null) {
         if (entry.type !== "session") return null;
         header = entry;
         continue;
@@ -761,15 +769,15 @@ async function buildSessionInfo(
       if (message.role !== "user" && message.role !== "assistant") continue;
 
       const textContent = extractTextContent(message);
-      if (!textContent) continue;
+      if (textContent === "") continue;
 
       allMessages.push(textContent);
-      if (!firstMessage && message.role === "user") {
+      if (firstMessage === "" && message.role === "user") {
         firstMessage = textContent;
       }
     }
 
-    if (!header) return null;
+    if (header === null) return null;
 
     const cwd = typeof header.cwd === "string" ? header.cwd : "";
     const parentSessionPath = header.parentSession;
@@ -778,9 +786,9 @@ async function buildSessionInfo(
     const modified =
       typeof lastActivityTime === "number" && lastActivityTime > 0
         ? new Date(lastActivityTime)
-        : !Number.isNaN(headerTime)
-          ? new Date(headerTime)
-          : stats.mtime;
+        : Number.isNaN(headerTime)
+          ? stats.mtime
+          : new Date(headerTime);
 
     return {
       path: filePath,
@@ -877,7 +885,7 @@ async function listSessionsFromDir(
       files,
       (info) => {
         loaded++;
-        if (info) partialSessions.push(info);
+        if (info !== null) partialSessions.push(info);
         const publishPartial =
           loaded === 1 ||
           loaded % CURRENT_SESSION_LIST_PUBLISH_INTERVAL === 0 ||
@@ -921,13 +929,13 @@ export class SessionManager {
     this.cwd = resolvePath(cwd);
     this.sessionDir = normalizePath(sessionDir);
     this.persist = persist;
-    if (persist && this.sessionDir && !existsSync(this.sessionDir)) {
+    if (persist && this.sessionDir !== "" && !existsSync(this.sessionDir)) {
       mkdirSync(this.sessionDir, { recursive: true });
     }
 
-    if (sessionFile) {
+    if (sessionFile !== undefined && sessionFile !== "") {
       this.setSessionFileInternal(sessionFile, preloadedFileEntries);
-    } else if (preloadedFileEntries?.length) {
+    } else if (preloadedFileEntries?.length !== undefined && preloadedFileEntries?.length !== 0) {
       this.loadEntries(preloadedFileEntries, newSessionOptions);
     } else {
       this.newSession(newSessionOptions);
@@ -995,16 +1003,16 @@ export class SessionManager {
   private loadEntries(entries: FileEntry[], options?: NewSessionOptions): void {
     const header = entries.find((e) => e.type === "session") as SessionHeader | undefined;
 
-    if (header) {
+    if (header === undefined) {
+      this.newSession(options);
+      this.fileEntries = this.fileEntries.concat(entries);
+    } else {
       this.fileEntries = entries;
       this.sessionId = header.id;
 
       if (migrateToCurrentVersion(this.fileEntries)) {
         this.rewriteFile();
       }
-    } else {
-      this.newSession(options);
-      this.fileEntries = this.fileEntries.concat(entries);
     }
 
     this.buildIndex();
@@ -1020,7 +1028,7 @@ export class SessionManager {
       this.byId.set(entry.id, entry);
       this.leafId = entry.id;
       if (entry.type === "label") {
-        if (entry.label) {
+        if (entry.label !== undefined && entry.label !== "") {
           this.labelsById.set(entry.targetId, entry.label);
           this.labelTimestampsById.set(entry.targetId, entry.timestamp);
         } else {
@@ -1032,7 +1040,7 @@ export class SessionManager {
   }
 
   private rewriteFile(): void {
-    if (!this.persist || !this.sessionFile) return;
+    if (!this.persist || this.sessionFile === undefined || this.sessionFile === "") return;
     const fd = openSync(this.sessionFile, "w");
     try {
       for (const entry of this.fileEntries) {
@@ -1074,9 +1082,11 @@ export class SessionManager {
   }
 
   persistInternal(entry: SessionEntry): void {
-    if (!this.persist || !this.sessionFile) return;
+    if (!this.persist || this.sessionFile === undefined || this.sessionFile === "") return;
 
-    if (!this.flushed) {
+    if (this.flushed) {
+      appendFileSync(this.sessionFile, `${JSON.stringify(entry)}\n`);
+    } else {
       if (!this.hasConversation()) return;
       const fd = openSync(this.sessionFile, "wx");
       try {
@@ -1087,8 +1097,6 @@ export class SessionManager {
         closeSync(fd);
       }
       this.flushed = true;
-    } else {
-      appendFileSync(this.sessionFile, `${JSON.stringify(entry)}\n`);
     }
   }
 
@@ -1152,7 +1160,7 @@ export class SessionManager {
       provider,
       model,
       usage,
-      ...(note ? { note } : {}),
+      ...(note !== undefined && note !== "" ? { note } : {}),
     };
     this.appendEntry(entry);
     return entry;
@@ -1180,9 +1188,9 @@ export class SessionManager {
       details,
       usage,
       fromHook,
-      ...(systemMessage
-        ? { systemMessage: { ...systemMessage, timestamp: new Date(timestamp).getTime() } }
-        : {}),
+      ...(systemMessage === undefined
+        ? {}
+        : { systemMessage: { ...systemMessage, timestamp: new Date(timestamp).getTime() } }),
     };
     this.appendEntry(entry);
     return entry.id;
@@ -1254,7 +1262,7 @@ export class SessionManager {
       throw new Error("Context edit replacement must be null or contain string/array content");
     }
     const target = this.byId.get(targetId);
-    if (!target) throw new Error(`Entry ${targetId} not found`);
+    if (target === undefined) throw new Error(`Entry ${targetId} not found`);
     if (!this.getBranch().some((entry) => entry.id === targetId)) {
       throw new Error(`Entry ${targetId} is not on the active branch`);
     }
@@ -1289,7 +1297,7 @@ export class SessionManager {
   }
 
   getLeafEntry(): SessionEntry | undefined {
-    return this.leafId ? this.byId.get(this.leafId) : undefined;
+    return this.leafId !== null && this.leafId !== "" ? this.byId.get(this.leafId) : undefined;
   }
 
   getEntry(id: string): SessionEntry | undefined {
@@ -1323,7 +1331,7 @@ export class SessionManager {
       label,
     };
     this.appendEntry(entry);
-    if (label) {
+    if (label !== undefined && label !== "") {
       this.labelsById.set(targetId, label);
       this.labelTimestampsById.set(targetId, entry.timestamp);
     } else {
@@ -1336,10 +1344,13 @@ export class SessionManager {
   getBranch(fromId?: string): SessionEntry[] {
     const path: SessionEntry[] = [];
     const startId = fromId ?? this.leafId;
-    let current = startId ? this.byId.get(startId) : undefined;
-    while (current) {
+    let current = startId !== null && startId !== "" ? this.byId.get(startId) : undefined;
+    while (current !== undefined) {
       path.push(current);
-      current = current.parentId ? this.byId.get(current.parentId) : undefined;
+      current =
+        current.parentId !== null && current.parentId !== ""
+          ? this.byId.get(current.parentId)
+          : undefined;
     }
     path.reverse();
     return path;
@@ -1360,7 +1371,7 @@ export class SessionManager {
 
   getHeader(): SessionHeader | null {
     const h = this.fileEntries.find((e) => e.type === "session");
-    return h ? (h as SessionHeader) : null;
+    return h === undefined ? null : (h as SessionHeader);
   }
 
   getEntryCount(): number {
@@ -1388,10 +1399,10 @@ export class SessionManager {
         roots.push(node);
       } else {
         const parent = nodeMap.get(entry.parentId);
-        if (parent) {
-          parent.children.push(node);
-        } else {
+        if (parent === undefined) {
           roots.push(node);
+        } else {
+          parent.children.push(node);
         }
       }
     }
@@ -1557,7 +1568,10 @@ export class SessionManager {
   }
 
   static create(cwd: string, sessionDir?: string, options?: NewSessionOptions): SessionManager {
-    const dir = sessionDir ? normalizePath(sessionDir) : getDefaultSessionDir(cwd);
+    const dir =
+      sessionDir !== undefined && sessionDir !== ""
+        ? normalizePath(sessionDir)
+        : getDefaultSessionDir(cwd);
     return new SessionManager(cwd, dir, undefined, true, options);
   }
 
@@ -1575,16 +1589,23 @@ export class SessionManager {
         header = firstEntry?.type === "session" ? firstEntry : null;
       }
     }
-    const cwd = cwdOverride ?? (header ? getSessionHeaderCwd(header) : undefined) ?? process.cwd();
-    const dir = sessionDir ? normalizePath(sessionDir) : resolve(resolvedPath, "..");
+    const cwd =
+      cwdOverride ?? (header === null ? undefined : getSessionHeaderCwd(header)) ?? process.cwd();
+    const dir =
+      sessionDir !== undefined && sessionDir !== ""
+        ? normalizePath(sessionDir)
+        : resolve(resolvedPath, "..");
     return new SessionManager(cwd, dir, resolvedPath, true, undefined, preloadedFileEntries);
   }
 
   static continueRecent(cwd: string, sessionDir?: string): SessionManager {
-    const dir = sessionDir ? normalizePath(sessionDir) : getDefaultSessionDir(cwd);
+    const dir =
+      sessionDir !== undefined && sessionDir !== ""
+        ? normalizePath(sessionDir)
+        : getDefaultSessionDir(cwd);
     const filterCwd = sessionDir !== undefined && dir !== getDefaultSessionDirPath(cwd);
     const mostRecent = findMostRecentSession(dir, filterCwd ? cwd : undefined);
-    if (mostRecent) {
+    if (mostRecent !== null && mostRecent !== "") {
       return new SessionManager(cwd, dir, mostRecent, true);
     }
     return new SessionManager(cwd, dir, undefined, true);
@@ -1616,11 +1637,14 @@ export class SessionManager {
     const sourceHeader = sourceEntries.find((e) => e.type === "session") as
       | SessionHeader
       | undefined;
-    if (!sourceHeader) {
+    if (sourceHeader === undefined) {
       throw new Error(`Cannot fork: source session has no header: ${resolvedSourcePath}`);
     }
 
-    const dir = sessionDir ? normalizePath(sessionDir) : getDefaultSessionDir(resolvedTargetCwd);
+    const dir =
+      sessionDir !== undefined && sessionDir !== ""
+        ? normalizePath(sessionDir)
+        : getDefaultSessionDir(resolvedTargetCwd);
     if (!existsSync(dir)) {
       mkdirSync(dir, { recursive: true });
     }
@@ -1653,7 +1677,10 @@ export class SessionManager {
   }
 
   static findById(cwd: string, id: string, sessionDir?: string): string | undefined {
-    const dir = sessionDir ? normalizePath(sessionDir) : getDefaultSessionDir(cwd);
+    const dir =
+      sessionDir !== undefined && sessionDir !== ""
+        ? normalizePath(sessionDir)
+        : getDefaultSessionDir(cwd);
     const filterCwd = sessionDir !== undefined && dir !== getDefaultSessionDirPath(cwd);
     const resolvedCwd = resolvePath(cwd);
 
@@ -1676,15 +1703,19 @@ export class SessionManager {
     onProgress?: SessionListProgress,
     signal?: AbortSignal,
   ): Promise<SessionInfo[]> {
-    const dir = sessionDir ? normalizePath(sessionDir) : getDefaultSessionDir(cwd);
+    const dir =
+      sessionDir !== undefined && sessionDir !== ""
+        ? normalizePath(sessionDir)
+        : getDefaultSessionDir(cwd);
     const filterCwd = sessionDir !== undefined && dir !== getDefaultSessionDirPath(cwd);
     const resolvedCwd = resolvePath(cwd);
     const includeSession = (session: SessionInfo) =>
       !filterCwd || sessionCwdMatches(session.cwd, resolvedCwd);
-    const progress: SessionListProgress | undefined = onProgress
-      ? (loaded, total, partialSessions) =>
-          onProgress(loaded, total, partialSessions?.filter(includeSession))
-      : undefined;
+    const progress: SessionListProgress | undefined =
+      onProgress === undefined
+        ? undefined
+        : (loaded, total, partialSessions) =>
+            onProgress(loaded, total, partialSessions?.filter(includeSession));
     const sessions = (await listSessionsFromDir(dir, progress, signal)).filter(includeSession);
     return sortSessionInfos(sessions);
   }
@@ -1718,7 +1749,7 @@ export class SessionManager {
         ? signal
         : (onProgressOrSignal ?? signal);
     abortSignal?.throwIfAborted();
-    if (customSessionDir) {
+    if (customSessionDir !== undefined && customSessionDir !== "") {
       return sortSessionInfos(await listSessionsFromDir(customSessionDir, progress, abortSignal));
     }
 
@@ -1774,7 +1805,7 @@ export class SessionManager {
         (info, index) => {
           loaded++;
           if (index === 0) firstCandidateLoaded = true;
-          if (info) partialSessions.push(info);
+          if (info !== null) partialSessions.push(info);
           const publishPartial =
             firstCandidateLoaded &&
             (index === 0 ||

@@ -57,7 +57,7 @@ export async function resolveProjectTrusted(
     return true;
   }
 
-  if (options.extensionsResult) {
+  if (options.extensionsResult !== undefined) {
     const { result, errors } = await emitProjectTrustEvent(
       options.extensionsResult,
       { type: "project_trust", cwd: options.cwd },
@@ -68,7 +68,7 @@ export async function resolveProjectTrusted(
         `Extension "${error.extensionPath}" project_trust error: ${error.error}`,
       );
     }
-    if (result) {
+    if (result !== undefined) {
       const trusted = result.trusted === "yes";
       if (result.remember === true) {
         options.trustStore.set(options.cwd, trusted);

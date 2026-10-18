@@ -36,7 +36,7 @@ export function parseHttpIdleTimeoutMs(value: unknown): number | undefined {
 
 export function formatHttpIdleTimeoutMs(timeoutMs: number): string {
   const choice = HTTP_IDLE_TIMEOUT_CHOICES.find((item) => item.timeoutMs === timeoutMs);
-  if (choice) {
+  if (choice !== undefined) {
     return choice.label;
   }
   return `${timeoutMs / 1000} sec`;
@@ -44,7 +44,7 @@ export function formatHttpIdleTimeoutMs(timeoutMs: number): string {
 
 export function applyHttpProxySettings(httpProxy: string | undefined): void {
   const proxy = httpProxy?.trim();
-  if (!proxy) return;
+  if (proxy === undefined || proxy === "") return;
   process.env["HTTP_PROXY"] ??= proxy;
   process.env["HTTPS_PROXY"] ??= proxy;
 }

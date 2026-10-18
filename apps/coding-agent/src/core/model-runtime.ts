@@ -160,7 +160,7 @@ function mergeHeaders(
   base: ProviderHeaders | undefined,
   override: ProviderHeaders | undefined,
 ): ProviderHeaders | undefined {
-  if (!base && !override) return undefined;
+  if (base === undefined && override === undefined) return undefined;
   const merged = { ...base };
   for (const [name, value] of Object.entries(override ?? {})) {
     const lowerName = name.toLowerCase();
@@ -225,7 +225,7 @@ export class ModelRuntime implements Models {
     const config = await ModelConfig.load(modelsPath);
     const modelsStore =
       options.modelsStore ??
-      (modelsPath
+      (modelsPath !== undefined && modelsPath !== ""
         ? new FileModelsStore(
             options.modelsStorePath ?? join(dirname(modelsPath), "models-store.json"),
           )
@@ -256,20 +256,25 @@ export class ModelRuntime implements Models {
       refreshFromNetwork && options.modelRefreshTimeoutMs !== undefined
         ? new AbortController()
         : undefined;
-    const timeout = controller
-      ? setTimeout(() => controller.abort(), options.modelRefreshTimeoutMs)
-      : undefined;
-    const signal = controller
-      ? options.signal
-        ? AbortSignal.any([options.signal, controller.signal])
-        : controller.signal
-      : options.signal;
+    const timeout =
+      controller === undefined
+        ? undefined
+        : setTimeout(() => controller.abort(), options.modelRefreshTimeoutMs);
+    const signal =
+      controller === undefined
+        ? options.signal
+        : options.signal === undefined
+          ? controller.signal
+          : AbortSignal.any([options.signal, controller.signal]);
     try {
       if (options.refreshOnCreate !== false) {
-        await runtime.refresh({ allowNetwork: refreshFromNetwork, ...(signal ? { signal } : {}) });
+        await runtime.refresh({
+          allowNetwork: refreshFromNetwork,
+          ...(signal === undefined ? {} : { signal }),
+        });
       }
     } finally {
-      if (timeout) clearTimeout(timeout);
+      if (timeout !== undefined) clearTimeout(timeout);
     }
     return runtime;
   }
@@ -291,15 +296,15 @@ export class ModelRuntime implements Models {
     );
     if (virtualModels.length > 0)
       this.models.setProvider(withVirtualModels(providerId, provider, virtualModels));
-    else if (provider) this.models.setProvider(provider);
-    else this.models.deleteProvider(providerId);
+    else if (provider === undefined) this.models.deleteProvider(providerId);
+    else this.models.setProvider(provider);
     return provider;
   }
 
   private composeProvider(providerId: string): Provider | undefined {
     const base = this.nativeExtensionProviders.get(providerId) ?? this.builtins.get(providerId);
     const extension = this.extensionProviders.get(providerId);
-    if (!this.config.getProvider(providerId) && !extension) {
+    if (this.config.getProvider(providerId) === undefined && extension === undefined) {
       this.compositionErrors.delete(providerId);
       return base;
     }
@@ -347,7 +352,7 @@ export class ModelRuntime implements Models {
     ]);
     if (seq !== this.availabilityRefreshSeq) {
       const latest = this.latestAvailabilityRefresh;
-      if (latest && latest.seq > seq) await latest.pass;
+      if (latest !== undefined && latest.seq > seq) await latest.pass;
       return;
     }
     const auth = new Map(checks);
@@ -402,15 +407,15 @@ export class ModelRuntime implements Models {
       const configuredProviders = new Set(this.snapshot.configuredProviders);
       const storedProviders = new Set(this.snapshot.storedProviders);
       const authByProvider = new Map(this.snapshot.auth);
-      if (auth) {
-        configuredProviders.add(providerId);
-        authByProvider.set(providerId, auth);
-      } else {
+      if (auth === undefined) {
         configuredProviders.delete(providerId);
         authByProvider.delete(providerId);
+      } else {
+        configuredProviders.add(providerId);
+        authByProvider.set(providerId, auth);
       }
-      if (credential) storedProviders.add(providerId);
-      else storedProviders.delete(providerId);
+      if (credential === undefined) storedProviders.delete(providerId);
+      else storedProviders.add(providerId);
       const all = [...this.models.getModels()];
       const availableById = new Map(
         [
@@ -501,14 +506,14 @@ export class ModelRuntime implements Models {
     providerId?: string,
     options?: AuthOperationOptions,
   ): Promise<readonly Model<Api>[]> {
-    if (providerId) {
+    if (providerId !== undefined && providerId !== "") {
       const errorSeq = ++this.availabilityErrorSeq;
       try {
         const available = await this.models.getAvailable(providerId, options);
         if (errorSeq === this.availabilityErrorSeq) this.availabilityError = undefined;
         return available;
       } catch (error) {
-        if (errorSeq === this.availabilityErrorSeq && !options?.signal?.aborted) {
+        if (errorSeq === this.availabilityErrorSeq && options?.signal?.aborted !== true) {
           this.availabilityError = toErrorMessage(error);
         }
         throw error;
@@ -525,11 +530,12 @@ export class ModelRuntime implements Models {
   getError(): string | undefined {
     const errors: string[] = [];
     const configError = this.config.getError();
-    if (configError) errors.push(configError);
+    if (configError !== undefined && configError !== "") errors.push(configError);
     for (const [providerId, error] of this.compositionErrors) {
       errors.push(`Provider "${providerId}": ${error}`);
     }
-    if (this.availabilityError) errors.push(`Availability refresh: ${this.availabilityError}`);
+    if (this.availabilityError !== undefined && this.availabilityError !== "")
+      errors.push(`Availability refresh: ${this.availabilityError}`);
     return errors.length > 0 ? errors.join("\n\n") : undefined;
   }
 
@@ -581,7 +587,7 @@ export class ModelRuntime implements Models {
   ): Promise<AuthResult | undefined> {
     if (typeof providerOrModel === "string") return this.models.getAuth(providerOrModel, overrides);
     const resolution = await this.models.getAuth(providerOrModel, overrides);
-    if (!resolution) return undefined;
+    if (resolution === undefined) return undefined;
     const configuredHeaders = resolveConfiguredModelHeaders(
       providerOrModel,
       this.config.getProvider(providerOrModel.provider),
@@ -632,7 +638,8 @@ export class ModelRuntime implements Models {
       signal.throwIfAborted();
       this.recomposeProvider(providerId);
       const compositionError = this.compositionErrors.get(providerId);
-      if (compositionError) throw new Error(compositionError);
+      if (compositionError !== undefined && compositionError !== "")
+        throw new Error(compositionError);
       const result = await this.models.refresh({
         allowNetwork: false,
         providers: [providerId],
@@ -640,7 +647,7 @@ export class ModelRuntime implements Models {
       });
       if (result.aborted) signal.throwIfAborted();
       const refreshError = result.errors.get(providerId);
-      if (refreshError) throw refreshError;
+      if (refreshError !== undefined) throw refreshError;
       this.updateModelSnapshot();
       await this.refreshProviderAvailability(providerId, signal);
     } catch (cause) {
@@ -686,11 +693,11 @@ export class ModelRuntime implements Models {
       this.config.getProvider(providerId),
       this.extensionProviders.get(providerId),
     );
-    if (configured) return configured;
+    if (configured !== undefined) return configured;
     const check = this.snapshot.auth.get(providerId);
-    return check
-      ? { configured: true, source: "environment", label: check.source }
-      : { configured: false };
+    return check === undefined
+      ? { configured: false }
+      : { configured: true, source: "environment", label: check.source };
   }
 
   private async prepareRequest<
@@ -705,26 +712,29 @@ export class ModelRuntime implements Models {
     options: Omit<TOptions, "transformHeaders"> & ProviderRequestOptions<TModel>;
   }> {
     const provider = this.models.getProvider(model.provider);
-    if (!provider) throw new ModelsError("provider", `Unknown provider: ${model.provider}`);
+    if (provider === undefined)
+      throw new ModelsError("provider", `Unknown provider: ${model.provider}`);
     const resolution = await this.getAuth(model, {
       apiKey: options?.apiKey,
       env: options?.env,
-      ...(options?.signal ? { signal: options.signal } : {}),
+      ...(options?.signal === undefined ? {} : { signal: options.signal }),
     });
-    if (!resolution) throw new ModelsError("auth", `Provider is not configured: ${model.provider}`);
+    if (resolution === undefined)
+      throw new ModelsError("auth", `Provider is not configured: ${model.provider}`);
 
     const { transformHeaders, ...rawProviderOptions } = options ?? {};
     const providerOptions = rawProviderOptions as Omit<TOptions, "transformHeaders"> &
       ProviderRequestOptions<TModel>;
     let headers = mergeHeaders(resolution.auth.headers, providerOptions.headers);
-    if (transformHeaders) headers = await transformHeaders(headers ?? {});
+    if (transformHeaders !== undefined) headers = await transformHeaders(headers ?? {});
     const env =
-      resolution.env || providerOptions.env
+      resolution.env !== undefined || providerOptions.env !== undefined
         ? { ...(resolution.env ?? {}), ...(providerOptions.env ?? {}) }
         : undefined;
-    const requestModel: TModel = resolution.auth.baseUrl
-      ? { ...model, baseUrl: resolution.auth.baseUrl }
-      : model;
+    const requestModel: TModel =
+      resolution.auth.baseUrl !== undefined && resolution.auth.baseUrl !== ""
+        ? { ...model, baseUrl: resolution.auth.baseUrl }
+        : model;
     return {
       provider,
       model: requestModel,
@@ -780,7 +790,9 @@ export class ModelRuntime implements Models {
         });
         const { maxTokens: limit } = route.model;
         const maxTokens =
-          options?.maxTokens && limit > 0 ? Math.min(options.maxTokens, limit) : options?.maxTokens;
+          options?.maxTokens !== undefined && options?.maxTokens !== 0 && limit > 0
+            ? Math.min(options.maxTokens, limit)
+            : options?.maxTokens;
         const reasoning = route.thinkingLevel === "off" ? undefined : route.thinkingLevel;
         const { apiKey, headers, env, ...rest } = options ?? {};
         const auth = route.model.provider === model.provider ? { apiKey, headers, env } : {};
@@ -814,7 +826,7 @@ export class ModelRuntime implements Models {
     return lazyStream(model, async () => {
       assertChatModel(model);
       const prepared = await this.prepareRequest(model, options);
-      if (!prepared.provider.fetchDeferred) {
+      if (prepared.provider.fetchDeferred === undefined) {
         throw new ModelsError(
           "provider",
           `Provider ${model.provider} does not support deferred responses`,
@@ -843,7 +855,7 @@ export class ModelRuntime implements Models {
   ): Promise<void> {
     assertChatModel(model);
     const prepared = await this.prepareRequest(model, options);
-    if (!prepared.provider.cancelDeferred) {
+    if (prepared.provider.cancelDeferred === undefined) {
       throw new ModelsError(
         "provider",
         `Provider ${model.provider} does not support deferred responses`,
@@ -864,7 +876,7 @@ export class ModelRuntime implements Models {
     try {
       assertImageModel(model);
       const prepared = await this.prepareRequest(model, options);
-      if (!prepared.provider.generateImages) {
+      if (prepared.provider.generateImages === undefined) {
         throw new ModelsError(
           "provider",
           `Provider ${model.provider} does not support image generation`,
@@ -889,7 +901,7 @@ export class ModelRuntime implements Models {
       assertClassifierModel(model);
       assertClassifierInputSupported(model, context);
       const prepared = await this.prepareRequest(model, options);
-      if (!prepared.provider.classify) {
+      if (prepared.provider.classify === undefined) {
         throw new ModelsError(
           "provider",
           `Provider ${model.provider} does not support classification`,
@@ -934,11 +946,11 @@ export class ModelRuntime implements Models {
 
   async refresh(options: ModelsRefreshOptions = {}): Promise<ModelsRefreshResult> {
     this.config = await ModelConfig.load(this.modelsPath);
-    if (options.providers) {
+    if (options.providers === undefined) {
+      this.rebuildProviders();
+    } else {
       for (const providerId of new Set(options.providers)) this.recomposeProvider(providerId);
       this.updateModelSnapshot();
-    } else {
-      this.rebuildProviders();
     }
     const refreshOptions = {
       ...options,
@@ -952,28 +964,28 @@ export class ModelRuntime implements Models {
     };
     const errors = new Map(result.errors);
     this.updateModelSnapshot();
-    if (options.providers) {
+    if (options.providers === undefined) {
+      try {
+        await this.queueAvailabilityRefresh(options.signal);
+      } catch {}
+    } else {
       await Promise.all(
         [...new Set(options.providers)].map(async (providerId) => {
           try {
             await this.refreshProviderAvailability(providerId, operationSignal(options.signal));
           } catch (error) {
-            if (!options.signal?.aborted) {
+            if (options.signal?.aborted !== true) {
               errors.set(providerId, error instanceof Error ? error : new Error(String(error)));
             }
           }
         }),
       );
-    } else {
-      try {
-        await this.queueAvailabilityRefresh(options.signal);
-      } catch {}
     }
     return { aborted: result.aborted || (options.signal?.aborted ?? false), errors };
   }
 
   registerNativeProvider(provider: Provider): void {
-    if (!provider.id.trim()) throw new Error("Provider id must not be empty.");
+    if (provider.id.trim() === "") throw new Error("Provider id must not be empty.");
     this.extensionProviders.delete(provider.id);
     this.nativeExtensionProviders.set(provider.id, provider);
     this.recomposeProvider(provider.id);
@@ -981,7 +993,7 @@ export class ModelRuntime implements Models {
     this.markProvisionallyConfigured(
       provider.id,
       configuredRequestAuthStatus(this.config.getProvider(provider.id), undefined),
-      provider.auth.oauth && !provider.auth.apiKey ? "oauth" : "api_key",
+      provider.auth.oauth !== undefined && provider.auth.apiKey === undefined ? "oauth" : "api_key",
     );
     void this.refresh({ allowNetwork: false });
   }
@@ -991,10 +1003,12 @@ export class ModelRuntime implements Models {
     configuredStatus: AuthStatus | undefined,
     type: AuthType,
   ): void {
-    if (!this.snapshot.storedProviders.has(providerId) && !configuredStatus?.configured) return;
+    if (!this.snapshot.storedProviders.has(providerId) && configuredStatus?.configured !== true)
+      return;
     const configuredProviders = new Set(this.snapshot.configuredProviders).add(providerId);
     const auth = new Map(this.snapshot.auth);
-    if (!auth.get(providerId)) auth.set(providerId, { type, source: "configured provider" });
+    if (auth.get(providerId) === undefined)
+      auth.set(providerId, { type, source: "configured provider" });
     this.snapshot = {
       ...this.snapshot,
       auth,
@@ -1022,7 +1036,9 @@ export class ModelRuntime implements Models {
     this.markProvisionallyConfigured(
       providerId,
       configuredRequestAuthStatus(this.config.getProvider(providerId), effective),
-      effective.oauth && !effective.apiKey ? "oauth" : "api_key",
+      effective.oauth !== undefined && (effective.apiKey === undefined || effective.apiKey === "")
+        ? "oauth"
+        : "api_key",
     );
     void this.refresh({ allowNetwork: false });
   }
@@ -1037,10 +1053,10 @@ export class ModelRuntime implements Models {
 
   registerVirtualModel(definition: VirtualModelDefinition): void {
     const { provider: providerId, id } = definition;
-    if (!providerId.trim() || !id.trim())
+    if (providerId.trim() === "" || id.trim() === "")
       throw new Error("Virtual model provider and id must not be empty.");
     const existing = this.models.getModel(providerId, id);
-    if (existing && !isVirtualModel(existing)) {
+    if (existing !== undefined && !isVirtualModel(existing)) {
       throw new Error(`Virtual model ${providerId}/${id} conflicts with a physical model.`);
     }
     const models = this.virtualModels.get(providerId) ?? new Map<string, RegisteredVirtualModel>();
@@ -1049,7 +1065,10 @@ export class ModelRuntime implements Models {
       route: (request) => definition.route(request),
     });
     this.virtualModels.set(providerId, models);
-    if (!this.recomposeProvider(providerId) && !this.snapshot.configuredProviders.has(providerId)) {
+    if (
+      this.recomposeProvider(providerId) === undefined &&
+      !this.snapshot.configuredProviders.has(providerId)
+    ) {
       const auth = new Map(this.snapshot.auth).set(providerId, {
         type: "api_key",
         source: "virtual",
@@ -1063,7 +1082,7 @@ export class ModelRuntime implements Models {
 
   unregisterVirtualModel(providerId: string, id: string): void {
     const models = this.virtualModels.get(providerId);
-    if (!models?.delete(id)) return;
+    if (models?.delete(id) !== true) return;
     if (models.size === 0) this.virtualModels.delete(providerId);
     this.recomposeProvider(providerId);
     this.updateModelSnapshot();
@@ -1083,7 +1102,7 @@ export class ModelRuntime implements Models {
   ): Promise<ModelRoute> {
     const name = `Virtual model ${model.provider}/${model.id}`;
     const virtual = this.virtualModels.get(model.provider)?.get(model.id);
-    if (!virtual) throw new Error(`${name} is not registered.`);
+    if (virtual === undefined) throw new Error(`${name} is not registered.`);
     const { failed, ...request } = options;
     const latest = findLatestResponse(messages);
     const previousModel = latest && this.getPhysicalModel(latest.provider, latest.model);
@@ -1098,7 +1117,7 @@ export class ModelRuntime implements Models {
     });
     const target = this.getPhysicalModel(route.model.provider, route.model.id);
     const routed = `${name} routed to ${route.model.provider}/${route.model.id}`;
-    if (!target) throw new Error(`${routed}, which is not a physical model.`);
+    if (target === undefined) throw new Error(`${routed}, which is not a physical model.`);
     if (!this.hasConfiguredAuth(target.provider))
       throw new Error(`${routed}, which has no credentials.`);
     return {
@@ -1110,6 +1129,6 @@ export class ModelRuntime implements Models {
 
   getPhysicalModel(providerId: string, modelId: string): Model<Api> | undefined {
     const model = this.models.getModel(providerId, modelId);
-    return model && !isVirtualModel(model) ? model : undefined;
+    return model !== undefined && !isVirtualModel(model) ? model : undefined;
   }
 }

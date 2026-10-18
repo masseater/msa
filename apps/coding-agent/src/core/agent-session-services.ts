@@ -70,7 +70,7 @@ function applyExtensionFlagValues(
   resourceLoader: ResourceLoader,
   extensionFlagValues: Map<string, boolean | string> | undefined,
 ): AgentSessionRuntimeDiagnostic[] {
-  if (!extensionFlagValues) {
+  if (extensionFlagValues === undefined) {
     return [];
   }
 
@@ -86,7 +86,7 @@ function applyExtensionFlagValues(
   const unknownFlags: string[] = [];
   for (const [name, value] of extensionFlagValues) {
     const flag = registeredFlags.get(name);
-    if (!flag) {
+    if (flag === undefined) {
       unknownFlags.push(name);
       continue;
     }
@@ -118,7 +118,10 @@ export async function createAgentSessionServices(
   options: CreateAgentSessionServicesOptions,
 ): Promise<AgentSessionServices> {
   const cwd = resolvePath(options.cwd);
-  const agentDir = options.agentDir ? resolvePath(options.agentDir) : getAgentDir();
+  const agentDir =
+    options.agentDir !== undefined && options.agentDir !== ""
+      ? resolvePath(options.agentDir)
+      : getAgentDir();
   const modelRuntime =
     options.modelRuntime ??
     (await ModelRuntime.create({

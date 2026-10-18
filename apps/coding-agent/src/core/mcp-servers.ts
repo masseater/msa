@@ -123,7 +123,7 @@ function validateOAuth(value: unknown): string | undefined {
       return "oauth.callbackUrl must be an http URI on localhost, 127.0.0.1, or [::1] without query or fragment";
     }
     const urlPort = new URL(value["callbackUrl"]).port;
-    if (urlPort && port !== undefined && Number(urlPort) !== port) {
+    if (urlPort !== "" && port !== undefined && Number(urlPort) !== port) {
       return "oauth.callbackUrl and oauth.callbackPort name different ports";
     }
   }
@@ -131,7 +131,7 @@ function validateOAuth(value: unknown): string | undefined {
     return "oauth.scope must be a string";
   if (
     value["clientName"] !== undefined &&
-    (typeof value["clientName"] !== "string" || !value["clientName"].trim())
+    (typeof value["clientName"] !== "string" || value["clientName"].trim() === "")
   ) {
     return "oauth.clientName must be a non-empty string";
   }
@@ -143,7 +143,10 @@ function validateOAuth(value: unknown): string | undefined {
     }
     const callback =
       typeof value["callbackUrl"] === "string" ? new URL(value["callbackUrl"]) : undefined;
-    if (callback && (callback.hostname === "[::1]" || callback.pathname !== "/callback")) {
+    if (
+      callback !== undefined &&
+      (callback.hostname === "[::1]" || callback.pathname !== "/callback")
+    ) {
       return 'oauth.clientRegistration "cimd" requires oauth.callbackUrl on localhost or 127.0.0.1 with path /callback';
     }
   }
@@ -154,7 +157,7 @@ function validateOAuth(value: unknown): string | undefined {
         ? new URL(metadataUrl)
         : undefined;
     if (
-      !url ||
+      url === undefined ||
       !(
         url.protocol === "https:" ||
         (url.protocol === "http:" && LOOPBACK_HOSTS.includes(url.hostname))
@@ -236,12 +239,12 @@ export function validateMcpServerConfig(name: string, raw: unknown): McpServerCo
       return `server "${name}": headers must map names to strings`;
     }
     const oauthError = validateOAuth(value["oauth"]);
-    if (oauthError) return `server "${name}": ${oauthError}`;
+    if (oauthError !== undefined && oauthError !== "") return `server "${name}": ${oauthError}`;
     if (value["auth"] !== undefined) {
       if (
         !isRecord(value["auth"]) ||
         typeof value["auth"]["provider"] !== "string" ||
-        !value["auth"]["provider"]
+        value["auth"]["provider"] === ""
       ) {
         return `server "${name}": auth.provider must be a provider name`;
       }

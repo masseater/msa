@@ -96,9 +96,9 @@ function formatValidationPath(error: TLocalizedValidationError): string {
     const requiredProperties = (error.params as { requiredProperties?: string[] })
       .requiredProperties;
     const requiredProperty = requiredProperties?.[0];
-    if (requiredProperty) {
+    if (requiredProperty !== undefined && requiredProperty !== "") {
       const basePath = error.instancePath.replace(/^\//, "").replace(/\//g, ".");
-      return basePath ? `${basePath}.${requiredProperty}` : requiredProperty;
+      return basePath === "" ? requiredProperty : `${basePath}.${requiredProperty}`;
     }
   }
   const path = error.instancePath.replace(/^\//, "").replace(/\//g, ".");
@@ -121,7 +121,7 @@ export class ModelConfig {
   }
 
   static async load(modelsJsonPath: string | undefined): Promise<ModelConfig> {
-    if (!modelsJsonPath) return new ModelConfig(new Map());
+    if (modelsJsonPath === undefined || modelsJsonPath === "") return new ModelConfig(new Map());
     const path = normalizePath(modelsJsonPath);
     let content: string;
     try {

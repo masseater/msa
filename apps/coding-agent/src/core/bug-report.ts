@@ -37,7 +37,7 @@ export function redactUrl(value: string): string {
   try {
     const url = new URL(value);
     let changed = false;
-    if (url.username || url.password) {
+    if (url.username !== "" || url.password !== "") {
       url.username = "";
       url.password = "";
       changed = true;
@@ -74,7 +74,10 @@ function collectEnvironment() {
   return {
     version: VERSION,
     userAgent: getMsaUserAgent(VERSION),
-    runtime: process.versions["bun"] ? `bun/${process.versions["bun"]}` : `node/${process.version}`,
+    runtime:
+      process.versions["bun"] !== undefined && process.versions["bun"] !== ""
+        ? `bun/${process.versions["bun"]}`
+        : `node/${process.version}`,
     platform: process.platform,
     arch: process.arch,
     osRelease: os.release(),
@@ -108,8 +111,9 @@ function describeModel(model: Model<Api>) {
     input: model.input,
     contextWindow: model.contextWindow,
     maxTokens: model.maxTokens,
-    samplingParams: model.samplingParams ? redactJsonValue(model.samplingParams) : null,
-    compat: model.compat ? redactJsonValue(model.compat) : null,
+    samplingParams:
+      model.samplingParams === undefined ? null : redactJsonValue(model.samplingParams),
+    compat: model.compat === undefined ? null : redactJsonValue(model.compat),
     thinkingLevelMap: model.thinkingLevelMap ?? null,
     headerNames: Object.keys(model.headers ?? {}).sort(),
   };
@@ -117,12 +121,15 @@ function describeModel(model: Model<Api>) {
 
 function describeProvider(modelRuntime: ModelRuntime, provider: Provider) {
   const authTypes: Array<"api_key" | "oauth"> = [];
-  if (provider.auth.apiKey) authTypes.push("api_key");
-  if (provider.auth.oauth) authTypes.push("oauth");
+  if (provider.auth.apiKey !== undefined) authTypes.push("api_key");
+  if (provider.auth.oauth !== undefined) authTypes.push("oauth");
   return {
     id: provider.id,
     name: provider.name,
-    baseUrl: provider.baseUrl ? redactUrl(provider.baseUrl) : null,
+    baseUrl:
+      provider.baseUrl !== undefined && provider.baseUrl !== ""
+        ? redactUrl(provider.baseUrl)
+        : null,
     headerNames: Object.keys(provider.headers ?? {}).sort(),
     authTypes,
     authStatus: modelRuntime.getProviderAuthStatus(provider.id),
@@ -160,9 +167,10 @@ interface CollectBugReportMetadataOptions {
 
 export function collectBugReportMetadata(options: CollectBugReportMetadataOptions) {
   const hint = options.hint?.trim() || null;
-  const provider = options.model
-    ? options.modelRuntime.getProvider(options.model.provider)
-    : undefined;
+  const provider =
+    options.model === undefined
+      ? undefined
+      : options.modelRuntime.getProvider(options.model.provider);
   return {
     schemaVersion: BUG_REPORT_SCHEMA_VERSION,
     id: options.id ?? uuidv7(),
@@ -176,8 +184,8 @@ export function collectBugReportMetadata(options: CollectBugReportMetadataOption
       messageCount: options.messageCount,
       ...(options.includeSession ? { cwd: options.cwd } : {}),
     },
-    model: options.model ? describeModel(options.model) : null,
-    provider: provider ? describeProvider(options.modelRuntime, provider) : null,
+    model: options.model === undefined ? null : describeModel(options.model),
+    provider: provider === undefined ? null : describeProvider(options.modelRuntime, provider),
     thinkingLevel: options.thinkingLevel,
     extensions: options.extensions.map(describeExtension),
     extensionErrors: options.extensionErrors.map(({ path, error }) => ({ path, error })),
@@ -204,7 +212,7 @@ export function collectBugReportDiagnostics(
       diagnostics.length === 0 &&
       message.stopReason !== "error" &&
       message.stopReason !== "aborted" &&
-      !message.errorMessage
+      (message.errorMessage === undefined || message.errorMessage === "")
     ) {
       continue;
     }
@@ -354,7 +362,7 @@ export async function generateBugReportSummary(
       ? `Note: only the last ${messages.length} of ${options.messages.length} messages are shown.`
       : undefined,
     `<conversation>\n${serializeConversation(convertToLlm(messages))}\n</conversation>`,
-    hint ? `<user-report>\n${hint}\n</user-report>` : undefined,
+    hint !== undefined && hint !== "" ? `<user-report>\n${hint}\n</user-report>` : undefined,
     BUG_SUMMARY_INSTRUCTIONS,
   ]
     .filter((part) => part !== undefined)
@@ -366,7 +374,7 @@ export async function generateBugReportSummary(
     headers: options.headers,
     env: options.env,
     sessionId: options.sessionId,
-    ...(model.reasoning && options.thinkingLevel && options.thinkingLevel !== "off"
+    ...(model.reasoning && options.thinkingLevel !== undefined && options.thinkingLevel !== "off"
       ? { reasoning: options.thinkingLevel }
       : {}),
   };
@@ -384,11 +392,11 @@ export async function generateBugReportSummary(
   );
   if (response.stopReason === "aborted") throw new Error("Bug report summary was cancelled");
   const failure = getSummarizationFailure(response, "Bug report summary");
-  if (failure) throw new Error(failure);
+  if (failure !== undefined && failure !== "") throw new Error(failure);
   if (response.content.some((block) => block.type === "toolCall")) {
     throw new Error("Bug report summary attempted to call a tool");
   }
   const text = contentText(response.content, "\n").trim();
-  if (!text) throw new Error("Bug report summary was empty");
+  if (text === "") throw new Error("Bug report summary was empty");
   return text;
 }

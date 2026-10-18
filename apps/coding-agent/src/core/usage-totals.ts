@@ -72,18 +72,21 @@ export function getUsageCostBreakdown(entries: SessionEntry[]): UsageCostBreakdo
     } else if (
       entry.type === "message" &&
       entry.message.role === "toolResult" &&
-      entry.message.usage
+      entry.message.usage !== undefined
     ) {
       key = "Tools/summaries";
       usage = entry.message.usage;
-    } else if ((entry.type === "branch_summary" || entry.type === "compaction") && entry.usage) {
+    } else if (
+      (entry.type === "branch_summary" || entry.type === "compaction") &&
+      entry.usage !== undefined
+    ) {
       key = "Tools/summaries";
       usage = entry.usage;
     }
-    if (!key || !usage) continue;
+    if (key === undefined || key === "" || usage === undefined) continue;
 
     let totals = totalsByKey.get(key);
-    if (!totals) {
+    if (totals === undefined) {
       totals = createUsageTotals();
       totalsByKey.set(key, totals);
     }

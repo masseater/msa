@@ -107,7 +107,8 @@ export function getToolListError(entries: readonly string[]): string | undefined
   if (modifiers.length < entries.length)
     return "tool names cannot be mixed with +name or -name entries";
   const pattern = modifiers.find((entry) => entry.includes("*"));
-  if (pattern) return `+name and -name entries take exact tool names, not patterns: ${pattern}`;
+  if (pattern !== undefined && pattern !== "")
+    return `+name and -name entries take exact tool names, not patterns: ${pattern}`;
   return undefined;
 }
 
@@ -117,7 +118,7 @@ export function applyToolModifiers(base: readonly string[], entries: readonly st
     if (!isToolModifier(entry)) continue;
     const name = entry.slice(1);
     const index = tools.indexOf(name);
-    if (entry.startsWith("+") && index === -1 && name) tools.push(name);
+    if (entry.startsWith("+") && index === -1 && name !== "") tools.push(name);
     else if (entry.startsWith("-") && index !== -1) tools.splice(index, 1);
   }
   return tools;
@@ -182,7 +183,7 @@ type SettingsPaths = Partial<Record<SettingsScope, string>>;
 function toSettingsError(scope: SettingsScope, error: unknown, path?: string): SettingsError {
   return {
     scope,
-    ...(path ? { path } : {}),
+    ...(path !== undefined && path !== "" ? { path } : {}),
     error: error instanceof Error ? error : new Error(String(error)),
   };
 }
@@ -239,13 +240,13 @@ export class FileSettingsStorage implements SettingsStorage {
         if (!existsSync(dir)) {
           mkdirSync(dir, { recursive: true });
         }
-        if (!release) {
+        if (release === undefined) {
           release = this.acquireLockSyncWithRetry(path);
         }
         writeFileSync(path, next, "utf-8");
       }
     } finally {
-      if (release) {
+      if (release !== undefined) {
         release();
       }
     }
@@ -344,10 +345,10 @@ export class SettingsManager {
     const globalLoad = SettingsManager.tryLoadFromStorage(storage, "global");
     const projectLoad = SettingsManager.tryLoadFromStorage(storage, "project", projectTrusted);
     const initialErrors: SettingsError[] = [];
-    if (globalLoad.error) {
+    if (globalLoad.error !== null) {
       initialErrors.push(toSettingsError("global", globalLoad.error, settingsPaths.global));
     }
-    if (projectLoad.error) {
+    if (projectLoad.error !== null) {
       initialErrors.push(toSettingsError("project", projectLoad.error, settingsPaths.project));
     }
 
@@ -390,7 +391,7 @@ export class SettingsManager {
       return undefined;
     });
 
-    if (!content) {
+    if (content === undefined || content === "") {
       return {};
     }
     const settings = JSON.parse(stripBom(content));
@@ -511,7 +512,7 @@ export class SettingsManager {
     const projectLoad = SettingsManager.tryLoadFromStorage(this.storage, "project", trusted);
     this.projectSettings = projectLoad.settings;
     this.projectSettingsLoadError = projectLoad.error;
-    if (projectLoad.error) {
+    if (projectLoad.error !== null) {
       this.recordError("project", projectLoad.error);
     }
     this.settings = deepMergeSettings(this.globalSettings, this.projectSettings);
@@ -520,7 +521,7 @@ export class SettingsManager {
   async reload(): Promise<void> {
     await this.writeQueue;
     const globalLoad = SettingsManager.tryLoadFromStorage(this.storage, "global");
-    if (!globalLoad.error) {
+    if (globalLoad.error === null) {
       this.globalSettings = globalLoad.settings;
       this.globalSettingsLoadError = null;
     } else {
@@ -538,7 +539,7 @@ export class SettingsManager {
       "project",
       this.projectTrusted,
     );
-    if (!projectLoad.error) {
+    if (projectLoad.error === null) {
       this.projectSettings = projectLoad.settings;
       this.projectSettingsLoadError = null;
     } else {
@@ -555,7 +556,7 @@ export class SettingsManager {
 
   private markModified(field: keyof Settings, nestedKey?: string): void {
     this.modifiedFields.add(field);
-    if (nestedKey) {
+    if (nestedKey !== undefined && nestedKey !== "") {
       if (!this.modifiedNestedFields.has(field)) {
         this.modifiedNestedFields.set(field, new Set());
       }
@@ -583,7 +584,7 @@ export class SettingsManager {
 
   private markProjectModified(field: keyof Settings, nestedKey?: string): void {
     this.modifiedProjectFields.add(field);
-    if (nestedKey) {
+    if (nestedKey !== undefined && nestedKey !== "") {
       if (!this.modifiedProjectNestedFields.has(field)) {
         this.modifiedProjectNestedFields.set(field, new Set());
       }
@@ -643,9 +644,12 @@ export class SettingsManager {
     modifiedNestedFields: Map<keyof Settings, Set<string>>,
   ): void {
     this.storage.withLock(scope, (current) => {
-      const currentFileSettings = current
-        ? SettingsManager.migrateSettings(JSON.parse(stripBom(current)) as Record<string, unknown>)
-        : {};
+      const currentFileSettings =
+        current !== undefined && current !== ""
+          ? SettingsManager.migrateSettings(
+              JSON.parse(stripBom(current)) as Record<string, unknown>,
+            )
+          : {};
       const mergedSettings: Settings = { ...currentFileSettings };
       for (const field of modifiedFields) {
         const value = snapshotSettings[field];
@@ -670,7 +674,7 @@ export class SettingsManager {
   private save(): void {
     this.settings = deepMergeSettings(this.globalSettings, this.projectSettings);
 
-    if (this.globalSettingsLoadError) {
+    if (this.globalSettingsLoadError !== null) {
       return;
     }
 
@@ -693,7 +697,7 @@ export class SettingsManager {
     this.projectSettings = structuredClone(settings);
     this.settings = deepMergeSettings(this.globalSettings, this.projectSettings);
 
-    if (this.projectSettingsLoadError) {
+    if (this.projectSettingsLoadError !== null) {
       return;
     }
 
@@ -738,7 +742,7 @@ export class SettingsManager {
 
   getSessionDir(): string | undefined {
     const sessionDir = this.settings.sessionDir;
-    return sessionDir ? normalizePath(sessionDir) : sessionDir;
+    return sessionDir !== undefined && sessionDir !== "" ? normalizePath(sessionDir) : sessionDir;
   }
 
   getDefaultProvider(): string | undefined {
@@ -789,7 +793,7 @@ export class SettingsManager {
 
   getTheme(): string | undefined {
     const theme = this.getThemeSetting();
-    return theme?.includes("/") ? undefined : theme;
+    return theme?.includes("/") === true ? undefined : theme;
   }
 
   setTheme(theme: string): void {
@@ -813,7 +817,7 @@ export class SettingsManager {
   }
 
   setModelThinkingLevel(provider: string, modelId: string, level: ThinkingLevel): void {
-    if (!this.globalSettings.modelThinkingLevels) {
+    if (this.globalSettings.modelThinkingLevels === undefined) {
       this.globalSettings.modelThinkingLevels = {};
     }
     this.globalSettings.modelThinkingLevels[`${provider}/${modelId}`] = level;
@@ -822,7 +826,7 @@ export class SettingsManager {
   }
 
   removeModelThinkingLevel(provider: string, modelId: string): void {
-    if (!this.globalSettings.modelThinkingLevels) return;
+    if (this.globalSettings.modelThinkingLevels === undefined) return;
     delete this.globalSettings.modelThinkingLevels[`${provider}/${modelId}`];
     if (Object.keys(this.globalSettings.modelThinkingLevels).length === 0) {
       delete this.globalSettings.modelThinkingLevels;
@@ -862,8 +866,8 @@ export class SettingsManager {
       );
     }
 
-    const modelKey = model ? `${model.provider}/${model.id}` : undefined;
-    const entry = modelKey !== undefined ? compaction?.modelOverrides?.[modelKey] : undefined;
+    const modelKey = model === undefined ? undefined : `${model.provider}/${model.id}`;
+    const entry = modelKey === undefined ? undefined : compaction?.modelOverrides?.[modelKey];
     if (entry !== undefined && !isMergeableObject(entry)) {
       throw new Error(
         `Invalid compaction.modelOverrides["${modelKey}"] setting: ${String(entry)}. Expected an object.`,
@@ -1024,7 +1028,7 @@ export class SettingsManager {
       return configuredEditor;
     }
     const environmentEditor = process.env["VISUAL"] || process.env["EDITOR"];
-    if (environmentEditor) {
+    if (environmentEditor !== undefined && environmentEditor !== "") {
       return environmentEditor;
     }
     return process.platform === "win32" ? "notepad" : "nano";
@@ -1045,7 +1049,7 @@ export class SettingsManager {
 
   getShellPath(): string | undefined {
     const shellPath = this.settings.shellPath;
-    return shellPath ? normalizePath(shellPath) : shellPath;
+    return shellPath !== undefined && shellPath !== "" ? normalizePath(shellPath) : shellPath;
   }
 
   setShellPath(path: string | undefined): void {
@@ -1079,11 +1083,11 @@ export class SettingsManager {
   }
 
   getNpmCommand(): string[] | undefined {
-    return this.settings.npmCommand ? [...this.settings.npmCommand] : undefined;
+    return this.settings.npmCommand === undefined ? undefined : [...this.settings.npmCommand];
   }
 
   setNpmCommand(command: string[] | undefined): void {
-    this.setGlobalSetting("npmCommand", command ? [...command] : undefined);
+    this.setGlobalSetting("npmCommand", command === undefined ? undefined : [...command]);
   }
 
   getCollapseChangelog(): boolean {
@@ -1113,7 +1117,10 @@ export class SettingsManager {
   setEnableAnalytics(enabled: boolean): void {
     this.globalSettings.enableAnalytics = enabled;
     this.markModified("enableAnalytics");
-    if (enabled && !this.globalSettings.trackingId) {
+    if (
+      enabled &&
+      (this.globalSettings.trackingId === undefined || this.globalSettings.trackingId === "")
+    ) {
       this.globalSettings.trackingId = randomUUID();
       this.markModified("trackingId");
     }
@@ -1121,7 +1128,7 @@ export class SettingsManager {
   }
 
   getOrCreateDeviceId(): string {
-    if (!this.globalSettings.deviceId) {
+    if (this.globalSettings.deviceId === undefined || this.globalSettings.deviceId === "") {
       this.globalSettings.deviceId = randomUUID();
       this.markModified("deviceId");
       this.save();
@@ -1337,22 +1344,29 @@ export class SettingsManager {
     const memory = this.settings.memory;
     const defaults = SETTINGS_DEFAULTS.memory;
     const apiKeyEnv = memory?.embedding?.apiKeyEnv?.trim();
-    const apiKey = apiKeyEnv ? process.env[apiKeyEnv]?.trim() : undefined;
+    const apiKey =
+      apiKeyEnv !== undefined && apiKeyEnv !== "" ? process.env[apiKeyEnv]?.trim() : undefined;
     const database = memory?.database?.trim();
     const timeoutMs = memory?.embedding?.timeoutMs;
     const limit = memory?.recall?.limit;
     const minScore = memory?.recall?.minScore;
-    const agentDir = this.settingsPaths.global ? dirname(this.settingsPaths.global) : getAgentDir();
+    const agentDir =
+      this.settingsPaths.global !== undefined && this.settingsPaths.global !== ""
+        ? dirname(this.settingsPaths.global)
+        : getAgentDir();
     return {
       enabled: memory?.enabled ?? defaults.enabled,
-      database: database ? resolvePath(database, agentDir) : join(agentDir, "memory.db"),
+      database:
+        database !== undefined && database !== ""
+          ? resolvePath(database, agentDir)
+          : join(agentDir, "memory.db"),
       embedding: {
         enabled: memory?.embedding?.enabled ?? defaults.embedding.enabled,
         baseUrl: memory?.embedding?.baseUrl?.trim() || defaults.embedding.baseUrl,
         model: memory?.embedding?.model?.trim() || defaults.embedding.model,
         queryPrefix: memory?.embedding?.queryPrefix ?? defaults.embedding.queryPrefix,
         documentPrefix: memory?.embedding?.documentPrefix ?? defaults.embedding.documentPrefix,
-        ...(apiKey ? { apiKey } : {}),
+        ...(apiKey !== undefined && apiKey !== "" ? { apiKey } : {}),
         timeoutMs:
           typeof timeoutMs === "number" && Number.isFinite(timeoutMs) && timeoutMs >= 0
             ? timeoutMs
@@ -1399,7 +1413,7 @@ export class SettingsManager {
   getTreeFilterMode(): "default" | "no-tools" | "user-only" | "labeled-only" | "all" {
     const mode = this.settings.treeFilterMode;
     const valid = ["default", "no-tools", "user-only", "labeled-only", "all"];
-    return mode && valid.includes(mode) ? mode : SETTINGS_DEFAULTS.treeFilterMode;
+    return mode !== undefined && valid.includes(mode) ? mode : SETTINGS_DEFAULTS.treeFilterMode;
   }
 
   setTreeFilterMode(mode: "default" | "no-tools" | "user-only" | "labeled-only" | "all"): void {

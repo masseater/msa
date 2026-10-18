@@ -76,7 +76,7 @@ function resolveBranchWithGitAsync(repoDir: string): Promise<string | null> {
         encoding: "utf8",
       },
       (error: ExecFileException | null, stdout: string) => {
-        if (error) {
+        if (error !== null) {
           resolvePromise(null);
           return;
         }
@@ -89,7 +89,8 @@ function resolveBranchWithGitAsync(repoDir: string): Promise<string | null> {
 
 function isWslEnvironment(): boolean {
   return (
-    process.platform === "linux" && !!(process.env["WSL_DISTRO_NAME"] || process.env["WSL_INTEROP"])
+    process.platform === "linux" &&
+    ((process.env["WSL_DISTRO_NAME"] ?? "") !== "" || (process.env["WSL_INTEROP"] ?? "") !== "")
   );
 }
 
@@ -170,7 +171,7 @@ export class FooterDataProvider {
     }
 
     this.cwd = cwd;
-    if (this.refreshTimer) {
+    if (this.refreshTimer !== null) {
       clearTimeout(this.refreshTimer);
       this.refreshTimer = null;
     }
@@ -183,7 +184,7 @@ export class FooterDataProvider {
 
   dispose(): void {
     this.disposed = true;
-    if (this.refreshTimer) {
+    if (this.refreshTimer !== null) {
       clearTimeout(this.refreshTimer);
       this.refreshTimer = null;
     }
@@ -196,7 +197,7 @@ export class FooterDataProvider {
   }
 
   private scheduleRefresh(): void {
-    if (this.disposed || this.refreshTimer) return;
+    if (this.disposed || this.refreshTimer !== null) return;
     if (this.refreshInFlight) {
       this.refreshPending = true;
       return;
@@ -235,7 +236,7 @@ export class FooterDataProvider {
 
   private resolveGitBranchSync(): string | null {
     try {
-      if (!this.gitPaths) return null;
+      if (this.gitPaths === undefined || this.gitPaths === null) return null;
       const content = readFileSync(this.gitPaths.headPath, "utf8").trim();
       if (content.startsWith("ref: refs/heads/")) {
         const branch = content.slice(16);
@@ -251,7 +252,7 @@ export class FooterDataProvider {
 
   private async resolveGitBranchAsync(): Promise<string | null> {
     try {
-      if (!this.gitPaths) return null;
+      if (this.gitPaths === undefined || this.gitPaths === null) return null;
       const content = readFileSync(this.gitPaths.headPath, "utf8").trim();
       if (content.startsWith("ref: refs/heads/")) {
         const branch = content.slice(16);
@@ -268,7 +269,11 @@ export class FooterDataProvider {
   private clearGitWatchers(): void {
     closeWatcher(this.headWatcher);
     this.headWatcher = null;
-    if (this.headWatchFilePath && this.headWatchFileListener) {
+    if (
+      this.headWatchFilePath !== null &&
+      this.headWatchFilePath !== "" &&
+      this.headWatchFileListener !== null
+    ) {
       unwatchFile(this.headWatchFilePath, this.headWatchFileListener);
       this.headWatchFilePath = null;
       this.headWatchFileListener = null;
@@ -277,18 +282,18 @@ export class FooterDataProvider {
     this.reftableWatcher = null;
     closeWatcher(this.reftableTablesListWatcher);
     this.reftableTablesListWatcher = null;
-    if (this.reftableTablesListPath) {
+    if (this.reftableTablesListPath !== null && this.reftableTablesListPath !== "") {
       unwatchFile(this.reftableTablesListPath);
       this.reftableTablesListPath = null;
     }
-    if (this.gitWatcherRetryTimer) {
+    if (this.gitWatcherRetryTimer !== null) {
       clearTimeout(this.gitWatcherRetryTimer);
       this.gitWatcherRetryTimer = null;
     }
   }
 
   private scheduleGitWatcherRetry(): void {
-    if (this.disposed || this.gitWatcherRetryTimer) {
+    if (this.disposed || this.gitWatcherRetryTimer !== null) {
       return;
     }
 
@@ -305,14 +310,14 @@ export class FooterDataProvider {
 
   private setupGitWatcher(): void {
     this.clearGitWatchers();
-    if (!this.gitPaths) return;
+    if (this.gitPaths === undefined || this.gitPaths === null) return;
 
     const pollGitHead = shouldPollGitHead(this.gitPaths.repoDir);
 
     this.headWatcher = watchWithErrorHandler(
       dirname(this.gitPaths.headPath),
       (_eventType, filename) => {
-        if (!filename || filename === "HEAD") {
+        if (filename === null || filename === "" || filename === "HEAD") {
           this.scheduleRefresh();
         }
       },
@@ -331,7 +336,7 @@ export class FooterDataProvider {
       };
       watchFile(this.headWatchFilePath, { interval: 1000 }, this.headWatchFileListener);
     }
-    if (!this.headWatcher && !pollGitHead) {
+    if (this.headWatcher === null && !pollGitHead) {
       return;
     }
 
@@ -344,7 +349,7 @@ export class FooterDataProvider {
         },
         () => this.handleGitWatcherError(),
       );
-      if (!this.reftableWatcher) {
+      if (this.reftableWatcher === null) {
         return;
       }
 
@@ -358,7 +363,7 @@ export class FooterDataProvider {
           },
           () => this.handleGitWatcherError(),
         );
-        if (!this.reftableTablesListWatcher) {
+        if (this.reftableTablesListWatcher === null) {
           return;
         }
         watchFile(tablesListPath, { interval: 250 }, (current, previous) => {

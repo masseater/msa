@@ -196,7 +196,7 @@ export function parseSkillBlock(text: string): ParsedSkillBlock | null {
   const match = text.match(
     /^<skill name="([^"]+)" location="([^"]+)">\n([\s\S]*?)\n<\/skill>(?:\n\n([\s\S]+))?$/,
   );
-  if (!match) return null;
+  if (match === null) return null;
   const [, name, location, content, userMessage] = match;
   if (name === undefined || location === undefined || content === undefined) return null;
   return {
@@ -276,11 +276,11 @@ export type AgentSessionEventListener = (event: AgentSessionEvent) => void;
 function withoutDeletedHeaders(
   headers: ProviderHeaders | undefined,
 ): Record<string, string> | undefined {
-  return headers
-    ? Object.fromEntries(
+  return headers === undefined
+    ? undefined
+    : Object.fromEntries(
         Object.entries(headers).filter((entry): entry is [string, string] => entry[1] !== null),
-      )
-    : undefined;
+      );
 }
 
 export interface AgentSessionConfig {
@@ -469,22 +469,23 @@ export class AgentSession {
     this.cwd = config.cwd;
     this.modelRuntimeInternal = config.modelRuntime;
     this.cacheWarmer = config.cacheWarmer;
-    if (this.cacheWarmer) {
+    if (this.cacheWarmer !== undefined) {
       this.cacheWarmer.onWarmed = (entry) => this.emit({ type: "entry_appended", entry });
     }
     this.extensionRunnerRef = config.extensionRunnerRef;
     this.initialActiveToolNames = config.initialActiveToolNames;
     this.usesDefaultTools = config.usesDefaultTools ?? false;
     this.defaultToolModifiers = config.defaultToolModifiers ?? [];
-    if (config.allowedToolNames) {
+    if (config.allowedToolNames !== undefined) {
       this.allowedTools = createToolNameMatcher(config.allowedToolNames);
       this.allowlistFiltersMcp =
         config.allowedToolNames.length === 0 ||
         config.allowedToolNames.some((entry) => entry.startsWith("mcp__"));
     }
-    this.excludedTools = config.excludedToolNames
-      ? createToolNameMatcher(config.excludedToolNames)
-      : undefined;
+    this.excludedTools =
+      config.excludedToolNames === undefined
+        ? undefined
+        : createToolNameMatcher(config.excludedToolNames);
     this.baseToolsOverride = config.baseToolsOverride;
     this.sessionStartEvent = config.sessionStartEvent ?? {
       type: "session_start",
@@ -517,26 +518,27 @@ export class AgentSession {
     );
 
     const createWorkerSession = config.createWorkerSession;
-    this.orchestratorInternal = createWorkerSession
-      ? new Orchestrator({
-          project: this.sessionManager.getSessionId(),
-          cwd: this.cwd,
-          connectGraph: () => Neo4jSessionGraph.connect(),
-          createWorker: createWorkerSession,
-          resolveModel: (reference) => this.resolveOrchestratorModel(reference),
-          defaults: () => this.orchestratorDefaults(),
-          report: (text, details) =>
-            void this.sendCustomMessage(
-              {
-                customType: ORCHESTRATOR_REPORT_MESSAGE_TYPE,
-                content: text,
-                display: true,
-                details,
-              },
-              { triggerTurn: true, deliverAs: "followUp" },
-            ),
-        })
-      : undefined;
+    this.orchestratorInternal =
+      createWorkerSession === undefined
+        ? undefined
+        : new Orchestrator({
+            project: this.sessionManager.getSessionId(),
+            cwd: this.cwd,
+            connectGraph: () => Neo4jSessionGraph.connect(),
+            createWorker: createWorkerSession,
+            resolveModel: (reference) => this.resolveOrchestratorModel(reference),
+            defaults: () => this.orchestratorDefaults(),
+            report: (text, details) =>
+              void this.sendCustomMessage(
+                {
+                  customType: ORCHESTRATOR_REPORT_MESSAGE_TYPE,
+                  content: text,
+                  display: true,
+                  details,
+                },
+                { triggerTurn: true, deliverAs: "followUp" },
+              ),
+          });
     let orchestratorChangePending: ReturnType<typeof setTimeout> | undefined;
     this.orchestratorInternal?.onChange(() => {
       orchestratorChangePending ??= setTimeout(() => {
@@ -575,7 +577,10 @@ export class AgentSession {
   }> {
     let result: AuthResult | undefined;
     try {
-      result = await this.modelRuntimeInternal.getAuth(model, signal ? { signal } : {});
+      result = await this.modelRuntimeInternal.getAuth(
+        model,
+        signal === undefined ? {} : { signal },
+      );
     } catch (error) {
       const cause = error instanceof Error ? error.cause : undefined;
       if (cause instanceof Error && cause.message === "authHeader requires a resolved API key") {
@@ -583,8 +588,14 @@ export class AgentSession {
       }
       throw error;
     }
-    if (result && (result.auth.apiKey || result.auth.headers)) {
-      const requestModel = result.auth.baseUrl ? { ...model, baseUrl: result.auth.baseUrl } : model;
+    if (
+      result !== undefined &&
+      ((result.auth.apiKey ?? "") !== "" || result.auth.headers !== undefined)
+    ) {
+      const requestModel =
+        result.auth.baseUrl !== undefined && result.auth.baseUrl !== ""
+          ? { ...model, baseUrl: result.auth.baseUrl }
+          : model;
       return {
         model: requestModel,
         apiKey: result.auth.apiKey,
@@ -626,9 +637,15 @@ export class AgentSession {
     }
 
     try {
-      const result = await this.modelRuntimeInternal.getAuth(model, signal ? { signal } : {});
-      if (!result) return { model, thinkingLevel };
-      const requestModel = result.auth.baseUrl ? { ...model, baseUrl: result.auth.baseUrl } : model;
+      const result = await this.modelRuntimeInternal.getAuth(
+        model,
+        signal === undefined ? {} : { signal },
+      );
+      if (result === undefined) return { model, thinkingLevel };
+      const requestModel =
+        result.auth.baseUrl !== undefined && result.auth.baseUrl !== ""
+          ? { ...model, baseUrl: result.auth.baseUrl }
+          : model;
       return {
         model: requestModel,
         apiKey: result.auth.apiKey,
@@ -637,28 +654,31 @@ export class AgentSession {
         thinkingLevel,
       };
     } catch (error) {
-      if (signal?.aborted) throw error;
+      if (signal?.aborted === true) throw error;
       return { model, thinkingLevel };
     }
   }
 
   private modelForMessage(message: AssistantMessage): Model<any> | undefined {
     const model = this.model;
-    if (model && isVirtualModel(model))
+    if (model !== undefined && isVirtualModel(model))
       return this.modelRuntimeInternal.getPhysicalModel(message.provider, message.model);
     return model?.provider === message.provider && model.id === message.model ? model : undefined;
   }
 
   private recordSelection(): void {
     const model = this.model;
-    if (!model) return;
+    if (model === undefined) return;
     const getModel = (provider: string, modelId: string) =>
       this.modelRuntimeInternal.getModel(provider, modelId);
     const recorded = getBranchSelection(this.sessionManager.getBranch(), getModel);
-    if (!recorded || (recorded.provider === model.provider && recorded.modelId === model.id))
+    if (
+      recorded === undefined ||
+      (recorded.provider === model.provider && recorded.modelId === model.id)
+    )
       return;
     const recordedModel = getModel(recorded.provider, recorded.modelId);
-    if (!isVirtualModel(model) && !(recordedModel && isVirtualModel(recordedModel))) return;
+    if (!isVirtualModel(model) && (recordedModel && isVirtualModel(recordedModel)) !== true) return;
     this.sessionManager.appendModelChange(model.provider, model.id);
   }
 
@@ -685,7 +705,7 @@ export class AgentSession {
         type: "tool_call",
         toolName: toolCall.name,
         toolCallId: toolCall.id,
-        ...(parentToolCallId ? { parentToolCallId } : {}),
+        ...(parentToolCallId !== undefined && parentToolCallId !== "" ? { parentToolCallId } : {}),
         input: args as Record<string, unknown>,
       });
     } catch (err) {
@@ -706,7 +726,9 @@ export class AgentSession {
           type: "tool_result",
           toolName: toolCall.name,
           toolCallId: toolCall.id,
-          ...(parentToolCallId ? { parentToolCallId } : {}),
+          ...(parentToolCallId !== undefined && parentToolCallId !== ""
+            ? { parentToolCallId }
+            : {}),
           input: args as Record<string, unknown>,
           content: result.content,
           details: result.details,
@@ -722,22 +744,23 @@ export class AgentSession {
     const resizeOptions = this.limitsModel()?.inputLimits?.images?.resize;
     const normalizedContent = await normalizeToolResultImages(content, {
       autoResizeImages: this.settingsManager.getImageAutoResize(),
-      ...(resizeOptions ? { resizeOptions } : {}),
+      ...(resizeOptions === undefined ? {} : { resizeOptions }),
     });
 
-    if (!hookResult && normalizedContent === content) {
+    if (hookResult === undefined && normalizedContent === content) {
       return undefined;
     }
 
     const details = hookResult?.details;
-    const structuredContent = hookResult ? hookResult.structuredContent : result.structuredContent;
+    const structuredContent =
+      hookResult === undefined ? result.structuredContent : hookResult.structuredContent;
     const usage = hookResult?.usage;
     return {
       content: normalizedContent,
-      ...(details !== undefined ? { details } : {}),
-      ...(structuredContent !== undefined ? { structuredContent } : {}),
+      ...(details === undefined ? {} : { details }),
+      ...(structuredContent === undefined ? {} : { structuredContent }),
       isError: hookResult?.isError ?? isError,
-      ...(usage !== undefined ? { usage } : {}),
+      ...(usage === undefined ? {} : { usage }),
     };
   }
 
@@ -752,7 +775,7 @@ export class AgentSession {
       isSequential: () => this.agent.toolExecution === "sequential",
       runToolCall: (toolCall, parentId, signal, onUpdate) => {
         const assistantMessage = this.findLastAssistantMessage();
-        if (!assistantMessage) {
+        if (assistantMessage === undefined) {
           return Promise.resolve({
             toolCall,
             result: {
@@ -768,7 +791,7 @@ export class AgentSession {
           context: { messages: this.agent.state.messages, tools: this.agent.state.tools },
           beforeToolCall: (context) => this.beforeToolCall(context, parentId),
           afterToolCall: (context) => this.afterToolCall(context, parentId),
-          ...(signal ? { signal } : {}),
+          ...(signal === undefined ? {} : { signal }),
           onUpdate,
         });
       },
@@ -792,7 +815,11 @@ export class AgentSession {
   private async compactBeforeNextAssistantResponse(context: AgentContext): Promise<AgentContext> {
     const projection = this.sessionManager.buildSessionProjection();
     const model = this.model;
-    if (!model || isVirtualModel(model) || !this.exceedsCompactionThreshold(model, projection)) {
+    if (
+      model === undefined ||
+      isVirtualModel(model) ||
+      !this.exceedsCompactionThreshold(model, projection)
+    ) {
       return { ...context, messages: projection.messages };
     }
     await this.runAutoCompaction("threshold", false);
@@ -838,7 +865,7 @@ export class AgentSession {
         model,
         convertToLlm(context.messages),
         {
-          reason: failed ? "retry" : userTurn ? "user" : "continuation",
+          reason: failed === undefined ? (userTurn ? "user" : "continuation") : "retry",
           thinkingLevel,
           signal,
           failed,
@@ -854,7 +881,7 @@ export class AgentSession {
         const entry = this.sessionManager.getEntry(
           this.sessionManager.appendCustomEntry(VIRTUAL_MODEL_STATE_ENTRY, data),
         );
-        if (entry) this.emit({ type: "entry_appended", entry });
+        if (entry !== undefined) this.emit({ type: "entry_appended", entry });
       }
       if (this.exceedsCompactionThreshold(route.model, projection)) {
         await this.runAutoCompaction("threshold", false);
@@ -876,7 +903,7 @@ export class AgentSession {
           : "completed";
     const messageEntryId = this.findPersistedMessageEntryId(message);
     if (!this.extensionRunnerInternal.hasHandlers("turn_end")) return false;
-    if (!messageEntryId) {
+    if (messageEntryId === undefined || messageEntryId === "") {
       this.extensionRunnerInternal.emitError({
         extensionPath: "<boundary>",
         event: "turn_end",
@@ -886,7 +913,7 @@ export class AgentSession {
     }
     const toolResultEntryIds = toolResults.flatMap((result) => {
       const entryId = this.findPersistedMessageEntryId(result);
-      return entryId ? [entryId] : [];
+      return entryId !== undefined && entryId !== "" ? [entryId] : [];
     });
     const boundary = await this.extensionRunnerInternal.emitBoundary(
       {
@@ -924,10 +951,10 @@ export class AgentSession {
   private installAgentNextTurnRefresh(): void {
     const previousPrepareNextTurnWithContext =
       this.agent.prepareNextTurnWithContext ??
-      (this.agent.prepareNextTurn
-        ? async (_turn: PrepareNextTurnContext, signal?: AbortSignal) =>
-            await this.agent.prepareNextTurn?.(signal)
-        : undefined);
+      (this.agent.prepareNextTurn === undefined
+        ? undefined
+        : async (_turn: PrepareNextTurnContext, signal?: AbortSignal) =>
+            await this.agent.prepareNextTurn?.(signal));
     this.agent.prepareNextTurnWithContext = async (turn, signal) => {
       const context = await this.compactBeforeNextAssistantResponse(turn.context);
       const previousSnapshot = await previousPrepareNextTurnWithContext?.(
@@ -954,9 +981,9 @@ export class AgentSession {
           ...nextContext,
           tools: this.agent.state.tools.slice(),
         },
-        ...(updateMessage
-          ? { messages: [...(previousSnapshot?.messages ?? []), updateMessage] }
-          : {}),
+        ...(updateMessage === undefined
+          ? {}
+          : { messages: [...(previousSnapshot?.messages ?? []), updateMessage] }),
         model: this.agent.state.model,
         thinkingLevel: this.agent.state.thinkingLevel,
       };
@@ -1011,14 +1038,14 @@ export class AgentSession {
         }
       }
       const entry = manager.getEntry(entryId);
-      if (entry) appended.push(entry);
+      if (entry !== undefined) appended.push(entry);
     }
     return appended;
   }
 
   private createBoundaryPreviewManager(drafts: SessionBoundaryDraft[]): SessionManager {
     const header = this.sessionManager.getHeader();
-    if (!header) throw new Error("Session header is missing");
+    if (header === null) throw new Error("Session header is missing");
     const manager = SessionManager.inMemory(this.cwd, undefined, [
       header,
       ...this.sessionManager.getBranch(),
@@ -1093,7 +1120,7 @@ export class AgentSession {
   }
 
   private getIdleWaitPromise(): Promise<void> {
-    if (!this.idleWaitPromise) {
+    if (this.idleWaitPromise === undefined) {
       this.idleWaitPromise = new Promise((resolve) => {
         this.resolveIdleWait = resolve;
       });
@@ -1102,7 +1129,7 @@ export class AgentSession {
   }
 
   private resolveIdleWaitIfIdle(): void {
-    if (!this.isIdle || !this.resolveIdleWait) {
+    if (!this.isIdle || this.resolveIdleWait === undefined) {
       return;
     }
     const resolve = this.resolveIdleWait;
@@ -1137,15 +1164,16 @@ export class AgentSession {
 
   private handleAgentEvent = async (event: AgentEvent): Promise<void> => {
     if (event.type === "agent_start" && this.agentRunAbortRequested) this.agent.abort();
-    if (this.nestedToolCalls) {
+    if (this.nestedToolCalls !== undefined) {
       if (event.type === "message_start" && event.message.role === "toolResult") {
         const message = event.message;
         const summary = this.nestedToolCalls.takeRecord(message.toolCallId);
-        if (summary?.calls) message.nestedCalls = summary.calls;
-        if (summary?.usage) {
-          message.usage = message.usage
-            ? combineUsage(message.usage, summary.usage)
-            : summary.usage;
+        if (summary?.calls !== undefined) message.nestedCalls = summary.calls;
+        if (summary?.usage !== undefined) {
+          message.usage =
+            message.usage === undefined
+              ? summary.usage
+              : combineUsage(message.usage, summary.usage);
         }
       } else if (event.type === "agent_end") {
         this.nestedToolCalls.clear();
@@ -1155,17 +1183,17 @@ export class AgentSession {
     if (event.type === "message_start" && event.message.role === "user") {
       this.overflowRecoveryAttempted = false;
       const messageText = contentText(event.message.content, "");
-      if (messageText) {
+      if (messageText !== "") {
         const steeringIndex = this.steeringMessages.indexOf(messageText);
-        if (steeringIndex !== -1) {
-          this.steeringMessages.splice(steeringIndex, 1);
-          this.emitQueueUpdate();
-        } else {
+        if (steeringIndex === -1) {
           const followUpIndex = this.followUpMessages.indexOf(messageText);
           if (followUpIndex !== -1) {
             this.followUpMessages.splice(followUpIndex, 1);
             this.emitQueueUpdate();
           }
+        } else {
+          this.steeringMessages.splice(steeringIndex, 1);
+          this.emitQueueUpdate();
         }
       }
     }
@@ -1194,7 +1222,8 @@ export class AgentSession {
       ) {
         entryId = this.sessionManager.appendMessage(event.message);
       }
-      if (entryId) this.entryIdsByMessage.set(event.message, entryId);
+      if (entryId !== undefined && entryId !== "")
+        this.entryIdsByMessage.set(event.message, entryId);
 
       if (event.message.role === "assistant") {
         const assistantMsg = event.message as AssistantMessage;
@@ -1238,7 +1267,7 @@ export class AgentSession {
 
   private findPersistedMessageEntryId(message: AgentMessage): string | undefined {
     const mapped = this.entryIdsByMessage.get(message);
-    if (mapped) return mapped;
+    if (mapped !== undefined && mapped !== "") return mapped;
     for (const entry of [...this.sessionManager.getBranch()].reverse()) {
       if (entry.type === "message" && entry.message === message) return entry.id;
     }
@@ -1272,10 +1301,10 @@ export class AgentSession {
       );
     }
     for (const targetId of targetIds) {
-      if (!targetId) continue;
+      if (targetId === undefined || targetId === "") continue;
       const editId = this.sessionManager.appendContextEdit(targetId, null);
       const entry = this.sessionManager.getEntry(editId);
-      if (entry) this.emit({ type: "entry_appended", entry });
+      if (entry !== undefined) this.emit({ type: "entry_appended", entry });
     }
     this.refreshFinalizedContext();
   }
@@ -1343,7 +1372,7 @@ export class AgentSession {
         message: event.message,
       };
       const replacement = await this.extensionRunnerInternal.emitMessageEnd(extensionEvent);
-      if (replacement) {
+      if (replacement !== undefined) {
         const normalized =
           (replacement.role === "user" ||
             replacement.role === "assistant" ||
@@ -1396,7 +1425,7 @@ export class AgentSession {
   }
 
   private disconnectFromAgent(): void {
-    if (this.unsubscribeAgent) {
+    if (this.unsubscribeAgent !== undefined) {
       this.unsubscribeAgent();
       this.unsubscribeAgent = undefined;
     }
@@ -1420,7 +1449,7 @@ export class AgentSession {
     );
     this.disconnectFromAgent();
     this.eventListeners = [];
-    if (this.cacheWarmer) {
+    if (this.cacheWarmer !== undefined) {
       this.cacheWarmer.onWarmed = undefined;
       this.cacheWarmer.cancel();
     }
@@ -1453,7 +1482,7 @@ export class AgentSession {
   }
 
   get routedModel(): { model: Model<any>; thinkingLevel?: ThinkingLevel | undefined } | undefined {
-    if (!this.model || !isVirtualModel(this.model)) return undefined;
+    if (this.model === undefined || !isVirtualModel(this.model)) return undefined;
     const latest = findLatestResponse(this.agent.state.messages);
     const model =
       latest && this.modelRuntimeInternal.getPhysicalModel(latest.provider, latest.model);
@@ -1491,9 +1520,11 @@ export class AgentSession {
       parameters: definition.parameters,
       promptGuidelines: definition.promptGuidelines,
       exposure: this.getToolExposure(definition.name),
-      ...(definition.namespace ? { namespace: definition.namespace } : {}),
-      ...(definition.annotations ? { annotations: { ...definition.annotations } } : {}),
-      ...(definition.reachesTools ? { reachesTools: definition.reachesTools } : {}),
+      ...(definition.namespace === undefined ? {} : { namespace: definition.namespace }),
+      ...(definition.annotations === undefined
+        ? {}
+        : { annotations: { ...definition.annotations } }),
+      ...(definition.reachesTools === undefined ? {} : { reachesTools: definition.reachesTools }),
       sourceInfo,
     }));
   }
@@ -1516,13 +1547,14 @@ export class AgentSession {
   }
 
   private isAllowedTool(name: string): boolean {
-    if (this.excludedTools?.(name)) return false;
-    if (!this.allowedTools || this.allowedTools(name)) return true;
+    if (this.excludedTools?.(name) === true) return false;
+    if (this.allowedTools === undefined || this.allowedTools(name)) return true;
     return !this.allowlistFiltersMcp && isMcpToolName(name);
   }
 
   private isActivatable(name: string): boolean {
-    if (!this.allowedTools || this.allowedTools(name) || !isMcpToolName(name)) return true;
+    if (this.allowedTools === undefined || this.allowedTools(name) || !isMcpToolName(name))
+      return true;
     return this.getToolExposure(name) !== "direct" && this.toolRegistry.has("tool_search");
   }
 
@@ -1546,13 +1578,15 @@ export class AgentSession {
   private applyToolLoadout(toolNames: string[]): AgentTool[] {
     const tools = [...new Set(toolNames)].flatMap((name) => {
       const tool = this.toolRegistry.get(name);
-      return tool && this.getToolExposure(name) !== "hidden" && this.isActivatable(name)
+      return tool !== undefined &&
+        this.getToolExposure(name) !== "hidden" &&
+        this.isActivatable(name)
         ? [tool]
         : [];
     });
     const hooks = tools.flatMap((tool) => {
       const entry = this.toolDefinitions.get(tool.name);
-      return entry?.definition.prepareLoadout ? [entry] : [];
+      return entry?.definition.prepareLoadout === undefined ? [] : [entry];
     });
     const hidden = new Set<string>();
     let declared = tools;
@@ -1642,7 +1676,7 @@ export class AgentSession {
   }
 
   private normalizePromptSnippet(text: string | undefined): string | undefined {
-    if (!text) return undefined;
+    if (text === undefined || text === "") return undefined;
     const oneLine = text
       .replace(/[\r\n]+/g, " ")
       .replace(/\s+/g, " ")
@@ -1651,7 +1685,7 @@ export class AgentSession {
   }
 
   private normalizePromptGuidelines(guidelines: string[] | undefined): string[] {
-    if (!guidelines || guidelines.length === 0) {
+    if (guidelines === undefined || guidelines.length === 0) {
       return [];
     }
 
@@ -1670,7 +1704,7 @@ export class AgentSession {
     const toolSnippets: Record<string, string> = {};
     for (const name of this.toolRegistry.keys()) {
       const snippet = this.toolPromptSnippets.get(name);
-      if (snippet) toolSnippets[name] = snippet;
+      if (snippet !== undefined && snippet !== "") toolSnippets[name] = snippet;
     }
 
     const loaderSystemPrompt = this.resourceLoaderInternal.getSystemPrompt();
@@ -1703,19 +1737,25 @@ export class AgentSession {
       getCurrentSystemMessage(messages)?.sections ?? {},
       buildSystemPromptSections(options),
     );
-    return sections ? { role: "system", content: "", sections, timestamp: Date.now() } : undefined;
+    return sections === undefined
+      ? undefined
+      : { role: "system", content: "", sections, timestamp: Date.now() };
   }
 
   private installHiddenDeclarationsProjection(): void {
     const previousTransformContext = this.agent.transformContext;
     this.agent.transformContext = async (messages, signal) => {
-      const transformed = previousTransformContext
-        ? await previousTransformContext(messages, signal)
-        : messages;
+      const transformed =
+        previousTransformContext === undefined
+          ? messages
+          : await previousTransformContext(messages, signal);
       const hidden = this.hiddenDeclarations;
       if (hidden.size === 0) return transformed;
       return transformed.map((message) => {
-        if (message.role !== "system" || (!message.toolsAdded && !message.toolsRemoved))
+        if (
+          message.role !== "system" ||
+          (message.toolsAdded === undefined && message.toolsRemoved === undefined)
+        )
           return message;
         const { toolsAdded, toolsRemoved, ...rest } = message;
         const added = toolsAdded?.filter((tool) => !hidden.has(tool.name)) ?? [];
@@ -1732,16 +1772,17 @@ export class AgentSession {
   private installAgentForcedPromptProjection(): void {
     const previousTransformContext = this.agent.transformContext;
     this.agent.transformContext = async (messages, signal) => {
-      const transformed = previousTransformContext
-        ? await previousTransformContext(messages, signal)
-        : messages;
+      const transformed =
+        previousTransformContext === undefined
+          ? messages
+          : await previousTransformContext(messages, signal);
       const forced = this.runSystemPromptOptions?.forceSystemPrompt;
       if (forced === undefined) return transformed;
       const current = getCurrentSystemMessage(transformed);
       const head: SystemMessage = {
         role: "system",
         content: forced,
-        ...(current?.toolsAdded ? { toolsAdded: current.toolsAdded } : {}),
+        ...(current?.toolsAdded === undefined ? {} : { toolsAdded: current.toolsAdded }),
         timestamp: current?.timestamp ?? Date.now(),
       };
       return [head, ...transformed.filter((message) => message.role !== "system")];
@@ -1751,7 +1792,7 @@ export class AgentSession {
   private restoreToolsFromTranscript(modifiers: readonly string[] = []): void {
     this.pendingToolNames.clear();
     const current = getCurrentSystemMessage(this.sessionManager.buildSessionContext().messages);
-    if (!current) return;
+    if (current === undefined) return;
     const names = applyToolModifiers(
       (current.toolsAdded ?? []).map((tool) => tool.name),
       modifiers,
@@ -1808,7 +1849,7 @@ export class AgentSession {
 
   private async prepareRun(trigger: BeforeAgentStartTrigger): Promise<AgentMessage[]> {
     const lastAssistant = this.findLastAssistantMessage();
-    if (lastAssistant) {
+    if (lastAssistant !== undefined) {
       await this.checkCompaction(lastAssistant, false);
     }
 
@@ -1838,7 +1879,7 @@ export class AgentSession {
         content: [{ type: "text", text }, ...normalized.images],
         timestamp: Date.now(),
       });
-      if (this.memoryInternal) {
+      if (this.memoryInternal !== undefined) {
         const recalled = await this.memoryInternal.recall(trigger.prompt);
         if (recalled.length > 0) {
           messages.unshift({
@@ -1865,7 +1906,7 @@ export class AgentSession {
     }
     const updateMessage = this.preparePromptAndToolLoadout(result.systemPromptOptions);
     this.runSystemPromptOptions = result.systemPromptOptions;
-    if (updateMessage) messages.unshift(updateMessage);
+    if (updateMessage !== undefined) messages.unshift(updateMessage);
     return messages;
   }
 
@@ -1878,7 +1919,7 @@ export class AgentSession {
       this.finishCancelledRetry();
       return false;
     }
-    if (!message) return this.agent.hasQueuedMessages();
+    if (message === undefined) return this.agent.hasQueuedMessages();
 
     if (this.isRetryableError(message) && (await this.prepareRetry(message))) {
       if (this.agentRunAbortRequested) this.finishCancelledRetry();
@@ -1960,7 +2001,7 @@ export class AgentSession {
   private async normalizePromptImages(
     images: ImageContent[] | undefined,
   ): Promise<{ images: ImageContent[]; hints: string[] }> {
-    if (!images) return { images: [], hints: [] };
+    if (images === undefined) return { images: [], hints: [] };
 
     const normalizedImages: ImageContent[] = [];
     const hints: string[] = [];
@@ -1987,12 +2028,12 @@ export class AgentSession {
     const expandPromptTemplates = options?.expandPromptTemplates ?? true;
     const preflightResult = options?.preflightResult;
     const goalCommand = expandPromptTemplates ? parseGoalCommand(text) : undefined;
-    if (goalCommand) {
+    if (goalCommand !== undefined) {
       await this.runGoalCommand(goalCommand, options);
       return;
     }
     const memoryCommand = expandPromptTemplates ? parseMemoryCommand(text) : undefined;
-    if (memoryCommand) {
+    if (memoryCommand !== undefined) {
       await this.runMemoryCommand(memoryCommand, options);
       return;
     }
@@ -2016,7 +2057,7 @@ export class AgentSession {
       options?.source ?? "interactive",
       this.isStreaming ? options?.streamingBehavior : undefined,
     );
-    if (!processedInput) {
+    if (processedInput === undefined) {
       preflightResult?.("handled");
       return;
     }
@@ -2029,7 +2070,7 @@ export class AgentSession {
     }
 
     if (this.isStreaming) {
-      if (!options?.streamingBehavior) {
+      if (options?.streamingBehavior === undefined) {
         throw new Error(
           "Agent is already processing. Specify streamingBehavior ('steer' or 'followUp') to queue the message.",
         );
@@ -2043,7 +2084,7 @@ export class AgentSession {
       return;
     }
 
-    if (!this.model) {
+    if (this.model === undefined) {
       throw new Error(formatNoModelSelectedMessage());
     }
 
@@ -2073,7 +2114,7 @@ export class AgentSession {
     const args = spaceIndex === -1 ? "" : text.slice(spaceIndex + 1);
 
     const command = this.extensionRunnerInternal.getCommand(commandName);
-    if (!command || this.isSkillCommand(text)) return false;
+    if (command === undefined || this.isSkillCommand(text)) return false;
 
     const ctx = this.extensionRunnerInternal.createCommandContext();
 
@@ -2103,13 +2144,13 @@ export class AgentSession {
     const args = spaceIndex === -1 ? "" : text.slice(spaceIndex + 1).trim();
 
     const skill = this.resourceLoader.getSkills().skills.find((s) => s.name === skillName);
-    if (!skill) return text;
+    if (skill === undefined) return text;
 
     try {
       const content = readFileSync(skill.filePath, "utf-8");
       const body = stripFrontmatter(content).trim();
       const skillBlock = `<skill name="${skill.name}" location="${skill.filePath}">\nReferences are relative to ${skill.baseDir}.\n\n${body}\n</skill>`;
-      return args ? `${skillBlock}\n\n${args}` : skillBlock;
+      return args === "" ? skillBlock : `${skillBlock}\n\n${args}`;
     } catch (err) {
       this.extensionRunnerInternal.emitError({
         extensionPath: skill.filePath,
@@ -2136,7 +2177,7 @@ export class AgentSession {
       source,
       this.isStreaming ? behavior : undefined,
     );
-    if (!processedInput) return "handled";
+    if (processedInput === undefined) return "handled";
 
     let expandedText = this.expandSkillCommand(processedInput.text);
     expandedText = expandPromptTemplate(expandedText, [...this.promptTemplates]);
@@ -2169,7 +2210,7 @@ export class AgentSession {
     this.steeringMessages.push(text);
     this.emitQueueUpdate();
     const content: (TextContent | ImageContent)[] = [{ type: "text", text }];
-    if (images) {
+    if (images !== undefined) {
       content.push(...images);
     }
     this.agent.steer({
@@ -2183,7 +2224,7 @@ export class AgentSession {
     this.followUpMessages.push(text);
     this.emitQueueUpdate();
     const content: (TextContent | ImageContent)[] = [{ type: "text", text }];
-    if (images) {
+    if (images !== undefined) {
       content.push(...images);
     }
     this.agent.followUp({ role: "user", content, timestamp: Date.now() });
@@ -2194,7 +2235,7 @@ export class AgentSession {
     const commandName = spaceIndex === -1 ? text.slice(1) : text.slice(1, spaceIndex);
     const command = this.extensionRunnerInternal.getCommand(commandName);
 
-    if (command && !this.isSkillCommand(text)) {
+    if (command !== undefined && !this.isSkillCommand(text)) {
       throw new Error(
         `Extension command "/${commandName}" cannot be queued. Use prompt() or execute the command when not streaming.`,
       );
@@ -2221,7 +2262,7 @@ export class AgentSession {
       } else {
         this.agent.steer(appMessage);
       }
-    } else if (options?.triggerTurn) {
+    } else if (options?.triggerTurn === true) {
       if (this.isEmittingAgentSettled) {
         this.deferredSettledActions.push(
           async () => await this.sendCustomMessage(message, options),
@@ -2359,7 +2400,7 @@ export class AgentSession {
     if (command.kind === "set") {
       this.goalInternal.set(command.condition);
       const goal = this.goalInternal.snapshot;
-      if (!goal) return;
+      if (goal === undefined) return;
       await this.prompt(goal.condition, {
         ...options,
         expandPromptTemplates: false,
@@ -2377,13 +2418,13 @@ export class AgentSession {
     const entry = this.sessionManager.getEntry(
       this.sessionManager.appendCustomEntry(GOAL_ENTRY_TYPE, data),
     );
-    if (entry) this.emit({ type: "entry_appended", entry });
+    if (entry !== undefined) this.emit({ type: "entry_appended", entry });
   }
 
   private async runMemoryCommand(command: MemoryCommand, options?: PromptOptions): Promise<void> {
     const memory = this.memoryInternal;
     let text: string;
-    if (!memory) {
+    if (memory === undefined) {
       text = "Memory is disabled (settings: memory.enabled).";
     } else {
       switch (command.kind) {
@@ -2430,7 +2471,7 @@ export class AgentSession {
 
   private orchestratorDefaults(): OrchestratorDefaults {
     const current = this.model;
-    if (!current) throw new Error(formatNoModelSelectedMessage());
+    if (current === undefined) throw new Error(formatNoModelSelectedMessage());
     const currentReference = `${current.provider}/${current.id}`;
     return {
       workerModel: this.settingsManager.getOrchestratorWorkerModel() ?? currentReference,
@@ -2446,7 +2487,7 @@ export class AgentSession {
   private goalEvaluatorModel(): Model<any> {
     const configured = this.settingsManager.getGoalEvaluatorModel();
     const available = this.modelRuntimeInternal.getAvailableSnapshot();
-    if (configured) {
+    if (configured !== undefined && configured !== "") {
       const result = resolveModelReference(
         { text: configured, thinkingSuffix: "none", fuzzy: false },
         available,
@@ -2458,7 +2499,7 @@ export class AgentSession {
       return result.model;
     }
     const current = this.limitsModel();
-    if (!current) throw new Error(formatNoModelSelectedMessage());
+    if (current === undefined) throw new Error(formatNoModelSelectedMessage());
     return pickEvaluatorModel(current, available);
   }
 
@@ -2485,7 +2526,7 @@ export class AgentSession {
       this.agent.streamFunction,
       this.settingsManager.getRetrySettings(),
     );
-    if (response.usage) {
+    if (response.usage !== undefined) {
       const entry = this.sessionManager.appendUsage(
         "goal_evaluation",
         response.provider,
@@ -2515,7 +2556,7 @@ export class AgentSession {
   }
 
   async setModel(model: Model<any>, options: ModelMutationOptions = {}): Promise<void> {
-    if (!(await this.modelRuntimeInternal.checkAuth(model.provider))) {
+    if ((await this.modelRuntimeInternal.checkAuth(model.provider)) === undefined) {
       throw new Error(`No API key for ${model.provider}/${model.id}`);
     }
 
@@ -2523,7 +2564,7 @@ export class AgentSession {
     const thinkingLevel = this.getThinkingLevelForModelSwitch(model);
     this.agent.state.model = model;
     this.sessionManager.appendModelChange(model.provider, model.id);
-    if (options.persist) {
+    if (options.persist === true) {
       this.settingsManager.setDefaultModelAndProvider(model.provider, model.id);
       this.addPersistedDefaultToNonEmptyScope(model);
     }
@@ -2540,7 +2581,7 @@ export class AgentSession {
     this.scopedModelsInternal = [...this.scopedModelsInternal, { model }];
 
     const enabledModels = this.settingsManager.getEnabledModels();
-    if (!enabledModels?.length) return;
+    if (enabledModels?.length === undefined || enabledModels?.length === 0) return;
 
     const modelReference = `${model.provider}/${model.id}`;
     if (enabledModels.some((pattern) => pattern.toLowerCase() === modelReference.toLowerCase()))
@@ -2585,7 +2626,7 @@ export class AgentSession {
 
     this.agent.state.model = next.model;
     this.sessionManager.appendModelChange(next.model.provider, next.model.id);
-    if (options.persist) {
+    if (options.persist === true) {
       this.settingsManager.setDefaultModelAndProvider(next.model.provider, next.model.id);
       this.addPersistedDefaultToNonEmptyScope(next.model);
     }
@@ -2617,7 +2658,7 @@ export class AgentSession {
     const thinkingLevel = this.getThinkingLevelForModelSwitch(nextModel);
     this.agent.state.model = nextModel;
     this.sessionManager.appendModelChange(nextModel.provider, nextModel.id);
-    if (options.persist) {
+    if (options.persist === true) {
       this.settingsManager.setDefaultModelAndProvider(nextModel.provider, nextModel.id);
       this.addPersistedDefaultToNonEmptyScope(nextModel);
     }
@@ -2640,7 +2681,7 @@ export class AgentSession {
 
     this.agent.state.thinkingLevel = effectiveLevel;
 
-    if (options.persist) {
+    if (options.persist === true) {
       this.settingsManager.setDefaultThinkingLevel(level);
     }
 
@@ -2669,12 +2710,12 @@ export class AgentSession {
   }
 
   getAvailableThinkingLevels(): ThinkingLevel[] {
-    if (!this.model) return [...THINKING_LEVEL_OPTIONS];
+    if (this.model === undefined) return [...THINKING_LEVEL_OPTIONS];
     return getSupportedThinkingLevels(this.model) as ThinkingLevel[];
   }
 
   supportsThinking(): boolean {
-    return !!this.model?.reasoning;
+    return this.model?.reasoning === true;
   }
 
   private getThinkingLevelForModelSwitch(
@@ -2684,7 +2725,7 @@ export class AgentSession {
     if (explicitLevel !== undefined) {
       return explicitLevel;
     }
-    if (targetModel) {
+    if (targetModel !== undefined) {
       const perModel = this.settingsManager.getModelThinkingLevel(
         targetModel.provider,
         targetModel.id,
@@ -2702,7 +2743,9 @@ export class AgentSession {
     level: ThinkingLevel,
     _availableLevels: ThinkingLevel[],
   ): ThinkingLevel {
-    return this.model ? (clampThinkingLevel(this.model, level) as ThinkingLevel) : "off";
+    return this.model === undefined
+      ? "off"
+      : (clampThinkingLevel(this.model, level) as ThinkingLevel);
   }
 
   private syncQueueModesFromSettings(): void {
@@ -2758,7 +2801,7 @@ export class AgentSession {
 
     try {
       const model = this.model;
-      if (!model) {
+      if (model === undefined) {
         throw new Error(formatNoModelSelectedMessage());
       }
 
@@ -2766,7 +2809,7 @@ export class AgentSession {
       const pathEntries = this.sessionManager.getBranch();
 
       const preparation = prepareCompaction(pathEntries, settings);
-      if (!preparation) {
+      if (preparation === undefined) {
         const lastEntry = pathEntries[pathEntries.length - 1];
         if (lastEntry?.type === "compaction") {
           throw new Error("Already compacted");
@@ -2787,12 +2830,12 @@ export class AgentSession {
           signal: this.compactionAbortController.signal,
         })) as SessionBeforeCompactResult | undefined;
 
-        if (result?.cancel) {
+        if (result?.cancel === true) {
           cancelledByExtension = true;
           throw new Error("Compaction cancelled");
         }
 
-        if (result?.compaction) {
+        if (result?.compaction !== undefined) {
           extensionCompaction = result.compaction;
           fromExtension = true;
         }
@@ -2804,13 +2847,7 @@ export class AgentSession {
       let usage: Usage | undefined;
       let details: unknown;
 
-      if (extensionCompaction) {
-        summary = extensionCompaction.summary;
-        firstKeptEntryId = extensionCompaction.firstKeptEntryId;
-        tokensBefore = extensionCompaction.tokensBefore;
-        usage = extensionCompaction.usage;
-        details = extensionCompaction.details;
-      } else {
+      if (extensionCompaction === undefined) {
         const result = await this.runDefaultCompaction(
           preparation,
           model,
@@ -2823,6 +2860,12 @@ export class AgentSession {
         tokensBefore = result.tokensBefore;
         usage = result.usage;
         details = result.details;
+      } else {
+        summary = extensionCompaction.summary;
+        firstKeptEntryId = extensionCompaction.firstKeptEntryId;
+        tokensBefore = extensionCompaction.tokensBefore;
+        usage = extensionCompaction.usage;
+        details = extensionCompaction.details;
       }
 
       if (this.compactionAbortController.signal.aborted) {
@@ -2847,7 +2890,7 @@ export class AgentSession {
         (e) => e.type === "compaction" && e.summary === summary,
       ) as CompactionEntry | undefined;
 
-      if (this.extensionRunnerInternal && savedCompactionEntry) {
+      if (savedCompactionEntry !== undefined) {
         await this.extensionRunnerInternal.emit({
           type: "session_compact",
           compactionEntry: savedCompactionEntry,
@@ -2941,9 +2984,10 @@ export class AgentSession {
           entry.messages.some((message) => message.role === "assistant"),
       );
     const branch = this.sessionManager.getBranch();
-    const assistantIndex = assistantEntryId
-      ? branch.findIndex((entry) => entry.id === assistantEntryId)
-      : -1;
+    const assistantIndex =
+      assistantEntryId !== undefined && assistantEntryId !== ""
+        ? branch.findIndex((entry) => entry.id === assistantEntryId)
+        : -1;
     const entriesAfterAssistant = assistantIndex >= 0 ? branch.slice(assistantIndex + 1) : [];
     const hasPostAssistantContextEdit = entriesAfterAssistant.some(
       (entry) => entry.type === "context_edit",
@@ -3010,9 +3054,8 @@ export class AgentSession {
     const hasContextEdits = projection.entries.some(
       (entry) => entry.sourceEntry.type === "context_edit",
     );
-    const directContextTokens = assistantMessage.usage
-      ? calculateContextTokens(assistantMessage.usage)
-      : 0;
+    const directContextTokens =
+      assistantMessage.usage !== undefined ? calculateContextTokens(assistantMessage.usage) : 0;
     if (hasContextEdits) {
       contextTokens = estimateProjectedContextTokens(projection, branch).tokens;
     } else if (assistantMessage.stopReason === "error" || directContextTokens === 0) {
@@ -3021,7 +3064,7 @@ export class AgentSession {
       if (estimate.lastUsageIndex !== null) {
         const usageMsg = messages[estimate.lastUsageIndex];
         if (
-          compactionEntry &&
+          compactionEntry !== null &&
           usageMsg?.role === "assistant" &&
           (usageMsg as AssistantMessage).timestamp <= new Date(compactionEntry.timestamp).getTime()
         ) {
@@ -3050,13 +3093,13 @@ export class AgentSession {
     let cancelledByExtension = false;
 
     try {
-      if (!model) {
+      if (model === undefined) {
         return false;
       }
 
       const pathEntries = this.sessionManager.getBranch();
       const preparation = prepareCompaction(pathEntries, settings);
-      if (!preparation) {
+      if (preparation === undefined) {
         return false;
       }
 
@@ -3079,12 +3122,12 @@ export class AgentSession {
           signal: abortController.signal,
         })) as SessionBeforeCompactResult | undefined;
 
-        if (extensionResult?.cancel) {
+        if (extensionResult?.cancel === true) {
           cancelledByExtension = true;
           throw new Error("Compaction cancelled");
         }
 
-        if (extensionResult?.compaction) {
+        if (extensionResult?.compaction !== undefined) {
           extensionCompaction = extensionResult.compaction;
           fromExtension = true;
         }
@@ -3097,13 +3140,7 @@ export class AgentSession {
       let usage: Usage | undefined;
       let details: unknown;
 
-      if (extensionCompaction) {
-        summary = extensionCompaction.summary;
-        firstKeptEntryId = extensionCompaction.firstKeptEntryId;
-        tokensBefore = extensionCompaction.tokensBefore;
-        usage = extensionCompaction.usage;
-        details = extensionCompaction.details;
-      } else {
+      if (extensionCompaction === undefined) {
         const compactResult = await this.runDefaultCompaction(
           preparation,
           model,
@@ -3116,6 +3153,12 @@ export class AgentSession {
         tokensBefore = compactResult.tokensBefore;
         usage = compactResult.usage;
         details = compactResult.details;
+      } else {
+        summary = extensionCompaction.summary;
+        firstKeptEntryId = extensionCompaction.firstKeptEntryId;
+        tokensBefore = extensionCompaction.tokensBefore;
+        usage = extensionCompaction.usage;
+        details = extensionCompaction.details;
       }
       abortController.signal.throwIfAborted();
 
@@ -3137,7 +3180,7 @@ export class AgentSession {
         (e) => e.type === "compaction" && e.summary === summary,
       ) as CompactionEntry | undefined;
 
-      if (this.extensionRunnerInternal && savedCompactionEntry) {
+      if (savedCompactionEntry !== undefined) {
         await this.extensionRunnerInternal.emit({
           type: "session_compact",
           compactionEntry: savedCompactionEntry,
@@ -3269,7 +3312,7 @@ export class AgentSession {
           source,
           scope: "temporary",
           origin: "top-level",
-          ...(baseDir !== undefined ? { baseDir } : {}),
+          ...(baseDir === undefined ? {} : { baseDir }),
         },
       };
     });
@@ -3289,14 +3332,15 @@ export class AgentSession {
     runner.bindCommandContext(this.extensionCommandContextActions);
 
     this.extensionErrorUnsubscriber?.();
-    this.extensionErrorUnsubscriber = this.extensionErrorListener
-      ? runner.onError(this.extensionErrorListener)
-      : undefined;
+    this.extensionErrorUnsubscriber =
+      this.extensionErrorListener === undefined
+        ? undefined
+        : runner.onError(this.extensionErrorListener);
   }
 
   private refreshCurrentModelFromRegistry(): void {
     const currentModel = this.model;
-    if (!currentModel) {
+    if (currentModel === undefined) {
       return;
     }
 
@@ -3304,7 +3348,7 @@ export class AgentSession {
       currentModel.provider,
       currentModel.id,
     );
-    if (!refreshedModel || refreshedModel === currentModel) {
+    if (refreshedModel === undefined || refreshedModel === currentModel) {
       return;
     }
 
@@ -3364,7 +3408,7 @@ export class AgentSession {
         appendEntry: (customType, data) => {
           const entryId = this.sessionManager.appendCustomEntry(customType, data);
           const entry = this.sessionManager.getEntry(entryId);
-          if (entry) {
+          if (entry !== undefined) {
             this.emit({ type: "entry_appended", entry });
           }
         },
@@ -3398,7 +3442,7 @@ export class AgentSession {
         isProjectTrusted: () => this.settingsManager.isProjectTrusted(),
         getSignal: () => this.agent.signal,
         abort: () => {
-          if (this.extensionAbortHandler) {
+          if (this.extensionAbortHandler !== undefined) {
             this.extensionAbortHandler();
             return;
           }
@@ -3493,7 +3537,9 @@ export class AgentSession {
       Array.from(definitionRegistry.values())
         .map(({ definition }) => {
           const snippet = this.normalizePromptSnippet(definition.promptSnippet);
-          return snippet ? ([definition.name, snippet] as const) : undefined;
+          return snippet !== undefined && snippet !== ""
+            ? ([definition.name, snippet] as const)
+            : undefined;
         })
         .filter((entry): entry is readonly [string, string] => entry !== undefined),
     );
@@ -3526,20 +3572,22 @@ export class AgentSession {
     this.toolRegistry = toolRegistry;
 
     const nextActiveToolNames = (
-      options?.activeToolNames ? [...options.activeToolNames] : [...previousActiveToolNames]
+      options?.activeToolNames === undefined
+        ? [...previousActiveToolNames]
+        : [...options.activeToolNames]
     ).filter((name) => this.isAllowedTool(name));
 
-    if (allowedTools) {
+    if (allowedTools !== undefined) {
       for (const toolName of this.toolRegistry.keys()) {
         if (allowedTools(toolName) && this.isDeclarable(toolName)) {
           nextActiveToolNames.push(toolName);
         }
       }
-    } else if (options?.includeAllExtensionTools) {
+    } else if (options?.includeAllExtensionTools === true) {
       for (const tool of wrappedExtensionTools) {
         if (this.isActivatedOnRegistration(tool.name)) nextActiveToolNames.push(tool.name);
       }
-    } else if (!options?.activeToolNames) {
+    } else if (options?.activeToolNames === undefined) {
       for (const toolName of this.toolRegistry.keys()) {
         if (
           !previousActivatedOnRegistration.has(toolName) &&
@@ -3579,27 +3627,28 @@ export class AgentSession {
       ? new MemoryService({ settings: memorySettings, cwd: this.cwd })
       : undefined;
     this.memoryInternal?.warm();
-    const baseToolDefinitions = this.baseToolsOverride
-      ? Object.fromEntries(
-          Object.entries(this.baseToolsOverride).map(([name, tool]) => [
-            name,
-            createToolDefinitionFromAgentTool(tool),
-          ]),
-        )
-      : {
-          ...createAllToolDefinitions(this.cwd, {
-            read: { autoResizeImages },
-            bash: { commandPrefix: shellCommandPrefix, shellPath },
-          }),
-          ...(this.memoryInternal
-            ? { memory: createMemoryToolDefinition(this.memoryInternal) }
-            : {}),
-        };
+    const baseToolDefinitions =
+      this.baseToolsOverride === undefined
+        ? {
+            ...createAllToolDefinitions(this.cwd, {
+              read: { autoResizeImages },
+              bash: { commandPrefix: shellCommandPrefix, shellPath },
+            }),
+            ...(this.memoryInternal === undefined
+              ? {}
+              : { memory: createMemoryToolDefinition(this.memoryInternal) }),
+          }
+        : Object.fromEntries(
+            Object.entries(this.baseToolsOverride).map(([name, tool]) => [
+              name,
+              createToolDefinitionFromAgentTool(tool),
+            ]),
+          );
 
     this.baseToolDefinitions = new Map(
       Object.entries(baseToolDefinitions).map(([name, tool]) => [name, tool as ToolDefinition]),
     );
-    if (this.orchestratorInternal && !this.baseToolsOverride) {
+    if (this.orchestratorInternal !== undefined && this.baseToolsOverride === undefined) {
       for (const [name, tool] of Object.entries(
         createOrchestratorToolDefinitions(this.orchestratorInternal),
       )) {
@@ -3608,7 +3657,7 @@ export class AgentSession {
     }
 
     const extensionsResult = this.resourceLoaderInternal.getExtensions();
-    if (options.flagValues) {
+    if (options.flagValues !== undefined) {
       for (const [name, value] of options.flagValues) {
         extensionsResult.runtime.flagValues.set(name, value);
       }
@@ -3621,17 +3670,18 @@ export class AgentSession {
       this.sessionManager,
       new ModelRegistry(this.modelRuntimeInternal),
     );
-    if (this.extensionRunnerRef) {
+    if (this.extensionRunnerRef !== undefined) {
       this.extensionRunnerRef.current = this.extensionRunnerInternal;
     }
     this.bindExtensionCore(this.extensionRunnerInternal);
     this.applyExtensionBindings(this.extensionRunnerInternal);
 
-    if (!this.baseToolsOverride) this.addExternalServiceTools();
+    if (this.baseToolsOverride === undefined) this.addExternalServiceTools();
 
-    const defaultActiveToolNames = this.baseToolsOverride
-      ? Object.keys(this.baseToolsOverride)
-      : [...DEFAULT_TOOL_NAMES];
+    const defaultActiveToolNames =
+      this.baseToolsOverride === undefined
+        ? [...DEFAULT_TOOL_NAMES]
+        : Object.keys(this.baseToolsOverride);
     const baseActiveToolNames = options.activeToolNames ?? defaultActiveToolNames;
     this.refreshToolRegistry({
       activeToolNames: baseActiveToolNames,
@@ -3655,7 +3705,7 @@ export class AgentSession {
   }
 
   refreshExternalServiceTools(): void {
-    if (this.baseToolsOverride) return;
+    if (this.baseToolsOverride !== undefined) return;
     const names = this.addExternalServiceTools();
     const defaultTools = this.usesDefaultTools
       ? applyToolModifiers(
@@ -3701,7 +3751,7 @@ export class AgentSession {
       this.extensionCommandContextActions ||
       this.extensionShutdownHandler ||
       this.extensionErrorListener;
-    if (hasBindings) {
+    if (hasBindings !== undefined) {
       await options?.beforeSessionStart?.();
       await this.extensionRunnerInternal.emit({ type: "session_start", reason: "reload" });
       this.extensionRunnerInternal.reportUnhandledMcpServers();
@@ -3824,7 +3874,8 @@ export class AgentSession {
 
     const prefix = this.settingsManager.getShellCommandPrefix();
     const shellPath = this.settingsManager.getShellPath();
-    const resolvedCommand = prefix ? `${prefix}\n${command}` : command;
+    const resolvedCommand =
+      prefix !== undefined && prefix !== "" ? `${prefix}\n${command}` : command;
 
     try {
       const result = await executeBashWithOperations(
@@ -3937,12 +3988,12 @@ export class AgentSession {
       return { cancelled: false };
     }
 
-    if (options.summarize && !this.model) {
+    if (options.summarize === true && this.model === undefined) {
       throw new Error("No model available for summarization");
     }
 
     const targetEntry = this.sessionManager.getEntry(targetId);
-    if (!targetEntry) {
+    if (targetEntry === undefined) {
       throw new Error(`Entry ${targetId} not found`);
     }
 
@@ -3980,11 +4031,11 @@ export class AgentSession {
           signal: this.branchSummaryAbortController.signal,
         })) as SessionBeforeTreeResult | undefined;
 
-        if (result?.cancel) {
+        if (result?.cancel === true) {
           return { cancelled: true };
         }
 
-        if (result?.summary && options.summarize) {
+        if (result?.summary !== undefined && options.summarize === true) {
           extensionSummary = result.summary;
           fromExtension = true;
         }
@@ -4003,7 +4054,11 @@ export class AgentSession {
       let summaryText: string | undefined;
       let summaryDetails: unknown;
       let summaryUsage: Usage | undefined;
-      if (options.summarize && entriesToSummarize.length > 0 && !extensionSummary) {
+      if (
+        options.summarize === true &&
+        entriesToSummarize.length > 0 &&
+        extensionSummary === undefined
+      ) {
         const signal = this.branchSummaryAbortController.signal;
         const branchSummarySettings = this.settingsManager.getBranchSummarySettings();
         const result = await generateBranchSummary(entriesToSummarize, {
@@ -4016,10 +4071,10 @@ export class AgentSession {
           retry: this.settingsManager.getRetrySettings(),
           callbacks: this.summarizationRetryCallbacks({ source: "branchSummary" }),
         });
-        if (result.aborted) {
+        if (result.aborted === true) {
           return { cancelled: true, aborted: true };
         }
-        if (result.error) {
+        if (result.error !== undefined && result.error !== "") {
           throw new Error(result.error);
         }
         summaryText = result.summary;
@@ -4028,7 +4083,7 @@ export class AgentSession {
           readFiles: result.readFiles || [],
           modifiedFiles: result.modifiedFiles || [],
         };
-      } else if (extensionSummary) {
+      } else if (extensionSummary !== undefined) {
         summaryText = extensionSummary.summary;
         summaryDetails = extensionSummary.details;
         summaryUsage = extensionSummary.usage;
@@ -4048,7 +4103,7 @@ export class AgentSession {
       }
 
       let summaryEntry: BranchSummaryEntry | undefined;
-      if (summaryText) {
+      if (summaryText !== undefined && summaryText !== "") {
         const summaryId = this.sessionManager.branchWithSummary(
           newLeafId,
           summaryText,
@@ -4058,7 +4113,7 @@ export class AgentSession {
         );
         summaryEntry = this.sessionManager.getEntry(summaryId) as BranchSummaryEntry;
 
-        if (label) {
+        if (label !== undefined && label !== "") {
           this.sessionManager.appendLabelChange(summaryId, label);
         }
       } else if (newLeafId === null) {
@@ -4067,7 +4122,11 @@ export class AgentSession {
         this.sessionManager.branch(newLeafId);
       }
 
-      if (label && !summaryText) {
+      if (
+        label !== undefined &&
+        label !== "" &&
+        (summaryText === undefined || summaryText === "")
+      ) {
         this.sessionManager.appendLabelChange(targetId, label);
       }
 
@@ -4079,7 +4138,7 @@ export class AgentSession {
         newLeafId: this.sessionManager.getLeafId(),
         oldLeafId,
         summaryEntry,
-        fromExtension: summaryText ? fromExtension : undefined,
+        fromExtension: summaryText !== undefined && summaryText !== "" ? fromExtension : undefined,
       });
 
       return { editorText, cancelled: false, summaryEntry };
@@ -4098,7 +4157,7 @@ export class AgentSession {
       if (entry.message.role !== "user") continue;
 
       const text = contentText(entry.message.content, "");
-      if (text) {
+      if (text !== "") {
         result.push({ entryId: entry.id, text });
       }
     }
@@ -4117,7 +4176,10 @@ export class AgentSession {
     for (const entry of this.sessionManager.getEntries()) {
       if (entry.type === "usage") {
         addUsageToTotals(usageTotals, entry.usage);
-      } else if ((entry.type === "branch_summary" || entry.type === "compaction") && entry.usage) {
+      } else if (
+        (entry.type === "branch_summary" || entry.type === "compaction") &&
+        entry.usage !== undefined
+      ) {
         addUsageToTotals(usageTotals, entry.usage);
       }
       if (entry.type !== "message") continue;
@@ -4127,7 +4189,7 @@ export class AgentSession {
         userMessages++;
       } else if (message.role === "toolResult") {
         toolResults++;
-        if (message.usage) {
+        if (message.usage !== undefined) {
           addUsageToTotals(usageTotals, message.usage);
         }
       } else if (message.role === "assistant") {
@@ -4163,7 +4225,7 @@ export class AgentSession {
 
   getContextUsage(): ContextUsage | undefined {
     const model = this.limitsModel();
-    if (!model) return undefined;
+    if (model === undefined) return undefined;
 
     const contextWindow = model.contextWindow ?? 0;
     if (contextWindow <= 0) return undefined;
@@ -4172,7 +4234,7 @@ export class AgentSession {
     const branch = this.sessionManager.getBranch();
     const latestCompaction = getLatestCompactionEntry(branch);
 
-    if (latestCompaction) {
+    if (latestCompaction !== null) {
       const projectedAssistants = new Set(
         projection.entries.flatMap((entry) =>
           entry.messages.some(
@@ -4234,7 +4296,7 @@ export class AgentSession {
     signal: AbortSignal;
   }): Promise<string> {
     const model = this.model;
-    if (!model) {
+    if (model === undefined) {
       throw new Error("No model selected");
     }
     return generateBugReportSummary({
@@ -4259,7 +4321,7 @@ export class AgentSession {
         return true;
       });
 
-    if (!lastAssistant) return undefined;
+    if (lastAssistant === undefined) return undefined;
 
     let text = "";
     for (const content of (lastAssistant as AssistantMessage).content) {

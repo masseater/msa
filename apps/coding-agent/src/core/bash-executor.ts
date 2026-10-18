@@ -35,7 +35,7 @@ export async function executeBashWithOperations(
   let totalBytes = 0;
 
   const ensureTempFile = () => {
-    if (tempFilePath) {
+    if (tempFilePath !== undefined && tempFilePath !== "") {
       return;
     }
     ({ path: tempFilePath, stream: tempFileStream } = createOutputFileStream("msa-bash", ".log"));
@@ -49,7 +49,7 @@ export async function executeBashWithOperations(
 
   const appendText = (rawText: string) => {
     const text = sanitizeBinaryOutput(stripAnsi(rawText)).replace(/\r/g, "");
-    if (!text) {
+    if (text === "") {
       return;
     }
 
@@ -57,7 +57,7 @@ export async function executeBashWithOperations(
       ensureTempFile();
     }
 
-    if (tempFileStream) {
+    if (tempFileStream !== undefined) {
       tempFileStream.write(text);
     }
 
@@ -68,7 +68,7 @@ export async function executeBashWithOperations(
       outputBytes -= removed.length;
     }
 
-    if (options?.onChunk) {
+    if (options?.onChunk !== undefined) {
       options.onChunk(text);
     }
   };
@@ -92,7 +92,7 @@ export async function executeBashWithOperations(
   try {
     ({ exitCode } = await operations.exec(command, cwd, { onData, signal: options?.signal }));
   } catch (err) {
-    if (!options?.signal?.aborted) {
+    if (options?.signal?.aborted !== true) {
       tempFileStream?.end();
       throw err;
     }
@@ -104,7 +104,7 @@ export async function executeBashWithOperations(
   if (truncationResult.truncated) {
     ensureTempFile();
   }
-  if (tempFileStream) await finished(tempFileStream.end());
+  if (tempFileStream !== undefined) await finished(tempFileStream.end());
   const cancelled = options?.signal?.aborted ?? false;
 
   return {

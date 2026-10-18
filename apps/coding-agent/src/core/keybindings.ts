@@ -360,7 +360,7 @@ export class KeybindingsManager extends TuiKeybindingsManager {
   }
 
   reload(): void {
-    if (!this.configPath) return;
+    if (this.configPath === undefined || this.configPath === "") return;
     this.setUserBindings(KeybindingsManager.loadFromFile(this.configPath));
   }
 
@@ -370,7 +370,7 @@ export class KeybindingsManager extends TuiKeybindingsManager {
 
   private static loadFromFile(path: string): KeybindingsConfig {
     const rawConfig = loadRawConfig(path);
-    if (!rawConfig) return {};
+    if (rawConfig === undefined) return {};
     return toKeybindingsConfig(migrateKeybindingsConfig(rawConfig).config);
   }
 }

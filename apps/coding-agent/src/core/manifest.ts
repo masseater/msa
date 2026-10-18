@@ -22,7 +22,7 @@ export function readMsaManifest(packageJsonPath: string): MsaManifest | null {
       return null;
     }
     const section = isObject(pkg["msa"]) ? pkg["msa"] : isObject(pkg["pi"]) ? pkg["pi"] : null;
-    if (!section) {
+    if (section === null) {
       return null;
     }
 

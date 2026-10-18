@@ -62,17 +62,17 @@ declare module "@msa/agent-core" {
 
 export function bashExecutionToText(msg: BashExecutionMessage): string {
   let text = `Ran \`${msg.command}\`\n`;
-  if (msg.output) {
-    text += `\`\`\`\n${msg.output}\n\`\`\``;
-  } else {
+  if (msg.output === "") {
     text += "(no output)";
+  } else {
+    text += `\`\`\`\n${msg.output}\n\`\`\``;
   }
   if (msg.cancelled) {
     text += "\n\n(command cancelled)";
   } else if (msg.exitCode !== null && msg.exitCode !== undefined && msg.exitCode !== 0) {
     text += `\n\nCommand exited with code ${msg.exitCode}`;
   }
-  if (msg.truncated && msg.fullOutputPath) {
+  if (msg.truncated && msg.fullOutputPath !== undefined && msg.fullOutputPath !== "") {
     text += `\n\n[Output truncated. Full output: ${msg.fullOutputPath}]`;
   }
   return text;
@@ -126,7 +126,7 @@ export function convertToLlm(messages: AgentMessage[]): Message[] {
     .map((m): Message | undefined => {
       switch (m.role) {
         case "bashExecution":
-          if (m.excludeFromContext) {
+          if (m.excludeFromContext === true) {
             return undefined;
           }
           return {

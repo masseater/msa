@@ -36,7 +36,7 @@ export function getPromptCacheTtlMs(
 }
 
 export function isReplayable(model: Model<Api>, options: SimpleStreamOptions | undefined): boolean {
-  if (!options?.reasoning || model.api !== "anthropic-messages") return true;
+  if (options?.reasoning === undefined || model.api !== "anthropic-messages") return true;
   return (model as Model<"anthropic-messages">).compat?.forceAdaptiveThinking === true;
 }
 
@@ -143,7 +143,7 @@ export class CacheWarmer {
   get status(): CacheWarmingStatus {
     if (this.getMode() === "off") return { state: "inactive", reason: "cache warming disabled" };
     const run = this.run;
-    if (!run) return this.inactive;
+    if (run === undefined) return this.inactive;
     if (!run.isCurrent()) return { state: "inactive", reason: "conversation context changed" };
     const decision = this.evaluate(run);
     const refreshing = run.timer === undefined;
@@ -200,7 +200,7 @@ export class CacheWarmer {
 
   onAgentSettled(): void {
     const run = this.run;
-    if (!run) return;
+    if (run === undefined) return;
     if (this.getMode() === "streaming") {
       this.stop("agent run settled");
       return;
@@ -214,9 +214,9 @@ export class CacheWarmer {
 
   onModeChanged(): void {
     const run = this.run;
-    if (!run) return;
+    if (run === undefined) return;
     const reason = this.getModeStopReason(run);
-    if (reason) this.stop(reason);
+    if (reason !== undefined && reason !== "") this.stop(reason);
   }
 
   cancel(): void {
@@ -225,9 +225,9 @@ export class CacheWarmer {
 
   private clearRun(): void {
     const run = this.run;
-    if (!run) return;
+    if (run === undefined) return;
     this.run = undefined;
-    if (run.timer) clearTimeout(run.timer);
+    if (run.timer !== undefined) clearTimeout(run.timer);
     run.controller.abort();
   }
 
@@ -319,9 +319,8 @@ export class CacheWarmer {
   private validateRun(run: ActiveRun): boolean {
     if (this.run !== run) return false;
     const reason =
-      this.getModeStopReason(run) ??
-      (!run.isCurrent() ? "conversation context changed" : undefined);
-    if (!reason) return true;
+      this.getModeStopReason(run) ?? (run.isCurrent() ? undefined : "conversation context changed");
+    if (reason === undefined || reason === "") return true;
     this.stop(reason);
     return false;
   }
@@ -390,21 +389,24 @@ function formatCacheWarmingDecisionTime(nextWarmAt: number | undefined, now: num
 export function formatCacheWarmingStatus(status: CacheWarmingStatus, now = Date.now()): string {
   const decision = status.decision;
   if (
-    !decision ||
-    (status.state === "inactive" && !decision.economicsAvailable && !status.extensionOverride)
+    decision === undefined ||
+    (status.state === "inactive" &&
+      !decision.economicsAvailable &&
+      status.extensionOverride !== true)
   ) {
     return `Inactive (${status.reason ?? "unknown reason"})`;
   }
-  const details = status.extensionOverride
-    ? `extension override, ${formatCacheWarmingEconomics(decision)}`
-    : `${formatCacheWarmingEconomics(decision)} -> ${decision.action}`;
+  const details =
+    status.extensionOverride === true
+      ? `extension override, ${formatCacheWarmingEconomics(decision)}`
+      : `${formatCacheWarmingEconomics(decision)} -> ${decision.action}`;
   if (status.state === "inactive") return `Stopped (${details})`;
   if (status.state === "refreshing") return `Warming cache (${details})`;
   return `${formatCacheWarmingDecisionTime(status.nextWarmAt, now)} (${details})`;
 }
 
 export function formatCacheWarmingUsage(entry: UsageEntry): string {
-  const note = entry.note ? ` (${entry.note})` : "";
+  const note = entry.note !== undefined && entry.note !== "" ? ` (${entry.note})` : "";
   const cost = entry.usage.cost.total.toFixed(6).replace(/(\.\d{3}\d*?)0+$/, "$1");
   return `Cache warmed${note}: $${cost}`;
 }

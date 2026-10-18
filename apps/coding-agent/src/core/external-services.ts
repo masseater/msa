@@ -37,27 +37,28 @@ const treg: ExternalService = {
   purpose: "web search and page reading",
   async status() {
     const cli = findTregCli();
-    return cli
-      ? { installed: true, signedIn: cli.signedIn }
-      : { installed: false, install: TREG_INSTALL_COMMAND };
+    return cli === undefined
+      ? { installed: false, install: TREG_INSTALL_COMMAND }
+      : { installed: true, signedIn: cli.signedIn };
   },
   async login(interaction, signal) {
     const cli = findTregCli();
-    if (!cli) throw new Error(`treg is not installed. Install it with: ${TREG_INSTALL_COMMAND}`);
+    if (cli === undefined)
+      throw new Error(`treg is not installed. Install it with: ${TREG_INSTALL_COMMAND}`);
     await loginTreg(cli.command, (page) => interaction.showPage(page), signal);
   },
   async logout() {
     const cli = findTregCli();
-    if (cli) await logoutTreg(cli.command);
+    if (cli !== undefined) await logoutTreg(cli.command);
   },
   tools() {
     const options = findTreg();
-    return options
-      ? [
+    return options === undefined
+      ? []
+      : [
           createWebSearchToolDefinition(options) as ToolDefinition,
           createWebFetchToolDefinition(options) as ToolDefinition,
-        ]
-      : [];
+        ];
   },
 };
 

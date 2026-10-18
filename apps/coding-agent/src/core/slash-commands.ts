@@ -128,7 +128,12 @@ export function formatHelpMarkdown(
     if (taken.has(command.name)) continue;
     const aliases = command.aliases?.map((alias) => `\`/${alias}\``).join(", ");
     lines.push(
-      row(command.name, aliases ? `${command.description} (${aliases})` : command.description),
+      row(
+        command.name,
+        aliases !== undefined && aliases !== ""
+          ? `${command.description} (${aliases})`
+          : command.description,
+      ),
     );
   }
   for (const command of added) {

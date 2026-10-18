@@ -79,7 +79,7 @@ export class FileAuthStorageBackend implements AuthStorageBackend {
       try {
         return lockfile.lockSync(path, { realpath: false });
       } catch (error) {
-        if (!getRetryableLockErrorCode(error) || attempt === maxAttempts) throw error;
+        if (getRetryableLockErrorCode(error) === undefined || attempt === maxAttempts) throw error;
         const start = Date.now();
         while (Date.now() - start < delayMs) {}
       }
@@ -100,7 +100,7 @@ export class FileAuthStorageBackend implements AuthStorageBackend {
       }
       return result;
     } finally {
-      if (release) {
+      if (release !== undefined) {
         release();
       }
     }
@@ -129,16 +129,16 @@ export class FileAuthStorageBackend implements AuthStorageBackend {
         signal?.throwIfAborted();
         const code = getRetryableLockErrorCode(error);
         const remainingMs = deadline - Date.now();
-        if (!code || remainingMs <= 0) throw error;
+        if (code === undefined || remainingMs <= 0) throw error;
         if (code === "EPERM" && ++epermRetries > MAX_EPERM_RETRIES) throw error;
         const baseDelayMs = Math.min(10 * 2 ** retry, maxDelayMs / 2);
         retry++;
         const delayMs = Math.min(Math.round(baseDelayMs * (1 + Math.random())), remainingMs);
-        if (signal) await sleep(delayMs, undefined, { signal });
-        else await sleep(delayMs);
+        if (signal === undefined) await sleep(delayMs);
+        else await sleep(delayMs, undefined, { signal });
         continue;
       }
-      if (signal?.aborted) {
+      if (signal?.aborted === true) {
         await release();
         signal.throwIfAborted();
       }
@@ -181,7 +181,7 @@ export class FileAuthStorageBackend implements AuthStorageBackend {
       throwIfCompromised();
       return result;
     } finally {
-      if (release) {
+      if (release !== undefined) {
         try {
           await release();
         } catch {}
@@ -199,7 +199,7 @@ export class ReadOnlyAuthStorage implements CredentialStore {
   }
 
   private load(): AuthStorageData {
-    if (this.data) return this.data;
+    if (this.data !== undefined) return this.data;
 
     let parsed: unknown;
     try {
@@ -249,8 +249,13 @@ export class ReadOnlyAuthStorage implements CredentialStore {
     options?.signal?.throwIfAborted();
     const credential = this.load()[providerId];
     options?.signal?.throwIfAborted();
-    if (!credential) return undefined;
-    if (credential.type !== "api_key" || !credential.key || isCommandConfigValue(credential.key)) {
+    if (credential === undefined) return undefined;
+    if (
+      credential.type !== "api_key" ||
+      credential.key === undefined ||
+      credential.key === "" ||
+      isCommandConfigValue(credential.key)
+    ) {
       return structuredClone(credential);
     }
     return { ...credential, key: resolveConfigValue(credential.key, credential.env) };
@@ -320,13 +325,13 @@ export class AuthStorage implements CredentialStore {
     this.storage = storage;
     this.authPath = authPath;
     this.readState =
-      authPath && sharedAuthFileReadState?.authPath === authPath
+      authPath !== undefined && authPath !== "" && sharedAuthFileReadState?.authPath === authPath
         ? sharedAuthFileReadState.readState
         : { data: {} };
-    if (authPath && !sharedAuthFileReadState) {
+    if (authPath !== undefined && authPath !== "" && sharedAuthFileReadState === undefined) {
       sharedAuthFileReadState = { authPath, readState: this.readState };
     }
-    if (authPath) {
+    if (authPath !== undefined && authPath !== "") {
       const revision = getFileRevision(authPath);
       if (revision !== undefined && revision === this.readState.revision) return;
     }
@@ -349,7 +354,7 @@ export class AuthStorage implements CredentialStore {
   }
 
   private parseStorageData(content: string | undefined): AuthStorageData {
-    if (!content) {
+    if (content === undefined || content === "") {
       return {};
     }
     return JSON.parse(stripBom(content)) as AuthStorageData;
@@ -366,7 +371,10 @@ export class AuthStorage implements CredentialStore {
     try {
       this.storage.withLock((current) => {
         content = current;
-        revision = this.authPath ? getFileRevision(this.authPath) : undefined;
+        revision =
+          this.authPath !== undefined && this.authPath !== ""
+            ? getFileRevision(this.authPath)
+            : undefined;
         return { result: undefined };
       });
       this.updateReadState(this.parseStorageData(content), revision);
@@ -376,7 +384,10 @@ export class AuthStorage implements CredentialStore {
   private async reloadFromStorageAsync(options?: AuthOperationOptions): Promise<AuthStorageData> {
     return this.storage.withLockAsync(async (content) => {
       const currentData = this.parseStorageData(content);
-      const revision = this.authPath ? getFileRevision(this.authPath) : undefined;
+      const revision =
+        this.authPath !== undefined && this.authPath !== ""
+          ? getFileRevision(this.authPath)
+          : undefined;
       this.updateReadState(currentData, revision);
       return { result: currentData };
     }, options);
@@ -384,13 +395,13 @@ export class AuthStorage implements CredentialStore {
 
   private async readLatestData(options?: AuthOperationOptions): Promise<AuthStorageData> {
     options?.signal?.throwIfAborted();
-    if (!this.authPath) {
+    if (this.authPath === undefined || this.authPath === "") {
       const reload = this.reloadFromStorageAsync(options);
-      return options?.signal ? reload : reload.catch(() => this.readState.data);
+      return options?.signal === undefined ? reload.catch(() => this.readState.data) : reload;
     }
     const revision = getFileRevision(this.authPath);
     if (revision !== undefined && revision === this.readState.revision) return this.readState.data;
-    if (!this.readState.reload) {
+    if (this.readState.reload === undefined) {
       const controller = new AbortController();
       const reload: AuthFileReload = {
         controller,
@@ -412,7 +423,9 @@ export class AuthStorage implements CredentialStore {
     reload.readers++;
     try {
       const result = raceWithAbortSignal(reload.promise, options?.signal);
-      return options?.signal ? await result : await result.catch(() => this.readState.data);
+      return options?.signal === undefined
+        ? await result.catch(() => this.readState.data)
+        : await result;
     } finally {
       reload.readers--;
       if (reload.readers === 0 && this.readState.reload === reload) {
@@ -442,7 +455,10 @@ export class AuthStorage implements CredentialStore {
       const next = await fn(currentData[provider]);
       if (next === undefined) {
         latestData = currentData;
-        revision = this.authPath ? getFileRevision(this.authPath) : undefined;
+        revision =
+          this.authPath !== undefined && this.authPath !== ""
+            ? getFileRevision(this.authPath)
+            : undefined;
         return { result: currentData[provider] };
       }
 

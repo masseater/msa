@@ -119,11 +119,20 @@ export async function createAgentSession(
   options: CreateAgentSessionOptions = {},
 ): Promise<CreateAgentSessionResult> {
   const cwd = resolvePath(options.cwd ?? options.sessionManager?.getCwd() ?? process.cwd());
-  const agentDir = options.agentDir ? resolvePath(options.agentDir) : getDefaultAgentDir();
+  const agentDir =
+    options.agentDir !== undefined && options.agentDir !== ""
+      ? resolvePath(options.agentDir)
+      : getDefaultAgentDir();
   let resourceLoader = options.resourceLoader;
 
-  const authPath = options.agentDir ? join(agentDir, "auth.json") : undefined;
-  const modelsPath = options.agentDir ? join(agentDir, "models.json") : undefined;
+  const authPath =
+    options.agentDir !== undefined && options.agentDir !== ""
+      ? join(agentDir, "auth.json")
+      : undefined;
+  const modelsPath =
+    options.agentDir !== undefined && options.agentDir !== ""
+      ? join(agentDir, "models.json")
+      : undefined;
   const modelRuntime =
     options.modelRuntime ?? (await ModelRuntime.create({ authPath, modelsPath }));
 
@@ -131,7 +140,7 @@ export async function createAgentSession(
   const sessionManager =
     options.sessionManager ?? SessionManager.create(cwd, getDefaultSessionDir(cwd, agentDir));
 
-  if (!resourceLoader) {
+  if (resourceLoader === undefined) {
     resourceLoader = new DefaultResourceLoader({ cwd, agentDir, settingsManager });
     await resourceLoader.reload();
     time("resourceLoader.reload");
@@ -150,17 +159,17 @@ export async function createAgentSession(
     modelRuntime.getModel(provider, modelId),
   );
 
-  if (!model && hasExistingSession && sessionModel) {
+  if (model === undefined && hasExistingSession && sessionModel !== undefined) {
     const restoredModel = modelRuntime.getModel(sessionModel.provider, sessionModel.modelId);
-    if (restoredModel && modelRuntime.hasConfiguredAuth(restoredModel.provider)) {
+    if (restoredModel !== undefined && modelRuntime.hasConfiguredAuth(restoredModel.provider)) {
       model = restoredModel;
     }
-    if (!model) {
+    if (model === undefined) {
       modelFallbackMessage = `Could not restore model ${sessionModel.provider}/${sessionModel.modelId}`;
     }
   }
 
-  if (!model) {
+  if (model === undefined) {
     const result = await findInitialModel({
       scopedModels: [],
       isContinuing: hasExistingSession,
@@ -171,9 +180,9 @@ export async function createAgentSession(
       modelRuntime,
     });
     model = result.model;
-    if (!model) {
+    if (model === undefined) {
       modelFallbackMessage = formatNoModelsAvailableMessage();
-    } else if (modelFallbackMessage) {
+    } else if (modelFallbackMessage !== undefined && modelFallbackMessage !== "") {
       modelFallbackMessage += `. Using ${model.provider}/${model.id}`;
     }
   }
@@ -186,9 +195,9 @@ export async function createAgentSession(
       : (settingsManager.getDefaultThinkingLevel() ?? DEFAULT_THINKING_LEVEL);
   }
 
-  if (thinkingLevel === undefined && model) {
+  if (thinkingLevel === undefined && model !== undefined) {
     const perModel = settingsManager.getModelThinkingLevel(model.provider, model.id);
-    if (perModel) {
+    if (perModel !== undefined) {
       thinkingLevel = perModel;
     }
   }
@@ -196,30 +205,33 @@ export async function createAgentSession(
     thinkingLevel = settingsManager.getDefaultThinkingLevel() ?? DEFAULT_THINKING_LEVEL;
   }
 
-  if (!model) {
+  if (model === undefined) {
     thinkingLevel = "off";
   } else {
     thinkingLevel = clampThinkingLevel(model, thinkingLevel) as ThinkingLevel;
   }
 
-  const toolListError = options.tools ? getToolListError(options.tools) : undefined;
-  if (toolListError) throw new Error(`Invalid tools option: ${toolListError}`);
-  const defaultToolNames = options.noTools
-    ? []
-    : (settingsManager.getDefaultTools() ?? DEFAULT_TOOL_NAMES);
-  const toolModifiers = options.tools?.some(isToolModifier) ? options.tools : undefined;
-  const selectedToolNames = toolModifiers
-    ? applyToolModifiers(defaultToolNames, toolModifiers)
-    : options.tools;
-  const allowedToolNames = toolModifiers
-    ? options.noTools === "all"
-      ? selectedToolNames
-      : undefined
-    : (options.tools ?? (options.noTools === "all" ? [] : undefined));
+  const toolListError = options.tools === undefined ? undefined : getToolListError(options.tools);
+  if (toolListError !== undefined && toolListError !== "")
+    throw new Error(`Invalid tools option: ${toolListError}`);
+  const defaultToolNames =
+    options.noTools === undefined ? (settingsManager.getDefaultTools() ?? DEFAULT_TOOL_NAMES) : [];
+  const toolModifiers = options.tools?.some(isToolModifier) === true ? options.tools : undefined;
+  const selectedToolNames =
+    toolModifiers === undefined
+      ? options.tools
+      : applyToolModifiers(defaultToolNames, toolModifiers);
+  const allowedToolNames =
+    toolModifiers === undefined
+      ? (options.tools ?? (options.noTools === "all" ? [] : undefined))
+      : options.noTools === "all"
+        ? selectedToolNames
+        : undefined;
   const excludedToolNames = options.excludeTools;
-  const isExcludedTool = excludedToolNames ? createToolNameMatcher(excludedToolNames) : undefined;
+  const isExcludedTool =
+    excludedToolNames === undefined ? undefined : createToolNameMatcher(excludedToolNames);
   const initialActiveToolNames = (selectedToolNames ?? defaultToolNames).filter(
-    (name) => !isExcludedTool?.(name),
+    (name) => isExcludedTool?.(name) !== true,
   );
 
   const convertToLlmWithBlockImages = (messages: AgentMessage[]): Message[] => {
@@ -287,7 +299,7 @@ export async function createAgentSession(
           streamOptions.sessionId,
           requestHeaders,
         );
-        return headerRunner?.hasHandlers("before_provider_headers")
+        return headerRunner?.hasHandlers("before_provider_headers") === true
           ? headerRunner.emitBeforeProviderHeaders(headers ?? {})
           : (headers ?? {});
       },
@@ -308,14 +320,14 @@ export async function createAgentSession(
   };
   const transformProviderPayload = async (payload: unknown) => {
     const runner = extensionRunnerRef.current;
-    if (!runner?.hasHandlers("before_provider_request")) return payload;
+    if (runner?.hasHandlers("before_provider_request") !== true) return payload;
     return runner.emitBeforeProviderRequest(payload);
   };
   const handleProviderResponse: NonNullable<ModelsSimpleStreamOptions["onResponse"]> = async (
     response,
   ) => {
     const runner = extensionRunnerRef.current;
-    if (!runner?.hasHandlers("after_provider_response")) return;
+    if (runner?.hasHandlers("after_provider_response") !== true) return;
     await runner.emit({
       type: "after_provider_response",
       status: response.status,
@@ -326,7 +338,7 @@ export async function createAgentSession(
     ModelsSimpleStreamOptions["onProviderStreamEvent"]
   > = async (data, eventModel) => {
     const runner = extensionRunnerRef.current;
-    if (!runner?.hasHandlers("provider_stream_event")) return;
+    if (runner?.hasHandlers("provider_stream_event") !== true) return;
     await runner.emit({
       data,
       type: "provider_stream_event",
@@ -340,7 +352,7 @@ export async function createAgentSession(
   const agent = new Agent({
     initialState: {
       systemPrompt: "",
-      ...(model ? { model } : {}),
+      ...(model === undefined ? {} : { model }),
       thinkingLevel,
       tools: [],
       messages: existingSession.messages,
@@ -362,13 +374,13 @@ export async function createAgentSession(
     sessionId: sessionManager.getSessionId(),
     transformContext: async (messages) => {
       const runner = extensionRunnerRef.current;
-      if (!runner) return messages;
+      if (runner === undefined) return messages;
       return runner.emitContext(messages);
     },
     steeringMode: settingsManager.getSteeringMode(),
     followUpMode: settingsManager.getFollowUpMode(),
     transport: settingsManager.getTransport(),
-    ...(thinkingBudgets ? { thinkingBudgets } : {}),
+    ...(thinkingBudgets === undefined ? {} : { thinkingBudgets }),
     maxRetryDelayMs: settingsManager.getProviderRetrySettings().maxRetryDelayMs,
   });
 
@@ -377,7 +389,7 @@ export async function createAgentSession(
       sessionManager.appendThinkingLevelChange(thinkingLevel);
     }
   } else {
-    if (model) {
+    if (model !== undefined) {
       sessionManager.appendModelChange(model.provider, model.id);
     }
     sessionManager.appendThinkingLevelChange(thinkingLevel);
@@ -395,14 +407,14 @@ export async function createAgentSession(
     cacheWarmer,
     initialActiveToolNames,
     usesDefaultTools:
-      (options.tools === undefined || toolModifiers !== undefined) && !options.noTools,
+      (options.tools === undefined || toolModifiers !== undefined) && options.noTools === undefined,
     defaultToolModifiers: toolModifiers,
     allowedToolNames,
     excludedToolNames,
     extensionRunnerRef,
     sessionStartEvent: options.sessionStartEvent,
     createWorkerSession:
-      options.orchestrator && resourceLoader instanceof DefaultResourceLoader
+      options.orchestrator === true && resourceLoader instanceof DefaultResourceLoader
         ? async (worker) => {
             const workerResourceLoader = resourceLoader.fork();
             await workerResourceLoader.reload();
@@ -419,23 +431,26 @@ export async function createAgentSession(
               modelRuntime,
               settingsManager,
               resourceLoader: workerResourceLoader,
-              ...(options.customTools ? { customTools: options.customTools } : {}),
+              ...(options.customTools === undefined ? {} : { customTools: options.customTools }),
               model: worker.model,
               thinkingLevel: worker.thinkingLevel,
-              ...(workerTools && !(workerTools.length === 0 && toolModifiers)
+              ...(workerTools !== undefined &&
+              !(workerTools.length === 0 && toolModifiers !== undefined)
                 ? { tools: workerTools }
                 : {}),
               excludeTools: [...(options.excludeTools ?? []), ...ORCHESTRATOR_TOOL_NAMES],
-              ...(options.noTools ? { noTools: options.noTools } : {}),
-              sessionManager: worker.sessionFile
-                ? SessionManager.open(worker.sessionFile)
-                : SessionManager.create(
-                    worker.cwd,
-                    join(
-                      sessionManager.getSessionDir() || getDefaultSessionDir(worker.cwd, agentDir),
-                      "workers",
+              ...(options.noTools === undefined ? {} : { noTools: options.noTools }),
+              sessionManager:
+                worker.sessionFile !== undefined && worker.sessionFile !== ""
+                  ? SessionManager.open(worker.sessionFile)
+                  : SessionManager.create(
+                      worker.cwd,
+                      join(
+                        sessionManager.getSessionDir() ||
+                          getDefaultSessionDir(worker.cwd, agentDir),
+                        "workers",
+                      ),
                     ),
-                  ),
             });
             await workerSession.bindExtensions({ mode: "print" });
             return workerSession;

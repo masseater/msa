@@ -63,7 +63,7 @@ const GIT_UPDATE_CONCURRENCY = 4;
 
 function isOfflineModeEnabled(): boolean {
   const value = process.env["MSA_OFFLINE"];
-  if (!value) return false;
+  if (value === undefined || value === "") return false;
   return value === "1" || value.toLowerCase() === "true" || value.toLowerCase() === "yes";
 }
 
@@ -72,7 +72,7 @@ function isExactNpmVersion(version: string | undefined): boolean {
 }
 
 function getNpmVersionRange(version: string | undefined): string | undefined {
-  return version ? (validRange(version) ?? undefined) : undefined;
+  return version !== undefined && version !== "" ? (validRange(version) ?? undefined) : undefined;
 }
 
 export interface PathMetadata {
@@ -233,7 +233,7 @@ export function getExtensionTempFolder(agentDir: string): string {
 
 function prefixIgnorePattern(line: string, prefix: string): string | null {
   const trimmed = line.trim();
-  if (!trimmed) return null;
+  if (trimmed === "") return null;
   if (trimmed.startsWith("#") && !trimmed.startsWith("\\#")) return null;
 
   let pattern = line;
@@ -250,13 +250,13 @@ function prefixIgnorePattern(line: string, prefix: string): string | null {
     pattern = pattern.slice(1);
   }
 
-  const prefixed = prefix ? `${prefix}${pattern}` : pattern;
+  const prefixed = prefix === "" ? pattern : `${prefix}${pattern}`;
   return negated ? `!${prefixed}` : prefixed;
 }
 
 function addIgnoreRules(ig: IgnoreMatcher, dir: string, rootDir: string): void {
   const relativeDir = relative(rootDir, dir);
-  const prefix = relativeDir ? `${toPosixPath(relativeDir)}/` : "";
+  const prefix = relativeDir === "" ? "" : `${toPosixPath(relativeDir)}/`;
 
   for (const filename of IGNORE_FILE_NAMES) {
     const ignorePath = join(dir, filename);
@@ -470,7 +470,7 @@ function collectAncestorAgentsSkillDirs(startDir: string): string[] {
   let dir = resolvedStartDir;
   while (true) {
     skillDirs.push(join(dir, ".agents", "skills"));
-    if (gitRepoRoot && dir === gitRepoRoot) {
+    if (gitRepoRoot !== null && gitRepoRoot !== "" && dir === gitRepoRoot) {
       break;
     }
     const parent = dirname(dir);
@@ -557,7 +557,7 @@ function resolveExtensionEntries(dir: string): string[] | null {
   const packageJsonPath = join(dir, "package.json");
   if (existsSync(packageJsonPath)) {
     const manifest = readMsaManifest(packageJsonPath);
-    if (manifest?.extensions?.length) {
+    if (manifest?.extensions?.length !== undefined && manifest?.extensions?.length !== 0) {
       const entries: string[] = [];
       for (const extPath of manifest.extensions) {
         const resolvedExtPath = resolve(dir, extPath);
@@ -588,7 +588,7 @@ function collectAutoExtensionEntries(dir: string): string[] {
   if (!existsSync(dir)) return entries;
 
   const rootEntries = resolveExtensionEntries(dir);
-  if (rootEntries) {
+  if (rootEntries !== null) {
     return rootEntries;
   }
 
@@ -623,7 +623,7 @@ function collectAutoExtensionEntries(dir: string): string[] {
         entries.push(fullPath);
       } else if (isDir) {
         const resolvedEntries = resolveExtensionEntries(fullPath);
-        if (resolvedEntries) {
+        if (resolvedEntries !== null) {
           entries.push(...resolvedEntries);
         }
       }
@@ -818,7 +818,7 @@ export class DefaultPackageManager implements PackageManager {
   }
 
   addSourceToSettings(source: string, options?: { local?: boolean }): boolean {
-    const scope: SourceScope = options?.local ? "project" : "user";
+    const scope: SourceScope = options?.local === true ? "project" : "user";
     const currentSettings =
       scope === "project"
         ? this.settingsManager.getProjectSettings()
@@ -853,7 +853,7 @@ export class DefaultPackageManager implements PackageManager {
   }
 
   removeSourceFromSettings(source: string, options?: { local?: boolean }): boolean {
-    const scope: SourceScope = options?.local ? "project" : "user";
+    const scope: SourceScope = options?.local === true ? "project" : "user";
     const currentSettings =
       scope === "project"
         ? this.settingsManager.getProjectSettings()
@@ -998,11 +998,8 @@ export class DefaultPackageManager implements PackageManager {
     options?: { local?: boolean; temporary?: boolean },
   ): Promise<ResolvedPaths> {
     const accumulator = this.createAccumulator();
-    const scope: SourceScope = options?.temporary
-      ? "temporary"
-      : options?.local
-        ? "project"
-        : "user";
+    const scope: SourceScope =
+      options?.temporary === true ? "temporary" : options?.local === true ? "project" : "user";
     for (const source of sources.filter((candidate) => candidate.startsWith(BUILTIN_PATH_PREFIX))) {
       this.addResource(
         accumulator.extensions,
@@ -1048,7 +1045,7 @@ export class DefaultPackageManager implements PackageManager {
 
   async install(source: string, options?: { local?: boolean }): Promise<void> {
     const parsed = this.parseSource(source);
-    const scope: SourceScope = options?.local ? "project" : "user";
+    const scope: SourceScope = options?.local === true ? "project" : "user";
     this.assertProjectTrustedForScope(scope);
     await this.withProgress("install", source, `Installing ${source}...`, async () => {
       if (parsed.type === "npm") {
@@ -1077,7 +1074,7 @@ export class DefaultPackageManager implements PackageManager {
 
   async remove(source: string, options?: { local?: boolean }): Promise<void> {
     const parsed = this.parseSource(source);
-    const scope: SourceScope = options?.local ? "project" : "user";
+    const scope: SourceScope = options?.local === true ? "project" : "user";
     this.assertProjectTrustedForScope(scope);
     await this.withProgress("remove", source, `Removing ${source}...`, async () => {
       if (parsed.type === "npm") {
@@ -1103,24 +1100,35 @@ export class DefaultPackageManager implements PackageManager {
   async update(source?: string): Promise<void> {
     const globalSettings = this.settingsManager.getGlobalSettings();
     const projectSettings = this.settingsManager.getProjectSettings();
-    const identity = source ? this.getPackageIdentity(source) : undefined;
+    const identity =
+      source !== undefined && source !== "" ? this.getPackageIdentity(source) : undefined;
     let matched = false;
     const updateSources: ConfiguredUpdateSource[] = [];
 
     for (const pkg of globalSettings.packages ?? []) {
       const sourceStr = typeof pkg === "string" ? pkg : pkg.source;
-      if (identity && this.getPackageIdentity(sourceStr, "user") !== identity) continue;
+      if (
+        identity !== undefined &&
+        identity !== "" &&
+        this.getPackageIdentity(sourceStr, "user") !== identity
+      )
+        continue;
       matched = true;
       updateSources.push({ source: sourceStr, scope: "user" });
     }
     for (const pkg of projectSettings.packages ?? []) {
       const sourceStr = typeof pkg === "string" ? pkg : pkg.source;
-      if (identity && this.getPackageIdentity(sourceStr, "project") !== identity) continue;
+      if (
+        identity !== undefined &&
+        identity !== "" &&
+        this.getPackageIdentity(sourceStr, "project") !== identity
+      )
+        continue;
       matched = true;
       updateSources.push({ source: sourceStr, scope: "project" });
     }
 
-    if (source && !matched) {
+    if (source !== undefined && source !== "" && !matched) {
       throw new Error(
         this.buildNoMatchingPackageMessage(source, [
           ...(globalSettings.packages ?? []),
@@ -1197,13 +1205,13 @@ export class DefaultPackageManager implements PackageManager {
     const installedVersion = existsSync(installedPath)
       ? this.getInstalledNpmVersion(installedPath)
       : undefined;
-    if (!installedVersion) {
+    if (installedVersion === undefined || installedVersion === "") {
       return true;
     }
 
     try {
       const targetVersion = await this.getLatestNpmVersion(
-        source.version ? source.spec : source.name,
+        source.version !== undefined && source.version !== "" ? source.spec : source.name,
         source.range,
       );
       return gt(targetVersion, installedVersion);
@@ -1221,12 +1229,15 @@ export class DefaultPackageManager implements PackageManager {
     }
 
     const singleSource = sources.length === 1 ? sources[0] : undefined;
-    const sourceLabel = singleSource ? singleSource.source : `${scope} npm packages`;
-    const message = singleSource
-      ? `Updating ${singleSource.source}...`
-      : `Updating ${scope} npm packages...`;
+    const sourceLabel = singleSource === undefined ? `${scope} npm packages` : singleSource.source;
+    const message =
+      singleSource === undefined
+        ? `Updating ${scope} npm packages...`
+        : `Updating ${singleSource.source}...`;
     const specs = sources.map((entry) =>
-      entry.parsed.version ? entry.parsed.spec : `${entry.parsed.name}@latest`,
+      entry.parsed.version !== undefined && entry.parsed.version !== ""
+        ? entry.parsed.spec
+        : `${entry.parsed.name}@latest`,
     );
 
     await this.withProgress("update", sourceLabel, message, async () => {
@@ -1327,7 +1338,7 @@ export class DefaultPackageManager implements PackageManager {
 
       const installMissing = async (): Promise<boolean> => {
         if (isOfflineModeEnabled()) return false;
-        if (!onMissing) {
+        if (onMissing === undefined) {
           await this.installParsedSource(parsed, resolvedScope);
           return true;
         }
@@ -1381,9 +1392,9 @@ export class DefaultPackageManager implements PackageManager {
         entry.scope === "user" &&
         this.getPackageIdentity(this.getPackageSourceString(entry.pkg), "user") === identity,
     );
-    return userEntry
-      ? { source: this.getPackageSourceString(userEntry.pkg), scope: "user" }
-      : undefined;
+    return userEntry === undefined
+      ? undefined
+      : { source: this.getPackageSourceString(userEntry.pkg), scope: "user" };
   }
 
   private resolveLocalExtensionSource(
@@ -1461,7 +1472,7 @@ export class DefaultPackageManager implements PackageManager {
     configuredPackages: PackageSource[],
   ): string {
     const suggestion = this.findSuggestedConfiguredSource(source, configuredPackages);
-    if (!suggestion) {
+    if (suggestion === undefined || suggestion === "") {
       return `No matching package found for ${source}`;
     }
     return `No matching package found for ${source}. Did you mean ${suggestion}?`;
@@ -1485,10 +1496,11 @@ export class DefaultPackageManager implements PackageManager {
       }
       if (parsed.type === "git") {
         const shorthand = `${parsed.host}/${parsed.path}`;
-        const shorthandWithRef = parsed.ref ? `${shorthand}@${parsed.ref}` : undefined;
+        const shorthandWithRef =
+          parsed.ref !== undefined && parsed.ref !== "" ? `${shorthand}@${parsed.ref}` : undefined;
         if (
           trimmedSource === shorthand ||
-          (shorthandWithRef && trimmedSource === shorthandWithRef)
+          (shorthandWithRef && trimmedSource === shorthandWithRef) === true
         ) {
           suggestions.add(sourceStr);
         }
@@ -1538,7 +1550,7 @@ export class DefaultPackageManager implements PackageManager {
     }
 
     const gitParsed = parseGitUrl(source);
-    if (gitParsed) {
+    if (gitParsed !== null) {
       return gitParsed;
     }
 
@@ -1550,10 +1562,12 @@ export class DefaultPackageManager implements PackageManager {
     installedPath: string,
   ): Promise<boolean> {
     const installedVersion = this.getInstalledNpmVersion(installedPath);
-    if (!installedVersion) {
+    if (installedVersion === undefined || installedVersion === "") {
       return false;
     }
-    return source.range ? satisfies(installedVersion, source.range) : true;
+    return source.range !== undefined && source.range !== ""
+      ? satisfies(installedVersion, source.range)
+      : true;
   }
 
   private async npmHasAvailableUpdate(source: NpmSource, installedPath: string): Promise<boolean> {
@@ -1562,13 +1576,13 @@ export class DefaultPackageManager implements PackageManager {
     }
 
     const installedVersion = this.getInstalledNpmVersion(installedPath);
-    if (!installedVersion) {
+    if (installedVersion === undefined || installedVersion === "") {
       return false;
     }
 
     try {
       const targetVersion = await this.getLatestNpmVersion(
-        source.version ? source.spec : source.name,
+        source.version !== undefined && source.version !== "" ? source.spec : source.name,
         source.range,
       );
       return gt(targetVersion, installedVersion);
@@ -1597,7 +1611,7 @@ export class DefaultPackageManager implements PackageManager {
       { cwd: this.cwd, timeoutMs: NETWORK_TIMEOUT_MS },
     );
     const raw = stdout.trim();
-    if (!raw) throw new Error("Empty response from npm view");
+    if (raw === "") throw new Error("Empty response from npm view");
     const parsed = JSON.parse(raw) as unknown;
     if (typeof parsed === "string") {
       return parsed;
@@ -1606,8 +1620,11 @@ export class DefaultPackageManager implements PackageManager {
       const versions = parsed.filter(
         (value): value is string => typeof value === "string" && value.length > 0,
       );
-      const latest = range ? maxSatisfying(versions, range) : [...versions].sort(rcompare)[0];
-      if (latest) return latest;
+      const latest =
+        range !== undefined && range !== ""
+          ? maxSatisfying(versions, range)
+          : [...versions].sort(rcompare)[0];
+      if (latest !== undefined && latest !== null && latest !== "") return latest;
     }
     throw new Error("Unexpected response from npm view");
   }
@@ -1631,14 +1648,14 @@ export class DefaultPackageManager implements PackageManager {
 
   private async getRemoteGitHead(installedPath: string): Promise<string> {
     const upstreamRef = await this.getGitUpstreamRef(installedPath);
-    if (upstreamRef) {
+    if (upstreamRef !== undefined && upstreamRef !== "") {
       const remoteHead = await this.runGitRemoteCommand(installedPath, [
         "ls-remote",
         "origin",
         upstreamRef,
       ]);
       const match = remoteHead.match(/^([0-9a-f]{40})\s+/m);
-      if (match?.[1]) {
+      if (match?.[1] !== undefined && match?.[1] !== "") {
         return match[1];
       }
     }
@@ -1649,7 +1666,7 @@ export class DefaultPackageManager implements PackageManager {
       "HEAD",
     ]);
     const match = remoteHead.match(/^([0-9a-f]{40})\s+HEAD$/m);
-    if (!match?.[1]) {
+    if (match?.[1] === undefined || match?.[1] === "") {
       throw new Error("Failed to determine remote HEAD");
     }
     return match[1];
@@ -1672,7 +1689,7 @@ export class DefaultPackageManager implements PackageManager {
         throw new Error(`Unsupported upstream remote: ${trimmedUpstream}`);
       }
       const branch = trimmedUpstream.slice("origin/".length);
-      if (!branch) {
+      if (branch === "") {
         throw new Error("Missing upstream branch name");
       }
       const head = await this.runCommandCapture("git", ["rev-parse", "@{upstream}"], {
@@ -1707,7 +1724,7 @@ export class DefaultPackageManager implements PackageManager {
         },
       ).catch(() => "");
       const branch = originHeadRef.trim().replace(/^refs\/remotes\/origin\//, "");
-      if (branch) {
+      if (branch !== "") {
         return {
           ref: "origin/HEAD",
           head,
@@ -1743,7 +1760,7 @@ export class DefaultPackageManager implements PackageManager {
         return undefined;
       }
       const branch = trimmed.slice("origin/".length);
-      return branch ? `refs/heads/${branch}` : undefined;
+      return branch === "" ? undefined : `refs/heads/${branch}`;
     } catch {
       return undefined;
     }
@@ -1792,7 +1809,7 @@ export class DefaultPackageManager implements PackageManager {
     if (parsed.type === "git") {
       return `git:${parsed.host}/${parsed.path}`;
     }
-    if (scope) {
+    if (scope !== undefined) {
       const baseDir = this.getBaseDirForScope(scope);
       return `local:${this.resolvePathFromBase(parsed.path, baseDir)}`;
     }
@@ -1824,7 +1841,7 @@ export class DefaultPackageManager implements PackageManager {
 
   private parseNpmSpec(spec: string): { name: string; version?: string } {
     const match = spec.match(/^(@?[^@]+(?:\/[^@]+)?)(?:@(.+))?$/);
-    if (!match) {
+    if (match === null) {
       return { name: spec };
     }
     const name = match[1] ?? spec;
@@ -1840,11 +1857,11 @@ export class DefaultPackageManager implements PackageManager {
 
   private getNpmCommand(): { command: string; args: string[] } {
     const configuredCommand = this.settingsManager.getNpmCommand();
-    if (!configuredCommand || configuredCommand.length === 0) {
+    if (configuredCommand === undefined || configuredCommand.length === 0) {
       return { command: "npm", args: [] };
     }
     const [command, ...args] = configuredCommand;
-    if (!command) {
+    if (command === undefined || command === "") {
       throw new Error("Invalid npmCommand: first array entry must be a non-empty command");
     }
     return { command, args };
@@ -1859,7 +1876,9 @@ export class DefaultPackageManager implements PackageManager {
     const separatorIndex = npmCommand.args.lastIndexOf("--");
     if (separatorIndex >= 0) {
       const wrappedCommand = npmCommand.args[separatorIndex + 1];
-      return wrappedCommand ? normalizeCommandName(wrappedCommand) : directCommand;
+      return wrappedCommand !== undefined && wrappedCommand !== ""
+        ? normalizeCommandName(wrappedCommand)
+        : directCommand;
     }
     if (supportedPackageManagers.has(directCommand)) return directCommand;
 
@@ -1956,7 +1975,7 @@ export class DefaultPackageManager implements PackageManager {
   private async installGit(source: GitSource, scope: SourceScope): Promise<void> {
     const targetDir = this.getGitInstallPath(source, scope);
     if (existsSync(targetDir)) {
-      if (source.ref) {
+      if (source.ref !== undefined && source.ref !== "") {
         await this.ensureGitRef(targetDir, ["fetch", "origin", source.ref], "FETCH_HEAD");
         return;
       }
@@ -1965,7 +1984,7 @@ export class DefaultPackageManager implements PackageManager {
       return;
     }
     const gitRoot = this.getGitInstallRoot(scope);
-    if (gitRoot) {
+    if (gitRoot !== undefined && gitRoot !== "") {
       this.ensureGitIgnore(gitRoot);
     }
     mkdirSync(dirname(targetDir), { recursive: true });
@@ -1973,7 +1992,7 @@ export class DefaultPackageManager implements PackageManager {
 
     try {
       await this.runCommand("git", ["clone", source.repo, targetDir]);
-      if (source.ref) {
+      if (source.ref !== undefined && source.ref !== "") {
         await this.runCommand("git", ["checkout", source.ref], { cwd: targetDir });
       }
       const packageJsonPath = join(targetDir, "package.json");
@@ -1994,7 +2013,7 @@ export class DefaultPackageManager implements PackageManager {
       return;
     }
 
-    if (source.ref) {
+    if (source.ref !== undefined && source.ref !== "") {
       await this.ensureGitRef(targetDir, ["fetch", "origin", source.ref], "FETCH_HEAD");
       return;
     }
@@ -2012,8 +2031,8 @@ export class DefaultPackageManager implements PackageManager {
         dependencies?: unknown;
       };
       if (
-        !manifest.dependencies ||
         typeof manifest.dependencies !== "object" ||
+        manifest.dependencies === null ||
         Array.isArray(manifest.dependencies)
       ) {
         return false;
@@ -2103,7 +2122,7 @@ export class DefaultPackageManager implements PackageManager {
   }
 
   private pruneEmptyGitParents(targetDir: string, installRoot: string | undefined): void {
-    if (!installRoot) return;
+    if (installRoot === undefined || installRoot === "") return;
     const resolvedRoot = resolve(installRoot);
     let current = dirname(targetDir);
     while (current.startsWith(resolvedRoot) && current !== resolvedRoot) {
@@ -2161,7 +2180,11 @@ export class DefaultPackageManager implements PackageManager {
   private getGlobalNpmRoot(): string {
     const npmCommand = this.getNpmCommand();
     const commandKey = [npmCommand.command, ...npmCommand.args].join("\0");
-    if (this.globalNpmRoot && this.globalNpmRootCommandKey === commandKey) {
+    if (
+      this.globalNpmRoot !== undefined &&
+      this.globalNpmRoot !== "" &&
+      this.globalNpmRootCommandKey === commandKey
+    ) {
       return this.globalNpmRoot;
     }
     if (this.getPackageManagerName() === "bun") {
@@ -2185,7 +2208,7 @@ export class DefaultPackageManager implements PackageManager {
     }>;
     for (const entry of entries) {
       const path = entry.dependencies?.[packageName]?.path;
-      if (path) return path;
+      if (path !== undefined && path !== "") return path;
     }
     return undefined;
   }
@@ -2217,7 +2240,9 @@ export class DefaultPackageManager implements PackageManager {
       return managedPath;
     }
     const legacyPath = this.getLegacyGlobalNpmInstallPath(source);
-    return legacyPath && existsSync(legacyPath) ? legacyPath : managedPath;
+    return legacyPath !== undefined && legacyPath !== "" && existsSync(legacyPath)
+      ? legacyPath
+      : managedPath;
   }
 
   private getGitInstallPath(source: GitSource, scope: SourceScope): string {
@@ -2225,7 +2250,7 @@ export class DefaultPackageManager implements PackageManager {
       return this.getTemporaryDir(`git-${source.host}`, source.path, source.ref);
     }
     const installRoot = this.getGitInstallRoot(scope);
-    if (!installRoot) {
+    if (installRoot === undefined || installRoot === "") {
       throw new Error("Missing git install root");
     }
     return this.resolveManagedPath(installRoot, source.host, source.path);
@@ -2245,7 +2270,7 @@ export class DefaultPackageManager implements PackageManager {
   private getTemporaryDir(prefix: string, suffix?: string, ref?: string): string {
     const root = this.resolveManagedPath(getExtensionTempFolder(this.agentDir), prefix);
     const hash = createHash("sha256")
-      .update(`${prefix}-${suffix ?? ""}${ref ? `@${ref}` : ""}`)
+      .update(`${prefix}-${suffix ?? ""}${ref !== undefined && ref !== "" ? `@${ref}` : ""}`)
       .digest("hex")
       .slice(0, 8);
     return this.resolveManagedPath(root, hash, suffix ?? "");
@@ -2285,23 +2310,23 @@ export class DefaultPackageManager implements PackageManager {
     filter: PackageFilter | undefined,
     metadata: PathMetadata,
   ): boolean {
-    if (filter) {
+    if (filter !== undefined) {
       for (const resourceType of RESOURCE_TYPES) {
         const patterns = filter[resourceType];
         const target = this.getTargetMap(accumulator, resourceType);
         if (filter.autoload === false) {
           this.applyPackageDeltaFilter(packageRoot, patterns ?? [], resourceType, target, metadata);
-        } else if (patterns !== undefined) {
-          this.applyPackageFilter(packageRoot, patterns, resourceType, target, metadata);
-        } else {
+        } else if (patterns === undefined) {
           this.collectDefaultResources(packageRoot, resourceType, target, metadata);
+        } else {
+          this.applyPackageFilter(packageRoot, patterns, resourceType, target, metadata);
         }
       }
       return true;
     }
 
     const manifest = readMsaManifest(join(packageRoot, "package.json"));
-    if (manifest) {
+    if (manifest !== null) {
       for (const resourceType of RESOURCE_TYPES) {
         const entries = manifest[resourceType as keyof MsaManifest];
         this.addManifestEntries(
@@ -2337,7 +2362,7 @@ export class DefaultPackageManager implements PackageManager {
   ): void {
     const manifest = readMsaManifest(join(packageRoot, "package.json"));
     const entries = manifest?.[resourceType as keyof MsaManifest];
-    if (entries) {
+    if (entries !== undefined) {
       this.addManifestEntries(entries, packageRoot, resourceType, target, metadata);
       return;
     }
@@ -2398,7 +2423,7 @@ export class DefaultPackageManager implements PackageManager {
   ): { allFiles: string[]; enabledByManifest: Set<string> } {
     const manifest = readMsaManifest(join(packageRoot, "package.json"));
     const entries = manifest?.[resourceType as keyof MsaManifest];
-    if (entries && entries.length > 0) {
+    if (entries !== undefined && entries.length > 0) {
       const allFiles = this.collectFilesFromManifestEntries(entries, packageRoot, resourceType);
       const manifestPatterns = entries.filter(isOverridePattern);
       const enabledByManifest =
@@ -2423,7 +2448,7 @@ export class DefaultPackageManager implements PackageManager {
     target: Map<string, { metadata: PathMetadata; enabled: boolean }>,
     metadata: PathMetadata,
   ): void {
-    if (!entries) return;
+    if (entries === undefined) return;
 
     const allFiles = this.collectFilesFromManifestEntries(entries, root, resourceType);
     const patterns = entries.filter(isOverridePattern);
@@ -2675,7 +2700,7 @@ export class DefaultPackageManager implements PackageManager {
     metadata: PathMetadata,
     enabled: boolean,
   ): void {
-    if (!path) return;
+    if (path === "") return;
     if (!map.has(path)) {
       map.set(path, { metadata, enabled });
     }
@@ -2735,7 +2760,7 @@ export class DefaultPackageManager implements PackageManager {
     options?: { cwd?: string; env?: Record<string, string> },
   ): ChildProcessByStdio<null, Readable, Readable> {
     const baseEnv = getEnv();
-    const env = options?.env ? { ...baseEnv, ...options.env } : baseEnv;
+    const env = options?.env === undefined ? baseEnv : { ...baseEnv, ...options.env };
     return spawnProcess(command, args, {
       cwd: options?.cwd,
       stdio: ["ignore", "pipe", "pipe"],
@@ -2768,11 +2793,11 @@ export class DefaultPackageManager implements PackageManager {
         stderr += data.toString();
       });
       child.once("error", (error) => {
-        if (timeout) clearTimeout(timeout);
+        if (timeout !== undefined) clearTimeout(timeout);
         reject(error);
       });
       child.once("close", (code, signal) => {
-        if (timeout) clearTimeout(timeout);
+        if (timeout !== undefined) clearTimeout(timeout);
         if (timedOut) {
           reject(new Error(`${command} ${args.join(" ")} timed out after ${options?.timeoutMs}ms`));
           return;
@@ -2810,7 +2835,7 @@ export class DefaultPackageManager implements PackageManager {
       encoding: "utf-8",
       env,
     });
-    if (result.error || result.status !== 0) {
+    if (result.error !== undefined || result.status !== 0) {
       throw new Error(
         `Failed to run ${command} ${args.join(" ")}: ${result.error?.message || result.stderr || result.stdout}`,
       );

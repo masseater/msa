@@ -16,12 +16,12 @@ export function getMissingSessionCwdIssue(
   fallbackCwd: string,
 ): SessionCwdIssue | undefined {
   const sessionFile = sessionManager.getSessionFile();
-  if (!sessionFile) {
+  if (sessionFile === undefined || sessionFile === "") {
     return undefined;
   }
 
   const sessionCwd = sessionManager.getCwd();
-  if (!sessionCwd || existsSync(sessionCwd)) {
+  if (sessionCwd === "" || existsSync(sessionCwd)) {
     return undefined;
   }
 
@@ -33,7 +33,10 @@ export function getMissingSessionCwdIssue(
 }
 
 export function formatMissingSessionCwdError(issue: SessionCwdIssue): string {
-  const sessionFile = issue.sessionFile ? `\nSession file: ${issue.sessionFile}` : "";
+  const sessionFile =
+    issue.sessionFile !== undefined && issue.sessionFile !== ""
+      ? `\nSession file: ${issue.sessionFile}`
+      : "";
   return `Stored session working directory does not exist: ${issue.sessionCwd}${sessionFile}\nCurrent working directory: ${issue.fallbackCwd}`;
 }
 
@@ -56,7 +59,7 @@ export function assertSessionCwdExists(
   fallbackCwd: string,
 ): void {
   const issue = getMissingSessionCwdIssue(sessionManager, fallbackCwd);
-  if (issue) {
+  if (issue !== undefined) {
     throw new MissingSessionCwdError(issue);
   }
 }

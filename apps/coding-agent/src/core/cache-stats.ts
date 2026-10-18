@@ -38,7 +38,7 @@ function detectMiss(
   const usage = message.usage;
   const promptTokens = usage.input + usage.cacheRead + usage.cacheWrite;
   if (
-    !prev ||
+    prev === undefined ||
     promptTokens <= 0 ||
     (usage.cacheRead + usage.cacheWrite === 0 && !prev.reportedCache)
   ) {
@@ -107,7 +107,7 @@ function scan(
       }
     } else if (entry.type === "message" && entry.message.role === "assistant") {
       const miss = detectMiss(prev, entry.message, models);
-      if (miss) {
+      if (miss !== undefined) {
         totals.missedTokens += miss.missedTokens;
         totals.missedCost += miss.missedCost;
         totals.missCount += 1;

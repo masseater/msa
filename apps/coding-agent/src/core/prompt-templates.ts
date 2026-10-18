@@ -23,7 +23,7 @@ export function parseCommandArgs(argsString: string): string[] {
   let inQuote: string | null = null;
 
   for (const char of argsString) {
-    if (inQuote) {
+    if (inQuote !== null && inQuote !== "") {
       if (char === inQuote) {
         inQuote = null;
       } else {
@@ -57,19 +57,19 @@ export function substituteArgs(content: string, args: string[]): string {
   return content.replace(
     /\$\{(\d+|ARGUMENTS|@):-([^}]*)\}|\$\{@:(\d+)(?::(\d+))?\}|\$(ARGUMENTS|@|\d+)/g,
     (_match, defaultTarget, defaultValue, sliceStart, sliceLength, simple) => {
-      if (defaultTarget) {
+      if (defaultTarget !== undefined) {
         const value =
           defaultTarget === "@" || defaultTarget === "ARGUMENTS"
             ? allArgs
             : args[parseInt(defaultTarget, 10) - 1];
-        return value ? value : defaultValue;
+        return value !== undefined && value !== "" ? value : defaultValue;
       }
 
-      if (sliceStart) {
+      if (sliceStart !== undefined) {
         let start = parseInt(sliceStart, 10) - 1;
         if (start < 0) start = 0;
 
-        if (sliceLength) {
+        if (sliceLength !== undefined) {
           const length = parseInt(sliceLength, 10);
           return args.slice(start, start + length).join(" ");
         }
@@ -114,9 +114,9 @@ function loadTemplateFromFile(
 
   let description =
     typeof frontmatter["description"] === "string" ? frontmatter["description"] : "";
-  if (!description) {
+  if (description === "") {
     const firstLine = body.split("\n").find((line) => line.trim());
-    if (firstLine) {
+    if (firstLine !== undefined && firstLine !== "") {
       description = firstLine.slice(0, 60);
       if (firstLine.length > 60) description += "...";
     }
@@ -166,7 +166,7 @@ function loadTemplatesFromDir(
 
       if (isFile && entry.name.endsWith(".md")) {
         const result = loadTemplateFromFile(fullPath, getSourceInfo(fullPath));
-        if (result.template) {
+        if (result.template !== null) {
           templates.push(result.template);
         }
         diagnostics.push(...result.diagnostics);
@@ -256,7 +256,7 @@ export function loadPromptTemplates(
         addResult(loadTemplatesFromDir(resolvedPath, getSourceInfo));
       } else if (stats.isFile() && resolvedPath.endsWith(".md")) {
         const result = loadTemplateFromFile(resolvedPath, getSourceInfo(resolvedPath));
-        if (result.template) {
+        if (result.template !== null) {
           templates.push(result.template);
         }
         diagnostics.push(...result.diagnostics);
@@ -275,13 +275,13 @@ export function expandPromptTemplate(text: string, templates: PromptTemplate[]):
   if (!text.startsWith("/")) return text;
 
   const match = text.match(/^\/([^\s]+)(?:\s+([\s\S]*))?$/);
-  if (!match) return text;
+  if (match === null) return text;
 
   const templateName = match[1];
   const argsString = match[2] ?? "";
 
   const template = templates.find((t) => t.name === templateName);
-  if (template) {
+  if (template !== undefined) {
     const args = parseCommandArgs(argsString);
     return substituteArgs(template.content, args);
   }

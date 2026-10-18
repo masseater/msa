@@ -45,7 +45,7 @@ function parseCatalog(providerId: string, value: unknown): AnyModel[] {
       : typeof value === "object" && value !== null
         ? Object.values(value)
         : undefined;
-  if (!entries) throw new Error(`Invalid model catalog for provider "${providerId}"`);
+  if (entries === undefined) throw new Error(`Invalid model catalog for provider "${providerId}"`);
   return entries
     .filter(
       (entry): entry is Record<string, unknown> =>
@@ -64,7 +64,7 @@ async function readCatalog(
   return {
     models: parseCatalog(providerId, await response.json()),
     lastModified: Number.isNaN(lastModified) ? 0 : lastModified,
-    ...(etag !== null ? { etag } : {}),
+    ...(etag === null ? {} : { etag }),
   };
 }
 
@@ -79,7 +79,7 @@ function remoteModels(
   entry: ModelsStoreEntry | undefined,
   localGeneratedAt: number | undefined,
 ): readonly AnyModel[] {
-  return entry && isNewer(entry.lastModified, localGeneratedAt) ? entry.models : [];
+  return entry !== undefined && isNewer(entry.lastModified, localGeneratedAt) ? entry.models : [];
 }
 
 function requestCatalog(
@@ -96,7 +96,7 @@ function requestCatalog(
       headers: {
         accept: "application/json",
         "User-Agent": getMsaUserAgent(VERSION),
-        ...(validator ? { "if-none-match": validator } : {}),
+        ...(validator !== undefined && validator !== "" ? { "if-none-match": validator } : {}),
       },
       signal,
     },
@@ -141,7 +141,7 @@ export function withRemoteCatalog(
       }
       if (!context.allowNetwork || context.signal.aborted) return;
       if (
-        !context.force &&
+        context.force !== true &&
         stored?.checkedAt !== undefined &&
         stored.lastModified !== undefined &&
         Date.now() - stored.checkedAt < REMOTE_CATALOG_REFRESH_INTERVAL_MS
@@ -149,11 +149,11 @@ export function withRemoteCatalog(
         return;
       }
 
-      const validator = stored && stored.models.length > 0 ? stored.etag : undefined;
+      const validator = stored !== undefined && stored.models.length > 0 ? stored.etag : undefined;
       const response = await requestCatalog(provider.id, catalogBaseUrl, context.signal, validator);
       if (context.signal.aborted) return;
       const checkedAt = Date.now();
-      if (response.status === 304 && stored) {
+      if (response.status === 304 && stored !== undefined) {
         await context.publish({ persist: { ...stored, checkedAt } });
         return;
       }

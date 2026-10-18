@@ -92,7 +92,7 @@ export function getProjectTrustOptions(
       savedPath: parentPath,
     });
   }
-  if (options?.includeSessionOnly) {
+  if (options?.includeSessionOnly === true) {
     trustOptions.push({ label: "Trust (this session only)", trusted: true, updates: [] });
   }
   trustOptions.push({
@@ -101,7 +101,7 @@ export function getProjectTrustOptions(
     updates: [{ path: trustPath, decision: false }],
     savedPath: trustPath,
   });
-  if (options?.includeSessionOnly) {
+  if (options?.includeSessionOnly === true) {
     trustOptions.push({ label: "Do not trust (this session only)", trusted: false, updates: [] });
   }
   return trustOptions;

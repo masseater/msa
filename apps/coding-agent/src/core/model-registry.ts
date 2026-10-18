@@ -84,7 +84,7 @@ export class ModelRegistry {
   async getApiKeyAndHeaders(model: Model<Api>): Promise<ResolvedRequestAuth> {
     try {
       const resolution = await this.runtime.getAuth(model);
-      if (!resolution) {
+      if (resolution === undefined) {
         const compatibility = this.runtime.getCompatibilityRequestConfig(model);
         if (compatibility.authHeader) {
           return { ok: false, error: `No API key found for "${model.provider}"` };
@@ -95,7 +95,9 @@ export class ModelRegistry {
         ok: true,
         apiKey: resolution.auth.apiKey,
         headers: resolution.auth.headers,
-        ...(resolution.auth.baseUrl ? { baseUrl: resolution.auth.baseUrl } : {}),
+        ...(resolution.auth.baseUrl !== undefined && resolution.auth.baseUrl !== ""
+          ? { baseUrl: resolution.auth.baseUrl }
+          : {}),
         env: resolution.env,
       };
     } catch (error) {
@@ -211,7 +213,8 @@ export class ModelRegistry {
   registerProvider(providerName: string, config: ProviderConfigInput): void;
   registerProvider(providerOrName: Provider | string, config?: ProviderConfigInput): void {
     if (typeof providerOrName === "string") {
-      if (!config) throw new Error("Provider config is required when registering by name");
+      if (config === undefined)
+        throw new Error("Provider config is required when registering by name");
       this.runtime.registerProvider(providerOrName, config);
       return;
     }

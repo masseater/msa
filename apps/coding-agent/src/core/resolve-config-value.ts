@@ -13,7 +13,7 @@ type ConfigValueReference =
   | { type: "template"; parts: TemplatePart[] };
 
 function appendLiteral(parts: TemplatePart[], value: string): void {
-  if (!value) return;
+  if (value === "") return;
   const previousPart = parts[parts.length - 1];
   if (previousPart?.type === "literal") {
     previousPart.value += value;
@@ -61,7 +61,7 @@ function parseConfigValueTemplate(config: string): TemplatePart[] {
     }
 
     const match = config.slice(dollarIndex + 1).match(ENV_VAR_NAME_PREFIX_RE);
-    if (match) {
+    if (match !== null) {
       parts.push({ type: "env", name: match[0] });
       index = dollarIndex + 1 + match[0].length;
       continue;
@@ -166,7 +166,7 @@ function executeWithConfiguredShell(command: string): {
       windowsHide: true,
     });
 
-    if (result.error) {
+    if (result.error !== undefined) {
       const error = result.error as NodeJS.ErrnoException;
       if (error.code === "ENOENT") {
         return { executed: false, value: undefined };
@@ -269,11 +269,11 @@ export function resolveHeaders(
   headers: Record<string, string> | undefined,
   env?: Record<string, string>,
 ): Record<string, string> | undefined {
-  if (!headers) return undefined;
+  if (headers === undefined) return undefined;
   const resolved: Record<string, string> = {};
   for (const [key, value] of Object.entries(headers)) {
     const resolvedValue = resolveConfigValue(value, env);
-    if (resolvedValue) {
+    if (resolvedValue !== undefined && resolvedValue !== "") {
       resolved[key] = resolvedValue;
     }
   }
@@ -285,7 +285,7 @@ export function resolveHeadersOrThrow(
   description: string,
   env?: Record<string, string>,
 ): Record<string, string> | undefined {
-  if (!headers) return undefined;
+  if (headers === undefined) return undefined;
   const resolved: Record<string, string> = {};
   for (const [key, value] of Object.entries(headers)) {
     resolved[key] = resolveConfigValueOrThrow(value, `${description} header "${key}"`, env);

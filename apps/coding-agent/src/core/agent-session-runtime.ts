@@ -164,10 +164,10 @@ export class AgentSessionRuntime {
   private async finishSessionReplacement(
     withSession?: (ctx: ReplacedSessionContext) => Promise<void>,
   ): Promise<void> {
-    if (this.rebindSession) {
+    if (this.rebindSession !== undefined) {
       await this.rebindSession(this.session);
     }
-    if (withSession) {
+    if (withSession !== undefined) {
       await withSession(this.session.createReplacedSessionContext());
     }
   }
@@ -217,7 +217,7 @@ export class AgentSessionRuntime {
     const sessionManager = this.session.sessionManager.isPersisted()
       ? SessionManager.create(this.cwd, sessionDir)
       : SessionManager.inMemory(this.cwd);
-    if (options?.parentSession) {
+    if (options?.parentSession !== undefined && options?.parentSession !== "") {
       sessionManager.newSession({ parentSession: options.parentSession });
     }
 
@@ -230,7 +230,7 @@ export class AgentSessionRuntime {
         sessionStartEvent: { type: "session_start", reason: "new", previousSessionFile },
       }),
     );
-    if (options?.setup) {
+    if (options?.setup !== undefined) {
       await options.setup(this.session.sessionManager);
       this.session.refreshContext();
     }
@@ -254,7 +254,7 @@ export class AgentSessionRuntime {
     let selectedText: string | undefined;
 
     const selectedEntry = this.session.sessionManager.getEntry(entryId);
-    if (!selectedEntry) {
+    if (selectedEntry === undefined) {
       throw new Error("Invalid entry ID for forking");
     }
 
@@ -271,11 +271,11 @@ export class AgentSessionRuntime {
     const previousSessionFile = this.session.sessionFile;
     if (this.session.sessionManager.isPersisted()) {
       const currentSessionFile = this.session.sessionFile;
-      if (!currentSessionFile) {
+      if (currentSessionFile === undefined || currentSessionFile === "") {
         throw new Error("Persisted session is missing a session file");
       }
       const sessionDir = this.session.sessionManager.getSessionDir();
-      if (!targetLeafId) {
+      if (targetLeafId === null || targetLeafId === "") {
         const sessionManager = SessionManager.create(this.cwd, sessionDir);
         sessionManager.newSession({ parentSession: currentSessionFile });
         await this.teardownCurrent("fork", sessionManager.getSessionFile());
@@ -298,7 +298,7 @@ export class AgentSessionRuntime {
       }
       const sessionManager = SessionManager.open(currentSessionFile, sessionDir);
       const forkedSessionPath = sessionManager.createBranchedSession(targetLeafId);
-      if (!forkedSessionPath) {
+      if (forkedSessionPath === undefined || forkedSessionPath === "") {
         throw new Error("Failed to create forked session");
       }
       await this.teardownCurrent("fork", sessionManager.getSessionFile());
@@ -316,7 +316,7 @@ export class AgentSessionRuntime {
 
     const sessionManager = this.session.sessionManager;
     await this.teardownCurrent("fork", sessionManager.getSessionFile());
-    if (!targetLeafId) {
+    if (targetLeafId === null || targetLeafId === "") {
       sessionManager.newSession({ parentSession: previousSessionFile });
     } else {
       sessionManager.createBranchedSession(targetLeafId);

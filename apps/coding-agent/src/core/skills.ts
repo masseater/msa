@@ -23,7 +23,7 @@ function toPosixPath(p: string): string {
 
 function prefixIgnorePattern(line: string, prefix: string): string | null {
   const trimmed = line.trim();
-  if (!trimmed) return null;
+  if (trimmed === "") return null;
   if (trimmed.startsWith("#") && !trimmed.startsWith("\\#")) return null;
 
   let pattern = line;
@@ -40,13 +40,13 @@ function prefixIgnorePattern(line: string, prefix: string): string | null {
     pattern = pattern.slice(1);
   }
 
-  const prefixed = prefix ? `${prefix}${pattern}` : pattern;
+  const prefixed = prefix === "" ? pattern : `${prefix}${pattern}`;
   return negated ? `!${prefixed}` : prefixed;
 }
 
 function addIgnoreRules(ig: IgnoreMatcher, dir: string, rootDir: string): void {
   const relativeDir = relative(rootDir, dir);
-  const prefix = relativeDir ? `${toPosixPath(relativeDir)}/` : "";
+  const prefix = relativeDir === "" ? "" : `${toPosixPath(relativeDir)}/`;
 
   for (const filename of IGNORE_FILE_NAMES) {
     const ignorePath = join(dir, filename);
@@ -196,7 +196,7 @@ function loadSkillsFromDirInternal(
       }
 
       const result = loadSkillFromFile(fullPath, source);
-      if (result.skill) {
+      if (result.skill !== null) {
         skills.push(result.skill);
       }
       diagnostics.push(...result.diagnostics);
@@ -244,7 +244,7 @@ function loadSkillsFromDirInternal(
       }
 
       const result = loadSkillFromFile(fullPath, source);
-      if (result.skill) {
+      if (result.skill !== null) {
         skills.push(result.skill);
       }
       diagnostics.push(...result.diagnostics);
@@ -392,7 +392,10 @@ export function loadSkills(options: LoadSkillsOptions): LoadSkillsResult {
       }
 
       const existing = skillMap.get(skill.name);
-      if (existing) {
+      if (existing === undefined) {
+        skillMap.set(skill.name, skill);
+        realPathSet.add(realPath);
+      } else {
         collisionDiagnostics.push({
           type: "collision",
           message: `name "${skill.name}" collision`,
@@ -404,9 +407,6 @@ export function loadSkills(options: LoadSkillsOptions): LoadSkillsResult {
             loserPath: skill.filePath,
           },
         });
-      } else {
-        skillMap.set(skill.name, skill);
-        realPathSet.add(realPath);
       }
     }
   }
@@ -456,10 +456,10 @@ export function loadSkills(options: LoadSkillsOptions): LoadSkillsResult {
         addSkills(loadSkillsFromDirInternal(resolvedPath, source, true));
       } else if (stats.isFile() && resolvedPath.endsWith(".md")) {
         const result = loadSkillFromFile(resolvedPath, source);
-        if (result.skill) {
-          addSkills({ skills: [result.skill], diagnostics: result.diagnostics });
-        } else {
+        if (result.skill === null) {
           allDiagnostics.push(...result.diagnostics);
+        } else {
+          addSkills({ skills: [result.skill], diagnostics: result.diagnostics });
         }
       } else {
         allDiagnostics.push({

@@ -11,7 +11,7 @@ const RAW_STDOUT_RETRY_DELAY_MS = 10;
 let rawStdoutWriteTail: Promise<void> = Promise.resolve();
 
 function getRawStdoutWrite(): StdoutTakeoverState["rawStdoutWrite"] {
-  if (stdoutTakeoverState) {
+  if (stdoutTakeoverState !== undefined) {
     return stdoutTakeoverState.rawStdoutWrite;
   }
   return process.stdout.write.bind(process.stdout) as StdoutTakeoverState["rawStdoutWrite"];
@@ -23,7 +23,7 @@ async function writeRawStdoutChunk(text: string): Promise<void> {
       await new Promise<void>((resolve, reject) => {
         try {
           getRawStdoutWrite()(text, (error) => {
-            if (error) reject(error);
+            if (error !== undefined && error !== null) reject(error);
             else resolve();
           });
         } catch (error) {
@@ -43,7 +43,7 @@ async function writeRawStdoutChunk(text: string): Promise<void> {
 }
 
 export function takeOverStdout(): void {
-  if (stdoutTakeoverState) {
+  if (stdoutTakeoverState !== undefined) {
     return;
   }
 
@@ -74,7 +74,7 @@ export function takeOverStdout(): void {
 }
 
 export function restoreStdout(): void {
-  if (!stdoutTakeoverState) {
+  if (stdoutTakeoverState === undefined) {
     return;
   }
 
