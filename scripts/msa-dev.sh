@@ -24,16 +24,6 @@ if [[ "$NO_ENV" == "true" ]]; then
   unset GH_TOKEN
   unset GITHUB_TOKEN
   unset HF_TOKEN
-  unset AWS_PROFILE
-  unset AWS_ACCESS_KEY_ID
-  unset AWS_SECRET_ACCESS_KEY
-  unset AWS_SESSION_TOKEN
-  unset AWS_REGION
-  unset AWS_DEFAULT_REGION
-  unset AWS_BEARER_TOKEN_BEDROCK
-  unset AWS_CONTAINER_CREDENTIALS_RELATIVE_URI
-  unset AWS_CONTAINER_CREDENTIALS_FULL_URI
-  unset AWS_WEB_IDENTITY_TOKEN_FILE
   echo "Running without API keys..."
 fi
 

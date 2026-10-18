@@ -5,7 +5,7 @@ Most hosted providers support one or both of these authentication methods:
 - Sign in through a browser or device flow backed by OAuth.
 - Provide an API key.
 
-Use `/login [provider]` to see the methods supported by a provider. Amazon Bedrock can also use ambient cloud credentials.
+Use `/login [provider]` to see the methods supported by a provider.
 
 ## Authenticate interactively
 
@@ -26,7 +26,7 @@ export ANTHROPIC_API_KEY=sk-ant-...
 msa
 ```
 
-This table covers providers with a single primary API-key variable. Providers that need additional configuration or support ambient credentials are covered under [Provider Specific Config](#provider-specific-config).
+This table covers providers with a single primary API-key variable. Providers that need additional configuration are covered under [Provider Specific Config](#provider-specific-config).
 
 | Provider            | Environment variable |
 | ------------------- | -------------------- |
@@ -57,16 +57,17 @@ msa runs the command when the key is first needed and caches its standard output
 
 ## Provider Specific Config
 
-The providers below have additional setup, need additional settings, or can use credentials supplied by their platform.
+The providers below have additional setup or need additional settings.
 
 A stored API-key credential can include an `env` object. Its values take priority over the process environment for that provider:
 
 ```json
 {
-  "amazon-bedrock": {
+  "openrouter": {
     "type": "api_key",
+    "key": "sk-or-...",
     "env": {
-      "AWS_PROFILE": "my-profile"
+      "OPENROUTER_TEAM": "my-team"
     }
   }
 }
@@ -103,27 +104,3 @@ Regional endpoints filter models to their region. To use one, set the base URL i
 ```
 
 If the base URL rejects the key at `/models/user` or does not have that endpoint, for example a proxy configured as the OpenRouter base URL, msa lists every OpenRouter model.
-
-### Amazon Bedrock
-
-Bedrock can use a bearer token or an ambient AWS credential source:
-
-```bash
-# Named profile
-export AWS_PROFILE=your-profile
-
-# IAM keys
-export AWS_ACCESS_KEY_ID=AKIA...
-export AWS_SECRET_ACCESS_KEY=...
-# Required for temporary credentials
-export AWS_SESSION_TOKEN=...
-
-# Bedrock bearer token
-export AWS_BEARER_TOKEN_BEDROCK=...
-
-# Region, when not supplied by the profile or AWS SDK configuration
-export AWS_REGION=us-west-2
-# AWS_DEFAULT_REGION is also supported
-```
-
-msa also supports ECS task credentials and IRSA through the standard `AWS_CONTAINER_CREDENTIALS_*` and `AWS_WEB_IDENTITY_TOKEN_FILE` variables.

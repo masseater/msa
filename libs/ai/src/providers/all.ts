@@ -14,7 +14,6 @@ import type {
   ImageModel,
   Model,
 } from "../types.ts";
-import { amazonBedrockProvider } from "./amazon-bedrock.ts";
 import { anthropicProvider } from "./anthropic.ts";
 import modelDataManifest from "./data/.manifest.json" with { type: "json" };
 import { openaiCodexProvider } from "./openai-codex.ts";
@@ -138,7 +137,6 @@ export function getAllBuiltinModels<TProvider extends BuiltinProvider>(
  */
 export function builtinProviders(): Provider[] {
   return [
-    amazonBedrockProvider(),
     anthropicProvider(),
     openaiProvider(),
     openaiCodexProvider(),

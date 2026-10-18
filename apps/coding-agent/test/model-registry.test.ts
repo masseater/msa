@@ -1268,27 +1268,28 @@ describe("ModelRegistry", () => {
     });
 
     test("stored API key env propagates to request auth and resolves headers", async () => {
-      await authStorage.modify("amazon-bedrock", async () => ({
+      await authStorage.modify("openrouter", async () => ({
         type: "api_key",
-        env: { AWS_PROFILE: "stored-profile" },
+        key: "stored-openrouter-key",
+        env: { OPENROUTER_TEAM: "stored-team" },
       }));
       writeRawModelsJson({
-        "amazon-bedrock": {
-          headers: { "x-profile": "$AWS_PROFILE" },
+        openrouter: {
+          headers: { "x-team": "$OPENROUTER_TEAM" },
         },
       });
 
       const registry = await createModelRegistry(authStorage, modelsJsonPath);
-      const model = registry.getAll().find((m) => m.provider === "amazon-bedrock");
+      const model = registry.getAll().find((m) => m.provider === "openrouter");
       expect(model).toBeDefined();
 
       const auth = await registry.getApiKeyAndHeaders(model!);
 
       expect(auth).toEqual({
         ok: true,
-        apiKey: undefined,
-        headers: { "x-profile": "stored-profile" },
-        env: { AWS_PROFILE: "stored-profile" },
+        apiKey: "stored-openrouter-key",
+        headers: { "x-team": "stored-team" },
+        env: { OPENROUTER_TEAM: "stored-team" },
       });
     });
 

@@ -10,7 +10,6 @@ import type { StreamOptions } from "../src/types.ts";
 
 type StreamOptionsWithExtras = StreamOptions & Record<string, unknown>;
 
-import { hasBedrockCredentials } from "./bedrock-utils.ts";
 import { resolveApiKey } from "./oauth.ts";
 
 // Resolve OAuth tokens at module level (async, runs before tests)
@@ -271,18 +270,6 @@ describe("Tool Results with Images", () => {
 
   describe.skipIf(!process.env["OPENROUTER_API_KEY"])("OpenRouter Provider (glm-4.5v)", () => {
     const llm = getModel("openrouter", "z-ai/glm-4.5v");
-
-    it("should handle tool result with only image", { retry: 3, timeout: 30000 }, async () => {
-      await handleToolWithImageResult(llm);
-    });
-
-    it("should handle tool result with text and image", { retry: 3, timeout: 30000 }, async () => {
-      await handleToolWithTextAndImageResult(llm);
-    });
-  });
-
-  describe.skipIf(!hasBedrockCredentials())("Amazon Bedrock Provider (claude-sonnet-4-5)", () => {
-    const llm = getModel("amazon-bedrock", "global.anthropic.claude-sonnet-4-5-20250929-v1:0");
 
     it("should handle tool result with only image", { retry: 3, timeout: 30000 }, async () => {
       await handleToolWithImageResult(llm);

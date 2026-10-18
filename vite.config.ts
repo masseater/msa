@@ -132,8 +132,6 @@ export default defineConfig({
     ignorePatterns: [
       ...generated,
       "apps/coding-agent/examples/extensions/gondolin/**",
-      "libs/ai/bedrock-provider.d.ts",
-      "libs/ai/bedrock-provider.js",
       "libs/codemode/examples/**",
     ],
     plugins: lintPlugins,

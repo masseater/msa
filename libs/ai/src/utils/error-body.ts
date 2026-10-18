@@ -8,7 +8,7 @@
 // collapse to `"Unknown: UnknownError"`.
 //
 // `normalizeProviderError` probes the known SDK field shapes (`openai`,
-// `@google/genai`, AWS Bedrock, msa's own HTTP errors) and returns a struct each provider
+// `@google/genai`, msa's own HTTP errors) and returns a struct each provider
 // composes into its display string. The `messageCarriesBody` flag captures the
 // Anthropic / `@google/genai` happy path where the SDK already folded the body
 // into the message, so providers can preserve it without double-printing.
@@ -30,8 +30,6 @@ type SdkErrorShape = Error & {
   status?: unknown;
   body?: unknown;
   error?: unknown;
-  $metadata?: { httpStatusCode?: unknown };
-  $response?: { statusCode?: unknown; body?: unknown };
 };
 
 export function normalizeProviderError(error: unknown): NormalizedProviderError {
@@ -53,26 +51,21 @@ export function normalizeProviderError(error: unknown): NormalizedProviderError 
 }
 
 /**
- * Probe the HTTP status, first numeric hit wins, in SDK-field order:
- * `status` (`openai`, `@google/genai`) →
- * `$metadata.httpStatusCode` (Bedrock) → `$response.statusCode` (Bedrock).
+ * Probe the HTTP status from `status` (`openai`, `@google/genai`).
  *
  * @param {SdkErrorShape} error - thrown value
  * @returns {number | undefined} the HTTP status, or undefined
  */
 function extractStatus(error: SdkErrorShape): number | undefined {
   if (typeof error.status === "number") return error.status;
-  if (typeof error.$metadata?.httpStatusCode === "number") return error.$metadata.httpStatusCode;
-  if (typeof error.$response?.statusCode === "number") return error.$response.statusCode;
   return undefined;
 }
 
 /**
  * Probe the raw body reason, first usable hit wins, in SDK-field order:
  * `body` string (msa's own HTTP errors) → `error` parsed JSON body object (`openai` SDK's
- * `this.error`) → `$response.body` (Bedrock). Empty objects and unread response
- * streams are treated as no body so they do not surface as `"{}"` or serialized
- * stream internals. The chosen body is truncated to the cap.
+ * `this.error`). Empty objects are treated as no body so they do not surface
+ * as `"{}"`. The chosen body is truncated to the cap.
  *
  * @param {SdkErrorShape} error - thrown value
  * @returns {string | undefined} the truncated body, or undefined
@@ -88,35 +81,16 @@ function extractBody(error: SdkErrorShape): string | undefined {
 function pickBodyText(error: SdkErrorShape): string | undefined {
   if (typeof error.body === "string") return error.body;
   if (isPlainNonEmptyObject(error.error)) return safeJsonStringify(error.error);
-  const responseBody = error.$response?.body;
-  if (typeof responseBody === "string") return responseBody;
-  if (isReadableStreamLike(responseBody)) return undefined;
-  if (isPlainNonEmptyObject(responseBody)) return safeJsonStringify(responseBody);
   return undefined;
-}
-
-function isReadableStreamLike(value: unknown): boolean {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    "pipe" in value &&
-    typeof value.pipe === "function"
-  );
 }
 
 /**
  * Only a PLAIN object counts as an HTTP body. SDK error fields can hold class
- * instances instead of parsed bodies — AWS SDK v3's `$response.body` is an
- * HTTP stream/response wrapper object, and stringifying one produced garbage
- * like `{"_events":...}` as the "body", which then REPLACED `error.message`
- * in the composed display string. `error.message` is where the SDK puts the
- * real deserialized exception text ("Input is too long...", schema validation
- * details, ...), so the one useful string was discarded for noise. A class
- * instance yields no body, `messageCarriesBody` stays true, and the real
- * message survives. Complements the `pipe` sniffing above: web
- * ReadableStreams (pipeTo/pipeThrough, no `pipe`) and non-stream SDK wrapper
- * classes fail the prototype check, while parsed JSON bodies (plain objects
- * by construction) still pass.
+ * instances instead of parsed bodies, and stringifying one produces garbage
+ * like `{"_events":...}` that would REPLACE `error.message` in the composed
+ * display string. A class instance yields no body, `messageCarriesBody` stays
+ * true, and the real message survives, while parsed JSON bodies (plain
+ * objects by construction) still pass.
  *
  * @param {unknown} value - candidate body
  * @returns {boolean} whether the value is a plain object with keys

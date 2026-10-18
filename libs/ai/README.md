@@ -63,7 +63,6 @@ Unified LLM API with provider collections, automatic auth resolution, token and 
 - **Radius** (API key or OAuth, with a dynamically refreshed gateway catalog)
 - **Anthropic**
 - **OpenRouter**
-- **Amazon Bedrock**
 - **OpenCode Zen**
 - **OpenCode Go**
 - **Any OpenAI-compatible API**: Ollama, vLLM, LM Studio, etc.
@@ -222,7 +221,6 @@ Providers internally share **API implementations** (the wire protocols): Anthrop
 For apps that only need specific providers, there is one factory per built-in provider, each a subpath import that pulls only that provider's catalog:
 
 ```typescript
-import { amazonBedrockProvider } from "@msa/ai/providers/amazon-bedrock";
 import { anthropicProvider } from "@msa/ai/providers/anthropic";
 import { openaiProvider } from "@msa/ai/providers/openai";
 import { openrouterProvider } from "@msa/ai/providers/openrouter";
@@ -346,7 +344,7 @@ Static built-in providers are no-ops for `refresh()`. Radius is both static and 
 
 ## Auth
 
-Every provider owns its auth: how API keys resolve (stored credentials, environment variables, ambient sources like AWS profiles or gcloud ADC) and, where supported, OAuth login/refresh flows.
+Every provider owns its auth: how API keys resolve (stored credentials, environment variables, ambient sources like workload identity federation) and, where supported, OAuth login/refresh flows.
 
 ### How Auth Resolves
 
@@ -421,8 +419,9 @@ API-key credentials use the same discriminator as msa's `auth.json` and can carr
 ```typescript
 const credential = {
   type: "api_key",
+  key: "sk-or-...",
   env: {
-    AWS_PROFILE: "my-profile",
+    OPENROUTER_TEAM: "my-team",
   },
 } as const;
 ```
@@ -440,8 +439,6 @@ Built-in providers resolve these env vars (Node.js; in browsers pass `apiKey` ex
 | OpenCode Zen / OpenCode Go | `OPENCODE_API_KEY`                             |
 
 Stored credentials remain provider-scoped, so save the key under the provider ID you register.
-
-Amazon Bedrock resolves ambient AWS credentials (`AWS_PROFILE`, access key pairs, `AWS_BEARER_TOKEN_BEDROCK`, ECS task roles, web identity tokens); its provider-owned login flow supports bearer tokens, AWS profiles, and the existing credential chain.
 
 ## Tools
 
@@ -496,7 +493,7 @@ const strictTool: Tool = {
 };
 ```
 
-Strict JSON-schema constrained sampling is supported for OpenAI, Anthropic, supported Amazon Bedrock Converse models, and Gemini 3 tool calls through the Google Generative AI adapter. Google uses `VALIDATED` function-calling mode (or `ANY` when explicitly requested); earlier Gemini versions fall back for `strict: 'prefer'` and reject `strict: 'require'` because they do not enforce required parameters. Bedrock strict-tool capability is generated from model structured-output metadata; custom Bedrock models can override `compat.supportsStrictMode`. OpenAI Responses and Chat Completions can also emit grammar-constrained custom tools with OpenAI Lark or regex grammar variants. If multiple OpenAI variants are supplied, Lark is preferred over regex. Grammar constraints are enforced when the active model supports grammar tools; otherwise the tool falls back to normal function/JSON-schema handling. Grammar tool capability is model metadata: the generated catalog sets `compat.supportsOpenAIGrammarTools` for GPT-5+ models on endpoints that pass OpenAI custom tools through (OpenAI, OpenAI Codex, and opencode). OpenAI rejects `type: "custom"` tools for pre-GPT-5 models, and gateways that normalize tool schemas (e.g. OpenRouter) mangle them, so the flag stays off elsewhere. Custom model definitions can opt in via `compat`. Grammar-capable models reject grammar configurations without a non-empty supported variant. Native grammar tools must have an object parameter schema with exactly one required string property:
+Strict JSON-schema constrained sampling is supported for OpenAI, Anthropic, and Gemini 3 tool calls through the Google Generative AI adapter. Google uses `VALIDATED` function-calling mode (or `ANY` when explicitly requested); earlier Gemini versions fall back for `strict: 'prefer'` and reject `strict: 'require'` because they do not enforce required parameters. OpenAI Responses and Chat Completions can also emit grammar-constrained custom tools with OpenAI Lark or regex grammar variants. If multiple OpenAI variants are supplied, Lark is preferred over regex. Grammar constraints are enforced when the active model supports grammar tools; otherwise the tool falls back to normal function/JSON-schema handling. Grammar tool capability is model metadata: the generated catalog sets `compat.supportsOpenAIGrammarTools` for GPT-5+ models on endpoints that pass OpenAI custom tools through (OpenAI, OpenAI Codex, and opencode). OpenAI rejects `type: "custom"` tools for pre-GPT-5 models, and gateways that normalize tool schemas (e.g. OpenRouter) mangle them, so the flag stays off elsewhere. Custom model definitions can opt in via `compat`. Grammar-capable models reject grammar configurations without a non-empty supported variant. Native grammar tools must have an object parameter schema with exactly one required string property:
 
 ```typescript
 const patchTool: Tool = {
@@ -1316,14 +1313,13 @@ const s = stream(claudeModel, normalizeContext(context), {
 
 Built-in API implementations live under `./api/<api-id>`:
 
-| API id                    | Options type                  |
-| ------------------------- | ----------------------------- |
-| `anthropic-messages`      | `AnthropicOptions`            |
-| `openai-completions`      | `OpenAICompletionsOptions`    |
-| `openai-responses`        | `OpenAIResponsesOptions`      |
-| `openai-codex-responses`  | `OpenAICodexResponsesOptions` |
-| `google-generative-ai`    | `GoogleOptions`               |
-| `bedrock-converse-stream` | `BedrockOptions`              |
+| API id                   | Options type                  |
+| ------------------------ | ----------------------------- |
+| `anthropic-messages`     | `AnthropicOptions`            |
+| `openai-completions`     | `OpenAICompletionsOptions`    |
+| `openai-responses`       | `OpenAIResponsesOptions`      |
+| `openai-codex-responses` | `OpenAICodexResponsesOptions` |
+| `google-generative-ai`   | `GoogleOptions`               |
 
 Importing an implementation module loads its SDK. The `./api/<id>.lazy` wrappers (used by the provider factories) defer that load to the first request when the runtime or bundler supports dynamic import chunking. Legacy raw API subpaths from older releases (`./anthropic`, `./google`, `./openai-completions`, ...) were removed; use `@msa/ai/api/<api-id>`.
 
@@ -1639,9 +1635,8 @@ const response = await models.complete(
 
 Browser compatibility notes:
 
-- Amazon Bedrock (`bedrock-converse-stream`) is not supported in browser environments. It can still appear in model lists; calls fail at runtime.
 - OAuth login flows are Node-only. They are lazy-loaded behind bundler-opaque imports, so registering an OAuth-capable provider does not pull Node-only code into a browser bundle — only actually logging in would.
-- Use a server-side proxy or backend service if you need Bedrock or OAuth-based auth from a web app.
+- Use a server-side proxy or backend service if you need OAuth-based auth from a web app.
 
 ## Bundling and Tree Shaking
 
@@ -1662,7 +1657,7 @@ Rules:
 - `@msa/ai/providers/<provider>` imports that provider's catalog and lazy API wrapper only.
 - `@msa/ai/providers/all` imports every built-in provider factory and all catalogs. Use it only when you want the full built-in set.
 - With code splitting, provider SDKs stay in lazy chunks and load on first request.
-- Without code splitting, bundlers fold reachable lazy API implementations into the single bundle. A single-provider bundle then includes that provider's SDK; `providers/all` includes all statically visible SDKs. Bedrock is the exception: its AWS SDK implementation is loaded through a bundler-opaque Node-only import.
+- Without code splitting, bundlers fold reachable lazy API implementations into the single bundle. A single-provider bundle then includes that provider's SDK; `providers/all` includes all statically visible SDKs.
 - Importing `@msa/ai/api/<api-id>` directly loads that API implementation and its SDK immediately.
 
 Avoid `@msa/ai/compat` in new bundled apps; it preserves the old global API and imports the full built-in catalog surface.
@@ -1677,39 +1672,17 @@ esbuild app.js --bundle --platform=node --format=esm \
 
 This is only for Node bundles; it is not a browser or Cloudflare Workers workaround.
 
-Bedrock is Node-only. Add it like any other provider:
-
-```typescript
-import { createModels } from "@msa/ai";
-import { amazonBedrockProvider } from "@msa/ai/providers/amazon-bedrock";
-
-const models = createModels();
-models.setProvider(amazonBedrockProvider());
-```
-
-In normal Node package usage and code-split bundles, Bedrock loads its AWS SDK implementation lazily. For a standalone single-file bundle that must include Bedrock support, register the implementation module explicitly:
-
-```typescript
-import { setBedrockProviderModule } from "@msa/ai/api/bedrock-converse-stream.lazy";
-import { bedrockProviderModule } from "@msa/ai/bedrock-provider";
-
-setBedrockProviderModule(bedrockProviderModule);
-```
-
-That explicit override bundles the AWS SDK. Without it, Bedrock's opaque runtime import expects the package's Bedrock implementation file to be available at runtime.
-
 ### Provider-Scoped Environment Overrides
 
-Pass `env` in stream options to scope provider configuration to a request. Values in `env` are used before process environment variables for provider auth and configuration such as Bedrock settings, `MSA_CACHE_RETENTION`, and `HTTP_PROXY`/`HTTPS_PROXY`.
+Pass `env` in stream options to scope provider configuration to a request. Values in `env` are used before process environment variables for provider auth and configuration such as `MSA_CACHE_RETENTION`, and `HTTP_PROXY`/`HTTPS_PROXY`.
 
 ```typescript
 const models = builtinModels();
-const model = models.getModel("amazon-bedrock", "us.anthropic.claude-opus-4-6-v1")!;
+const model = models.getModel("anthropic", "claude-opus-4-8")!;
 
 const response = await models.complete(model, context, {
   env: {
-    AWS_PROFILE: "my-profile",
-    AWS_REGION: "us-west-2",
+    MSA_CACHE_RETENTION: "long",
   },
 });
 ```
@@ -1817,15 +1790,15 @@ Adding a new LLM provider requires changes across multiple files. The layered la
 
 #### 1. Core Types (`src/types.ts`)
 
-- Add the API identifier to `KnownApi` (for example `"bedrock-converse-stream"`), if it is a new API
-- Add the provider name to `KnownProvider` (for example `"amazon-bedrock"`)
+- Add the API identifier to `KnownApi` (for example `"anthropic-messages"`), if it is a new API
+- Add the provider name to `KnownProvider` (for example `"openrouter"`)
 - Add the options type to `ApiOptionsMap`
 
 #### 2. API Implementation (`src/api/<api-id>.ts`, only for a new API)
 
-Create a new API implementation file (for example `bedrock-converse-stream.ts`) that exports exactly `stream` and `streamSimple`, plus:
+Create a new API implementation file (for example `anthropic-messages.ts`) that exports exactly `stream` and `streamSimple`, plus:
 
-- An options interface extending `StreamOptions` (for example `BedrockOptions`)
+- An options interface extending `StreamOptions` (for example `AnthropicOptions`)
 - Message conversion functions to transform the `TranscriptContext` messages to provider format; read the prompt and tools from the transcript with `getInitialSystemMessage()`, `getCurrentTools()`, and `resolveTranscript()`
 - Tool conversion if the provider supports tools
 - Response parsing to emit standardized events (`text`, `tool_call`, `thinking`, `usage`, `stop`)
@@ -1842,7 +1815,7 @@ Add a lazy wrapper `src/api/<api-id>.lazy.ts` (`<name>Api()` via `lazyApi()`) so
 #### 4. Provider Factory (`src/providers/<id>.ts`)
 
 - `createProvider()` wiring catalog + auth + the lazy API wrapper
-- Auth: `envApiKeyAuth` for standard key providers, a custom `ApiKeyAuth` for ambient auth (AWS profiles, ADC), `lazyOAuth` where an OAuth flow exists
+- Auth: `envApiKeyAuth` for standard key providers, a custom `ApiKeyAuth` for ambient auth, `lazyOAuth` where an OAuth flow exists
 - Register the factory in `src/providers/all.ts`
 - If it is a new API: register it in the builtin list in `src/compat.ts` and add the package subpath export in `package.json`
 
@@ -1864,8 +1837,6 @@ Create or update test files to cover the new provider:
 - `providers.test.ts` - Provider listing and auth resolution
 
 For `cross-provider-handoff.test.ts`, add at least one provider/model pair. If the provider exposes multiple model families (for example GPT and Claude), add at least one pair per family.
-
-For providers with non-standard auth (AWS), create a utility like `bedrock-utils.ts` with credential detection helpers.
 
 #### 6. Coding Agent Integration (`../../apps/coding-agent/`)
 

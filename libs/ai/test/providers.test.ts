@@ -2,7 +2,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { lazyApi } from "../src/api/lazy.ts";
 import { envApiKeyAuth } from "../src/auth/helpers.ts";
-import type { AuthContext, AuthEvent } from "../src/auth/types.ts";
+import type { AuthContext } from "../src/auth/types.ts";
 import { getModel as getCompatModel, getModels as getCompatModels } from "../src/compat.ts";
 import { InMemoryModelsStore } from "../src/models-store.ts";
 import { createModels, createProvider, getSupportedThinkingLevels } from "../src/models.ts";
@@ -18,7 +18,6 @@ import {
   getBuiltinModels,
   getBuiltinProviders,
 } from "../src/providers/all.ts";
-import { amazonBedrockProvider } from "../src/providers/amazon-bedrock.ts";
 import { anthropicProvider } from "../src/providers/anthropic.ts";
 import { fauxAssistantMessage, fauxProvider } from "../src/providers/faux.ts";
 import type {
@@ -122,11 +121,6 @@ describe("builtin providers", () => {
     expect(getBuiltinModel("anthropic", "claude-opus-5").inputLimits?.images?.maxPerRequest).toBe(
       600,
     );
-    expect(
-      getBuiltinModel("amazon-bedrock", "anthropic.claude-haiku-4-5-20251001-v1:0").inputLimits,
-    ).toMatchObject({
-      images: { maxPerMessage: 20 },
-    });
     expect(getBuiltinModel("openai", "gpt-4o").inputLimits).toMatchObject({
       maxRequestBytes: 512 * 1024 * 1024,
       images: { maxPerRequest: 1500 },
@@ -248,56 +242,6 @@ describe("builtin providers", () => {
     const result = await models.getAuth("anthropic");
     expect(result?.auth.apiKey).toBe("oauth-token");
     expect(result?.source).toBe("ANTHROPIC_OAUTH_TOKEN");
-  });
-
-  it("runs provider-owned Bedrock bearer token and AWS profile login flows", async () => {
-    const auth = amazonBedrockProvider().auth.apiKey!;
-    const bearerAnswers = ["bearer-token", "bedrock-token"];
-    expect(
-      await auth.login?.({
-        signal: neverAbortedSignal,
-        prompt: () => Promise.resolve(bearerAnswers.shift()!),
-        notify: () => {},
-      }),
-    ).toEqual({ type: "api_key", key: "bedrock-token" });
-
-    const profileAnswers = ["aws-profile", "work"];
-    const events: AuthEvent[] = [];
-    expect(
-      await auth.login?.({
-        signal: neverAbortedSignal,
-        prompt: () => Promise.resolve(profileAnswers.shift()!),
-        notify: (event) => events.push(event),
-      }),
-    ).toEqual({ type: "api_key", env: { AWS_PROFILE: "work" } });
-    expect(events).toEqual([
-      expect.objectContaining({
-        type: "info",
-        links: [expect.objectContaining({ label: "AWS credential provider chain" })],
-      }),
-    ]);
-    expect(
-      await auth.resolve({
-        ctx: fakeAuthContext({}),
-        credential: { type: "api_key", env: { AWS_PROFILE: "work" } },
-        signal: neverAbortedSignal,
-      }),
-    ).toMatchObject({ auth: {}, env: { AWS_PROFILE: "work" } });
-  });
-
-  it("reports bedrock as configured from ambient AWS credentials without an api key", async () => {
-    const models = createModels({ authContext: fakeAuthContext({ AWS_PROFILE: "dev" }) });
-    models.setProvider(amazonBedrockProvider());
-    const model = models.getModels("amazon-bedrock")[0];
-    if (!model) throw new Error("Expected a model");
-
-    const result = await models.getAuth(model.provider);
-    expect(result?.auth).toEqual({});
-    expect(result?.source).toBe("AWS_PROFILE");
-
-    const unconfigured = createModels({ authContext: fakeAuthContext({}) });
-    unconfigured.setProvider(amazonBedrockProvider());
-    expect(await unconfigured.getAuth(model.provider)).toBeUndefined();
   });
 });
 
