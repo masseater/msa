@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { stripVTControlCharacters } from "node:util";
 import { runInNewContext } from "node:vm";
@@ -10,6 +10,7 @@ import {
   writeTextFile,
   joinPath,
   isoFromMillis,
+  removePath,
 } from "@msa/testing";
 import type { TUI } from "@msa/tui";
 import { Effect } from "effect";
@@ -72,14 +73,22 @@ describe("read line range display", () => {
     [25, "Infinity", ""],
   ];
 
-  beforeAll(() => {
-    initTheme("dark");
-    tempDir = mkdtempSync(joinPath(tmpdir(), "msa-read-range-"));
-  });
+  beforeAll(() =>
+    runTest(
+      Effect.gen(function* () {
+        initTheme("dark");
+        tempDir = mkdtempSync(joinPath(tmpdir(), "msa-read-range-"));
+      }),
+    ),
+  );
 
-  afterAll(() => {
-    rmSync(tempDir, { recursive: true, force: true });
-  });
+  afterAll(() =>
+    runTest(
+      Effect.gen(function* () {
+        yield* removePath(tempDir);
+      }),
+    ),
+  );
 
   it("formats raw read arguments", () => {
     for (const [offset, limit, range] of cases) {

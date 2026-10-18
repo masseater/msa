@@ -1,7 +1,8 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 
-import { currentTimeMillis, joinPath } from "@msa/testing";
+import { currentTimeMillis, joinPath, runTest, removePath } from "@msa/testing";
+import { Effect } from "effect";
 import { afterAll, describe, expect, test } from "vite-plus/test";
 
 import { getAgentDir } from "../src/config.ts";
@@ -632,11 +633,15 @@ Analyze GitHub issue(s): $ARGUMENTS`,
     expect(is!.argumentHint).toBe("<issue>");
   });
 
-  afterAll(() => {
-    try {
-      rmSync(testDir, { recursive: true, force: true });
-    } catch {}
-  });
+  afterAll(() =>
+    runTest(
+      Effect.gen(function* () {
+        try {
+          yield* removePath(testDir);
+        } catch {}
+      }),
+    ),
+  );
 });
 
 describe("loadPromptTemplates - diagnostics", () => {

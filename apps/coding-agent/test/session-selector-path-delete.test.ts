@@ -1,7 +1,7 @@
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 
-import { awaited, runTest, joinPath, dateFromMillis } from "@msa/testing";
+import { awaited, runTest, joinPath, dateFromMillis, removePath } from "@msa/testing";
 import { setKeybindings } from "@msa/tui";
 import { Effect } from "effect";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vite-plus/test";
@@ -101,11 +101,15 @@ describe("session selector path/delete interactions", () => {
   const keybindings = new KeybindingsManager();
   const tempDirs: string[] = [];
 
-  afterEach(() => {
-    for (const dir of tempDirs.splice(0)) {
-      rmSync(dir, { recursive: true, force: true });
-    }
-  });
+  afterEach(() =>
+    runTest(
+      Effect.gen(function* () {
+        for (const dir of tempDirs.splice(0)) {
+          yield* removePath(dir);
+        }
+      }),
+    ),
+  );
 
   beforeEach(() => {
     setKeybindings(new KeybindingsManager());

@@ -1,8 +1,9 @@
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, symlinkSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { pathToFileURL } from "node:url";
 
-import { joinPath, resolvePath } from "@msa/testing";
+import { joinPath, resolvePath, runTest, removePath } from "@msa/testing";
+import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import {
@@ -16,12 +17,16 @@ import {
 
 let tempDir: string;
 
-afterEach(() => {
-  if (tempDir.length > 0) {
-    rmSync(tempDir, { recursive: true, force: true });
-    tempDir = "";
-  }
-});
+afterEach(() =>
+  runTest(
+    Effect.gen(function* () {
+      if (tempDir.length > 0) {
+        yield* removePath(tempDir);
+        tempDir = "";
+      }
+    }),
+  ),
+);
 
 function createTempDir(): string {
   tempDir = mkdtempSync(joinPath(tmpdir(), "msa-paths-"));

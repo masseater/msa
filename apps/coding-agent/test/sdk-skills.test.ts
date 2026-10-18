@@ -1,7 +1,15 @@
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 
-import { awaited, runTest, currentTimeMillis, randomSuffixSync, joinPath } from "@msa/testing";
+import {
+  awaited,
+  runTest,
+  currentTimeMillis,
+  randomSuffixSync,
+  joinPath,
+  writeTextFile,
+  makeDirectory,
+  removePath,
+} from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
@@ -15,14 +23,15 @@ describe("createAgentSession skills option", () => {
   let tempDir: string;
   let skillsDir: string;
 
-  beforeEach(() => {
-    tempDir = joinPath(tmpdir(), `msa-sdk-test-${currentTimeMillis()}-${randomSuffixSync()}`);
-    skillsDir = joinPath(tempDir, "skills", "test-skill");
-    mkdirSync(skillsDir, { recursive: true });
-
-    writeFileSync(
-      joinPath(skillsDir, "SKILL.md"),
-      `---
+  beforeEach(() =>
+    runTest(
+      Effect.gen(function* () {
+        tempDir = joinPath(tmpdir(), `msa-sdk-test-${currentTimeMillis()}-${randomSuffixSync()}`);
+        skillsDir = joinPath(tempDir, "skills", "test-skill");
+        yield* makeDirectory(skillsDir);
+        yield* writeTextFile(
+          joinPath(skillsDir, "SKILL.md"),
+          `---
 name: test-skill
 description: A test skill for SDK tests.
 ---
@@ -31,14 +40,20 @@ description: A test skill for SDK tests.
 
 This is a test skill.
 `,
-    );
-  });
+        );
+      }),
+    ),
+  );
 
-  afterEach(() => {
-    if (tempDir.length > 0) {
-      rmSync(tempDir, { recursive: true, force: true });
-    }
-  });
+  afterEach(() =>
+    runTest(
+      Effect.gen(function* () {
+        if (tempDir.length > 0) {
+          yield* removePath(tempDir);
+        }
+      }),
+    ),
+  );
 
   it("should discover skills by default and expose them on session.skills", () =>
     runTest(

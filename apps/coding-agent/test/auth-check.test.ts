@@ -1,4 +1,3 @@
-import { existsSync, mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 
 import { InMemoryModelsStore } from "@msa/ai";
@@ -11,6 +10,8 @@ import {
   writeTextFile,
   pathExists,
   joinPath,
+  makeDirectory,
+  removePath,
 } from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
@@ -45,14 +46,22 @@ function createRuntime(credentials: AuthStorage | ReadOnlyAuthStorage): Promise<
 }
 
 describe("auth check command", () => {
-  beforeEach(() => {
-    if (existsSync(tempDir)) rmSync(tempDir, { recursive: true });
-    mkdirSync(tempDir, { recursive: true });
-  });
+  beforeEach(() =>
+    runTest(
+      Effect.gen(function* () {
+        if (yield* pathExists(tempDir)) yield* removePath(tempDir);
+        yield* makeDirectory(tempDir);
+      }),
+    ),
+  );
 
-  afterEach(() => {
-    if (existsSync(tempDir)) rmSync(tempDir, { recursive: true });
-  });
+  afterEach(() =>
+    runTest(
+      Effect.gen(function* () {
+        if (yield* pathExists(tempDir)) yield* removePath(tempDir);
+      }),
+    ),
+  );
 
   test("reports a configured provider as ready", () =>
     runTest(

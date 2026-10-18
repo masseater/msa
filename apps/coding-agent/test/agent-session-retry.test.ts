@@ -1,9 +1,16 @@
-import { existsSync, mkdirSync, rmSync } from "node:fs";
+import { mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 
 import { Agent, type AgentEvent, type AgentTool } from "@msa/agent-core";
 import { type AssistantMessage, createAssistantMessageEventStream, getModel } from "@msa/ai/compat";
-import { awaited, runTest, currentTimeMillis, joinPath } from "@msa/testing";
+import {
+  awaited,
+  runTest,
+  currentTimeMillis,
+  joinPath,
+  pathExists,
+  removePath,
+} from "@msa/testing";
 import { Effect } from "effect";
 import { Type } from "typebox";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
@@ -56,14 +63,18 @@ describe("AgentSession retry", () => {
     ),
   );
 
-  afterEach(() => {
-    if (session != null) {
-      session.dispose();
-    }
-    if (tempDir.length > 0 && existsSync(tempDir)) {
-      rmSync(tempDir, { recursive: true });
-    }
-  });
+  afterEach(() =>
+    runTest(
+      Effect.gen(function* () {
+        if (session != null) {
+          session.dispose();
+        }
+        if (tempDir.length > 0 && (yield* pathExists(tempDir))) {
+          yield* removePath(tempDir);
+        }
+      }),
+    ),
+  );
 
   function createSession(options?: {
     failCount?: number;

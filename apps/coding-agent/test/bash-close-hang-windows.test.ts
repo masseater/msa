@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 
 import {
@@ -9,6 +9,8 @@ import {
   abortController,
   randomSuffixSync,
   joinPath,
+  makeDirectory,
+  removePath,
 } from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
@@ -84,17 +86,25 @@ function getTextOutput(result: { content?: Array<{ type: string; text?: string }
 describe.skipIf(process.platform !== "win32")("Windows child-process close handling", () => {
   let testDir: string;
 
-  beforeEach(() => {
-    testDir = joinPath(
-      tmpdir(),
-      `coding-agent-bash-close-test-${currentTimeMillis()}-${randomSuffixSync()}`,
-    );
-    mkdirSync(testDir, { recursive: true });
-  });
+  beforeEach(() =>
+    runTest(
+      Effect.gen(function* () {
+        testDir = joinPath(
+          tmpdir(),
+          `coding-agent-bash-close-test-${currentTimeMillis()}-${randomSuffixSync()}`,
+        );
+        yield* makeDirectory(testDir);
+      }),
+    ),
+  );
 
-  afterEach(() => {
-    rmSync(testDir, { recursive: true, force: true });
-  });
+  afterEach(() =>
+    runTest(
+      Effect.gen(function* () {
+        yield* removePath(testDir);
+      }),
+    ),
+  );
 
   it("executeBash resolves after the shell exits even if inherited stdio handles stay open", () =>
     runTest(

@@ -1,4 +1,3 @@
-import { existsSync, mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 
 import {
@@ -10,7 +9,16 @@ import {
   type ProviderHeaders,
   type SimpleStreamOptions,
 } from "@msa/ai";
-import { awaited, runTest, currentTimeMillis, randomSuffixSync, joinPath } from "@msa/testing";
+import {
+  awaited,
+  runTest,
+  currentTimeMillis,
+  randomSuffixSync,
+  joinPath,
+  pathExists,
+  makeDirectory,
+  removePath,
+} from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
@@ -27,28 +35,36 @@ describe("createAgentSession provider attribution headers", () => {
   let agentDir: string;
   let originalTelemetryEnv: string | undefined;
 
-  beforeEach(() => {
-    tempDir = joinPath(
-      tmpdir(),
-      `pi-sdk-attribution-test-${currentTimeMillis()}-${randomSuffixSync()}`,
-    );
-    cwd = joinPath(tempDir, "project");
-    agentDir = joinPath(tempDir, "agent");
-    mkdirSync(cwd, { recursive: true });
-    mkdirSync(agentDir, { recursive: true });
-    deleteEnv("MSA_TELEMETRY");
-  });
+  beforeEach(() =>
+    runTest(
+      Effect.gen(function* () {
+        tempDir = joinPath(
+          tmpdir(),
+          `pi-sdk-attribution-test-${currentTimeMillis()}-${randomSuffixSync()}`,
+        );
+        cwd = joinPath(tempDir, "project");
+        agentDir = joinPath(tempDir, "agent");
+        yield* makeDirectory(cwd);
+        yield* makeDirectory(agentDir);
+        deleteEnv("MSA_TELEMETRY");
+      }),
+    ),
+  );
 
-  afterEach(() => {
-    if (originalTelemetryEnv === undefined) {
-      deleteEnv("MSA_TELEMETRY");
-    } else {
-      writeEnv("MSA_TELEMETRY", originalTelemetryEnv);
-    }
-    if (tempDir.length > 0 && existsSync(tempDir)) {
-      rmSync(tempDir, { recursive: true, force: true });
-    }
-  });
+  afterEach(() =>
+    runTest(
+      Effect.gen(function* () {
+        if (originalTelemetryEnv === undefined) {
+          deleteEnv("MSA_TELEMETRY");
+        } else {
+          writeEnv("MSA_TELEMETRY", originalTelemetryEnv);
+        }
+        if (tempDir.length > 0 && (yield* pathExists(tempDir))) {
+          yield* removePath(tempDir);
+        }
+      }),
+    ),
+  );
 
   function createModel(
     provider: string,

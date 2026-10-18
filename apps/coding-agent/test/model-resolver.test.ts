@@ -1,4 +1,3 @@
-import { rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 
 import { Agent } from "@msa/agent-core";
@@ -12,6 +11,7 @@ import {
   randomSuffix,
   makeDirectory,
   joinPath,
+  removePath,
 } from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, test, vi } from "vite-plus/test";
@@ -866,11 +866,15 @@ describe("default model selection", () => {
     const sonnet = getModel("anthropic", "claude-sonnet-4-5")!;
     const opus = getModel("anthropic", "claude-opus-4-8")!;
 
-    afterEach(() => {
-      for (const dir of tempDirs.splice(0)) {
-        rmSync(dir, { recursive: true, force: true });
-      }
-    });
+    afterEach(() =>
+      runTest(
+        Effect.gen(function* () {
+          for (const dir of tempDirs.splice(0)) {
+            yield* removePath(dir);
+          }
+        }),
+      ),
+    );
 
     function createSession(options: { scoped: boolean; persistedScope?: string[] }) {
       return runTest(

@@ -1,4 +1,3 @@
-import { mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 
 import { getModel } from "@msa/ai/compat";
@@ -9,6 +8,7 @@ import {
   pathExists,
   removePath,
   joinPath,
+  makeDirectory,
 } from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
@@ -31,10 +31,14 @@ describe.skipIf(!(API_KEY !== undefined && API_KEY.length > 0))("AgentSession fo
   let tempDir: string;
   let sessionManager: SessionManager;
 
-  beforeEach(() => {
-    tempDir = joinPath(tmpdir(), `msa-branching-test-${currentTimeMillis()}`);
-    mkdirSync(tempDir, { recursive: true });
-  });
+  beforeEach(() =>
+    runTest(
+      Effect.gen(function* () {
+        tempDir = joinPath(tmpdir(), `msa-branching-test-${currentTimeMillis()}`);
+        yield* makeDirectory(tempDir);
+      }),
+    ),
+  );
 
   afterEach(() =>
     runTest(

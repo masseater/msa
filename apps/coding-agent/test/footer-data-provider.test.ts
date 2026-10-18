@@ -1,5 +1,5 @@
 import { execFile, spawnSync } from "child_process";
-import { existsSync, type FSWatcher, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "fs";
+import { type FSWatcher, mkdirSync, mkdtempSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
@@ -41,7 +41,14 @@ vi.mock("child_process", () => ({
   }),
 }));
 
-import { awaited, runTest, currentTimeMillis, joinPath } from "@msa/testing";
+import {
+  awaited,
+  runTest,
+  currentTimeMillis,
+  joinPath,
+  pathExists,
+  removePath,
+} from "@msa/testing";
 import { Effect } from "effect";
 
 import { FooterDataProvider } from "../src/core/footer-data-provider.ts";
@@ -108,20 +115,28 @@ describe("FooterDataProvider reftable branch detection", () => {
   let originalCwd: string;
   let tempDir: string;
 
-  beforeEach(() => {
-    originalCwd = process.cwd();
-    tempDir = mkdtempSync(joinPath(tmpdir(), "footer-data-provider-"));
-    resolvedBranch = "main";
-    vi.mocked(spawnSync).mockClear();
-    vi.mocked(execFile).mockClear();
-  });
+  beforeEach(() =>
+    runTest(
+      Effect.gen(function* () {
+        originalCwd = process.cwd();
+        tempDir = mkdtempSync(joinPath(tmpdir(), "footer-data-provider-"));
+        resolvedBranch = "main";
+        vi.mocked(spawnSync).mockClear();
+        vi.mocked(execFile).mockClear();
+      }),
+    ),
+  );
 
-  afterEach(() => {
-    process.chdir(originalCwd);
-    if (tempDir.length > 0 && existsSync(tempDir)) {
-      rmSync(tempDir, { recursive: true, force: true });
-    }
-  });
+  afterEach(() =>
+    runTest(
+      Effect.gen(function* () {
+        process.chdir(originalCwd);
+        if (tempDir.length > 0 && (yield* pathExists(tempDir))) {
+          yield* removePath(tempDir);
+        }
+      }),
+    ),
+  );
 
   it("uses HEAD directly in a regular repo from a nested directory", () => {
     const repoDir = createPlainRepo(tempDir);

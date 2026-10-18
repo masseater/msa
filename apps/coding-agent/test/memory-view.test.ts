@@ -1,7 +1,7 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 
-import { awaited, runTest, joinPath } from "@msa/testing";
+import { awaited, runTest, joinPath, removePath } from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vite-plus/test";
 
@@ -44,10 +44,14 @@ beforeAll(() => {
   initTheme(undefined, false);
 });
 
-afterEach(() => {
-  for (const service of services.splice(0)) service.close();
-  for (const dir of tempDirs.splice(0)) rmSync(dir, { recursive: true, force: true });
-});
+afterEach(() =>
+  runTest(
+    Effect.gen(function* () {
+      for (const service of services.splice(0)) service.close();
+      for (const dir of tempDirs.splice(0)) yield* removePath(dir);
+    }),
+  ),
+);
 
 function setup() {
   return runTest(

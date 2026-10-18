@@ -1,7 +1,8 @@
-import { mkdtempSync, rmSync, writeFileSync } from "fs";
+import { mkdtempSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 
-import { joinPath } from "@msa/testing";
+import { joinPath, runTest, removePath } from "@msa/testing";
+import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
 import { shouldRunFirstTimeSetup } from "../src/cli/startup-ui.ts";
@@ -15,26 +16,34 @@ describe("shouldRunFirstTimeSetup", () => {
   let tempDir: string;
   let settingsPath: string;
 
-  beforeEach(() => {
-    tempDir = mkdtempSync(joinPath(tmpdir(), "msa-first-time-setup-"));
-    settingsPath = joinPath(tempDir, "settings.json");
-    process.env["MSA_EXPERIMENTAL"] = "1";
-    delete process.env[ENV_AGENT_DIR];
-  });
+  beforeEach(() =>
+    runTest(
+      Effect.gen(function* () {
+        tempDir = mkdtempSync(joinPath(tmpdir(), "msa-first-time-setup-"));
+        settingsPath = joinPath(tempDir, "settings.json");
+        process.env["MSA_EXPERIMENTAL"] = "1";
+        delete process.env[ENV_AGENT_DIR];
+      }),
+    ),
+  );
 
-  afterEach(() => {
-    rmSync(tempDir, { recursive: true, force: true });
-    if (originalMsaExperimental === undefined) {
-      delete process.env["MSA_EXPERIMENTAL"];
-    } else {
-      process.env["MSA_EXPERIMENTAL"] = originalMsaExperimental;
-    }
-    if (originalAgentDir === undefined) {
-      delete process.env[ENV_AGENT_DIR];
-    } else {
-      process.env[ENV_AGENT_DIR] = originalAgentDir;
-    }
-  });
+  afterEach(() =>
+    runTest(
+      Effect.gen(function* () {
+        yield* removePath(tempDir);
+        if (originalMsaExperimental === undefined) {
+          delete process.env["MSA_EXPERIMENTAL"];
+        } else {
+          process.env["MSA_EXPERIMENTAL"] = originalMsaExperimental;
+        }
+        if (originalAgentDir === undefined) {
+          delete process.env[ENV_AGENT_DIR];
+        } else {
+          process.env[ENV_AGENT_DIR] = originalAgentDir;
+        }
+      }),
+    ),
+  );
 
   it("returns true when experimental, default agent dir, and no settings.json", () => {
     expect(shouldRunFirstTimeSetup(settingsPath)).toBe(true);

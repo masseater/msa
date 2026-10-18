@@ -1,4 +1,3 @@
-import { mkdirSync, rmSync } from "fs";
 import { tmpdir } from "os";
 
 import {
@@ -8,6 +7,8 @@ import {
   writeBytesFile,
   writeTextFile,
   joinPath,
+  makeDirectory,
+  removePath,
 } from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
@@ -70,14 +71,22 @@ describe("blockImages setting", () => {
   describe("Read tool", () => {
     let testDir: string;
 
-    beforeEach(() => {
-      testDir = joinPath(tmpdir(), `block-images-test-${currentTimeMillis()}`);
-      mkdirSync(testDir, { recursive: true });
-    });
+    beforeEach(() =>
+      runTest(
+        Effect.gen(function* () {
+          testDir = joinPath(tmpdir(), `block-images-test-${currentTimeMillis()}`);
+          yield* makeDirectory(testDir);
+        }),
+      ),
+    );
 
-    afterEach(() => {
-      rmSync(testDir, { recursive: true, force: true });
-    });
+    afterEach(() =>
+      runTest(
+        Effect.gen(function* () {
+          yield* removePath(testDir);
+        }),
+      ),
+    );
 
     it("should always read images (filtering happens at convertToLlm layer)", () =>
       runTest(
@@ -114,14 +123,22 @@ describe("blockImages setting", () => {
   describe("processFileArguments", () => {
     let testDir: string;
 
-    beforeEach(() => {
-      testDir = joinPath(tmpdir(), `block-images-process-test-${currentTimeMillis()}`);
-      mkdirSync(testDir, { recursive: true });
-    });
+    beforeEach(() =>
+      runTest(
+        Effect.gen(function* () {
+          testDir = joinPath(tmpdir(), `block-images-process-test-${currentTimeMillis()}`);
+          yield* makeDirectory(testDir);
+        }),
+      ),
+    );
 
-    afterEach(() => {
-      rmSync(testDir, { recursive: true, force: true });
-    });
+    afterEach(() =>
+      runTest(
+        Effect.gen(function* () {
+          yield* removePath(testDir);
+        }),
+      ),
+    );
 
     it("should always process images (filtering happens at convertToLlm layer)", () =>
       runTest(

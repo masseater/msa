@@ -1,7 +1,7 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 
-import { awaited, runTest, toJsonText, writeTextFile, joinPath } from "@msa/testing";
+import { awaited, runTest, toJsonText, writeTextFile, joinPath, removePath } from "@msa/testing";
 import { Effect } from "effect";
 import { Compile } from "typebox/compile";
 import { afterEach, describe, expect, it } from "vite-plus/test";
@@ -18,11 +18,15 @@ const schemaBaseUrl =
 const temporaryDirectories: string[] = [];
 const renderedSchemas = await Effect.runPromise(renderConfigSchemas);
 
-afterEach(() => {
-  for (const directory of temporaryDirectories.splice(0)) {
-    rmSync(directory, { recursive: true, force: true });
-  }
-});
+afterEach(() =>
+  runTest(
+    Effect.gen(function* () {
+      for (const directory of temporaryDirectories.splice(0)) {
+        yield* removePath(directory);
+      }
+    }),
+  ),
+);
 
 function createTemporaryDirectory(): string {
   const directory = mkdtempSync(joinPath(tmpdir(), "msa-config-schema-test-"));

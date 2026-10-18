@@ -1,4 +1,4 @@
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 
 import {
@@ -8,6 +8,7 @@ import {
   currentDate,
   randomSuffixSync,
   joinPath,
+  removePath,
 } from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
@@ -41,11 +42,15 @@ function writeSessionFile(path: string, cwd: string): void {
 describe("session cwd handling", () => {
   const cleanupPaths: string[] = [];
 
-  afterEach(() => {
-    for (const path of cleanupPaths.splice(0)) {
-      rmSync(path, { recursive: true, force: true });
-    }
-  });
+  afterEach(() =>
+    runTest(
+      Effect.gen(function* () {
+        for (const path of cleanupPaths.splice(0)) {
+          yield* removePath(path);
+        }
+      }),
+    ),
+  );
 
   it("detects missing session cwd from persisted sessions", () => {
     const fallbackCwd = createTempDir("msa-session-cwd-fallback");

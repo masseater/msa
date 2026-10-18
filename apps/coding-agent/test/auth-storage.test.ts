@@ -29,15 +29,23 @@ describe("AuthStorage", () => {
   );
   const authJsonPath = joinPath(tempDir, "auth.json");
 
-  beforeEach(() => {
-    if (existsSync(tempDir)) rmSync(tempDir, { recursive: true });
-    mkdirSync(tempDir, { recursive: true });
-  });
+  beforeEach(() =>
+    runTest(
+      Effect.gen(function* () {
+        if (existsSync(tempDir)) rmSync(tempDir, { recursive: true });
+        mkdirSync(tempDir, { recursive: true });
+      }),
+    ),
+  );
 
-  afterEach(() => {
-    if (existsSync(tempDir)) rmSync(tempDir, { recursive: true });
-    vi.restoreAllMocks();
-  });
+  afterEach(() =>
+    runTest(
+      Effect.gen(function* () {
+        if (existsSync(tempDir)) rmSync(tempDir, { recursive: true });
+        vi.restoreAllMocks();
+      }),
+    ),
+  );
 
   function writeAuthJson(data: Record<string, unknown>): void {
     writeFileSync(authJsonPath, JSON.stringify(data));

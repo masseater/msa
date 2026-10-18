@@ -4,7 +4,6 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
-  rmSync,
   writeFileSync,
 } from "node:fs";
 import { homedir, tmpdir } from "node:os";
@@ -20,6 +19,7 @@ import {
   changeMode,
   joinPath,
   dateFromMillis,
+  removePath,
 } from "@msa/testing";
 import { Effect, Stream } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
@@ -52,16 +52,24 @@ import { registerOpenCode } from "../src/extensions/cli-agents/opencode.ts";
 let dir: string;
 const savedEnv = { ...envSnapshot() };
 
-beforeEach(() => {
-  dir = mkdtempSync(joinPath(tmpdir(), "msa-cli-agents-"));
-  process.env[ENV_AGENT_DIR] = dir;
-});
+beforeEach(() =>
+  runTest(
+    Effect.gen(function* () {
+      dir = mkdtempSync(joinPath(tmpdir(), "msa-cli-agents-"));
+      process.env[ENV_AGENT_DIR] = dir;
+    }),
+  ),
+);
 
-afterEach(() => {
-  for (const key of envNames()) if (!(key in savedEnv)) delete process.env[key];
-  Object.assign(process.env, savedEnv);
-  rmSync(dir, { recursive: true, force: true });
-});
+afterEach(() =>
+  runTest(
+    Effect.gen(function* () {
+      for (const key of envNames()) if (!(key in savedEnv)) delete process.env[key];
+      Object.assign(process.env, savedEnv);
+      yield* removePath(dir);
+    }),
+  ),
+);
 
 function writeAccounts(accounts: unknown[]): void {
   writeFileSync(joinPath(dir, "claude-code-accounts.json"), JSON.stringify({ accounts }));

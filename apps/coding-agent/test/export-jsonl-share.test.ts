@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 
 import type { AssistantMessage, ToolResultMessage } from "@msa/ai/compat";
@@ -10,6 +10,7 @@ import {
   readTextFile,
   writeTextFile,
   joinPath,
+  removePath,
 } from "@msa/testing";
 import { Effect } from "effect";
 import { Type } from "typebox";
@@ -26,11 +27,15 @@ import { assistantMsg, userMsg } from "./utilities.ts";
 describe("JSONL share export", () => {
   const tempDirs: string[] = [];
 
-  afterEach(() => {
-    for (const tempDir of tempDirs.splice(0)) {
-      rmSync(tempDir, { recursive: true, force: true });
-    }
-  });
+  afterEach(() =>
+    runTest(
+      Effect.gen(function* () {
+        for (const tempDir of tempDirs.splice(0)) {
+          yield* removePath(tempDir);
+        }
+      }),
+    ),
+  );
 
   it("adds presentation data without changing conversation IDs or links", () =>
     runTest(

@@ -1,7 +1,17 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 
-import { awaited, runTest, toJsonText, writeTextFile, joinPath } from "@msa/testing";
+import {
+  awaited,
+  runTest,
+  toJsonText,
+  writeTextFile,
+  joinPath,
+  fromJsonText,
+  readTextFile,
+  makeDirectory,
+  removePath,
+} from "@msa/testing";
 import { resetCapabilitiesCache, setCapabilityOverrides } from "@msa/tui";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
@@ -27,28 +37,35 @@ describe("DefaultResourceLoader theme color mode", () => {
   let themePath: string;
   let themeJson: TestThemeJson;
 
-  beforeEach(() => {
-    tempDir = mkdtempSync(joinPath(tmpdir(), "resource-loader-theme-"));
-    agentDir = joinPath(tempDir, "agent");
-    cwd = joinPath(tempDir, "project");
-    mkdirSync(agentDir, { recursive: true });
-    mkdirSync(cwd, { recursive: true });
+  beforeEach(() =>
+    runTest(
+      Effect.gen(function* () {
+        tempDir = mkdtempSync(joinPath(tmpdir(), "resource-loader-theme-"));
+        agentDir = joinPath(tempDir, "agent");
+        cwd = joinPath(tempDir, "project");
+        yield* makeDirectory(agentDir);
+        yield* makeDirectory(cwd);
+        themeJson = (yield* fromJsonText(
+          yield* readTextFile(joinPath(getThemesDir(), "dark.json")),
+        )) as TestThemeJson;
+        themeJson.name = "capability-test";
+        themeJson.colors["userMessageBg"] = "#3c3544";
+        themePath = joinPath(tempDir, "capability-test.json");
+        yield* writeTextFile(themePath, yield* toJsonText(themeJson));
+      }),
+    ),
+  );
 
-    themeJson = JSON.parse(
-      readFileSync(joinPath(getThemesDir(), "dark.json"), "utf-8"),
-    ) as TestThemeJson;
-    themeJson.name = "capability-test";
-    themeJson.colors["userMessageBg"] = "#3c3544";
-    themePath = joinPath(tempDir, "capability-test.json");
-    writeFileSync(themePath, JSON.stringify(themeJson));
-  });
-
-  afterEach(() => {
-    vi.unstubAllEnvs();
-    setCapabilityOverrides({});
-    resetCapabilitiesCache();
-    rmSync(tempDir, { recursive: true, force: true });
-  });
+  afterEach(() =>
+    runTest(
+      Effect.gen(function* () {
+        vi.unstubAllEnvs();
+        setCapabilityOverrides({});
+        resetCapabilitiesCache();
+        yield* removePath(tempDir);
+      }),
+    ),
+  );
 
   it.each([
     {

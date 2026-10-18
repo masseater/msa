@@ -12,6 +12,7 @@ import {
   dirnameOf,
   basenameOf,
   resolvePath,
+  removePath,
 } from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
@@ -24,15 +25,23 @@ describe("extensions discovery", () => {
   let tempDir: string;
   let extensionsDir: string;
 
-  beforeEach(() => {
-    tempDir = fs.mkdtempSync(joinPath(os.tmpdir(), "msa-ext-test-"));
-    extensionsDir = joinPath(tempDir, "extensions");
-    fs.mkdirSync(extensionsDir);
-  });
+  beforeEach(() =>
+    runTest(
+      Effect.gen(function* () {
+        tempDir = fs.mkdtempSync(joinPath(os.tmpdir(), "msa-ext-test-"));
+        extensionsDir = joinPath(tempDir, "extensions");
+        yield* makeDirectory(extensionsDir);
+      }),
+    ),
+  );
 
-  afterEach(() => {
-    fs.rmSync(tempDir, { recursive: true, force: true });
-  });
+  afterEach(() =>
+    runTest(
+      Effect.gen(function* () {
+        yield* removePath(tempDir);
+      }),
+    ),
+  );
 
   const extensionCode = `
 		export default function(msa) {

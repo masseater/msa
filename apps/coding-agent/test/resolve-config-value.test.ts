@@ -1,7 +1,16 @@
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 
-import { currentTimeMillis, randomSuffixSync, joinPath } from "@msa/testing";
+import {
+  currentTimeMillis,
+  randomSuffixSync,
+  joinPath,
+  runTest,
+  pathExists,
+  makeDirectory,
+  removePath,
+} from "@msa/testing";
+import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
 
 import { deleteEnv, writeEnv } from "../src/core/process-env.ts";
@@ -15,17 +24,28 @@ import * as shellModule from "../src/utils/shell.ts";
 describe("resolveConfigValue", () => {
   let tempDir: string;
 
-  beforeEach(() => {
-    tempDir = joinPath(tmpdir(), `msa-config-value-${currentTimeMillis()}-${randomSuffixSync()}`);
-    mkdirSync(tempDir, { recursive: true });
-    clearConfigValueCache();
-  });
+  beforeEach(() =>
+    runTest(
+      Effect.gen(function* () {
+        tempDir = joinPath(
+          tmpdir(),
+          `msa-config-value-${currentTimeMillis()}-${randomSuffixSync()}`,
+        );
+        yield* makeDirectory(tempDir);
+        clearConfigValueCache();
+      }),
+    ),
+  );
 
-  afterEach(() => {
-    if (existsSync(tempDir)) rmSync(tempDir, { recursive: true });
-    clearConfigValueCache();
-    vi.restoreAllMocks();
-  });
+  afterEach(() =>
+    runTest(
+      Effect.gen(function* () {
+        if (yield* pathExists(tempDir)) yield* removePath(tempDir);
+        clearConfigValueCache();
+        vi.restoreAllMocks();
+      }),
+    ),
+  );
 
   test("resolves literals, environment templates, and escapes", () => {
     writeEnv("TEST_CONFIG_LEFT", "left");

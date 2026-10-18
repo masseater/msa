@@ -1,8 +1,16 @@
-import { existsSync, mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 
 import { getModel } from "@msa/ai/compat";
-import { awaited, runTest, currentTimeMillis, randomSuffixSync, joinPath } from "@msa/testing";
+import {
+  awaited,
+  runTest,
+  currentTimeMillis,
+  randomSuffixSync,
+  joinPath,
+  pathExists,
+  makeDirectory,
+  removePath,
+} from "@msa/testing";
 import { Effect } from "effect";
 import { Type } from "typebox";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
@@ -17,20 +25,28 @@ describe("AgentSession dynamic tool registration", () => {
   let tempDir: string;
   let agentDir: string;
 
-  beforeEach(() => {
-    tempDir = joinPath(
-      tmpdir(),
-      `msa-dynamic-tool-test-${currentTimeMillis()}-${randomSuffixSync()}`,
-    );
-    agentDir = joinPath(tempDir, "agent");
-    mkdirSync(agentDir, { recursive: true });
-  });
+  beforeEach(() =>
+    runTest(
+      Effect.gen(function* () {
+        tempDir = joinPath(
+          tmpdir(),
+          `msa-dynamic-tool-test-${currentTimeMillis()}-${randomSuffixSync()}`,
+        );
+        agentDir = joinPath(tempDir, "agent");
+        yield* makeDirectory(agentDir);
+      }),
+    ),
+  );
 
-  afterEach(() => {
-    if (tempDir.length > 0 && existsSync(tempDir)) {
-      rmSync(tempDir, { recursive: true, force: true });
-    }
-  });
+  afterEach(() =>
+    runTest(
+      Effect.gen(function* () {
+        if (tempDir.length > 0 && (yield* pathExists(tempDir))) {
+          yield* removePath(tempDir);
+        }
+      }),
+    ),
+  );
 
   it("exposes session state before custom bash spawn hooks and supports opting out", () =>
     runTest(

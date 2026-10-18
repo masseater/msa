@@ -8,6 +8,7 @@ import {
   readTextFile,
   writeTextFile,
   joinPath,
+  removePath,
 } from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
@@ -20,12 +21,16 @@ import { createModelRegistry } from "./model-runtime-test-utils.ts";
 describe("config value env var syntax migration", () => {
   const tempDirs: string[] = [];
 
-  afterEach(() => {
-    for (const dir of tempDirs.splice(0)) {
-      fs.rmSync(dir, { recursive: true, force: true });
-    }
-    vi.restoreAllMocks();
-  });
+  afterEach(() =>
+    runTest(
+      Effect.gen(function* () {
+        for (const dir of tempDirs.splice(0)) {
+          yield* removePath(dir);
+        }
+        vi.restoreAllMocks();
+      }),
+    ),
+  );
 
   function createAgentDir(): string {
     const agentDir = fs.mkdtempSync(joinPath(os.tmpdir(), "msa-config-value-migration-test-"));

@@ -1,4 +1,4 @@
-import { chmodSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 
 import { getModel } from "@msa/ai/compat";
@@ -9,6 +9,9 @@ import {
   abortController,
   randomSuffixSync,
   joinPath,
+  pathExists,
+  makeDirectory,
+  removePath,
 } from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
@@ -271,14 +274,22 @@ describe("web_fetch tool", () => {
 describe("findTreg", () => {
   let bin: string;
 
-  beforeEach(() => {
-    bin = joinPath(tmpdir(), `msa-treg-bin-${currentTimeMillis()}-${randomSuffixSync()}`);
-    mkdirSync(bin);
-  });
+  beforeEach(() =>
+    runTest(
+      Effect.gen(function* () {
+        bin = joinPath(tmpdir(), `msa-treg-bin-${currentTimeMillis()}-${randomSuffixSync()}`);
+        yield* makeDirectory(bin);
+      }),
+    ),
+  );
 
-  afterEach(() => {
-    rmSync(bin, { recursive: true, force: true });
-  });
+  afterEach(() =>
+    runTest(
+      Effect.gen(function* () {
+        yield* removePath(bin);
+      }),
+    ),
+  );
 
   it("needs the CLI on PATH", () => {
     expect(findTreg(() => null, { TREG_TOKEN: "token" })).toBeUndefined();
@@ -317,15 +328,23 @@ describe("findTreg", () => {
 describe("treg sign-in", () => {
   let bin: string;
 
-  beforeEach(() => {
-    bin = joinPath(tmpdir(), `msa-treg-login-${currentTimeMillis()}-${randomSuffixSync()}`);
-    mkdirSync(bin);
-  });
+  beforeEach(() =>
+    runTest(
+      Effect.gen(function* () {
+        bin = joinPath(tmpdir(), `msa-treg-login-${currentTimeMillis()}-${randomSuffixSync()}`);
+        yield* makeDirectory(bin);
+      }),
+    ),
+  );
 
-  afterEach(() => {
-    vi.unstubAllEnvs();
-    rmSync(bin, { recursive: true, force: true });
-  });
+  afterEach(() =>
+    runTest(
+      Effect.gen(function* () {
+        vi.unstubAllEnvs();
+        yield* removePath(bin);
+      }),
+    ),
+  );
 
   function script(name: string, body: string): string {
     const path = joinPath(bin, name);
@@ -490,16 +509,24 @@ describe("web tool renderers", () => {
 describe("web tool registration", () => {
   let tempDir: string;
 
-  beforeEach(() => {
-    tempDir = joinPath(tmpdir(), `msa-web-tools-${currentTimeMillis()}-${randomSuffixSync()}`);
-    mkdirSync(joinPath(tempDir, "agent"), { recursive: true });
-    mkdirSync(joinPath(tempDir, "bin"));
-  });
+  beforeEach(() =>
+    runTest(
+      Effect.gen(function* () {
+        tempDir = joinPath(tmpdir(), `msa-web-tools-${currentTimeMillis()}-${randomSuffixSync()}`);
+        yield* makeDirectory(joinPath(tempDir, "agent"));
+        yield* makeDirectory(joinPath(tempDir, "bin"));
+      }),
+    ),
+  );
 
-  afterEach(() => {
-    vi.unstubAllEnvs();
-    if (existsSync(tempDir)) rmSync(tempDir, { recursive: true, force: true });
-  });
+  afterEach(() =>
+    runTest(
+      Effect.gen(function* () {
+        vi.unstubAllEnvs();
+        if (yield* pathExists(tempDir)) yield* removePath(tempDir);
+      }),
+    ),
+  );
 
   function createSession() {
     return runTest(

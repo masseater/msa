@@ -1,7 +1,7 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 
-import { awaited, runTest, writeTextFile, makeDirectory, joinPath } from "@msa/testing";
+import { awaited, runTest, writeTextFile, makeDirectory, joinPath, removePath } from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
@@ -64,9 +64,13 @@ function setup(cwd: string, execResults: Map<string, ExecResult>) {
 describe("git-merge-and-resolve example", () => {
   let tempDir: string;
 
-  afterEach(() => {
-    if (tempDir.length > 0) rmSync(tempDir, { recursive: true, force: true });
-  });
+  afterEach(() =>
+    runTest(
+      Effect.gen(function* () {
+        if (tempDir.length > 0) yield* removePath(tempDir);
+      }),
+    ),
+  );
 
   function createTempDir() {
     tempDir = mkdtempSync(joinPath(tmpdir(), "msa-merge-test-"));

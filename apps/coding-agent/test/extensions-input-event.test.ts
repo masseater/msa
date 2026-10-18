@@ -15,13 +15,16 @@ describe("Input Event", () => {
   let tempDir: string;
   let extensionsDir: string;
 
-  beforeEach(() => {
-    tempDir = fs.mkdtempSync(joinPath(os.tmpdir(), "msa-input-test-"));
-    extensionsDir = joinPath(tempDir, "extensions");
-    fs.mkdirSync(extensionsDir);
-
-    delete (globalThis as any).testVar;
-  });
+  beforeEach(() =>
+    runTest(
+      Effect.gen(function* () {
+        tempDir = fs.mkdtempSync(joinPath(os.tmpdir(), "msa-input-test-"));
+        extensionsDir = joinPath(tempDir, "extensions");
+        yield* makeDirectory(extensionsDir);
+        delete (globalThis as any).testVar;
+      }),
+    ),
+  );
 
   afterEach(() => fs.rmSync(tempDir, { recursive: true, force: true }));
 

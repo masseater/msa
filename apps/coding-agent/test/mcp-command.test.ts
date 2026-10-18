@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 
 import {
@@ -10,6 +10,7 @@ import {
   pathExists,
   joinPath,
   resolvePath,
+  removePath,
 } from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
@@ -24,9 +25,13 @@ const FIXTURE = resolvePath(
 describe("msa mcp", () => {
   const dirs: string[] = [];
 
-  afterEach(() => {
-    while (dirs.length > 0) rmSync(dirs.pop() ?? "", { recursive: true, force: true });
-  });
+  afterEach(() =>
+    runTest(
+      Effect.gen(function* () {
+        while (dirs.length > 0) yield* removePath(dirs.pop() ?? "");
+      }),
+    ),
+  );
 
   function run(args: string[], servers: Record<string, unknown> | undefined, dir?: string) {
     return runTest(

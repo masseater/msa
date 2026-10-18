@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 
 import {
@@ -12,6 +12,7 @@ import {
   makeDirectory,
   removePath,
   joinPath,
+  pathExists,
 } from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
@@ -76,30 +77,38 @@ describe("DefaultPackageManager git update", () => {
 
   const gitSource = "git:github.com/test/extension";
 
-  beforeEach(() => {
-    allowNetwork();
-    tempDir = joinPath(tmpdir(), `git-update-test-${currentTimeMillis()}-${randomSuffixSync()}`);
-    mkdirSync(tempDir, { recursive: true });
-    remoteDir = joinPath(tempDir, "remote");
-    agentDir = joinPath(tempDir, "agent");
+  beforeEach(() =>
+    runTest(
+      Effect.gen(function* () {
+        allowNetwork();
+        tempDir = joinPath(
+          tmpdir(),
+          `git-update-test-${currentTimeMillis()}-${randomSuffixSync()}`,
+        );
+        yield* makeDirectory(tempDir);
+        remoteDir = joinPath(tempDir, "remote");
+        agentDir = joinPath(tempDir, "agent");
+        installedDir = joinPath(agentDir, "git", "github.com", "test", "extension");
+        yield* makeDirectory(agentDir);
+        settingsManager = SettingsManager.inMemory();
+        packageManager = new DefaultPackageManager({
+          cwd: tempDir,
+          agentDir,
+          settingsManager,
+        });
+      }),
+    ),
+  );
 
-    installedDir = joinPath(agentDir, "git", "github.com", "test", "extension");
-
-    mkdirSync(agentDir, { recursive: true });
-
-    settingsManager = SettingsManager.inMemory();
-    packageManager = new DefaultPackageManager({
-      cwd: tempDir,
-      agentDir,
-      settingsManager,
-    });
-  });
-
-  afterEach(() => {
-    if (tempDir.length > 0 && existsSync(tempDir)) {
-      rmSync(tempDir, { recursive: true, force: true });
-    }
-  });
+  afterEach(() =>
+    runTest(
+      Effect.gen(function* () {
+        if (tempDir.length > 0 && (yield* pathExists(tempDir))) {
+          yield* removePath(tempDir);
+        }
+      }),
+    ),
+  );
 
   function setupRemoteAndInstall(): void {
     mkdirSync(remoteDir, { recursive: true });

@@ -1,7 +1,8 @@
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 
-import { joinPath } from "@msa/testing";
+import { joinPath, runTest, removePath } from "@msa/testing";
+import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { APP_NAME } from "../src/config.ts";
@@ -11,17 +12,20 @@ import { formatResumeCommand } from "../src/modes/interactive/interactive-mode.t
 const tempDirs: string[] = [];
 const originalStdoutIsTTY = Object.getOwnPropertyDescriptor(process.stdout, "isTTY");
 
-afterEach(() => {
-  if (originalStdoutIsTTY === undefined) {
-    Reflect.deleteProperty(process.stdout, "isTTY");
-  } else {
-    Object.defineProperty(process.stdout, "isTTY", originalStdoutIsTTY);
-  }
-
-  for (const dir of tempDirs.splice(0)) {
-    rmSync(dir, { recursive: true, force: true });
-  }
-});
+afterEach(() =>
+  runTest(
+    Effect.gen(function* () {
+      if (originalStdoutIsTTY === undefined) {
+        Reflect.deleteProperty(process.stdout, "isTTY");
+      } else {
+        Object.defineProperty(process.stdout, "isTTY", originalStdoutIsTTY);
+      }
+      for (const dir of tempDirs.splice(0)) {
+        yield* removePath(dir);
+      }
+    }),
+  ),
+);
 
 function setStdoutIsTTY(value: boolean): void {
   Object.defineProperty(process.stdout, "isTTY", { configurable: true, value });

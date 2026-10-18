@@ -1,4 +1,3 @@
-import { mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 
 import type { Api, Model } from "@msa/ai";
@@ -9,7 +8,15 @@ vi.mock("../src/utils/image-resize.js", () => ({
   formatDimensionNote: vi.fn(() => undefined),
 }));
 
-import { awaited, runTest, currentTimeMillis, writeBytesFile, joinPath } from "@msa/testing";
+import {
+  awaited,
+  runTest,
+  currentTimeMillis,
+  writeBytesFile,
+  joinPath,
+  makeDirectory,
+  removePath,
+} from "@msa/testing";
 import { Effect } from "effect";
 
 import { processFileArguments } from "../src/cli/file-processor.ts";
@@ -23,16 +30,24 @@ const TINY_PNG_BASE64 =
 describe("image resize callers", () => {
   let testDir: string;
 
-  beforeEach(() => {
-    testDir = joinPath(tmpdir(), `image-resize-callers-${currentTimeMillis()}`);
-    mkdirSync(testDir, { recursive: true });
-    vi.mocked(resizeImage).mockReset();
-    vi.mocked(resizeImage).mockResolvedValue(null);
-  });
+  beforeEach(() =>
+    runTest(
+      Effect.gen(function* () {
+        testDir = joinPath(tmpdir(), `image-resize-callers-${currentTimeMillis()}`);
+        yield* makeDirectory(testDir);
+        vi.mocked(resizeImage).mockReset();
+        vi.mocked(resizeImage).mockResolvedValue(null);
+      }),
+    ),
+  );
 
-  afterEach(() => {
-    rmSync(testDir, { recursive: true, force: true });
-  });
+  afterEach(() =>
+    runTest(
+      Effect.gen(function* () {
+        yield* removePath(testDir);
+      }),
+    ),
+  );
 
   it("read tool returns text-only output when auto-resize cannot produce a safe image", () =>
     runTest(

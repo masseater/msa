@@ -8,6 +8,7 @@ import {
   writeTextFile,
   makeDirectory,
   joinPath,
+  removePath,
 } from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
@@ -54,9 +55,13 @@ describe("ExtensionRunner", () => {
     ),
   );
 
-  afterEach(() => {
-    fs.rmSync(tempDir, { recursive: true, force: true });
-  });
+  afterEach(() =>
+    runTest(
+      Effect.gen(function* () {
+        yield* removePath(tempDir);
+      }),
+    ),
+  );
 
   const providerModelConfig: ProviderConfig = {
     baseUrl: "https://provider.test/v1",

@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { mkdtempSync, realpathSync, rmSync } from "node:fs";
+import { mkdtempSync, realpathSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { pathToFileURL } from "node:url";
 
@@ -11,6 +11,7 @@ import {
   makeDirectory,
   joinPath,
   resolvePath,
+  removePath,
 } from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
@@ -25,11 +26,15 @@ const sourceResolverUrl = pathToFileURL(
 ).href;
 const tempDirs: string[] = [];
 
-afterEach(() => {
-  for (const dir of tempDirs.splice(0)) {
-    rmSync(dir, { recursive: true, force: true });
-  }
-});
+afterEach(() =>
+  runTest(
+    Effect.gen(function* () {
+      for (const dir of tempDirs.splice(0)) {
+        yield* removePath(dir);
+      }
+    }),
+  ),
+);
 
 function createTempDir(): string {
   const dir = realpathSync(mkdtempSync(joinPath(tmpdir(), "msa-session-file-invalid-")));

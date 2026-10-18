@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, realpathSync, rmSync } from "node:fs";
+import { realpathSync } from "node:fs";
 import { tmpdir } from "node:os";
 
 import { getModel } from "@msa/ai/compat";
@@ -9,6 +9,8 @@ import {
   randomSuffixSync,
   makeDirectory,
   joinPath,
+  pathExists,
+  removePath,
 } from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
@@ -21,22 +23,30 @@ describe("createAgentSession session manager defaults", () => {
   let cwd: string;
   let agentDir: string;
 
-  beforeEach(() => {
-    tempDir = joinPath(
-      tmpdir(),
-      `msa-sdk-session-test-${currentTimeMillis()}-${randomSuffixSync()}`,
-    );
-    cwd = joinPath(tempDir, "project");
-    agentDir = joinPath(tempDir, "agent");
-    mkdirSync(cwd, { recursive: true });
-    mkdirSync(agentDir, { recursive: true });
-  });
+  beforeEach(() =>
+    runTest(
+      Effect.gen(function* () {
+        tempDir = joinPath(
+          tmpdir(),
+          `msa-sdk-session-test-${currentTimeMillis()}-${randomSuffixSync()}`,
+        );
+        cwd = joinPath(tempDir, "project");
+        agentDir = joinPath(tempDir, "agent");
+        yield* makeDirectory(cwd);
+        yield* makeDirectory(agentDir);
+      }),
+    ),
+  );
 
-  afterEach(() => {
-    if (tempDir.length > 0 && existsSync(tempDir)) {
-      rmSync(tempDir, { recursive: true, force: true });
-    }
-  });
+  afterEach(() =>
+    runTest(
+      Effect.gen(function* () {
+        if (tempDir.length > 0 && (yield* pathExists(tempDir))) {
+          yield* removePath(tempDir);
+        }
+      }),
+    ),
+  );
 
   it("uses agentDir for the default persisted session path", () =>
     runTest(

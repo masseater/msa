@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 
 import {
@@ -9,7 +9,14 @@ import {
   normalizeContext,
   type SimpleStreamOptions,
 } from "@msa/ai";
-import { awaited, runTest, currentTimeMillis, joinPath } from "@msa/testing";
+import {
+  awaited,
+  runTest,
+  currentTimeMillis,
+  joinPath,
+  makeDirectory,
+  removePath,
+} from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
@@ -26,19 +33,27 @@ describe("createAgentSession stream options", () => {
   let cwd: string;
   let agentDir: string;
 
-  beforeEach(() => {
-    tempDir = mkdtempSync(joinPath(tmpdir(), "msa-sdk-stream-options-"));
-    cwd = joinPath(tempDir, "project");
-    agentDir = joinPath(tempDir, "agent");
-    mkdirSync(cwd, { recursive: true });
-    mkdirSync(agentDir, { recursive: true });
-  });
+  beforeEach(() =>
+    runTest(
+      Effect.gen(function* () {
+        tempDir = mkdtempSync(joinPath(tmpdir(), "msa-sdk-stream-options-"));
+        cwd = joinPath(tempDir, "project");
+        agentDir = joinPath(tempDir, "agent");
+        yield* makeDirectory(cwd);
+        yield* makeDirectory(agentDir);
+      }),
+    ),
+  );
 
-  afterEach(() => {
-    if (tempDir.length > 0) {
-      rmSync(tempDir, { recursive: true, force: true });
-    }
-  });
+  afterEach(() =>
+    runTest(
+      Effect.gen(function* () {
+        if (tempDir.length > 0) {
+          yield* removePath(tempDir);
+        }
+      }),
+    ),
+  );
 
   function createModel(api: Api): Model<Api> {
     return {

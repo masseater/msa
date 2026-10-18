@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 
 import {
@@ -9,7 +9,7 @@ import {
   InMemoryModelsStore,
   type Model,
 } from "@msa/ai";
-import { awaited, runTest, joinPath } from "@msa/testing";
+import { awaited, runTest, joinPath, removePath } from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it, onTestFinished } from "vite-plus/test";
 
@@ -397,13 +397,21 @@ describe("ModelRuntime virtual models", () => {
 describe("createAgentSession with virtual models", () => {
   let tempDir: string;
 
-  beforeEach(() => {
-    tempDir = mkdtempSync(joinPath(tmpdir(), "msa-virtual-models-"));
-  });
+  beforeEach(() =>
+    runTest(
+      Effect.gen(function* () {
+        tempDir = mkdtempSync(joinPath(tmpdir(), "msa-virtual-models-"));
+      }),
+    ),
+  );
 
-  afterEach(() => {
-    rmSync(tempDir, { recursive: true, force: true });
-  });
+  afterEach(() =>
+    runTest(
+      Effect.gen(function* () {
+        yield* removePath(tempDir);
+      }),
+    ),
+  );
 
   function resume(runtime: ModelRuntime, model?: Model<string>) {
     return runTest(

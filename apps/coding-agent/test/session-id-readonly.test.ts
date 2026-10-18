@@ -7,7 +7,6 @@ import {
   readFileSync,
   realpathSync,
   renameSync,
-  rmSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { pathToFileURL } from "node:url";
@@ -19,6 +18,7 @@ import {
   makeDirectory,
   joinPath,
   resolvePath,
+  removePath,
 } from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
@@ -37,12 +37,16 @@ const sourceResolverUrl = pathToFileURL(
 ).href;
 const tempDirs: string[] = [];
 
-afterEach(() => {
-  vi.restoreAllMocks();
-  for (const dir of tempDirs.splice(0)) {
-    rmSync(dir, { recursive: true, force: true });
-  }
-});
+afterEach(() =>
+  runTest(
+    Effect.gen(function* () {
+      vi.restoreAllMocks();
+      for (const dir of tempDirs.splice(0)) {
+        yield* removePath(dir);
+      }
+    }),
+  ),
+);
 
 function createTempDir(): string {
   const dir = realpathSync(mkdtempSync(joinPath(tmpdir(), "msa-session-id-readonly-")));

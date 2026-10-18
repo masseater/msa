@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 
 import {
@@ -20,6 +20,7 @@ import {
   toJsonText,
   writeTextFile,
   joinPath,
+  removePath,
 } from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
@@ -80,9 +81,13 @@ function okImageResult(model: ImageModel<string>): AssistantImages {
 
 describe("ModelRuntime image generation", () => {
   const tempDirs: string[] = [];
-  afterEach(() => {
-    for (const dir of tempDirs.splice(0)) rmSync(dir, { recursive: true, force: true });
-  });
+  afterEach(() =>
+    runTest(
+      Effect.gen(function* () {
+        for (const dir of tempDirs.splice(0)) yield* removePath(dir);
+      }),
+    ),
+  );
 
   function createRuntime(modelsJson?: object): Promise<ModelRuntime> {
     return runTest(

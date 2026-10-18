@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { pathToFileURL } from "node:url";
 
@@ -10,6 +10,7 @@ import {
   makeDirectory,
   joinPath,
   resolvePath,
+  removePath,
 } from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
@@ -30,11 +31,15 @@ beforeEach(() => {
   allowNetwork();
 });
 
-afterEach(() => {
-  for (const dir of tempDirs.splice(0)) {
-    rmSync(dir, { recursive: true, force: true });
-  }
-});
+afterEach(() =>
+  runTest(
+    Effect.gen(function* () {
+      for (const dir of tempDirs.splice(0)) {
+        yield* removePath(dir);
+      }
+    }),
+  ),
+);
 
 function createTempDir(): string {
   const dir = mkdtempSync(joinPath(tmpdir(), "msa-stdout-clean-"));

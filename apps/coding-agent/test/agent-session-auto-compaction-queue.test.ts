@@ -1,4 +1,3 @@
-import { existsSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 
 import { Agent } from "@msa/agent-core";
@@ -8,7 +7,15 @@ import {
   fauxAssistantMessage,
 } from "@msa/ai";
 import { getModel, streamSimple } from "@msa/ai/compat";
-import { awaited, runTest, currentTimeMillis, makeDirectory, joinPath } from "@msa/testing";
+import {
+  awaited,
+  runTest,
+  currentTimeMillis,
+  makeDirectory,
+  joinPath,
+  pathExists,
+  removePath,
+} from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
@@ -65,13 +72,17 @@ describe("AgentSession auto-compaction queue resume", () => {
     ),
   );
 
-  afterEach(() => {
-    session.dispose();
-    vi.restoreAllMocks();
-    if (tempDir.length > 0 && existsSync(tempDir)) {
-      rmSync(tempDir, { recursive: true });
-    }
-  });
+  afterEach(() =>
+    runTest(
+      Effect.gen(function* () {
+        session.dispose();
+        vi.restoreAllMocks();
+        if (tempDir.length > 0 && (yield* pathExists(tempDir))) {
+          yield* removePath(tempDir);
+        }
+      }),
+    ),
+  );
 
   it("should resume after threshold compaction when only agent-level queued messages exist", () =>
     runTest(

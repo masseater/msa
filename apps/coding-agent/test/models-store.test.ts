@@ -26,13 +26,21 @@ const sharedTempDir = joinPath(
 );
 const sharedModelsPath = joinPath(sharedTempDir, "models-store.json");
 
-beforeAll(() => {
-  mkdirSync(sharedTempDir, { recursive: true });
-});
+beforeAll(() =>
+  runTest(
+    Effect.gen(function* () {
+      mkdirSync(sharedTempDir, { recursive: true });
+    }),
+  ),
+);
 
-afterAll(() => {
-  if (existsSync(sharedTempDir)) rmSync(sharedTempDir, { recursive: true });
-});
+afterAll(() =>
+  runTest(
+    Effect.gen(function* () {
+      if (existsSync(sharedTempDir)) rmSync(sharedTempDir, { recursive: true });
+    }),
+  ),
+);
 
 afterEach(() => {
   vi.restoreAllMocks();

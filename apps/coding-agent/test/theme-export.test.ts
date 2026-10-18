@@ -1,8 +1,9 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 
-import { joinPath } from "@msa/testing";
+import { joinPath, runTest, makeDirectory, removePath } from "@msa/testing";
 import { colorToHex, okhslColor } from "@msa/tui";
+import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
 import { deleteEnv, readEnv, writeEnv } from "../src/core/process-env.ts";
@@ -23,20 +24,28 @@ describe("getThemeExportColors", () => {
   let tempRoot: string;
   let previousAgentDir: string | undefined;
 
-  beforeEach(() => {
-    tempRoot = mkdtempSync(joinPath(tmpdir(), "msa-theme-export-"));
-    writeEnv("MSA_CODING_AGENT_DIR", joinPath(tempRoot, "agent"));
-    mkdirSync(joinPath(readEnv("MSA_CODING_AGENT_DIR")!, "themes"), { recursive: true });
-  });
+  beforeEach(() =>
+    runTest(
+      Effect.gen(function* () {
+        tempRoot = mkdtempSync(joinPath(tmpdir(), "msa-theme-export-"));
+        writeEnv("MSA_CODING_AGENT_DIR", joinPath(tempRoot, "agent"));
+        yield* makeDirectory(joinPath(readEnv("MSA_CODING_AGENT_DIR")!, "themes"));
+      }),
+    ),
+  );
 
-  afterEach(() => {
-    rmSync(tempRoot, { recursive: true, force: true });
-    if (previousAgentDir === undefined) {
-      deleteEnv("MSA_CODING_AGENT_DIR");
-    } else {
-      writeEnv("MSA_CODING_AGENT_DIR", previousAgentDir);
-    }
-  });
+  afterEach(() =>
+    runTest(
+      Effect.gen(function* () {
+        yield* removePath(tempRoot);
+        if (previousAgentDir === undefined) {
+          deleteEnv("MSA_CODING_AGENT_DIR");
+        } else {
+          writeEnv("MSA_CODING_AGENT_DIR", previousAgentDir);
+        }
+      }),
+    ),
+  );
 
   it("resolves export variable references using the same syntax as colors", () => {
     const darkTheme = JSON.parse(

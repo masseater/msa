@@ -1,4 +1,4 @@
-import { mkdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { pathToFileURL } from "node:url";
 
@@ -14,6 +14,7 @@ import {
   writeTextFile,
   makeDirectory,
   joinPath,
+  removePath,
 } from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
@@ -33,17 +34,25 @@ describe("DefaultResourceLoader", () => {
   let agentDir: string;
   let cwd: string;
 
-  beforeEach(() => {
-    tempDir = joinPath(tmpdir(), `rl-test-${currentTimeMillis()}-${randomSuffixSync()}`);
-    agentDir = joinPath(tempDir, "agent");
-    cwd = joinPath(tempDir, "project");
-    mkdirSync(agentDir, { recursive: true });
-    mkdirSync(cwd, { recursive: true });
-  });
+  beforeEach(() =>
+    runTest(
+      Effect.gen(function* () {
+        tempDir = joinPath(tmpdir(), `rl-test-${currentTimeMillis()}-${randomSuffixSync()}`);
+        agentDir = joinPath(tempDir, "agent");
+        cwd = joinPath(tempDir, "project");
+        yield* makeDirectory(agentDir);
+        yield* makeDirectory(cwd);
+      }),
+    ),
+  );
 
-  afterEach(() => {
-    rmSync(tempDir, { recursive: true, force: true });
-  });
+  afterEach(() =>
+    runTest(
+      Effect.gen(function* () {
+        yield* removePath(tempDir);
+      }),
+    ),
+  );
 
   describe("reload", () => {
     it("should initialize with empty results before reload", () => {

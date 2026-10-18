@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { pathToFileURL } from "node:url";
 
@@ -10,6 +10,7 @@ import {
   currentDate,
   joinPath,
   resolvePath,
+  removePath,
 } from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
@@ -24,11 +25,15 @@ const sourceResolverUrl = pathToFileURL(
 ).href;
 const tempDirs: string[] = [];
 
-afterEach(() => {
-  for (const dir of tempDirs.splice(0)) {
-    rmSync(dir, { recursive: true, force: true });
-  }
-});
+afterEach(() =>
+  runTest(
+    Effect.gen(function* () {
+      for (const dir of tempDirs.splice(0)) {
+        yield* removePath(dir);
+      }
+    }),
+  ),
+);
 
 function createTempDir(): string {
   const dir = mkdtempSync(joinPath(tmpdir(), "msa-startup-session-name-"));
