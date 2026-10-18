@@ -1,4 +1,4 @@
-import { Effect } from "effect";
+import { Effect, Exit } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
@@ -80,9 +80,20 @@ const rendersPages = withCallback(
     }),
 );
 
+const rejectsTakenPort = withCallback(undefined, (callback) =>
+  Effect.gen(function* () {
+    const port = Number(new URL(callback.redirectUrl).port);
+    const second = yield* Effect.exit(
+      Effect.tryPromise(() => OAuthCallbackServer.listen({ port })),
+    );
+    expect(Exit.isFailure(second)).toBe(true);
+  }),
+);
+
 describe("OAuthCallbackServer pages", () => {
   it("renders plain text by default", () => Effect.runPromise(rendersPlainText));
   it("rejects a response on another path than the expected one", () =>
     Effect.runPromise(rejectsOtherPath));
   it("renders pages through renderPage", () => Effect.runPromise(rendersPages));
+  it("fails to listen on a port that is already taken", () => Effect.runPromise(rejectsTakenPort));
 });
