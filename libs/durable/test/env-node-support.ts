@@ -1,5 +1,3 @@
-import { type FileHandle, open } from "node:fs/promises";
-
 import { BACKGROUND_CONTEXT, withAbortSignal } from "@msa/chord/context";
 import { Effect } from "effect";
 import { dual } from "effect/Function";
@@ -32,10 +30,24 @@ export function abortedContext() {
   return withAbortSignal(controller.signal, BACKGROUND_CONTEXT);
 }
 
+export interface NodeFileHandle {
+  readonly fd: number;
+  sync(): Promise<void>;
+  read(...args: unknown[]): Promise<unknown>;
+  close(): Promise<void>;
+}
+
+type FsPromises = {
+  open(path: string, flags: string): Promise<NodeFileHandle>;
+};
+
+const nodeFsPromises = (): FsPromises =>
+  (process.getBuiltinModule as (id: string) => unknown)("node:fs/promises") as FsPromises;
+
 export const fileHandlePrototype = Effect.fn("fileHandlePrototype")(function* (path: string) {
-  const handle = yield* awaited(open(path, "r"));
+  const handle = yield* awaited(nodeFsPromises().open(path, "r"));
   yield* awaited(handle.close());
-  return Object.getPrototypeOf(handle) as FileHandle;
+  return Object.getPrototypeOf(handle) as NodeFileHandle;
 });
 
 function collectShellOutputImpl(

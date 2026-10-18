@@ -1,5 +1,3 @@
-import { type FileHandle } from "node:fs/promises";
-
 import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
@@ -8,6 +6,7 @@ import { getOrThrow } from "../src/env/index.ts";
 import { NodeExecutionEnv } from "../src/env/node.ts";
 import { awaited } from "./effect-support.ts";
 import {
+  type NodeFileHandle,
   cleanUpEnvTests,
   createTempDir,
   fileHandlePrototype,
@@ -137,8 +136,8 @@ const syncsThroughOpened = Effect.gen(function* () {
   getOrThrow(yield* awaited(env.writeFile("file.txt", "durable", BACKGROUND_CONTEXT)));
   const prototype = yield* fileHandlePrototype(joinPath(root, "file.txt"));
   const originalSync = prototype.sync;
-  const synced: FileHandle[] = [];
-  const sync = vi.spyOn(prototype, "sync").mockImplementation(function (this: FileHandle) {
+  const synced: NodeFileHandle[] = [];
+  const sync = vi.spyOn(prototype, "sync").mockImplementation(function (this: NodeFileHandle) {
     synced.push(this);
     return Reflect.apply(originalSync, this, []);
   });
@@ -147,7 +146,7 @@ const syncsThroughOpened = Effect.gen(function* () {
   expect(sync).toHaveBeenCalledTimes(1);
   expect(synced[0]?.fd).toBe(-1);
 
-  sync.mockImplementationOnce(function (this: FileHandle) {
+  sync.mockImplementationOnce(function (this: NodeFileHandle) {
     synced.push(this);
     return Promise.reject(Object.assign(new Error("EIO: i/o error, fsync"), { code: "EIO" }));
   });

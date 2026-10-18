@@ -7,9 +7,13 @@ import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { safeNow } from "../src/harness/harness.ts";
-import { contained } from "../src/session/session.ts";
-import { running, Waiting, started } from "./harness-storage-failure-support.ts";
+import {
+  contained,
+  running,
+  safeNow,
+  started,
+  Waiting,
+} from "./harness-storage-failure-support.ts";
 import { awaited, context, openTasks } from "./support.ts";
 
 const containsFulfilledThenable = Effect.gen(function* () {

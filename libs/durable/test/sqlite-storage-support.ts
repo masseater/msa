@@ -20,6 +20,12 @@ import { ROOT_CONVERSATION_ID } from "../src/types.ts";
 import { awaited } from "./effect-support.ts";
 import { joinPath, makeTempDir } from "./platform-support.ts";
 
+export type { SqliteStorage } from "../src/storage/sqlite/index.ts";
+export {
+  openNodeSqliteStorage,
+  type NodeSqliteStorageOptions,
+} from "../src/storage/sqlite/node.ts";
+
 export const context = BACKGROUND_CONTEXT;
 
 export const openStorages = new Set<SqliteStorage>();

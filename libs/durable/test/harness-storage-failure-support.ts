@@ -7,6 +7,9 @@ import { awaited } from "./effect-support.ts";
 import { ControlledStorage, context } from "./session-support.ts";
 import { aborted, deferred, openTasks } from "./task-support.ts";
 
+export { safeNow } from "../src/harness/harness.ts";
+export { contained } from "../src/session/session.ts";
+
 export const signals: string[] = [];
 
 export const Waiting = defineTask<null, { phase: "work" }, null>({

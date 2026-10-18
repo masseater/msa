@@ -17,19 +17,17 @@ import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { idFromNumber } from "../src/ids.ts";
-import type { SqliteStorage } from "../src/storage/sqlite/index.ts";
 import {
-  type NodeSqliteStorageOptions,
-  openNodeSqliteStorage,
-} from "../src/storage/sqlite/node.ts";
-import {
-  pendingTask,
-  entry,
-  createRoot,
   context,
-  tempDirectories,
-  openStorages,
+  createRoot,
   createSqliteStorage,
+  entry,
+  openNodeSqliteStorage,
+  openStorages,
+  pendingTask,
+  tempDirectories,
+  type NodeSqliteStorageOptions,
+  type SqliteStorage,
 } from "./sqlite-storage-support.ts";
 import { awaited, makeTempFile, removeDir } from "./support.ts";
 

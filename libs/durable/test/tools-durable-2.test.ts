@@ -18,14 +18,15 @@ import { createBashTool, createPowerShellTool } from "../src/tools/index.ts";
 import { DEFAULT_MAX_LINES } from "../src/truncate.ts";
 import { BACKGROUND_CONTEXT, withAbortSignal, abortController, awaited } from "./support.ts";
 import {
+  TRUNCATED_OUTPUT_LINES,
+  TimeoutOutputExecutionEnv,
   createEnv,
   createTempDir,
-  run,
   fakeApi,
-  runFailing,
   removeTempDirs,
+  run,
+  runFailing,
 } from "./tools-support.ts";
-import { TRUNCATED_OUTPUT_LINES, TimeoutOutputExecutionEnv } from "./tools-timeout-env-support.ts";
 
 afterAll(() => Effect.runPromise(removeTempDirs));
 

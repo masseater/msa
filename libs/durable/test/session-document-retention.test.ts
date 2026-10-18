@@ -3,13 +3,17 @@ import { type StorageWrite } from "@msa/durable";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { currentTimeMillis } from "../src/clock.ts";
 import { SessionImpl } from "../src/session/session.ts";
-import { awaited } from "./effect-support.ts";
 import { SessionCounterDoc } from "./session-document-retention-cases.ts";
 import { settleLine, CounterDoc, bump, open } from "./session-document-retention-support.ts";
-import { context, createConversation } from "./session-support.ts";
-import { deferred, eventually } from "./task-support.ts";
+import {
+  currentTimeMillis,
+  awaited,
+  context,
+  createConversation,
+  deferred,
+  eventually,
+} from "./support.ts";
 
 const evictsUnattachedDocument = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());

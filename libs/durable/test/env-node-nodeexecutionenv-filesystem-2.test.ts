@@ -1,5 +1,3 @@
-import { type FileHandle } from "node:fs/promises";
-
 import { BACKGROUND_CONTEXT, withAbortSignal } from "@msa/chord/context";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
@@ -7,7 +5,12 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { getOrThrow } from "../src/env/index.ts";
 import { NodeExecutionEnv } from "../src/env/node.ts";
 import { abortController, awaited } from "./effect-support.ts";
-import { cleanUpEnvTests, createTempDir, fileHandlePrototype } from "./env-node-support.ts";
+import {
+  type NodeFileHandle,
+  cleanUpEnvTests,
+  createTempDir,
+  fileHandlePrototype,
+} from "./env-node-support.ts";
 import { joinPath } from "./platform-support.ts";
 
 afterEach(() => Effect.runPromise(cleanUpEnvTests), 15_000);
@@ -50,17 +53,17 @@ const rejectsReadCancelled = Effect.gen(function* () {
   const { promise: started, resolve: markStarted } = Promise.withResolvers<void>();
   const { promise: gate, resolve: release } = Promise.withResolvers<void>();
   vi.spyOn(prototype, "read").mockImplementationOnce(function (
-    this: FileHandle,
+    this: NodeFileHandle,
     ...args: unknown[]
   ) {
     return runPromise(
       Effect.gen({ self: this }, function* () {
         markStarted();
         yield* awaited(gate);
-        return Reflect.apply(read, this, args);
+        return yield* awaited(Reflect.apply(read, this, args));
       }),
     );
-  } as unknown as FileHandle["read"]);
+  } as unknown as NodeFileHandle["read"]);
 
   const reader = getOrThrow(
     yield* awaited(env.openTextLineReader("lines.txt", BACKGROUND_CONTEXT)),
