@@ -15,28 +15,7 @@ const effectRuleNames = Object.values(effectPresets).flatMap((preset) =>
   Object.keys(preset.rules ?? {}),
 );
 
-const effectRulesPendingMigration = new Set([
-  "effecttsgo/async-function",
-  "effecttsgo/crypto-random-uuid",
-  "effecttsgo/extends-native-error",
-  "effecttsgo/global-console",
-  "effecttsgo/global-date",
-  "effecttsgo/global-fetch",
-  "effecttsgo/global-random",
-  "effecttsgo/global-timers",
-  "effecttsgo/missing-pipeable-signature",
-  "effecttsgo/new-promise",
-  "effecttsgo/node-builtin-import",
-  "effecttsgo/process-env",
-  "effecttsgo/strict-boolean-expressions",
-  "effecttsgo/unnecessary-arrow-block",
-  "effecttsgo/unnecessary-pipe-chain",
-]);
-
 const effectRules = asErrors(effectRuleNames);
-const landedEffectRules = asErrors(
-  effectRuleNames.filter((name) => !effectRulesPendingMigration.has(name)),
-);
 
 export const workspaceSourcePaths = {
   chordIndex: fileURLToPath(new URL("./libs/chord/src/index.ts", import.meta.url)),
@@ -156,26 +135,28 @@ export default defineConfig({
     ],
     rules: {
       "vite-plus/prefer-vite-plus-imports": "error",
-      "eslint/no-control-regex": "off",
+      "eslint/no-control-regex": "error",
       "eslint/no-duplicate-imports": ["error", { allowSeparateTypeImports: true }],
       "eslint/no-restricted-imports": ["error", restrictedImports],
       "eslint/no-undef": "off",
-      "eslint/no-underscore-dangle": "off",
-      "eslint/no-unmodified-loop-condition": "off",
+      "eslint/no-underscore-dangle": "error",
+      "eslint/no-unmodified-loop-condition": "error",
       "eslint/one-var": ["error", "never"],
       "eslint/sort-imports": "off",
       "eslint/sort-keys": "off",
       "import/no-named-export": "off",
       "import/prefer-default-export": "off",
       "node/no-top-level-await": "off",
-      "promise/always-return": "off",
-      ...landedEffectRules,
+      "promise/always-return": "error",
+      "eslint/no-shadow": "error",
+      "no-comments/disallowComments": ["error", { allow: ["oxlint-disable", "eslint-disable"] }],
+      ...asErrors(strictCategoryRules),
+      ...effectRules,
     },
     overrides: [
       {
         files: ["**/test/**", "**/*.test.ts", "**/*.spec.ts", "**/*.bench.ts"],
         rules: {
-          "eslint/no-shadow": "off",
           "eslint/max-lines-per-function": "off",
         },
       },
