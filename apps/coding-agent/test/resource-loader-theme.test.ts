@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { resetCapabilitiesCache, setCapabilityOverrides } from "@msa/tui";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
+import { getThemesDir } from "../src/config.ts";
 import { DefaultResourceLoader } from "../src/core/resource-loader.ts";
 import { SettingsManager } from "../src/core/settings-manager.ts";
 import { validateThemeJson } from "../src/modes/interactive/theme/theme-schema.ts";
@@ -33,10 +34,7 @@ describe("DefaultResourceLoader theme color mode", () => {
     mkdirSync(cwd, { recursive: true });
 
     themeJson = JSON.parse(
-      readFileSync(
-        join(process.cwd(), "src", "modes", "interactive", "theme", "dark.json"),
-        "utf-8",
-      ),
+      readFileSync(join(getThemesDir(), "dark.json"), "utf-8"),
     ) as TestThemeJson;
     themeJson.name = "capability-test";
     themeJson.colors["userMessageBg"] = "#3c3544";

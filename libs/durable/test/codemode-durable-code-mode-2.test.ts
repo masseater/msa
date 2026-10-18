@@ -244,14 +244,19 @@ describe("durable code mode", () => {
 
   it("times a script out across a restart, without admitting new calls", async () => {
     const chat = codemodeChat();
+    // The live run must reach the hold before its own timeout fires, so the timeout is far beyond the test's. The
+    // deadline then passes while the call is interrupted by moving the stored deadline to now, without waiting for it.
     const { harness, result } = await restart(
       chat,
-      `// @options: {"timeout_ms": 300}
+      `// @options: {"timeout_ms": 60000}
 			await tools.hold({}); await tools.echo({ text: "late" });`,
-      () =>
-        new Promise((resolve) => {
-          setTimeout(resolve, 400);
-        }),
+      async (opened, task) => {
+        await opened.commit(async (tx) => {
+          const run = await tx.doc(CodemodeRunDoc, task);
+          expect(run.start!.deadline).toBe(run.start!.startedAt + 60_000);
+          run.start!.deadline = Date.now();
+        }, context);
+      },
     );
     expect(result.isError).toBe(true);
     expect(result.text).toContain("deadline passed");

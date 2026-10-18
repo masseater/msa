@@ -9,6 +9,10 @@ export default defineConfig({
   test: {
     environment: "node",
     setupFiles: ["./test/setup-document-retention.ts"],
+    projects: [
+      { test: { name: "retaining" } },
+      { test: { name: "evicting", env: { MSA_DURABLE_DOCUMENT_RETENTION_MS: "0" } } },
+    ],
   },
   resolve: {
     conditions: ["source"],
