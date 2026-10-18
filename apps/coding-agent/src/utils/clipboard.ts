@@ -5,6 +5,7 @@ import { join } from "node:path";
 
 import { getNativeClipboard } from "@msa/tui";
 
+import { envSnapshot, readEnv } from "../core/process-env.ts";
 import { runClipboardCommand } from "./clipboard-command.ts";
 import { isWSL } from "./wsl.ts";
 
@@ -66,11 +67,10 @@ async function copyViaWindowsClipboard(text: string): Promise<boolean> {
 export async function readClipboardText(): Promise<string | null> {
   const commands: [string, string[]][] = [];
   // Termux reports platform "android", not "linux" (#10391).
-  if (process.env["TERMUX_VERSION"]) commands.push(["termux-clipboard-get", []]);
+  if (readEnv("TERMUX_VERSION")) commands.push(["termux-clipboard-get", []]);
   if (platform() === "linux") {
-    if (process.env["WAYLAND_DISPLAY"])
-      commands.push(["wl-paste", ["--no-newline", "--type", "text"]]);
-    if (process.env["DISPLAY"]) {
+    if (readEnv("WAYLAND_DISPLAY")) commands.push(["wl-paste", ["--no-newline", "--type", "text"]]);
+    if (readEnv("DISPLAY")) {
       commands.push(
         ["xclip", ["-selection", "clipboard", "-out"]],
         ["xsel", ["--clipboard", "--output"]],
@@ -96,7 +96,7 @@ export async function readClipboardFilePaths(): Promise<string[] | null> {
 
 export async function copyToClipboard(text: string): Promise<void> {
   const p = platform();
-  const env = process.env;
+  const env = envSnapshot();
   let copied = false;
   // Direct writes precede OSC 52 so the terminal cannot race the native writer.
   // Linux tools retain clipboard selection ownership after this call returns.

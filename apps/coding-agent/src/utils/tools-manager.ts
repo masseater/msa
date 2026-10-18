@@ -14,6 +14,7 @@ import { Readable } from "stream";
 import { pipeline } from "stream/promises";
 
 import { APP_NAME, getBinDir } from "../config.ts";
+import { readEnv } from "../core/process-env.ts";
 import { fetchWithRetry } from "./management-http.ts";
 
 const TOOLS_DIR = getBinDir();
@@ -21,7 +22,7 @@ const NETWORK_TIMEOUT_MS = 10_000;
 const DOWNLOAD_TIMEOUT_MS = 120_000;
 
 function isOfflineModeEnabled(): boolean {
-  const value = process.env["MSA_OFFLINE"];
+  const value = readEnv("MSA_OFFLINE");
   if (!value) return false;
   return value === "1" || value.toLowerCase() === "true" || value.toLowerCase() === "yes";
 }
@@ -218,7 +219,7 @@ function extractTarGzArchive(archivePath: string, extractDir: string, assetName:
 }
 
 function getWindowsTarCommand(): string {
-  const systemRoot = process.env["SystemRoot"] ?? process.env["WINDIR"];
+  const systemRoot = readEnv("SystemRoot") ?? readEnv("WINDIR");
   if (systemRoot) {
     const systemTar = join(systemRoot, "System32", "tar.exe");
     if (existsSync(systemTar)) {

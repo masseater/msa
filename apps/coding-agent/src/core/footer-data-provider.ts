@@ -11,6 +11,7 @@ import {
 import { dirname, join, resolve } from "path";
 
 import { closeWatcher, FS_WATCH_RETRY_DELAY_MS, watchWithErrorHandler } from "../utils/fs-watch.ts";
+import { readEnv } from "./process-env.ts";
 
 export type GitPaths = {
   repoDir: string;
@@ -94,9 +95,7 @@ function resolveBranchWithGitAsync(repoDir: string): Promise<string | null> {
 }
 
 function isWslEnvironment(): boolean {
-  return (
-    process.platform === "linux" && !!(process.env["WSL_DISTRO_NAME"] || process.env["WSL_INTEROP"])
-  );
+  return process.platform === "linux" && !!(readEnv("WSL_DISTRO_NAME") || readEnv("WSL_INTEROP"));
 }
 
 function isWindowsMountedRepoPath(repoDir: string): boolean {

@@ -17,6 +17,7 @@ import type { CrashRecord } from "./crash-log.ts";
 import type { Extension } from "./extensions/types.ts";
 import { convertToLlm } from "./messages.ts";
 import type { ModelRuntime } from "./model-runtime.ts";
+import { envNames, readEnv } from "./process-env.ts";
 import type { ReadonlySessionManager } from "./session-manager.ts";
 import type { Settings } from "./settings-manager.ts";
 
@@ -72,7 +73,7 @@ function redactSettings(settings: Settings): Settings {
 }
 
 function collectEnvironment() {
-  const env = (name: string): string | null => process.env[name] || null;
+  const env = (name: string): string | null => readEnv(name) || null;
   return {
     version: VERSION,
     userAgent: getMsaUserAgent(VERSION),
@@ -81,20 +82,18 @@ function collectEnvironment() {
     arch: process.arch,
     osRelease: os.release(),
     osVersion: os.version(),
-    shell: process.env["SHELL"]?.split(/[\\/]/).pop() || null,
+    shell: readEnv("SHELL")?.split(/[\\/]/).pop() || null,
     terminal: {
       term: env("TERM"),
       program: env("TERM_PROGRAM"),
       programVersion: env("TERM_PROGRAM_VERSION"),
       colorterm: env("COLORTERM"),
-      tmux: Boolean(process.env["TMUX"]),
-      ssh: Boolean(
-        process.env["SSH_CONNECTION"] || process.env["SSH_CLIENT"] || process.env["SSH_TTY"],
-      ),
-      ci: Boolean(process.env["CI"]),
+      tmux: Boolean(readEnv("TMUX")),
+      ssh: Boolean(readEnv("SSH_CONNECTION") || readEnv("SSH_CLIENT") || readEnv("SSH_TTY")),
+      ci: Boolean(readEnv("CI")),
     },
     // Names help diagnose configuration; values never leave the machine.
-    piEnvironmentVariables: Object.keys(process.env)
+    piEnvironmentVariables: envNames()
       .filter((name) => name.startsWith("MSA_"))
       .sort(),
   };

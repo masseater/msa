@@ -1,5 +1,6 @@
 import neo4j, { type Driver, type Record as Neo4jRecord } from "neo4j-driver";
 
+import { envSnapshot } from "../process-env.ts";
 import type {
   SessionGraph,
   SessionNode,
@@ -56,7 +57,7 @@ export class Neo4jSessionGraph implements SessionGraph {
   }
 
   /** Connects with `NEO4J_URI`, `NEO4J_USERNAME`, and `NEO4J_PASSWORD`. */
-  static async connect(env: NodeJS.ProcessEnv = process.env): Promise<Neo4jSessionGraph> {
+  static async connect(env: NodeJS.ProcessEnv = envSnapshot()): Promise<Neo4jSessionGraph> {
     const password = env["NEO4J_PASSWORD"];
     if (!password) {
       throw new Error(

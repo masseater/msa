@@ -26,6 +26,7 @@ import {
 import chalk from "chalk";
 
 import { getCustomThemesDir, getThemesDir } from "../../../config.ts";
+import { envSnapshot } from "../../../core/process-env.ts";
 import type { SourceInfo } from "../../../core/source-info.ts";
 import { toErrorMessage } from "../../../utils/errors.ts";
 import { closeWatcher, watchWithErrorHandler } from "../../../utils/fs-watch.ts";
@@ -644,7 +645,7 @@ export function resolveThemeSetting(
  * Solarized Dark's background) are dark, 7 and 9-15 are light.
  */
 export function detectColorFgBgTheme(
-  env: NodeJS.ProcessEnv = process.env,
+  env: NodeJS.ProcessEnv = envSnapshot(),
 ): TerminalTheme | undefined {
   const bg = env["COLORFGBG"]?.split(";").at(-1)?.trim();
   if (!bg || !/^\d{1,2}$/.test(bg)) return undefined;
@@ -661,7 +662,7 @@ export function detectColorFgBgTheme(
 export function detectTerminalTheme(
   colors: TerminalColors = {},
   reportedScheme?: TerminalTheme,
-  env: NodeJS.ProcessEnv = process.env,
+  env: NodeJS.ProcessEnv = envSnapshot(),
 ): TerminalTheme {
   const { background, foreground } = colors;
   if (background) return terminalAppearance(background, foreground);

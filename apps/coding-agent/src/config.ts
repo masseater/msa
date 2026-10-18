@@ -4,6 +4,7 @@ import { homedir } from "os";
 import { basename, dirname, join, resolve, sep, win32 } from "path";
 import { fileURLToPath } from "url";
 
+import { readEnv } from "./core/process-env.ts";
 import { spawnProcessSync } from "./utils/child-process.ts";
 import { normalizePath } from "./utils/paths.ts";
 import { stripBom } from "./utils/text.ts";
@@ -142,7 +143,7 @@ function getSelfUpdateCommandForMethod(
       const globalDir = match?.[1];
       const binDirArgs =
         globalDir !== undefined
-          ? [`--config.global-bin-dir=${process.env["PNPM_HOME"] || dirname(dirname(globalDir))}`]
+          ? [`--config.global-bin-dir=${readEnv("PNPM_HOME") || dirname(dirname(globalDir))}`]
           : [];
       return makeSelfUpdateCommand(
         makeSelfUpdateCommandStep("pnpm", [
@@ -444,7 +445,7 @@ export function findNodePackageDir(startDir: string): string {
 
 export function getPackageDir(): string {
   // Allow override via environment variable (useful for Nix/Guix where store paths tokenize poorly)
-  const envDir = process.env["MSA_PACKAGE_DIR"];
+  const envDir = readEnv("MSA_PACKAGE_DIR");
   if (envDir) {
     return normalizePath(envDir);
   }
@@ -650,7 +651,7 @@ const DEFAULT_SHARE_VIEWER_URL = "https://pi.dev/session/";
 
 /** Get the share viewer URL for a gist ID. */
 export function getShareViewerUrl(gistId: string): string {
-  const baseUrl = process.env["MSA_SHARE_VIEWER_URL"] || DEFAULT_SHARE_VIEWER_URL;
+  const baseUrl = readEnv("MSA_SHARE_VIEWER_URL") || DEFAULT_SHARE_VIEWER_URL;
   return `${baseUrl}#${gistId}`;
 }
 
@@ -660,7 +661,7 @@ export function getShareViewerUrl(gistId: string): string {
 
 /** Get the agent config directory (e.g., ~/.msa/agent/) */
 export function getAgentDir(): string {
-  const envDir = process.env[ENV_AGENT_DIR];
+  const envDir = readEnv(ENV_AGENT_DIR);
   if (envDir) {
     return expandTildePath(envDir);
   }
