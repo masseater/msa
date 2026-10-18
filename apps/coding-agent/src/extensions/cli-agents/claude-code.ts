@@ -1,5 +1,3 @@
-import { spawn, type ChildProcess } from "node:child_process";
-
 import type { Query, SDKMessage, SDKUserMessage } from "@anthropic-ai/claude-agent-sdk";
 import type { ContentBlockParam } from "@anthropic-ai/sdk/resources/messages";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -22,6 +20,7 @@ import { awaited, awaiting, awaitingWith } from "../../core/awaiting.ts";
 import type { ExtensionAPI } from "../../core/extensions/types.ts";
 import { sha256Hex } from "../../core/platform-node.ts";
 import { nowMs, schedule, type Scheduled } from "../../core/platform.ts";
+import { type ChildProcess, spawnProcess } from "../../utils/child-process.ts";
 import { callbackPromise } from "../../utils/interop.ts";
 import {
   accountEnv,
@@ -254,7 +253,7 @@ class Session {
         cwd: process.cwd(),
         env,
         spawnClaudeCodeProcess: (spawnOptions) => {
-          const child = spawn(spawnOptions.command, spawnOptions.args, {
+          const child = spawnProcess(spawnOptions.command, spawnOptions.args, {
             cwd: spawnOptions.cwd,
             env: spawnOptions.env,
             signal: spawnOptions.signal,

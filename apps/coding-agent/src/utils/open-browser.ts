@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { spawnProcess } from "./child-process.ts";
 
 export function openBrowser(target: string): void {
   const [cmd, args]: [string, string[]] =
@@ -8,7 +8,7 @@ export function openBrowser(target: string): void {
         ? ["rundll32", ["url.dll,FileProtocolHandler", target]]
         : ["xdg-open", [target]];
 
-  spawn(cmd, args, { stdio: "ignore", detached: true })
+  spawnProcess(cmd, args, { stdio: "ignore", detached: true })
     .on("error", () => {})
     .unref();
 }

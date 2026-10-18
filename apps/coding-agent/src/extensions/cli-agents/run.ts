@@ -1,4 +1,3 @@
-import type { ChildProcess } from "node:child_process";
 import { createInterface } from "node:readline";
 
 import type { Model, SimpleStreamOptions, TranscriptContext } from "@msa/ai/compat";
@@ -6,7 +5,7 @@ import * as Effect from "effect/Effect";
 
 import { awaited, awaiting, performed } from "../../core/awaiting.ts";
 import { schedule } from "../../core/platform.ts";
-import { spawnProcess, waitForChildProcess } from "../../utils/child-process.ts";
+import { type ChildProcess, spawnProcess, waitForChildProcess } from "../../utils/child-process.ts";
 import { createReply, type ReplyBuilder } from "./reply.ts";
 
 const SPAWN_ATTEMPTS = 3;

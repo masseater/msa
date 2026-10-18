@@ -1,5 +1,4 @@
 import { homedir } from "node:os";
-import { setTimeout as sleep } from "node:timers/promises";
 import { pathToFileURL } from "node:url";
 
 import {
@@ -389,7 +388,9 @@ export class McpServerConnection implements McpToolCaller, McpResourceServer {
               throw this.connectFailed(error);
             }
             yield* awaited(
-              sleep(delay, undefined, { signal: this.shutdown.signal }).catch(() => undefined),
+              Effect.runPromise(Effect.sleep(delay), { signal: this.shutdown.signal }).catch(
+                () => undefined,
+              ),
             );
             if (this.closed) throw this.connectFailed(error);
           }

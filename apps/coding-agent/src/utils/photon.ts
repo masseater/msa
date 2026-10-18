@@ -1,4 +1,3 @@
-import type { PathOrFileDescriptor } from "fs";
 import { createRequire } from "module";
 import { fileURLToPath } from "url";
 
@@ -13,6 +12,7 @@ const fs = require("fs") as typeof import("fs");
 export type { PhotonImage as PhotonImageType } from "@silvia-odwyer/photon-node";
 
 type ReadFileSync = typeof fs.readFileSync;
+type PathOrFileDescriptor = Parameters<ReadFileSync>[0];
 
 const WASM_FILENAME = "photon_rs_bg.wasm";
 

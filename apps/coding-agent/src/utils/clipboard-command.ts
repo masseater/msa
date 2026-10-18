@@ -1,6 +1,5 @@
-import { spawn } from "node:child_process";
-
 import { schedule } from "../core/platform.ts";
+import { spawnProcess } from "./child-process.ts";
 import { callbackPromise } from "./interop.ts";
 
 export function runClipboardCommand(
@@ -9,7 +8,7 @@ export function runClipboardCommand(
   options?: { input?: string; timeoutMs?: number; maxBufferBytes?: number },
 ): Promise<Buffer | undefined> {
   return callbackPromise((resolve) => {
-    const child = spawn(command, args, {
+    const child = spawnProcess(command, [...args], {
       stdio: ["pipe", options?.input === undefined ? "pipe" : "ignore", "ignore"],
       windowsHide: true,
     });

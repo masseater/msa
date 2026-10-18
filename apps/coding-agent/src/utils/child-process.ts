@@ -1,6 +1,7 @@
 import {
   type ChildProcess,
   type ChildProcessByStdio,
+  execFile,
   spawn as nodeSpawn,
   spawnSync as nodeSpawnSync,
   type SpawnOptions,
@@ -11,13 +12,29 @@ import {
   type StdioPipe,
 } from "node:child_process";
 import type { Readable, Writable } from "node:stream";
+import { promisify } from "node:util";
 
 import crossSpawn from "cross-spawn";
 
 import { schedule, type Scheduled } from "../core/platform.ts";
 import { callbackPromise } from "./interop.ts";
 
+export type { ChildProcess };
+
 const EXIT_STDIO_GRACE_MS = 100;
+
+export function execFileText(options: {
+  command: string;
+  args: string[];
+  env?: NodeJS.ProcessEnv;
+  timeout?: number;
+}): Promise<{ stdout: string; stderr: string }> {
+  return promisify(execFile)(options.command, options.args, {
+    ...(options.env === undefined ? {} : { env: options.env }),
+    ...(options.timeout === undefined ? {} : { timeout: options.timeout }),
+    encoding: "utf8",
+  });
+}
 
 export function spawnProcess(
   command: string,

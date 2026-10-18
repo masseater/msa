@@ -1,6 +1,4 @@
-import { execFile } from "node:child_process";
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { promisify } from "node:util";
 
 import type { SDKAssistantMessageError } from "@anthropic-ai/claude-agent-sdk";
 import * as Effect from "effect/Effect";
@@ -9,7 +7,7 @@ import { expandTildePath, getAgentDir } from "../../config.ts";
 import { awaited, awaiting } from "../../core/awaiting.ts";
 import { dirname, join } from "../../core/platform-node.ts";
 import { nowMs, readEnv } from "../../core/platform.ts";
-import { spawnProcess, waitForChildProcess } from "../../utils/child-process.ts";
+import { execFileText, spawnProcess, waitForChildProcess } from "../../utils/child-process.ts";
 import { findExecutableOnPath } from "../../utils/shell.ts";
 
 const configFile = () => join(getAgentDir(), "claude-code-accounts.json");
@@ -130,7 +128,7 @@ function runTokenCommand(command: string): Promise<string> {
       let stdout: string;
       try {
         ({ stdout } = yield* awaited(
-          promisify(execFile)(readEnv("SHELL") || "/bin/sh", ["-c", command]),
+          execFileText({ command: readEnv("SHELL") || "/bin/sh", args: ["-c", command] }),
         ));
       } catch (error) {
         const stderr = String((error as { stderr?: unknown }).stderr ?? "").trim();
@@ -200,7 +198,9 @@ export function authStatus(account: Account): Promise<AuthStatus> {
     awaiting(function* () {
       try {
         const { stdout } = yield* awaited(
-          promisify(execFile)(claudeExecutable() ?? "claude", ["auth", "status"], {
+          execFileText({
+            command: claudeExecutable() ?? "claude",
+            args: ["auth", "status"],
             env: yield* awaited(accountEnv(account)),
             timeout: 15_000,
           }),
@@ -293,7 +293,9 @@ export function logoutAccount(account: Account): Promise<void> {
   return Effect.runPromise(
     awaiting(function* () {
       yield* awaited(
-        promisify(execFile)(claudeExecutable() ?? "claude", ["auth", "logout"], {
+        execFileText({
+          command: claudeExecutable() ?? "claude",
+          args: ["auth", "logout"],
           env: yield* awaited(accountEnv(account)),
           timeout: 15_000,
         }),
