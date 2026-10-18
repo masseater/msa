@@ -33,7 +33,14 @@
     "plugins": [
       {
         "name": "@effect/language-service",
-        "allowedUnstableApis": ["effect/FileSystem", "@effect/platform-node"]
+        "overrides": [
+          {
+            "include": ["apps/coding-agent/test/orchestrator-sdk.test.ts"],
+            "options": {
+              "allowedUnstableApis": ["effect/FileSystem", "@effect/platform-node"]
+            }
+          }
+        ]
       }
     ]
   }
