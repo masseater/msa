@@ -429,30 +429,32 @@ const assertHasImplementation = <TApi extends Api>(
   }
 };
 
-class DynamicModels<TApi extends Api> {
-  private dynamic: readonly ProviderModel<TApi>[] = [];
-  private readonly baseline: readonly ProviderModel<TApi>[];
-
-  constructor(baseline: readonly ProviderModel<TApi>[]) {
-    this.baseline = baseline;
-  }
-
-  set(models: readonly ProviderModel<TApi>[]): void {
-    this.dynamic = models;
-  }
-
-  current(): readonly ProviderModel<TApi>[] {
-    const merged = [...this.baseline];
-    for (const model of this.dynamic) {
-      const index = merged.findIndex(
-        (entry) => getModelType(entry) === getModelType(model) && entry.id === model.id,
-      );
-      if (index >= 0) merged[index] = model;
-      else merged.push(model);
-    }
-    return merged;
-  }
+interface DynamicModels<TApi extends Api> {
+  readonly set: (models: readonly ProviderModel<TApi>[]) => void;
+  readonly current: () => readonly ProviderModel<TApi>[];
 }
+
+const dynamicModels = <TApi extends Api>(
+  baseline: readonly ProviderModel<TApi>[],
+): DynamicModels<TApi> => {
+  let dynamic: readonly ProviderModel<TApi>[] = [];
+  return {
+    set: (models) => {
+      dynamic = models;
+    },
+    current: () => {
+      const merged = [...baseline];
+      for (const model of dynamic) {
+        const index = merged.findIndex(
+          (entry) => getModelType(entry) === getModelType(model) && entry.id === model.id,
+        );
+        if (index >= 0) merged[index] = model;
+        else merged.push(model);
+      }
+      return merged;
+    },
+  };
+};
 
 interface ModelRefresher<TApi extends Api> {
   readonly providerId: string;
@@ -546,7 +548,7 @@ export const createProvider = <TApi extends Api = Api>(
 ): Provider<TApi> => {
   const implementations = streamImplementations(input);
   assertHasImplementation(input, implementations.streams);
-  const models = new DynamicModels(input.models);
+  const models = dynamicModels(input.models);
   const apiFor = (model: Model<Api>): ProviderStreams | undefined =>
     implementations.single ?? implementations.byApi?.[model.api];
   const dispatch = dispatcher(input.id, apiFor);
