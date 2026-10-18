@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { OutputBuffer, type OutputLimits, type OutputSkip } from "../src/output.ts";
+import {
+  type BoundedOutput,
+  OutputBuffer,
+  type OutputLimits,
+  type OutputSkip,
+} from "../src/output.ts";
 
 /** Deterministic PRNG (mulberry32) so failures reproduce from the printed seed. */
 function random(seed: number): () => number {
@@ -48,21 +53,23 @@ function measure(text: string): OutputSkip {
   return { bytes: Buffer.byteLength(text, "utf8"), newlines, endsWithNewline: text.endsWith("\n") };
 }
 
-/** Whether `text` proves that everything before it is outside the tail window. */
-function exceedsWindow(text: string, limits: OutputLimits): boolean {
-  const { bytes, newlines } = measure(text);
-  return bytes > limits.maxBytes || newlines > limits.maxLines;
-}
-
-/** Code-point boundaries of `text`, so a cut never splits a surrogate pair. */
-function boundaries(text: string): number[] {
-  const result = [0];
+/**
+ * Code-point boundaries after which the rest of `text` still proves that everything before it is outside the tail
+ * window. The rest only shrinks as the cut moves right, so the legal cuts are a prefix of the boundaries; one pass
+ * finds them without measuring every suffix again.
+ */
+function legalCuts(text: string, limits: OutputLimits): number[] {
+  let { bytes, newlines } = measure(text);
+  const cuts: number[] = [];
   let offset = 0;
   for (const character of text) {
     offset += character.length;
-    result.push(offset);
+    bytes -= Buffer.byteLength(character, "utf8");
+    if (character === "\n") newlines--;
+    if (bytes <= limits.maxBytes && newlines <= limits.maxLines) break;
+    cuts.push(offset);
   }
-  return result;
+  return cuts;
 }
 
 /**
@@ -81,11 +88,12 @@ function checkSeed(seed: number): void {
   const skipping = new OutputBuffer(limits);
   let pending = "";
   let skips = 0;
+  // Snapshots of both buffers whenever they have seen the same output, compared once per seed.
+  const delivered: BoundedOutput[] = [];
+  const expected: BoundedOutput[] = [];
   const flush = (): void => {
     if (pending === "") return;
-    const cuts = boundaries(pending).filter(
-      (cut) => cut > 0 && exceedsWindow(pending.slice(cut), limits),
-    );
+    const cuts = legalCuts(pending, limits);
     if (cuts.length > 0 && next() < 0.7) {
       const cut = cuts[Math.floor(next() * cuts.length)]!;
       skipping.push(pending.slice(cut), measure(pending.slice(0, cut)));
@@ -96,7 +104,8 @@ function checkSeed(seed: number): void {
     pending = "";
     // Progress snapshots happen between deliveries and compact stored chunks.
     if (next() < 0.5) skipping.snapshot();
-    expect(skipping.snapshot(), `seed ${seed}`).toEqual(full.snapshot());
+    delivered.push(skipping.snapshot());
+    expected.push(full.snapshot());
   };
   const chunks = Math.floor(next() * 40);
   for (let index = 0; index < chunks; index++) {
@@ -109,7 +118,9 @@ function checkSeed(seed: number): void {
   flush();
   full.end();
   skipping.end();
-  expect(skipping.snapshot(), `seed ${seed}`).toEqual(full.snapshot());
+  delivered.push(skipping.snapshot());
+  expected.push(full.snapshot());
+  expect(delivered, `seed ${seed}`).toEqual(expected);
   expect(skips >= 0).toBe(true);
 }
 
