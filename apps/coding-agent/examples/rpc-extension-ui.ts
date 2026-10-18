@@ -1,622 +1,81 @@
-import { spawn } from "node:child_process";
-import { dirname, join } from "node:path";
-import { StringDecoder } from "node:string_decoder";
 import { fileURLToPath } from "node:url";
 
-import {
-  type Component,
-  Container,
-  Input,
-  matchesKey,
-  ProcessTerminal,
-  SelectList,
-  type TUI,
-  TuiMainScreen,
-} from "@msa/tui";
-import { Effect } from "effect";
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-
-const GREEN = "\x1b[32m";
-const YELLOW = "\x1b[33m";
-const BLUE = "\x1b[34m";
-const MAGENTA = "\x1b[35m";
-const RED = "\x1b[31m";
-const DIM = "\x1b[2m";
-const BOLD = "\x1b[1m";
-const RESET = "\x1b[0m";
-
-interface ExtensionUIRequest {
-  type: "extension_ui_request";
-  id: string;
-  method: string;
-  title?: string;
-  options?: string[];
-  message?: string;
-  placeholder?: string;
-  prefill?: string;
-  notifyType?: "info" | "warning" | "error";
-  statusKey?: string;
-  statusText?: string;
-  widgetKey?: string;
-  widgetLines?: string[];
-  text?: string;
-}
-
-class OutputLog implements Component {
-  private lines: string[] = [];
-  private maxLines = 1000;
-  private visibleLines = 0;
-
-  setVisibleLines(n: number): void {
-    this.visibleLines = n;
-  }
-
-  append(line: string): void {
-    this.lines.push(line);
-    if (this.lines.length > this.maxLines) {
-      this.lines = this.lines.slice(-this.maxLines);
-    }
-  }
-
-  appendRaw(text: string): void {
-    if (this.lines.length === 0) {
-      this.lines.push(text);
-    } else {
-      this.lines[this.lines.length - 1] += text;
-    }
-  }
-
-  invalidate(): void {}
-
-  render(width: number): string[] {
-    if (this.lines.length === 0) return [""];
-    const n = this.visibleLines > 0 ? this.visibleLines : this.lines.length;
-    return this.lines.slice(-n).map((l) => l.slice(0, width));
-  }
-}
-
-class LoadingIndicator implements Component {
-  private dots = 1;
-  private intervalId: NodeJS.Timeout | null = null;
-  private tui: TUI | null = null;
-
-  start(tui: TUI): void {
-    this.tui = tui;
-    this.dots = 1;
-    this.intervalId = setInterval(() => {
-      this.dots = (this.dots % 3) + 1;
-      this.tui?.requestRender();
-    }, 400);
-  }
-
-  stop(): void {
-    if (this.intervalId !== null) {
-      clearInterval(this.intervalId);
-      this.intervalId = null;
-    }
-  }
-
-  invalidate(): void {}
-
-  render(_width: number): string[] {
-    return [`${BLUE}${BOLD}Agent:${RESET} ${DIM}Working${".".repeat(this.dots)}${RESET}`];
-  }
-}
-
-class PromptInput implements Component {
-  readonly input: Input;
-  onCtrlD?: () => void;
-
-  constructor() {
-    this.input = new Input();
-  }
-
-  handleInput(data: string): void {
-    if (matchesKey(data, "ctrl+d")) {
-      this.onCtrlD?.();
-      return;
-    }
-    this.input.handleInput(data);
-  }
-
-  invalidate(): void {
-    this.input.invalidate();
-  }
-
-  render(width: number): string[] {
-    return [`${GREEN}${BOLD}You:${RESET}`, ...this.input.render(width)];
-  }
-}
-
-class SelectDialog implements Component {
-  private list: SelectList;
-  private title: string;
-  onSelect?: (value: string) => void;
-  onCancel?: () => void;
-
-  constructor(title: string, options: string[]) {
-    this.title = title;
-    const items = options.map((o) => ({ value: o, label: o }));
-    this.list = new SelectList(items, Math.min(items.length, 8), {
-      selectedPrefix: (t) => `${MAGENTA}${t}${RESET}`,
-      selectedText: (t) => `${MAGENTA}${t}${RESET}`,
-      description: (t) => `${DIM}${t}${RESET}`,
-      scrollInfo: (t) => `${DIM}${t}${RESET}`,
-      noMatch: (t) => `${YELLOW}${t}${RESET}`,
-    });
-    this.list.onSelect = (item) => this.onSelect?.(item.value);
-    this.list.onCancel = () => this.onCancel?.();
-  }
-
-  handleInput(data: string): void {
-    this.list.handleInput(data);
-  }
-
-  invalidate(): void {
-    this.list.invalidate();
-  }
-
-  render(width: number): string[] {
-    return [
-      `${MAGENTA}${BOLD}${this.title}${RESET}`,
-      ...this.list.render(width),
-      `${DIM}Up/Down, Enter to select, Esc to cancel${RESET}`,
-    ];
-  }
-}
-
-class InputDialog implements Component {
-  private dialogInput: Input;
-  private title: string;
-  onCtrlD?: () => void;
-
-  constructor(title: string, prefill?: string) {
-    this.title = title;
-    this.dialogInput = new Input();
-    if (prefill !== undefined && prefill.length > 0) this.dialogInput.setValue(prefill);
-  }
-
-  get onSubmit(): ((value: string) => void) | undefined {
-    return this.dialogInput.onSubmit;
-  }
-
-  set onSubmit(fn: (value: string) => void) {
-    this.dialogInput.onSubmit = fn;
-  }
-
-  get onEscape(): (() => void) | undefined {
-    return this.dialogInput.onEscape;
-  }
-
-  set onEscape(fn: () => void) {
-    this.dialogInput.onEscape = fn;
-  }
-
-  get inputComponent(): Input {
-    return this.dialogInput;
-  }
-
-  handleInput(data: string): void {
-    if (matchesKey(data, "ctrl+d")) {
-      this.onCtrlD?.();
-      return;
-    }
-    this.dialogInput.handleInput(data);
-  }
-
-  invalidate(): void {
-    this.dialogInput.invalidate();
-  }
-
-  render(width: number): string[] {
-    return [
-      `${MAGENTA}${BOLD}${this.title}${RESET}`,
-      ...this.dialogInput.render(width),
-      `${DIM}Enter to submit, Esc to cancel${RESET}`,
-    ];
-  }
-}
-
-async function main() {
-  const extensionPath = join(__dirname, "extensions/rpc-demo.ts");
-  const cliPath = join(__dirname, "../dist/cli.js");
-
-  const agent = spawn(
-    "node",
-    [cliPath, "--mode", "rpc", "--no-session", "--no-extensions", "--extension", extensionPath],
-    { stdio: ["pipe", "pipe", "pipe"] },
-  );
-
-  let stderr = "";
-  agent.stderr?.on("data", (data: Buffer) => {
-    stderr += data.toString();
-  });
-
-  await Effect.runPromise(Effect.sleep(500));
-  if (agent.exitCode !== null) {
-    console.error(`Agent exited immediately. Stderr:\n${stderr}`);
-    process.exit(1);
-  }
-
-  const terminal = new ProcessTerminal();
-  const tui: TUI = new TuiMainScreen(terminal);
-
-  const outputLog = new OutputLog();
-  const loadingIndicator = new LoadingIndicator();
-  const promptInput = new PromptInput();
-
-  const root = new Container();
-  root.addChild(outputLog);
-  root.addChild(promptInput);
-
-  tui.addChild(root);
-  tui.setFocus(promptInput.input);
-
-  function send(obj: Record<string, unknown>): void {
-    agent.stdin!.write(`${JSON.stringify(obj)}\n`);
-  }
-
-  let isStreaming = false;
-  let hasTextOutput = false;
-
-  function exit(): void {
-    tui.stop();
-    agent.kill("SIGTERM");
-    process.exit(0);
-  }
-
-  let activeDialog: Component | null = null;
-
-  function setBottomComponent(component: Component): void {
-    root.clear();
-    root.addChild(outputLog);
-    if (isStreaming) root.addChild(loadingIndicator);
-    root.addChild(component);
-    tui.setFocus(component);
-    tui.requestRender();
-  }
-
-  function showPrompt(): void {
-    activeDialog = null;
-    setBottomComponent(promptInput);
-    tui.setFocus(promptInput.input);
-  }
-
-  function showDialog(dialog: Component): void {
-    activeDialog = dialog;
-    setBottomComponent(dialog);
-  }
-
-  function showLoading(): void {
-    if (!isStreaming) {
-      isStreaming = true;
-      hasTextOutput = false;
-      root.clear();
-      root.addChild(outputLog);
-      root.addChild(loadingIndicator);
-      root.addChild(activeDialog ?? promptInput);
-      if (activeDialog === null) tui.setFocus(promptInput.input);
-      loadingIndicator.start(tui);
-      tui.requestRender();
-    }
-  }
-
-  function hideLoading(): void {
-    loadingIndicator.stop();
-    root.clear();
-    root.addChild(outputLog);
-    root.addChild(activeDialog ?? promptInput);
-    if (activeDialog === null) tui.setFocus(promptInput.input);
-    tui.requestRender();
-  }
-
-  function showSelectDialog(
-    title: string,
-    options: string[],
-    onDone: (value: string | undefined) => void,
-  ): void {
-    const dialog = new SelectDialog(title, options);
-    dialog.onSelect = (value) => {
-      showPrompt();
-      onDone(value);
-    };
-    dialog.onCancel = () => {
-      showPrompt();
-      onDone(undefined);
-    };
-    showDialog(dialog);
-  }
-
-  function showInputDialog(
-    title: string,
-    prefill?: string,
-    onDone?: (value: string | undefined) => void,
-  ): void {
-    const dialog = new InputDialog(title, prefill);
-    dialog.onSubmit = (value) => {
-      showPrompt();
-      onDone?.(value.trim() || undefined);
-    };
-    dialog.onEscape = () => {
-      showPrompt();
-      onDone?.(undefined);
-    };
-    dialog.onCtrlD = exit;
-    showDialog(dialog);
-    tui.setFocus(dialog.inputComponent);
-  }
-
-  function handleExtensionUI(req: ExtensionUIRequest): void {
-    const { id, method } = req;
-
-    switch (method) {
-      case "select": {
-        showSelectDialog(req.title ?? "Select", req.options ?? [], (value) => {
-          if (value === undefined) {
-            send({ type: "extension_ui_response", id, cancelled: true });
-          } else {
-            send({ type: "extension_ui_response", id, value });
-          }
-        });
-        break;
-      }
-
-      case "confirm": {
-        const title =
-          req.message !== undefined && req.message.length > 0
-            ? `${req.title}: ${req.message}`
-            : (req.title ?? "Confirm");
-        showSelectDialog(title, ["Yes", "No"], (value) => {
-          send({ type: "extension_ui_response", id, confirmed: value === "Yes" });
-        });
-        break;
-      }
-
-      case "input": {
-        const title =
-          req.placeholder !== undefined && req.placeholder.length > 0
-            ? `${req.title} (${req.placeholder})`
-            : (req.title ?? "Input");
-        showInputDialog(title, undefined, (value) => {
-          if (value === undefined) {
-            send({ type: "extension_ui_response", id, cancelled: true });
-          } else {
-            send({ type: "extension_ui_response", id, value });
-          }
-        });
-        break;
-      }
-
-      case "editor": {
-        const prefill = req.prefill?.replace(/\n/gu, " ");
-        showInputDialog(req.title ?? "Editor", prefill, (value) => {
-          if (value === undefined) {
-            send({ type: "extension_ui_response", id, cancelled: true });
-          } else {
-            send({ type: "extension_ui_response", id, value });
-          }
-        });
-        break;
-      }
-
-      case "notify": {
-        const notifyType = (req.notifyType as string) ?? "info";
-        const color = notifyType === "error" ? RED : notifyType === "warning" ? YELLOW : MAGENTA;
-        outputLog.append(`${color}${BOLD}Notification:${RESET} ${req.message}`);
-        tui.requestRender();
-        break;
-      }
-
-      case "setStatus":
-        outputLog.append(
-          `${MAGENTA}${BOLD}Notification:${RESET} ${DIM}[status: ${req.statusKey}]${RESET} ${req.statusText ?? "(cleared)"}`,
-        );
-        tui.requestRender();
-        break;
-
-      case "setWidget": {
-        const lines = req.widgetLines;
-        if (lines !== undefined && lines.length > 0) {
-          outputLog.append(
-            `${MAGENTA}${BOLD}Notification:${RESET} ${DIM}[widget: ${req.widgetKey}]${RESET}`,
-          );
-          for (const wl of lines) {
-            outputLog.append(`  ${DIM}${wl}${RESET}`);
-          }
-          tui.requestRender();
-        }
-        break;
-      }
-
-      case "set_editor_text":
-        promptInput.input.setValue((req.text as string) ?? "");
-        tui.requestRender();
-        break;
-    }
-  }
-
-  function handleSlashCommand(cmd: string): boolean {
-    switch (cmd) {
-      case "/select":
-        showSelectDialog("Pick a color", ["Red", "Green", "Blue", "Yellow"], (value) => {
-          if (value !== undefined && value.length > 0) {
-            outputLog.append(`${MAGENTA}${BOLD}Notification:${RESET} You picked: ${value}`);
-          } else {
-            outputLog.append(`${MAGENTA}${BOLD}Notification:${RESET} Selection cancelled`);
-          }
-          tui.requestRender();
-        });
-        return true;
-
-      case "/confirm":
-        showSelectDialog("Are you sure?", ["Yes", "No"], (value) => {
-          const confirmed = value === "Yes";
-          outputLog.append(`${MAGENTA}${BOLD}Notification:${RESET} Confirmed: ${confirmed}`);
-          tui.requestRender();
-        });
-        return true;
-
-      case "/input":
-        showInputDialog("Enter your name", undefined, (value) => {
-          if (value !== undefined && value.length > 0) {
-            outputLog.append(`${MAGENTA}${BOLD}Notification:${RESET} You entered: ${value}`);
-          } else {
-            outputLog.append(`${MAGENTA}${BOLD}Notification:${RESET} Input cancelled`);
-          }
-          tui.requestRender();
-        });
-        return true;
-
-      case "/editor":
-        showInputDialog("Edit text", "Hello, world!", (value) => {
-          if (value !== undefined && value.length > 0) {
-            outputLog.append(`${MAGENTA}${BOLD}Notification:${RESET} Submitted: ${value}`);
-          } else {
-            outputLog.append(`${MAGENTA}${BOLD}Notification:${RESET} Editor cancelled`);
-          }
-          tui.requestRender();
-        });
-        return true;
-
-      default:
-        return false;
-    }
-  }
-
-  function handleAgentLine(line: string): void {
-    let data: Record<string, unknown>;
-    try {
-      data = JSON.parse(line);
-    } catch {
-      return;
-    }
-
-    if (data["type"] === "response" && data["success"] !== true) {
-      outputLog.append(`${RED}[error]${RESET} ${data["command"]}: ${data["error"]}`);
-      tui.requestRender();
-      return;
-    }
-
-    if (data["type"] === "agent_start") {
-      showLoading();
-      return;
-    }
-
-    if (data["type"] === "extension_ui_request") {
-      handleExtensionUI(data as unknown as ExtensionUIRequest);
-      return;
-    }
-
-    if (data["type"] === "message_update") {
-      const evt = data["assistantMessageEvent"] as Record<string, unknown> | undefined;
-      if (evt?.["type"] === "text_delta") {
-        if (!hasTextOutput) {
-          hasTextOutput = true;
-          outputLog.append("");
-          outputLog.append(`${BLUE}${BOLD}Agent:${RESET}`);
-        }
-        const delta = evt["delta"] as string;
-        const parts = delta.split("\n");
-        for (const [i, part] of parts.entries()) {
-          if (i > 0) outputLog.append("");
-          if (part.length > 0) outputLog.appendRaw(part);
-        }
-        tui.requestRender();
-      }
-      return;
-    }
-
-    if (data["type"] === "tool_execution_start") {
-      outputLog.append(`${DIM}[tool: ${data["toolName"]}]${RESET}`);
-      tui.requestRender();
-      return;
-    }
-
-    if (data["type"] === "tool_execution_end") {
-      const result = JSON.stringify(data["result"]).slice(0, 120);
-      outputLog.append(`${DIM}[result: ${result}...]${RESET}`);
-      tui.requestRender();
-      return;
-    }
-
-    if (data["type"] === "agent_settled") {
-      isStreaming = false;
-      hideLoading();
-      outputLog.append("");
-      tui.requestRender();
-    }
-  }
-
-  const stdoutDecoder = new StringDecoder("utf8");
-  let stdoutBuffer = "";
-
-  agent.stdout!.on("data", (chunk: Buffer) => {
-    stdoutBuffer += stdoutDecoder.write(chunk);
-    while (true) {
-      const newlineIndex = stdoutBuffer.indexOf("\n");
-      if (newlineIndex === -1) break;
-
-      const line = stdoutBuffer.slice(0, newlineIndex);
-      stdoutBuffer = stdoutBuffer.slice(newlineIndex + 1);
-      handleAgentLine(line.endsWith("\r") ? line.slice(0, -1) : line);
-    }
-  });
-
-  agent.stdout!.on("end", () => {
-    stdoutBuffer += stdoutDecoder.end();
-    if (stdoutBuffer.length > 0) {
-      handleAgentLine(stdoutBuffer.endsWith("\r") ? stdoutBuffer.slice(0, -1) : stdoutBuffer);
-    }
-  });
-
-  promptInput.input.onSubmit = (value) => {
-    const trimmed = value.trim();
-    if (trimmed.length === 0) return;
-
-    promptInput.input.setValue("");
-
-    if (handleSlashCommand(trimmed)) {
-      outputLog.append(`${GREEN}${BOLD}You:${RESET} ${trimmed}`);
-      tui.requestRender();
-      return;
-    }
-
-    outputLog.append(`${GREEN}${BOLD}You:${RESET} ${trimmed}`);
-    send({ type: "prompt", message: trimmed });
-    tui.requestRender();
-  };
-
-  promptInput.onCtrlD = exit;
-
-  promptInput.input.onEscape = () => {
-    if (isStreaming) {
-      send({ type: "abort" });
-      outputLog.append(`${YELLOW}[aborted]${RESET}`);
-      tui.requestRender();
-    } else {
-      exit();
-    }
-  };
-
-  agent.on("exit", (code) => {
-    tui.stop();
-    if (stderr.length > 0) console.error(stderr);
-    console.log(`Agent exited with code ${code}`);
-    process.exit(code ?? 0);
-  });
-
-  outputLog.append(`${BOLD}RPC Chat${RESET}`);
-  outputLog.append(
-    `${DIM}Type a message and press Enter. Esc to abort or exit. Ctrl+D to quit.${RESET}`,
-  );
-  outputLog.append(`${DIM}Slash commands: /select /confirm /input /editor${RESET}`);
-  outputLog.append("");
-
-  tui.start();
-}
-
-main().catch((err) => {
-  console.error(err);
+import { ProcessTerminal, type TUI, TuiMainScreen } from "@msa/tui";
+import { Console, Effect } from "effect";
+
+import { startAgent } from "./rpc-ui/agent-process.ts";
+import { UiController } from "./rpc-ui/controller.ts";
+import { showWelcome } from "./rpc-ui/slash-commands.ts";
+
+const here = fileURLToPath(new URL(".", import.meta.url));
+const extensionPath = `${here}extensions/rpc-demo.ts`;
+const cliPath = `${here}../dist/cli.js`;
+
+const fail = (message: string): never => {
+  Effect.runSync(Console.error(message));
   process.exit(1);
-});
+};
+
+const parseLine = (line: string): Record<string, unknown> | undefined => {
+  const trimmed = line.endsWith("\r") ? line.slice(0, -1) : line;
+  try {
+    return JSON.parse(trimmed) as Record<string, unknown>;
+  } catch {
+    return undefined;
+  }
+};
+
+const handleExit =
+  (terminal: { stop: () => void }, agent: () => { stderrText: () => string }) =>
+  (code: number): void => {
+    terminal.stop();
+    const stderr = agent().stderrText();
+    if (stderr.length > 0) Effect.runSync(Console.error(stderr));
+    Effect.runSync(Console.log(`Agent exited with code ${code}`));
+    process.exit(code);
+  };
+
+const main = () =>
+  Effect.gen(function* () {
+    const terminal = new ProcessTerminal();
+    const tui: TUI = new TuiMainScreen(terminal);
+
+    let controller: UiController | undefined;
+    const agent = startAgent({
+      command: "node",
+      args: [
+        cliPath,
+        "--mode",
+        "rpc",
+        "--no-session",
+        "--no-extensions",
+        "--extension",
+        extensionPath,
+      ],
+      onLine: (line) => {
+        const data = parseLine(line);
+        if (data !== undefined) controller?.handleAgentEvent(data);
+      },
+      onExit: handleExit(terminal, () => agent),
+    });
+
+    yield* Effect.sleep(500);
+    if (!agent.isRunning()) {
+      return fail(`Agent exited immediately. Stderr:\n${agent.stderrText()}`);
+    }
+
+    controller = new UiController(
+      tui,
+      (message) => agent.send(message),
+      () => {
+        tui.stop();
+        process.exit(0);
+      },
+    );
+
+    showWelcome(controller);
+    tui.start();
+    return undefined;
+  });
+
+Effect.runSync(main());
