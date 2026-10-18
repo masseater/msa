@@ -1,7 +1,8 @@
 import type { ExtensionAPI } from "@msa/coding-agent";
+import { DateTime } from "effect";
 
 export default function (msa: ExtensionAPI) {
-  msa.on("input", async (event, ctx) => {
+  msa.on("input", (event, ctx) => {
     if (event.source === "extension") {
       return { action: "continue" };
     }
@@ -20,7 +21,7 @@ export default function (msa: ExtensionAPI) {
       return { action: "handled" };
     }
     if (event.text.toLowerCase() === "time") {
-      ctx.ui.notify(new Date().toLocaleString(), "info");
+      ctx.ui.notify(DateTime.formatLocal(DateTime.nowUnsafe()), "info");
       return { action: "handled" };
     }
 

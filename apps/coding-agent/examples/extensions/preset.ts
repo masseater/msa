@@ -329,7 +329,7 @@ export default function presetExtension(msa: ExtensionAPI) {
     },
   });
 
-  msa.on("before_agent_start", async (event) => {
+  msa.on("before_agent_start", (event) => {
     if (activePreset?.instructions !== undefined && activePreset?.instructions.length > 0) {
       return {
         systemPrompt: `${event.systemPrompt}\n\n${activePreset.instructions}`,
@@ -374,7 +374,7 @@ export default function presetExtension(msa: ExtensionAPI) {
     updateStatus(ctx);
   });
 
-  msa.on("turn_start", async () => {
+  msa.on("turn_start", () => {
     if (activePresetName !== undefined && activePresetName.length > 0) {
       msa.appendEntry("preset-state", { name: activePresetName });
     }

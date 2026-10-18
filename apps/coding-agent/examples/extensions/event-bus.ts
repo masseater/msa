@@ -1,9 +1,10 @@
 import type { ExtensionAPI, ExtensionContext } from "@msa/coding-agent";
+import { Effect } from "effect";
 
 export default function (msa: ExtensionAPI) {
   let currentCtx: ExtensionContext | undefined;
 
-  msa.on("session_start", async (_event, ctx) => {
+  msa.on("session_start", (_event, ctx) => {
     currentCtx = ctx;
   });
 
@@ -14,13 +15,16 @@ export default function (msa: ExtensionAPI) {
 
   msa.registerCommand("emit", {
     description: "Emit my:notification event (usage: /emit message)",
-    handler: async (args, _ctx) => {
-      const message = args.trim() || "hello";
-      msa.events.emit("my:notification", { message, from: "/emit command" });
-    },
+    handler: (args, _ctx) =>
+      Effect.runPromise(
+        Effect.sync(() => {
+          const message = args.trim() || "hello";
+          msa.events.emit("my:notification", { message, from: "/emit command" });
+        }),
+      ),
   });
 
-  msa.on("session_start", async () => {
+  msa.on("session_start", () => {
     msa.events.emit("my:notification", {
       message: "Session started",
       from: "event-bus-example",

@@ -4,7 +4,7 @@ export default function (msa: ExtensionAPI) {
   const checkpoints = new Map<string, string>();
   let currentEntryId: string | undefined;
 
-  msa.on("tool_result", async (_event, ctx) => {
+  msa.on("tool_result", (_event, ctx) => {
     const leaf = ctx.sessionManager.getLeafEntry();
     if (leaf !== undefined) currentEntryId = leaf.id;
   });
@@ -36,7 +36,7 @@ export default function (msa: ExtensionAPI) {
     }
   });
 
-  msa.on("agent_settled", async () => {
+  msa.on("agent_settled", () => {
     checkpoints.clear();
   });
 }

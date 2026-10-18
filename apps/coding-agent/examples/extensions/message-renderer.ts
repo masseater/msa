@@ -1,5 +1,6 @@
 import type { ExtensionAPI } from "@msa/coding-agent";
 import { Box, Text } from "@msa/tui";
+import { Clock, DateTime, Effect } from "effect";
 
 export default function (msa: ExtensionAPI) {
   msa.registerMessageRenderer("status-update", (message, { expanded, outputPad }, theme) => {
@@ -12,7 +13,7 @@ export default function (msa: ExtensionAPI) {
     let text = `${prefix} ${message.content}`;
 
     if (expanded && details?.timestamp !== undefined) {
-      const time = new Date(details.timestamp).toLocaleTimeString();
+      const time = DateTime.formatLocal(DateTime.makeUnsafe(details.timestamp));
       text += `\n${theme.fg("dim", `  at ${time}`)}`;
     }
 
@@ -23,22 +24,25 @@ export default function (msa: ExtensionAPI) {
 
   msa.registerCommand("status", {
     description: "Send a status message (usage: /status [warn|error] message)",
-    handler: async (args, _ctx) => {
-      const parts = args.trim().split(/\s+/u);
-      let level = "info";
-      let content = args.trim();
+    handler: (args, _ctx) =>
+      Effect.runPromise(
+        Effect.sync(() => {
+          const parts = args.trim().split(/\s+/u);
+          let level = "info";
+          let content = args.trim();
 
-      if (parts[0] === "warn" || parts[0] === "error") {
-        level = parts[0];
-        content = parts.slice(1).join(" ") || "Status update";
-      }
+          if (parts[0] === "warn" || parts[0] === "error") {
+            level = parts[0];
+            content = parts.slice(1).join(" ") || "Status update";
+          }
 
-      msa.sendMessage({
-        customType: "status-update",
-        content,
-        display: true,
-        details: { level, timestamp: Date.now() },
-      });
-    },
+          msa.sendMessage({
+            customType: "status-update",
+            content,
+            display: true,
+            details: { level, timestamp: Effect.runSync(Clock.currentTimeMillis) },
+          });
+        }),
+      ),
   });
 }

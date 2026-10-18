@@ -35,7 +35,7 @@ async function checkDirtyRepo(
 }
 
 export default function (msa: ExtensionAPI) {
-  msa.on("session_before_switch", async (event, ctx) => {
+  msa.on("session_before_switch", (event, ctx) => {
     const action = event.reason === "new" ? "new session" : "switch session";
     return checkDirtyRepo(msa, ctx, action);
   });

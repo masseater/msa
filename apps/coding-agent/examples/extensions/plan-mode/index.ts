@@ -2,6 +2,7 @@ import type { AgentMessage } from "@msa/agent-core";
 import type { AssistantMessage, TextContent } from "@msa/ai";
 import type { ExtensionAPI, ExtensionContext } from "@msa/coding-agent";
 import { Key } from "@msa/tui";
+import { Effect } from "effect";
 
 import { extractTodoItems, isSafeCommand, markCompletedSteps, type TodoItem } from "./utils.ts";
 
@@ -126,29 +127,32 @@ export default function planModeExtension(msa: ExtensionAPI): void {
 
   msa.registerCommand("plan", {
     description: "Toggle plan mode (read-only exploration)",
-    handler: async (_args, ctx) => togglePlanMode(ctx),
+    handler: (_args, ctx) => Effect.runPromise(Effect.sync(() => togglePlanMode(ctx))),
   });
 
   msa.registerCommand("todos", {
     description: "Show current plan todo list",
-    handler: async (_args, ctx) => {
-      if (todoItems.length === 0) {
-        ctx.ui.notify("No todos. Create a plan first with /plan", "info");
-        return;
-      }
-      const list = todoItems
-        .map((item, i) => `${i + 1}. ${item.completed ? "✓" : "○"} ${item.text}`)
-        .join("\n");
-      ctx.ui.notify(`Plan Progress:\n${list}`, "info");
-    },
+    handler: (_args, ctx) =>
+      Effect.runPromise(
+        Effect.sync(() => {
+          if (todoItems.length === 0) {
+            ctx.ui.notify("No todos. Create a plan first with /plan", "info");
+            return;
+          }
+          const list = todoItems
+            .map((item, i) => `${i + 1}. ${item.completed ? "✓" : "○"} ${item.text}`)
+            .join("\n");
+          ctx.ui.notify(`Plan Progress:\n${list}`, "info");
+        }),
+      ),
   });
 
   msa.registerShortcut(Key.ctrlAlt("p"), {
     description: "Toggle plan mode",
-    handler: async (ctx) => togglePlanMode(ctx),
+    handler: (ctx) => togglePlanMode(ctx),
   });
 
-  msa.on("tool_call", async (event) => {
+  msa.on("tool_call", (event) => {
     if (!planModeEnabled || event.toolName !== "bash") return;
 
     const command = event.input.command as string;
@@ -161,7 +165,7 @@ export default function planModeExtension(msa: ExtensionAPI): void {
     return undefined;
   });
 
-  msa.on("context", async (event) => {
+  msa.on("context", (event) => {
     if (planModeEnabled) return;
 
     return {
@@ -184,7 +188,7 @@ export default function planModeExtension(msa: ExtensionAPI): void {
     };
   });
 
-  msa.on("before_agent_start", async (event) => {
+  msa.on("before_agent_start", (event) => {
     if (event.messageType !== "user") return;
 
     if (planModeEnabled) {
@@ -235,7 +239,7 @@ After completing a step, include a [DONE:n] tag in your response.`,
     return undefined;
   });
 
-  msa.on("turn_end", async (event, ctx) => {
+  msa.on("turn_end", (event, ctx) => {
     if (!executionMode || todoItems.length === 0) return;
     if (!isAssistantMessage(event.message)) return;
 
@@ -324,7 +328,7 @@ After completing a step, include a [DONE:n] tag in your response.`;
     }
   });
 
-  msa.on("session_start", async (_event, ctx) => {
+  msa.on("session_start", (_event, ctx) => {
     if (msa.getFlag("plan") === true) {
       planModeEnabled = true;
     }

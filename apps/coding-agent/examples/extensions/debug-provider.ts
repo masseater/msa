@@ -1,5 +1,6 @@
 import { type ExtensionAPI, keyHint } from "@msa/coding-agent";
 import { Box, Text } from "@msa/tui";
+import { Effect } from "effect";
 
 const ENTRY_TYPE = "debug-provider-events";
 const STATUS_KEY = "debug-provider";
@@ -39,21 +40,24 @@ export default function (msa: ExtensionAPI) {
 
   msa.registerCommand("debug-provider", {
     description: "Toggle capture of raw provider stream events",
-    handler: async (args, ctx) => {
-      const requestedState = args.trim().toLowerCase();
-      if (requestedState !== "" && requestedState !== "on" && requestedState !== "off") {
-        ctx.ui.notify("Usage: /debug-provider [on|off]", "warning");
-        return;
-      }
+    handler: (args, ctx) =>
+      Effect.runPromise(
+        Effect.sync(() => {
+          const requestedState = args.trim().toLowerCase();
+          if (requestedState !== "" && requestedState !== "on" && requestedState !== "off") {
+            ctx.ui.notify("Usage: /debug-provider [on|off]", "warning");
+            return;
+          }
 
-      enabled = requestedState === "" ? !enabled : requestedState === "on";
-      if (!enabled) {
-        activeEvents = undefined;
-        completedEntry = undefined;
-      }
-      ctx.ui.setStatus(STATUS_KEY, enabled ? "provider debug" : undefined);
-      ctx.ui.notify(`Provider event capture ${enabled ? "enabled" : "disabled"}`, "info");
-    },
+          enabled = requestedState === "" ? !enabled : requestedState === "on";
+          if (!enabled) {
+            activeEvents = undefined;
+            completedEntry = undefined;
+          }
+          ctx.ui.setStatus(STATUS_KEY, enabled ? "provider debug" : undefined);
+          ctx.ui.notify(`Provider event capture ${enabled ? "enabled" : "disabled"}`, "info");
+        }),
+      ),
   });
 
   msa.on("turn_start", () => {

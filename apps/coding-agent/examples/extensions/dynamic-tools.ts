@@ -1,4 +1,5 @@
 import type { ExtensionAPI } from "@msa/coding-agent";
+import { Effect } from "effect";
 import { Type } from "typebox";
 
 const ECHO_PARAMS = Type.Object({
@@ -28,12 +29,13 @@ export default function dynamicToolsExtension(msa: ExtensionAPI) {
       promptSnippet: `Echo back user-provided text with ${prefix.trim()} prefix`,
       promptGuidelines: ["Use echo_session when the user asks for exact echo output."],
       parameters: ECHO_PARAMS,
-      async execute(_toolCallId, params) {
-        return {
-          content: [{ type: "text", text: `${prefix}${params.message}` }],
-          details: { tool: name, prefix },
-        };
-      },
+      execute: (_toolCallId, params) =>
+        Effect.runPromise(
+          Effect.succeed({
+            content: [{ type: "text", text: `${prefix}${params.message}` }],
+            details: { tool: name, prefix },
+          }),
+        ),
     });
 
     return true;
@@ -46,23 +48,26 @@ export default function dynamicToolsExtension(msa: ExtensionAPI) {
 
   msa.registerCommand("add-echo-tool", {
     description: "Register a new echo tool dynamically: /add-echo-tool <tool_name>",
-    handler: async (args, ctx) => {
-      const toolName = normalizeToolName(args);
-      if (toolName === undefined || toolName.length === 0) {
-        ctx.ui.notify(
-          "Usage: /add-echo-tool <tool_name> (lowercase, numbers, underscores)",
-          "warning",
-        );
-        return;
-      }
+    handler: (args, ctx) =>
+      Effect.runPromise(
+        Effect.sync(() => {
+          const toolName = normalizeToolName(args);
+          if (toolName === undefined || toolName.length === 0) {
+            ctx.ui.notify(
+              "Usage: /add-echo-tool <tool_name> (lowercase, numbers, underscores)",
+              "warning",
+            );
+            return;
+          }
 
-      const created = registerEchoTool(toolName, `Echo ${toolName}`, `[${toolName}] `);
-      if (!created) {
-        ctx.ui.notify(`Tool already registered: ${toolName}`, "warning");
-        return;
-      }
+          const created = registerEchoTool(toolName, `Echo ${toolName}`, `[${toolName}] `);
+          if (!created) {
+            ctx.ui.notify(`Tool already registered: ${toolName}`, "warning");
+            return;
+          }
 
-      ctx.ui.notify(`Registered dynamic tool: ${toolName}`, "info");
-    },
+          ctx.ui.notify(`Registered dynamic tool: ${toolName}`, "info");
+        }),
+      ),
   });
 }

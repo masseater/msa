@@ -4,6 +4,7 @@ import { join, resolve } from "path";
 
 import type { TextContent } from "@msa/ai";
 import { type ExtensionAPI, getAgentDir, withFileMutationQueue } from "@msa/coding-agent";
+import { Effect } from "effect";
 import { Type } from "typebox";
 
 const LOG_FILE = join(getAgentDir(), "read-access.log");
@@ -102,14 +103,17 @@ export default function (msa: ExtensionAPI) {
 
   msa.registerCommand("read-log", {
     description: "View the file access log",
-    handler: async (_args, ctx) => {
-      try {
-        const log = readFileSync(LOG_FILE, "utf-8");
-        const lines = log.trim().split("\n").slice(-20);
-        ctx.ui.notify(`Recent file access:\n${lines.join("\n")}`, "info");
-      } catch {
-        ctx.ui.notify("No access log found", "info");
-      }
-    },
+    handler: (_args, ctx) =>
+      Effect.runPromise(
+        Effect.sync(() => {
+          try {
+            const log = readFileSync(LOG_FILE, "utf-8");
+            const lines = log.trim().split("\n").slice(-20);
+            ctx.ui.notify(`Recent file access:\n${lines.join("\n")}`, "info");
+          } catch {
+            ctx.ui.notify("No access log found", "info");
+          }
+        }),
+      ),
   });
 }

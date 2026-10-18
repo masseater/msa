@@ -153,10 +153,13 @@ export default function (msa: ExtensionAPI) {
 
       const newSessionResult = await ctx.newSession({
         ...(currentSessionFile === undefined ? {} : { parentSession: currentSessionFile }),
-        withSession: async (replacementCtx) => {
-          replacementCtx.ui.setEditorText(editedPrompt);
-          replacementCtx.ui.notify("Handoff ready. Submit when ready.", "info");
-        },
+        withSession: (replacementCtx) =>
+          Effect.runPromise(
+            Effect.sync(() => {
+              replacementCtx.ui.setEditorText(editedPrompt);
+              replacementCtx.ui.notify("Handoff ready. Submit when ready.", "info");
+            }),
+          ),
       });
 
       if (newSessionResult.cancelled) {

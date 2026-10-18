@@ -3,7 +3,7 @@ import * as fs from "node:fs";
 import type { ExtensionAPI } from "@msa/coding-agent";
 
 export default function (msa: ExtensionAPI) {
-  msa.on("session_start", async (_event, ctx) => {
+  msa.on("session_start", (_event, ctx) => {
     const triggerFile = "/tmp/agent-trigger.txt";
 
     fs.watch(triggerFile, () => {

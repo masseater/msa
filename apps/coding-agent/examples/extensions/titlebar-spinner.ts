@@ -38,15 +38,15 @@ export default function (msa: ExtensionAPI) {
     }, 80);
   }
 
-  msa.on("agent_start", async (_event, ctx) => {
+  msa.on("agent_start", (_event, ctx) => {
     startAnimation(ctx);
   });
 
-  msa.on("agent_settled", async (_event, ctx) => {
+  msa.on("agent_settled", (_event, ctx) => {
     stopAnimation(ctx);
   });
 
-  msa.on("session_shutdown", async (_event, ctx) => {
+  msa.on("session_shutdown", (_event, ctx) => {
     stopAnimation(ctx);
   });
 }

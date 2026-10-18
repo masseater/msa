@@ -1,20 +1,21 @@
 import type { ExtensionAPI } from "@msa/coding-agent";
+import { Effect } from "effect";
 
 export default function (msa: ExtensionAPI) {
   let turnCount = 0;
 
-  msa.on("session_start", async (event, ctx) => {
+  msa.on("session_start", (event, ctx) => {
     ctx.ui.setTitle(event.reason === "new" ? "msa RPC Demo (new session)" : "msa RPC Demo");
     ctx.ui.setWidget("rpc-demo", ["--- RPC Extension UI Demo ---", "Loaded and ready."]);
     ctx.ui.setStatus("rpc-demo", `Turns: ${turnCount}`);
   });
 
-  msa.on("turn_start", async (_event, ctx) => {
+  msa.on("turn_start", (_event, ctx) => {
     turnCount++;
     ctx.ui.setStatus("rpc-demo", `Turn ${turnCount} running...`);
   });
 
-  msa.on("turn_end", async (_event, ctx) => {
+  msa.on("turn_end", (_event, ctx) => {
     ctx.ui.setStatus("rpc-demo", `Turn ${turnCount} done`);
   });
 
@@ -78,9 +79,12 @@ export default function (msa: ExtensionAPI) {
 
   msa.registerCommand("rpc-prefill", {
     description: "Prefill the input editor (demonstrates ctx.ui.setEditorText in RPC)",
-    handler: async (_args, ctx) => {
-      ctx.ui.setEditorText("This text was set by the rpc-demo extension.");
-      ctx.ui.notify("Editor prefilled", "info");
-    },
+    handler: (_args, ctx) =>
+      Effect.runPromise(
+        Effect.sync(() => {
+          ctx.ui.setEditorText("This text was set by the rpc-demo extension.");
+          ctx.ui.notify("Editor prefilled", "info");
+        }),
+      ),
   });
 }

@@ -1,4 +1,5 @@
 import type { ExtensionAPI, ExtensionContext, WorkingIndicatorOptions } from "@msa/coding-agent";
+import { Effect } from "effect";
 
 type WorkingIndicatorMode = "dot" | "none" | "pulse" | "spinner" | "default";
 
@@ -76,33 +77,36 @@ export default function (msa: ExtensionAPI) {
     );
   };
 
-  msa.on("session_start", async (_event, ctx) => {
+  msa.on("session_start", (_event, ctx) => {
     applyIndicator(ctx);
   });
 
   msa.registerCommand("working-indicator", {
     description: "Set the streaming working indicator: dot, pulse, none, spinner, or reset.",
-    handler: async (args, ctx) => {
-      const nextMode = args.trim().toLowerCase();
-      if (nextMode.length === 0) {
-        ctx.ui.notify(`Working indicator: ${describeMode(mode)}`, "info");
-        return;
-      }
+    handler: (args, ctx) =>
+      Effect.runPromise(
+        Effect.sync(() => {
+          const nextMode = args.trim().toLowerCase();
+          if (nextMode.length === 0) {
+            ctx.ui.notify(`Working indicator: ${describeMode(mode)}`, "info");
+            return;
+          }
 
-      if (
-        nextMode !== "dot" &&
-        nextMode !== "none" &&
-        nextMode !== "pulse" &&
-        nextMode !== "spinner" &&
-        nextMode !== "reset"
-      ) {
-        ctx.ui.notify("Usage: /working-indicator [dot|pulse|none|spinner|reset]", "error");
-        return;
-      }
+          if (
+            nextMode !== "dot" &&
+            nextMode !== "none" &&
+            nextMode !== "pulse" &&
+            nextMode !== "spinner" &&
+            nextMode !== "reset"
+          ) {
+            ctx.ui.notify("Usage: /working-indicator [dot|pulse|none|spinner|reset]", "error");
+            return;
+          }
 
-      mode = nextMode === "reset" ? "default" : nextMode;
-      applyIndicator(ctx);
-      ctx.ui.notify(`Working indicator set to: ${describeMode(mode)}`, "info");
-    },
+          mode = nextMode === "reset" ? "default" : nextMode;
+          applyIndicator(ctx);
+          ctx.ui.notify(`Working indicator set to: ${describeMode(mode)}`, "info");
+        }),
+      ),
   });
 }

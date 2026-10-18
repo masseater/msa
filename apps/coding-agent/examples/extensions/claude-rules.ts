@@ -29,7 +29,7 @@ export default function claudeRulesExtension(msa: ExtensionAPI) {
   let ruleFiles: string[] = [];
   let rulesDir: string = "";
 
-  msa.on("session_start", async (_event, ctx) => {
+  msa.on("session_start", (_event, ctx) => {
     rulesDir = path.join(ctx.cwd, ".claude", "rules");
     ruleFiles = findMarkdownFiles(rulesDir);
 
@@ -38,7 +38,7 @@ export default function claudeRulesExtension(msa: ExtensionAPI) {
     }
   });
 
-  msa.on("before_agent_start", async (event) => {
+  msa.on("before_agent_start", (event) => {
     if (ruleFiles.length === 0) {
       return;
     }

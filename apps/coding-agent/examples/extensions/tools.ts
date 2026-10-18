@@ -110,11 +110,11 @@ export default function toolsExtension(msa: ExtensionAPI) {
     },
   });
 
-  msa.on("session_start", async (_event, ctx) => {
+  msa.on("session_start", (_event, ctx) => {
     restoreFromBranch(ctx);
   });
 
-  msa.on("session_tree", async (_event, ctx) => {
+  msa.on("session_tree", (_event, ctx) => {
     restoreFromBranch(ctx);
   });
 }

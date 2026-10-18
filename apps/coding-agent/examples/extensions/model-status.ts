@@ -1,7 +1,8 @@
 import type { ExtensionAPI } from "@msa/coding-agent";
+import { Console, Effect } from "effect";
 
 export default function (msa: ExtensionAPI) {
-  msa.on("model_select", async (event, ctx) => {
+  msa.on("model_select", (event, ctx) => {
     const { model, previousModel, source } = event;
 
     const next = `${model.provider}/${model.id}`;
@@ -14,6 +15,6 @@ export default function (msa: ExtensionAPI) {
 
     ctx.ui.setStatus("model", `🤖 ${model.id}`);
 
-    console.log(`[model_select] ${prev} → ${next} (${source})`);
+    Effect.runSync(Console.log(`[model_select] ${prev} → ${next} (${source})`));
   });
 }

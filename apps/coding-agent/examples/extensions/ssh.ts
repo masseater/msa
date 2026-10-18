@@ -124,7 +124,7 @@ export default function (msa: ExtensionAPI) {
 
   msa.registerTool({
     ...localRead,
-    async execute(id, params, signal, onUpdate, _ctx) {
+    execute(id, params, signal, onUpdate, _ctx) {
       const ssh = getSsh();
       if (ssh !== null) {
         const tool = createReadTool(localCwd, {
@@ -203,7 +203,7 @@ export default function (msa: ExtensionAPI) {
     return { operations: createRemoteBashOps(ssh.remote, ssh.remoteCwd, localCwd) };
   });
 
-  msa.on("before_agent_start", async (event) => {
+  msa.on("before_agent_start", (event) => {
     const ssh = getSsh();
     if (ssh !== null) {
       const modified = event.systemPrompt.replace(

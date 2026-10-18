@@ -141,7 +141,7 @@ export default function (msa: ExtensionAPI): void {
     let issuesPromise: Promise<GitHubIssue[] | undefined> | undefined;
     let loadErrorShown = false;
 
-    const getIssues = async (): Promise<GitHubIssue[] | undefined> => {
+    const getIssues = (): Promise<GitHubIssue[] | undefined> => {
       issuesPromise ||= (async () => {
         const result = await msa.exec(
           "gh",

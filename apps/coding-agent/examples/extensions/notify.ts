@@ -41,7 +41,7 @@ function notify(title: string, body: string): void {
 }
 
 export default function (msa: ExtensionAPI) {
-  msa.on("agent_settled", async () => {
+  msa.on("agent_settled", () => {
     notify("msa", "Ready for input");
   });
 }

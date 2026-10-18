@@ -1,5 +1,6 @@
 import type { ExtensionAPI, Theme } from "@msa/coding-agent";
 import { VERSION } from "@msa/coding-agent";
+import { Effect } from "effect";
 
 function getMsaMascot(theme: Theme): string[] {
   const msaBlue = (text: string) => theme.fg("accent", text);
@@ -21,7 +22,7 @@ function getMsaMascot(theme: Theme): string[] {
 }
 
 export default function (msa: ExtensionAPI) {
-  msa.on("session_start", async (_event, ctx) => {
+  msa.on("session_start", (_event, ctx) => {
     if (ctx.mode === "tui") {
       ctx.ui.setHeader((_tui, theme) => ({
         render(_width: number): string[] {
@@ -37,9 +38,12 @@ export default function (msa: ExtensionAPI) {
 
   msa.registerCommand("builtin-header", {
     description: "Restore built-in header with keybinding hints",
-    handler: async (_args, ctx) => {
-      ctx.ui.setHeader(undefined);
-      ctx.ui.notify("Built-in header restored", "info");
-    },
+    handler: (_args, ctx) =>
+      Effect.runPromise(
+        Effect.sync(() => {
+          ctx.ui.setHeader(undefined);
+          ctx.ui.notify("Built-in header restored", "info");
+        }),
+      ),
   });
 }

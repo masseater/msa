@@ -1,17 +1,21 @@
 import type { ExtensionAPI } from "@msa/coding-agent";
+import { Effect } from "effect";
 
 export default function pirateExtension(msa: ExtensionAPI) {
   let pirateMode = false;
 
   msa.registerCommand("pirate", {
     description: "Toggle pirate mode (agent speaks like a pirate)",
-    handler: async (_args, ctx) => {
-      pirateMode = !pirateMode;
-      ctx.ui.notify(pirateMode ? "Arrr! Pirate mode enabled!" : "Pirate mode disabled", "info");
-    },
+    handler: (_args, ctx) =>
+      Effect.runPromise(
+        Effect.sync(() => {
+          pirateMode = !pirateMode;
+          ctx.ui.notify(pirateMode ? "Arrr! Pirate mode enabled!" : "Pirate mode disabled", "info");
+        }),
+      ),
   });
 
-  msa.on("before_agent_start", async (event) => {
+  msa.on("before_agent_start", (event) => {
     if (pirateMode) {
       return {
         systemPrompt:
