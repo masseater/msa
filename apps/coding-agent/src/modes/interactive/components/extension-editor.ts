@@ -15,6 +15,7 @@ import {
 } from "@msa/tui";
 
 import type { KeybindingsManager } from "../../../core/keybindings.ts";
+import { readEnv } from "../../../core/process-env.ts";
 import { editInExternalEditor } from "../external-editor.ts";
 import { getEditorTheme, theme } from "../theme/theme.ts";
 import { DynamicBorder } from "./dynamic-border.ts";
@@ -57,8 +58,8 @@ export class ExtensionEditorComponent extends Container implements Focusable {
     this.keybindings = keybindings;
     this.externalEditorCommand =
       externalEditorCommand ||
-      process.env["VISUAL"] ||
-      process.env["EDITOR"] ||
+      readEnv("VISUAL") ||
+      readEnv("EDITOR") ||
       (process.platform === "win32" ? "notepad" : "nano");
     this.onSubmitCallback = onSubmit;
     this.onCancelCallback = onCancel;

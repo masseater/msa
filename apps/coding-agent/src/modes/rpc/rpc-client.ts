@@ -16,6 +16,7 @@ import type {
 } from "../../core/agent-session.ts";
 import type { BashResult } from "../../core/bash-executor.ts";
 import type { CompactionResult } from "../../core/compaction/index.ts";
+import { envSnapshot } from "../../core/process-env.ts";
 import type { SessionEntry, SessionTreeNode } from "../../core/session-manager.ts";
 import type { JsonAgentSessionEvent } from "../json-event.ts";
 import { attachJsonlLineReader, serializeJsonLine } from "./jsonl.ts";
@@ -101,7 +102,7 @@ export class RpcClient {
 
     const childProcess = spawn("node", [cliPath, ...args], {
       cwd: this.options.cwd,
-      env: { ...process.env, ...this.options.env },
+      env: { ...envSnapshot(), ...this.options.env },
       stdio: ["pipe", "pipe", "pipe"],
     });
     this.process = childProcess;

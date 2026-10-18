@@ -9,6 +9,7 @@ import * as Schema from "effect/Schema";
 
 import { spawnProcess, spawnProcessSync, waitForChildProcess } from "../utils/child-process.ts";
 import { findExecutableOnPath } from "../utils/shell.ts";
+import { envSnapshot } from "./process-env.ts";
 
 /** TinyFish answers web search and page reads for free; treg falls back to paid vendors after it. */
 const PREFERRED_VENDOR = "tinyfish";
@@ -90,7 +91,7 @@ export const TREG_INSTALL_COMMAND = "curl -fsSL https://treg.to/install.sh | sh"
 /** The installed `treg` CLI and whether it has a login to call with. */
 export function findTregCli(
   find: (executable: string) => string | null = findExecutableOnPath,
-  env: NodeJS.ProcessEnv = process.env,
+  env: NodeJS.ProcessEnv = envSnapshot(),
 ): { command: string; signedIn: boolean } | undefined {
   const command = find("treg");
   return command ? { command, signedIn: isSignedIn(command, env) } : undefined;
@@ -99,7 +100,7 @@ export function findTregCli(
 /** The installed and signed-in `treg` CLI, or undefined when the web tools are unavailable. */
 export function findTreg(
   find: (executable: string) => string | null = findExecutableOnPath,
-  env: NodeJS.ProcessEnv = process.env,
+  env: NodeJS.ProcessEnv = envSnapshot(),
 ): TregOptions | undefined {
   const cli = findTregCli(find, env);
   return cli?.signedIn ? { run: spawnRunner(cli.command) } : undefined;
@@ -123,7 +124,7 @@ export async function loginTreg(
   const child = spawnProcess(command, ["login"], {
     stdio: ["ignore", "pipe", "pipe"],
     windowsHide: true,
-    env: { ...process.env, PYTHONUNBUFFERED: "1" },
+    env: { ...envSnapshot(), PYTHONUNBUFFERED: "1" },
     ...(signal ? { signal } : {}),
   });
   let output = "";

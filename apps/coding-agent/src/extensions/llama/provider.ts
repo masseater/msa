@@ -14,6 +14,7 @@ import { llamaCppClassifyApi } from "@msa/ai/api/llama-cpp-classify.lazy";
 import { typesafeSystemOneApi } from "@msa/ai/api/typesafe-system-one.lazy";
 import { stream, streamSimple } from "@msa/ai/compat";
 
+import { readEnv } from "../../core/process-env.ts";
 import {
   LlamaClient,
   type LlamaModelInfo,
@@ -213,10 +214,10 @@ export function createLlamaProvider(): LlamaProviderController {
           const enteredUrl = await interaction.prompt({
             type: "text",
             message: "llama.cpp server URL",
-            placeholder: process.env["LLAMA_BASE_URL"] ?? DEFAULT_LLAMA_SERVER_URL,
+            placeholder: readEnv("LLAMA_BASE_URL") ?? DEFAULT_LLAMA_SERVER_URL,
           });
           const serverUrl = normalizeLlamaServerUrl(
-            enteredUrl.trim() || process.env["LLAMA_BASE_URL"] || DEFAULT_LLAMA_SERVER_URL,
+            enteredUrl.trim() || readEnv("LLAMA_BASE_URL") || DEFAULT_LLAMA_SERVER_URL,
           );
           const apiKey = (
             await interaction.prompt({

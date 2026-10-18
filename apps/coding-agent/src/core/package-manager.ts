@@ -14,10 +14,11 @@ import {
 import { homedir } from "node:os";
 
 import { toErrorMessage } from "../utils/errors.ts";
+import { envNames, envSnapshot, readEnv } from "./process-env.ts";
 
 function getEnv(): NodeJS.ProcessEnv {
-  if (process.platform !== "linux" || Object.keys(process.env).length > 0) {
-    return process.env;
+  if (process.platform !== "linux" || envNames().length > 0) {
+    return envSnapshot();
   }
   try {
     const data = readFileSync("/proc/self/environ", "utf-8");
@@ -30,7 +31,7 @@ function getEnv(): NodeJS.ProcessEnv {
     }
     return env;
   } catch {
-    return process.env;
+    return envSnapshot();
   }
 }
 
@@ -62,7 +63,7 @@ const UPDATE_CHECK_CONCURRENCY = 4;
 const GIT_UPDATE_CONCURRENCY = 4;
 
 function isOfflineModeEnabled(): boolean {
-  const value = process.env["MSA_OFFLINE"];
+  const value = readEnv("MSA_OFFLINE");
   if (!value) return false;
   return value === "1" || value.toLowerCase() === "true" || value.toLowerCase() === "yes";
 }
@@ -235,7 +236,7 @@ function toPosixPath(p: string): string {
 }
 
 function getHomeDir(): string {
-  return process.env["HOME"] || homedir();
+  return readEnv("HOME") || homedir();
 }
 
 export function getExtensionTempFolder(agentDir: string): string {

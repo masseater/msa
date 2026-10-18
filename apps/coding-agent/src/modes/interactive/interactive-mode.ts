@@ -113,6 +113,7 @@ import {
 } from "../../core/model-resolver.ts";
 import { ORCHESTRATOR_REPORT_MESSAGE_TYPE } from "../../core/orchestrator/orchestrator.ts";
 import { DefaultPackageManager } from "../../core/package-manager.ts";
+import { readEnv } from "../../core/process-env.ts";
 import type { ResourceDiagnostic } from "../../core/resource-loader.ts";
 import { formatMissingSessionCwdPrompt, MissingSessionCwdError } from "../../core/session-cwd.ts";
 import {
@@ -1135,7 +1136,7 @@ export class InteractiveMode {
   async run(): Promise<void> {
     await this.init();
 
-    if (!process.env["MSA_OFFLINE"]) {
+    if (!readEnv("MSA_OFFLINE")) {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 15_000);
       void refreshModelCatalogs(this.session.modelRuntime, controller.signal)
@@ -1248,7 +1249,7 @@ export class InteractiveMode {
   }
 
   private async checkForPackageUpdates(): Promise<string[]> {
-    if (process.env["MSA_OFFLINE"]) {
+    if (readEnv("MSA_OFFLINE")) {
       return [];
     }
 
@@ -1266,7 +1267,7 @@ export class InteractiveMode {
   }
 
   private async checkTmuxKeyboardSetup(): Promise<string | undefined> {
-    if (!process.env["TMUX"]) return undefined;
+    if (!readEnv("TMUX")) return undefined;
 
     const runTmuxShow = (option: string): Promise<string | undefined> => {
       return new Promise((resolve) => {

@@ -8,6 +8,7 @@ import { createInterface } from "node:readline";
 
 import type { Model, SimpleStreamOptions, TranscriptContext } from "@msa/ai/compat";
 
+import { envSnapshot } from "../../core/process-env.ts";
 import { spawnProcess, waitForChildProcess } from "../../utils/child-process.ts";
 import { createReply, type ReplyBuilder } from "./reply.ts";
 
@@ -96,7 +97,7 @@ export function streamViaCli<Event>(
       try {
         child = spawnProcess(command.bin, command.args, {
           cwd,
-          env: command.env ?? process.env,
+          env: command.env ?? envSnapshot(),
           stdio: ["pipe", "pipe", "pipe"],
         });
       } catch (error) {

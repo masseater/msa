@@ -66,6 +66,7 @@ import { resolveCliModel, resolveModelScope, type ScopedModel } from "./core/mod
 import { ModelRuntime } from "./core/model-runtime.ts";
 import { ORCHESTRATOR_TOOL_NAMES } from "./core/orchestrator/tools.ts";
 import { restoreStdout, takeOverStdout } from "./core/output-guard.ts";
+import { readEnv, writeEnv } from "./core/process-env.ts";
 import { type AppMode, resolveProjectTrusted } from "./core/project-trust.ts";
 import type { CreateAgentSessionOptions } from "./core/sdk.ts";
 import {
@@ -651,10 +652,10 @@ export async function main(args: string[], options?: MainOptions) {
   // Commands and startup selectors can load user-authored themes before runtime creation.
   setThemeJsonValidator(validateThemeJson);
   const extensionFactories = [...builtInExtensions, ...(options?.extensionFactories ?? [])];
-  const offlineMode = args.includes("--offline") || isTruthyEnvFlag(process.env["MSA_OFFLINE"]);
+  const offlineMode = args.includes("--offline") || isTruthyEnvFlag(readEnv("MSA_OFFLINE"));
   if (offlineMode) {
-    process.env["MSA_OFFLINE"] = "1";
-    process.env["MSA_SKIP_VERSION_CHECK"] = "1";
+    writeEnv("MSA_OFFLINE", "1");
+    writeEnv("MSA_SKIP_VERSION_CHECK", "1");
   }
 
   if (await runAuthCommand(args)) {
@@ -766,7 +767,7 @@ export async function main(args: string[], options?: MainOptions) {
   // settings, resources, provider registrations, and models must be resolved only after
   // the target session cwd is known. The startup-cwd settings manager is used only for
   // sessionDir lookup during session selection.
-  const envSessionDir = process.env[ENV_SESSION_DIR];
+  const envSessionDir = readEnv(ENV_SESSION_DIR);
   const sessionDir =
     (parsed.sessionDir ? normalizePath(parsed.sessionDir) : undefined) ??
     (envSessionDir ? expandTildePath(envSessionDir) : undefined) ??
@@ -1033,7 +1034,7 @@ export async function main(args: string[], options?: MainOptions) {
     process.exit(1);
   }
 
-  const startupBenchmark = isTruthyEnvFlag(process.env["MSA_STARTUP_BENCHMARK"]);
+  const startupBenchmark = isTruthyEnvFlag(readEnv("MSA_STARTUP_BENCHMARK"));
   if (startupBenchmark && appMode !== "interactive") {
     console.error(chalk.red("Error: MSA_STARTUP_BENCHMARK only supports interactive mode"));
     process.exit(1);
