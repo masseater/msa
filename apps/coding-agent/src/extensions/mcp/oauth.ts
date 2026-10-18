@@ -16,7 +16,6 @@ import {
   parseWwwAuthenticate,
   stepUpScope,
 } from "@msa/mcp/oauth";
-import { Data } from "effect";
 import * as Effect from "effect/Effect";
 import lockfile from "proper-lockfile";
 
@@ -27,6 +26,7 @@ import { mcpNamespace } from "../../core/mcp-servers.ts";
 import { join, sha256Hex } from "../../core/platform-node.ts";
 import { nowMs } from "../../core/platform.ts";
 import { makeDirectory } from "../../utils/node-fs.ts";
+import { McpSignInCancelledError } from "./sign-in-cancelled.ts";
 
 const CALLBACK_HOST = "127.0.0.1";
 const CALLBACK_PATH = "/callback";
@@ -380,13 +380,7 @@ export interface McpSignInPrompt {
   promptForRedirectUrl(signal: AbortSignal): Promise<string | undefined>;
 }
 
-export class McpSignInCancelledError extends Data.TaggedError("McpSignInCancelledError")<{
-  readonly message: string;
-}> {
-  constructor() {
-    super({ message: "Sign-in cancelled" });
-  }
-}
+export { McpSignInCancelledError } from "./sign-in-cancelled.ts";
 
 type AuthorizationResponse = Pick<OAuthCallback, "code" | "iss">;
 
