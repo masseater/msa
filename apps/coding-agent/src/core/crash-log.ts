@@ -172,7 +172,9 @@ export function takeUnnotifiedCrash(path = crashLogPath(), now = nowMs()): Crash
   if (crash === undefined) return undefined;
   try {
     writeCrashLog(
-      records.map((record) => (record.notified === true ? record : { ...record, notified: true })),
+      records.map((record) =>
+        record.notified === true ? record : Object.assign({}, record, { notified: true }),
+      ),
       path,
     );
   } catch {}

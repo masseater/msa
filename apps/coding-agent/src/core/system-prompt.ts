@@ -52,8 +52,8 @@ export function normalizeBuildSystemPromptOptions(
     appendSystemPrompt: input.appendSystemPrompt ?? "",
     sections: { ...(input.sections ?? {}) },
     cwd: input.cwd,
-    contextFiles: (input.contextFiles ?? []).map((file) => ({ ...file })),
-    skills: (input.skills ?? []).map((skill) => ({ ...skill })),
+    contextFiles: (input.contextFiles ?? []).map((file) => Object.assign({}, file)),
+    skills: (input.skills ?? []).map((skill) => Object.assign({}, skill)),
   };
 }
 

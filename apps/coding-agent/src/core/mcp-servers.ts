@@ -297,10 +297,9 @@ export class McpServerRegistry {
   }
 
   list(): RegisteredMcpServer[] {
-    return [...this.servers.values()].map((server) => ({
-      ...server,
-      config: structuredClone(server.config),
-    }));
+    return [...this.servers.values()].map((server) =>
+      Object.assign({}, server, { config: structuredClone(server.config) }),
+    );
   }
 
   setChangeListener(listener: (() => void) | undefined): void {

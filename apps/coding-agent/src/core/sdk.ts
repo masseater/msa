@@ -271,7 +271,7 @@ export function createAgentSession(
                           "Image reading is disabled."
                       ),
                   );
-                return { ...msg, content: filteredContent };
+                return Object.assign({}, msg, { content: filteredContent });
               }
             }
           }

@@ -487,7 +487,7 @@ function projectContextEntry(
       typeof replacement.content === "string"
         ? [{ type: "text" as const, text: replacement.content }]
         : replacement.content;
-    return { ...message, content } as AgentMessage;
+    return Object.assign({}, message, { content }) as AgentMessage;
   });
 }
 

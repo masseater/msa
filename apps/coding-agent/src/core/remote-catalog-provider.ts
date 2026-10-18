@@ -55,7 +55,7 @@ function parseCatalog(providerId: string, value: unknown): AnyModel[] {
         typeof entry === "object" && entry !== null && "id" in entry,
     )
     .filter(isSupportedModelType)
-    .map((model) => ({ ...model, provider: providerId }) as AnyModel);
+    .map((model) => Object.assign(model, { provider: providerId }) as unknown as AnyModel);
 }
 
 function readCatalog(

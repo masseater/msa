@@ -1585,19 +1585,23 @@ export class AgentSession {
   }
 
   getAllTools(): ToolInfo[] {
-    return Array.from(this.toolDefinitions.values()).map(({ definition, sourceInfo }) => ({
-      name: definition.name,
-      description: definition.description,
-      parameters: definition.parameters,
-      promptGuidelines: definition.promptGuidelines,
-      exposure: this.getToolExposure(definition.name),
-      ...(definition.namespace === undefined ? {} : { namespace: definition.namespace }),
-      ...(definition.annotations === undefined
-        ? {}
-        : { annotations: { ...definition.annotations } }),
-      ...(definition.reachesTools === undefined ? {} : { reachesTools: definition.reachesTools }),
-      sourceInfo,
-    }));
+    return Array.from(this.toolDefinitions.values()).map(({ definition, sourceInfo }) =>
+      Object.assign(
+        {
+          name: definition.name,
+          description: definition.description,
+          parameters: definition.parameters,
+          promptGuidelines: definition.promptGuidelines,
+          exposure: this.getToolExposure(definition.name),
+          sourceInfo,
+        },
+        definition.namespace === undefined ? {} : { namespace: definition.namespace },
+        definition.annotations === undefined
+          ? {}
+          : { annotations: Object.assign({}, definition.annotations) },
+        definition.reachesTools === undefined ? {} : { reachesTools: definition.reachesTools },
+      ),
+    );
   }
 
   getToolDefinition(name: string): ToolDefinition | undefined {
@@ -1689,7 +1693,7 @@ export class AgentSession {
       }
       declared = tools.map((tool) => {
         const description = descriptions.get(tool.name);
-        return description === undefined ? tool : { ...tool, description };
+        return description === undefined ? tool : Object.assign({}, tool, { description });
       });
     }
     this.hiddenDeclarations = hidden;
@@ -1833,11 +1837,12 @@ export class AgentSession {
             const { toolsAdded, toolsRemoved, ...rest } = message;
             const added = toolsAdded?.filter((tool) => !hidden.has(tool.name)) ?? [];
             const removed = toolsRemoved?.filter((tool) => !hidden.has(tool.name)) ?? [];
-            return {
-              ...rest,
-              ...(added.length > 0 ? { toolsAdded: added } : {}),
-              ...(removed.length > 0 ? { toolsRemoved: removed } : {}),
-            };
+            return Object.assign(
+              {},
+              rest,
+              added.length > 0 ? { toolsAdded: added } : {},
+              removed.length > 0 ? { toolsRemoved: removed } : {},
+            );
           });
         }, this),
       );
