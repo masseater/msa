@@ -3,7 +3,8 @@ import { spawn } from "node:child_process";
 import * as Effect from "effect/Effect";
 
 import { waitForChildProcess } from "../utils/child-process.ts";
-import { awaited, awaiting } from "./awaiting.ts";
+import { awaiting, performed } from "./awaiting.ts";
+import { schedule, type Scheduled } from "./platform.ts";
 
 export interface ExecOptions {
   signal?: AbortSignal;
@@ -26,8 +27,8 @@ export function execCommand(
 ): Promise<ExecResult> {
   return Effect.runPromise(
     awaiting(function* () {
-      return yield* awaited(
-        new Promise((resolve) => {
+      return yield* performed(
+        Effect.callback<ExecResult>((resume) => {
           const proc = spawn(command, args, {
             cwd,
             shell: false,
@@ -37,13 +38,13 @@ export function execCommand(
           let stdout = "";
           let stderr = "";
           let killed = false;
-          let timeoutId: NodeJS.Timeout | undefined;
+          let timeoutId: Scheduled | undefined;
 
           const killProcess = () => {
             if (!killed) {
               killed = true;
               proc.kill("SIGTERM");
-              setTimeout(() => {
+              schedule(() => {
                 if (!proc.killed) {
                   proc.kill("SIGKILL");
                 }
@@ -60,7 +61,7 @@ export function execCommand(
           }
 
           if (options?.timeout !== undefined && options?.timeout !== 0 && options.timeout > 0) {
-            timeoutId = setTimeout(() => {
+            timeoutId = schedule(() => {
               killProcess();
             }, options.timeout);
           }
@@ -73,21 +74,23 @@ export function execCommand(
             stderr += data.toString();
           });
 
-          waitForChildProcess(proc)
-            .then((code) => {
-              if (timeoutId !== undefined) clearTimeout(timeoutId);
-              if (options?.signal !== undefined) {
-                options.signal.removeEventListener("abort", killProcess);
-              }
-              resolve({ stdout, stderr, code: code ?? 0, killed });
-            })
-            .catch((_err) => {
-              if (timeoutId !== undefined) clearTimeout(timeoutId);
-              if (options?.signal !== undefined) {
-                options.signal.removeEventListener("abort", killProcess);
-              }
-              resolve({ stdout, stderr, code: 1, killed });
-            });
+          const finish = (code: number) => {
+            if (timeoutId !== undefined) timeoutId.cancel();
+            if (options?.signal !== undefined) {
+              options.signal.removeEventListener("abort", killProcess);
+            }
+            resume(Effect.succeed({ stdout, stderr, code, killed }));
+          };
+          waitForChildProcess(proc).then(
+            (code) => {
+              finish(code ?? 0);
+              return undefined;
+            },
+            () => {
+              finish(1);
+              return undefined;
+            },
+          );
         }),
       );
     }),

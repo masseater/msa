@@ -1,5 +1,3 @@
-import { dirname, join } from "node:path";
-
 import {
   type AnyModel,
   type Api,
@@ -77,7 +75,8 @@ import { AuthStorage as DefaultAuthStorage } from "./auth-storage.ts";
 import { awaited, awaiting, awaitingWith, performed } from "./awaiting.ts";
 import { ModelConfig } from "./model-config.ts";
 import { FileModelsStore, InMemoryCodingAgentModelsStore } from "./models-store.ts";
-import { readEnv } from "./platform.ts";
+import { dirname, join } from "./platform-node.ts";
+import { makeLatch, readEnv, schedule } from "./platform.ts";
 import {
   type AuthStatus,
   type CompatibilityRequestConfig,
@@ -269,7 +268,7 @@ export class ModelRuntime implements Models {
         const timeout =
           controller === undefined
             ? undefined
-            : setTimeout(() => controller.abort(), options.modelRefreshTimeoutMs);
+            : schedule(() => controller.abort(), options.modelRefreshTimeoutMs ?? 0);
         const signal =
           controller === undefined
             ? options.signal
@@ -286,7 +285,7 @@ export class ModelRuntime implements Models {
             );
           }
         } finally {
-          if (timeout !== undefined) clearTimeout(timeout);
+          if (timeout !== undefined) timeout.cancel();
         }
         return runtime;
       }),
@@ -650,9 +649,9 @@ export class ModelRuntime implements Models {
   ): Promise<T> {
     const previous = this.credentialOperations.get(providerId) ?? Promise.resolve();
     let markStarted: (() => void) | undefined;
-    const started = new Promise<void>((resolve) => {
-      markStarted = resolve;
-    });
+    const startedLatch = makeLatch();
+    markStarted = startedLatch.open;
+    const started = startedLatch.promise;
     const operation = (() =>
       Effect.runPromise(
         awaiting(function* () {

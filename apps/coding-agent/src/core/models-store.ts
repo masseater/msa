@@ -1,5 +1,3 @@
-import { join } from "node:path";
-
 import type { ModelsStore, ModelsStoreEntry, ModelsStoreOperationOptions } from "@msa/ai";
 import * as Effect from "effect/Effect";
 
@@ -9,6 +7,7 @@ import { getFileRevision, normalizePath } from "../utils/paths.ts";
 import { stripBom } from "../utils/text.ts";
 import { type AuthStorageBackend, FileAuthStorageBackend } from "./auth-storage.ts";
 import { awaited, awaitingWith, performed } from "./awaiting.ts";
+import { join } from "./platform-node.ts";
 
 type StoredModels = Record<string, ModelsStoreEntry>;
 

@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
-import { dirname } from "node:path";
 
 import { resolvePath } from "../utils/paths.ts";
+import { dirname } from "./platform-node.ts";
 import { nowIso } from "./platform.ts";
 import {
   CURRENT_SESSION_VERSION,

@@ -1,6 +1,4 @@
 import { readFileSync } from "node:fs";
-import { basename, dirname } from "node:path";
-import { setTimeout as delay } from "node:timers/promises";
 
 import {
   type AfterToolCallContext,
@@ -142,7 +140,8 @@ import {
   type WorkerSession,
 } from "./orchestrator/orchestrator.ts";
 import { createOrchestratorToolDefinitions } from "./orchestrator/tools.ts";
-import { nowMs, toEpochMs } from "./platform.ts";
+import { basename, dirname } from "./platform-node.ts";
+import { makeLatch, nowMs, schedule, sleepFor, toEpochMs, type Scheduled } from "./platform.ts";
 import { expandPromptTemplate, type PromptTemplate } from "./prompt-templates.ts";
 import type { ResourceExtensionPaths, ResourceLoader } from "./resource-loader.ts";
 import { exportSessionToJsonl } from "./session-export.ts";
@@ -543,9 +542,9 @@ export class AgentSession {
                 { triggerTurn: true, deliverAs: "followUp" },
               ),
           });
-    let orchestratorChangePending: ReturnType<typeof setTimeout> | undefined;
+    let orchestratorChangePending: Scheduled | undefined;
     this.orchestratorInternal?.onChange(() => {
-      orchestratorChangePending ??= setTimeout(() => {
+      orchestratorChangePending ??= schedule(() => {
         orchestratorChangePending = undefined;
         this.emit({ type: "orchestrator_changed" });
       }, 100);
@@ -1180,9 +1179,9 @@ export class AgentSession {
 
   private getIdleWaitPromise(): Promise<void> {
     if (this.idleWaitPromise === undefined) {
-      this.idleWaitPromise = new Promise((resolve) => {
-        this.resolveIdleWait = resolve;
-      });
+      const latch = makeLatch();
+      this.resolveIdleWait = latch.open;
+      this.idleWaitPromise = latch.promise;
     }
     return this.idleWaitPromise;
   }
@@ -4067,7 +4066,7 @@ export class AgentSession {
 
       this.retryAbortController = new AbortController();
       try {
-        yield* awaited(delay(delayMs, undefined, { signal: this.retryAbortController.signal }));
+        yield* performed(sleepFor(delayMs, this.retryAbortController.signal));
       } catch {
         this.finishCancelledRetry();
         return false;

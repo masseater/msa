@@ -1,5 +1,3 @@
-import { join } from "node:path";
-
 import { Agent, type AgentMessage, setDefaultStreamFn, type ThinkingLevel } from "@msa/agent-core";
 import type { ModelsSimpleStreamOptions } from "@msa/ai";
 import { clampThinkingLevel, type Message, type Model, streamSimple } from "@msa/ai/compat";
@@ -23,6 +21,7 @@ import { convertToLlm } from "./messages.ts";
 import { findInitialModel } from "./model-resolver.ts";
 import { ModelRuntime } from "./model-runtime.ts";
 import { isOrchestratorTool, ORCHESTRATOR_TOOL_NAMES } from "./orchestrator/tools.ts";
+import { join } from "./platform-node.ts";
 import { mergeProviderAttributionHeaders } from "./provider-attribution.ts";
 import type { ResourceLoader } from "./resource-loader.ts";
 import { DefaultResourceLoader } from "./resource-loader.ts";

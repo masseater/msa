@@ -1,6 +1,4 @@
-import { randomUUID } from "crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
-import { dirname, join } from "path";
 
 import type { ThinkingLevel } from "@msa/agent-core";
 import type { Model } from "@msa/ai";
@@ -14,6 +12,7 @@ import { stripBom } from "../utils/text.ts";
 import { awaited, awaitingWith } from "./awaiting.ts";
 import { DEFAULT_HTTP_IDLE_TIMEOUT_MS, parseHttpIdleTimeoutMs } from "./http-dispatcher.ts";
 import type { ResolvedMemorySettings } from "./memory/memory.ts";
+import { dirname, join, randomUuid } from "./platform-node.ts";
 import { nowMs, readEnv } from "./platform.ts";
 import { SETTINGS_DEFAULTS } from "./settings-defaults.ts";
 import type {
@@ -1133,7 +1132,7 @@ export class SettingsManager {
       enabled &&
       (this.globalSettings.trackingId === undefined || this.globalSettings.trackingId === "")
     ) {
-      this.globalSettings.trackingId = randomUUID();
+      this.globalSettings.trackingId = randomUuid();
       this.markModified("trackingId");
     }
     this.save();
@@ -1141,7 +1140,7 @@ export class SettingsManager {
 
   getOrCreateDeviceId(): string {
     if (this.globalSettings.deviceId === undefined || this.globalSettings.deviceId === "") {
-      this.globalSettings.deviceId = randomUUID();
+      this.globalSettings.deviceId = randomUuid();
       this.markModified("deviceId");
       this.save();
     }

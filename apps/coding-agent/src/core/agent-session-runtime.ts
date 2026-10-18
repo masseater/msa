@@ -1,5 +1,4 @@
 import { constants, copyFileSync, existsSync, mkdirSync } from "node:fs";
-import { basename, join, parse, resolve } from "node:path";
 
 import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
@@ -18,6 +17,7 @@ import type {
   SessionStartEvent,
 } from "./extensions/index.ts";
 import { emitSessionShutdownEvent } from "./extensions/runner.ts";
+import { basename, join, parse, resolve } from "./platform-node.ts";
 import type { CreateAgentSessionResult } from "./sdk.ts";
 import { assertSessionCwdExists } from "./session-cwd.ts";
 import { SessionManager } from "./session-manager.ts";

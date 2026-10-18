@@ -1,8 +1,8 @@
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
 
 import { getAgentDir, VERSION } from "../config.ts";
 import type { Extension } from "./extensions/types.ts";
+import { dirname, join } from "./platform-node.ts";
 import { nowIso, nowMs } from "./platform.ts";
 import { isSyntheticPath } from "./source-info.ts";
 

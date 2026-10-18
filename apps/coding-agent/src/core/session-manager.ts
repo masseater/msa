@@ -1,4 +1,3 @@
-import { randomUUID } from "crypto";
 import {
   appendFileSync,
   closeSync,
@@ -13,7 +12,6 @@ import {
   writeFileSync,
 } from "fs";
 import { readdir, stat } from "fs/promises";
-import { basename, join, resolve } from "path";
 import { createInterface } from "readline";
 import { StringDecoder } from "string_decoder";
 
@@ -44,6 +42,7 @@ import {
   createCompactionSummaryMessage,
   createCustomMessage,
 } from "./messages.ts";
+import { basename, join, randomUuid, resolve } from "./platform-node.ts";
 import { nowIso, toDate, toEpochMs } from "./platform.ts";
 export const CURRENT_SESSION_VERSION = 3;
 
@@ -236,10 +235,10 @@ export function assertValidSessionId(id: string): void {
 
 function generateId(byId: { has(id: string): boolean }): string {
   for (let i = 0; i < 100; i++) {
-    const id = randomUUID().slice(0, 8);
+    const id = randomUuid().slice(0, 8);
     if (!byId.has(id)) return id;
   }
-  return randomUUID();
+  return randomUuid();
 }
 
 function migrateV1ToV2(entries: FileEntry[]): void {

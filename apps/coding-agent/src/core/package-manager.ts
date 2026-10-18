@@ -1,5 +1,4 @@
 import type { ChildProcess, ChildProcessByStdio } from "node:child_process";
-import { createHash } from "node:crypto";
 import {
   chmodSync,
   existsSync,
@@ -37,7 +36,6 @@ function getEnv(): NodeJS.ProcessEnv {
   }
 }
 
-import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import type { Readable } from "node:stream";
 
 import ignore from "ignore";
@@ -57,7 +55,8 @@ import {
 import { stripBom } from "../utils/text.ts";
 import { type MsaManifest, readMsaManifest } from "./manifest.ts";
 import { isStdoutTakenOver } from "./output-guard.ts";
-import { readEnv } from "./platform.ts";
+import { basename, dirname, join, relative, resolve, sep, sha256Hex } from "./platform-node.ts";
+import { readEnv, schedule } from "./platform.ts";
 import type { PackageSource, SettingsManager } from "./settings-manager.ts";
 import { BUILTIN_PATH_PREFIX } from "./source-info.ts";
 
@@ -2451,10 +2450,9 @@ export class DefaultPackageManager implements PackageManager {
 
   private getTemporaryDir(prefix: string, suffix?: string, ref?: string): string {
     const root = this.resolveManagedPath(getExtensionTempFolder(this.agentDir), prefix);
-    const hash = createHash("sha256")
-      .update(`${prefix}-${suffix ?? ""}${ref !== undefined && ref !== "" ? `@${ref}` : ""}`)
-      .digest("hex")
-      .slice(0, 8);
+    const hash = sha256Hex(
+      `${prefix}-${suffix ?? ""}${ref !== undefined && ref !== "" ? `@${ref}` : ""}`,
+    ).slice(0, 8);
     return this.resolveManagedPath(root, hash, suffix ?? "");
   }
 
@@ -2955,59 +2953,73 @@ export class DefaultPackageManager implements PackageManager {
     args: string[],
     options?: { cwd?: string; timeoutMs?: number; env?: Record<string, string> },
   ): Promise<string> {
-    return new Promise((resolvePromise, reject) => {
-      const child = this.spawnCaptureCommand(command, args, options);
-      let stdout = "";
-      let stderr = "";
-      let timedOut = false;
-      const timeout =
-        typeof options?.timeoutMs === "number"
-          ? setTimeout(() => {
-              timedOut = true;
-              child.kill();
-            }, options.timeoutMs)
-          : undefined;
+    return Effect.runPromise(
+      Effect.callback<string>((resume) => {
+        const child = this.spawnCaptureCommand(command, args, options);
+        let stdout = "";
+        let stderr = "";
+        let timedOut = false;
+        const timeout =
+          typeof options?.timeoutMs === "number"
+            ? schedule(() => {
+                timedOut = true;
+                child.kill();
+              }, options.timeoutMs)
+            : undefined;
 
-      child.stdout?.on("data", (data) => {
-        stdout += data.toString();
-      });
-      child.stderr?.on("data", (data) => {
-        stderr += data.toString();
-      });
-      child.once("error", (error) => {
-        if (timeout !== undefined) clearTimeout(timeout);
-        reject(error);
-      });
-      child.once("close", (code, signal) => {
-        if (timeout !== undefined) clearTimeout(timeout);
-        if (timedOut) {
-          reject(new Error(`${command} ${args.join(" ")} timed out after ${options?.timeoutMs}ms`));
-          return;
-        }
-        if (code === 0) {
-          resolvePromise(stdout.trim());
-          return;
-        }
-        const exitStatus = code === null ? `signal ${signal ?? "unknown"}` : `code ${code}`;
-        reject(
-          new Error(`${command} ${args.join(" ")} failed with ${exitStatus}: ${stderr || stdout}`),
-        );
-      });
-    });
+        child.stdout?.on("data", (data) => {
+          stdout += data.toString();
+        });
+        child.stderr?.on("data", (data) => {
+          stderr += data.toString();
+        });
+        child.once("error", (error) => {
+          if (timeout !== undefined) timeout.cancel();
+          resume(Effect.die(error));
+        });
+        child.once("close", (code, signal) => {
+          if (timeout !== undefined) timeout.cancel();
+          if (timedOut) {
+            resume(
+              Effect.die(
+                new Error(`${command} ${args.join(" ")} timed out after ${options?.timeoutMs}ms`),
+              ),
+            );
+            return;
+          }
+          if (code === 0) {
+            resume(Effect.succeed(stdout.trim()));
+            return;
+          }
+          const exitStatus = code === null ? `signal ${signal ?? "unknown"}` : `code ${code}`;
+          resume(
+            Effect.die(
+              new Error(
+                `${command} ${args.join(" ")} failed with ${exitStatus}: ${stderr || stdout}`,
+              ),
+            ),
+          );
+        });
+      }),
+    );
   }
 
   private runCommand(command: string, args: string[], options?: { cwd?: string }): Promise<void> {
-    return new Promise((resolvePromise, reject) => {
-      const child = this.spawnCommand(command, args, options);
-      child.on("error", reject);
-      child.on("exit", (code) => {
-        if (code === 0) {
-          resolvePromise();
-        } else {
-          reject(new Error(`${command} ${args.join(" ")} failed with code ${code}`));
-        }
-      });
-    });
+    return Effect.runPromise(
+      Effect.callback<void>((resume) => {
+        const child = this.spawnCommand(command, args, options);
+        child.on("error", (error) => {
+          resume(Effect.die(error));
+        });
+        child.on("exit", (code) => {
+          if (code === 0) {
+            resume(Effect.void);
+          } else {
+            resume(Effect.die(new Error(`${command} ${args.join(" ")} failed with code ${code}`)));
+          }
+        });
+      }),
+    );
   }
 
   private runCommandSync(command: string, args: string[]): string {

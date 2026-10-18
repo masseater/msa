@@ -1,6 +1,5 @@
-import { join } from "node:path";
-
 import { getDocsPath } from "../config.ts";
+import { join } from "./platform-node.ts";
 
 const UNKNOWN_PROVIDER = "unknown";
 

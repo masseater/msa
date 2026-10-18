@@ -1,6 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, join } from "node:path";
 
 import lockfile from "proper-lockfile";
 
@@ -8,6 +7,7 @@ import { CONFIG_DIR_NAME } from "../config.ts";
 import { toErrorMessage } from "../utils/errors.ts";
 import { canonicalizePath, resolvePath } from "../utils/paths.ts";
 import { stripBom } from "../utils/text.ts";
+import { dirname, join } from "./platform-node.ts";
 import { nowMs, readEnv } from "./platform.ts";
 
 export type ProjectTrustDecision = boolean | null;

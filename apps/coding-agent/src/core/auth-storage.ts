@@ -1,6 +1,4 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
-import { dirname, join } from "path";
-import { setTimeout as sleep } from "timers/promises";
 
 import type { AuthOperationOptions, Credential, CredentialInfo, CredentialStore } from "@msa/ai";
 import * as Effect from "effect/Effect";
@@ -12,7 +10,8 @@ import { toErrorMessage } from "../utils/errors.ts";
 import { getFileRevision, normalizePath } from "../utils/paths.ts";
 import { stripBom } from "../utils/text.ts";
 import { awaited, awaitingWith, performed } from "./awaiting.ts";
-import { nowMs, randomUnit } from "./platform.ts";
+import { dirname, join } from "./platform-node.ts";
+import { nowMs, randomUnit, sleepFor } from "./platform.ts";
 import { isCommandConfigValue, resolveConfigValue } from "./resolve-config-value.ts";
 
 type AuthStorageData = Record<string, Credential>;
@@ -140,8 +139,7 @@ export class FileAuthStorageBackend implements AuthStorageBackend {
           const baseDelayMs = Math.min(10 * 2 ** retry, maxDelayMs / 2);
           retry++;
           const delayMs = Math.min(Math.round(baseDelayMs * (1 + randomUnit())), remainingMs);
-          if (signal === undefined) yield* awaited(sleep(delayMs));
-          else yield* awaited(sleep(delayMs, undefined, { signal }));
+          yield* performed(sleepFor(delayMs, signal));
           continue;
         }
         if (signal?.aborted === true) {

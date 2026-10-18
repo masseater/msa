@@ -12,7 +12,7 @@ import * as Effect from "effect/Effect";
 
 import { awaited, awaitingWith } from "./awaiting.ts";
 import type { ModelRuntime } from "./model-runtime.ts";
-import { nowMs } from "./platform.ts";
+import { nowMs, schedule, type Scheduled } from "./platform.ts";
 import type { SessionEntry, SessionManager, UsageEntry } from "./session-manager.ts";
 import type { CacheWarmingMode } from "./settings-manager.ts";
 
@@ -117,7 +117,7 @@ interface ActiveRun extends CacheWarmRequest {
   phase: "streaming" | "idle";
   nextWarmAt: number;
   extensionOverride: boolean;
-  timer?: ReturnType<typeof setTimeout> | undefined;
+  timer?: Scheduled | undefined;
 }
 
 export class CacheWarmer {
@@ -230,7 +230,7 @@ export class CacheWarmer {
     const run = this.run;
     if (run === undefined) return;
     this.run = undefined;
-    if (run.timer !== undefined) clearTimeout(run.timer);
+    if (run.timer !== undefined) run.timer.cancel();
     run.controller.abort();
   }
 
@@ -256,8 +256,7 @@ export class CacheWarmer {
       );
       return;
     }
-    run.timer = setTimeout(() => void this.refresh(run), Math.max(0, run.nextWarmAt - nowMs()));
-    run.timer.unref?.();
+    run.timer = schedule(() => void this.refresh(run), Math.max(0, run.nextWarmAt - nowMs()));
   }
 
   private refresh(run: ActiveRun): Promise<void> {

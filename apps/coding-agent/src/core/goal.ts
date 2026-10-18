@@ -1,5 +1,3 @@
-import { setTimeout as delay } from "node:timers/promises";
-
 import type { AgentMessage } from "@msa/agent-core";
 import type { Api, AssistantMessage, Model } from "@msa/ai/compat";
 import * as Effect from "effect/Effect";
@@ -8,7 +6,7 @@ import { toErrorMessage } from "../utils/errors.ts";
 import { awaited, awaitingWith, performed } from "./awaiting.ts";
 import { serializeConversation } from "./compaction/utils.ts";
 import { convertToLlm } from "./messages.ts";
-import { nowMs } from "./platform.ts";
+import { nowMs, sleepFor } from "./platform.ts";
 import type { SessionEntry } from "./session-manager.ts";
 
 export const GOAL_ENTRY_TYPE = "msa.goal";
@@ -443,7 +441,7 @@ export class GoalLoop {
         );
         this.host.record({ event: "waiting", condition: goal.condition, reason: error, delayMs });
         try {
-          yield* awaited(delay(delayMs, undefined, { signal }));
+          yield* performed(sleepFor(delayMs, signal));
         } catch {
           return false;
         }

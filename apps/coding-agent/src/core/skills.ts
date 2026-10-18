@@ -1,5 +1,4 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "fs";
-import { basename, dirname, join, relative, resolve, sep } from "path";
 
 import ignore from "ignore";
 
@@ -7,6 +6,7 @@ import { CONFIG_DIR_NAME, getAgentDir } from "../config.ts";
 import { parseFrontmatter } from "../utils/frontmatter.ts";
 import { canonicalizePath, resolvePath } from "../utils/paths.ts";
 import type { ResourceDiagnostic } from "./diagnostics.ts";
+import { basename, dirname, join, relative, resolve, sep } from "./platform-node.ts";
 import { createSyntheticSourceInfo, type SourceInfo } from "./source-info.ts";
 
 const MAX_NAME_LENGTH = 64;

@@ -1,5 +1,3 @@
-import { join } from "node:path";
-
 import type { ThinkingLevel } from "@msa/agent-core";
 import type { Model } from "@msa/ai";
 import * as Effect from "effect/Effect";
@@ -10,6 +8,7 @@ import { resolvePath } from "../utils/paths.ts";
 import { awaited, awaiting } from "./awaiting.ts";
 import type { SessionStartEvent, ToolDefinition } from "./extensions/index.ts";
 import { ModelRuntime } from "./model-runtime.ts";
+import { join } from "./platform-node.ts";
 import {
   DefaultResourceLoader,
   type DefaultResourceLoaderOptions,

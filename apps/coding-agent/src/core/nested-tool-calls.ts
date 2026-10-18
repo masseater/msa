@@ -15,6 +15,7 @@ import type {
 import * as Effect from "effect/Effect";
 
 import { awaited, awaitingWith } from "./awaiting.ts";
+import { makeLatch } from "./platform.ts";
 import { combineUsage } from "./usage-totals.ts";
 
 export const NESTED_CALL_LIMITS = {
@@ -197,9 +198,9 @@ export class NestedToolCallRunner {
         let release: (() => void) | undefined;
         if (exclusive) {
           const previous = this.queueTail;
-          this.queueTail = new Promise((resolve) => {
-            release = resolve;
-          });
+          const latch = makeLatch();
+          release = latch.open;
+          this.queueTail = latch.promise;
           yield* awaited(previous);
         }
         this.scopes.set(toolCall.id, {

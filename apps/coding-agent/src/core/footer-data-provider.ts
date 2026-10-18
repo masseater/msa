@@ -8,13 +8,13 @@ import {
   unwatchFile,
   watchFile,
 } from "fs";
-import { dirname, join, resolve } from "path";
 
 import * as Effect from "effect/Effect";
 
 import { closeWatcher, FS_WATCH_RETRY_DELAY_MS, watchWithErrorHandler } from "../utils/fs-watch.ts";
 import { awaited, awaitingWith, performed } from "./awaiting.ts";
-import { readEnv } from "./platform.ts";
+import { dirname, join, resolve } from "./platform-node.ts";
+import { readEnv, schedule, type Scheduled } from "./platform.ts";
 
 export type GitPaths = {
   repoDir: string;
@@ -71,24 +71,26 @@ function resolveBranchWithGitSync(repoDir: string): string | null {
 }
 
 function resolveBranchWithGitAsync(repoDir: string): Promise<string | null> {
-  return new Promise((resolvePromise) => {
-    execFile(
-      "git",
-      ["--no-optional-locks", "symbolic-ref", "--quiet", "--short", "HEAD"],
-      {
-        cwd: repoDir,
-        encoding: "utf8",
-      },
-      (error: ExecFileException | null, stdout: string) => {
-        if (error !== null) {
-          resolvePromise(null);
-          return;
-        }
-        const branch = stdout.trim();
-        resolvePromise(branch || null);
-      },
-    );
-  });
+  return Effect.runPromise(
+    Effect.callback<string | null>((resume) => {
+      execFile(
+        "git",
+        ["--no-optional-locks", "symbolic-ref", "--quiet", "--short", "HEAD"],
+        {
+          cwd: repoDir,
+          encoding: "utf8",
+        },
+        (error: ExecFileException | null, stdout: string) => {
+          if (error !== null) {
+            resume(Effect.succeed(null));
+            return;
+          }
+          const branch = stdout.trim();
+          resume(Effect.succeed(branch === "" ? null : branch));
+        },
+      );
+    }),
+  );
 }
 
 function isWslEnvironment(): boolean {
@@ -121,8 +123,8 @@ export class FooterDataProvider {
   private reftableTablesListPath: string | null = null;
   private branchChangeCallbacks = new Set<() => void>();
   private availableProviderCount = 0;
-  private refreshTimer: ReturnType<typeof setTimeout> | null = null;
-  private gitWatcherRetryTimer: ReturnType<typeof setTimeout> | null = null;
+  private refreshTimer: Scheduled | null = null;
+  private gitWatcherRetryTimer: Scheduled | null = null;
   private refreshInFlight = false;
   private refreshPending = false;
   private disposed = false;
@@ -176,7 +178,7 @@ export class FooterDataProvider {
 
     this.cwd = cwd;
     if (this.refreshTimer !== null) {
-      clearTimeout(this.refreshTimer);
+      this.refreshTimer.cancel();
       this.refreshTimer = null;
     }
     this.clearGitWatchers();
@@ -189,7 +191,7 @@ export class FooterDataProvider {
   dispose(): void {
     this.disposed = true;
     if (this.refreshTimer !== null) {
-      clearTimeout(this.refreshTimer);
+      this.refreshTimer.cancel();
       this.refreshTimer = null;
     }
     this.clearGitWatchers();
@@ -206,7 +208,7 @@ export class FooterDataProvider {
       this.refreshPending = true;
       return;
     }
-    this.refreshTimer = setTimeout(() => {
+    this.refreshTimer = schedule(() => {
       this.refreshTimer = null;
       void Effect.runPromise(this.refreshGitBranchAsync());
     }, FooterDataProvider.WATCH_DEBOUNCE_MS);
@@ -295,7 +297,7 @@ export class FooterDataProvider {
       this.reftableTablesListPath = null;
     }
     if (this.gitWatcherRetryTimer !== null) {
-      clearTimeout(this.gitWatcherRetryTimer);
+      this.gitWatcherRetryTimer.cancel();
       this.gitWatcherRetryTimer = null;
     }
   }
@@ -305,7 +307,7 @@ export class FooterDataProvider {
       return;
     }
 
-    this.gitWatcherRetryTimer = setTimeout(() => {
+    this.gitWatcherRetryTimer = schedule(() => {
       this.gitWatcherRetryTimer = null;
       this.setupGitWatcher();
     }, FS_WATCH_RETRY_DELAY_MS);
