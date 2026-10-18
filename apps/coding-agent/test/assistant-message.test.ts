@@ -312,9 +312,7 @@ describe("AssistantMessageComponent", () => {
       { type: "thinking" as const, thinking: "reasoning" },
     ]);
     const component = new AssistantMessageComponent(message, false, undefined, "Thinking...", 1, [
-      (markdown, { messageType }) => {
-        return `${messageType}:${markdown}`;
-      },
+      (markdown, { messageType }) => `${messageType}:${markdown}`,
     ]);
 
     const rendered = stripAnsi(component.render(80).join("\n"));

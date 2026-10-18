@@ -43,7 +43,7 @@ describe.skipIf(!(API_KEY !== undefined && API_KEY.length > 0))("AgentSession fo
   afterEach(() =>
     runTest(
       Effect.gen(function* () {
-        if (runtimeHost != null) {
+        if (runtimeHost !== null && runtimeHost !== undefined) {
           yield* awaited(runtimeHost.dispose());
         }
         if (tempDir.length > 0 && (yield* pathExists(tempDir))) {
