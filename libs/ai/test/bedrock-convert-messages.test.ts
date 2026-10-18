@@ -1,4 +1,4 @@
-import { Clock, Effect, Stream } from "effect";
+import { Clock, Data, Effect, Stream } from "effect";
 import { Type } from "typebox";
 import { describe, expect, it, vi } from "vite-plus/test";
 
@@ -8,7 +8,7 @@ const bedrockMock = vi.hoisted(() => ({
 }));
 
 vi.mock("@aws-sdk/client-bedrock-runtime", () => {
-  class BedrockRuntimeServiceException extends Error {}
+  class BedrockRuntimeServiceException extends Data.Error<{ readonly message: string }> {}
 
   class BedrockRuntimeClient {
     constructor(config: Record<string, unknown>) {

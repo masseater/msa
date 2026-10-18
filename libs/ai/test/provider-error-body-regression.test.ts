@@ -1,4 +1,4 @@
-import { Effect, Stream } from "effect";
+import { Data, Effect, Stream } from "effect";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { streamSimple as streamSimpleBedrock } from "../src/api/bedrock-converse-stream.ts";
@@ -6,16 +6,11 @@ import { stream as streamOpenAICompletions } from "../src/api/openai-completions
 import { stream as streamOpenAIResponses } from "../src/api/openai-responses.ts";
 import type { Model } from "../src/types.ts";
 
-class FakeAPIError extends Error {
-  status: number;
-  error: unknown;
-  constructor(status: number, parsedBody: unknown) {
-    super(`${status} status code (no body)`);
-    this.name = "PermissionDeniedError";
-    this.status = status;
-    this.error = parsedBody;
-  }
-}
+class FakeAPIError extends Data.TaggedError("PermissionDeniedError")<{
+  readonly message: string;
+  readonly status: number;
+  readonly error: unknown;
+}> {}
 
 const bedrockMock = vi.hoisted(() => ({
   sendError: undefined as unknown,
@@ -28,7 +23,14 @@ const openaiMock = vi.hoisted(() => ({
 vi.mock("openai", () => {
   function throwingCreate() {
     const promise = Promise.resolve(undefined) as unknown as { withResponse: () => Promise<never> };
-    promise.withResponse = () => Promise.reject(new FakeAPIError(403, openaiMock.parsedBody));
+    promise.withResponse = () =>
+      Promise.reject(
+        new FakeAPIError({
+          message: "403 status code (no body)",
+          status: 403,
+          error: openaiMock.parsedBody,
+        }),
+      );
     return promise;
   }
   class FakeOpenAI {
@@ -39,7 +41,7 @@ vi.mock("openai", () => {
 });
 
 vi.mock("@aws-sdk/client-bedrock-runtime", () => {
-  class BedrockRuntimeServiceException extends Error {}
+  class BedrockRuntimeServiceException extends Data.Error<{ readonly message: string }> {}
 
   class BedrockRuntimeClient {
     middlewareStack = { add: () => {} };

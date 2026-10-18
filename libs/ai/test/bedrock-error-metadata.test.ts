@@ -1,15 +1,15 @@
-import { Effect } from "effect";
+import { Data, Effect } from "effect";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 type SendResult = { kind: "reject"; error: unknown } | { kind: "resolve"; response: unknown };
 
 const bedrockMock = vi.hoisted(() => ({
   send: undefined as SendResult | undefined,
-  ServiceException: undefined as unknown as new (message?: string) => Error,
+  ServiceException: undefined as unknown as new (args: { readonly message: string }) => Error,
 }));
 
 vi.mock("@aws-sdk/client-bedrock-runtime", () => {
-  class BedrockRuntimeServiceException extends Error {}
+  class BedrockRuntimeServiceException extends Data.Error<{ readonly message: string }> {}
   bedrockMock.ServiceException = BedrockRuntimeServiceException;
 
   class BedrockRuntimeClient {
@@ -70,7 +70,7 @@ function getModelFixture(): Model<"bedrock-converse-stream"> {
 }
 
 function makeServiceException(name: string, extra: Record<string, unknown> = {}): Error {
-  const error = new bedrockMock.ServiceException(VALIDATION_MESSAGE) as Error &
+  const error = new bedrockMock.ServiceException({ message: VALIDATION_MESSAGE }) as Error &
     Record<string, unknown>;
   error.name = name;
   Object.assign(error, extra);

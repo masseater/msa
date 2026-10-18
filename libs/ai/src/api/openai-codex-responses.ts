@@ -1,6 +1,6 @@
 import type * as NodeZlib from "node:zlib";
 
-import { Cause, Effect, Fiber, Stream } from "effect";
+import { Cause, Data, Effect, Fiber, Stream } from "effect";
 import type {
   Tool as OpenAITool,
   ResponseCreateParamsStreaming,
@@ -171,14 +171,16 @@ function getRetryAfterDelayMs(headers: Headers): number | undefined {
   return undefined;
 }
 
-class RetryDelayExceededError extends Error {}
+class RetryDelayExceededError extends Data.TaggedError("RetryDelayExceededError")<{
+  readonly message: string;
+}> {}
 
 function validateRetryDelayMs(delayMs: number, options?: StreamOptions): number {
   const maxRetryDelayMs = options?.maxRetryDelayMs ?? DEFAULT_MAX_RETRY_DELAY_MS;
   if (maxRetryDelayMs > 0 && delayMs > maxRetryDelayMs) {
-    throw new RetryDelayExceededError(
-      `Server requested ${Math.ceil(delayMs / 1000)}s retry delay (max: ${Math.ceil(maxRetryDelayMs / 1000)}s)`,
-    );
+    throw new RetryDelayExceededError({
+      message: `Server requested ${Math.ceil(delayMs / 1000)}s retry delay (max: ${Math.ceil(maxRetryDelayMs / 1000)}s)`,
+    });
   }
   return delayMs;
 }
@@ -802,40 +804,24 @@ const processStream = (
     },
   );
 
-class CodexApiError extends Error {
-  readonly code?: string | undefined;
-  readonly payload?: Record<string, unknown> | undefined;
+class CodexApiError extends Data.TaggedError("CodexApiError")<{
+  readonly message: string;
+  readonly code: string | undefined;
+  readonly payload: Record<string, unknown> | undefined;
+}> {}
 
-  constructor(
-    message: string,
-    options?: { code?: string | undefined; payload?: Record<string, unknown>; cause?: unknown },
-  ) {
-    super(message);
-    this.name = "CodexApiError";
-    this.code = options?.code;
-    this.payload = options?.payload;
-    this.cause = options?.cause;
-  }
-}
+class CodexProtocolError extends Data.TaggedError("CodexProtocolError")<{
+  readonly message: string;
+  readonly payload: unknown;
+  readonly cause: unknown;
+}> {}
 
-class CodexProtocolError extends Error {
-  readonly payload?: unknown;
-
-  constructor(message: string, options?: { payload?: unknown; cause?: unknown }) {
-    super(message);
-    this.name = "CodexProtocolError";
-    this.payload = options?.payload;
-    this.cause = options?.cause;
-  }
-}
-
-class ProviderStreamEventCallbackError extends Error {
-  constructor(cause: unknown) {
-    super(formatThrownValue(cause));
-    this.name = "ProviderStreamEventCallbackError";
-    this.cause = cause;
-  }
-}
+class ProviderStreamEventCallbackError extends Data.TaggedError(
+  "ProviderStreamEventCallbackError",
+)<{
+  readonly message: string;
+  readonly cause: unknown;
+}> {}
 
 function isCodexNonTransportError(error: unknown): boolean {
   return (
@@ -886,7 +872,8 @@ function mapCodexEvent(
 
   if (type === "error") {
     const { code, message } = extractCodexEventError(event);
-    throw new CodexApiError(`Codex error: ${message || code || JSON.stringify(event)}`, {
+    throw new CodexApiError({
+      message: `Codex error: ${message || code || JSON.stringify(event)}`,
       code,
       payload: event,
     });
@@ -897,7 +884,7 @@ function mapCodexEvent(
       .response;
     const code = response?.error?.code;
     const message = response?.error?.message;
-    throw new CodexApiError(message || "Codex response failed", { code, payload: event });
+    throw new CodexApiError({ message: message || "Codex response failed", code, payload: event });
   }
 
   if (type === "response.done" || type === "response.completed" || type === "response.incomplete") {
@@ -928,7 +915,14 @@ const mapCodexEvents = (
   events.pipe(
     Stream.mapEffect((event) =>
       callHook(() => onProviderStreamEvent?.(event, model)).pipe(
-        Effect.catchDefect((error) => Effect.die(new ProviderStreamEventCallbackError(error))),
+        Effect.catchDefect((error) =>
+          Effect.die(
+            new ProviderStreamEventCallbackError({
+              message: formatThrownValue(error),
+              cause: error,
+            }),
+          ),
+        ),
         Effect.andThen(Effect.sync(() => mapCodexEvent(event, output))),
       ),
     ),
@@ -954,7 +948,8 @@ function parseCodexSseChunk(chunk: string): Record<string, unknown> | undefined 
   try {
     return JSON.parse(data) as Record<string, unknown>;
   } catch (cause) {
-    throw new CodexProtocolError(`Invalid Codex SSE JSON: ${formatThrownValue(cause)}`, {
+    throw new CodexProtocolError({
+      message: `Invalid Codex SSE JSON: ${formatThrownValue(cause)}`,
       cause,
       payload: data,
     });
@@ -1203,26 +1198,12 @@ function getWebSocketConstructor(env?: ProviderEnv): Promise<WebSocketConstructo
   return Promise.resolve(ctor as unknown as WebSocketConstructor);
 }
 
-class WebSocketCloseError extends Error {
-  readonly code?: number | undefined;
-  readonly reason?: string | undefined;
-  readonly wasClean?: boolean | undefined;
-
-  constructor(
-    message: string,
-    options?: {
-      code?: number | undefined;
-      reason?: string | undefined;
-      wasClean?: boolean | undefined;
-    },
-  ) {
-    super(message);
-    this.name = "WebSocketCloseError";
-    this.code = options?.code;
-    this.reason = options?.reason;
-    this.wasClean = options?.wasClean;
-  }
-}
+class WebSocketCloseError extends Data.TaggedError("WebSocketCloseError")<{
+  readonly message: string;
+  readonly code: number | undefined;
+  readonly reason: string | undefined;
+  readonly wasClean: boolean | undefined;
+}> {}
 
 function getWebSocketReadyState(socket: WebSocketLike): number | undefined {
   const readyState = (socket as { readyState?: unknown }).readyState;
@@ -1472,7 +1453,8 @@ function extractWebSocketCloseError(event: unknown): Error {
     if (reasonText === "" && code === WEBSOCKET_MESSAGE_TOO_BIG_CLOSE_CODE) {
       reasonText = " message too big";
     }
-    return new WebSocketCloseError(`WebSocket closed${codeText}${reasonText}`.trim(), {
+    return new WebSocketCloseError({
+      message: `WebSocket closed${codeText}${reasonText}`.trim(),
       code: typeof code === "number" ? code : undefined,
       reason: typeof reason === "string" && reason.length > 0 ? reason : undefined,
       wasClean: typeof wasClean === "boolean" ? wasClean : undefined,
@@ -1504,7 +1486,8 @@ function parseCodexWebSocketMessage(text: string): Record<string, unknown> {
   try {
     return JSON.parse(text) as Record<string, unknown>;
   } catch (cause) {
-    throw new CodexProtocolError(`Invalid Codex WebSocket JSON: ${formatThrownValue(cause)}`, {
+    throw new CodexProtocolError({
+      message: `Invalid Codex WebSocket JSON: ${formatThrownValue(cause)}`,
       cause,
       payload: text,
     });
@@ -1571,10 +1554,11 @@ function openCodexWebSocketInbox(
             fail(
               cause instanceof CodexProtocolError
                 ? cause
-                : new CodexProtocolError(
-                    `Invalid Codex WebSocket JSON: ${formatThrownValue(cause)}`,
-                    { cause, payload: null },
-                  ),
+                : new CodexProtocolError({
+                    message: `Invalid Codex WebSocket JSON: ${formatThrownValue(cause)}`,
+                    cause,
+                    payload: null,
+                  }),
             ),
           ),
         ),

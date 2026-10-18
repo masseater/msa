@@ -1,4 +1,4 @@
-import { Effect, Stream } from "effect";
+import { Data, Effect, Stream } from "effect";
 
 import { calculateCost, clampThinkingLevel } from "../models.ts";
 import type {
@@ -369,7 +369,13 @@ const requestMistralStream = Effect.fn("requestMistralStream")(function* (
 
   if (!response.ok) {
     const text = yield* Effect.promise(() => response.text());
-    return yield* Effect.die(new MistralHttpError(response.status, text, response.statusText));
+    return yield* Effect.die(
+      new MistralHttpError({
+        message: response.statusText || `Request failed with status ${response.status}`,
+        statusCode: response.status,
+        body: text,
+      }),
+    );
   }
   if (response.body === null) {
     return yield* Effect.die(new Error("Mistral response has no body"));
@@ -378,17 +384,11 @@ const requestMistralStream = Effect.fn("requestMistralStream")(function* (
   return readMistralEvents(response.body, options?.signal);
 });
 
-class MistralHttpError extends Error {
-  statusCode: number;
-  body: string;
-
-  constructor(statusCode: number, body: string, statusText: string) {
-    super(statusText || `Request failed with status ${statusCode}`);
-    this.name = "MistralHttpError";
-    this.statusCode = statusCode;
-    this.body = body;
-  }
-}
+class MistralHttpError extends Data.TaggedError("MistralHttpError")<{
+  readonly message: string;
+  readonly statusCode: number;
+  readonly body: string;
+}> {}
 
 function buildMistralHeaders(
   model: Model<"mistral-conversations">,

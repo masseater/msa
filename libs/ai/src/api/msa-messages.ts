@@ -1,4 +1,4 @@
-import { Effect, Option, Stream } from "effect";
+import { Data, Effect, Option, Stream } from "effect";
 
 import type {
   AssistantMessage,
@@ -96,17 +96,11 @@ type MsaMessagesErrorBody = {
   };
 };
 
-export class MsaMessagesResponseError extends Error {
-  code?: string | undefined;
+export class MsaMessagesResponseError extends Data.TaggedError("MsaMessagesResponseError")<{
+  readonly message: string;
+  readonly code: string | undefined;
   readonly diagnosticDetails: JsonObject;
-
-  constructor(message: string, code: string | undefined, diagnosticDetails: JsonObject) {
-    super(message);
-    this.name = "MsaMessagesResponseError";
-    this.code = code;
-    this.diagnosticDetails = diagnosticDetails;
-  }
-}
+}> {}
 
 function parseMsaMessagesErrorBody(body: string): MsaMessagesErrorBody | undefined {
   try {
@@ -146,10 +140,10 @@ function createMsaMessagesResponseError(
 ): MsaMessagesResponseError {
   const errorBody = parseMsaMessagesErrorBody(body);
   const code = typeof errorBody?.error?.code === "string" ? errorBody.error.code : undefined;
-  return new MsaMessagesResponseError(
-    formatMsaMessagesResponseError(response, body, errorBody),
+  return new MsaMessagesResponseError({
+    message: formatMsaMessagesResponseError(response, body, errorBody),
     code,
-    {
+    diagnosticDetails: {
       version: 1,
       provider: model.provider,
       model: model.id,
@@ -160,7 +154,7 @@ function createMsaMessagesResponseError(
       ...(errorBody === undefined ? { body: truncateDiagnosticString(body) } : {}),
       timestampMs: currentTimeMillis(),
     },
-  );
+  });
 }
 
 function createEmptyUsage(): MsaMessagesUsage {

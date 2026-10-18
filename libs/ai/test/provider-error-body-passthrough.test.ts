@@ -1,19 +1,14 @@
-import { Effect } from "effect";
+import { Data, Effect } from "effect";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import { generateImages } from "../src/images.ts";
 import type { ImageModel, ImagesContext } from "../src/types.ts";
 
-class FakeAPIError extends Error {
-  status: number;
-  error: unknown;
-  constructor(status: number, parsedBody: unknown) {
-    super(`${status} status code (no body)`);
-    this.name = "PermissionDeniedError";
-    this.status = status;
-    this.error = parsedBody;
-  }
-}
+class FakeAPIError extends Data.TaggedError("PermissionDeniedError")<{
+  readonly message: string;
+  readonly status: number;
+  readonly error: unknown;
+}> {}
 
 vi.mock("openai", () => {
   class FakeOpenAI {
@@ -24,7 +19,13 @@ vi.mock("openai", () => {
             withResponse: () => Promise<never>;
           };
           promise.withResponse = () =>
-            Promise.reject(new FakeAPIError(403, { error: "blocked by gateway WAF" }));
+            Promise.reject(
+              new FakeAPIError({
+                message: "403 status code (no body)",
+                status: 403,
+                error: { error: "blocked by gateway WAF" },
+              }),
+            );
           return promise;
         },
       },
