@@ -91,7 +91,7 @@ describe("ModelRuntime auth options", () => {
         }),
         expect.objectContaining({
           type: "oauth",
-          provider: expect.objectContaining({ id: "anthropic-api", name: "Anthropic API" }),
+          provider: expect.objectContaining({ id: "openai", name: "OpenAI" }),
         }),
       ]),
     );
@@ -105,7 +105,7 @@ describe("ModelRuntime auth options", () => {
   it("attaches the provider's active auth status to every method option", async () => {
     const runtime = await ModelRuntime.create({
       credentials: AuthStorage.inMemory({
-        "anthropic-api": {
+        openai: {
           type: "oauth",
           access: "access",
           refresh: "refresh",
@@ -115,18 +115,18 @@ describe("ModelRuntime auth options", () => {
       modelsPath: null,
     });
 
-    const options = authOptions(runtime).filter((option) => option.provider.id === "anthropic-api");
+    const options = authOptions(runtime).filter((option) => option.provider.id === "openai");
     expect(options).toHaveLength(2);
-    expect(await runtime.checkAuth("anthropic-api")).toMatchObject({ type: "oauth" });
+    expect(await runtime.checkAuth("openai")).toMatchObject({ type: "oauth" });
   });
 
   it("distinguishes subscription OAuth from generic OAuth sign-in", async () => {
     const runtime = await ModelRuntime.create({
       credentials: AuthStorage.inMemory({
-        "anthropic-api": {
+        openai: {
           type: "oauth",
-          access: "anthropic-access",
-          refresh: "anthropic-refresh",
+          access: "openai-access",
+          refresh: "openai-refresh",
           expires: Date.now() + 60 * 60_000,
         },
         openrouter: {
@@ -139,8 +139,8 @@ describe("ModelRuntime auth options", () => {
       modelsPath: null,
     });
 
-    expect(runtime.isUsingOAuth("anthropic-api")).toBe(true);
-    expect(runtime.isUsingSubscription("anthropic-api")).toBe(true);
+    expect(runtime.isUsingOAuth("openai")).toBe(true);
+    expect(runtime.isUsingSubscription("openai")).toBe(true);
     expect(runtime.isUsingOAuth("openrouter")).toBe(true);
     expect(runtime.isUsingSubscription("openrouter")).toBe(false);
   });

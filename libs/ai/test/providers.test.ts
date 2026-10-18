@@ -216,7 +216,6 @@ describe("builtin providers", () => {
     const models = createModels({
       authContext: fakeAuthContext({
         ANTHROPIC_AUTH_TOKEN: "auth-token",
-        ANTHROPIC_OAUTH_TOKEN: "oauth-token",
         ANTHROPIC_API_KEY: "api-key",
       }),
     });
@@ -226,20 +225,6 @@ describe("builtin providers", () => {
       auth: { headers: { Authorization: "Bearer auth-token" } },
       source: "ANTHROPIC_AUTH_TOKEN",
     });
-  });
-
-  it("preserves Anthropic OAuth token precedence over the API key", async () => {
-    const models = createModels({
-      authContext: fakeAuthContext({
-        ANTHROPIC_API_KEY: "key",
-        ANTHROPIC_OAUTH_TOKEN: "oauth-token",
-      }),
-    });
-    models.setProvider(anthropicProvider());
-
-    const result = await models.getAuth("anthropic-api");
-    expect(result?.auth.apiKey).toBe("oauth-token");
-    expect(result?.source).toBe("ANTHROPIC_OAUTH_TOKEN");
   });
 });
 

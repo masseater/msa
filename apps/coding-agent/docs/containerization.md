@@ -89,22 +89,13 @@ The command should report `/workspace`. Changes under `/workspace` write through
 
 Configure credentials before creating the sandbox. Do not run `/login` inside the sandbox because that writes a real credential into it.
 
-### Use a Claude Pro or Max token
-
-Generate the token with `claude setup-token` on a machine with Claude Code. If an `anthropic` secret is already configured, remove it first so the proxy does not add an API-key header alongside the bearer token:
+### Use an Anthropic API key
 
 ```bash
-sbx secret rm anthropic
-
-sbx secret set-custom \
-  --host api.anthropic.com \
-  --env ANTHROPIC_OAUTH_TOKEN \
-  --placeholder 'sk-ant-oat01-{rand}'
+sbx secret set anthropic
 ```
 
-`sbx secret set-custom` reads the real token from standard input. The sandbox receives an OAuth-shaped placeholder, which the proxy replaces only for requests to the configured host.
-
-For an Anthropic API key, use `sbx secret set anthropic` instead.
+A Claude Pro or Max subscription is used through [`claude-subs`](cli-agents.md) instead.
 
 ### Start msa
 

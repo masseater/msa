@@ -428,12 +428,12 @@ const credential = {
 
 Built-in providers resolve these env vars (Node.js; in browsers pass `apiKey` explicitly):
 
-| Provider                   | Environment Variable(s)                        |
-| -------------------------- | ---------------------------------------------- |
-| OpenAI                     | `OPENAI_API_KEY`                               |
-| Anthropic                  | `ANTHROPIC_API_KEY` or `ANTHROPIC_OAUTH_TOKEN` |
-| OpenRouter                 | `OPENROUTER_API_KEY`                           |
-| OpenCode Zen / OpenCode Go | `OPENCODE_API_KEY`                             |
+| Provider                   | Environment Variable(s) |
+| -------------------------- | ----------------------- |
+| OpenAI                     | `OPENAI_API_KEY`        |
+| Anthropic API              | `ANTHROPIC_API_KEY`     |
+| OpenRouter                 | `OPENROUTER_API_KEY`    |
+| OpenCode Zen / OpenCode Go | `OPENCODE_API_KEY`      |
 
 Stored credentials remain provider-scoped, so save the key under the provider ID you register.
 
@@ -1690,7 +1690,6 @@ Use this when one process needs different provider settings per request, or when
 
 Several providers support OAuth authentication instead of static API keys:
 
-- **Anthropic** (Claude Pro/Max subscription)
 - **OpenAI** (Sign in with ChatGPT: uses the ChatGPT subscription with the OpenAI API)
 - **OpenAI Codex (legacy)** (ChatGPT Plus/Pro subscription, access to GPT-5.x Codex models)
 - **OpenRouter** (OAuth PKCE that mints a user-controlled API key)
@@ -1699,13 +1698,13 @@ Each of these providers carries an `OAuthAuth` on `provider.auth.oauth` with thr
 
 ```typescript
 import { createModels } from "@msa/ai";
-import { anthropicProvider } from "@msa/ai/providers/anthropic";
+import { openaiProvider } from "@msa/ai/providers/openai";
 
 const models = createModels({ credentials: myStore }); // persistent CredentialStore
-models.setProvider(anthropicProvider());
+models.setProvider(openaiProvider());
 
 // Login: Models drives the flow and persists the credential
-await models.login("anthropic-api", "oauth", {
+await models.login("openai", "oauth", {
   prompt: async (p) => {
     // p.type: 'text' | 'secret' | 'select' | 'manual_code'
     // manual_code prompts race a local callback server; p.signal aborts them when the server wins
@@ -1726,11 +1725,11 @@ await models.login("anthropic-api", "oauth", {
 });
 
 // From here on, requests resolve and refresh the token automatically
-const model = models.getModel("anthropic-api", "claude-sonnet-4-5")!;
+const model = models.getModel("openai", "gpt-5.5")!;
 await models.complete(model, context);
 
 // Logout
-await models.logout("anthropic-api");
+await models.logout("openai");
 ```
 
 ### CLI Login

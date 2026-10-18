@@ -13,11 +13,7 @@ type StreamOptionsWithExtras = StreamOptions & Record<string, unknown>;
 import { resolveApiKey } from "./oauth.ts";
 
 // Resolve OAuth tokens at module level (async, runs before tests)
-const oauthTokens = await Promise.all([
-  resolveApiKey("anthropic-api"),
-  resolveApiKey("openai-codex"),
-]);
-const [anthropicOAuthToken, openaiCodexToken] = oauthTokens;
+const openaiCodexToken = await resolveApiKey("openai-codex");
 
 /**
  * Test that tool results containing only images work correctly across all providers.
@@ -286,26 +282,6 @@ describe("Tool Results with Images", () => {
   // =========================================================================
   // OAuth-based providers (credentials from ~/.msa/agent/oauth.json)
   // =========================================================================
-
-  describe("Anthropic OAuth Provider (claude-sonnet-4-5)", () => {
-    const model = getModel("anthropic-api", "claude-sonnet-4-5");
-
-    it.skipIf(!anthropicOAuthToken)(
-      "should handle tool result with only image",
-      { retry: 3, timeout: 30000 },
-      async () => {
-        await handleToolWithImageResult(model, { apiKey: anthropicOAuthToken });
-      },
-    );
-
-    it.skipIf(!anthropicOAuthToken)(
-      "should handle tool result with text and image",
-      { retry: 3, timeout: 30000 },
-      async () => {
-        await handleToolWithTextAndImageResult(model, { apiKey: anthropicOAuthToken });
-      },
-    );
-  });
 
   describe("OpenAI Codex Provider", () => {
     it.skipIf(!openaiCodexToken)(

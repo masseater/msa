@@ -368,7 +368,12 @@ function rewriteJson(path: string, update: (data: Record<string, unknown>) => bo
  */
 function migrateRenamedProviders(): void {
   const agentDir = getAgentDir();
-  rewriteJson(join(agentDir, "auth.json"), renameKeys);
+  rewriteJson(join(agentDir, "auth.json"), (data) => {
+    // anthropic-api takes API keys only; a Claude Pro/Max sign-in has no provider to move to.
+    const anthropic = data["anthropic"] as { type?: unknown } | undefined;
+    if (anthropic?.type === "oauth") delete data["anthropic"];
+    return renameKeys(data) || anthropic?.type === "oauth";
+  });
   rewriteJson(join(agentDir, "models.json"), (data) =>
     data["providers"] && typeof data["providers"] === "object"
       ? renameKeys(data["providers"] as Record<string, unknown>)

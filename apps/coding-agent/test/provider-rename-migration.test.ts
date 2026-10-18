@@ -65,6 +65,12 @@ describe("renamed provider migration", () => {
     });
   });
 
+  it("drops a Claude Pro/Max sign-in stored under anthropic", () => {
+    write("auth.json", { anthropic: { type: "oauth", access: "a", refresh: "r", expires: 0 } });
+    runMigrations(agentDir);
+    expect(read("auth.json")).toEqual({});
+  });
+
   it("keeps a credential already stored under the new id", () => {
     write("auth.json", {
       anthropic: { type: "api_key", key: "old" },

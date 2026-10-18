@@ -105,45 +105,6 @@ function getCacheControl(
   };
 }
 
-// Stealth mode: Mimic Claude Code's tool naming exactly
-const claudeCodeVersion = "2.1.280";
-
-// Claude Code 2.x tool names (canonical casing)
-// Source: https://cchistory.mariozechner.at/data/prompts-2.1.11.md
-// To update: https://github.com/badlogic/cchistory
-const claudeCodeTools = [
-  "Read",
-  "Write",
-  "Edit",
-  "Bash",
-  "Grep",
-  "Glob",
-  "AskUserQuestion",
-  "EnterPlanMode",
-  "ExitPlanMode",
-  "KillShell",
-  "NotebookEdit",
-  "Skill",
-  "Task",
-  "TaskOutput",
-  "TodoWrite",
-  "WebFetch",
-  "WebSearch",
-];
-
-const ccToolLookup = new Map(claudeCodeTools.map((t) => [t.toLowerCase(), t]));
-
-// Convert tool name to CC canonical casing if it matches (case-insensitive)
-const toClaudeCodeName = (name: string) => ccToolLookup.get(name.toLowerCase()) ?? name;
-const fromClaudeCodeName = (name: string, tools?: Tool[]) => {
-  if (tools && tools.length > 0) {
-    const lowerName = name.toLowerCase();
-    const matchedTool = tools.find((tool) => tool.name.toLowerCase() === lowerName);
-    if (matchedTool) return matchedTool.name;
-  }
-  return name;
-};
-
 function convertContentBlocks(content: (TextContent | ImageContent)[]):
   | string
   | Array<
@@ -602,7 +563,6 @@ export const stream: StreamFunction<"anthropic-messages", AnthropicOptions> = (
     context,
     getAnthropicCompat(model).supportsMidConvoSystemMessages,
   );
-  const currentTools = getCurrentTools(normalizedContext.messages);
 
   (async () => {
     const output: AssistantMessage = {
@@ -625,13 +585,11 @@ export const stream: StreamFunction<"anthropic-messages", AnthropicOptions> = (
 
     try {
       let client: Anthropic;
-      let isOAuth: boolean;
       let usageModel = model;
       let inputTransformations: BetaInputTransformation[] | undefined;
 
       if (options?.client) {
         client = options.client;
-        isOAuth = false;
       } else {
         const apiKey = options?.apiKey;
         const federation = getAnthropicFederation(model, apiKey, options?.headers, options?.env);
@@ -640,7 +598,7 @@ export const stream: StreamFunction<"anthropic-messages", AnthropicOptions> = (
         const cacheRetention = resolveCacheRetention(options?.cacheRetention, options?.env);
         const cacheSessionId = cacheRetention === "none" ? undefined : options?.sessionId;
 
-        const created = createClient(
+        client = createClient(
           model,
           apiKey,
           options?.headers,
@@ -648,8 +606,6 @@ export const stream: StreamFunction<"anthropic-messages", AnthropicOptions> = (
           cacheSessionId,
           federation,
         );
-        client = created.client;
-        isOAuth = created.isOAuthToken;
       }
       const requestOptions = {
         ...(options?.signal ? { signal: options.signal } : {}),
@@ -660,13 +616,7 @@ export const stream: StreamFunction<"anthropic-messages", AnthropicOptions> = (
       let response: Response;
       for (;;) {
         options?.signal?.throwIfAborted();
-        const built = buildParams(
-          model,
-          normalizedContext,
-          isOAuth,
-          options,
-          disablePreferredStrictTools,
-        );
+        const built = buildParams(model, normalizedContext, options, disablePreferredStrictTools);
         if (built.providerThinkingLevel) output.providerThinkingLevel = built.providerThinkingLevel;
         let params = built.params;
         const nextParams = await options?.onPayload?.(params, model);
@@ -801,9 +751,7 @@ export const stream: StreamFunction<"anthropic-messages", AnthropicOptions> = (
             const block: Block = {
               type: "toolCall",
               id: event.content_block.id,
-              name: isOAuth
-                ? fromClaudeCodeName(event.content_block.name, currentTools)
-                : event.content_block.name,
+              name: event.content_block.name,
               arguments: (event.content_block.input as Record<string, any>) ?? {},
               partialJson: "",
               index: event.index,
@@ -1077,10 +1025,6 @@ export const streamSimple: StreamFunction<"anthropic-messages", SimpleStreamOpti
   } satisfies AnthropicOptions);
 };
 
-function isOAuthToken(apiKey: string): boolean {
-  return apiKey.includes("sk-ant-oat");
-}
-
 function createClient(
   model: Model<"anthropic-messages">,
   apiKey: string | undefined,
@@ -1088,30 +1032,7 @@ function createClient(
   fetch?: typeof globalThis.fetch,
   sessionId?: string,
   federation?: AnthropicFederationConfig,
-): { client: Anthropic; isOAuthToken: boolean } {
-  // OAuth: Bearer auth, Claude Code identity headers
-  if (apiKey && isOAuthToken(apiKey)) {
-    const client = new MsaAnthropic({
-      apiKey: null,
-      authToken: apiKey,
-      baseURL: model.baseUrl,
-      dangerouslyAllowBrowser: true,
-      fetch,
-      defaultHeaders: mergeClientHeaders(
-        {
-          accept: "application/json",
-          "anthropic-dangerous-direct-browser-access": "true",
-          "user-agent": `claude-cli/${claudeCodeVersion}`,
-          "x-app": "cli",
-        },
-        model.headers,
-        optionsHeaders,
-      ),
-    });
-
-    return { client, isOAuthToken: true };
-  }
-
+): Anthropic {
   // API key, header-owned auth, or workload identity federation.
   const compat = getAnthropicCompat(model);
   const sessionAffinityHeaders: ProviderHeaders = {};
@@ -1142,10 +1063,10 @@ function createClient(
       });
       federationClient = { key, fetch, client };
     }
-    return { client: federationClient.client.withOptions({ defaultHeaders }), isOAuthToken: false };
+    return federationClient.client.withOptions({ defaultHeaders });
   }
 
-  const client = new MsaAnthropic({
+  return new MsaAnthropic({
     apiKey: apiKey ?? null,
     authToken: null,
     baseURL: model.baseUrl,
@@ -1153,14 +1074,11 @@ function createClient(
     fetch,
     defaultHeaders,
   });
-
-  return { client, isOAuthToken: false };
 }
 
 function getBetaFeatures(
   model: Model<"anthropic-messages">,
   context: TranscriptContext,
-  usesOAuth: boolean,
   nativeToolChanges: boolean,
   options?: AnthropicOptions,
 ): NonNullable<MessageCreateParamsStreaming["betas"]> {
@@ -1183,7 +1101,6 @@ function getBetaFeatures(
   }
 
   const features: NonNullable<MessageCreateParamsStreaming["betas"]> = [];
-  if (usesOAuth) features.push("claude-code-20250219", "oauth-2025-04-20");
   if (shouldUseFineGrainedToolStreamingBeta(model, context))
     features.push(FINE_GRAINED_TOOL_STREAMING_BETA);
   if (
@@ -1205,7 +1122,6 @@ function getBetaFeatures(
 function buildParams(
   model: Model<"anthropic-messages">,
   context: TranscriptContext,
-  usesOAuth: boolean,
   options?: AnthropicOptions,
   disablePreferredStrictTools = false,
 ): {
@@ -1233,7 +1149,6 @@ function buildParams(
   ): BetaTool[] => {
     const definitions = convertTools(
       tools,
-      usesOAuth,
       compat.supportsEagerToolInputStreaming,
       compat.supportsStrictTools,
       toolCacheControl,
@@ -1265,14 +1180,13 @@ function buildParams(
   const effortMessages = model.compat?.supportsMidConvoEffort === true && !thinkingDisabled;
   const converted = convertMessages(
     conversationMessages,
-    usesOAuth,
     cacheControl,
     compat.allowEmptySignature,
     effortMessages ? model.provider : undefined,
     nativeToolChanges ? convertToolDefinitions : undefined,
   );
   const activeEffort = options?.effort ?? "high";
-  const betaFeatures = getBetaFeatures(model, context, usesOAuth, nativeToolChanges, options);
+  const betaFeatures = getBetaFeatures(model, context, nativeToolChanges, options);
   const params: MessageCreateParamsStreaming = {
     model: model.id,
     messages: effortMessages
@@ -1283,24 +1197,7 @@ function buildParams(
     ...(betaFeatures.length > 0 ? { betas: betaFeatures } : {}),
   };
 
-  // For OAuth tokens, we MUST include Claude Code identity
-  if (usesOAuth) {
-    params.system = [
-      {
-        type: "text",
-        text: "You are Claude Code, Anthropic's official CLI for Claude.",
-        ...(cacheControl ? { cache_control: cacheControl } : {}),
-      },
-    ];
-    if (initialSystemText) {
-      params.system.push({
-        type: "text",
-        text: sanitizeSurrogates(initialSystemText),
-        ...(cacheControl ? { cache_control: cacheControl } : {}),
-      });
-    }
-  } else if (initialSystemText) {
-    // Add cache control to system prompt for non-OAuth tokens
+  if (initialSystemText) {
     params.system = [
       {
         type: "text",
@@ -1430,7 +1327,6 @@ interface ConvertedAnthropicMessages {
 
 function convertMessages(
   transformedMessages: Message[],
-  usesOAuth: boolean,
   cacheControl?: CacheControlEphemeral,
   allowEmptySignature = false,
   managedProvider?: string,
@@ -1470,7 +1366,7 @@ function convertMessages(
             type: "tool_removal",
             tool: {
               type: "tool_reference",
-              name: usesOAuth ? toClaudeCodeName(tool.name) : tool.name,
+              name: tool.name,
             },
           });
         }
@@ -1566,7 +1462,7 @@ function convertMessages(
           blocks.push({
             type: "tool_use",
             id: block.id,
-            name: usesOAuth ? toClaudeCodeName(block.name) : block.name,
+            name: block.name,
             input: block.arguments ?? {},
           });
         }
@@ -1712,7 +1608,6 @@ const isAnthropicStrictUnsupportedKeyword: UnsupportedStrictSchemaKeywordCheck =
 
 function convertTools(
   tools: Tool[],
-  usesOAuth: boolean,
   supportsEagerToolInputStreaming: boolean,
   supportsStrictTools: boolean,
   cacheControl?: CacheControlEphemeral,
@@ -1749,7 +1644,7 @@ function convertTools(
         : legacyInputSchema;
 
     return {
-      name: usesOAuth ? toClaudeCodeName(tool.name) : tool.name,
+      name: tool.name,
       description: tool.description,
       ...(supportsEagerToolInputStreaming ? { eager_input_streaming: true } : {}),
       ...(strict === true ? { strict: true } : {}),

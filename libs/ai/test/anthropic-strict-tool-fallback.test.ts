@@ -165,7 +165,7 @@ describe("Anthropic preferred strict tool fallback", () => {
         },
       },
       transcript,
-      { ...options, apiKey: "sk-ant-oat-test" },
+      { ...options, apiKey: "sk-ant-test" },
     ).result();
     expect(result.stopReason).toBe("stop");
     expect(payloads).toHaveLength(2);

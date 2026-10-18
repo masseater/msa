@@ -8,11 +8,7 @@ type StreamOptionsWithExtras = StreamOptions & Record<string, unknown>;
 import { resolveApiKey } from "./oauth.ts";
 
 // Resolve OAuth tokens at module level (async, runs before tests)
-const oauthTokens = await Promise.all([
-  resolveApiKey("anthropic-api"),
-  resolveApiKey("openai-codex"),
-]);
-const [anthropicOAuthToken, openaiCodexToken] = oauthTokens;
+const openaiCodexToken = await resolveApiKey("openai-codex");
 
 async function testTokensOnAbort<TApi extends Api>(
   llm: Model<TApi>,
@@ -114,18 +110,6 @@ describe("Token Statistics on Abort", () => {
   // =========================================================================
   // OAuth-based providers (credentials from ~/.msa/agent/oauth.json)
   // =========================================================================
-
-  describe("Anthropic OAuth Provider", () => {
-    const llm = getModel("anthropic-api", "claude-sonnet-4-6");
-
-    it.skipIf(!anthropicOAuthToken)(
-      "should include token stats when aborted mid-stream",
-      { retry: 3, timeout: 30000 },
-      async () => {
-        await testTokensOnAbort(llm, { apiKey: anthropicOAuthToken });
-      },
-    );
-  });
 
   describe("OpenAI Codex Provider", () => {
     it.skipIf(!openaiCodexToken)(

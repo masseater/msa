@@ -2,7 +2,6 @@ import type { KnownProvider, ProviderEnv } from "./types.ts";
 import { getProviderEnvValue } from "./utils/provider-env.ts";
 
 export const ANTHROPIC_AUTH_TOKEN_ENV = "ANTHROPIC_AUTH_TOKEN";
-export const ANTHROPIC_OAUTH_TOKEN_ENV = "ANTHROPIC_OAUTH_TOKEN";
 export const ANTHROPIC_API_KEY_ENV = "ANTHROPIC_API_KEY";
 export const ANTHROPIC_FEDERATION_RULE_ID_ENV = "ANTHROPIC_FEDERATION_RULE_ID";
 export const ANTHROPIC_ORGANIZATION_ID_ENV = "ANTHROPIC_ORGANIZATION_ID";
@@ -14,7 +13,7 @@ function getApiKeyEnvVars(provider: string): readonly string[] | undefined {
   // ANTHROPIC_AUTH_TOKEN participates in env discovery/status, but
   // getEnvApiKey() skips it because requests must pass it as Authorization: Bearer.
   if (provider === "anthropic-api") {
-    return [ANTHROPIC_AUTH_TOKEN_ENV, ANTHROPIC_OAUTH_TOKEN_ENV, ANTHROPIC_API_KEY_ENV];
+    return [ANTHROPIC_AUTH_TOKEN_ENV, ANTHROPIC_API_KEY_ENV];
   }
 
   const envMap: Record<string, string> = {

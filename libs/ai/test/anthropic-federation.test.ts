@@ -157,7 +157,6 @@ describe("Anthropic workload identity federation", () => {
     expect(mockState.constructorOpts?.["config"]).toEqual(expectedConfig);
     const headers = mockState.constructorOpts?.["defaultHeaders"] as Record<string, string | null>;
     expect(headers["Authorization"]).toBeUndefined();
-    expect(mockState.createParams?.["betas"] ?? []).not.toContain("oauth-2025-04-20");
   });
 
   it("threads authContext federation variables through Models", async () => {
