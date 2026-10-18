@@ -27,7 +27,7 @@ afterEach(() =>
   ),
 );
 
-const supervisorSetup = Effect.fn("supervisorSetup")(function* () {
+const supervisorSetupStep1 = Effect.fn("supervisorSetupStep1")(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const directory = yield* makeTempDir("msa-durable-supervisor-");
@@ -41,6 +41,11 @@ const supervisorSetup = Effect.fn("supervisorSetup")(function* () {
     fork: "initial",
     initial: () => ({}),
   });
+  return { runPromise, path, Children };
+});
+
+const supervisorSetup = Effect.fn("supervisorSetup")(function* () {
+  const { runPromise, path, Children } = yield* supervisorSetupStep1();
   const Supervisor = defineTask<{ parent: ConversationId }, { phase: "run" }, { answer: EntryId }>({
     name: "test.supervisor",
     version: 1,

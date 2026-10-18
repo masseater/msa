@@ -27,9 +27,8 @@ export function graphChild(gates: { readonly child: Promise<void>; readonly late
   });
 }
 
-export function family(gates: { readonly child: Promise<void>; readonly late: Promise<void> }) {
-  const Child = graphChild(gates);
-  const Parent = defineTask<null, ParentState, null>({
+function graphParent(Child: ReturnType<typeof graphChild>) {
+  return defineTask<null, ParentState, null>({
     name: "test.graph-parent",
     version: 1,
     initial: () => ({ phase: "spawn" }),
@@ -37,37 +36,28 @@ export function family(gates: { readonly child: Promise<void>; readonly late: Pr
       spawn: (task, runtime, ctx) =>
         Effect.runPromise(
           Effect.gen(function* () {
-            const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
             const ownership = { kind: "task", taskId: task.id } as const;
             yield* awaited(
               runtime.commit(
                 (tx) =>
-                  runPromise(
-                    Effect.gen(function* () {
-                      yield* awaited(tx.createConversation({ ownership }));
-                      yield* awaited(tx.createConversation({ ownership }));
-                      return undefined;
-                    }),
-                  ),
+                  tx
+                    .createConversation({ ownership })
+                    .then(() => tx.createConversation({ ownership }))
+                    .then(() => undefined),
                 ctx,
               ),
             );
             yield* awaited(
               runtime.commit(
                 (tx) =>
-                  runPromise(
-                    Effect.gen(function* () {
-                      const child = yield* awaited(
-                        tx.createTask(Child, { late: false }, { ownership }),
-                      );
-                      return {
+                  tx.createTask(Child, { late: false }, { ownership }).then(
+                    (child) =>
+                      ({
                         status: "waiting",
                         checkpoint: { phase: "join", child },
                         on: [child],
                         policy: "allSettled",
-                      };
-                    }),
+                      }) as const,
                   ),
                 ctx,
               ),
@@ -75,38 +65,22 @@ export function family(gates: { readonly child: Promise<void>; readonly late: Pr
           }),
         ),
       join: (task, runtime, ctx) =>
-        Effect.runPromise(
-          Effect.gen(function* () {
-            const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
-            yield* awaited(
-              runtime.commit(
-                (tx) =>
-                  runPromise(
-                    Effect.gen(function* () {
-                      yield* awaited(
-                        tx.createTask(
-                          Child,
-                          { late: true },
-                          { ownership: { kind: "task", taskId: task.id } },
-                        ),
-                      );
-                      return { status: "running", checkpoint: { phase: "finish" } };
-                    }),
-                  ),
-                ctx,
-              ),
-            );
-          }),
+        runtime.commit(
+          (tx) =>
+            tx
+              .createTask(Child, { late: true }, { ownership: { kind: "task", taskId: task.id } })
+              .then(() => ({ status: "running", checkpoint: { phase: "finish" } }) as const),
+          ctx,
         ),
-      finish: (_task, runtime, ctx) =>
-        Effect.runPromise(
-          Effect.asVoid(Effect.suspend(() => awaited(runtime.commit(() => completed(null), ctx)))),
-        ),
+      finish: (_task, runtime, ctx) => runtime.commit(() => completed(null), ctx),
     },
     abort: () => Promise.resolve(),
   });
-  return { Parent, Child };
+}
+
+export function family(gates: { readonly child: Promise<void>; readonly late: Promise<void> }) {
+  const Child = graphChild(gates);
+  return { Parent: graphParent(Child), Child };
 }
 
 export function statuses(graph: TaskGraph): Record<string, string> {

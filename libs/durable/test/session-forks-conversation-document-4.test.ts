@@ -1,4 +1,4 @@
-import { type ConversationId, defineDoc, type EntryId } from "@msa/durable";
+import { type ConversationId, defineDoc } from "@msa/durable";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -34,15 +34,15 @@ const rollsEveryCopiedStep1 = Effect.gen(function* () {
   const { Copied, toggle, Failure } = failingCheckpointDocs();
   const { session, storage, publications } = openTestSession();
   const parentId = yield* awaited(createConversation(session));
-  let forkAt!: EntryId;
-  yield* awaited(
+  const forkAt = yield* awaited(
     session.commit(
       (tx) =>
         runPromise(
           Effect.gen(function* () {
-            forkAt = (yield* awaited(tx.appendEntry(parentId, { kind: "point" }))).id;
+            const forkAt = (yield* awaited(tx.appendEntry(parentId, { kind: "point" }))).id;
             yield* awaited(tx.doc(Copied, parentId));
             yield* awaited(tx.doc(Failure));
+            return forkAt;
           }),
         ),
       context,
@@ -118,14 +118,14 @@ const failsSessionRejectedStep1 = Effect.gen(function* () {
 
 const failsSessionRejected = Effect.gen(function* () {
   const { runPromise, Doc, session, storage, parentId } = yield* failsSessionRejectedStep1;
-  let forkAt!: EntryId;
-  yield* awaited(
+  const forkAt = yield* awaited(
     session.commit(
       (tx) =>
         runPromise(
           Effect.gen(function* () {
-            forkAt = (yield* awaited(tx.appendEntry(parentId, { kind: "point" }))).id;
+            const forkAt = (yield* awaited(tx.appendEntry(parentId, { kind: "point" }))).id;
             yield* awaited(tx.doc(Doc, parentId));
+            return forkAt;
           }),
         ),
       context,
@@ -176,14 +176,14 @@ const retiresCopiedDocumentStep1 = Effect.gen(function* () {
   });
   const { session, storage } = openTestSession();
   const parentId = yield* awaited(createConversation(session));
-  let forkAt!: EntryId;
-  yield* awaited(
+  const forkAt = yield* awaited(
     session.commit(
       (tx) =>
         runPromise(
           Effect.gen(function* () {
-            forkAt = (yield* awaited(tx.appendEntry(parentId, { kind: "point" }))).id;
+            const forkAt = (yield* awaited(tx.appendEntry(parentId, { kind: "point" }))).id;
             (yield* awaited(tx.doc(Doc, parentId))).value = "copied";
+            return forkAt;
           }),
         ),
       context,

@@ -52,21 +52,21 @@ function storedVersionDocs() {
   return { V1, fork, V3, session, storage };
 }
 
-const selectsEntryOwning = Effect.gen(function* () {
+const selectsEntryOwningStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const { AsOf, Current } = ancestorDocs();
   const { session } = openTestSession();
   const rootId = yield* awaited(createConversation(session));
-  let inherited!: EntryId;
-  yield* awaited(
+  const inherited = yield* awaited(
     session.commit(
       (tx) =>
         runPromise(
           Effect.gen(function* () {
-            inherited = (yield* awaited(tx.appendEntry(rootId, { kind: "root" }))).id;
+            const inherited = (yield* awaited(tx.appendEntry(rootId, { kind: "root" }))).id;
             (yield* awaited(tx.doc(AsOf, rootId))).value = "root-at-entry";
             (yield* awaited(tx.doc(Current, rootId))).value = "root-current";
+            return inherited;
           }),
         ),
       context,
@@ -78,21 +78,25 @@ const selectsEntryOwning = Effect.gen(function* () {
       context,
     ),
   );
-  let parentEntry!: EntryId;
-  yield* awaited(
+  const parentEntry = yield* awaited(
     session.commit(
       (tx) =>
         runPromise(
           Effect.gen(function* () {
-            parentEntry = (yield* awaited(tx.appendEntry(parent.id, { kind: "parent" }))).id;
+            const parentEntry = (yield* awaited(tx.appendEntry(parent.id, { kind: "parent" }))).id;
             (yield* awaited(tx.doc(AsOf, parent.id))).value = "parent-at-own-entry";
             (yield* awaited(tx.doc(Current, parent.id))).value = "parent-current";
+            return parentEntry;
           }),
         ),
       context,
     ),
   );
+  return { AsOf, Current, session, inherited, parent, parentEntry };
+});
 
+const selectsEntryOwning = Effect.gen(function* () {
+  const { AsOf, Current, session, inherited, parent, parentEntry } = yield* selectsEntryOwningStep1;
   const inheritedFork = yield* awaited(
     session.commit(
       (tx) => tx.forkConversation(parent.id, inherited, { ownership: { kind: "ownerless" } }),

@@ -94,9 +94,8 @@ function probeRegistry() {
   return { registry, probe, legacy };
 }
 
-const cacheReadAfterToolChange = Effect.fn("cacheReadAfterToolChange")(function* (
+const cacheReadAfterToolChangeStep1 = Effect.fn("cacheReadAfterToolChangeStep1")(function* (
   token: string,
-  legacyOrder: boolean,
 ) {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
@@ -109,6 +108,14 @@ const cacheReadAfterToolChange = Effect.fn("cacheReadAfterToolChange")(function*
       context,
     ),
   );
+  return { runPromise, probe, legacy, harness };
+});
+
+const cacheReadAfterToolChange = Effect.fn("cacheReadAfterToolChange")(function* (
+  token: string,
+  legacyOrder: boolean,
+) {
+  const { runPromise, probe, legacy, harness } = yield* cacheReadAfterToolChangeStep1(token);
   return yield* Effect.gen(function* () {
     const root = yield* awaited(
       harness.root(context, {

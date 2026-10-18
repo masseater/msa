@@ -166,7 +166,7 @@ registerStorageConformance({ describe, expect, it }, "SqliteStorage across reope
   ),
 );
 
-const replacedDocument = Effect.fn("replacedDocument")(function* () {
+const replacedDocumentStep1 = Effect.fn("replacedDocumentStep1")(function* () {
   const { storage, path } = yield* createSqliteStorage();
   yield* awaited(createRoot(storage));
   const id = yield* awaited(storage.mintId<DocumentId>());
@@ -198,6 +198,11 @@ const replacedDocument = Effect.fn("replacedDocument")(function* () {
       context,
     ),
   );
+  return { storage, path, id };
+});
+
+const replacedDocument = Effect.fn("replacedDocument")(function* () {
+  const { storage, path, id } = yield* replacedDocumentStep1();
   yield* awaited(
     storage.commit(
       [

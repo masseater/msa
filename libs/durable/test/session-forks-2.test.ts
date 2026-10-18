@@ -19,15 +19,15 @@ const usesFinalDocument = Effect.gen(function* () {
   const { session } = openTestSession();
   const parentId = yield* awaited(createConversation(session));
   let forkAt!: EntryId;
-  let excluded!: EntryId;
-  yield* awaited(
+  const excluded = yield* awaited(
     session.commit(
       (tx) =>
         runPromise(
           Effect.gen(function* () {
             forkAt = (yield* awaited(tx.appendEntry(parentId, { kind: "included" }))).id;
             (yield* awaited(tx.doc(Doc, parentId))).value = "final-state-of-commit";
-            excluded = (yield* awaited(tx.appendEntry(parentId, { kind: "excluded" }))).id;
+            const excluded = (yield* awaited(tx.appendEntry(parentId, { kind: "excluded" }))).id;
+            return excluded;
           }),
         ),
       context,

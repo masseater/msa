@@ -13,7 +13,7 @@ function unloadDocuments(harness: Harness): Promise<void> {
   return (harness as unknown as SessionImpl).unloadDocuments();
 }
 
-const observedNotes = Effect.fn("observedNotes")(function* () {
+const observedNotesStep1 = Effect.fn("observedNotesStep1")(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const Notes = defineDoc<{ text: string }>({
@@ -43,6 +43,35 @@ const observedNotes = Effect.fn("observedNotes")(function* () {
   const graphState = yield* awaited(harness.taskGraph(context));
   const graphWatch = yield* awaited(harness.watchTaskGraph(context));
   const frames: string[] = [];
+  return {
+    Notes,
+    storage,
+    harness,
+    root,
+    docState,
+    docWatch,
+    viewState,
+    viewWatch,
+    graphState,
+    graphWatch,
+    frames,
+  };
+});
+
+const observedNotes = Effect.fn("observedNotes")(function* () {
+  const {
+    Notes,
+    storage,
+    harness,
+    root,
+    docState,
+    docWatch,
+    viewState,
+    viewWatch,
+    graphState,
+    graphWatch,
+    frames,
+  } = yield* observedNotesStep1();
   graphState.subscribe((_value, _context, delivery) => {
     if (delivery.kind === "update") frames.push("graphState");
   });

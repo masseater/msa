@@ -2,7 +2,6 @@ import { fauxAssistantMessage, fauxText, fauxToolCall, Type } from "@msa/ai";
 import {
   type ConversationHandle,
   type ConversationId,
-  configure,
   defineTool,
   type Submission,
   type TaskId,
@@ -13,11 +12,12 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import {
   directories,
-  open,
   gates,
+  open,
+  openHarness,
   ownedChild,
   runs,
-  openHarness,
+  spawnFauxChild,
 } from "./harness-ownership-support.ts";
 import {
   chatSetup,
@@ -95,29 +95,7 @@ function delegateThroughHandle() {
       execute: (_args, api, callContext) =>
         Effect.runPromise(
           Effect.gen(function* () {
-            const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
-            const child = yield* awaited(
-              api.commit(
-                (tx) =>
-                  runPromise(
-                    Effect.gen(function* () {
-                      const created = yield* awaited(
-                        tx.createConversation({
-                          ownership: { kind: "task", taskId: api.taskId },
-                        }),
-                      );
-                      yield* awaited(
-                        configure(tx, created.id, {
-                          model: { provider: "faux", modelId: "faux-1" },
-                        }),
-                      );
-                      return created.id;
-                    }),
-                  ),
-                callContext,
-              ),
-            );
+            const child = yield* spawnFauxChild(api, callContext);
             got.missing = yield* awaited(api.conversation(99_999 as ConversationId, callContext));
             got.handle = (yield* awaited(api.conversation(child, callContext)))!;
             got.submission = yield* awaited(

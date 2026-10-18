@@ -1,10 +1,8 @@
-import type { Draft } from "@msa/chord";
 import {
   configure,
   defineDoc,
   type HarnessSettings,
   LiveDoc,
-  type LiveState,
   type TaskId,
   type Tx,
 } from "@msa/durable";
@@ -277,13 +275,13 @@ function taskSequencesImpl(
         Effect.gen(function* () {
           const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-          let escaped: Draft<LiveState> | undefined;
-          yield* awaited(
+          const escaped = yield* awaited(
             session.commit(
               (tx) =>
                 runPromise(
                   Effect.gen(function* () {
-                    escaped = yield* awaited(tx.doc(LiveDoc, conversationId));
+                    const escaped = yield* awaited(tx.doc(LiveDoc, conversationId));
+                    return escaped;
                   }),
                 ),
               context,

@@ -1,3 +1,4 @@
+import type { Context } from "@msa/chord";
 import { withCancel } from "@msa/chord/context";
 import { defineTask, type TaskRuntime } from "@msa/durable";
 import { Effect } from "effect";
@@ -9,22 +10,28 @@ import { start, oneStep, openRoot } from "./harness-tasks-support.ts";
 import { context } from "./session-support.ts";
 import { completed, deferred } from "./task-support.ts";
 
+type PingHooks = { ping(): void };
+type PingRuntime = TaskRuntime<null, { phase: string }, null, PingHooks>;
+type Seen = { phase: string; pings: string[]; thinking: string; same?: boolean };
+
+const observer = (pings: string[], seen: Seen[]) =>
+  Effect.fn("observe")(function* (runtime: PingRuntime, ctx: Context, phase: string) {
+    const agent = yield* awaited(runtime.agent(ctx));
+    pings.length = 0;
+    yield* awaited(runtime.hooks.each("ping", (handler) => handler()));
+    const entry: Seen = { phase, pings: [...pings], thinking: agent.thinkingLevel };
+    seen.push(entry);
+    return { agent, entry };
+  });
+
 function pingPhases() {
-  type PingHooks = { ping(): void };
   const pings: string[] = [];
-  const seen: { phase: string; pings: string[]; thinking: string; same?: boolean }[] = [];
+  const seen: Seen[] = [];
   const beforeUse = deferred();
   const afterUse = deferred();
   const waitingBeforeUse = deferred();
   const waitingAfterUse = deferred();
-  const ping = (runtime: TaskRuntime<null, { phase: string }, null, PingHooks>) =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        pings.length = 0;
-        yield* awaited(runtime.hooks.each("ping", (handler) => handler()));
-        return [...pings];
-      }),
-    );
+  const observe = observer(pings, seen);
   const Phases = defineTask<null, { phase: "a" } | { phase: "b" }, null, PingHooks>({
     name: "test.agent-phases",
     version: 1,
@@ -35,21 +42,11 @@ function pingPhases() {
           Effect.gen(function* () {
             waitingBeforeUse.resolve();
             yield* awaited(beforeUse.promise);
-            const first = yield* awaited(runtime.agent(ctx));
-            seen.push({
-              phase: "a",
-              pings: yield* awaited(ping(runtime)),
-              thinking: first.thinkingLevel,
-            });
+            const first = yield* observe(runtime, ctx, "a");
             waitingAfterUse.resolve();
             yield* awaited(afterUse.promise);
-            const second = yield* awaited(runtime.agent(ctx));
-            seen.push({
-              phase: "a",
-              pings: yield* awaited(ping(runtime)),
-              thinking: second.thinkingLevel,
-              same: second === first,
-            });
+            const second = yield* observe(runtime, ctx, "a");
+            second.entry.same = second.agent === first.agent;
             yield* awaited(
               runtime.commit(() => ({ status: "running", checkpoint: { phase: "b" } }), ctx),
             );
@@ -58,12 +55,7 @@ function pingPhases() {
       b: (_task, runtime, ctx) =>
         Effect.runPromise(
           Effect.gen(function* () {
-            const agent = yield* awaited(runtime.agent(ctx));
-            seen.push({
-              phase: "b",
-              pings: yield* awaited(ping(runtime)),
-              thinking: agent.thinkingLevel,
-            });
+            yield* observe(runtime, ctx, "b");
             yield* awaited(runtime.commit(() => completed(null), ctx));
           }),
         ),

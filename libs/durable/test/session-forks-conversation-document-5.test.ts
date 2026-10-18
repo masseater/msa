@@ -41,20 +41,20 @@ function migratingDocs() {
   return { V1, calls, V2 };
 }
 
-const coalescesTypedMigration = Effect.gen(function* () {
+const coalescesTypedMigrationStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const { V1, calls, V2 } = migratingDocs();
   const { session, storage, publications } = openTestSession();
   const parentId = yield* awaited(createConversation(session));
-  let forkAt!: EntryId;
-  yield* awaited(
+  const forkAt = yield* awaited(
     session.commit(
       (tx) =>
         runPromise(
           Effect.gen(function* () {
-            forkAt = (yield* awaited(tx.appendEntry(parentId, { kind: "point" }))).id;
+            const forkAt = (yield* awaited(tx.appendEntry(parentId, { kind: "point" }))).id;
             yield* awaited(tx.doc(V1, parentId));
+            return forkAt;
           }),
         ),
       context,
@@ -62,6 +62,33 @@ const coalescesTypedMigration = Effect.gen(function* () {
   );
 
   const documentReads = storage.documentReadCount;
+  return {
+    runPromise,
+    V1,
+    calls,
+    V2,
+    session,
+    storage,
+    publications,
+    parentId,
+    forkAt,
+    documentReads,
+  };
+});
+
+const coalescesTypedMigrationStep2 = Effect.gen(function* () {
+  const {
+    runPromise,
+    V1,
+    calls,
+    V2,
+    session,
+    storage,
+    publications,
+    parentId,
+    forkAt,
+    documentReads,
+  } = yield* coalescesTypedMigrationStep1;
   const child = yield* awaited(
     session.commit(
       (tx) =>
@@ -91,6 +118,11 @@ const coalescesTypedMigration = Effect.gen(function* () {
   });
   expect(calls.checkpoints).toBe(0);
   expect(documentChanges(publications.at(-1)!)).toMatchObject([{ version: 2 }]);
+  return { V1, V2, session, storage, parentId, child };
+});
+
+const coalescesTypedMigration = Effect.gen(function* () {
+  const { V1, V2, session, storage, parentId, child } = yield* coalescesTypedMigrationStep2;
   expect(yield* awaited(session.snapshot(V2, child.id, context))).toEqual({
     count: 9,
     migrated: true,
@@ -201,14 +233,14 @@ const rejectsInvisibleFork = Effect.gen(function* () {
   const { session, storage, publications } = openTestSession();
   const rootId = yield* awaited(createConversation(session));
   let visible!: EntryId;
-  let hidden!: EntryId;
-  yield* awaited(
+  const hidden = yield* awaited(
     session.commit(
       (tx) =>
         runPromise(
           Effect.gen(function* () {
             visible = (yield* awaited(tx.appendEntry(rootId, { kind: "visible" }))).id;
-            hidden = (yield* awaited(tx.appendEntry(rootId, { kind: "hidden" }))).id;
+            const hidden = (yield* awaited(tx.appendEntry(rootId, { kind: "hidden" }))).id;
+            return hidden;
           }),
         ),
       context,

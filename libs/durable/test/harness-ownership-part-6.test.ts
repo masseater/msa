@@ -1,10 +1,10 @@
 import { fauxAssistantMessage, fauxText, fauxToolCall, Type } from "@msa/ai";
-import { type ConversationId, configure, defineTool, LiveDoc, type TaskId } from "@msa/durable";
+import { type ConversationId, defineTool, LiveDoc, type TaskId } from "@msa/durable";
 import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { directories, gates, runs, gated } from "./harness-ownership-support.ts";
+import { directories, gated, gates, runs, spawnFauxChild } from "./harness-ownership-support.ts";
 import {
   chatSetup,
   openChat,
@@ -89,29 +89,7 @@ function delegateToGatedChild() {
       execute: (_args, api, callContext) =>
         Effect.runPromise(
           Effect.gen(function* () {
-            const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
-            spawned.child = yield* awaited(
-              api.commit(
-                (tx) =>
-                  runPromise(
-                    Effect.gen(function* () {
-                      const created = yield* awaited(
-                        tx.createConversation({
-                          ownership: { kind: "task", taskId: api.taskId },
-                        }),
-                      );
-                      yield* awaited(
-                        configure(tx, created.id, {
-                          model: { provider: "faux", modelId: "faux-1" },
-                        }),
-                      );
-                      return created.id;
-                    }),
-                  ),
-                callContext,
-              ),
-            );
+            spawned.child = yield* spawnFauxChild(api, callContext);
             const submission = yield* awaited(
               (yield* awaited(api.conversation(spawned.child, callContext)))!.submit(
                 { type: "input", content: "child task" },

@@ -52,7 +52,7 @@ const collectEnds = Effect.fn("collectEnds")(function* (
   return { ends, stop: () => stream.stop() };
 });
 
-const replayUnsafeBatch = Effect.fn("replayUnsafeBatch")(function* () {
+const replayUnsafeBatchStep1 = Effect.fn("replayUnsafeBatchStep1")(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const path = yield* sqlitePath();
@@ -91,6 +91,11 @@ const replayUnsafeBatch = Effect.fn("replayUnsafeBatch")(function* () {
       return Promise.resolve(aborted(hookContext.abortSignal!));
     },
   });
+  return { runPromise, path, setup, runs, running, gated };
+});
+
+const replayUnsafeBatch = Effect.fn("replayUnsafeBatch")(function* () {
+  const { runPromise, path, setup, runs, running, gated } = yield* replayUnsafeBatchStep1();
   addTool(
     setup.registry,
     tool("batch", (_args, api, callContext) =>

@@ -30,7 +30,7 @@ import {
   deferred,
 } from "./support.ts";
 
-const liveChangeSequence = Effect.fn("liveChangeSequence")(function* () {
+const liveChangeSequenceStep1 = Effect.fn("liveChangeSequenceStep1")(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const { harness, root } = yield* openChat(new MemoryStorage(), chatSetup());
@@ -68,6 +68,11 @@ const liveChangeSequence = Effect.fn("liveChangeSequence")(function* () {
       live.generation!.deferred!.pollAt = 2;
     }),
   );
+  return { harness, root, stream, batches, change, partial };
+});
+
+const liveChangeSequence = Effect.fn("liveChangeSequence")(function* () {
+  const { harness, root, stream, batches, change, partial } = yield* liveChangeSequenceStep1();
   yield* awaited(
     change((live) => {
       live.tools = [

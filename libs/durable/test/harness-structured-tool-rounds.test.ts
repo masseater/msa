@@ -55,7 +55,7 @@ afterEach(() =>
   ),
 );
 
-const faultedGenerationSetup = Effect.fn("faultedGenerationSetup")(function* () {
+const faultedGenerationSetupStep1 = Effect.fn("faultedGenerationSetupStep1")(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const base = chatSetup();
@@ -95,6 +95,11 @@ const faultedGenerationSetup = Effect.fn("faultedGenerationSetup")(function* () 
       ),
   });
   const failure = new Error("disk gone");
+  return { setup, faulted, failure };
+});
+
+const faultedGenerationSetup = Effect.fn("faultedGenerationSetup")(function* () {
+  const { setup, faulted, failure } = yield* faultedGenerationSetupStep1();
   class Failing extends ControlledStorage {
     override commit(
       writes: Parameters<MemoryStorage["commit"]>[0],

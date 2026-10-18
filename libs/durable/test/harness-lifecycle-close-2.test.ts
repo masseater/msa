@@ -1,15 +1,14 @@
 import { defineDoc, type TaskId } from "@msa/durable";
-import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { awaited } from "./effect-support.ts";
+import { paused } from "./harness-lifecycle-close-2-cases.ts";
 import { start, oneStep } from "./harness-lifecycle-support.ts";
-import { addTask } from "./harness-support.ts";
 import { ControlledStorage, context, flush } from "./session-support.ts";
 import { eventually, openTasks } from "./task-support.ts";
 
-const closingWithQueuedWork = Effect.fn("closingWithQueuedWork")(function* () {
+const closingWithQueuedWorkStep1 = Effect.fn("closingWithQueuedWorkStep1")(function* () {
   const storage = new ControlledStorage();
   const { harness } = yield* openTasks(storage, []);
   const root = yield* awaited(harness.root(context));
@@ -28,6 +27,12 @@ const closingWithQueuedWork = Effect.fn("closingWithQueuedWork")(function* () {
   yield* awaited(held.entered);
   const queuedInspect = harness.inspect(context);
   const closing = harness.close(context);
+  return { harness, root, entry, submission, held, blocking, queuedInspect, closing };
+});
+
+const closingWithQueuedWork = Effect.fn("closingWithQueuedWork")(function* () {
+  const { harness, root, entry, submission, held, blocking, queuedInspect, closing } =
+    yield* closingWithQueuedWorkStep1();
   const operations: Record<string, () => Promise<unknown>> = {
     submit: () => root.submit({ type: "input", content: "x" }, context),
     agent: () => root.agent(context),
@@ -164,34 +169,6 @@ describe("Harness close", () => {
     Effect.runPromise(completesReadsQueued));
 });
 
-const paused = Effect.fn("paused")(function* () {
-  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
-  let ran = false;
-  const Marker = oneStep("test.marker", () => {
-    ran = true;
-
-    return Promise.resolve();
-  });
-  const { harness } = yield* openTasks(new MemoryStorage(), [Marker]);
-  const root = yield* awaited(harness.root(context));
-  const id = yield* awaited(start(root, Marker, true));
-  const submissionId = yield* awaited(
-    harness.commit(
-      (tx) =>
-        runPromise(
-          Effect.gen(function* () {
-            return (yield* awaited(
-              tx.createSubmission({ conversationId: root.id, type: "write", status: "queued" }),
-            )).id;
-          }),
-        ),
-      context,
-    ),
-  );
-  return { harness, root, id, submissionId, ran: () => ran };
-});
-
 const neverSchedulesRead = Effect.gen(function* () {
   const { harness, root, id, submissionId, ran } = yield* paused();
   const Notes = defineDoc<{ text: string }>({
@@ -263,36 +240,4 @@ const schedulesEveryProgress = Effect.gen(function* () {
 
 describe("scheduling on a paused Harness", () => {
   it("schedules from every progress call", () => Effect.runPromise(schedulesEveryProgress));
-});
-
-const runsWhatRegistry = Effect.gen(function* () {
-  const log: string[] = [];
-  const define = (label: string) =>
-    oneStep("test.late-definition", () => {
-      log.push(label);
-
-      return Promise.resolve();
-    });
-  const storage = new MemoryStorage();
-  const first = yield* openTasks(storage, []);
-  const root = yield* awaited(first.harness.root(context));
-  const missing = yield* awaited(start(root, define("unused")));
-  expect((yield* awaited(first.harness.inspect(context))).tasks).toMatchObject([
-    { state: { kind: "blocked", reason: "missing_task" } },
-  ]);
-  const installed = addTask(first.registry, define("v1"));
-  expect((yield* awaited(first.harness.inspect(context))).tasks).toMatchObject([
-    { state: { kind: "ready" } },
-  ]);
-  installed.dispose();
-  addTask(first.registry, define("v2"));
-  first.harness.resume();
-  yield* awaited(first.harness.waitForTask(missing, context));
-  expect(log).toEqual(["v2"]);
-  yield* awaited(first.harness.close(context));
-});
-
-describe("registry changes before resume", () => {
-  it("runs what the registry holds at resume: a definition installed or replaced after open", () =>
-    Effect.runPromise(runsWhatRegistry));
 });

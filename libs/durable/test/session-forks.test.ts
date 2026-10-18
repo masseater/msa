@@ -1,4 +1,4 @@
-import { type ConversationId, defineDoc, defineDocFamily, type EntryId } from "@msa/durable";
+import { type ConversationId, defineDoc, defineDocFamily } from "@msa/durable";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -85,19 +85,18 @@ function forkPolicyDocs() {
   return { AsOf, Current, Initial, AsOfFamily, CurrentFamily };
 }
 
-const forkWithEveryPolicy = Effect.fn("forkWithEveryPolicy")(function* () {
+const forkWithEveryPolicyStep1 = Effect.fn("forkWithEveryPolicyStep1")(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const { AsOf, Current, Initial, AsOfFamily, CurrentFamily } = forkPolicyDocs();
   const { session, storage, publications } = openTestSession();
   const parentId = yield* awaited(createConversation(session));
-  let forkAt!: EntryId;
-  yield* awaited(
+  const forkAt = yield* awaited(
     session.commit(
       (tx) =>
         runPromise(
           Effect.gen(function* () {
-            forkAt = (yield* awaited(tx.appendEntry(parentId, { kind: "fork-point" }))).id;
+            const forkAt = (yield* awaited(tx.appendEntry(parentId, { kind: "fork-point" }))).id;
             (yield* awaited(tx.doc(AsOf, parentId))).value = "as-at-fork";
             (yield* awaited(tx.doc(Current, parentId))).value = "current-at-fork";
             (yield* awaited(tx.doc(Initial, parentId))).value = "parent-only";
@@ -105,11 +104,41 @@ const forkWithEveryPolicy = Effect.fn("forkWithEveryPolicy")(function* () {
             (yield* awaited(tx.doc(AsOfFamily, parentId, "b", "unused"))).value = "family-as-b";
             (yield* awaited(tx.doc(CurrentFamily, parentId, "a", "unused"))).value =
               "family-current-a";
+            return forkAt;
           }),
         ),
       context,
     ),
   );
+  return {
+    runPromise,
+    AsOf,
+    Current,
+    Initial,
+    AsOfFamily,
+    CurrentFamily,
+    session,
+    storage,
+    publications,
+    parentId,
+    forkAt,
+  };
+});
+
+const forkWithEveryPolicyStep2 = Effect.fn("forkWithEveryPolicyStep2")(function* () {
+  const {
+    runPromise,
+    AsOf,
+    Current,
+    Initial,
+    AsOfFamily,
+    CurrentFamily,
+    session,
+    storage,
+    publications,
+    parentId,
+    forkAt,
+  } = yield* forkWithEveryPolicyStep1();
   yield* awaited(
     session.commit(
       (tx) =>
@@ -127,7 +156,35 @@ const forkWithEveryPolicy = Effect.fn("forkWithEveryPolicy")(function* () {
   );
   yield* flush;
   const documentReads = storage.documentReadCount;
+  return {
+    AsOf,
+    Current,
+    Initial,
+    AsOfFamily,
+    CurrentFamily,
+    session,
+    storage,
+    publications,
+    parentId,
+    forkAt,
+    documentReads,
+  };
+});
 
+const forkWithEveryPolicy = Effect.fn("forkWithEveryPolicy")(function* () {
+  const {
+    AsOf,
+    Current,
+    Initial,
+    AsOfFamily,
+    CurrentFamily,
+    session,
+    storage,
+    publications,
+    parentId,
+    forkAt,
+    documentReads,
+  } = yield* forkWithEveryPolicyStep2();
   const child = yield* awaited(
     session.commit(
       (tx) => tx.forkConversation(parentId, forkAt, { ownership: { kind: "ownerless" } }),

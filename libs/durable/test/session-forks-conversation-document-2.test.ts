@@ -1,4 +1,4 @@
-import { defineDoc, type EntryId } from "@msa/durable";
+import { defineDoc } from "@msa/durable";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -52,14 +52,14 @@ const rejectsDuplicateCurrentStep1 = Effect.gen(function* () {
 const rejectsDuplicateCurrent = Effect.gen(function* () {
   const { runPromise, AsOf, Current, session, storage, parentId } =
     yield* rejectsDuplicateCurrentStep1;
-  let oldAt!: EntryId;
-  yield* awaited(
+  const oldAt = yield* awaited(
     session.commit(
       (tx) =>
         runPromise(
           Effect.gen(function* () {
-            oldAt = (yield* awaited(tx.appendEntry(parentId, { kind: "old" }))).id;
+            const oldAt = (yield* awaited(tx.appendEntry(parentId, { kind: "old" }))).id;
             yield* awaited(tx.doc(AsOf, parentId));
+            return oldAt;
           }),
         ),
       context,
@@ -88,21 +88,21 @@ describe("Session conversation document forks", () => {
     Effect.runPromise(rejectsDuplicateCurrent));
 });
 
-const rejectsCurrentSource = Effect.gen(function* () {
+const rejectsCurrentSourceStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const { Current, AsOf } = sourceWriteDocs();
   const { session, storage } = openTestSession();
   const parentId = yield* awaited(createConversation(session));
-  let forkAt!: EntryId;
-  yield* awaited(
+  const forkAt = yield* awaited(
     session.commit(
       (tx) =>
         runPromise(
           Effect.gen(function* () {
-            forkAt = (yield* awaited(tx.appendEntry(parentId, { kind: "point" }))).id;
+            const forkAt = (yield* awaited(tx.appendEntry(parentId, { kind: "point" }))).id;
             yield* awaited(tx.doc(Current, parentId));
             yield* awaited(tx.doc(AsOf, parentId));
+            return forkAt;
           }),
         ),
       context,
@@ -125,6 +125,12 @@ const rejectsCurrentSource = Effect.gen(function* () {
       ),
     ).rejects.toThrow("Cannot change fork source document"),
   );
+  return { runPromise, Current, AsOf, session, storage, parentId, forkAt, commits };
+});
+
+const rejectsCurrentSource = Effect.gen(function* () {
+  const { runPromise, Current, AsOf, session, storage, parentId, forkAt, commits } =
+    yield* rejectsCurrentSourceStep1;
   yield* awaited(
     expect(
       session.commit(

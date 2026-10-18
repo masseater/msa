@@ -102,7 +102,7 @@ function registeredTasks(
   ];
 }
 
-const openInspected = Effect.fn("openInspected")(function* (gate: Deferred<void>) {
+const openInspectedStep1 = Effect.fn("openInspectedStep1")(function* (gate: Deferred<void>) {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const Gate = task("test.gate", 1, { gate: gate.promise });
@@ -114,6 +114,12 @@ const openInspected = Effect.fn("openInspected")(function* (gate: Deferred<void>
     registeredTasks(Gate, Dependent, counts),
   );
   const root = yield* awaited(harness.root(context));
+  return { runPromise, Gate, gated, Dependent, counts, harness, root };
+});
+
+const openInspected = Effect.fn("openInspected")(function* (gate: Deferred<void>) {
+  const { runPromise, Gate, gated, Dependent, counts, harness, root } =
+    yield* openInspectedStep1(gate);
   const ids = yield* awaited(
     root.commit(
       (tx) =>

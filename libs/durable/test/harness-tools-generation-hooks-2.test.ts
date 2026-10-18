@@ -7,55 +7,35 @@ import { NodeExecutionEnv } from "../src/env/node.ts";
 import { resultText, results, DONE, calls, run, tool } from "./harness-tools-support.ts";
 import { chatSetup, openChat, awaited, addTask, addTool, context } from "./support.ts";
 
+const child = defineTask<{ n: number }, { phase: "run" }, number>({
+  name: "test.child",
+  version: 1,
+  initial: () => ({ phase: "run" }),
+  phases: {
+    run: (task, runtime, callContext) =>
+      runtime.commit(
+        () => ({ status: "terminal", outcome: { status: "completed", result: task.input.n * 2 } }),
+        callContext,
+      ),
+  },
+  abort: () => Promise.resolve(),
+});
+
 function probingToolSetup() {
   const setup = chatSetup();
-  const child = defineTask<{ n: number }, { phase: "run" }, number>({
-    name: "test.child",
-    version: 1,
-    initial: () => ({ phase: "run" }),
-    phases: {
-      run: (task, runtime, callContext) =>
-        Effect.runPromise(
-          Effect.asVoid(
-            Effect.suspend(() =>
-              awaited(
-                runtime.commit(
-                  () => ({
-                    status: "terminal",
-                    outcome: { status: "completed", result: task.input.n * 2 },
-                  }),
-                  callContext,
-                ),
-              ),
-            ),
-          ),
-        ),
-    },
-    abort: () => Promise.resolve(),
-  });
   addTask(setup.registry, child);
   const seen: unknown[] = [];
   const probe = tool("probe", (_args, api) =>
     Effect.runPromise(
       Effect.gen(function* () {
-        const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
         seen.push(api.env?.cwd);
         seen.push((yield* awaited(api.agent(context))).tools.map((each) => each.name));
         seen.push(api.registry.extension("tool:probe") !== undefined);
         const entry = yield* awaited(
           api.commit(
             (tx) =>
-              runPromise(
-                Effect.gen(function* () {
-                  yield* awaited(configure(tx, api.conversationId, { cwd: "/" }));
-                  return yield* awaited(
-                    tx.appendEntry(api.conversationId, {
-                      kind: "test.note",
-                      data: api.callId,
-                    }),
-                  );
-                }),
+              configure(tx, api.conversationId, { cwd: "/" }).then(() =>
+                tx.appendEntry(api.conversationId, { kind: "test.note", data: api.callId }),
               ),
             context,
           ),

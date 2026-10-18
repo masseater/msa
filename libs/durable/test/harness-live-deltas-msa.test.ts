@@ -16,6 +16,22 @@ import {
   documentChanges,
 } from "./support.ts";
 
+const slowOutputTool = (name: string) =>
+  defineTool({
+    name,
+    description: name,
+    parameters: Type.Object({}),
+    execute: (_args, api) =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          api.output(`${name} output\n`);
+          yield* Effect.sleep(150);
+          api.output(`${name} more\n`);
+          return {};
+        }),
+      ),
+  });
+
 function recordingChatSetup() {
   const written = new Map<number, "base" | "delta">();
   const live: { liveId?: number } = {};
@@ -40,25 +56,7 @@ function recordingChatSetup() {
     }
   }
   const setup = chatSetup();
-  for (const name of ["first", "second"]) {
-    addTool(
-      setup.registry,
-      defineTool({
-        name,
-        description: name,
-        parameters: Type.Object({}),
-        execute: (_args, api) =>
-          Effect.runPromise(
-            Effect.gen(function* () {
-              api.output(`${name} output\n`);
-              yield* Effect.sleep(150);
-              api.output(`${name} more\n`);
-              return {};
-            }),
-          ),
-      }),
-    );
-  }
+  for (const name of ["first", "second"]) addTool(setup.registry, slowOutputTool(name));
   setup.faux.setResponses([
     fauxAssistantMessage(
       [fauxToolCall("first", {}, { id: "a" }), fauxToolCall("second", {}, { id: "b" })],

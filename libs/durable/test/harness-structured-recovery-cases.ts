@@ -8,11 +8,7 @@ import { awaited, context } from "./support.ts";
 
 export type Seeded = { parent: TaskId; children: TaskId[] };
 
-export const seed = Effect.fn("seed")(function* (
-  path: string,
-  children: readonly string[],
-  edit: (set: (id: TaskId, patch: object) => Promise<void>, seeded: Seeded) => Promise<void>,
-) {
+const seedStep1 = Effect.fn("seedStep1")(function* (path: string, children: readonly string[]) {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const session = createSession(yield* awaited(openNodeSqliteStorage(path)));
@@ -39,6 +35,15 @@ export const seed = Effect.fn("seed")(function* (
       context,
     ),
   );
+  return { runPromise, session, seeded };
+});
+
+export const seed = Effect.fn("seed")(function* (
+  path: string,
+  children: readonly string[],
+  edit: (set: (id: TaskId, patch: object) => Promise<void>, seeded: Seeded) => Promise<void>,
+) {
+  const { runPromise, session, seeded } = yield* seedStep1(path, children);
   yield* awaited(
     edit(
       (id, patch) =>

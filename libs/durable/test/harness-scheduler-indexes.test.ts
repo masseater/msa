@@ -30,7 +30,7 @@ afterEach(() =>
   ),
 );
 
-const cancellingOwnersStore = Effect.fn("cancellingOwnersStore")(function* () {
+const cancellingOwnersStoreStep1 = Effect.fn("cancellingOwnersStoreStep1")(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const path = yield* sqlitePath();
@@ -66,6 +66,11 @@ const cancellingOwnersStore = Effect.fn("cancellingOwnersStore")(function* () {
       context,
     ),
   );
+  return { runPromise, path, session, ids };
+});
+
+const cancellingOwnersStore = Effect.fn("cancellingOwnersStore")(function* () {
+  const { runPromise, path, session, ids } = yield* cancellingOwnersStoreStep1();
   yield* awaited(
     session.commit(
       (tx) =>

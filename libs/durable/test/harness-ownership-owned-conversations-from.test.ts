@@ -1,11 +1,18 @@
 import { fauxAssistantMessage, fauxText, fauxToolCall, Type } from "@msa/ai";
-import { configure, defineTool, type TaskId } from "@msa/durable";
+import { defineTool, type TaskId } from "@msa/durable";
 import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
-import { directories, gates, Hold, runs, gated } from "./harness-ownership-support.ts";
+import {
+  Hold,
+  directories,
+  gated,
+  gates,
+  runs,
+  spawnFauxChild,
+} from "./harness-ownership-support.ts";
 import {
   chatSetup,
   openChat,
@@ -104,29 +111,7 @@ const letsRunningTool = Effect.gen(function* () {
       execute: (_args, api, callContext) =>
         runPromise(
           Effect.gen(function* () {
-            const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
-            const child = yield* awaited(
-              api.commit(
-                (tx) =>
-                  runPromise(
-                    Effect.gen(function* () {
-                      const created = yield* awaited(
-                        tx.createConversation({
-                          ownership: { kind: "task", taskId: api.taskId },
-                        }),
-                      );
-                      yield* awaited(
-                        configure(tx, created.id, {
-                          model: { provider: "faux", modelId: "faux-1" },
-                        }),
-                      );
-                      return created.id;
-                    }),
-                  ),
-                callContext,
-              ),
-            );
+            const child = yield* spawnFauxChild(api, callContext);
             const handle = (yield* awaited(api.conversation(child, callContext)))!;
             const submission = yield* awaited(
               handle.submit({ type: "input", content: "child task" }, callContext),

@@ -93,7 +93,7 @@ function expectDistinctRevisions(seen: readonly TaskGraph[], parent: TaskId) {
   expect(seen.some((value) => value.tasks[String(parent)]?.conversations.length === 2)).toBe(true);
 }
 
-const committedGraphTasks = Effect.fn("committedGraphTasks")(function* () {
+const committedGraphTasksStep1 = Effect.fn("committedGraphTasksStep1")(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const directory = yield* makeTempDir("msa-durable-graph-");
@@ -128,6 +128,12 @@ const committedGraphTasks = Effect.fn("committedGraphTasks")(function* () {
   });
   const first = yield* openTasks(yield* awaited(openNodeSqliteStorage(path)), [Work]);
   const firstRoot = yield* awaited(first.harness.root(context));
+  return { runPromise, directory, path, gate, Work, first, firstRoot };
+});
+
+const committedGraphTasks = Effect.fn("committedGraphTasks")(function* () {
+  const { runPromise, directory, path, gate, Work, first, firstRoot } =
+    yield* committedGraphTasksStep1();
   const [foreground, background, owned] = yield* awaited(
     firstRoot.commit(
       (tx) =>

@@ -38,7 +38,7 @@ afterEach(() =>
   ),
 );
 
-const heldFailureTree = Effect.fn("heldFailureTree")(function* () {
+const heldFailureTreeStep1 = Effect.fn("heldFailureTreeStep1")(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const { harness, root } = yield* openNodes();
@@ -77,6 +77,11 @@ const heldFailureTree = Effect.fn("heldFailureTree")(function* () {
       ),
   });
   const spawned: { outside?: TaskId } = {};
+  return { runPromise, harness, root, found, spawned };
+});
+
+const heldFailureTree = Effect.fn("heldFailureTree")(function* () {
+  const { runPromise, harness, root, found, spawned } = yield* heldFailureTreeStep1();
   script("parent", {
     run: (runtime, ctx) =>
       runtime.commit(

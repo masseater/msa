@@ -19,7 +19,7 @@ import {
 import { context } from "./session-support.ts";
 import { deferred } from "./task-support.ts";
 
-const queuedBusyInputs = Effect.fn("queuedBusyInputs")(function* () {
+const queuedBusyInputsStep1 = Effect.fn("queuedBusyInputsStep1")(function* () {
   const setup = chatSetup();
   const gate = deferred();
   holdTool(setup, gate);
@@ -61,6 +61,11 @@ const queuedBusyInputs = Effect.fn("queuedBusyInputs")(function* () {
     ),
   );
   expect(again.id).toBe(steer.id);
+  return { gate, harness, root, input, steer, followUp };
+});
+
+const queuedBusyInputs = Effect.fn("queuedBusyInputs")(function* () {
+  const { gate, harness, root, input, steer, followUp } = yield* queuedBusyInputsStep1();
   yield* awaited(
     expect(
       root.submit(

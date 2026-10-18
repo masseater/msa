@@ -65,7 +65,7 @@ export const drivenTool: {
   ): ReturnType<typeof drivenToolImpl>;
 } = dual(3, drivenToolImpl);
 
-export const drive = Effect.fn("drive")(function* (
+const driveStep1 = Effect.fn("driveStep1")(function* (
   outputLimits: NonNullable<ToolRegistration["outputLimits"]> = {},
 ) {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
@@ -97,6 +97,13 @@ export const drive = Effect.fn("drive")(function* (
     actions.push(action);
     waker.wake?.();
   };
+  return { runPromise, harness, commits, submission, push };
+});
+
+export const drive = Effect.fn("drive")(function* (
+  outputLimits: NonNullable<ToolRegistration["outputLimits"]> = {},
+) {
+  const { runPromise, harness, commits, submission, push } = yield* driveStep1(outputLimits);
   return {
     harness,
     commits,

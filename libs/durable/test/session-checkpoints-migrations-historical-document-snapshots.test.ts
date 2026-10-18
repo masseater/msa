@@ -86,45 +86,53 @@ const migratedRewindableHistory = Effect.fn("migratedRewindableHistory")(functio
   return { Family, migrations, V3, session, storage, conversationId, entries };
 });
 
+const migratedEveryHistoricalValueStep1 = Effect.fn("migratedEveryHistoricalValueStep1")(
+  function* () {
+    const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
+    const { Family, migrations, V3, session, storage, conversationId, entries } =
+      yield* migratedRewindableHistory();
+
+    yield* awaited(
+      session.commit(
+        (tx) =>
+          runPromise(
+            Effect.gen(function* () {
+              entries.thirdEntry = (yield* awaited(
+                tx.appendEntry(conversationId, { kind: "third" }),
+              )).id;
+              yield* awaited(tx.doc(V3, conversationId));
+            }),
+          ),
+        context,
+      ),
+    );
+    expect(storage.commits.at(-1)!).toContainEqual(
+      expect.objectContaining({
+        type: "document.change",
+        content: expect.objectContaining({ kind: "base", version: 3 }),
+      }),
+    );
+
+    expect(
+      yield* awaited(session.snapshotAsOf(V3, conversationId, entries.firstEntry!, context)),
+    ).toEqual({
+      count: 1,
+      version: 3,
+    });
+    expect(
+      yield* awaited(session.snapshotAsOf(V3, conversationId, entries.secondEntry!, context)),
+    ).toEqual({
+      count: 2,
+      version: 3,
+    });
+    return { runPromise, Family, migrations, V3, session, conversationId, entries };
+  },
+);
+
 const migratedEveryHistoricalValue = Effect.fn("migratedEveryHistoricalValue")(function* () {
-  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
-  const { Family, migrations, V3, session, storage, conversationId, entries } =
-    yield* migratedRewindableHistory();
-
-  yield* awaited(
-    session.commit(
-      (tx) =>
-        runPromise(
-          Effect.gen(function* () {
-            entries.thirdEntry = (yield* awaited(
-              tx.appendEntry(conversationId, { kind: "third" }),
-            )).id;
-            yield* awaited(tx.doc(V3, conversationId));
-          }),
-        ),
-      context,
-    ),
-  );
-  expect(storage.commits.at(-1)!).toContainEqual(
-    expect.objectContaining({
-      type: "document.change",
-      content: expect.objectContaining({ kind: "base", version: 3 }),
-    }),
-  );
-
-  expect(
-    yield* awaited(session.snapshotAsOf(V3, conversationId, entries.firstEntry!, context)),
-  ).toEqual({
-    count: 1,
-    version: 3,
-  });
-  expect(
-    yield* awaited(session.snapshotAsOf(V3, conversationId, entries.secondEntry!, context)),
-  ).toEqual({
-    count: 2,
-    version: 3,
-  });
+  const { runPromise, Family, migrations, V3, session, conversationId, entries } =
+    yield* migratedEveryHistoricalValueStep1();
   expect(
     yield* awaited(session.snapshotAsOf(V3, conversationId, entries.thirdEntry!, context)),
   ).toEqual({
