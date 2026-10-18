@@ -1,6 +1,10 @@
-import { spawnSync } from "node:child_process";
+import { NodeServices } from "@effect/platform-node";
+import { readProcessEnv } from "@msa/ai/utils/env";
+import type { ExtensionAPI, ExtensionContext } from "@msa/coding-agent";
+import { Effect, ManagedRuntime } from "effect";
+import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
-import type { ExtensionAPI } from "@msa/coding-agent";
+const runtime = ManagedRuntime.make(NodeServices.layer);
 
 const DEFAULT_INTERACTIVE_COMMANDS = [
   "vim",
@@ -74,15 +78,16 @@ const DEFAULT_INTERACTIVE_COMMANDS = [
   "ncdu",
 ];
 
+function splitEnvList(name: string): string[] {
+  return (readProcessEnv(name) ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+}
+
 function getInteractiveCommands(): string[] {
-  const additional =
-    process.env["INTERACTIVE_COMMANDS"]
-      ?.split(",")
-      .map((s) => s.trim())
-      .filter(Boolean) ?? [];
-  const excluded = new Set(
-    process.env["INTERACTIVE_EXCLUDE"]?.split(",").map((s) => s.trim().toLowerCase()) ?? [],
-  );
+  const additional = splitEnvList("INTERACTIVE_COMMANDS");
+  const excluded = new Set(splitEnvList("INTERACTIVE_EXCLUDE").map((s) => s.toLowerCase()));
   return [...DEFAULT_INTERACTIVE_COMMANDS, ...additional].filter(
     (cmd) => !excluded.has(cmd.toLowerCase()),
   );
@@ -114,63 +119,76 @@ function isInteractiveCommand(command: string): boolean {
   return false;
 }
 
-export default function (msa: ExtensionAPI) {
-  msa.on("user_bash", async (event, ctx) => {
-    let command = event.command;
-    let forceInteractive = false;
+const runShell = (shell: string, command: string) =>
+  Effect.gen(function* () {
+    const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+    return yield* Effect.scoped(
+      Effect.gen(function* () {
+        const handle = yield* spawner.spawn(
+          ChildProcess.make(shell, ["-c", command], {
+            stdin: "inherit",
+            stdout: "inherit",
+            stderr: "inherit",
+          }),
+        );
+        return yield* handle.exitCode;
+      }),
+    );
+  });
 
-    if (command.startsWith("i ") || command.startsWith("i\t")) {
-      forceInteractive = true;
-      command = command.slice(2).trim();
-    }
+const bashResult = (output: string, exitCode: number) => ({
+  result: { output, exitCode, cancelled: false, truncated: false },
+});
 
-    const shouldBeInteractive = forceInteractive || isInteractiveCommand(command);
-    if (!shouldBeInteractive) {
-      return;
-    }
+const openShell = (ctx: ExtensionContext, command: string): Promise<number | null> =>
+  ctx.ui.custom<number | null>((tui, _theme, _kb, done) => {
+    tui.stop();
+    process.stdout.write("\x1b[2J\x1b[H");
 
-    if (ctx.mode !== "tui") {
-      return {
-        result: {
-          output: "(interactive commands require TUI)",
-          exitCode: 1,
-          cancelled: false,
-          truncated: false,
-        },
-      };
-    }
+    const shell = readProcessEnv("SHELL") || "/bin/sh";
+    void runtime.runFork(
+      runShell(shell, command).pipe(
+        Effect.andThen((code) =>
+          Effect.sync(() => {
+            tui.start();
+            tui.requestRender(true);
+            done(code);
+          }),
+        ),
+      ),
+    );
 
-    const exitCode = await ctx.ui.custom<number | null>((tui, _theme, _kb, done) => {
-      tui.stop();
+    return { render: () => [], invalidate: () => {} };
+  });
 
-      process.stdout.write("\x1b[2J\x1b[H");
+const stripForcePrefix = (command: string): { command: string; forced: boolean } => {
+  if (command.startsWith("i ") || command.startsWith("i\t")) {
+    return { command: command.slice(2).trim(), forced: true };
+  }
+  return { command, forced: false };
+};
 
-      const shell = process.env["SHELL"] || "/bin/sh";
-      const result = spawnSync(shell, ["-c", command], {
-        stdio: "inherit",
-        env: process.env,
-      });
-
-      tui.start();
-      tui.requestRender(true);
-
-      done(result.status);
-
-      return { render: () => [], invalidate: () => {} };
-    });
-
+const runInteractive = (ctx: ExtensionContext, command: string) =>
+  Effect.gen(function* () {
+    const exitCode = yield* Effect.promise(() => openShell(ctx, command));
     const output =
       exitCode === 0
         ? "(interactive command completed successfully)"
         : `(interactive command exited with code ${exitCode})`;
-
-    return {
-      result: {
-        output,
-        exitCode: exitCode ?? 1,
-        cancelled: false,
-        truncated: false,
-      },
-    };
+    return bashResult(output, exitCode ?? 1);
   });
+
+export default function (msa: ExtensionAPI) {
+  msa.on("user_bash", (event, ctx) =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const { command, forced } = stripForcePrefix(event.command);
+        if (!forced && !isInteractiveCommand(command)) return undefined;
+        if (ctx.mode !== "tui") {
+          return bashResult("(interactive commands require TUI)", 1);
+        }
+        return yield* runInteractive(ctx, command);
+      }),
+    ),
+  );
 }
