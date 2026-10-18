@@ -1,7 +1,3 @@
-/**
- * CLI argument parsing and help display
- */
-
 import type { ThinkingLevel } from "@msa/agent-core";
 import chalk from "chalk";
 
@@ -55,7 +51,7 @@ export interface Args {
   projectTrustOverride?: boolean;
   messages: string[];
   fileArgs: string[];
-  /** Unknown flags (potentially extension flags) - map of flag name to value */
+
   unknownFlags: Map<string, boolean | string>;
   diagnostics: Array<{ type: "warning" | "error"; message: string }>;
 }
@@ -133,11 +129,11 @@ export function parseArgs(args: string[]): Args {
       result.appendSystemPrompt = result.appendSystemPrompt ?? [];
       result.appendSystemPrompt.push(nextArg);
     } else if (arg === "--name" || arg === "-n") {
-      if (nextArg !== undefined) {
+      if (nextArg === undefined) {
+        result.diagnostics.push({ type: "error", message: "--name requires a value" });
+      } else {
         result.name = nextArg;
         i++;
-      } else {
-        result.diagnostics.push({ type: "error", message: "--name requires a value" });
       }
     } else if (arg === "--no-session") {
       result.noSession = true;
@@ -245,7 +241,6 @@ export function parseArgs(args: string[]): Args {
     } else if (arg === "--no-context-files" || arg === "-nc") {
       result.noContextFiles = true;
     } else if (arg === "--list-models") {
-      // Check if next arg is a search pattern (not a flag or file arg)
       if (nextArg !== undefined && !nextArg.startsWith("-") && !nextArg.startsWith("@")) {
         result.listModels = nextArg;
         i++;
@@ -278,12 +273,10 @@ export function parseArgs(args: string[]): Args {
     } else if (arg === "--offline") {
       result.offline = true;
     } else if (arg.startsWith("@")) {
-      result.fileArgs.push(arg.slice(1)); // Remove @ prefix
+      result.fileArgs.push(arg.slice(1));
     } else if (arg.startsWith("--")) {
       const eqIndex = arg.indexOf("=");
-      if (eqIndex !== -1) {
-        result.unknownFlags.set(arg.slice(2, eqIndex), arg.slice(eqIndex + 1));
-      } else {
+      if (eqIndex === -1) {
         const flagName = arg.slice(2);
         const next = nextArg;
         if (next !== undefined && !next.startsWith("-") && !next.startsWith("@")) {
@@ -292,6 +285,8 @@ export function parseArgs(args: string[]): Args {
         } else {
           result.unknownFlags.set(flagName, true);
         }
+      } else {
+        result.unknownFlags.set(arg.slice(2, eqIndex), arg.slice(eqIndex + 1));
       }
     } else if (arg.startsWith("-") && !arg.startsWith("--")) {
       result.diagnostics.push({ type: "error", message: `Unknown option: ${arg}` });

@@ -1,7 +1,3 @@
-/**
- * TUI session selector for --resume flag
- */
-
 import { setKeybindings } from "@msa/tui";
 
 import { KeybindingsManager } from "../core/keybindings.ts";
@@ -15,7 +11,6 @@ type SessionsLoader = (
   signal?: AbortSignal,
 ) => Promise<SessionInfo[]>;
 
-/** Show TUI session selector and return selected session path or null if cancelled */
 export async function selectSession(
   currentSessionsLoader: SessionsLoader,
   allSessionsLoader: SessionsLoader,

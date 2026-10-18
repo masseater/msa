@@ -10,9 +10,6 @@ export interface ShellConfig {
   commandTransport?: "argv" | "stdin";
 }
 
-/**
- * Find bash executable on PATH (cross-platform)
- */
 function isLegacyWslBashPath(path: string): boolean {
   const normalized = path.replace(/\//g, "\\").toLowerCase();
   return /^[a-z]:\\windows\\(?:system32|sysnative)\\bash\.exe$/.test(normalized);
@@ -26,7 +23,6 @@ function getBashShellConfig(shell: string): ShellConfig {
 
 export function findExecutableOnPath(executable: string): string | null {
   if (process.platform === "win32") {
-    // Windows: Use 'where' and verify file exists (where can return non-existent paths)
     try {
       const result = spawnSync("where", [executable], {
         encoding: "utf-8",
@@ -39,13 +35,10 @@ export function findExecutableOnPath(executable: string): string | null {
           return firstMatch;
         }
       }
-    } catch {
-      // Ignore errors
-    }
+    } catch {}
     return null;
   }
 
-  // Unix: Use 'which' and trust its output (handles Termux and special filesystems)
   try {
     const result = spawnSync("which", [executable], { encoding: "utf-8", timeout: 5000 });
     if (result.status === 0 && result.stdout) {
@@ -54,21 +47,11 @@ export function findExecutableOnPath(executable: string): string | null {
         return firstMatch;
       }
     }
-  } catch {
-    // Ignore errors
-  }
+  } catch {}
   return null;
 }
 
-/**
- * Resolve shell configuration based on platform and an optional explicit shell path.
- * Resolution order:
- * 1. User-specified shellPath
- * 2. On Windows: Git Bash in known locations, then bash on PATH
- * 3. On Unix: /bin/bash, then bash on PATH, then fallback to sh
- */
 export function getShellConfig(customShellPath?: string): ShellConfig {
-  // 1. Check user-specified shell path
   if (customShellPath) {
     if (existsSync(customShellPath)) {
       return getBashShellConfig(customShellPath);
@@ -77,7 +60,6 @@ export function getShellConfig(customShellPath?: string): ShellConfig {
   }
 
   if (process.platform === "win32") {
-    // 2. Try Git Bash in known locations
     const paths: string[] = [];
     const programFiles = process.env["ProgramFiles"];
     if (programFiles) {
@@ -94,7 +76,6 @@ export function getShellConfig(customShellPath?: string): ShellConfig {
       }
     }
 
-    // 3. Fallback: search bash.exe on PATH (Cygwin, MSYS2, WSL, etc.)
     const bashOnPath = findExecutableOnPath("bash.exe");
     if (bashOnPath) {
       return getBashShellConfig(bashOnPath);
@@ -109,7 +90,6 @@ export function getShellConfig(customShellPath?: string): ShellConfig {
     );
   }
 
-  // Unix: try /bin/bash, then bash on PATH, then fallback to sh
   if (existsSync("/bin/bash")) {
     return getBashShellConfig("/bin/bash");
   }
@@ -130,7 +110,6 @@ export const POWERSHELL_ARGS = [
   "-Command",
 ] as const;
 
-/** Resolve PowerShell on Windows, preferring PowerShell 7 when available. */
 export function getPowerShellConfig(): ShellConfig {
   if (process.platform !== "win32") {
     throw new Error("The powershell tool is only available on Windows.");
@@ -162,21 +141,10 @@ export function getShellEnv(): NodeJS.ProcessEnv {
   };
 }
 
-/**
- * Sanitize binary output for display/storage.
- * Removes characters that crash string-width or cause display issues:
- * - Control characters (except tab, newline, carriage return)
- * - Unicode interlinear annotation characters U+FFF9..U+FFFB (crash string-width due to a bug)
- */
 export function sanitizeBinaryOutput(str: string): string {
-  // All removed characters are single UTF-16 code units, so surrogate pairs are never split.
   return str.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\uFFF9-\uFFFB]/g, "");
 }
 
-/**
- * Detached child processes must be tracked so they can be killed on parent
- * shutdown signals (SIGHUP/SIGTERM).
- */
 const trackedDetachedChildPids = new Set<number>();
 
 export function trackDetachedChildPid(pid: number): void {
@@ -194,12 +162,8 @@ export function killTrackedDetachedChildren(): void {
   trackedDetachedChildPids.clear();
 }
 
-/**
- * Kill a process and all its children (cross-platform)
- */
 export function killProcessTree(pid: number): void {
   if (process.platform === "win32") {
-    // Use the trusted System32 executable so cleanup does not depend on PATH.
     try {
       const child = spawn(
         join(process.env["SystemRoot"] ?? "C:\\Windows", "System32", "taskkill.exe"),
@@ -210,22 +174,16 @@ export function killProcessTree(pid: number): void {
           windowsHide: true,
         },
       );
-      // A failed spawn emits "error" asynchronously; consume it to avoid crashing Node.
+
       child.once("error", () => {});
-    } catch {
-      // Ignore errors if taskkill fails.
-    }
+    } catch {}
   } else {
-    // Use SIGKILL on Unix/Linux/Mac
     try {
       process.kill(-pid, "SIGKILL");
     } catch {
-      // Fallback to killing just the child if process group kill fails
       try {
         process.kill(pid, "SIGKILL");
-      } catch {
-        // Process already dead
-      }
+      } catch {}
     }
   }
 }

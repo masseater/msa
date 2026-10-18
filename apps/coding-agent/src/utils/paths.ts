@@ -8,24 +8,17 @@ import { spawnProcessSync } from "./child-process.ts";
 const UNICODE_SPACES = /[\u00A0\u2000-\u200A\u202F\u205F\u3000]/g;
 
 export interface PathInputOptions {
-  /** Trim leading/trailing whitespace before normalization. */
   trim?: boolean;
-  /** Expand leading `~` to a home directory. Defaults to true. */
+
   expandTilde?: boolean;
-  /** Home directory used for `~` expansion. Defaults to `os.homedir()`. */
+
   homeDir?: string;
-  /** Strip a leading `@`, used for CLI @file paths. */
+
   stripAtPrefix?: boolean;
-  /** Normalize unicode space variants to regular spaces. */
+
   normalizeUnicodeSpaces?: boolean;
 }
 
-/**
- * Resolve a path to its canonical (real) form, following symlinks.
- * Falls back to the raw path if resolution fails (e.g. the target does
- * not exist yet), so that callers never crash on missing filesystem
- * entries.
- */
 export function canonicalizePath(path: string): string {
   try {
     return realpathSync(path);
@@ -43,14 +36,9 @@ export function getFileRevision(path: string): string | undefined {
   }
 }
 
-/**
- * Returns true if the value is NOT a package source (npm:, git:, etc.),
- * a built-in extension (builtin:), or a remote URL protocol. Bare names,
- * relative paths, and file: URLs are considered local.
- */
 export function isLocalPath(value: string): boolean {
   const trimmed = value.trim();
-  // Known non-local prefixes. file: URLs are local paths and are intentionally resolved by resolvePath().
+
   if (
     trimmed.startsWith("npm:") ||
     trimmed.startsWith("git:") ||
@@ -65,7 +53,6 @@ export function isLocalPath(value: string): boolean {
   return true;
 }
 
-/** Convert Git Bash, MSYS, Cygwin, and WSL drive paths to a form native Windows APIs accept. */
 export function normalizeWindowsShellPath(filePath: string): string {
   if (!filePath.startsWith("/") || filePath.startsWith("//") || filePath.includes("\\"))
     return filePath;
@@ -129,7 +116,6 @@ export function getCwdRelativePath(filePath: string, cwd: string): string | unde
   return isInsideCwd ? relativePath || "." : undefined;
 }
 
-/** Replaces a leading home directory with `~`; other paths are returned unchanged. */
 export function abbreviateHomePath(filePath: string, home: string = homedir()): string {
   if (!home || !filePath.startsWith(home)) return filePath;
   const rest = filePath.slice(home.length);

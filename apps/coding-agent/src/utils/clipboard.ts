@@ -10,11 +10,6 @@ import { isWSL } from "./wsl.ts";
 
 const MAX_OSC52_ENCODED_LENGTH = 100_000;
 
-/**
- * Remote sessions also emit OSC 52 so the client terminal receives the copy. MSA_CLIPBOARD_OSC52=1
- * covers remote clients that leave no SSH markers, such as multiplexer attaches (#10114, #10835)
- * or IDE daemons (#10826).
- */
 function isRemoteSession(env: NodeJS.ProcessEnv): boolean {
   return Boolean(
     env["SSH_CONNECTION"] ||
@@ -33,11 +28,6 @@ function emitOsc52(text: string): boolean {
   return true;
 }
 
-/**
- * WSL without WSLg has no Linux display, so the Windows clipboard is written through
- * interop. PowerShell reads the text from a file because `clip.exe` and PowerShell stdin
- * decode piped bytes with the console code page, which mangles non-ASCII UTF-8.
- */
 async function copyViaWindowsClipboard(text: string): Promise<boolean> {
   const tmpFile = join(tmpdir(), `msa-wsl-clip-${randomUUID()}.txt`);
   try {
@@ -56,16 +46,13 @@ async function copyViaWindowsClipboard(text: string): Promise<boolean> {
   } finally {
     try {
       unlinkSync(tmpFile);
-    } catch {
-      // The file may not have been created.
-    }
+    } catch {}
   }
 }
 
-/** Read plain text from the system clipboard. */
 export async function readClipboardText(): Promise<string | null> {
   const commands: [string, string[]][] = [];
-  // Termux reports platform "android", not "linux" (#10391).
+
   if (process.env["TERMUX_VERSION"]) commands.push(["termux-clipboard-get", []]);
   if (platform() === "linux") {
     if (process.env["WAYLAND_DISPLAY"])
@@ -88,7 +75,6 @@ export async function readClipboardText(): Promise<string | null> {
   }
 }
 
-/** Read file paths, such as Finder file copies, from the native clipboard. */
 export async function readClipboardFilePaths(): Promise<string[] | null> {
   const paths = await getNativeClipboard()?.getFilePaths?.();
   return paths?.length ? paths : null;
@@ -98,8 +84,7 @@ export async function copyToClipboard(text: string): Promise<void> {
   const p = platform();
   const env = process.env;
   let copied = false;
-  // Direct writes precede OSC 52 so the terminal cannot race the native writer.
-  // Linux tools retain clipboard selection ownership after this call returns.
+
   if (p !== "linux") {
     try {
       const clipboard = getNativeClipboard();
@@ -107,9 +92,7 @@ export async function copyToClipboard(text: string): Promise<void> {
         await clipboard.setText(text);
         copied = true;
       }
-    } catch {
-      // Try platform commands next.
-    }
+    } catch {}
   }
   if (!copied) {
     const commands: [string, string[]][] = [];
@@ -133,13 +116,10 @@ export async function copyToClipboard(text: string): Promise<void> {
   }
   let osc52Emitted = false;
   if (!copied && p === "linux" && isWSL(env)) {
-    // Windows Terminal supports OSC 52; prefer it over the slower PowerShell round trip.
     if (env["WT_SESSION"]) osc52Emitted = emitOsc52(text);
     copied = osc52Emitted || (await copyViaWindowsClipboard(text));
   }
-  // OSC 52 cannot be verified, so a desktop session with a display reports the failure
-  // instead (#9618). Without a display the terminal is the only clipboard route (containers,
-  // WSL without WSLg), and remote sessions always emit it to reach the client clipboard.
+
   const headless =
     p === "linux" && !env["DISPLAY"] && !env["WAYLAND_DISPLAY"] && !env["TERMUX_VERSION"];
   let oversized = false;

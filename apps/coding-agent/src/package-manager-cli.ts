@@ -306,10 +306,10 @@ function parsePackageCommand(args: string[]): PackageCommandOptions | undefined 
       continue;
     }
 
-    if (!source) {
-      source = arg;
-    } else {
+    if (source) {
       invalidArgument = invalidArgument ?? arg;
+    } else {
+      source = arg;
     }
   }
 

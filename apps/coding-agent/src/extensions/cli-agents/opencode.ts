@@ -1,10 +1,3 @@
-/**
- * OpenCode Zen free models, each request run by `opencode run --standalone`.
- *
- * Environment overrides:
- *   OPENCODE_BIN             opencode binary (default: ~/.opencode/bin/opencode)
- *   OPENCODE_FREE_DATA_HOME  data dir for these runs (default: ~/.local/share/msa-opencode-free)
- */
 import { homedir } from "node:os";
 import { join } from "node:path";
 
@@ -17,7 +10,6 @@ import { flattenTranscript } from "./transcript.ts";
 
 const PROVIDER_ID = "opencode-free";
 
-/** OpenCode Zen's zero-cost chat models from the bundled models.dev catalog. */
 function freeModels() {
   return getBuiltinModels("opencode").filter(
     (model) =>
@@ -48,7 +40,6 @@ function buildPrompt(messages: Parameters<typeof flattenTranscript>[0], cwd: str
   ].join("\n");
 }
 
-/** The parts of `opencode run --format json` lines this backend reads. */
 interface OpenCodeEvent {
   type?: string;
   error?: { message?: string };

@@ -74,10 +74,7 @@ function loadThemes(resources: ResolvedResource[]): Theme[] {
         seen.add(loadedTheme.name);
       }
       themes.push(loadedTheme);
-    } catch {
-      // Startup prompts should not fail because a theme is broken. The normal
-      // resource loader reports theme diagnostics later in startup.
-    }
+    } catch {}
   }
   return themes;
 }
@@ -98,7 +95,7 @@ async function loadStartupThemes(settingsManager: SettingsManager): Promise<Them
 export async function createStartupTui(settingsManager: SettingsManager): Promise<TUI> {
   setCapabilityOverrides(settingsManager.getTerminalCapabilityOverrides());
   setRegisteredThemes(await loadStartupThemes(settingsManager));
-  // The system theme starts in grayscale until the terminal reports its colors.
+
   markTerminalColorsPending();
   initTheme(
     resolveThemeSetting(settingsManager.getThemeSetting(), getTerminalTheme()) ?? SYSTEM_THEME_NAME,
@@ -121,10 +118,6 @@ export function startStartupTui(ui: TUI, settingsManager: SettingsManager): void
   });
 }
 
-/**
- * Query the terminal's colors without waiting for them. When they arrive, including after the timeout,
- * record them for the system theme and "" (terminal default) tokens, run `onColors`, and re-render.
- */
 function queryStartupTerminalColors(ui: TUI, onColors: () => void): void {
   void requestTerminalColors(ui, (colors) => {
     setTerminalColors(colors);
@@ -140,13 +133,6 @@ async function clearStartupTui(ui: TUI): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, 25));
 }
 
-/**
- * First-time setup runs when all of these hold:
- * - this is the official msa distribution (not a fork/rebrand)
- * - experimental features are enabled (MSA_EXPERIMENTAL=1)
- * - the default agent directory is used (no custom agent dir override)
- * - setup was not completed before (settings.json does not exist)
- */
 export function shouldRunFirstTimeSetup(settingsPath: string = getSettingsPath()): boolean {
   if (
     !isOfficialDistribution({
@@ -197,7 +183,6 @@ export async function showStartupSelector<T>(
   });
 }
 
-/** Show the first-time setup dialog and persist the result */
 export async function showFirstTimeSetup(settingsManager: SettingsManager): Promise<void> {
   const ui = await createStartupTui(settingsManager);
   return new Promise((resolve) => {
@@ -232,7 +217,7 @@ export async function showFirstTimeSetup(settingsManager: SettingsManager): Prom
     ui.addChild(component);
     ui.setFocus(component);
     ui.requestRender();
-    // The terminal's colors regenerate the system theme; re-rendering rebuilds the dialog with it.
+
     queryStartupTerminalColors(ui, () => setTheme(previewTheme));
   });
 }

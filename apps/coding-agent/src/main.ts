@@ -1,10 +1,3 @@
-/**
- * Main entry point for the coding agent CLI.
- *
- * This file handles CLI argument parsing and translates them into
- * createAgentSession() options. The SDK does the heavy lifting.
- */
-
 import { createInterface } from "node:readline";
 
 import { type ImageContent, modelsAreEqual } from "@msa/ai";
@@ -96,12 +89,7 @@ import { cleanupWindowsSelfUpdateQuarantine } from "./utils/windows-self-update.
 
 const EXTENSION_LOAD_FAILURE_HINT = `Hint: Start without extensions using "${APP_NAME} -ne".`;
 
-/**
- * Read all content from piped stdin.
- * Returns undefined if stdin is a TTY (interactive terminal).
- */
 async function readPipedStdin(): Promise<string | undefined> {
-  // If stdin is a TTY, we're running interactively - don't read stdin
   if (process.stdin.isTTY) {
     return undefined;
   }
@@ -262,7 +250,6 @@ async function prepareInitialMessage(
     return buildInitialMessage({ parsed, stdinContent });
   }
 
-  // AgentSession resizes these after extension hooks select the request model.
   const { text, images } = await processFileArguments(parsed.fileArgs, { autoResizeImages: false });
   return buildInitialMessage({
     parsed,
@@ -272,17 +259,12 @@ async function prepareInitialMessage(
   });
 }
 
-/** Result from resolving a session argument */
 type ResolvedSession =
-  | { type: "path"; path: string } // Direct file path
-  | { type: "local"; path: string } // Found in current project
-  | { type: "global"; path: string; cwd: string } // Found in different project
-  | { type: "not_found"; arg: string }; // Not found anywhere
+  | { type: "path"; path: string }
+  | { type: "local"; path: string }
+  | { type: "global"; path: string; cwd: string }
+  | { type: "not_found"; arg: string };
 
-/**
- * Resolve a session argument to a file path.
- * If it looks like a path, use as-is. Otherwise try to match as session ID prefix.
- */
 function findLocalSessionByExactId(
   sessionId: string,
   cwd: string,
@@ -297,13 +279,10 @@ async function resolveSessionPath(
   cwd: string,
   sessionDir?: string,
 ): Promise<ResolvedSession> {
-  // If it looks like a file path, resolve it before handing it to the session manager.
   if (sessionArg.includes("/") || sessionArg.includes("\\") || sessionArg.endsWith(".jsonl")) {
     return { type: "path", path: resolvePath(sessionArg, cwd) };
   }
 
-  // Exact IDs only require reading session headers. Fall back to the full
-  // metadata listing for prefix matches.
   const exactLocalMatch = findLocalSessionByExactId(sessionArg, cwd, sessionDir);
   if (exactLocalMatch) {
     return exactLocalMatch;
@@ -316,7 +295,6 @@ async function resolveSessionPath(
     return { type: "local", path: localMatch.path };
   }
 
-  // Try global search across all projects
   const allSessions = await SessionManager.listAll(sessionDir);
   const globalMatch =
     allSessions.find((s) => s.id === sessionArg) ??
@@ -326,11 +304,9 @@ async function resolveSessionPath(
     return { type: "global", path: globalMatch.path, cwd: globalMatch.cwd };
   }
 
-  // Not found anywhere
   return { type: "not_found", arg: sessionArg };
 }
 
-/** Prompt user for yes/no confirmation */
 async function promptConfirm(message: string): Promise<boolean> {
   return new Promise((resolve) => {
     const rl = createInterface({
@@ -421,7 +397,7 @@ export async function createSessionManager(
   if (parsed.noSession || parsed.help || parsed.listModels !== undefined) {
     return SessionManager.inMemory(
       cwd,
-      parsed.sessionId !== undefined ? { id: parsed.sessionId } : undefined,
+      parsed.sessionId === undefined ? undefined : { id: parsed.sessionId },
     );
   }
 
@@ -523,9 +499,6 @@ function buildSessionOptions(
   const diagnostics: AgentSessionRuntimeDiagnostic[] = [];
   let cliThinkingFromModel = false;
 
-  // Model from CLI
-  // - supports --provider <name> --model <pattern>
-  // - supports --model <provider>/<pattern>
   if (parsed.provider && !parsed.model) {
     diagnostics.push({
       type: "error",
@@ -548,8 +521,7 @@ function buildSessionOptions(
     }
     if (resolved.model) {
       options.model = resolved.model;
-      // Allow "--model <pattern>:<thinking>" as a shorthand.
-      // Explicit --thinking still takes precedence (applied later).
+
       if (!parsed.thinking && resolved.thinkingLevel) {
         options.thinkingLevel = resolved.thinkingLevel;
         cliThinkingFromModel = true;
@@ -559,7 +531,6 @@ function buildSessionOptions(
 
   const firstScopedModel = scopedModels[0];
   if (!options.model && firstScopedModel !== undefined && !hasExistingSession) {
-    // Check if saved default is in scoped models - use it if so, otherwise first scoped model
     const savedProvider = settingsManager.getDefaultProvider();
     const savedModelId = settingsManager.getDefaultModel();
     const savedModel =
@@ -572,27 +543,23 @@ function buildSessionOptions(
 
     if (savedInScope) {
       options.model = savedInScope.model;
-      // Use thinking level from scoped model config if explicitly set
+
       if (!parsed.thinking && savedInScope.thinkingLevel) {
         options.thinkingLevel = savedInScope.thinkingLevel;
       }
     } else {
       options.model = firstScopedModel.model;
-      // Use thinking level from first scoped model if explicitly set
+
       if (!parsed.thinking && firstScopedModel.thinkingLevel) {
         options.thinkingLevel = firstScopedModel.thinkingLevel;
       }
     }
   }
 
-  // Thinking level from CLI (takes precedence over scoped model thinking levels set above)
   if (parsed.thinking) {
     options.thinkingLevel = parsed.thinking;
   }
 
-  // Scoped models for Ctrl+P cycling
-  // Keep thinking level undefined when not explicitly set in the model pattern.
-  // Undefined means "inherit current session thinking level" during cycling.
   if (scopedModels.length > 0) {
     options.scopedModels = scopedModels.map((sm) => ({
       model: sm.model,
@@ -600,10 +567,6 @@ function buildSessionOptions(
     }));
   }
 
-  // API key from CLI - set as a non-persistent runtime override
-  // (handled by caller before createAgentSession)
-
-  // Tools
   if (parsed.noTools) {
     options.noTools = "all";
   } else if (parsed.noBuiltinTools) {
@@ -648,7 +611,7 @@ export interface MainOptions {
 
 export async function main(args: string[], options?: MainOptions) {
   resetTimings();
-  // Commands and startup selectors can load user-authored themes before runtime creation.
+
   setThemeJsonValidator(validateThemeJson);
   const extensionFactories = [...builtInExtensions, ...(options?.extensionFactories ?? [])];
   const offlineMode = args.includes("--offline") || isTruthyEnvFlag(process.env["MSA_OFFLINE"]);
@@ -674,10 +637,6 @@ export async function main(args: string[], options?: MainOptions) {
   if (await handlePackageCommand(args, { extensionFactories })) {
     const exitCode = process.exitCode ?? 0;
     if (process.platform === "win32" && exitCode === 0 && args[0] === "update") {
-      // We normally prefer process.exit(0) for package commands so bad extensions cannot keep
-      // one-shot commands alive. On Windows, Node can assert after fetch() if process.exit(0)
-      // runs during teardown; let successful `msa update` drain naturally instead.
-      // https://github.com/nodejs/node/issues/56645
       return;
     }
     return process.exit(exitCode);
@@ -738,15 +697,12 @@ export async function main(args: string[], options?: MainOptions) {
   validateForkFlags(parsed);
   validateSessionIdFlags(parsed);
 
-  // Run migrations (pass cwd for project-local migrations)
   const { migratedAuthProviders: migratedProviders, deprecationWarnings } = runMigrations(cwd);
   time("runMigrations");
 
   const startupSettingsManager = SettingsManager.create(cwd, agentDir);
   const startupSettingsDiagnostics = collectSettingsDiagnostics(startupSettingsManager);
 
-  // Experimental first-time setup: theme choice and analytics opt-in.
-  // Runs before any runtime services are created so the chosen settings apply everywhere.
   if (
     appMode === "interactive" &&
     !parsed.help &&
@@ -761,11 +717,6 @@ export async function main(args: string[], options?: MainOptions) {
     startupSettingsManager.applyOverrides({ theme: parsed.useTheme });
   }
 
-  // Decide the final runtime cwd before creating cwd-bound runtime services.
-  // --session and --resume may select a session from another project, so project-local
-  // settings, resources, provider registrations, and models must be resolved only after
-  // the target session cwd is known. The startup-cwd settings manager is used only for
-  // sessionDir lookup during session selection.
   const envSessionDir = process.env[ENV_SESSION_DIR];
   const sessionDir =
     (parsed.sessionDir ? normalizePath(parsed.sessionDir) : undefined) ??
@@ -922,14 +873,14 @@ export async function main(args: string[], options?: MainOptions) {
     diagnostics.push(...sessionOptionDiagnostics);
 
     if (parsed.apiKey) {
-      if (!sessionOptions.model) {
+      if (sessionOptions.model) {
+        await modelRuntime.setRuntimeApiKey(sessionOptions.model.provider, parsed.apiKey);
+      } else {
         diagnostics.push({
           type: "error",
           message:
             "--api-key requires a model to be specified via --model, --provider/--model, or --models",
         });
-      } else {
-        await modelRuntime.setRuntimeApiKey(sessionOptions.model.provider, parsed.apiKey);
       }
     }
 
@@ -987,7 +938,6 @@ export async function main(args: string[], options?: MainOptions) {
     process.exit(0);
   }
 
-  // Read piped stdin content (if any) - skip for RPC mode which uses stdin for JSON-RPC
   let stdinContent: string | undefined;
   if (appMode !== "rpc") {
     stdinContent = await readPipedStdin();
@@ -1002,7 +952,6 @@ export async function main(args: string[], options?: MainOptions) {
   initTheme(settingsManager.getTheme(), appMode === "interactive");
   time("initTheme");
 
-  // Show deprecation warnings in interactive mode
   if (appMode === "interactive" && deprecationWarnings.length > 0) {
     await showDeprecationWarnings(deprecationWarnings);
   }
@@ -1039,7 +988,6 @@ export async function main(args: string[], options?: MainOptions) {
     process.exit(1);
   }
 
-  // RPC refreshes catalogs here in the background; interactive mode starts its refresh after TUI initialization.
   if (!offlineMode && appMode === "rpc") {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 15_000);
@@ -1068,8 +1016,7 @@ export async function main(args: string[], options?: MainOptions) {
     if (startupBenchmark) {
       await interactiveMode.init();
       time("interactiveMode.init");
-      // Give the TUI's stdin handler a brief chance to consume terminal query replies
-      // (Kitty keyboard protocol, device attributes, cell size) before restoring the terminal.
+
       await new Promise((resolve) => setTimeout(resolve, 150));
       interactiveMode.stop();
       stopThemeWatcher();

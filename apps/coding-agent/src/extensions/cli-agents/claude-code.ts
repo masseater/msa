@@ -1,15 +1,3 @@
-/**
- * Claude Code as a plain model for msa, through the Claude Agent SDK and the
- * user's own Claude Code login. Claude Code's built-in tools, hooks, settings,
- * plugins and CLAUDE.md are all off; msa's tools are its only tools, served from
- * an in-process MCP server. When Claude calls one, the call is handed to msa as
- * an ordinary tool call, and msa's result is passed back to the waiting call.
- *
- * One Claude Code process lives per msa conversation and is reused while the
- * conversation continues from its own last reply; any other history (branch,
- * compaction, another provider's turn) starts a fresh process from the
- * flattened transcript.
- */
 import { spawn, type ChildProcess } from "node:child_process";
 import { createHash } from "node:crypto";
 
@@ -47,7 +35,7 @@ const PROVIDER_ID = "claude-code";
 const SERVER = "msa";
 const TOOL_PREFIX = `mcp__${SERVER}__`;
 const IDLE_CLOSE_MS = 30 * 60_000;
-/** Idle processes kept for conversations that may come back (other msa sessions, branches). */
+
 const MAX_IDLE_SESSIONS = 2;
 
 const MODELS = [
@@ -69,7 +57,6 @@ const EFFORT: Record<string, Effort> = {
 
 type ImageMediaType = "image/jpeg" | "image/png" | "image/gif" | "image/webp";
 
-/** The SDK and the MCP server are loaded on first use, so msa starts without them. */
 const loadSdk = (() => {
   let loaded:
     | Promise<{
@@ -101,7 +88,6 @@ function hash(value: string): string {
   return createHash("sha256").update(value).digest("hex");
 }
 
-/** Identifies an assistant reply across msa requests. */
 function replyKey(content: Message["content"]): string {
   return hash(textFromContent(content));
 }
@@ -127,7 +113,6 @@ function toCallToolResult(result: ToolResultMessage): CallToolResult {
   return { content, isError: result.isError };
 }
 
-/** Async iterable of user messages fed to a live Claude Code process. */
 class Input implements AsyncIterable<SDKUserMessage> {
   private queue: SDKUserMessage[] = [];
   private wake: (() => void) | undefined;
@@ -165,7 +150,6 @@ class Input implements AsyncIterable<SDKUserMessage> {
 }
 
 interface SessionConfig {
-  /** Accounts this request may run under, in preference order. */
   accounts: Account[];
   model: string;
   effort: Effort | undefined;
@@ -185,7 +169,7 @@ class Session {
   private readonly server: McpServer;
   private readonly query: Query;
   private readonly events: AsyncIterator<SDKMessage>;
-  /** Tool calls handed to msa whose results have not come back yet. */
+
   readonly pending = new Set<string>();
   private readonly waiting = new Map<string, (result: CallToolResult) => void>();
   private readonly ready = new Map<string, CallToolResult>();
@@ -271,7 +255,6 @@ class Session {
     return this.busyFlag;
   }
 
-  /** Only a session serving a request keeps msa running; an idle one must not block exit. */
   set busy(value: boolean) {
     this.busyFlag = value;
     this.holdOpen(value);
@@ -314,7 +297,6 @@ class Session {
     }
   }
 
-  /** `next` hands the message to the turn in progress, like msa's steer. */
   send(content: ContentBlockParam[], priority?: SDKUserMessage["priority"]): void {
     this.input.push(content, priority);
   }
@@ -357,10 +339,6 @@ class Session {
   }
 }
 
-/**
- * Find a live session that can continue this transcript and hand it the new
- * turns; otherwise start one from the flattened transcript.
- */
 async function attach(messages: readonly Message[], config: SessionConfig): Promise<Session> {
   let tail = messages.length;
   while (tail > 0 && messages[tail - 1]?.role !== "assistant") tail -= 1;
@@ -389,7 +367,6 @@ async function attach(messages: readonly Message[], config: SessionConfig): Prom
     await session.update(config);
     const userContent = userTurns.flatMap((turn) => toAnthropicContent(turn.content));
     if (answersPending) {
-      // Steering messages go in before the results so they join the turn's next request.
       if (userContent.length > 0) session.send(userContent, "next");
       for (const result of toolResults)
         session.deliver(result.toolCallId, toCallToolResult(result));
@@ -399,14 +376,13 @@ async function attach(messages: readonly Message[], config: SessionConfig): Prom
     return session;
   }
 
-  // A session waiting on tool calls this transcript already answered was left behind for good.
   const answered = new Set(
     messages.flatMap((message) => (message.role === "toolResult" ? [message.toolCallId] : [])),
   );
   for (const session of sessions) {
     if (!session.busy && [...session.pending].some((id) => answered.has(id))) session.close();
   }
-  // Sessions waiting on tools belong to conversations still running; only finished ones are capped.
+
   const idle = [...sessions]
     .filter((session) => !session.busy && session.pending.size === 0)
     .sort((a, b) => b.lastUsed - a.lastUsed);
@@ -435,11 +411,6 @@ async function attach(messages: readonly Message[], config: SessionConfig): Prom
   return session;
 }
 
-/**
- * Read the session's events into one msa reply, ending at a tool call or a
- * finished turn. A failed run is returned rather than written to the reply, so
- * the caller can retry it under another account.
- */
 async function pump(
   session: Session,
   reply: ReplyBuilder,
@@ -460,10 +431,8 @@ async function pump(
     const event = next.value;
     try {
       await options?.onProviderStreamEvent?.(event, model);
-    } catch {
-      // Observation hooks must not break the stream.
-    }
-    // Subagent traffic stays inside Claude Code.
+    } catch {}
+
     if ("parent_tool_use_id" in event && event.parent_tool_use_id) continue;
 
     if (event.type === "stream_event") {
@@ -493,7 +462,7 @@ async function pump(
       }
     } else if (event.type === "assistant") {
       const message = event.message;
-      // Claude Code's own error notices (usage limit, logged out); the result event reports them.
+
       if (message.model === "<synthetic>") {
         apiError = event.error;
         continue;
@@ -513,7 +482,7 @@ async function pump(
       });
     } else if (event.type === "rate_limit_event") {
       const info = event.rate_limit_info;
-      // resetsAt is in seconds.
+
       if (info.status === "rejected") rejectedResetsAt = (info.resetsAt ?? 0) * 1000 || undefined;
     } else if (event.type === "result") {
       if (event.is_error) {
@@ -535,7 +504,6 @@ async function pump(
   }
 }
 
-/** Stream function for one provider: a fixed account, or every unblocked account in order. */
 const streamFor =
   (fixed?: Account) =>
   (model: Model<string>, context: TranscriptContext, options?: SimpleStreamOptions) => {
@@ -554,7 +522,6 @@ const streamFor =
     void (async () => {
       let session: Session | undefined;
       const onAbort = () => {
-        // An interrupted turn leaves msa with a reply the session never finished; drop the session.
         session?.interrupt();
         session?.close();
         reply.fail("aborted", "aborted");
@@ -567,9 +534,7 @@ const streamFor =
             { provider: PROVIDER_ID, ...config, tools: config.tools.map((tool) => tool.name) },
             model,
           );
-        } catch {
-          // Inspection hooks must not break the request.
-        }
+        } catch {}
         const failures: string[] = [];
         while (true) {
           let account = config.accounts[0];
@@ -588,7 +553,6 @@ const streamFor =
           try {
             session = await attach(messages, config);
           } catch (error) {
-            // Starting under this account failed (e.g. its tokenCommand failed).
             failure = { error: error instanceof Error ? error.message : String(error) };
           }
           if (session) {
@@ -644,10 +608,6 @@ function registerProvider(msa: ExtensionAPI, id: string, name: string, account?:
   });
 }
 
-/**
- * `claude-code` runs under the first available account and moves on when one is
- * blocked; `claude-code-<account>` stays on that account.
- */
 export function registerClaudeCode(msa: ExtensionAPI): void {
   const accounts = loadAccounts();
   registerProvider(msa, PROVIDER_ID, "Claude Code");

@@ -9,9 +9,7 @@ export function closeWatcher(watcher: FSWatcher | null | undefined): void {
 
   try {
     watcher.close();
-  } catch {
-    // Ignore watcher close errors
-  }
+  } catch {}
 }
 
 export function watchWithErrorHandler(

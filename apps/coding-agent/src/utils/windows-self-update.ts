@@ -55,9 +55,7 @@ export function cleanupWindowsSelfUpdateQuarantine(packageDir: string): void {
   }
   try {
     rmSync(quarantineRoot, { recursive: true, force: true });
-  } catch {
-    // A previous msa process may still be exiting and holding a native addon.
-  }
+  } catch {}
 }
 
 export function quarantineWindowsNativeDependencies(packageDir: string): void {

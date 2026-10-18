@@ -60,7 +60,6 @@ export function loadAllHighlightLanguages(): Promise<void> {
         void import("highlight.js/lib/index.js").then(
           () => resolve(),
           () => {
-            // Eager languages and plaintext fallback remain available.
             resolve();
           },
         );

@@ -8,7 +8,6 @@ export function warnDeprecation(message: string): void {
   console.warn(chalk.yellow(`Deprecation warning: ${message}`));
 }
 
-/** Clear deprecation warning state. Exported for tests. */
 export function clearDeprecationWarningsForTests(): void {
   emittedDeprecationWarnings.clear();
 }

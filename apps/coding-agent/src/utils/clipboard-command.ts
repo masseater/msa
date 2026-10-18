@@ -1,13 +1,11 @@
 import { spawn } from "node:child_process";
 
-/** Undefined means the command failed; an empty buffer is a successful result. */
 export function runClipboardCommand(
   command: string,
   args: readonly string[],
   options?: { input?: string; timeoutMs?: number; maxBufferBytes?: number },
 ): Promise<Buffer | undefined> {
   return new Promise((resolve) => {
-    // Clipboard writers can daemonize. Do not give them output pipes to retain.
     const child = spawn(command, args, {
       stdio: ["pipe", options?.input === undefined ? "pipe" : "ignore", "ignore"],
       windowsHide: true,
@@ -38,7 +36,7 @@ export function runClipboardCommand(
       if (length > (options?.maxBufferBytes ?? 50 * 1024 * 1024)) abort();
       else chunks.push(chunk);
     });
-    child.stdin?.on("error", () => {}); // A writer may exit before consuming all input.
+    child.stdin?.on("error", () => {});
     child.stdin?.end(options?.input);
   });
 }

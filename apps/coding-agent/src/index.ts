@@ -1,8 +1,5 @@
-// Core session management
-
 export { type Args, parseArgs } from "./cli/args.ts";
 
-// Config paths
 export {
   CONFIG_DIR_NAME,
   getAgentDir,
@@ -26,7 +23,7 @@ export {
 export type { GoalEntryData, GoalEvaluation, GoalSnapshot, GoalVerdict } from "./core/goal.ts";
 export { readStoredCredential } from "./core/auth-storage.ts";
 export type { CacheWarmingDecision, CacheWarmingStatus } from "./core/cache-warmer.ts";
-// Compaction
+
 export {
   type BranchPreparation,
   type BranchSummaryResult,
@@ -51,7 +48,7 @@ export {
   shouldCompact,
 } from "./core/compaction/index.ts";
 export { createEventBus, type EventBus, type EventBusController } from "./core/event-bus.ts";
-// Extension system
+
 export type {
   AfterProviderResponseEvent,
   AgentActivityOutcome,
@@ -216,7 +213,7 @@ export {
   wrapRegisteredTool,
   wrapRegisteredTools,
 } from "./core/extensions/index.ts";
-// Footer data provider (git branch + extension statuses - data not otherwise available to extensions)
+
 export type { ReadonlyFooterDataProvider } from "./core/footer-data-provider.ts";
 export type { RegisteredMcpServer } from "./core/mcp-servers.ts";
 export { convertToLlm } from "./core/messages.ts";
@@ -251,7 +248,7 @@ export type {
   ResourceLoader,
 } from "./core/resource-loader.ts";
 export { DefaultResourceLoader, loadProjectContextFiles } from "./core/resource-loader.ts";
-// SDK for programmatic usage
+
 export {
   AgentSessionRuntime,
   type AgentSessionRuntimeDiagnostic,
@@ -262,13 +259,11 @@ export {
   type CreateAgentSessionRuntimeFactory,
   type CreateAgentSessionRuntimeResult,
   type CreateAgentSessionServicesOptions,
-  // Factory
   createAgentSession,
   createAgentSessionFromServices,
   createAgentSessionRuntime,
   createAgentSessionServices,
   createBashTool,
-  // Tool factories (for custom cwd)
   createCodingTools,
   createEditTool,
   createFindTool,
@@ -325,7 +320,7 @@ export {
   type SettingsManagerCreateOptions,
   type TuiMode,
 } from "./core/settings-manager.ts";
-// Skills
+
 export {
   formatSkillsForPrompt,
   type LoadSkillsFromDirOptions,
@@ -341,7 +336,7 @@ export {
   generateDiffString,
   generateUnifiedPatch,
 } from "./core/tools/edit-diff.ts";
-// Tools
+
 export {
   type BashOperations,
   type BashSpawnContext,
@@ -415,7 +410,7 @@ export {
   type VirtualModelDefinition,
   type VirtualModelStateData,
 } from "./core/virtual-models.ts";
-// Built-in extensions. The CLI loads them; SDK sessions add them to their extension factories.
+
 export {
   type CodemodeExtensionOptions,
   createCodemodeExtension,
@@ -433,9 +428,9 @@ export {
   type McpTransportFactory,
 } from "./extensions/mcp/index.ts";
 export { createToolSearchExtension } from "./extensions/tool-search/index.ts";
-// Main entry point
+
 export { type MainOptions, main } from "./main.ts";
-// Run modes for programmatic SDK usage
+
 export {
   InteractiveMode,
   type InteractiveModeOptions,
@@ -453,7 +448,7 @@ export {
   runPrintMode,
   runRpcMode,
 } from "./modes/index.ts";
-// UI components for extensions
+
 export {
   ArminComponent,
   AssistantMessageComponent,
@@ -493,7 +488,7 @@ export {
   UserMessageSelectorComponent,
   type VisualTruncateResult,
 } from "./modes/interactive/components/index.ts";
-// Theme utilities for custom tools and extensions
+
 export {
   getLanguageFromPath,
   getMarkdownTheme,
@@ -508,11 +503,11 @@ export {
   type ThemeStyle,
   type ThemeToken,
 } from "./modes/interactive/theme/theme.ts";
-// Clipboard utilities
+
 export { copyToClipboard } from "./utils/clipboard.ts";
 export { parseFrontmatter, stripFrontmatter } from "./utils/frontmatter.ts";
 export { convertToPng } from "./utils/image-convert.ts";
 export { formatDimensionNote, type ResizedImage, resizeImage } from "./utils/image-resize.ts";
 export { detectSupportedImageMimeTypeFromFile } from "./utils/mime.ts";
-// Shell utilities
+
 export { getPowerShellConfig, getShellConfig } from "./utils/shell.ts";

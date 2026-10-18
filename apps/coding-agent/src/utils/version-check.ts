@@ -10,7 +10,6 @@ export interface LatestMsaRelease {
   version: string;
 }
 
-/** Include useful errno details hidden behind Node's generic "fetch failed" error. */
 export function formatVersionCheckError(error: unknown): string {
   const rootMessage = error instanceof Error && error.message ? error.message : String(error);
   const cause = error instanceof Error ? error.cause : undefined;

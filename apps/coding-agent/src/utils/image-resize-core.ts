@@ -2,14 +2,14 @@ import { applyExifOrientation } from "./exif-orientation.ts";
 import { loadPhoton } from "./photon.ts";
 
 export interface ImageResizeOptions {
-  maxWidth?: number; // Default: 2000
-  maxHeight?: number; // Default: 2000
-  maxBytes?: number; // Default: 4.5MB of base64 payload (below Anthropic's 5MB limit)
-  jpegQuality?: number; // Default: 80
+  maxWidth?: number;
+  maxHeight?: number;
+  maxBytes?: number;
+  jpegQuality?: number;
 }
 
 export interface ResizedImage {
-  data: string; // base64
+  data: string;
   mimeType: string;
   originalWidth: number;
   originalHeight: number;
@@ -18,17 +18,12 @@ export interface ResizedImage {
   wasResized: boolean;
 }
 
-/**
- * Tag on image resize worker replies. Node can post its own messages on the worker channel
- * (for example `{ "watch:require": [...] }` under `node --watch`), so replies must be identifiable.
- */
 export const IMAGE_RESIZE_WORKER_RESPONSE_TYPE = "msa:image-resize-response";
 
 export type ResizeImageWorkerResponse =
   | { type: typeof IMAGE_RESIZE_WORKER_RESPONSE_TYPE; result: ResizedImage | null }
   | { type: typeof IMAGE_RESIZE_WORKER_RESPONSE_TYPE; error: string };
 
-// 4.5MB of base64 payload. Provides headroom below Anthropic's 5MB limit.
 const DEFAULT_MAX_BYTES = 4.5 * 1024 * 1024;
 
 const DEFAULT_OPTIONS: Required<ImageResizeOptions> = {
@@ -53,19 +48,6 @@ function encodeCandidate(buffer: Uint8Array, mimeType: string): EncodedCandidate
   };
 }
 
-/**
- * Resize an image to fit within the specified max dimensions and encoded file size.
- * Returns null if the image cannot be resized below maxBytes.
- *
- * Uses Photon (Rust/WASM) for image processing. If Photon is not available,
- * returns null.
- *
- * Strategy for staying under maxBytes:
- * 1. First resize to maxWidth/maxHeight
- * 2. Try both PNG and JPEG formats, pick the smaller one
- * 3. If still too large, try JPEG with decreasing quality
- * 4. If still too large, progressively reduce dimensions until 1x1
- */
 export async function resizeImageInProcess(
   inputBytes: Uint8Array,
   mimeType: string,
@@ -89,7 +71,6 @@ export async function resizeImageInProcess(
     const originalHeight = image.get_height();
     const format = mimeType.split("/")[1] ?? "png";
 
-    // Check if already within all limits (dimensions AND encoded size)
     if (
       originalWidth <= opts.maxWidth &&
       originalHeight <= opts.maxHeight &&
@@ -106,7 +87,6 @@ export async function resizeImageInProcess(
       };
     }
 
-    // Calculate initial dimensions respecting max limits
     let targetWidth = originalWidth;
     let targetHeight = originalHeight;
 

@@ -1,4 +1,3 @@
-/** Renders an msa transcript as plain text, for backends that start from a prompt. */
 import type { Message } from "@msa/ai/compat";
 
 const MAX_TRANSCRIPT_CHARS = 200_000;

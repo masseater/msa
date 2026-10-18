@@ -90,13 +90,12 @@ function findWebpTiffOffset(bytes: Uint8Array): number {
 
     if (chunkId === "EXIF") {
       if (dataStart + chunkSize > bytes.length) return -1;
-      // Some WebP files have "Exif\0\0" prefix before the TIFF header
+
       const tiffStart =
         chunkSize >= 6 && hasExifHeader(bytes, dataStart) ? dataStart + 6 : dataStart;
       return tiffStart;
     }
 
-    // RIFF chunks are padded to even size
     offset = dataStart + chunkSize + (chunkSize % 2);
   }
 
@@ -117,12 +116,9 @@ function hasExifHeader(bytes: Uint8Array, offset: number): boolean {
 function getExifOrientation(bytes: Uint8Array): number {
   let tiffOffset = -1;
 
-  // JPEG: starts with FF D8
   if (bytes.length >= 2 && bytes[0] === 0xff && bytes[1] === 0xd8) {
     tiffOffset = findJpegTiffOffset(bytes);
-  }
-  // WebP: starts with RIFF....WEBP
-  else if (
+  } else if (
     bytes.length >= 12 &&
     bytes[0] === 0x52 &&
     bytes[1] === 0x49 &&
@@ -159,7 +155,6 @@ function rotate90(photon: Photon, image: PhotonImageType, dstIndex: DstIndexFn):
   return new photon.PhotonImage(dst, h, w);
 }
 
-// Flip orientations mutate in-place. Rotations return a new image (caller must free the old one if different).
 export function applyExifOrientation(
   photon: Photon,
   image: PhotonImageType,

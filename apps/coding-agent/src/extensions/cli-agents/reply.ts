@@ -1,8 +1,3 @@
-/**
- * Builds one msa assistant reply from incremental pieces and emits the matching
- * stream events: blocks are opened lazily, closed in order, and the stream ends
- * with exactly one terminal event.
- */
 import { createAssistantMessageEventStream } from "@msa/ai/compat";
 import type { AssistantMessage, JsonObject, Model } from "@msa/ai/compat";
 
@@ -94,7 +89,7 @@ export function createReply(model: Model<string>) {
     get hasContent() {
       return message.content.length > 0;
     },
-    /** Set a text block's full text; only the part beyond what was already emitted is streamed. */
+
     setText(key: string, full: string) {
       const current = open.get(`text:${key}`);
       const have = current ? (message.content[current.index] as { text: string }).text : "";

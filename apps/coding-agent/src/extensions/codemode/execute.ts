@@ -1,8 +1,3 @@
-/**
- * Runs one codemode script in the sandbox. Split from tool.ts and loaded through
- * execute.lazy.ts so the sandbox runtime only loads when a script runs.
- */
-
 import type { AgentTool, AgentToolCallOutcome, AgentToolResult } from "@msa/agent-core";
 import type {
   AnyModel,
@@ -52,15 +47,11 @@ import {
 
 const ARGS_PREVIEW_CHARS = 200;
 const ERROR_PREVIEW_CHARS = 500;
-/** `models.classify()` and `models.generateImages()` calls one script may have in flight; `Promise.all` over many items queues the rest. */
+
 const MAX_CONCURRENT_MODEL_CALLS = 4;
-/**
- * Heap limit for the QuickJS VM. The worker shares msa's process, so without a limit a runaway
- * script can grow to wasm32's 4 GiB and take the session down. Overruns throw
- * `InternalError: out of memory` inside the script.
- */
+
 const CODEMODE_MEMORY_LIMIT_BYTES = 256 * 1024 * 1024;
-// Shared across calls and sessions. Allow one replacement while a cancelled worker is still exiting.
+
 const MAX_CONCURRENT_CODEMODE_WORKERS = 2;
 let activeCodemodeWorkers = 0;
 const MODEL_TYPES: ReadonlySet<string> = new Set<ModelType>(["chat", "image", "classifier"]);
@@ -98,22 +89,18 @@ function toProvider(value: unknown): string | undefined {
   return value;
 }
 
-/** Catalog entry for scripts. `headers` is dropped because models.json headers can carry credentials. */
 function toModelInfo(model: AnyModel): Record<string, unknown> {
   const info: Record<string, unknown> = { ...model };
   delete info["headers"];
   return info;
 }
 
-/** `an image`, `a classifier`. */
 function withArticle(word: string): string {
   return `${/^[aeiou]/.test(word) ? "an" : "a"} ${word}`;
 }
 
-/** A JSON value from a script, read field by field: values that are not objects have no fields. */
 type ScriptValue = { readonly [key: string]: unknown } | null | undefined;
 
-/** A script value in an error message: `undefined`, `a string`, `an array`, or its keys (`{ prompt }`). */
 function describeValue(value: unknown): string {
   if (value === undefined || value === null) return String(value);
   if (Array.isArray(value)) return value.length === 0 ? "an empty array" : "an array";
@@ -128,7 +115,6 @@ function describeValue(value: unknown): string {
 const CLASSIFIER_CONTEXT_SHAPE =
   '{ state: { ... }, images?: [{ type: "image", data: <base64>, mimeType }], questions: { <id>: { type: "choice", instructions, criteria: { <label>: <meaning> } } | { type: "score", instructions, criteria: [<lowest level>, ..., <highest level>] } | { type: "bool", instructions, criteria: { true: <meaning>, false: <meaning> } } } }';
 
-/** Check a script's classifier context, so mistakes fail with the expected shape instead of a provider error. */
 function checkClassifierContext(context: unknown): ClassifierContext {
   const fail = (problem: string) =>
     new Error(
@@ -202,7 +188,6 @@ function checkClassifierContext(context: unknown): ClassifierContext {
   return context as unknown as ClassifierContext;
 }
 
-/** Check a script's image context, so mistakes such as `{ prompt }` fail with the expected shape. */
 function checkImagesContext(context: unknown): ImagesContext {
   const fail = (problem: string) =>
     new Error(
@@ -230,14 +215,12 @@ function checkImagesContext(context: unknown): ImagesContext {
   return context as unknown as ImagesContext;
 }
 
-/** The fields of `ClassifierResult` and `AssistantImages` that a nested call row reports. */
 interface ModelCallResult {
   stopReason: "stop" | "error" | "aborted";
   errorMessage?: string;
   usage?: Usage;
 }
 
-/** Runs at most `limit` calls at once, in call order. */
 function createLimiter(limit: number): <T>(run: () => Promise<T>) => Promise<T> {
   let active = 0;
   const waiting: (() => void)[] = [];
@@ -264,7 +247,6 @@ function isStoreEntryData(data: unknown): data is CodemodeStoreEntryData {
   );
 }
 
-/** Values of `load()`: the `codemode-store` entries on the branch, applied from the root. */
 export function readCodemodeStore(branch: readonly SessionEntry[]): Record<string, unknown> {
   const store = new Map<string, unknown>();
   for (const entry of branch) {
@@ -281,23 +263,15 @@ export function readCodemodeStore(branch: readonly SessionEntry[]): Record<strin
   return Object.fromEntries(store);
 }
 
-/** Default token budget for script output. */
 const DEFAULT_MAX_OUTPUT_TOKENS = 10_000;
-/** Characters per token when estimating. */
+
 const CHARS_PER_TOKEN = 4;
 
-/** Like the script's `text()`: strings as is, other values as compact JSON. */
 function valueText(value: unknown): string {
   if (typeof value === "string") return value;
   return JSON.stringify(value) ?? String(value);
 }
 
-/**
- * Lay out the script's output so the model can tell items apart: providers join adjacent text
- * blocks with a newline or with nothing. With more than one text item (`text()` or the returned
- * value), each starts with a `==> text N/M <==` line. `console.*` lines follow all other output in
- * one `<console_output>` block.
- */
 function formatOutput(output: readonly CodemodeOutputItem[]): (TextContent | ImageContent)[] {
   const total = output.filter((item) => item.type === "text" && !item.console).length;
   const items: (TextContent | ImageContent)[] = [];
@@ -325,11 +299,6 @@ function formatOutput(output: readonly CodemodeOutputItem[]): (TextContent | Ima
   return items;
 }
 
-/**
- * Join adjacent text items into one, each part starting on its own line. The separator check looks
- * at the last non-empty part, not the joined text: reading the end of a growing concatenation makes
- * V8 copy it on every item, which is quadratic (#10678).
- */
 function joinAdjacentText(items: (TextContent | ImageContent)[]): (TextContent | ImageContent)[] {
   const joined: (TextContent | ImageContent)[] = [];
   let parts: string[] = [];
@@ -377,7 +346,6 @@ function formatError(
   return `${head}\n\n${formatCallSummary(calls)}`;
 }
 
-/** Write the full text output to a temp file, like bash does for truncated output. */
 async function spillOutput(text: string): Promise<{ path: string } | { error: string }> {
   try {
     return { path: await writeOutputFile("msa-codemode", ".txt", text) };
@@ -386,7 +354,6 @@ async function spillOutput(text: string): Promise<{ path: string } | { error: st
   }
 }
 
-/** File extensions of the image types `image()` accepts. Must list every type the sandbox's `image()` detects. */
 const IMAGE_EXTENSIONS: Record<string, string> = {
   "image/png": ".png",
   "image/jpeg": ".jpg",
@@ -394,11 +361,6 @@ const IMAGE_EXTENSIONS: Record<string, string> = {
   "image/webp": ".webp",
 };
 
-/**
- * Save each image to a temp file and put a text item with its path before it. The model sees the
- * image but has no other way to reach its bytes: scripts cannot write files, and `write` only takes
- * text. Images shown more than once are saved once.
- */
 async function saveImages(
   items: (TextContent | ImageContent)[],
 ): Promise<(TextContent | ImageContent)[]> {
@@ -408,8 +370,7 @@ async function saveImages(
     const kind = `${mimeType}, ${formatSize(bytes.length)}`;
     const extension = IMAGE_EXTENSIONS[mimeType];
     if (!extension) throw new Error(`No file extension for image type ${mimeType}`);
-    // A failed write (disk full, unwritable temp dir) must not discard the result of a script whose
-    // tool calls already ran, so it becomes part of the label.
+
     try {
       const path = await writeOutputFile("msa-codemode", extension, bytes);
       return `[Image saved to ${path} (${kind})]`;
@@ -431,11 +392,6 @@ async function saveImages(
   return result.flat();
 }
 
-/**
- * Apply the token budget: when the combined text exceeds it, the text items become one
- * item that keeps the start and end of the text, and images follow it. The full text is written to
- * a temp file.
- */
 async function truncateOutput(
   items: (TextContent | ImageContent)[],
   maxTokens: number,
@@ -463,12 +419,6 @@ async function truncateOutput(
   };
 }
 
-/**
- * The value a script receives for a nested call: a tool that declares
- * `outputSchema` resolves to its `structuredContent`, also for error results that carry one (such
- * as MCP results with `isError`); any other tool resolves to its text content. Other failures
- * reject with the tool's error text.
- */
 function toScriptValue(tool: AgentTool<any>, outcome: AgentToolCallOutcome): unknown {
   const { result } = outcome;
   if (tool.outputSchema && result.structuredContent !== undefined) return result.structuredContent;
@@ -477,10 +427,6 @@ function toScriptValue(tool: AgentTool<any>, outcome: AgentToolCallOutcome): unk
   return text;
 }
 
-/**
- * Run one script. Without a session context (a plain Agent or a direct call) scripts cannot call
- * tools, `store()` starts empty, and writes are dropped.
- */
 export async function executeCodemode(
   toolCallId: string,
   input: CodemodeToolInput,
@@ -492,9 +438,9 @@ export async function executeCodemode(
   const startedAt = performance.now();
   const { code, options: sourceOptions } = parseCodemodeSource(input.code);
   const calls: CodemodeNestedCall[] = [];
-  // Usage of the script's `models.*` calls. Nested tool calls report theirs through the session.
+
   let modelUsage: Usage | undefined;
-  // Images returned by `models.generateImages()`, to notice a script that never shows them.
+
   let generatedImages = 0;
   const addGeneratedImages = (count: number) => {
     generatedImages += count;
@@ -505,11 +451,11 @@ export async function executeCodemode(
 
   const snapshot = (): CodemodeToolDetails => ({ calls: calls.map((call) => ({ ...call })) });
   const publish = () => onUpdate?.({ content: [], details: snapshot() });
-  // Show the script as running before its first nested call, so the row's timer starts.
+
   publish();
 
   const callable = ctx ? getCodemodeCallableTools(ctx.tools) : [];
-  // ALL_TOOLS entries carry the declaration.
+
   const guidelines = options.getToolGuidelines?.();
   const samples = new Map(
     callable.map((tool) => [
@@ -521,7 +467,7 @@ export async function executeCodemode(
     const description = samples.get(tool.name);
     return {
       name: tool.name,
-      ...(description !== undefined ? { description } : {}),
+      ...(description === undefined ? {} : { description }),
       execute: async (args, { signal: callSignal }) => {
         const record: CodemodeNestedCall = {
           id: `${toolCallId}/?`,
@@ -532,7 +478,7 @@ export async function executeCodemode(
         calls.push(record);
         publish();
         const callStartedAt = performance.now();
-        // Only tools from ctx.tools are callable, so ctx is set here.
+
         if (!ctx) throw new Error("Tool calls need a session");
         const outcome = await ctx.executeTool(tool.name, args, { signal: callSignal });
         record.id = outcome.toolCall.id;
@@ -571,7 +517,7 @@ export async function executeCodemode(
     timeoutMs: sourceOptions.timeoutMs ?? Number.POSITIVE_INFINITY,
     memoryLimitBytes: CODEMODE_MEMORY_LIMIT_BYTES,
     wasm: loadQuickJSWasm(getQuickJSWasmPath()),
-    ...(workerUrl !== undefined ? { workerUrl } : {}),
+    ...(workerUrl === undefined ? {} : { workerUrl }),
     acquireWorker: () => {
       if (activeCodemodeWorkers >= MAX_CONCURRENT_CODEMODE_WORKERS) {
         throw new Error(
@@ -592,7 +538,7 @@ export async function executeCodemode(
   } finally {
     await sandbox.close();
   }
-  // Calls still marked running were cut off by the script ending, a timeout, or an abort.
+
   for (const call of calls) {
     if (call.status === "running") call.status = "cancelled";
   }
@@ -603,7 +549,7 @@ export async function executeCodemode(
     if (Object.keys(set).length > 0 || deleted.length > 0) {
       options.appendEntry?.(CODEMODE_STORE_ENTRY_TYPE, { set, delete: deleted });
     }
-    // msa extension: a returned value is appended like text().
+
     if (result.value !== undefined)
       scriptOutput.push({ type: "text", text: valueText(result.value) });
   }
@@ -621,8 +567,7 @@ export async function executeCodemode(
     joinAdjacentText(items),
     sourceOptions.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
   );
-  // After truncation, which joins the text items and moves images after them, so each path stays
-  // next to its image and is never cut.
+
   const output = joinAdjacentText(await saveImages(truncated.items));
   const wallTime = ((performance.now() - startedAt) / 1000).toFixed(1);
   const header = `${result.ok ? "Script completed" : "Script failed"}\nWall time ${wallTime} seconds\nOutput:\n`;
@@ -636,10 +581,6 @@ export async function executeCodemode(
   };
 }
 
-/**
- * Whether `query` names the namespace: its name or one of its aliases, as written or as the same
- * script identifier (`dev-github` and `dev_github` are both `dev_github`).
- */
 function isNamespaceName(namespace: ToolNamespace, query: string): boolean {
   const queryId = toCodemodeIdentifier(query);
   return [namespace.name, ...(namespace.aliases ?? [])].some(
@@ -647,10 +588,6 @@ function isNamespaceName(namespace: ToolNamespace, query: string): boolean {
   );
 }
 
-/**
- * `searchTools()`, `describeTool()`, and `describeNamespace()`: ranked search and lookup over the
- * script's nested tools and their namespaces.
- */
 function createDiscoveryGlobals(
   tools: readonly AgentTool<any>[],
   samples: ReadonlyMap<string, string>,
@@ -727,11 +664,6 @@ function createDiscoveryGlobals(
   ];
 }
 
-/**
- * `models.*` for scripts: the model registry methods documented in docs/codemode.md.
- * Classifier and image calls appear as nested call rows so the renderer shows them, and their usage
- * goes to `addUsage`. Rows show only the model, never prompts or image data.
- */
 function createModelGlobals(
   models: CodemodeModelRuntime,
   toolCallId: string,
@@ -743,10 +675,6 @@ function createModelGlobals(
   const limit = createLimiter(MAX_CONCURRENT_MODEL_CALLS);
   let callCount = 0;
 
-  /**
-   * Resolve the script's model by provider and id only, check the context, then run the call as a
-   * nested call row. A script-supplied baseUrl or headers must never receive the credentials.
-   */
   const runModelCall = async <
     TType extends "classifier" | "image",
     TContext,
@@ -761,7 +689,6 @@ function createModelGlobals(
     const listHint = `List the ${type} models you can use with models.getAvailableOfType("${type}").`;
     const given = model as ScriptValue;
     if (typeof given?.["provider"] !== "string" || typeof given["id"] !== "string") {
-      // undefined arrives as null: spread arguments cross the sandbox as a JSON array.
       const undefinedHint =
         model === undefined || model === null
           ? " models.getModelOfType() returns undefined for an unknown provider or id."

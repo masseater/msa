@@ -14,12 +14,6 @@ const DEFAULT_BEARER_TOKEN_MIN_EXPIRY_MS = 30 * 60_000;
 
 type CredentialPrintKind = Exclude<AuthCommandKind, "check">;
 
-/**
- * Resolve one configured provider credential.
- *
- * This intentionally calls ModelRuntime.getAuth(), which refreshes and persists
- * OAuth credentials with less than five minutes remaining through the normal request-auth path.
- */
 export async function resolveCredentialForPrint(
   args: Args,
   modelRuntime: ModelRuntime,

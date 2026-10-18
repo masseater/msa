@@ -14,10 +14,6 @@ export interface InitialMessageResult {
   initialImages?: ImageContent[] | undefined;
 }
 
-/**
- * Combine stdin content, @file text, and the first CLI message into a single
- * initial prompt for non-interactive mode.
- */
 export function buildInitialMessage({
   parsed,
   fileText,

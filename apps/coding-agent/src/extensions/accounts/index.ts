@@ -1,8 +1,3 @@
-/**
- * `/accounts`: one command for every service msa keeps several accounts of.
- * `/accounts` lists them all; `/accounts <kind> <action> ...` manages one kind.
- * Commands have no subcommands, so like `/mcp` the first word picks the kind.
- */
 import type { ExtensionAPI } from "../../core/extensions/types.ts";
 import { claudeAccounts } from "../cli-agents/claude-account-kind.ts";
 import type { AccountKind } from "./kind.ts";

@@ -1,7 +1,3 @@
-/**
- * TUI config selector for `msa config` command
- */
-
 import { ProcessTerminal, type TUI, TuiMainScreen } from "@msa/tui";
 
 import type { SettingsManager } from "../core/settings-manager.ts";
@@ -20,9 +16,7 @@ export interface ConfigSelectorOptions {
   projectModeAvailable: boolean;
 }
 
-/** Show TUI config selector and return when closed */
 export async function selectConfig(options: ConfigSelectorOptions): Promise<void> {
-  // Initialize theme before showing TUI
   initTheme(options.settingsManager.getTheme(), true);
 
   return new Promise((resolve) => {

@@ -1,12 +1,3 @@
-/**
- * Presentation for the codemode tool.
- *
- * The call shows the script; the result lists the nested tool calls with their status as they
- * run and the cost of its model calls, followed by the script output without the "Script completed"
- * header, and the time the script has been running (`Elapsed`) or took (`Took`), like bash rows.
- * Nested calls are not separate tool rows because they never reach the model as tool calls.
- */
-
 import { Container, Spacer, Text } from "@msa/tui";
 
 import type { ToolDefinition } from "../../core/extensions/types.ts";
@@ -30,7 +21,6 @@ function formatDuration(ms: number | undefined): string {
   return ms < 1000 ? `${Math.round(ms)}ms` : `${(ms / 1000).toFixed(1)}s`;
 }
 
-/** Cents for larger amounts, two significant digits for the fractions of a cent classifier calls cost. */
 function formatCost(cost: number): string {
   return `$${cost >= 0.01 ? cost.toFixed(2) : cost.toPrecision(2)}`;
 }
@@ -69,7 +59,7 @@ export const codemodeRenderers: Pick<
 > = {
   renderCall(args, theme, context) {
     startToolTimer(context);
-    // The code includes the `// @options:` line, so options show as part of the script.
+
     const code = str((args as { code?: unknown } | undefined)?.code);
     const title = theme.fg("toolTitle", theme.bold("codemode"));
     const component = (context.lastComponent as Container | undefined) ?? new Container();
@@ -100,7 +90,6 @@ export const codemodeRenderers: Pick<
     component.clear();
     const calls = result.details?.calls ?? [];
     if (calls.length > 0 && !options.expanded) {
-      // Collapsed: the latest call, which shows what the script is doing now.
       const earlier = calls.length - 1;
       const more = earlier > 0 ? `  ${theme.fg("muted", `+${earlier} earlier calls`)}` : "";
       component.addChild(new Spacer(1));
@@ -116,8 +105,6 @@ export const codemodeRenderers: Pick<
       component.addChild(new Text(lines.join("\n"), 0, 0));
     }
 
-    // Drop the "Script completed\nWall time ...\nOutput:\n" header. Rejected input (invalid options)
-    // has no header.
     const [first, ...rest] = result.content;
     const hasHeader = first?.type === "text" && SCRIPT_HEADER.test(first.text);
     const output = options.isPartial

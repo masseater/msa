@@ -1,23 +1,3 @@
-/**
- * Claude accounts the claude-code provider can run Claude Code under, and which
- * of them are currently blocked (usage limit, logged out, disabled org).
- *
- * <agent dir>/claude-code-accounts.json:
- *   { "accounts": [
- *       { "name": "main", "configDir": "~/.claude-main" },
- *       { "name": "token", "tokenCommand": "op read op://vault/claude/token" },
- *       { "name": "work", "tokenCommand": "...", "auto": false } ] }
- *
- * `configDir` uses Claude Code's own login in that config dir. `tokenCommand` is
- * a shell command that prints a `claude setup-token` token; the token is given
- * only to that account's Claude Code process. Without the file there is one
- * account, "default", that inherits msa's environment. `auto: false` keeps an
- * account out of the `claude-code` rotation; it is used only through its own
- * provider.
- *
- * `/accounts claude` edits the file; an account added there without a
- * tokenCommand gets its own config dir under <agent dir>/claude-accounts.
- */
 import { execFile } from "node:child_process";
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -48,7 +28,6 @@ interface Block {
   reason: string;
 }
 
-/** The accounts as written in the file, `~` unexpanded. */
 function readAccounts(): Account[] {
   let raw: string;
   try {
@@ -67,7 +46,6 @@ export function loadAccounts(): Account[] {
   );
 }
 
-/** Apply `change` to the file's account list; writing it makes the implicit "default" explicit. */
 function editAccounts(change: (accounts: Account[]) => Account[]): void {
   const accounts = change(readAccounts());
   if (accounts.length === 0) throw new Error("At least one Claude account must remain");
@@ -82,7 +60,6 @@ function findAccount(accounts: Account[], name: string): Account {
   return account;
 }
 
-/** Add an account. Without a tokenCommand it gets its own, not yet logged-in, config dir. */
 export function addAccount(name: string, tokenCommand?: string): Account {
   if (!/^[a-z0-9][a-z0-9_-]*$/.test(name)) {
     throw new Error(`Account name "${name}" must be lowercase letters, digits, "-" or "_"`);
@@ -99,7 +76,6 @@ export function addAccount(name: string, tokenCommand?: string): Account {
   return account;
 }
 
-/** Remove an account, and the config dir msa made for it. */
 export function removeAccount(name: string): void {
   let removed: Account | undefined;
   editAccounts((accounts) => {
@@ -114,7 +90,6 @@ export function removeAccount(name: string): void {
   saveBlocks(blocks);
 }
 
-/** Put an account first, so the `claude-code` rotation tries it before the others. */
 export function preferAccount(name: string): void {
   editAccounts((accounts) => {
     const account = findAccount(accounts, name);
@@ -133,11 +108,6 @@ export function setAutoRotation(name: string, auto: boolean): void {
   });
 }
 
-/**
- * The user's installed `claude` (CLAUDE_BIN, else PATH). msa ships as a bundle
- * or a compiled binary, where the SDK cannot find the Claude Code binary it
- * carries; without `claude` the SDK's own lookup is the only option left.
- */
 export function claudeExecutable(): string | undefined {
   return process.env["CLAUDE_BIN"]?.trim() || findExecutableOnPath("claude") || undefined;
 }
@@ -159,7 +129,6 @@ async function runTokenCommand(command: string): Promise<string> {
   return token;
 }
 
-/** Environment for this account's Claude Code process. */
 export async function accountEnv(account: Account): Promise<Record<string, string>> {
   const env = { ...process.env } as Record<string, string>;
   delete env["CLAUDECODE"];
@@ -184,12 +153,10 @@ export interface AuthStatus {
   detail?: string;
 }
 
-/** "logged in as <email>" for a signed-in account, "" otherwise. */
 export function describeLogin(status: AuthStatus): string {
   return status.loggedIn ? `logged in${status.email ? ` as ${status.email}` : ""}` : "";
 }
 
-/** Each account with its {@link authStatus}, checked in parallel. */
 export async function withAuthStatus(
   accounts: Account[],
 ): Promise<Array<{ account: Account; status: AuthStatus }>> {
@@ -197,7 +164,6 @@ export async function withAuthStatus(
   return accounts.map((account, index) => ({ account, status: statuses[index]! }));
 }
 
-/** `claude auth status` (JSON, exit 1 when logged out) under this account. */
 export async function authStatus(account: Account): Promise<AuthStatus> {
   try {
     const { stdout } = await promisify(execFile)(
@@ -221,15 +187,9 @@ export async function authStatus(account: Account): Promise<AuthStatus> {
 }
 
 export interface LoginPrompts {
-  /** Called once with the sign-in URL; resolves to the code the user pasted, or undefined. */
   askCode(url: string, signal: AbortSignal): Promise<string | undefined>;
 }
 
-/**
- * Run `claude auth login` in the account's config dir. Claude Code prints a
- * sign-in URL and either finishes on its own (browser callback) or reads the
- * code the user pastes.
- */
 export async function loginAccount(account: Account, prompts: LoginPrompts): Promise<void> {
   if (!account.configDir && account.tokenCommand) {
     throw new Error(`"${account.name}" signs in with its tokenCommand, not a Claude login`);
@@ -306,9 +266,9 @@ export function clearBlocks(): void {
 
 export interface RunFailure {
   error: string;
-  /** Claude Code's classification: a used-up plan limit, or the API error of its error notice. */
+
   cause?: "usage_limit" | SDKAssistantMessageError;
-  /** When the rejected plan limit resets, in ms. */
+
   resetsAt?: number;
 }
 
@@ -318,12 +278,10 @@ const DISABLED_CAUSES = new Set<RunFailure["cause"]>([
   "billing_error",
 ]);
 
-/** If a failed run means the account cannot serve requests for a while, record it and return true. */
 export function blockIfUnusable(account: Account, failure: RunFailure): boolean {
   const { error, cause } = failure;
   let until: number | undefined;
   if (cause === "usage_limit") until = failure.resetsAt ?? Date.now() + FALLBACK_BLOCK_MS;
-  // Failures before any API call (no login, a failed tokenCommand) come without a classification.
   else if (
     cause === "authentication_failed" ||
     /^tokenCommand /.test(error) ||

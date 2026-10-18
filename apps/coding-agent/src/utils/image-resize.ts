@@ -11,8 +11,6 @@ import {
 export type { ImageResizeOptions, ResizedImage } from "./image-resize-core.ts";
 
 function toTransferableBytes(input: Uint8Array): Uint8Array<ArrayBuffer> {
-  // Transfer detaches the buffer, so transfer a worker-owned copy and leave the
-  // caller's bytes intact.
   return new Uint8Array(input);
 }
 
@@ -52,8 +50,6 @@ async function resizeImageInWorker(
       };
 
       worker.on("message", (message: unknown) => {
-        // Ignore messages Node posts on the worker channel itself, such as
-        // `{ "watch:require": [...] }` under `node --watch` (nodejs/node#65044).
         if (!isResizeImageWorkerResponse(message)) return;
         if ("error" in message) fail(new Error(message.error));
         else settle(message.result);
@@ -78,13 +74,6 @@ async function resizeImageInWorker(
   }
 }
 
-/**
- * Resize an image to fit within the specified max dimensions and encoded file size.
- * Runs Photon in a worker thread so WASM decoding, resizing, and encoding do not
- * block the TUI event loop. If the worker cannot be loaded (for example in some
- * Bun compiled executable layouts), fall back to in-process resizing so image
- * reads still work.
- */
 export async function resizeImage(
   inputBytes: Uint8Array,
   mimeType: string,
@@ -96,9 +85,6 @@ export async function resizeImage(
     import.meta.url,
   );
 
-  // Bun compiled executables resolve worker entrypoints by string path, not via
-  // new URL(..., import.meta.url). Try the string path first under Bun so the
-  // release binary uses the embedded worker instead of falling back in-process.
   if (typeof process.versions["bun"] === "string") {
     try {
       return await resizeImageInWorker(
@@ -117,10 +103,6 @@ export async function resizeImage(
   }
 }
 
-/**
- * Format a dimension note for resized images.
- * This helps the model understand the coordinate mapping.
- */
 export function formatDimensionNote(result: ResizedImage): string | undefined {
   if (!result.wasResized) {
     return undefined;

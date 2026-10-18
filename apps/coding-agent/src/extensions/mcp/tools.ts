@@ -1,15 +1,3 @@
-/**
- * Adapts MCP tools to msa tool definitions.
- *
- * Results map onto msa's model-facing content (text and images). Text over 20KB keeps its start and
- * end with the middle cut out, like Codex does, and the full text is saved to a temp file the model
- * can read. Binary resources other than images are saved to temp files too, and resource links name
- * the `read_mcp_resource` tool. Codemode scripts receive the whole `CallToolResult` without `_meta`
- * (`content` blocks as sent by the server, `structuredContent`, `isError`), never truncated: it is
- * the tool's `structuredContent`, and every MCP tool declares a `CallToolResult` output schema. MCP
- * errors (`isError`) are error results for the model, but scripts still resolve to the result.
- */
-
 import { createHash } from "node:crypto";
 
 import type { AgentToolResult } from "@msa/agent-core";
@@ -43,33 +31,23 @@ import { toErrorMessage } from "../../utils/errors.ts";
 import { writeOutputFile } from "../../utils/output-files.ts";
 import type { McpExposure } from "./config.ts";
 
-/**
- * Tool exposure of an MCP exposure. `codemode` and `deferred` both leave tools out of the codemode
- * description; they differ only in which tool the MCP extension activates to reach them.
- */
 export function toToolExposure(exposure: McpExposure): ToolExposure {
   return exposure === "codemode" ? "deferred" : exposure;
 }
 
-/** Provider tool names are limited to 64 characters of `[A-Za-z0-9_-]`. */
 const MAX_TOOL_NAME_LENGTH = 64;
-/** Model-facing text of an MCP result beyond this is cut in the middle. */
+
 export const MCP_OUTPUT_MAX_BYTES = 20 * 1024;
-/** Visual (wrapped) result lines shown before the output is expanded. */
-/** Tool that reads the resources named by resource links. */
+
 export { READ_MCP_RESOURCE_TOOL };
 
 export interface McpToolDetails {
   server: string;
   tool: string;
-  /** Temp file with the full text output, when the model-facing text was truncated. */
+
   fullOutputPath?: string;
 }
 
-/**
- * Saves the full text of a truncated result, or a binary resource, and returns the file path.
- * `extension` includes the dot, for example `.txt`.
- */
 export type McpOutputSaver = (data: string | Uint8Array, extension: string) => Promise<string>;
 
 export function saveToTempFile(data: string | Uint8Array, extension: string): Promise<string> {
@@ -84,12 +62,6 @@ export interface McpToolCaller {
   ): Promise<CallToolResult>;
 }
 
-/**
- * `mcp__<server>__<tool>`, sanitized and shortened with a hash suffix when too long. Like Codex,
- * everything but `[A-Za-z0-9_]` becomes `_`, so the name is also the identifier codemode scripts
- * call it by. `isTaken` reports names used by a different MCP tool: sanitizing can map two tools to
- * one name (`a-b` and `a_b`), which then get the hash suffix.
- */
 export function createMcpToolName(
   server: string,
   tool: string,
@@ -108,10 +80,6 @@ function textOf(content: readonly (TextContent | ImageContent)[]): string {
     .join("\n");
 }
 
-/**
- * MCP content blocks as one compact type with the fields of text and image blocks, which scripts
- * read most (`image(block)` takes an image block as is). Rendered into every MCP tool's declaration.
- */
 const CONTENT_BLOCK_SCHEMA = {
   type: "object",
   properties: {
@@ -124,9 +92,8 @@ const CONTENT_BLOCK_SCHEMA = {
   additionalProperties: true,
 };
 
-/** Keywords whose values are data, so a `$ref` key in them is not a reference. */
 const SCHEMA_DATA_KEYWORDS: ReadonlySet<string> = new Set(["const", "enum", "default", "examples"]);
-/** Keywords whose values map names to schemas, so their keys are names, not keywords. */
+
 const SCHEMA_MAP_KEYWORDS: ReadonlySet<string> = new Set([
   "properties",
   "patternProperties",
@@ -136,11 +103,6 @@ const SCHEMA_MAP_KEYWORDS: ReadonlySet<string> = new Set([
   "definitions",
 ]);
 
-/**
- * `schema` as a subschema at the JSON pointer `pointer` (`#/properties/structuredContent`) of
- * another schema: its local references (`#`, `#/$defs/Item`) are rewritten to point below
- * `pointer`, so they resolve to the same subschemas as before.
- */
 function relocateSchema(schema: unknown, pointer: string): unknown {
   if (Array.isArray(schema)) return schema.map((item) => relocateSchema(item, pointer));
   if (typeof schema !== "object" || schema === null) return schema;
@@ -169,10 +131,6 @@ function relocateSchema(schema: unknown, pointer: string): unknown {
   return relocated;
 }
 
-/**
- * Output schema of every MCP tool: the `CallToolResult` scripts receive (without `_meta`, which
- * {@link convertMcpResult} drops), with the tool's own output schema as `structuredContent`.
- */
 export function createMcpResultSchema(
   structuredContentSchema: Record<string, unknown> | undefined,
 ): TSchema {
@@ -180,22 +138,18 @@ export function createMcpResultSchema(
     type: "object",
     properties: {
       content: { type: "array", items: CONTENT_BLOCK_SCHEMA },
-      // Servers may send structured content without declaring a schema for it, and it may be any JSON value.
+
       structuredContent: structuredContentSchema
         ? relocateSchema(structuredContentSchema, "#/properties/structuredContent")
         : {},
       isError: { type: "boolean" },
     },
     required: ["content"],
-    // Fields newer protocol versions add.
+
     additionalProperties: true,
   } as unknown as TSchema;
 }
 
-/**
- * Keep model-facing text within {@link MCP_OUTPUT_MAX_BYTES}. Longer text becomes one text block in
- * Codex's truncation format, followed by the path of the file with the full text; images follow it.
- */
 export async function limitMcpContent(
   content: (TextContent | ImageContent)[],
   saveOutput: McpOutputSaver = saveToTempFile,
@@ -220,19 +174,16 @@ export async function limitMcpContent(
 }
 
 export interface ConvertMcpResultOptions {
-  /** Saves truncated text and binary resources. Default: a temp file. */
   saveOutput?: McpOutputSaver | undefined;
-  /** Whether the server's resources can be read with `read_mcp_resource`, which resource links then name. */
+
   readableResources?: boolean | undefined;
 }
 
-/** File extension for a saved binary resource: the one its URI ends in, else `.bin`. */
 function extensionOf(uri: string): string {
   const path = URL.canParse(uri) ? new URL(uri).pathname : uri;
   return /\.[A-Za-z0-9]{1,8}$/.exec(path)?.[0] ?? ".bin";
 }
 
-/** Blobs of these types are shown as text. */
 function isTextMimeType(mimeType: string | undefined): boolean {
   if (!mimeType) return false;
   const type = (mimeType.split(";", 1)[0] ?? "").trim().toLowerCase();
@@ -244,7 +195,6 @@ function isTextMimeType(mimeType: string | undefined): boolean {
   );
 }
 
-/** Model-facing content of one block of `server`'s result. */
 async function blockToContent(
   server: string,
   block: ContentBlock,
@@ -288,7 +238,6 @@ async function blockToContent(
   return toLlmContent({ content: [block] });
 }
 
-/** Model-facing content of `server`'s content blocks, before the output limit. */
 export async function toModelContent(
   server: string,
   blocks: readonly ContentBlock[],
@@ -297,14 +246,12 @@ export async function toModelContent(
   return (await Promise.all(blocks.map((block) => blockToContent(server, block, options)))).flat();
 }
 
-/** Convert an MCP result. `isError` results become error results that keep the structured result. */
 export async function convertMcpResult(
   server: string,
   tool: string,
   result: CallToolResult,
   options: ConvertMcpResultOptions = {},
 ): Promise<AgentToolResult<McpToolDetails>> {
-  // Without content blocks, toLlmContent falls back to the structured content as JSON.
   const converted: (TextContent | ImageContent)[] =
     result.content.length > 0
       ? await toModelContent(server, result.content, options)
@@ -322,10 +269,6 @@ export async function convertMcpResult(
   };
 }
 
-/**
- * Tool input schemas must be objects. MCP servers may omit `type`, and some providers reject object
- * schemas without `properties`.
- */
 function toParameters(schema: Record<string, unknown>): TSchema {
   return {
     ...schema,
@@ -341,7 +284,6 @@ const ANNOTATION_HINTS = [
   "openWorldHint",
 ] as const;
 
-/** The boolean hints of an MCP tool's annotations, or undefined when it has none. */
 function toToolAnnotations(tool: McpTool): ToolAnnotations | undefined {
   const annotations: ToolAnnotations = {};
   for (const hint of ANNOTATION_HINTS) {
@@ -359,7 +301,7 @@ export function createMcpToolDefinition(options: {
   namespace: ToolNamespace;
   timeoutMs: number;
   getClient: () => Promise<McpToolCaller>;
-  /** Whether `read_mcp_resource` can read the server's resources. */
+
   readableResources?: () => boolean;
 }): ToolDefinition<TSchema, McpToolDetails> {
   const { server, tool } = options;
@@ -394,7 +336,6 @@ export function createMcpToolDefinition(options: {
   };
 }
 
-/** Renderers of calls to an MCP tool, labeled `server/tool`, also used before the tool is registered. */
 export function createMcpToolRenderers(label: string): ToolRenderers {
   return {
     renderCall(args, theme, context) {

@@ -16,7 +16,6 @@ function dosDateTime(date: Date): { time: number; day: number } {
   };
 }
 
-/** Create the small, classic ZIP archives used by bug reports. */
 function createZipArchive(entries: readonly ZipEntry[]): Buffer {
   const files: Buffer[] = [];
   const directory: Buffer[] = [];

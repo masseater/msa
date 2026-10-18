@@ -7,7 +7,5 @@ export function setupCli(): void {
   process.env["AI_AGENT"] = "msa";
   process.emitWarning = (() => {}) as typeof process.emitWarning;
 
-  // Configure undici before provider SDKs issue requests. Settings are applied
-  // once SettingsManager has loaded global/project configuration.
   configureHttpDispatcher();
 }

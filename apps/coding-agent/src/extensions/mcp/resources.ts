@@ -1,15 +1,3 @@
-/**
- * MCP resources, through the tools Codex and opencode use: `list_mcp_resources`,
- * `list_mcp_resource_templates`, and `read_mcp_resource`. They take a `server` argument and cover
- * every connected server with resources, so models trained on those tools use them unchanged.
- *
- * Listings are JSON, as in Codex: `{ server?, resources: [{ server, ...resource }], nextCursor? }`.
- * With a `server`, one page is listed and `cursor` continues it; without, every page of every server.
- * MCP App resources (`ui://` URIs and `profile=mcp-app` HTML) are left out, since they are user
- * interfaces for hosts that render them, and so are icons. Read resources become text and images for
- * the model; binary resources are saved to temp files. Scripts get the JSON payloads.
- */
-
 import type { ImageContent, JsonValue, TextContent } from "@msa/ai";
 import type {
   ContentBlock,
@@ -34,7 +22,6 @@ import { limitMcpContent, type McpToolDetails, toModelContent, toToolExposure } 
 
 export { LIST_MCP_RESOURCE_TEMPLATES_TOOL, LIST_MCP_RESOURCES_TOOL, READ_MCP_RESOURCE_TOOL };
 
-/** A connected server that offers resources. */
 export interface McpResourceServer {
   name: string;
   timeoutMs: number;
@@ -51,7 +38,6 @@ export interface McpResourceServer {
   readResource(uri: string, options: McpRequestOptions): Promise<ReadResourceResult>;
 }
 
-/** MCP App user interfaces, which only hosts that render them can use. */
 function isMcpAppResource(item: {
   uri?: string;
   uriTemplate?: string;
@@ -61,7 +47,6 @@ function isMcpAppResource(item: {
   return uri.startsWith("ui://") || /;\s*profile\s*=\s*"?mcp-app"?/i.test(item.mimeType ?? "");
 }
 
-/** A listed resource or template without `_meta` and icons, tagged with its server. */
 function listed<T extends { _meta?: unknown }>(server: string, item: T): Record<string, unknown> {
   const { _meta, icons: _icons, ...rest } = item as T & { icons?: unknown };
   return { server, ...rest };
@@ -210,9 +195,6 @@ async function jsonResult(
   };
 }
 
-/**
- * The three resource tools. `servers` returns the servers whose resources they reach, at call time.
- */
 export function createMcpResourceToolDefinitions(options: {
   exposure: McpExposure;
   servers: () => readonly McpResourceServer[];
@@ -229,7 +211,6 @@ export function createMcpResourceToolDefinitions(options: {
     );
   };
 
-  /** One page of one server, or every page of every server. */
   const list = async <T extends { _meta?: unknown }>(
     params: unknown,
     signal: AbortSignal | undefined,
@@ -350,7 +331,7 @@ export function createMcpResourceToolDefinitions(options: {
         ...(signal ? { signal } : {}),
         timeoutMs: server.timeoutMs,
       });
-      // Several contents (for example a directory) are labeled with their URIs.
+
       const blocks: ContentBlock[] = result.contents.flatMap((contents) => [
         ...(result.contents.length > 1
           ? [{ type: "text" as const, text: `${contents.uri}:` }]

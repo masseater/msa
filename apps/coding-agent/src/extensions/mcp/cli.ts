@@ -1,10 +1,3 @@
-/**
- * `msa mcp`: add, remove, and check MCP servers and sign in to them outside a session. Agents run it
- * through bash to configure servers, verify an `mcp.json` they wrote, and start an OAuth sign-in;
- * the user only approves access in the browser. Running sessions pick up new credentials on their
- * next turn.
- */
-
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { createInterface } from "node:readline/promises";
@@ -82,11 +75,11 @@ const DEFAULT_LOGIN_TIMEOUT_SECONDS = 300;
 export interface McpCommandOptions {
   cwd: string;
   agentDir: string;
-  /** Defaults to `mcp-auth.json` in the agent directory. */
+
   credentials?: McpOAuthCredentialStore;
-  /** Defaults to the platform browser. */
+
   openUrl?: (url: string) => void;
-  /** Defaults to console output. */
+
   log?: (line: string) => void;
   error?: (line: string) => void;
 }
@@ -95,16 +88,16 @@ interface ServerReport {
   name: string;
   scope: string;
   source: string;
-  /** Project `mcp.json` that overrides `enabled`, `exposure`, or `toolExposure` of this global server. */
+
   override?: string;
   enabled: boolean;
   exposure: string;
   transport: string;
   state: string;
   tools: string[];
-  /** Tools whose exposure differs from the server's, from `toolExposure`. */
+
   toolExposure?: Record<string, string>;
-  /** Whether the server offers resources. They are not listed: listing every one can take long. */
+
   resources?: true;
   error?: string;
 }
@@ -129,21 +122,15 @@ function createConnection(
   });
 }
 
-/** Short spellings of options. `-l`/`--local` match `msa install`. */
 const OPTION_ALIASES = new Map([["-l", "--local"]]);
 
 interface ParsedOptions {
   positional: string[];
   values: Map<string, string | true>;
-  /** Values of `list` options, in order. */
+
   lists: Map<string, string[]>;
 }
 
-/**
- * Parse `--name value` options; returns undefined and reports unknown ones. `--` ends the options,
- * as does reaching `maxPositionals` positional arguments: the remaining arguments are positional,
- * so a command's own options (`add <server> <command> --flag`) are passed through.
- */
 function parseOptions(
   args: string[],
   known: Record<string, "flag" | "value" | "list">,
@@ -186,7 +173,6 @@ function parseOptions(
   return { positional, values, lists };
 }
 
-/** Run `msa mcp <args>` and return the exit code. */
 export async function runMcpCommand(args: string[], options: McpCommandOptions): Promise<number> {
   const log = options.log ?? ((line: string) => console.log(line));
   const error = options.error ?? ((line: string) => console.error(line));
@@ -284,7 +270,6 @@ export async function runMcpCommand(args: string[], options: McpCommandOptions):
   }
 }
 
-/** Parse `KEY=VALUE` pairs of a repeatable option into a record. */
 function parsePairs(option: string, pairs: string[] | undefined, error: (line: string) => void) {
   if (!pairs) return {};
   const record: Record<string, string> = {};
@@ -416,7 +401,7 @@ function add(
       `The project is not trusted, so ${path} is ignored until you start ${APP_NAME} in the project and trust it.`,
     );
   }
-  // HTTP servers without an Authorization header may use OAuth.
+
   const mayNeedSignIn =
     "url" in validated &&
     !Object.keys(validated.headers ?? {}).some(
@@ -493,9 +478,7 @@ async function list(
       const connection = createConnection(entry, options, credentials);
       try {
         await connection.getClient();
-      } catch {
-        // The connection records the state and error.
-      }
+      } catch {}
       report.state = connection.state;
       report.tools = connection.tools.map((tool) => tool.name);
       const overrides = connection.tools.flatMap((tool) => {
@@ -569,7 +552,7 @@ async function login(
   error: (line: string) => void,
 ): Promise<number> {
   const { name } = entry;
-  // Connecting first answers whether a sign-in is needed and records the server's challenge.
+
   try {
     await connection.getClient();
     log(`Already signed in to MCP server "${name}" (${connection.tools.length} tools).`);
@@ -617,10 +600,6 @@ async function login(
   return 0;
 }
 
-/**
- * The pasted redirect URL in a terminal; otherwise only the browser callback can finish the sign-in.
- * Resolves to undefined when `signal` aborts: the callback arrived, or the sign-in timed out.
- */
 async function waitForRedirectUrl(
   signal: AbortSignal,
   interactive: boolean,

@@ -39,9 +39,9 @@ async function resolveServerUrl(
 
 function modelIsSelectable(model: LlamaModelInfo, routerAutoload: boolean): boolean {
   if (model.status.value === "loaded") return true;
-  // llama.cpp reports idle-slept models as "sleeping"; requests wake them automatically.
+
   if (model.status.value === "sleeping") return true;
-  // Unloaded presets are routable only when llama.cpp router autoload can load them on first use.
+
   return (
     routerAutoload &&
     model.status.value === "unloaded" &&
@@ -87,27 +87,16 @@ function contextWindowOf(model: LlamaModelInfo, cachedContextWindow?: number): n
 
 type LlamaClassifierApi = "llama-cpp-classify" | "typesafe-system-one";
 
-/**
- * Whether llama.cpp reports a native decision model. Since llama.cpp 0.6.0, `GET /models` lists
- * `decisions` in `architecture.output_modalities` for these models, including unloaded and sleeping ones.
- * Older servers report `["text"]` or omit `architecture`, so their models are treated as chat models.
- */
 function isDecisionModel(model: LlamaModelInfo): boolean {
   return model.architecture?.output_modalities?.includes("decisions") === true;
 }
 
-/** Decision-only models cannot generate text and are not listed for chat. */
 function isChatModel(model: LlamaModelInfo): boolean {
   return (
     !isDecisionModel(model) || model.architecture?.output_modalities?.includes("text") === true
   );
 }
 
-/**
- * A llama.cpp model used as a classifier. Decision models answer natively through llama.cpp's
- * System One endpoint (`/v1/systemone`). Chat models fall back to `llama-cpp-classify`, which reads
- * answers from next-token label probabilities.
- */
 function toMsaClassifierModel(
   model: LlamaModelInfo,
   serverUrl: string,
@@ -289,10 +278,7 @@ export function createLlamaProvider(): LlamaProviderController {
       const routerAutoload = await routerAutoloadEnabled(client, catalog, context.signal);
       if (context.signal.aborted) return;
       const selectable = catalog.filter((model) => modelIsSelectable(model, routerAutoload));
-      // Only loaded models expose their chat template without side effects. Unloaded autoload presets would
-      // need to be loaded, while querying sleeping models may wake them. Those models remain without thinking
-      // support until they are loaded and a later catalog refresh discovers it. Decision models need no
-      // template, and llama.cpp reports them in the catalog regardless of their status.
+
       const refreshed = await Promise.all(
         selectable.filter(isChatModel).map(async (model) => {
           const cachedContextWindow = cachedContextWindows.get(model.id);

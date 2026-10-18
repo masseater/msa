@@ -110,10 +110,6 @@ export function normalizeChangelogLinks(
   });
 }
 
-/**
- * Parse changelog entries from CHANGELOG.md
- * Scans for ## lines and collects content until next ## or EOF
- */
 export function parseChangelog(changelogPath: string): ChangelogEntry[] {
   if (!existsSync(changelogPath)) {
     return [];
@@ -128,9 +124,7 @@ export function parseChangelog(changelogPath: string): ChangelogEntry[] {
     let currentVersion: { major: number; minor: number; patch: number } | null = null;
 
     for (const line of lines) {
-      // Check if this is a version header (## [x.y.z] ...)
       if (line.startsWith("## ")) {
-        // Save previous entry if exists
         if (currentVersion && currentLines.length > 0) {
           entries.push({
             ...currentVersion,
@@ -138,7 +132,6 @@ export function parseChangelog(changelogPath: string): ChangelogEntry[] {
           });
         }
 
-        // Try to parse version from this line
         const versionMatch = line.match(/##\s+\[?(\d+)\.(\d+)\.(\d+)\]?/);
         const [, major, minor, patch] = versionMatch ?? [];
         if (major !== undefined && minor !== undefined && patch !== undefined) {
@@ -149,17 +142,14 @@ export function parseChangelog(changelogPath: string): ChangelogEntry[] {
           };
           currentLines = [line];
         } else {
-          // Reset if we can't parse version
           currentVersion = null;
           currentLines = [];
         }
       } else if (currentVersion) {
-        // Collect lines for current version
         currentLines.push(line);
       }
     }
 
-    // Save last entry
     if (currentVersion && currentLines.length > 0) {
       entries.push({
         ...currentVersion,
@@ -174,20 +164,13 @@ export function parseChangelog(changelogPath: string): ChangelogEntry[] {
   }
 }
 
-/**
- * Compare versions. Returns: -1 if v1 < v2, 0 if v1 === v2, 1 if v1 > v2
- */
 export function compareVersions(v1: ChangelogEntry, v2: ChangelogEntry): number {
   if (v1.major !== v2.major) return v1.major - v2.major;
   if (v1.minor !== v2.minor) return v1.minor - v2.minor;
   return v1.patch - v2.patch;
 }
 
-/**
- * Get entries newer than lastVersion
- */
 export function getNewEntries(entries: ChangelogEntry[], lastVersion: string): ChangelogEntry[] {
-  // Parse lastVersion
   const parts = lastVersion.split(".").map(Number);
   const last: ChangelogEntry = {
     major: parts[0] || 0,
@@ -199,5 +182,4 @@ export function getNewEntries(entries: ChangelogEntry[], lastVersion: string): C
   return entries.filter((entry) => compareVersions(entry, last) > 0);
 }
 
-// Re-export getChangelogPath from paths.ts for convenience
 export { getChangelogPath } from "../config.ts";

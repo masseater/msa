@@ -66,10 +66,6 @@ function isSupportedImageMimeType(mimeType: string): boolean {
   return SUPPORTED_IMAGE_MIME_TYPES.some((t) => t === base);
 }
 
-/**
- * Convert unsupported image formats to PNG using Photon.
- * Returns null if conversion is unavailable or fails.
- */
 async function convertToPng(bytes: Uint8Array): Promise<Uint8Array | null> {
   const photon = await loadPhoton();
   if (!photon) {
@@ -88,8 +84,6 @@ async function convertToPng(bytes: Uint8Array): Promise<Uint8Array | null> {
   }
 }
 
-// Undefined means the backend failed; null means it has no image. An empty
-// Wayland clipboard must not fall through to stale X11 clipboard contents.
 async function readClipboardImageViaWlPaste(): Promise<ClipboardImage | null | undefined> {
   const list = await runClipboardCommand("wl-paste", ["--list-types"], {
     timeoutMs: DEFAULT_LIST_TIMEOUT_MS,
@@ -114,11 +108,6 @@ async function readClipboardImageViaWlPaste(): Promise<ClipboardImage | null | u
   return { bytes: data, mimeType: baseMimeType(selectedType) };
 }
 
-/**
- * On WSL, the Linux clipboard (Wayland/X11) does not receive image data from
- * Windows screenshots (Win+Shift+S). PowerShell can access the Windows clipboard
- * directly, so we use it as a fallback.
- */
 async function readClipboardImageViaPowerShell(): Promise<ClipboardImage | null> {
   const tmpFile = join(tmpdir(), `msa-wsl-clip-${randomUUID()}.png`);
 
@@ -171,9 +160,7 @@ async function readClipboardImageViaPowerShell(): Promise<ClipboardImage | null>
   } finally {
     try {
       unlinkSync(tmpFile);
-    } catch {
-      // Ignore cleanup errors.
-    }
+    } catch {}
   }
 }
 
@@ -215,10 +202,6 @@ async function readClipboardImageViaNativeClipboard(): Promise<ClipboardImage | 
   return { bytes, mimeType: detectSupportedImageMimeType(bytes) ?? "application/octet-stream" };
 }
 
-/**
- * Read the clipboard image from the user's `clipboardImageCommand`. Undefined means the command
- * failed; null means it printed nothing.
- */
 export async function readClipboardImageFromCommand(
   command: string,
   platform: NodeJS.Platform = process.platform,
@@ -259,7 +242,7 @@ export async function readClipboardImage(options?: {
       image = await readClipboardImageViaWlPaste();
     }
     if (image === undefined) image = await readClipboardImageViaXclip();
-    // Preserve Linux's empty/unavailable distinction if Windows has no image.
+
     if (!image && wsl) image = (await readClipboardImageViaPowerShell()) ?? image;
     if (image === undefined) image = await readClipboardImageViaNativeClipboard();
   } else {
@@ -269,7 +252,6 @@ export async function readClipboardImage(options?: {
   return image ? toSupportedImage(image) : null;
 }
 
-/** Convert unsupported formats (e.g., Windows DIB data wrapped as BMP) to PNG. */
 async function toSupportedImage(image: ClipboardImage): Promise<ClipboardImage | null> {
   if (!isSupportedImageMimeType(image.mimeType)) {
     const pngBytes = await convertToPng(image.bytes);

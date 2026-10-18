@@ -292,9 +292,7 @@ export class LlamaClient {
             const event = JSON.parse(data) as LlamaModelEvent;
             if (event && typeof event.model === "string" && typeof event.event === "string")
               onEvent(event);
-          } catch {
-            // Ignore malformed events; catalog polling remains authoritative.
-          }
+          } catch {}
         }
         boundary = buffer.indexOf("\n\n");
       }

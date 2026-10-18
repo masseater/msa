@@ -1,9 +1,3 @@
-/**
- * Log messages MCP servers send with `notifications/message`, appended to `mcp.log` in the agent
- * directory. Several msa processes may write to the same file, so every message is one synchronous
- * append. The file is rotated to `mcp.log.1` once it grows past `MAX_LOG_BYTES`.
- */
-
 import { appendFileSync, mkdirSync, renameSync, statSync } from "node:fs";
 import { dirname } from "node:path";
 
@@ -22,7 +16,6 @@ function formatData(data: unknown): string {
   }
 }
 
-/** Format one `notifications/message` from `server` as a log line; continuation lines are indented. */
 export function formatMcpLogMessage(
   server: string,
   params: unknown,
@@ -36,7 +29,6 @@ export function formatMcpLogMessage(
   return `${now.toISOString()} [${server}] ${level}${logger} ${text}\n`;
 }
 
-/** Appends server log messages to one file. Write errors are ignored: logging must not break tools. */
 export class McpServerLog {
   readonly path: string;
   private size: number | undefined;
@@ -53,15 +45,12 @@ export class McpServerLog {
         this.size = this.currentSize();
       }
       if (this.size > MAX_LOG_BYTES) {
-        // Another process may have rotated it already; check before renaming.
         if (this.currentSize() > MAX_LOG_BYTES) renameSync(this.path, `${this.path}.1`);
         this.size = this.currentSize();
       }
       appendFileSync(this.path, line);
       this.size += Buffer.byteLength(line);
-    } catch {
-      // Ignore: the log is best effort.
-    }
+    } catch {}
   }
 
   private currentSize(): number {

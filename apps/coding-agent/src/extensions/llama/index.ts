@@ -63,7 +63,7 @@ export default function llamaExtension(msa: ExtensionAPI): void {
     provider.setCatalog(current, client.serverUrl);
     const result = await ctx.modelRegistry.refresh({
       providers: [LLAMA_PROVIDER_ID],
-      // /llama already contacted the configured llama.cpp server, so keep this refresh live even in MSA_OFFLINE.
+
       allowNetwork: true,
       signal,
     });
@@ -125,9 +125,7 @@ export default function llamaExtension(msa: ExtensionAPI): void {
       if (replace) {
         try {
           await restoreLoaded();
-        } catch {
-          // Preserve the original load error.
-        }
+        } catch {}
       }
       throw error;
     }
