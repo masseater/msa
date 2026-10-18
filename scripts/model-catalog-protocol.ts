@@ -1,15 +1,15 @@
 import { Function } from "effect";
 
+import { comparePiVersions, parsePiVersion, requirePiVersion } from "./pi-version.ts";
+import type { ParsedPiVersion } from "./pi-version.ts";
+
 export const MODEL_CATALOG_SCHEMA_VERSION = 1;
 export const MODEL_CATALOG_PREFIX = `models/v${MODEL_CATALOG_SCHEMA_VERSION}`;
 export const MODEL_CATALOG_INDEX_KEY = `${MODEL_CATALOG_PREFIX}/index.json`;
 export const MODEL_CATALOG_REVISION_RE = /^sha256-[0-9a-f]{64}$/u;
 
-const PI_VERSION_RE = /^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/u;
 const PI_USER_AGENT_RE = /^pi\/([^\s()]+)(?: \([^;()]+(?:;\s*[^;()]+(?:;\s*[^()]+)?)?\))?$/iu;
 const MODEL_TYPE_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/u;
-
-type ParsedPiVersion = readonly [major: number, minor: number, patch: number, prerelease: string];
 
 export type ModelCatalogArtifact = "models.json" | "models.all.json" | "providers.json";
 
@@ -62,17 +62,46 @@ export const compareModelCatalogPiVersions: {
   comparePiVersions(requirePiVersion(left), requirePiVersion(right)),
 );
 
+function isValidTypeList(types: string): boolean {
+  return types !== "" && types.split(",").every((type) => MODEL_TYPE_RE.test(type));
+}
+
 export function parseModelCatalogRepresentation(
   types: string | null | undefined,
 ): ModelCatalogRepresentation | undefined {
   if (types === undefined || types === null) {
     return "legacy";
   }
-  if (types === "" || types.split(",").some((type) => !MODEL_TYPE_RE.test(type))) {
-    return undefined;
-  }
-  return "typed";
+  return isValidTypeList(types) ? "typed" : undefined;
 }
+
+const userAgentVersion = (userAgent: string | null | undefined): string | undefined =>
+  PI_USER_AGENT_RE.exec(userAgent ?? "")?.[1];
+
+const validPiVersion = (version: string | undefined): string | undefined =>
+  version !== undefined && isValidModelCatalogPiVersion(version) ? version : undefined;
+
+const requestWithoutPiVersion = (options: {
+  readonly representation: ModelCatalogRepresentation;
+  readonly requestUrl: URL;
+  readonly userAgent: string | null | undefined;
+}): ModelCatalogRequest => {
+  const { representation, requestUrl } = options;
+  const version = validPiVersion(userAgentVersion(options.userAgent));
+  if (version === undefined) {
+    return { kind: "catalog", piVersion: undefined, representation };
+  }
+  requestUrl.searchParams.set("pi-version", version);
+  return { kind: "redirect", location: requestUrl.toString() };
+};
+
+const requestWithPiVersion = (
+  piVersion: string,
+  representation: ModelCatalogRepresentation,
+): ModelCatalogRequest =>
+  isValidModelCatalogPiVersion(piVersion)
+    ? { kind: "catalog", piVersion, representation }
+    : { kind: "invalid", error: "Invalid Pi version." };
 
 const parseRequest = (
   url: string | URL,
@@ -83,20 +112,10 @@ const parseRequest = (
   if (representation === undefined) {
     return { kind: "invalid", error: "Invalid model types." };
   }
-
   const piVersion = requestUrl.searchParams.get("pi-version");
-  if (piVersion === null) {
-    const userAgentVersion = PI_USER_AGENT_RE.exec(userAgent ?? "")?.[1];
-    if (userAgentVersion !== undefined && isValidModelCatalogPiVersion(userAgentVersion)) {
-      requestUrl.searchParams.set("pi-version", userAgentVersion);
-      return { kind: "redirect", location: requestUrl.toString() };
-    }
-    return { kind: "catalog", piVersion: undefined, representation };
-  }
-  if (!isValidModelCatalogPiVersion(piVersion)) {
-    return { kind: "invalid", error: "Invalid Pi version." };
-  }
-  return { kind: "catalog", piVersion, representation };
+  return piVersion === null
+    ? requestWithoutPiVersion({ representation, requestUrl, userAgent })
+    : requestWithPiVersion(piVersion, representation);
 };
 
 export const parseModelCatalogRequest: {
@@ -113,23 +132,9 @@ const selectCatalog = (
   }
 
   const requestedVersion = parsePiVersion(piVersion);
-  if (requestedVersion === undefined) {
-    return undefined;
-  }
-
-  let selected: ModelCatalogIndexEntry | undefined;
-  let selectedVersion: ParsedPiVersion | undefined;
-  for (const catalog of index.catalogs) {
-    const minimumVersion = requirePiVersion(catalog.minimumPiVersion);
-    if (
-      comparePiVersions(minimumVersion, requestedVersion) <= 0 &&
-      (selectedVersion === undefined || comparePiVersions(minimumVersion, selectedVersion) > 0)
-    ) {
-      selected = catalog;
-      selectedVersion = minimumVersion;
-    }
-  }
-  return selected;
+  return requestedVersion === undefined
+    ? undefined
+    : newestCompatibleCatalog(index.catalogs, requestedVersion);
 };
 
 export const selectModelCatalog: {
@@ -137,30 +142,69 @@ export const selectModelCatalog: {
   (index: ModelCatalogIndex, piVersion: string | undefined): ModelCatalogIndexEntry | undefined;
 } = Function.dual(2, selectCatalog);
 
+function isObjectValue(value: unknown): value is object {
+  return typeof value === "object" && value !== null;
+}
+
+function isPlainObject(value: unknown): value is object {
+  return isObjectValue(value) && !Array.isArray(value);
+}
+
+function isRevision(value: unknown): value is string {
+  return typeof value === "string" && MODEL_CATALOG_REVISION_RE.test(value);
+}
+
+function isPiVersion(value: unknown): value is string {
+  return typeof value === "string" && parsePiVersion(value) !== undefined;
+}
+
+function hasEntryFields(catalog: object): catalog is ModelCatalogIndexEntry {
+  return (
+    "minimumPiVersion" in catalog &&
+    isPiVersion(catalog.minimumPiVersion) &&
+    "revision" in catalog &&
+    isRevision(catalog.revision)
+  );
+}
+
+function isIndexEntry(catalog: unknown): catalog is ModelCatalogIndexEntry {
+  return isObjectValue(catalog) && hasEntryFields(catalog);
+}
+
+function isCatalogList(catalogs: unknown): catalogs is ModelCatalogIndexEntry[] {
+  return Array.isArray(catalogs) && catalogs.length > 0 && catalogs.every(isIndexEntry);
+}
+
+function hasSchemaVersion(value: object): value is { readonly schemaVersion: number } {
+  return "schemaVersion" in value && value.schemaVersion === MODEL_CATALOG_SCHEMA_VERSION;
+}
+
+function hasDefaultRevision(value: object): value is { readonly defaultRevision: string } {
+  return "defaultRevision" in value && isRevision(value.defaultRevision);
+}
+
+function hasCatalogs(value: { readonly defaultRevision: string }): value is {
+  readonly catalogs: ModelCatalogIndexEntry[];
+  readonly defaultRevision: string;
+} {
+  return (
+    "catalogs" in value &&
+    isCatalogList(value.catalogs) &&
+    value.catalogs.some((catalog) => catalog.revision === value.defaultRevision)
+  );
+}
+
+function isModelCatalogIndex(value: unknown): value is ModelCatalogIndex {
+  return (
+    isPlainObject(value) &&
+    hasSchemaVersion(value) &&
+    hasDefaultRevision(value) &&
+    hasCatalogs(value)
+  );
+}
+
 export function parseModelCatalogIndex(value: unknown): ModelCatalogIndex {
-  if (
-    typeof value !== "object" ||
-    value === null ||
-    Array.isArray(value) ||
-    !("schemaVersion" in value) ||
-    value.schemaVersion !== MODEL_CATALOG_SCHEMA_VERSION ||
-    !("defaultRevision" in value) ||
-    typeof value.defaultRevision !== "string" ||
-    !MODEL_CATALOG_REVISION_RE.test(value.defaultRevision) ||
-    !("catalogs" in value) ||
-    !Array.isArray(value.catalogs) ||
-    value.catalogs.length === 0 ||
-    value.catalogs.some(
-      (catalog) =>
-        typeof catalog !== "object" ||
-        catalog === null ||
-        typeof catalog.minimumPiVersion !== "string" ||
-        parsePiVersion(catalog.minimumPiVersion) === undefined ||
-        typeof catalog.revision !== "string" ||
-        !MODEL_CATALOG_REVISION_RE.test(catalog.revision),
-    ) ||
-    !value.catalogs.some((catalog) => catalog.revision === value.defaultRevision)
-  ) {
+  if (!isModelCatalogIndex(value)) {
     throw new Error(`Model catalog index is invalid: ${MODEL_CATALOG_INDEX_KEY}`);
   }
 
@@ -174,63 +218,29 @@ export function parseModelCatalogIndex(value: unknown): ModelCatalogIndex {
   };
 }
 
-function requirePiVersion(version: string): ParsedPiVersion {
-  const parsed = parsePiVersion(version);
-  if (parsed === undefined) {
-    throw new Error(`Invalid Pi version: ${version}`);
-  }
-  return parsed;
+function isBetterCandidate(
+  minimumVersion: ParsedPiVersion,
+  requestedVersion: ParsedPiVersion,
+  selectedVersion: ParsedPiVersion | undefined,
+): boolean {
+  return (
+    comparePiVersions(minimumVersion, requestedVersion) <= 0 &&
+    (selectedVersion === undefined || comparePiVersions(minimumVersion, selectedVersion) > 0)
+  );
 }
 
-function parsePiVersion(version: string): ParsedPiVersion | undefined {
-  const match = PI_VERSION_RE.exec(version.trim());
-  if (match === null) {
-    return undefined;
-  }
-  const parsed = [Number(match[1]), Number(match[2]), Number(match[3])] as const;
-  if (parsed.some((part) => !Number.isSafeInteger(part))) {
-    return undefined;
-  }
-  return [parsed[0], parsed[1], parsed[2], match[4] ?? ""];
-}
-
-function comparePiVersions(left: ParsedPiVersion, right: ParsedPiVersion): number {
-  for (const index of [0, 1, 2] as const) {
-    const difference = left[index] - right[index];
-    if (difference !== 0) {
-      return difference;
+function newestCompatibleCatalog(
+  catalogs: ReadonlyArray<ModelCatalogIndexEntry>,
+  requestedVersion: ParsedPiVersion,
+): ModelCatalogIndexEntry | undefined {
+  let selected: ModelCatalogIndexEntry | undefined;
+  let selectedVersion: ParsedPiVersion | undefined;
+  for (const catalog of catalogs) {
+    const minimumVersion = requirePiVersion(catalog.minimumPiVersion);
+    if (isBetterCandidate(minimumVersion, requestedVersion, selectedVersion)) {
+      selected = catalog;
+      selectedVersion = minimumVersion;
     }
   }
-
-  const leftPrerelease = left[3];
-  const rightPrerelease = right[3];
-  if (leftPrerelease === rightPrerelease) {
-    return 0;
-  }
-  if (leftPrerelease === "") {
-    return 1;
-  }
-  if (rightPrerelease === "") {
-    return -1;
-  }
-
-  const leftParts = leftPrerelease.split(".");
-  const rightParts = rightPrerelease.split(".");
-  for (let index = 0; index < Math.max(leftParts.length, rightParts.length); index += 1) {
-    const leftPart = leftParts[index];
-    const rightPart = rightParts[index];
-    if (leftPart === undefined) return -1;
-    if (rightPart === undefined) return 1;
-    if (leftPart === rightPart) continue;
-
-    const leftNumber = /^\d+$/u.test(leftPart) ? Number(leftPart) : undefined;
-    const rightNumber = /^\d+$/u.test(rightPart) ? Number(rightPart) : undefined;
-    if (leftNumber !== undefined && rightNumber !== undefined) {
-      return leftNumber - rightNumber;
-    }
-    if (leftNumber !== undefined) return -1;
-    if (rightNumber !== undefined) return 1;
-    return leftPart.localeCompare(rightPart);
-  }
-  return 0;
+  return selected;
 }
