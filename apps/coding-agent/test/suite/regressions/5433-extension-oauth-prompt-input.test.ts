@@ -25,7 +25,7 @@ function renderDialog(dialog: LoginDialogComponent): string[] {
     dialog
       .render(120)
       .join("\n")
-      .replace(/\x1b_[^\x07]*\x07/gu, ""),
+      .replace(/\u001B_[^\u0007]*\u0007/gu, ""),
   )
     .split("\n")
     .map((line) => line.trimEnd());
