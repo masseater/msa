@@ -51,11 +51,7 @@ function setup(cwd: string, execResults: Map<string, ExecResult>) {
   const ctx = { cwd, ui: { notify: vi.fn() } } as unknown as ExtensionContext;
 
   function trigger() {
-    return runTest(
-      Effect.gen(function* () {
-        yield* awaited(handler!({ type: "agent_end" as const }, ctx));
-      }),
-    );
+    return runTest(awaited(handler!({ type: "agent_end" as const }, ctx)));
   }
 
   return { trigger, exec, sendUserMessage };

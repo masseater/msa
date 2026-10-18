@@ -55,13 +55,7 @@ describe("ExtensionRunner", () => {
     ),
   );
 
-  afterEach(() =>
-    runTest(
-      Effect.gen(function* () {
-        yield* removePath(tempDir);
-      }),
-    ),
-  );
+  afterEach(() => runTest(removePath(tempDir)));
 
   const providerModelConfig: ProviderConfig = {
     baseUrl: "https://provider.test/v1",

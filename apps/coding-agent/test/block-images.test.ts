@@ -80,13 +80,7 @@ describe("blockImages setting", () => {
       ),
     );
 
-    afterEach(() =>
-      runTest(
-        Effect.gen(function* () {
-          yield* removePath(testDir);
-        }),
-      ),
-    );
+    afterEach(() => runTest(removePath(testDir)));
 
     it("should always read images (filtering happens at convertToLlm layer)", () =>
       runTest(
@@ -132,13 +126,7 @@ describe("blockImages setting", () => {
       ),
     );
 
-    afterEach(() =>
-      runTest(
-        Effect.gen(function* () {
-          yield* removePath(testDir);
-        }),
-      ),
-    );
+    afterEach(() => runTest(removePath(testDir)));
 
     it("should always process images (filtering happens at convertToLlm layer)", () =>
       runTest(

@@ -42,11 +42,7 @@ class FakeTerminal implements Terminal {
 }
 
 function waitForRender(): Promise<void> {
-  return runTest(
-    Effect.gen(function* () {
-      yield* Effect.sleep(0);
-    }),
-  );
+  return runTest(Effect.sleep(0));
 }
 
 function waitForRenderedText(
@@ -91,11 +87,9 @@ describe("edit tool TUI rendering", () => {
 
   afterEach(() =>
     runTest(
-      Effect.gen(function* () {
-        yield* awaited(
-          Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true }))),
-        );
-      }),
+      awaited(
+        Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true }))),
+      ),
     ),
   );
 

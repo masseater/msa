@@ -46,13 +46,7 @@ describe("DefaultResourceLoader", () => {
     ),
   );
 
-  afterEach(() =>
-    runTest(
-      Effect.gen(function* () {
-        yield* removePath(tempDir);
-      }),
-    ),
-  );
+  afterEach(() => runTest(removePath(tempDir)));
 
   describe("reload", () => {
     it("should initialize with empty results before reload", () => {

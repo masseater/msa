@@ -41,13 +41,7 @@ describe("image resize callers", () => {
     ),
   );
 
-  afterEach(() =>
-    runTest(
-      Effect.gen(function* () {
-        yield* removePath(testDir);
-      }),
-    ),
-  );
+  afterEach(() => runTest(removePath(testDir)));
 
   it("read tool returns text-only output when auto-resize cannot produce a safe image", () =>
     runTest(

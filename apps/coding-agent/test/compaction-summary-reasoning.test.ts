@@ -124,13 +124,11 @@ describe("generateSummary reasoning options", () => {
 
   it("preserves the string result from generateSummary", () =>
     runTest(
-      Effect.gen(function* () {
-        yield* awaited(
-          expect(generateSummary(messages, createModel(false), 2000, "test-key")).resolves.toBe(
-            "## Goal\nTest summary",
-          ),
-        );
-      }),
+      awaited(
+        expect(generateSummary(messages, createModel(false), 2000, "test-key")).resolves.toBe(
+          "## Goal\nTest summary",
+        ),
+      ),
     ));
 
   it("uses fresh routing sessions without prompt caching", () =>

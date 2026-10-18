@@ -40,19 +40,17 @@ function json(response: ServerResponse, value: unknown): void {
 
 afterEach(() =>
   runTest(
-    Effect.gen(function* () {
-      yield* awaited(
-        Promise.all(
-          servers.splice(0).map(
-            (server) =>
-              new Promise<void>((resolve) => {
-                server.close(() => resolve());
-                server.closeAllConnections();
-              }),
-          ),
+    awaited(
+      Promise.all(
+        servers.splice(0).map(
+          (server) =>
+            new Promise<void>((resolve) => {
+              server.close(() => resolve());
+              server.closeAllConnections();
+            }),
         ),
-      );
-    }),
+      ),
+    ),
   ),
 );
 

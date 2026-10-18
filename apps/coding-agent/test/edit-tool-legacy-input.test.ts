@@ -22,15 +22,11 @@ function createTempDir(): Promise<string> {
 
 afterEach(() =>
   runTest(
-    Effect.gen(function* () {
-      yield* awaited(
-        Promise.all(
-          tempDirs
-            .splice(0, tempDirs.length)
-            .map((dir) => rm(dir, { recursive: true, force: true })),
-        ),
-      );
-    }),
+    awaited(
+      Promise.all(
+        tempDirs.splice(0, tempDirs.length).map((dir) => rm(dir, { recursive: true, force: true })),
+      ),
+    ),
   ),
 );
 

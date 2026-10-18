@@ -35,13 +35,7 @@ describe("extensions discovery", () => {
     ),
   );
 
-  afterEach(() =>
-    runTest(
-      Effect.gen(function* () {
-        yield* removePath(tempDir);
-      }),
-    ),
-  );
+  afterEach(() => runTest(removePath(tempDir)));
 
   const extensionCode = `
 		export default function(msa) {

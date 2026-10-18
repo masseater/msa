@@ -32,13 +32,7 @@ describe("ProjectTrustStore", () => {
     ),
   );
 
-  afterEach(() =>
-    runTest(
-      Effect.gen(function* () {
-        yield* removePath(tempDir);
-      }),
-    ),
-  );
+  afterEach(() => runTest(removePath(tempDir)));
 
   it("stores decisions and inherits from parent directories", () => {
     const store = new ProjectTrustStore(agentDir);

@@ -405,13 +405,7 @@ describe("createAgentSession with virtual models", () => {
     ),
   );
 
-  afterEach(() =>
-    runTest(
-      Effect.gen(function* () {
-        yield* removePath(tempDir);
-      }),
-    ),
-  );
+  afterEach(() => runTest(removePath(tempDir)));
 
   function resume(runtime: ModelRuntime, model?: Model<string>) {
     return runTest(

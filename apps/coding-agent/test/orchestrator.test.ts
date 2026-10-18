@@ -157,11 +157,7 @@ function setup(maxConcurrentSessions = 4) {
     );
   };
   const settled = (count: number) =>
-    runTest(
-      Effect.gen(function* () {
-        yield* awaited(expect.poll(() => reports.length).toBe(count));
-      }),
-    );
+    runTest(awaited(expect.poll(() => reports.length).toBe(count)));
   return { graph, workers, reports, orchestrator, workerFor, settled };
 }
 

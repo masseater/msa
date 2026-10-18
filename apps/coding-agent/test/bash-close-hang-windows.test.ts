@@ -98,13 +98,7 @@ describe.skipIf(process.platform !== "win32")("Windows child-process close handl
     ),
   );
 
-  afterEach(() =>
-    runTest(
-      Effect.gen(function* () {
-        yield* removePath(testDir);
-      }),
-    ),
-  );
+  afterEach(() => runTest(removePath(testDir)));
 
   it("executeBash resolves after the shell exits even if inherited stdio handles stay open", () =>
     runTest(

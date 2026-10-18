@@ -7,12 +7,12 @@ import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
 import { shouldRunFirstTimeSetup } from "../src/cli/startup-ui.ts";
 import { ENV_AGENT_DIR } from "../src/config.ts";
-import { readEnv } from "../src/core/process-env.ts";
+import { readEnv, writeEnv, deleteEnv } from "../src/core/process-env.ts";
 import { SettingsManager } from "../src/core/settings-manager.ts";
 
 describe("shouldRunFirstTimeSetup", () => {
   const originalMsaExperimental = readEnv("MSA_EXPERIMENTAL");
-  const originalAgentDir = process.env[ENV_AGENT_DIR];
+  const originalAgentDir = readEnv(ENV_AGENT_DIR);
   let tempDir: string;
   let settingsPath: string;
 
@@ -21,8 +21,8 @@ describe("shouldRunFirstTimeSetup", () => {
       Effect.gen(function* () {
         tempDir = mkdtempSync(joinPath(tmpdir(), "msa-first-time-setup-"));
         settingsPath = joinPath(tempDir, "settings.json");
-        process.env["MSA_EXPERIMENTAL"] = "1";
-        delete process.env[ENV_AGENT_DIR];
+        writeEnv("MSA_EXPERIMENTAL", "1");
+        deleteEnv(ENV_AGENT_DIR);
       }),
     ),
   );
@@ -32,14 +32,14 @@ describe("shouldRunFirstTimeSetup", () => {
       Effect.gen(function* () {
         yield* removePath(tempDir);
         if (originalMsaExperimental === undefined) {
-          delete process.env["MSA_EXPERIMENTAL"];
+          deleteEnv("MSA_EXPERIMENTAL");
         } else {
-          process.env["MSA_EXPERIMENTAL"] = originalMsaExperimental;
+          writeEnv("MSA_EXPERIMENTAL", originalMsaExperimental);
         }
         if (originalAgentDir === undefined) {
-          delete process.env[ENV_AGENT_DIR];
+          deleteEnv(ENV_AGENT_DIR);
         } else {
-          process.env[ENV_AGENT_DIR] = originalAgentDir;
+          writeEnv(ENV_AGENT_DIR, originalAgentDir);
         }
       }),
     ),
@@ -50,13 +50,13 @@ describe("shouldRunFirstTimeSetup", () => {
   });
 
   it("returns false when experimental features are disabled", () => {
-    delete process.env["MSA_EXPERIMENTAL"];
+    deleteEnv("MSA_EXPERIMENTAL");
 
     expect(shouldRunFirstTimeSetup(settingsPath)).toBe(false);
   });
 
   it("returns false when a custom agent dir is set", () => {
-    process.env[ENV_AGENT_DIR] = tempDir;
+    writeEnv(ENV_AGENT_DIR, tempDir);
 
     expect(shouldRunFirstTimeSetup(settingsPath)).toBe(false);
   });

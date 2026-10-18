@@ -15,6 +15,7 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { ENV_AGENT_DIR } from "../src/config.ts";
 import { AuthStorage } from "../src/core/auth-storage.ts";
+import { readEnv, writeEnv, deleteEnv } from "../src/core/process-env.ts";
 import { runMigrations } from "../src/migrations.ts";
 import { createModelRegistry } from "./model-runtime-test-utils.ts";
 
@@ -39,15 +40,15 @@ describe("config value env var syntax migration", () => {
   }
 
   function withAgentDir(agentDir: string, fn: () => void): void {
-    const previousAgentDir = process.env[ENV_AGENT_DIR];
-    process.env[ENV_AGENT_DIR] = agentDir;
+    const previousAgentDir = readEnv(ENV_AGENT_DIR);
+    writeEnv(ENV_AGENT_DIR, agentDir);
     try {
       fn();
     } finally {
       if (previousAgentDir === undefined) {
-        delete process.env[ENV_AGENT_DIR];
+        deleteEnv(ENV_AGENT_DIR);
       } else {
-        process.env[ENV_AGENT_DIR] = previousAgentDir;
+        writeEnv(ENV_AGENT_DIR, previousAgentDir);
       }
     }
   }
@@ -117,8 +118,8 @@ describe("config value env var syntax migration", () => {
         const envKeys = ["CUSTOM_API_KEY", "HEADER_API_KEY", "MODEL_API_KEY", "OVERRIDE_API_KEY"];
         const savedEnv: Record<string, string | undefined> = {};
         for (const key of envKeys) {
-          savedEnv[key] = process.env[key];
-          process.env[key] = `env-${key}`;
+          savedEnv[key] = readEnv(key);
+          writeEnv(key, `env-${key}`);
         }
 
         try {
@@ -201,9 +202,9 @@ describe("config value env var syntax migration", () => {
         } finally {
           for (const key of envKeys) {
             if (savedEnv[key] === undefined) {
-              delete process.env[key];
+              deleteEnv(key);
             } else {
-              process.env[key] = savedEnv[key];
+              writeEnv(key, savedEnv[key]);
             }
           }
         }

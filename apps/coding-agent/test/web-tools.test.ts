@@ -283,13 +283,7 @@ describe("findTreg", () => {
     ),
   );
 
-  afterEach(() =>
-    runTest(
-      Effect.gen(function* () {
-        yield* removePath(bin);
-      }),
-    ),
-  );
+  afterEach(() => runTest(removePath(bin)));
 
   it("needs the CLI on PATH", () => {
     expect(findTreg(() => null, { TREG_TOKEN: "token" })).toBeUndefined();
@@ -404,13 +398,11 @@ describe("treg sign-in", () => {
 
   it("reports why treg logout failed", () =>
     runTest(
-      Effect.gen(function* () {
-        yield* awaited(
-          expect(logoutTreg(script("treg", `echo "no login" >&2\nexit 2`))).rejects.toThrow(
-            "treg logout failed: no login",
-          ),
-        );
-      }),
+      awaited(
+        expect(logoutTreg(script("treg", `echo "no login" >&2\nexit 2`))).rejects.toThrow(
+          "treg logout failed: no login",
+        ),
+      ),
     ));
 
   const treg = () => findExternalService(EXTERNAL_SERVICES, "TREG")!;

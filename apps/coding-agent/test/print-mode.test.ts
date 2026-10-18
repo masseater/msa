@@ -87,11 +87,9 @@ function createRuntimeHost(assistantMessage: AssistantMessage): FakeRuntimeHost 
     switchSession: vi.fn(() => runTest(awaited(undefined))),
     dispose: vi.fn(() =>
       runTest(
-        Effect.gen(function* () {
-          yield* awaited(
-            session.extensionRunner.emit({ type: "session_shutdown" as const, reason: "quit" }),
-          );
-        }),
+        awaited(
+          session.extensionRunner.emit({ type: "session_shutdown" as const, reason: "quit" }),
+        ),
       ),
     ),
     setRebindSession: vi.fn(),

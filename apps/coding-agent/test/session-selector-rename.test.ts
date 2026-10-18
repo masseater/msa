@@ -10,13 +10,11 @@ import { initTheme } from "../src/modes/interactive/theme/theme.ts";
 
 function flushPromises(): Promise<void> {
   return runTest(
-    Effect.gen(function* () {
-      yield* awaited(
-        new Promise<void>((resolve) => {
-          setImmediate(resolve);
-        }),
-      );
-    }),
+    awaited(
+      new Promise<void>((resolve) => {
+        setImmediate(resolve);
+      }),
+    ),
   );
 }
 

@@ -149,13 +149,11 @@ describe("MCP OAuth sign-in", () => {
 
   it("rejects an authorization response from another issuer", () =>
     runTest(
-      Effect.gen(function* () {
-        yield* awaited(
-          expect(signIn({ iss: "https://attacker.example" })).rejects.toBeInstanceOf(
-            OAuthIssuerMismatchError,
-          ),
-        );
-      }),
+      awaited(
+        expect(signIn({ iss: "https://attacker.example" })).rejects.toBeInstanceOf(
+          OAuthIssuerMismatchError,
+        ),
+      ),
     ));
 
   it("keeps the granted scope when the server asks for more", () =>

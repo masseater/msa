@@ -126,13 +126,11 @@ describe("model catalog protocol with the current client", () => {
 
   afterAll(() =>
     runTest(
-      Effect.gen(function* () {
-        yield* awaited(
-          new Promise<void>((resolve, reject) =>
-            server.close((error) => (error === undefined ? resolve() : reject(error))),
-          ),
-        );
-      }),
+      awaited(
+        new Promise<void>((resolve, reject) =>
+          server.close((error) => (error === undefined ? resolve() : reject(error))),
+        ),
+      ),
     ),
   );
 

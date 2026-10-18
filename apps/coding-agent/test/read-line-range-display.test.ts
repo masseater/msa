@@ -82,13 +82,7 @@ describe("read line range display", () => {
     ),
   );
 
-  afterAll(() =>
-    runTest(
-      Effect.gen(function* () {
-        yield* removePath(tempDir);
-      }),
-    ),
-  );
+  afterAll(() => runTest(removePath(tempDir)));
 
   it("formats raw read arguments", () => {
     for (const [offset, limit, range] of cases) {
