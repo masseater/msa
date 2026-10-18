@@ -242,7 +242,7 @@ function bestFuzzyMatch(matches: readonly Model<Api>[]): Model<Api> | undefined 
 }
 
 function isAlias(id: string): boolean {
-  return id.endsWith("-latest") || !/-\d{8}$/.test(id);
+  return id.endsWith("-latest") || !/-\d{8}$/u.test(id);
 }
 
 function buildFallbackModel(

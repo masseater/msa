@@ -97,11 +97,11 @@ function formatValidationPath(error: TLocalizedValidationError): string {
       .requiredProperties;
     const requiredProperty = requiredProperties?.[0];
     if (requiredProperty !== undefined && requiredProperty !== "") {
-      const basePath = error.instancePath.replace(/^\//, "").replace(/\//g, ".");
+      const basePath = error.instancePath.replace(/^\//u, "").replace(/\//gu, ".");
       return basePath === "" ? requiredProperty : `${basePath}.${requiredProperty}`;
     }
   }
-  const path = error.instancePath.replace(/^\//, "").replace(/\//g, ".");
+  const path = error.instancePath.replace(/^\//u, "").replace(/\//gu, ".");
   return path || "root";
 }
 

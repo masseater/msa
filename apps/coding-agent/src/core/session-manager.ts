@@ -222,7 +222,7 @@ function createSessionId(): string {
 }
 
 export function assertValidSessionId(id: string): void {
-  if (!/^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$/.test(id)) {
+  if (!/^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$/u.test(id)) {
     throw new Error(
       "Session id must be non-empty, contain only alphanumeric characters, '-', '_', and '.', and start and end with an alphanumeric character",
     );
@@ -525,7 +525,7 @@ export function buildSessionContext(
 function getDefaultSessionDirPath(cwd: string, agentDir: string = getDefaultAgentDir()): string {
   const resolvedCwd = resolvePath(cwd);
   const resolvedAgentDir = resolvePath(agentDir);
-  const safePath = `--${resolvedCwd.replace(/^[/\\]/, "").replace(/[/\\:]/g, "-")}--`;
+  const safePath = `--${resolvedCwd.replace(/^[/\\]/u, "").replace(/[/\\:]/gu, "-")}--`;
   return join(resolvedAgentDir, "sessions", safePath);
 }
 
@@ -994,7 +994,7 @@ export class SessionManager {
     this.flushed = false;
 
     if (this.persist) {
-      const fileTimestamp = timestamp.replace(/[:.]/g, "-");
+      const fileTimestamp = timestamp.replace(/[:.]/gu, "-");
       this.sessionFile = join(this.getSessionDir(), `${fileTimestamp}_${this.sessionId}.jsonl`);
     }
     return this.sessionFile;
@@ -1210,7 +1210,7 @@ export class SessionManager {
   }
 
   appendSessionInfo(name: string): string {
-    const sanitizedName = name.replace(/[\r\n]+/g, " ").trim();
+    const sanitizedName = name.replace(/[\r\n]+/gu, " ").trim();
     const entry: SessionInfoEntry = {
       type: "session_info",
       id: generateId(this.byId),
@@ -1494,7 +1494,7 @@ export class SessionManager {
 
     const newSessionId = createSessionId();
     const timestamp = new Date().toISOString();
-    const fileTimestamp = timestamp.replace(/[:.]/g, "-");
+    const fileTimestamp = timestamp.replace(/[:.]/gu, "-");
     const newSessionFile = join(this.getSessionDir(), `${fileTimestamp}_${newSessionId}.jsonl`);
 
     const header: SessionHeader = {
@@ -1654,7 +1654,7 @@ export class SessionManager {
     }
     const newSessionId = options?.id ?? createSessionId();
     const timestamp = new Date().toISOString();
-    const fileTimestamp = timestamp.replace(/[:.]/g, "-");
+    const fileTimestamp = timestamp.replace(/[:.]/gu, "-");
     const newSessionFile = join(dir, `${fileTimestamp}_${newSessionId}.jsonl`);
 
     const newHeader: SessionHeader = {

@@ -32,7 +32,7 @@ export function parseCommandArgs(argsString: string): string[] {
     } else if (char === '"' || char === "'") {
       inQuote = char;
       hasToken = true;
-    } else if (/\s/.test(char)) {
+    } else if (/\s/u.test(char)) {
       if (hasToken) {
         args.push(current);
         current = "";
@@ -55,7 +55,7 @@ export function substituteArgs(content: string, args: string[]): string {
   const allArgs = args.join(" ");
 
   return content.replace(
-    /\$\{(\d+|ARGUMENTS|@):-([^}]*)\}|\$\{@:(\d+)(?::(\d+))?\}|\$(ARGUMENTS|@|\d+)/g,
+    /\$\{(\d+|ARGUMENTS|@):-([^}]*)\}|\$\{@:(\d+)(?::(\d+))?\}|\$(ARGUMENTS|@|\d+)/gu,
     (_match, defaultTarget, defaultValue, sliceStart, sliceLength, simple) => {
       if (defaultTarget !== undefined) {
         const value =
@@ -110,7 +110,7 @@ function loadTemplateFromFile(
     return { template: null, diagnostics };
   }
 
-  const name = basename(filePath).replace(/\.md$/, "");
+  const name = basename(filePath).replace(/\.md$/u, "");
 
   let description =
     typeof frontmatter["description"] === "string" ? frontmatter["description"] : "";
@@ -274,7 +274,7 @@ export function loadPromptTemplates(
 export function expandPromptTemplate(text: string, templates: PromptTemplate[]): string {
   if (!text.startsWith("/")) return text;
 
-  const match = text.match(/^\/([^\s]+)(?:\s+([\s\S]*))?$/);
+  const match = text.match(/^\/([^\s]+)(?:\s+([\s\S]*))?$/u);
   if (match === null) return text;
 
   const templateName = match[1];

@@ -54,7 +54,7 @@ function addIgnoreRules(ig: IgnoreMatcher, dir: string, rootDir: string): void {
     try {
       const content = readFileSync(ignorePath, "utf-8");
       const patterns = content
-        .split(/\r?\n/)
+        .split(/\r?\n/u)
         .map((line) => prefixIgnorePattern(line, prefix))
         .filter((line): line is string => Boolean(line));
       if (patterns.length > 0) {
@@ -92,7 +92,7 @@ function validateName(name: string): string[] {
     errors.push(`name exceeds ${MAX_NAME_LENGTH} characters (${name.length})`);
   }
 
-  if (!/^[a-z0-9-]+$/.test(name)) {
+  if (!/^[a-z0-9-]+$/u.test(name)) {
     errors.push(`name contains invalid characters (must be lowercase a-z, 0-9, hyphens only)`);
   }
 
@@ -357,11 +357,11 @@ export function formatSkillsForPrompt(
 
 function escapeXml(str: string): string {
   return str
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&apos;");
+    .replace(/&/gu, "&amp;")
+    .replace(/</gu, "&lt;")
+    .replace(/>/gu, "&gt;")
+    .replace(/"/gu, "&quot;")
+    .replace(/'/gu, "&apos;");
 }
 
 export interface LoadSkillsOptions {

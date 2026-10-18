@@ -24,14 +24,14 @@ export const BUG_REPORT_CUSTOM_ENTRY_TYPE = "msa.bug-report";
 const BUG_REPORT_SCHEMA_VERSION = 1;
 const REDACTED = "<redacted>";
 const SENSITIVE_KEY =
-  /(?:^|[-_])(api[-_]?key|secret|token|password|passwd|credential|authorization|cookie)(?:$|[-_])/i;
+  /(?:^|[-_])(api[-_]?key|secret|token|password|passwd|credential|authorization|cookie)(?:$|[-_])/iu;
 
 function isSensitiveKey(key: string): boolean {
-  return SENSITIVE_KEY.test(key.replace(/([a-z0-9])([A-Z])/g, "$1_$2"));
+  return SENSITIVE_KEY.test(key.replace(/([a-z0-9])([A-Z])/gu, "$1_$2"));
 }
 
 export function redactUrl(value: string): string {
-  const nested = /^([a-z][a-z0-9+.-]*:)([a-z][a-z0-9+.-]*:\/\/.*)$/i.exec(value);
+  const nested = /^([a-z][a-z0-9+.-]*:)([a-z][a-z0-9+.-]*:\/\/.*)$/iu.exec(value);
   const [, scheme, inner] = nested ?? [];
   if (scheme !== undefined && inner !== undefined) return `${scheme}${redactUrl(inner)}`;
   try {
@@ -82,7 +82,7 @@ function collectEnvironment() {
     arch: process.arch,
     osRelease: os.release(),
     osVersion: os.version(),
-    shell: process.env["SHELL"]?.split(/[\\/]/).pop() || null,
+    shell: process.env["SHELL"]?.split(/[\\/]/u).pop() || null,
     terminal: {
       term: env("TERM"),
       program: env("TERM_PROGRAM"),

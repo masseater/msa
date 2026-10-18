@@ -114,10 +114,10 @@ export async function loginTreg(
   let shown = false;
   const onOutput = (chunk: string) => {
     output = (output + chunk).slice(-4_000);
-    const url = /https:\/\/\S+/.exec(output)?.[0];
+    const url = /https:\/\/\S+/u.exec(output)?.[0];
     if (shown || url === undefined || url === "") return;
-    const code = /matches:\s*(\S+)/.exec(output)?.[1];
-    if ((code === undefined || code === "") && !/Waiting/.test(output)) return;
+    const code = /matches:\s*(\S+)/u.exec(output)?.[1];
+    if ((code === undefined || code === "") && !/Waiting/u.test(output)) return;
     shown = true;
     onPage(code !== undefined && code !== "" ? { url, code } : { url });
   };

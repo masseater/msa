@@ -407,6 +407,6 @@ export function formatCacheWarmingStatus(status: CacheWarmingStatus, now = Date.
 
 export function formatCacheWarmingUsage(entry: UsageEntry): string {
   const note = entry.note !== undefined && entry.note !== "" ? ` (${entry.note})` : "";
-  const cost = entry.usage.cost.total.toFixed(6).replace(/(\.\d{3}\d*?)0+$/, "$1");
+  const cost = entry.usage.cost.total.toFixed(6).replace(/(\.\d{3}\d*?)0+$/u, "$1");
   return `Cache warmed${note}: $${cost}`;
 }

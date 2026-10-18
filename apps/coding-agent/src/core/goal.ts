@@ -27,7 +27,7 @@ export type GoalCommand =
   | { kind: "set"; condition: string };
 
 export function parseGoalCommand(text: string): GoalCommand | undefined {
-  const match = /^\/goal(?:\s+([\s\S]*))?$/.exec(text.trim());
+  const match = /^\/goal(?:\s+([\s\S]*))?$/u.exec(text.trim());
   if (match === null) return undefined;
   const args = (match[1] ?? "").trim();
   if (args === "") return { kind: "status" };
@@ -111,9 +111,9 @@ const FATAL_ERROR_PATTERN = new RegExp(
     "model.{0,40}(?:not found|does not exist|not available|not supported|unavailable)",
     "(?:unknown|unsupported|no such) model",
   ].join("|"),
-  "i",
+  "iu",
 );
-const RATE_LIMIT_PATTERN = /rate.?limit|too many requests|\b429\b|ResourceExhausted/i;
+const RATE_LIMIT_PATTERN = /rate.?limit|too many requests|\b429\b|ResourceExhausted/iu;
 
 export function classifyGoalError(
   message: AssistantMessage,
@@ -126,7 +126,7 @@ export function classifyGoalError(
   return "transient";
 }
 
-const SMALL_TIER_PATTERN = /(?:^|[-_./:])(?:haiku|flash|mini|lite|small)(?=$|[-_./:])/i;
+const SMALL_TIER_PATTERN = /(?:^|[-_./:])(?:haiku|flash|mini|lite|small)(?=$|[-_./:])/iu;
 
 function price(model: Model<Api>): number {
   return model.cost.input + model.cost.output;

@@ -423,7 +423,7 @@ export async function createAgentSession(
               workerFlagValues.set(name, value);
             }
             const workerTools = options.tools?.filter(
-              (entry) => !isOrchestratorTool(entry.replace(/^[+-]/, "")),
+              (entry) => !isOrchestratorTool(entry.replace(/^[+-]/u, "")),
             );
             const { session: workerSession } = await createAgentSession({
               cwd: worker.cwd,

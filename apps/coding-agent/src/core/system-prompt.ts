@@ -32,7 +32,7 @@ export type NormalizedBuildSystemPromptOptions = BuildSystemPromptOptions & {
 
 export type SystemPromptSections = Record<string, string>;
 
-const SYSTEM_PROMPT_SECTION_NAME = /^[a-z][a-z0-9_-]*$/;
+const SYSTEM_PROMPT_SECTION_NAME = /^[a-z][a-z0-9_-]*$/u;
 export function normalizeBuildSystemPromptOptions(
   input: BuildSystemPromptOptions,
 ): NormalizedBuildSystemPromptOptions {
@@ -169,7 +169,7 @@ export function buildSystemPromptSections(input: BuildSystemPromptOptions): Syst
     const skillsPrompt = formatSkillsForPrompt(skills, skillFileReadTool).trim();
     if (skillsPrompt !== "") promptSections["skills"] = skillsPrompt;
   }
-  promptSections["cwd"] = cwd.replace(/\\/g, "/");
+  promptSections["cwd"] = cwd.replace(/\\/gu, "/");
   for (const [name, content] of Object.entries(customSections)) {
     if (content !== "") promptSections[name] = content;
   }

@@ -3,8 +3,8 @@ import { execSync, spawnSync } from "child_process";
 import { getShellConfig } from "../utils/shell.ts";
 
 const commandResultCache = new Map<string, string | undefined>();
-const ENV_VAR_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
-const ENV_VAR_NAME_PREFIX_RE = /^[A-Za-z_][A-Za-z0-9_]*/;
+const ENV_VAR_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*$/u;
+const ENV_VAR_NAME_PREFIX_RE = /^[A-Za-z_][A-Za-z0-9_]*/u;
 
 type TemplatePart = { type: "literal"; value: string } | { type: "env"; name: string };
 

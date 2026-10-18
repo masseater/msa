@@ -206,10 +206,10 @@ type ResourceType = "extensions" | "skills" | "prompts" | "themes";
 const RESOURCE_TYPES: ResourceType[] = ["extensions", "skills", "prompts", "themes"];
 
 const FILE_PATTERNS: Record<ResourceType, RegExp> = {
-  extensions: /\.(ts|js)$/,
-  skills: /\.md$/,
-  prompts: /\.md$/,
-  themes: /\.json$/,
+  extensions: /\.(ts|js)$/u,
+  skills: /\.md$/u,
+  prompts: /\.md$/u,
+  themes: /\.json$/u,
 };
 
 const IGNORE_FILE_NAMES = [".gitignore", ".ignore", ".fdignore"];
@@ -264,7 +264,7 @@ function addIgnoreRules(ig: IgnoreMatcher, dir: string, rootDir: string): void {
     try {
       const content = readFileSync(ignorePath, "utf-8");
       const patterns = content
-        .split(/\r?\n/)
+        .split(/\r?\n/u)
         .map((line) => prefixIgnorePattern(line, prefix))
         .filter((line): line is string => Boolean(line));
       if (patterns.length > 0) {
@@ -1654,7 +1654,7 @@ export class DefaultPackageManager implements PackageManager {
         "origin",
         upstreamRef,
       ]);
-      const match = remoteHead.match(/^([0-9a-f]{40})\s+/m);
+      const match = remoteHead.match(/^([0-9a-f]{40})\s+/mu);
       if (match?.[1] !== undefined && match?.[1] !== "") {
         return match[1];
       }
@@ -1665,7 +1665,7 @@ export class DefaultPackageManager implements PackageManager {
       "origin",
       "HEAD",
     ]);
-    const match = remoteHead.match(/^([0-9a-f]{40})\s+HEAD$/m);
+    const match = remoteHead.match(/^([0-9a-f]{40})\s+HEAD$/mu);
     if (match?.[1] === undefined || match?.[1] === "") {
       throw new Error("Failed to determine remote HEAD");
     }
@@ -1723,7 +1723,7 @@ export class DefaultPackageManager implements PackageManager {
           timeoutMs: NETWORK_TIMEOUT_MS,
         },
       ).catch(() => "");
-      const branch = originHeadRef.trim().replace(/^refs\/remotes\/origin\//, "");
+      const branch = originHeadRef.trim().replace(/^refs\/remotes\/origin\//u, "");
       if (branch !== "") {
         return {
           ref: "origin/HEAD",
@@ -1840,7 +1840,7 @@ export class DefaultPackageManager implements PackageManager {
   }
 
   private parseNpmSpec(spec: string): { name: string; version?: string } {
-    const match = spec.match(/^(@?[^@]+(?:\/[^@]+)?)(?:@(.+))?$/);
+    const match = spec.match(/^(@?[^@]+(?:\/[^@]+)?)(?:@(.+))?$/u);
     if (match === null) {
       return { name: spec };
     }
@@ -1870,7 +1870,7 @@ export class DefaultPackageManager implements PackageManager {
   private getPackageManagerName(): string {
     const npmCommand = this.getNpmCommand();
     const normalizeCommandName = (command: string): string =>
-      basename(command).replace(/\.(cmd|exe)$/i, "");
+      basename(command).replace(/\.(cmd|exe)$/iu, "");
     const supportedPackageManagers = new Set(["npm", "pnpm", "bun"]);
     const directCommand = normalizeCommandName(npmCommand.command);
     const separatorIndex = npmCommand.args.lastIndexOf("--");

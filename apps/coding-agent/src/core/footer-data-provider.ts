@@ -95,7 +95,7 @@ function isWslEnvironment(): boolean {
 }
 
 function isWindowsMountedRepoPath(repoDir: string): boolean {
-  return /^\/mnt\/[a-z](?:\/|$)/i.test(repoDir);
+  return /^\/mnt\/[a-z](?:\/|$)/iu.test(repoDir);
 }
 
 function shouldPollGitHead(repoDir: string): boolean {

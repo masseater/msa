@@ -1,9 +1,9 @@
 function toolPatternRegExp(pattern: string): RegExp {
   const source = pattern
     .split("*")
-    .map((part) => part.replace(/[.+?^${}()|[\]\\]/g, "\\$&"))
+    .map((part) => part.replace(/[.+?^${}()|[\]\\]/gu, "\\$&"))
     .join(".*");
-  return new RegExp(`^${source}$`);
+  return new RegExp(`^${source}$`, "u");
 }
 
 export function createToolNameMatcher(entries: readonly string[]): (name: string) => boolean {
@@ -89,10 +89,10 @@ export interface McpHttpServerConfig extends McpServerConfigBase {
 
 export type McpServerConfig = McpStdioServerConfig | McpHttpServerConfig;
 
-const SERVER_NAME = /^[A-Za-z0-9_-]+$/;
+const SERVER_NAME = /^[A-Za-z0-9_-]+$/u;
 
 export function mcpNamespace(server: string): string {
-  return `mcp__${server.replace(/-/g, "_")}`;
+  return `mcp__${server.replace(/-/gu, "_")}`;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -232,7 +232,7 @@ export function validateMcpServerConfig(name: string, raw: unknown): McpServerCo
     typeof value["url"] === "string" &&
     (type === undefined || type === "http" || type === "streamable-http")
   ) {
-    if (!URL.canParse(value["url"]) || !/^https?:$/.test(new URL(value["url"]).protocol)) {
+    if (!URL.canParse(value["url"]) || !/^https?:$/u.test(new URL(value["url"]).protocol)) {
       return `server "${name}": url must be an http or https URL`;
     }
     if (value["headers"] !== undefined && !isStringRecord(value["headers"])) {

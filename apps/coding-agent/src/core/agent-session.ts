@@ -194,7 +194,7 @@ export interface ParsedSkillBlock {
 
 export function parseSkillBlock(text: string): ParsedSkillBlock | null {
   const match = text.match(
-    /^<skill name="([^"]+)" location="([^"]+)">\n([\s\S]*?)\n<\/skill>(?:\n\n([\s\S]+))?$/,
+    /^<skill name="([^"]+)" location="([^"]+)">\n([\s\S]*?)\n<\/skill>(?:\n\n([\s\S]+))?$/u,
   );
   if (match === null) return null;
   const [, name, location, content, userMessage] = match;
@@ -1678,8 +1678,8 @@ export class AgentSession {
   private normalizePromptSnippet(text: string | undefined): string | undefined {
     if (text === undefined || text === "") return undefined;
     const oneLine = text
-      .replace(/[\r\n]+/g, " ")
-      .replace(/\s+/g, " ")
+      .replace(/[\r\n]+/gu, " ")
+      .replace(/\s+/gu, " ")
       .trim();
     return oneLine.length > 0 ? oneLine : undefined;
   }
@@ -3320,10 +3320,10 @@ export class AgentSession {
 
   private getExtensionSourceLabel(extensionPath: string): string {
     if (isSyntheticPath(extensionPath)) {
-      return `extension:${extensionPath.replace(/[<>]/g, "")}`;
+      return `extension:${extensionPath.replace(/[<>]/gu, "")}`;
     }
     const base = basename(extensionPath);
-    const name = base.replace(/\.(ts|js)$/, "");
+    const name = base.replace(/\.(ts|js)$/u, "");
     return `extension:${name}`;
   }
 

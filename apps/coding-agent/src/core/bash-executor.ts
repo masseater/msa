@@ -48,7 +48,7 @@ export async function executeBashWithOperations(
   let pendingAnsi = "";
 
   const appendText = (rawText: string) => {
-    const text = sanitizeBinaryOutput(stripAnsi(rawText)).replace(/\r/g, "");
+    const text = sanitizeBinaryOutput(stripAnsi(rawText)).replace(/\r/gu, "");
     if (text === "") {
       return;
     }

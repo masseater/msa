@@ -48,7 +48,7 @@ function writeCrashLog(records: readonly CrashRecord[], path: string): void {
 type ExtensionStackMetadata = Pick<Extension, "path" | "resolvedPath" | "sourceInfo">;
 
 function normalizeStackPath(value: string): string {
-  return value.replace(/\\/g, "/").replace(/\/+$/u, "");
+  return value.replace(/\\/gu, "/").replace(/\/+$/u, "");
 }
 
 function stackContainsPath(
@@ -89,7 +89,7 @@ export function findExtensionStackMatches(
       }
     })
     .join("\n")
-    .replace(/\\/g, "/");
+    .replace(/\\/gu, "/");
   const matches: string[] = [];
   const seen = new Set<string>();
 

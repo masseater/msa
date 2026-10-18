@@ -34,7 +34,7 @@ export function serializeSessionBranch(
 
 export function exportSessionToJsonl(sessionManager: SessionManager, outputPath?: string): string {
   const filePath = resolvePath(
-    outputPath ?? `session-${new Date().toISOString().replace(/[:.]/g, "-")}.jsonl`,
+    outputPath ?? `session-${new Date().toISOString().replace(/[:.]/gu, "-")}.jsonl`,
     process.cwd(),
   );
   const dir = dirname(filePath);
