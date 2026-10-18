@@ -3,16 +3,17 @@ import { tmpdir } from "node:os";
 
 import type { Model } from "@msa/ai";
 import {
-  awaited,
-  runTest,
-  currentTimeMillis,
   abortController,
-  toJsonText,
+  awaited,
+  currentTimeMillis,
+  deferredPromise,
   fromJsonText,
+  joinPath,
   randomSuffixSync,
   readTextFile,
+  runTest,
+  toJsonText,
   writeTextFile,
-  joinPath,
 } from "@msa/testing";
 import { Effect } from "effect";
 import lockfile from "proper-lockfile";
@@ -28,7 +29,7 @@ const sharedModelsPath = joinPath(sharedTempDir, "models-store.json");
 
 beforeAll(() =>
   runTest(
-    Effect.gen(function* () {
+    Effect.sync(() => {
       mkdirSync(sharedTempDir, { recursive: true });
     }),
   ),
@@ -36,7 +37,7 @@ beforeAll(() =>
 
 afterAll(() =>
   runTest(
-    Effect.gen(function* () {
+    Effect.sync(() => {
       if (existsSync(sharedTempDir)) rmSync(sharedTempDir, { recursive: true });
     }),
   ),
@@ -162,15 +163,13 @@ describe("FileModelsStore", () => {
           yield* toJsonText({ one: { models: [model("one", "stored")] } }),
         );
         const store = new FileModelsStore(sharedModelsPath);
-        let grantLock: (() => void) | undefined;
-        const lockGranted = new Promise<void>((resolve) => {
-          grantLock = resolve;
-        });
+        const lockGranted = deferredPromise<void>();
+        const grantLock = lockGranted.resolve;
         const release = vi.fn(() => effectRunPromise(Effect.sync(() => {})));
         const lockSpy = vi.spyOn(lockfile, "lock").mockImplementation(() =>
           effectRunPromise(
             Effect.gen(function* () {
-              yield* awaited(lockGranted);
+              yield* awaited(lockGranted.promise);
               return yield* awaited(release);
             }),
           ),

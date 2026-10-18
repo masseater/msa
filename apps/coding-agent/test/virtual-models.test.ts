@@ -1,6 +1,3 @@
-import { mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
-
 import {
   type AssistantMessage,
   fauxAssistantMessage,
@@ -9,7 +6,7 @@ import {
   InMemoryModelsStore,
   type Model,
 } from "@msa/ai";
-import { awaited, runTest, joinPath, removePath } from "@msa/testing";
+import { awaited, makeTempDir, removePath, runTest } from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it, onTestFinished } from "vite-plus/test";
 
@@ -400,7 +397,7 @@ describe("createAgentSession with virtual models", () => {
   beforeEach(() =>
     runTest(
       Effect.gen(function* () {
-        tempDir = mkdtempSync(joinPath(tmpdir(), "msa-virtual-models-"));
+        tempDir = yield* makeTempDir("msa-virtual-models-");
       }),
     ),
   );

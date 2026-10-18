@@ -1,16 +1,15 @@
-import { mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { stripVTControlCharacters } from "node:util";
 import { runInNewContext } from "node:vm";
 
 import {
   awaited,
-  runTest,
-  readTextFile,
-  writeTextFile,
-  joinPath,
   isoFromMillis,
+  joinPath,
+  makeTempDir,
+  readTextFile,
   removePath,
+  runTest,
+  writeTextFile,
 } from "@msa/testing";
 import type { TUI } from "@msa/tui";
 import { Effect } from "effect";
@@ -77,7 +76,7 @@ describe("read line range display", () => {
     runTest(
       Effect.gen(function* () {
         initTheme("dark");
-        tempDir = mkdtempSync(joinPath(tmpdir(), "msa-read-range-"));
+        tempDir = yield* makeTempDir("msa-read-range-");
       }),
     ),
   );

@@ -633,15 +633,7 @@ Analyze GitHub issue(s): $ARGUMENTS`,
     expect(is!.argumentHint).toBe("<issue>");
   });
 
-  afterAll(() =>
-    runTest(
-      Effect.gen(function* () {
-        try {
-          yield* removePath(testDir);
-        } catch {}
-      }),
-    ),
-  );
+  afterAll(() => runTest(removePath(testDir).pipe(Effect.ignore)));
 });
 
 describe("loadPromptTemplates - diagnostics", () => {

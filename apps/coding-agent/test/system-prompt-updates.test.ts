@@ -1,6 +1,3 @@
-import { mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
-
 import type { AgentMessage, AgentTool } from "@msa/agent-core";
 import {
   fauxAssistantMessage,
@@ -11,7 +8,15 @@ import {
   type TranscriptContext,
 } from "@msa/ai";
 import { getModel } from "@msa/ai/compat";
-import { awaited, runTest, toJsonText, fromJsonText, removePath, joinPath } from "@msa/testing";
+import {
+  awaited,
+  fromJsonText,
+  joinPath,
+  makeTempDir,
+  removePath,
+  runTest,
+  toJsonText,
+} from "@msa/testing";
 import { Effect } from "effect";
 import { Type } from "typebox";
 import { describe, expect, test } from "vite-plus/test";
@@ -74,7 +79,7 @@ describe("system prompt updates", () => {
   test("opens a transcript without a system message and declares the prompt on the first request", () =>
     runTest(
       Effect.gen(function* () {
-        const tempDir = mkdtempSync(joinPath(tmpdir(), "msa-system-prompt-migration-"));
+        const tempDir = yield* makeTempDir("msa-system-prompt-migration-");
         try {
           const sessionManager = SessionManager.inMemory(tempDir);
           sessionManager.appendMessage({ role: "user", content: "existing", timestamp: 1 });

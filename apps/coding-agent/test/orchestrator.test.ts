@@ -1,6 +1,6 @@
 import type { AgentMessage } from "@msa/agent-core";
 import { type Api, fauxAssistantMessage, type Model } from "@msa/ai";
-import { awaited, runTest } from "@msa/testing";
+import { awaited, deferredPromise, runTest } from "@msa/testing";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -56,17 +56,15 @@ class FakeWorker implements WorkerSession {
       Effect.gen(function* () {
         self.prompts.push(text);
         self.isStreaming = true;
-        yield* awaited(
-          new Promise<void>((resolve, reject) => {
-            self.pending.push({
-              finish: (reply: string) => {
-                self.messages = [...self.messages, fauxAssistantMessage(reply)];
-                resolve();
-              },
-              fail: reject,
-            });
-          }),
-        );
+        const promptDone = deferredPromise<void>();
+        self.pending.push({
+          finish: (reply: string) => {
+            self.messages = [...self.messages, fauxAssistantMessage(reply)];
+            promptDone.resolve();
+          },
+          fail: promptDone.reject,
+        });
+        yield* awaited(promptDone.promise);
         self.isStreaming = false;
       }),
     );
