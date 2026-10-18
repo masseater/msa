@@ -2,6 +2,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 
 import { CONFIG_DIR_NAME, getAgentDir, parseFrontmatter } from "@msa/coding-agent";
+import { dual } from "effect/Function";
 
 export type AgentScope = "user" | "project" | "both";
 
@@ -102,7 +103,7 @@ function findNearestProjectAgentsDir(cwd: string): string | null {
   }
 }
 
-export function discoverAgents(cwd: string, scope: AgentScope): AgentDiscoveryResult {
+function discoverAgentsImpl(cwd: string, scope: AgentScope): AgentDiscoveryResult {
   const userDir = path.join(getAgentDir(), "agents");
   const projectAgentsDir = findNearestProjectAgentsDir(cwd);
 
@@ -126,7 +127,12 @@ export function discoverAgents(cwd: string, scope: AgentScope): AgentDiscoveryRe
   return { agents: Array.from(agentMap.values()), projectAgentsDir };
 }
 
-export function formatAgentList(
+export const discoverAgents: {
+  (cwd: string, scope: AgentScope): AgentDiscoveryResult;
+  (scope: AgentScope): (cwd: string) => AgentDiscoveryResult;
+} = dual(2, discoverAgentsImpl);
+
+function formatAgentListImpl(
   agents: AgentConfig[],
   maxItems: number,
 ): { text: string; remaining: number } {
@@ -138,3 +144,8 @@ export function formatAgentList(
     remaining,
   };
 }
+
+export const formatAgentList: {
+  (agents: AgentConfig[], maxItems: number): { text: string; remaining: number };
+  (maxItems: number): (agents: AgentConfig[]) => { text: string; remaining: number };
+} = dual(2, formatAgentListImpl);

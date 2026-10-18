@@ -134,7 +134,7 @@ export default function (msa: ExtensionAPI) {
 
         const thm = ctx.ui.theme;
         const model =
-          ctx.model !== undefined ? `${ctx.model.provider}/${ctx.model.id}` : "no model";
+          ctx.model === undefined ? "no model" : `${ctx.model.provider}/${ctx.model.id}`;
         const thinking = msa.getThinkingLevel();
         const topLeft = isWorking ? thm.fg("accent", ` ${spinnerFrames[spinnerIndex]} `) : "";
         const topRight = "";

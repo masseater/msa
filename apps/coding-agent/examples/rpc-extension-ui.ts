@@ -13,6 +13,7 @@ import {
   type TUI,
   TuiMainScreen,
 } from "@msa/tui";
+import { Effect } from "effect";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -176,8 +177,16 @@ class InputDialog implements Component {
     if (prefill !== undefined && prefill.length > 0) this.dialogInput.setValue(prefill);
   }
 
+  get onSubmit(): ((value: string) => void) | undefined {
+    return this.dialogInput.onSubmit;
+  }
+
   set onSubmit(fn: (value: string) => void) {
     this.dialogInput.onSubmit = fn;
+  }
+
+  get onEscape(): (() => void) | undefined {
+    return this.dialogInput.onEscape;
   }
 
   set onEscape(fn: () => void) {
@@ -224,7 +233,7 @@ async function main() {
     stderr += data.toString();
   });
 
-  await new Promise((resolve) => setTimeout(resolve, 500));
+  await Effect.runPromise(Effect.sleep(500));
   if (agent.exitCode !== null) {
     console.error(`Agent exited immediately. Stderr:\n${stderr}`);
     process.exit(1);
@@ -536,7 +545,6 @@ async function main() {
       hideLoading();
       outputLog.append("");
       tui.requestRender();
-      return;
     }
   }
 

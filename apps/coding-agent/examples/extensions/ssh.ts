@@ -34,7 +34,7 @@ function createRemoteReadOps(remote: string, remoteCwd: string, localCwd: string
   const toRemote = (p: string) => p.replace(localCwd, remoteCwd);
   return {
     readFile: (p) => sshExec(remote, `cat ${JSON.stringify(toRemote(p))}`),
-    access: (p) => sshExec(remote, `test -r ${JSON.stringify(toRemote(p))}`).then(() => {}),
+    access: (p) => sshExec(remote, `test -r ${JSON.stringify(toRemote(p))}`).then(() => undefined),
     detectImageMimeType: async (p) => {
       try {
         const r = await sshExec(remote, `file --mime-type -b ${JSON.stringify(toRemote(p))}`);
@@ -61,7 +61,8 @@ function createRemoteWriteOps(
         `echo ${JSON.stringify(b64)} | base64 -d > ${JSON.stringify(toRemote(p))}`,
       );
     },
-    mkdir: (dir) => sshExec(remote, `mkdir -p ${JSON.stringify(toRemote(dir))}`).then(() => {}),
+    mkdir: (dir) =>
+      sshExec(remote, `mkdir -p ${JSON.stringify(toRemote(dir))}`).then(() => undefined),
   };
 }
 
@@ -80,12 +81,12 @@ function createRemoteBashOps(remote: string, remoteCwd: string, localCwd: string
         const child = spawn("ssh", [remote, cmd], { stdio: ["ignore", "pipe", "pipe"] });
         let timedOut = false;
         const timer =
-          timeout !== undefined
-            ? setTimeout(() => {
+          timeout === undefined
+            ? undefined
+            : setTimeout(() => {
                 timedOut = true;
                 child.kill();
-              }, timeout * 1000)
-            : undefined;
+              }, timeout * 1000);
         child.stdout.on("data", onData);
         child.stderr.on("data", onData);
         child.on("error", (e) => {

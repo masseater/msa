@@ -75,8 +75,8 @@ export default function (msa: ExtensionAPI) {
         const content = await readFile(absolutePath, "utf-8");
         const lines = content.split("\n");
 
-        const startLine = offset !== undefined ? Math.max(0, offset - 1) : 0;
-        const endLine = limit !== undefined ? startLine + limit : lines.length;
+        const startLine = offset === undefined ? 0 : Math.max(0, offset - 1);
+        const endLine = limit === undefined ? lines.length : startLine + limit;
         const selectedLines = lines.slice(startLine, endLine);
 
         let text = selectedLines.join("\n");

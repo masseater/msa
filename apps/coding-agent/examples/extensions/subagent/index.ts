@@ -512,7 +512,7 @@ export default function (msa: ExtensionAPI) {
     async execute(_toolCallId, params, signal, onUpdate, ctx) {
       const agentScope: AgentScope = params.agentScope ?? "user";
       const dispatchDefaults: DispatchDefaults = {
-        model: ctx.model !== undefined ? `${ctx.model.provider}/${ctx.model.id}` : undefined,
+        model: ctx.model === undefined ? undefined : `${ctx.model.provider}/${ctx.model.id}`,
         thinkingLevel: ctx.thinkingLevel,
       };
       const discovery = discoverAgents(ctx.cwd, agentScope);
@@ -587,8 +587,9 @@ export default function (msa: ExtensionAPI) {
           const taskWithContext = step.task.replace(/\{previous\}/gu, previousOutput);
 
           const chainUpdate: OnUpdateCallback | undefined =
-            onUpdate !== undefined
-              ? (partial) => {
+            onUpdate === undefined
+              ? undefined
+              : (partial) => {
                   const currentResult = partial.details?.results[0];
                   if (currentResult !== undefined) {
                     const allResults = [...results, currentResult];
@@ -597,8 +598,7 @@ export default function (msa: ExtensionAPI) {
                       details: makeDetails("chain")(allResults),
                     });
                   }
-                }
-              : undefined;
+                };
 
           const result = await runSingleAgent(
             ctx.cwd,
@@ -839,8 +839,8 @@ export default function (msa: ExtensionAPI) {
       const mdTheme = getMarkdownTheme();
 
       const renderDisplayItems = (items: DisplayItem[], limit?: number) => {
-        const toShow = limit !== undefined ? items.slice(-limit) : items;
-        const skipped = limit !== undefined && items.length > limit ? items.length - limit : 0;
+        const toShow = limit === undefined ? items : items.slice(-limit);
+        const skipped = limit === undefined || items.length <= limit ? 0 : items.length - limit;
         let text = "";
         if (skipped > 0) text += theme.fg("muted", `... ${skipped} earlier items\n`);
         for (const item of toShow) {

@@ -97,8 +97,7 @@ ${conversationText}
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       ctx.ui.notify(`Compaction failed: ${message}`, "error");
-
-      return;
+      return undefined;
     }
   });
 }

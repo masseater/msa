@@ -1,3 +1,4 @@
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import {
   type Api,
   type AssistantMessageEventStream,
@@ -12,6 +13,13 @@ import {
   type TranscriptContext,
 } from "@msa/ai/compat";
 import type { ExtensionAPI } from "@msa/coding-agent";
+import { Crypto, ManagedRuntime } from "effect";
+import { dual } from "effect/Function";
+
+const runtime = ManagedRuntime.make(NodeCrypto.layer);
+
+const randomUuid = (): string =>
+  runtime.runSync(Crypto.Crypto.use((crypto) => crypto.randomUUIDv4));
 
 const GITLAB_COM_URL = "https://gitlab.com";
 const AI_GATEWAY_URL = "https://cloud.gitlab.com";
@@ -215,7 +223,7 @@ async function loginGitLab(callbacks: OAuthLoginCallbacks): Promise<OAuthCredent
     scope: OAUTH_SCOPES.join(" "),
     code_challenge: challenge,
     code_challenge_method: "S256",
-    state: crypto.randomUUID(),
+    state: randomUuid(),
   });
 
   callbacks.onAuth({ url: `${GITLAB_COM_URL}/oauth/authorize?${authParams.toString()}` });
@@ -280,7 +288,7 @@ async function refreshGitLabToken(
   };
 }
 
-export function streamGitLabDuo(
+function streamGitLabDuoImpl(
   model: Model<Api>,
   context: TranscriptContext,
   options?: SimpleStreamOptions,
@@ -352,22 +360,29 @@ export function streamGitLabDuo(
   return stream;
 }
 
+export const streamGitLabDuo: {
+  (
+    model: Model<Api>,
+    context: TranscriptContext,
+    options?: SimpleStreamOptions,
+  ): AssistantMessageEventStream;
+  (
+    context: TranscriptContext,
+    options?: SimpleStreamOptions,
+  ): (model: Model<Api>) => AssistantMessageEventStream;
+} = dual((args: IArguments) => args.length >= 2, streamGitLabDuoImpl);
+
 export default function (msa: ExtensionAPI) {
   msa.registerProvider("gitlab-duo", {
     baseUrl: AI_GATEWAY_URL,
     apiKey: "$GITLAB_TOKEN",
     api: "gitlab-duo-api",
     models: MODELS.map(
-      ({ id, name, reasoning, thinkingLevelMap, input, cost, contextWindow, maxTokens }) => ({
-        id,
-        name,
-        reasoning,
-        ...(thinkingLevelMap !== undefined ? { thinkingLevelMap } : {}),
-        input,
-        cost,
-        contextWindow,
-        maxTokens,
-      }),
+      ({ id, name, reasoning, thinkingLevelMap, input, cost, contextWindow, maxTokens }) =>
+        Object.assign(
+          { id, name, reasoning, input, cost, contextWindow, maxTokens },
+          thinkingLevelMap === undefined ? {} : { thinkingLevelMap },
+        ),
     ),
     oauth: {
       name: "GitLab Duo",

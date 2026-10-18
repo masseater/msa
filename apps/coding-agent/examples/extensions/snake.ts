@@ -1,6 +1,8 @@
 import type { ExtensionAPI } from "@msa/coding-agent";
 import { matchesKey, visibleWidth } from "@msa/tui";
 
+const ANSI_SGR = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "gu");
+
 const GAME_WIDTH = 40;
 const GAME_HEIGHT = 15;
 const TICK_MS = 100;
@@ -264,7 +266,7 @@ class SnakeComponent {
   }
 
   private padLine(line: string, width: number): string {
-    const visibleLen = line.replace(/\x1b\[[0-9;]*m/gu, "").length;
+    const visibleLen = line.replace(ANSI_SGR, "").length;
     const padding = Math.max(0, width - visibleLen);
     return line + " ".repeat(padding);
   }
@@ -298,16 +300,17 @@ export default function (msa: ExtensionAPI) {
         }
       }
 
-      await ctx.ui.custom((tui, _theme, _kb, done) => {
-        return new SnakeComponent(
-          tui,
-          () => done(undefined),
-          (state) => {
-            msa.appendEntry(SNAKE_SAVE_TYPE, state);
-          },
-          savedState,
-        );
-      });
+      await ctx.ui.custom(
+        (tui, _theme, _kb, done) =>
+          new SnakeComponent(
+            tui,
+            () => done(undefined),
+            (state) => {
+              msa.appendEntry(SNAKE_SAVE_TYPE, state);
+            },
+            savedState,
+          ),
+      );
     },
   });
 }

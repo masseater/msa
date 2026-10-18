@@ -429,7 +429,7 @@ export default function questionnaire(msa: ExtensionAPI) {
         if (a.wasCustom) {
           return `${theme.fg("success", "✓ ")}${theme.fg("accent", a.id)}: ${theme.fg("muted", "(wrote) ")}${a.label}`;
         }
-        const display = a.index !== undefined ? `${a.index}. ${a.label}` : a.label;
+        const display = a.index === undefined ? a.label : `${a.index}. ${a.label}`;
         return `${theme.fg("success", "✓ ")}${theme.fg("accent", a.id)}: ${display}`;
       });
       return new Text(lines.join("\n"), 0, 0);

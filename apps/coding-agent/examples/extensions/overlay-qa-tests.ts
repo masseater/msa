@@ -3,6 +3,7 @@ import { spawn } from "child_process";
 import type { ExtensionAPI, ExtensionCommandContext, Theme } from "@msa/coding-agent";
 import type { Component, OverlayAnchor, OverlayHandle, OverlayOptions, TUI } from "@msa/tui";
 import { Input, matchesKey, truncateToWidth, visibleWidth } from "@msa/tui";
+import { Effect } from "effect";
 
 let globalToggleHandle: OverlayHandle | null = null;
 
@@ -81,11 +82,12 @@ export default function (msa: ExtensionAPI) {
 
       let index = 0;
       while (true) {
+        const config = configs[index]!;
         const result = await ctx.ui.custom<"next" | "close">(
-          (_tui, theme, _kb, done) => new MarginTestComponent(theme, configs[index]!, done),
+          (_tui, theme, _kb, done) => new MarginTestComponent(theme, config, done),
           {
             overlay: true,
-            overlayOptions: configs[index]!.options,
+            overlayOptions: config.options,
           },
         );
 
@@ -291,9 +293,7 @@ export default function (msa: ExtensionAPI) {
   });
 }
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
+const sleep = (ms: number): Promise<void> => Effect.runPromise(Effect.sleep(ms));
 
 abstract class BaseOverlay {
   protected theme: Theme;

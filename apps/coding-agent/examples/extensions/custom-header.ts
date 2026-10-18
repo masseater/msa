@@ -23,17 +23,15 @@ function getMsaMascot(theme: Theme): string[] {
 export default function (msa: ExtensionAPI) {
   msa.on("session_start", async (_event, ctx) => {
     if (ctx.mode === "tui") {
-      ctx.ui.setHeader((_tui, theme) => {
-        return {
-          render(_width: number): string[] {
-            const mascotLines = getMsaMascot(theme);
+      ctx.ui.setHeader((_tui, theme) => ({
+        render(_width: number): string[] {
+          const mascotLines = getMsaMascot(theme);
 
-            const subtitle = `${theme.fg("muted", "   shitty coding agent")}${theme.fg("dim", ` v${VERSION}`)}`;
-            return [...mascotLines, subtitle];
-          },
-          invalidate() {},
-        };
-      });
+          const subtitle = `${theme.fg("muted", "   shitty coding agent")}${theme.fg("dim", ` v${VERSION}`)}`;
+          return [...mascotLines, subtitle];
+        },
+        invalidate() {},
+      }));
     }
   });
 

@@ -1,14 +1,12 @@
 import { StringEnum } from "@msa/ai";
 import type { ExtensionAPI, ExtensionContext, Theme, ToolExecutionMode } from "@msa/coding-agent";
 import { type Component, matchesKey, Text, truncateToWidth, visibleWidth } from "@msa/tui";
+import { Data, Effect } from "effect";
 import { Type } from "typebox";
 
-class TicTacToeError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "TicTacToeError";
-  }
-}
+class TicTacToeError extends Data.TaggedError("TicTacToeError")<{
+  readonly message: string;
+}> {}
 
 type Cell = " " | "X" | "O";
 type GameStatus = "playing" | "win_X" | "win_O" | "draw";
@@ -558,9 +556,7 @@ class GameOverMessageComponent implements Component {
   }
 }
 
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
+const delay = (ms: number): Promise<void> => Effect.runPromise(Effect.sleep(ms));
 
 const SAVE_TYPE = "tic-tac-toe-save";
 const MOVE_MESSAGE_TYPE = "tic-tac-toe-move";
@@ -824,10 +820,10 @@ Decide the target cell first, then dump every action for the turn in one go.
           break;
         case "play": {
           if (gameState.status !== "playing") {
-            throw new TicTacToeError(`Game is over (${gameState.status}).`);
+            throw new TicTacToeError({ message: `Game is over (${gameState.status}).` });
           }
           if (gameState.currentTurn !== gameState.agentMark) {
-            throw new TicTacToeError("It is not your turn.");
+            throw new TicTacToeError({ message: "It is not your turn." });
           }
           const r = gameState.agentCursorRow;
           const c = gameState.agentCursorCol;
@@ -835,9 +831,9 @@ Decide the target cell first, then dump every action for the turn in one go.
           if (target !== " ") {
             component?.updateState(gameState);
             msa.appendEntry(SAVE_TYPE, getBoardDetails());
-            throw new TicTacToeError(
-              `Cell (${r},${c}) is already ${target}. Your cursor is still at (${r},${c}). Move to an empty cell and retry play.`,
-            );
+            throw new TicTacToeError({
+              message: `Cell (${r},${c}) is already ${target}. Your cursor is still at (${r},${c}). Move to an empty cell and retry play.`,
+            });
           }
           setCell(gameState.board, r, c, gameState.agentMark);
           gameState.status = checkWin(gameState.board);

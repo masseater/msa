@@ -1,3 +1,5 @@
+import { dual } from "effect/Function";
+
 const DESTRUCTIVE_PATTERNS = [
   /\brm\b/iu,
   /\brmdir\b/iu,
@@ -157,7 +159,7 @@ export function extractDoneSteps(message: string): number[] {
   return steps;
 }
 
-export function markCompletedSteps(text: string, items: TodoItem[]): number {
+function markCompletedStepsImpl(text: string, items: TodoItem[]): number {
   const doneSteps = extractDoneSteps(text);
   for (const step of doneSteps) {
     const item = items.find((t) => t.step === step);
@@ -165,3 +167,8 @@ export function markCompletedSteps(text: string, items: TodoItem[]): number {
   }
   return doneSteps.length;
 }
+
+export const markCompletedSteps: {
+  (text: string, items: TodoItem[]): number;
+  (items: TodoItem[]): (text: string) => number;
+} = dual(2, markCompletedStepsImpl);

@@ -6,7 +6,7 @@ export default function (msa: ExtensionAPI) {
 
     const next = `${model.provider}/${model.id}`;
     const prev =
-      previousModel !== undefined ? `${previousModel.provider}/${previousModel.id}` : "none";
+      previousModel === undefined ? "none" : `${previousModel.provider}/${previousModel.id}`;
 
     if (source !== "restore") {
       ctx.ui.notify(`Model: ${next}`, "info");

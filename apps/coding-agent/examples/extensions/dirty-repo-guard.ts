@@ -40,7 +40,5 @@ export default function (msa: ExtensionAPI) {
     return checkDirtyRepo(msa, ctx, action);
   });
 
-  msa.on("session_before_fork", async (_event, ctx) => {
-    return checkDirtyRepo(msa, ctx, "fork");
-  });
+  msa.on("session_before_fork", (_event, ctx) => checkDirtyRepo(msa, ctx, "fork"));
 }

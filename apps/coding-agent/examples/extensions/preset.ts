@@ -87,7 +87,12 @@ export default function presetExtension(msa: ExtensionAPI) {
       preset.model.length > 0
     ) {
       const model = ctx.modelRegistry.find(preset.provider, preset.model);
-      if (model !== undefined) {
+      if (model === undefined) {
+        ctx.ui.notify(
+          `Preset "${name}": Model ${preset.provider}/${preset.model} not found`,
+          "warning",
+        );
+      } else {
         const success = await msa.setModel(model);
         if (!success) {
           ctx.ui.notify(
@@ -95,11 +100,6 @@ export default function presetExtension(msa: ExtensionAPI) {
             "warning",
           );
         }
-      } else {
-        ctx.ui.notify(
-          `Preset "${name}": Model ${preset.provider}/${preset.model} not found`,
-          "warning",
-        );
       }
     }
 
@@ -223,14 +223,14 @@ export default function presetExtension(msa: ExtensionAPI) {
     if (result === "(none)") {
       activePresetName = undefined;
       activePreset = undefined;
-      if (originalState !== undefined) {
+      if (originalState === undefined) {
+        msa.setActiveTools(["read", "bash", "edit", "write"]);
+      } else {
         if (originalState.model !== undefined) {
           await msa.setModel(originalState.model);
         }
         msa.setThinkingLevel(originalState.thinkingLevel);
         msa.setActiveTools(originalState.tools);
-      } else {
-        msa.setActiveTools(["read", "bash", "edit", "write"]);
       }
       ctx.ui.notify("Preset cleared, defaults restored", "info");
       updateStatus(ctx);
@@ -277,14 +277,14 @@ export default function presetExtension(msa: ExtensionAPI) {
     if (nextName === "(none)") {
       activePresetName = undefined;
       activePreset = undefined;
-      if (originalState !== undefined) {
+      if (originalState === undefined) {
+        msa.setActiveTools(["read", "bash", "edit", "write"]);
+      } else {
         if (originalState.model !== undefined) {
           await msa.setModel(originalState.model);
         }
         msa.setThinkingLevel(originalState.thinkingLevel);
         msa.setActiveTools(originalState.tools);
-      } else {
-        msa.setActiveTools(["read", "bash", "edit", "write"]);
       }
       ctx.ui.notify("Preset cleared, defaults restored", "info");
       updateStatus(ctx);
@@ -344,12 +344,12 @@ export default function presetExtension(msa: ExtensionAPI) {
     const presetFlag = msa.getFlag("preset");
     if (typeof presetFlag === "string" && presetFlag.length > 0) {
       const preset = presets[presetFlag];
-      if (preset !== undefined) {
-        await applyPreset(presetFlag, preset, ctx);
-        ctx.ui.notify(`Preset "${presetFlag}" activated`, "info");
-      } else {
+      if (preset === undefined) {
         const available = Object.keys(presets).join(", ") || "(none defined)";
         ctx.ui.notify(`Unknown preset "${presetFlag}". Available: ${available}`, "warning");
+      } else {
+        await applyPreset(presetFlag, preset, ctx);
+        ctx.ui.notify(`Preset "${presetFlag}" activated`, "info");
       }
     }
 

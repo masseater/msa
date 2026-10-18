@@ -133,9 +133,9 @@ export default function (msa: ExtensionAPI) {
               {
                 type: "text",
                 text:
-                  todos.length !== 0
-                    ? todos.map((t) => `[${t.done ? "x" : " "}] #${t.id}: ${t.text}`).join("\n")
-                    : "No todos",
+                  todos.length === 0
+                    ? "No todos"
+                    : todos.map((t) => `[${t.done ? "x" : " "}] #${t.id}: ${t.text}`).join("\n"),
               },
             ],
             details: { action: "list", todos: [...todos], nextId } as TodoDetails,
@@ -289,9 +289,9 @@ export default function (msa: ExtensionAPI) {
         return;
       }
 
-      await ctx.ui.custom<void>((_tui, theme, _kb, done) => {
-        return new TodoListComponent(todos, theme, () => done());
-      });
+      await ctx.ui.custom<void>(
+        (_tui, theme, _kb, done) => new TodoListComponent(todos, theme, () => done()),
+      );
     },
   });
 }

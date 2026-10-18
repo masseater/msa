@@ -38,9 +38,8 @@ export default function (msa: ExtensionAPI) {
         }
 
         await ctx.ui.custom(
-          (tui, _theme, _keybindings, done) => {
-            return new DoomOverlayComponent(tui, activeEngine!, () => done(undefined), isResume);
-          },
+          (tui, _theme, _keybindings, done) =>
+            new DoomOverlayComponent(tui, activeEngine!, () => done(undefined), isResume),
           {
             overlay: true,
             overlayOptions: {

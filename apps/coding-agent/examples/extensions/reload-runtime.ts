@@ -6,7 +6,6 @@ export default function (msa: ExtensionAPI) {
     description: "Reload extensions, skills, prompts, themes, and context files",
     handler: async (_args, ctx) => {
       await ctx.reload();
-      return;
     },
   });
 
