@@ -926,19 +926,19 @@ export class SessionManager {
     }
 
     if (sessionFile) {
-      this._setSessionFile(sessionFile, preloadedFileEntries);
+      this.setSessionFileInternal(sessionFile, preloadedFileEntries);
     } else if (preloadedFileEntries?.length) {
-      this._loadEntries(preloadedFileEntries, newSessionOptions);
+      this.loadEntries(preloadedFileEntries, newSessionOptions);
     } else {
       this.newSession(newSessionOptions);
     }
   }
 
   setSessionFile(sessionFile: string): void {
-    this._setSessionFile(sessionFile);
+    this.setSessionFileInternal(sessionFile);
   }
 
-  private _setSessionFile(sessionFile: string, preloadedFileEntries?: FileEntry[]): void {
+  private setSessionFileInternal(sessionFile: string, preloadedFileEntries?: FileEntry[]): void {
     this.sessionFile = resolvePath(sessionFile);
     if (existsSync(this.sessionFile)) {
       const entries = preloadedFileEntries ?? loadEntriesFromFile(this.sessionFile);
@@ -950,12 +950,12 @@ export class SessionManager {
         }
         this.newSession();
         this.sessionFile = explicitPath;
-        this._rewriteFile();
+        this.rewriteFile();
         this.flushed = true;
         return;
       }
 
-      this._loadEntries(entries);
+      this.loadEntries(entries);
       this.flushed = true;
     } else {
       const explicitPath = this.sessionFile;
@@ -992,7 +992,7 @@ export class SessionManager {
     return this.sessionFile;
   }
 
-  private _loadEntries(entries: FileEntry[], options?: NewSessionOptions): void {
+  private loadEntries(entries: FileEntry[], options?: NewSessionOptions): void {
     const header = entries.find((e) => e.type === "session") as SessionHeader | undefined;
 
     if (header) {
@@ -1000,17 +1000,17 @@ export class SessionManager {
       this.sessionId = header.id;
 
       if (migrateToCurrentVersion(this.fileEntries)) {
-        this._rewriteFile();
+        this.rewriteFile();
       }
     } else {
       this.newSession(options);
       this.fileEntries = this.fileEntries.concat(entries);
     }
 
-    this._buildIndex();
+    this.buildIndex();
   }
 
-  private _buildIndex(): void {
+  private buildIndex(): void {
     this.byId.clear();
     this.labelsById.clear();
     this.labelTimestampsById.clear();
@@ -1031,7 +1031,7 @@ export class SessionManager {
     }
   }
 
-  private _rewriteFile(): void {
+  private rewriteFile(): void {
     if (!this.persist || !this.sessionFile) return;
     const fd = openSync(this.sessionFile, "w");
     try {
@@ -1067,17 +1067,17 @@ export class SessionManager {
     return this.sessionFile;
   }
 
-  private _hasConversation(): boolean {
+  private hasConversation(): boolean {
     return this.fileEntries.some(
       (e) => e.type === "message" && (e.message.role === "user" || e.message.role === "assistant"),
     );
   }
 
-  _persist(entry: SessionEntry): void {
+  persistInternal(entry: SessionEntry): void {
     if (!this.persist || !this.sessionFile) return;
 
     if (!this.flushed) {
-      if (!this._hasConversation()) return;
+      if (!this.hasConversation()) return;
       const fd = openSync(this.sessionFile, "wx");
       try {
         for (const e of this.fileEntries) {
@@ -1092,11 +1092,11 @@ export class SessionManager {
     }
   }
 
-  private _appendEntry(entry: SessionEntry): void {
+  private appendEntry(entry: SessionEntry): void {
     this.fileEntries.push(entry);
     this.byId.set(entry.id, entry);
     this.leafId = entry.id;
-    this._persist(entry);
+    this.persistInternal(entry);
   }
 
   appendMessage(message: Message | CustomMessage | BashExecutionMessage): string {
@@ -1107,7 +1107,7 @@ export class SessionManager {
       timestamp: new Date().toISOString(),
       message,
     };
-    this._appendEntry(entry);
+    this.appendEntry(entry);
     return entry.id;
   }
 
@@ -1119,7 +1119,7 @@ export class SessionManager {
       timestamp: new Date().toISOString(),
       thinkingLevel,
     };
-    this._appendEntry(entry);
+    this.appendEntry(entry);
     return entry.id;
   }
 
@@ -1132,7 +1132,7 @@ export class SessionManager {
       provider,
       modelId,
     };
-    this._appendEntry(entry);
+    this.appendEntry(entry);
     return entry.id;
   }
 
@@ -1154,7 +1154,7 @@ export class SessionManager {
       usage,
       ...(note ? { note } : {}),
     };
-    this._appendEntry(entry);
+    this.appendEntry(entry);
     return entry;
   }
 
@@ -1184,7 +1184,7 @@ export class SessionManager {
         ? { systemMessage: { ...systemMessage, timestamp: new Date(timestamp).getTime() } }
         : {}),
     };
-    this._appendEntry(entry);
+    this.appendEntry(entry);
     return entry.id;
   }
 
@@ -1197,7 +1197,7 @@ export class SessionManager {
       parentId: this.leafId,
       timestamp: new Date().toISOString(),
     };
-    this._appendEntry(entry);
+    this.appendEntry(entry);
     return entry.id;
   }
 
@@ -1210,7 +1210,7 @@ export class SessionManager {
       timestamp: new Date().toISOString(),
       name: sanitizedName,
     };
-    this._appendEntry(entry);
+    this.appendEntry(entry);
     return entry.id;
   }
 
@@ -1240,7 +1240,7 @@ export class SessionManager {
       parentId: this.leafId,
       timestamp: new Date().toISOString(),
     };
-    this._appendEntry(entry);
+    this.appendEntry(entry);
     return entry.id;
   }
 
@@ -1280,7 +1280,7 @@ export class SessionManager {
       targetId,
       replacement: normalizedReplacement,
     };
-    this._appendEntry(entry);
+    this.appendEntry(entry);
     return entry.id;
   }
 
@@ -1322,7 +1322,7 @@ export class SessionManager {
       targetId,
       label,
     };
-    this._appendEntry(entry);
+    this.appendEntry(entry);
     if (label) {
       this.labelsById.set(targetId, label);
       this.labelTimestampsById.set(targetId, entry.timestamp);
@@ -1442,7 +1442,7 @@ export class SessionManager {
       usage,
       fromHook,
     };
-    this._appendEntry(entry);
+    this.appendEntry(entry);
     return entry.id;
   }
 
@@ -1524,10 +1524,10 @@ export class SessionManager {
       this.fileEntries = [header, ...pathWithoutLabels, ...labelEntries];
       this.sessionId = newSessionId;
       this.sessionFile = newSessionFile;
-      this._buildIndex();
+      this.buildIndex();
 
-      if (this._hasConversation()) {
-        this._rewriteFile();
+      if (this.hasConversation()) {
+        this.rewriteFile();
         this.flushed = true;
       } else {
         this.flushed = false;
@@ -1552,7 +1552,7 @@ export class SessionManager {
     }
     this.fileEntries = [header, ...pathWithoutLabels, ...labelEntries];
     this.sessionId = newSessionId;
-    this._buildIndex();
+    this.buildIndex();
     return undefined;
   }
 

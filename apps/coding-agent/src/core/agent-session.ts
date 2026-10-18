@@ -376,130 +376,133 @@ export class AgentSession {
   readonly sessionManager: SessionManager;
   readonly settingsManager: SettingsManager;
 
-  private _scopedModels: Array<{ model: Model<any>; thinkingLevel?: ThinkingLevel | undefined }>;
+  private scopedModelsInternal: Array<{
+    model: Model<any>;
+    thinkingLevel?: ThinkingLevel | undefined;
+  }>;
 
-  private _unsubscribeAgent?: (() => void) | undefined;
-  private _eventListeners: AgentSessionEventListener[] = [];
-  private _isAgentRunActive = false;
-  private _agentRunAbortRequested = false;
-  private _idleWaitPromise: Promise<void> | undefined;
-  private _resolveIdleWait: (() => void) | undefined;
+  private unsubscribeAgent?: (() => void) | undefined;
+  private eventListeners: AgentSessionEventListener[] = [];
+  private isAgentRunActive = false;
+  private agentRunAbortRequested = false;
+  private idleWaitPromise: Promise<void> | undefined;
+  private resolveIdleWait: (() => void) | undefined;
 
-  private _steeringMessages: string[] = [];
-  private _followUpMessages: string[] = [];
-  private _pendingNextTurnMessages: CustomMessage[] = [];
-  private _pendingCustomMessages: CustomMessage[] = [];
+  private steeringMessages: string[] = [];
+  private followUpMessages: string[] = [];
+  private pendingNextTurnMessages: CustomMessage[] = [];
+  private pendingCustomMessages: CustomMessage[] = [];
 
-  private _compactionAbortController: AbortController | undefined = undefined;
-  private _autoCompactionAbortController: AbortController | undefined = undefined;
-  private _overflowRecoveryAttempted = false;
+  private compactionAbortController: AbortController | undefined = undefined;
+  private autoCompactionAbortController: AbortController | undefined = undefined;
+  private overflowRecoveryAttempted = false;
 
-  private _branchSummaryAbortController: AbortController | undefined = undefined;
+  private branchSummaryAbortController: AbortController | undefined = undefined;
 
-  private _retryAbortController: AbortController | undefined = undefined;
-  private _retryAttempt = 0;
-  private _failedResponse: AssistantMessage | undefined;
+  private retryAbortController: AbortController | undefined = undefined;
+  private retryAttemptInternal = 0;
+  private failedResponse: AssistantMessage | undefined;
 
-  private readonly _bashAbortControllers = new Set<AbortController>();
-  private _pendingBashMessages: BashExecutionMessage[] = [];
+  private readonly bashAbortControllers = new Set<AbortController>();
+  private pendingBashMessages: BashExecutionMessage[] = [];
 
-  private _extensionRunner!: ExtensionRunner;
-  private _turnIndex = 0;
-  private readonly _entryIdsByMessage = new WeakMap<object, string>();
-  private readonly _boundaryDispatchedMessages = new WeakSet<object>();
-  private _lastAssistantMessage: AssistantMessage | undefined;
-  private _lastAssistantToolResults: AgentMessage[] = [];
-  private _lastActivityOutcome: AgentActivityOutcome = "completed";
-  private readonly _goal: GoalLoop;
-  private readonly _orchestrator: Orchestrator | undefined;
-  private _totalTokensCache: { entryCount: number; total: number } | undefined;
-  private _isBeforeSettle = false;
-  private _abortDuringBeforeSettle = false;
-  private _isEmittingAgentSettled = false;
-  private readonly _deferredSettledActions: Array<() => Promise<void>> = [];
+  private extensionRunnerInternal!: ExtensionRunner;
+  private turnIndex = 0;
+  private readonly entryIdsByMessage = new WeakMap<object, string>();
+  private readonly boundaryDispatchedMessages = new WeakSet<object>();
+  private lastAssistantMessage: AssistantMessage | undefined;
+  private lastAssistantToolResults: AgentMessage[] = [];
+  private lastActivityOutcome: AgentActivityOutcome = "completed";
+  private readonly goalInternal: GoalLoop;
+  private readonly orchestratorInternal: Orchestrator | undefined;
+  private totalTokensCache: { entryCount: number; total: number } | undefined;
+  private isBeforeSettle = false;
+  private abortDuringBeforeSettle = false;
+  private isEmittingAgentSettled = false;
+  private readonly deferredSettledActions: Array<() => Promise<void>> = [];
 
-  private _resourceLoader: ResourceLoader;
-  private _customTools: ToolDefinition[];
-  private _baseToolDefinitions: Map<string, ToolDefinition> = new Map();
-  private _cwd: string;
-  private _extensionRunnerRef?: { current?: ExtensionRunner } | undefined;
-  private _initialActiveToolNames?: string[] | undefined;
-  private _pendingToolNames = new Set<string>();
-  private _usesDefaultTools: boolean;
-  private _defaultToolModifiers: string[];
-  private _allowedTools?: (name: string) => boolean;
-  private _allowlistFiltersMcp = false;
-  private _excludedTools?: ((name: string) => boolean) | undefined;
-  private _baseToolsOverride?: Record<string, AgentTool> | undefined;
-  private _sessionStartEvent: SessionStartEvent;
-  private _extensionUIContext?: ExtensionUIContext;
-  private _extensionMode: ExtensionMode = "print";
-  private _extensionCommandContextActions?: ExtensionCommandContextActions;
-  private _extensionAbortHandler?: () => void;
-  private _extensionShutdownHandler?: ShutdownHandler;
-  private _extensionErrorListener?: ExtensionErrorListener;
-  private _extensionErrorUnsubscriber?: (() => void) | undefined;
+  private resourceLoaderInternal: ResourceLoader;
+  private customTools: ToolDefinition[];
+  private baseToolDefinitions: Map<string, ToolDefinition> = new Map();
+  private cwd: string;
+  private extensionRunnerRef?: { current?: ExtensionRunner } | undefined;
+  private initialActiveToolNames?: string[] | undefined;
+  private pendingToolNames = new Set<string>();
+  private usesDefaultTools: boolean;
+  private defaultToolModifiers: string[];
+  private allowedTools?: (name: string) => boolean;
+  private allowlistFiltersMcp = false;
+  private excludedTools?: ((name: string) => boolean) | undefined;
+  private baseToolsOverride?: Record<string, AgentTool> | undefined;
+  private sessionStartEvent: SessionStartEvent;
+  private extensionUIContext?: ExtensionUIContext;
+  private extensionMode: ExtensionMode = "print";
+  private extensionCommandContextActions?: ExtensionCommandContextActions;
+  private extensionAbortHandler?: () => void;
+  private extensionShutdownHandler?: ShutdownHandler;
+  private extensionErrorListener?: ExtensionErrorListener;
+  private extensionErrorUnsubscriber?: (() => void) | undefined;
 
-  private _modelRuntime: ModelRuntime;
-  private _memory: MemoryService | undefined;
-  private _cacheWarmer?:
+  private modelRuntimeInternal: ModelRuntime;
+  private memoryInternal: MemoryService | undefined;
+  private cacheWarmer?:
     | Pick<CacheWarmer, "cancel" | "status" | "onAgentSettled" | "onModeChanged" | "onWarmed">
     | undefined;
 
-  private _toolRegistry: Map<string, AgentTool> = new Map();
-  private _nestedToolCalls: NestedToolCallRunner | undefined;
-  private _hiddenDeclarations: ReadonlySet<string> = new Set();
-  private _toolDefinitions: Map<string, ToolDefinitionEntry> = new Map();
-  private _toolPromptSnippets: Map<string, string> = new Map();
-  private _toolPromptGuidelines: Map<string, string[]> = new Map();
+  private toolRegistry: Map<string, AgentTool> = new Map();
+  private nestedToolCalls: NestedToolCallRunner | undefined;
+  private hiddenDeclarations: ReadonlySet<string> = new Set();
+  private toolDefinitions: Map<string, ToolDefinitionEntry> = new Map();
+  private toolPromptSnippets: Map<string, string> = new Map();
+  private toolPromptGuidelines: Map<string, string[]> = new Map();
 
-  private _baseSystemPromptOptions!: NormalizedBuildSystemPromptOptions;
-  private _runSystemPromptOptions?: NormalizedBuildSystemPromptOptions | undefined;
+  private baseSystemPromptOptions!: NormalizedBuildSystemPromptOptions;
+  private runSystemPromptOptions?: NormalizedBuildSystemPromptOptions | undefined;
 
   constructor(config: AgentSessionConfig) {
     this.agent = config.agent;
     this.sessionManager = config.sessionManager;
     this.settingsManager = config.settingsManager;
-    this._scopedModels = config.scopedModels ?? [];
-    this._resourceLoader = config.resourceLoader;
-    this._customTools = config.customTools ?? [];
-    this._cwd = config.cwd;
-    this._modelRuntime = config.modelRuntime;
-    this._cacheWarmer = config.cacheWarmer;
-    if (this._cacheWarmer) {
-      this._cacheWarmer.onWarmed = (entry) => this._emit({ type: "entry_appended", entry });
+    this.scopedModelsInternal = config.scopedModels ?? [];
+    this.resourceLoaderInternal = config.resourceLoader;
+    this.customTools = config.customTools ?? [];
+    this.cwd = config.cwd;
+    this.modelRuntimeInternal = config.modelRuntime;
+    this.cacheWarmer = config.cacheWarmer;
+    if (this.cacheWarmer) {
+      this.cacheWarmer.onWarmed = (entry) => this.emit({ type: "entry_appended", entry });
     }
-    this._extensionRunnerRef = config.extensionRunnerRef;
-    this._initialActiveToolNames = config.initialActiveToolNames;
-    this._usesDefaultTools = config.usesDefaultTools ?? false;
-    this._defaultToolModifiers = config.defaultToolModifiers ?? [];
+    this.extensionRunnerRef = config.extensionRunnerRef;
+    this.initialActiveToolNames = config.initialActiveToolNames;
+    this.usesDefaultTools = config.usesDefaultTools ?? false;
+    this.defaultToolModifiers = config.defaultToolModifiers ?? [];
     if (config.allowedToolNames) {
-      this._allowedTools = createToolNameMatcher(config.allowedToolNames);
-      this._allowlistFiltersMcp =
+      this.allowedTools = createToolNameMatcher(config.allowedToolNames);
+      this.allowlistFiltersMcp =
         config.allowedToolNames.length === 0 ||
         config.allowedToolNames.some((entry) => entry.startsWith("mcp__"));
     }
-    this._excludedTools = config.excludedToolNames
+    this.excludedTools = config.excludedToolNames
       ? createToolNameMatcher(config.excludedToolNames)
       : undefined;
-    this._baseToolsOverride = config.baseToolsOverride;
-    this._sessionStartEvent = config.sessionStartEvent ?? {
+    this.baseToolsOverride = config.baseToolsOverride;
+    this.sessionStartEvent = config.sessionStartEvent ?? {
       type: "session_start",
       reason: "startup",
     };
 
-    this._goal = new GoalLoop(
+    this.goalInternal = new GoalLoop(
       {
         messages: () => this.messages,
-        totalTokens: () => this._totalSessionTokens(),
-        lastAssistant: () => this._findLastAssistantMessage(),
+        totalTokens: () => this.totalSessionTokens(),
+        lastAssistant: () => this.findLastAssistantMessage(),
         isContextOverflow: (message) =>
           isContextOverflow(
             message,
-            (this._modelForMessage(message) ?? this.model)?.contextWindow ?? 0,
+            (this.modelForMessage(message) ?? this.model)?.contextWindow ?? 0,
           ),
-        evaluate: (prompt, signal) => this._evaluateGoal(prompt, signal),
-        record: (data) => this._recordGoalEntry(data),
+        evaluate: (prompt, signal) => this.evaluateGoal(prompt, signal),
+        record: (data) => this.recordGoalEntry(data),
         queueContinue: (text) =>
           this.agent.followUp({
             role: "custom",
@@ -508,20 +511,20 @@ export class AgentSession {
             display: false,
             timestamp: Date.now(),
           }),
-        changed: () => this._emit({ type: "goal_changed", goal: this._goal.snapshot }),
+        changed: () => this.emit({ type: "goal_changed", goal: this.goalInternal.snapshot }),
       },
       findActiveGoalCondition(this.sessionManager.getBranch()),
     );
 
     const createWorkerSession = config.createWorkerSession;
-    this._orchestrator = createWorkerSession
+    this.orchestratorInternal = createWorkerSession
       ? new Orchestrator({
           project: this.sessionManager.getSessionId(),
-          cwd: this._cwd,
+          cwd: this.cwd,
           connectGraph: () => Neo4jSessionGraph.connect(),
           createWorker: createWorkerSession,
-          resolveModel: (reference) => this._resolveOrchestratorModel(reference),
-          defaults: () => this._orchestratorDefaults(),
+          resolveModel: (reference) => this.resolveOrchestratorModel(reference),
+          defaults: () => this.orchestratorDefaults(),
           report: (text, details) =>
             void this.sendCustomMessage(
               {
@@ -535,33 +538,33 @@ export class AgentSession {
         })
       : undefined;
     let orchestratorChangePending: ReturnType<typeof setTimeout> | undefined;
-    this._orchestrator?.onChange(() => {
+    this.orchestratorInternal?.onChange(() => {
       orchestratorChangePending ??= setTimeout(() => {
         orchestratorChangePending = undefined;
-        this._emit({ type: "orchestrator_changed" });
+        this.emit({ type: "orchestrator_changed" });
       }, 100);
     });
 
-    this._unsubscribeAgent = this.agent.subscribe(this._handleAgentEvent);
-    this._installAgentToolHooks();
-    this._installAgentNextTurnRefresh();
-    this._installAgentRequestProjection();
-    this._installAgentBoundaryHooks();
-    this._installHiddenDeclarationsProjection();
-    this._installAgentForcedPromptProjection();
+    this.unsubscribeAgent = this.agent.subscribe(this.handleAgentEvent);
+    this.installAgentToolHooks();
+    this.installAgentNextTurnRefresh();
+    this.installAgentRequestProjection();
+    this.installAgentBoundaryHooks();
+    this.installHiddenDeclarationsProjection();
+    this.installAgentForcedPromptProjection();
 
-    this._buildRuntime({
-      activeToolNames: this._initialActiveToolNames,
+    this.buildRuntime({
+      activeToolNames: this.initialActiveToolNames,
       includeAllExtensionTools: true,
     });
-    if (this._usesDefaultTools) this._restoreToolsFromTranscript(this._defaultToolModifiers);
+    if (this.usesDefaultTools) this.restoreToolsFromTranscript(this.defaultToolModifiers);
   }
 
   get modelRuntime(): ModelRuntime {
-    return this._modelRuntime;
+    return this.modelRuntimeInternal;
   }
 
-  private async _getRequiredRequestAuth(
+  private async getRequiredRequestAuth(
     model: Model<any>,
     signal?: AbortSignal,
   ): Promise<{
@@ -572,7 +575,7 @@ export class AgentSession {
   }> {
     let result: AuthResult | undefined;
     try {
-      result = await this._modelRuntime.getAuth(model, signal ? { signal } : {});
+      result = await this.modelRuntimeInternal.getAuth(model, signal ? { signal } : {});
     } catch (error) {
       const cause = error instanceof Error ? error.cause : undefined;
       if (cause instanceof Error && cause.message === "authHeader requires a resolved API key") {
@@ -590,7 +593,7 @@ export class AgentSession {
       };
     }
 
-    const isOAuth = this._modelRuntime.isUsingOAuth(model.provider);
+    const isOAuth = this.modelRuntimeInternal.isUsingOAuth(model.provider);
     if (isOAuth) {
       throw new Error(
         `Authentication failed for "${model.provider}". ` +
@@ -601,7 +604,7 @@ export class AgentSession {
     throw new Error(formatNoApiKeyFoundMessage(model.provider));
   }
 
-  private async _getSummarizationRequestAuth(
+  private async getSummarizationRequestAuth(
     selectedModel: Model<any>,
     signal?: AbortSignal,
   ): Promise<{
@@ -612,18 +615,18 @@ export class AgentSession {
     thinkingLevel: ThinkingLevel;
   }> {
     const { model, thinkingLevel } = isVirtualModel(selectedModel)
-      ? await this._modelRuntime.resolveModel(selectedModel, convertToLlm(this.messages), {
+      ? await this.modelRuntimeInternal.resolveModel(selectedModel, convertToLlm(this.messages), {
           reason: "direct",
           thinkingLevel: this.thinkingLevel,
           signal,
         })
       : { model: selectedModel, thinkingLevel: this.thinkingLevel };
     if (this.agent.streamFunction === streamSimple) {
-      return { ...(await this._getRequiredRequestAuth(model, signal)), thinkingLevel };
+      return { ...(await this.getRequiredRequestAuth(model, signal)), thinkingLevel };
     }
 
     try {
-      const result = await this._modelRuntime.getAuth(model, signal ? { signal } : {});
+      const result = await this.modelRuntimeInternal.getAuth(model, signal ? { signal } : {});
       if (!result) return { model, thinkingLevel };
       const requestModel = result.auth.baseUrl ? { ...model, baseUrl: result.auth.baseUrl } : model;
       return {
@@ -639,18 +642,18 @@ export class AgentSession {
     }
   }
 
-  private _modelForMessage(message: AssistantMessage): Model<any> | undefined {
+  private modelForMessage(message: AssistantMessage): Model<any> | undefined {
     const model = this.model;
     if (model && isVirtualModel(model))
-      return this._modelRuntime.getPhysicalModel(message.provider, message.model);
+      return this.modelRuntimeInternal.getPhysicalModel(message.provider, message.model);
     return model?.provider === message.provider && model.id === message.model ? model : undefined;
   }
 
-  private _recordSelection(): void {
+  private recordSelection(): void {
     const model = this.model;
     if (!model) return;
     const getModel = (provider: string, modelId: string) =>
-      this._modelRuntime.getModel(provider, modelId);
+      this.modelRuntimeInternal.getModel(provider, modelId);
     const recorded = getBranchSelection(this.sessionManager.getBranch(), getModel);
     if (!recorded || (recorded.provider === model.provider && recorded.modelId === model.id))
       return;
@@ -659,20 +662,20 @@ export class AgentSession {
     this.sessionManager.appendModelChange(model.provider, model.id);
   }
 
-  private _limitsModel(): Model<any> | undefined {
+  private limitsModel(): Model<any> | undefined {
     return this.routedModel?.model ?? this.model;
   }
 
-  private _installAgentToolHooks(): void {
-    this.agent.beforeToolCall = (context) => this._beforeToolCall(context);
-    this.agent.afterToolCall = (context) => this._afterToolCall(context);
+  private installAgentToolHooks(): void {
+    this.agent.beforeToolCall = (context) => this.beforeToolCall(context);
+    this.agent.afterToolCall = (context) => this.afterToolCall(context);
   }
 
-  private async _beforeToolCall(
+  private async beforeToolCall(
     { toolCall, args }: BeforeToolCallContext,
     parentToolCallId?: string,
   ): Promise<BeforeToolCallResult | undefined> {
-    const runner = this._extensionRunner;
+    const runner = this.extensionRunnerInternal;
     if (!runner.hasHandlers("tool_call")) {
       return undefined;
     }
@@ -693,11 +696,11 @@ export class AgentSession {
     }
   }
 
-  private async _afterToolCall(
+  private async afterToolCall(
     { toolCall, args, result, isError }: AfterToolCallContext,
     parentToolCallId?: string,
   ): Promise<AfterToolCallResult | undefined> {
-    const runner = this._extensionRunner;
+    const runner = this.extensionRunnerInternal;
     const hookResult = runner.hasHandlers("tool_result")
       ? await runner.emitToolResult({
           type: "tool_result",
@@ -716,7 +719,7 @@ export class AgentSession {
       : undefined;
 
     const content = hookResult?.content ?? result.content ?? [];
-    const resizeOptions = this._limitsModel()?.inputLimits?.images?.resize;
+    const resizeOptions = this.limitsModel()?.inputLimits?.images?.resize;
     const normalizedContent = await normalizeToolResultImages(content, {
       autoResizeImages: this.settingsManager.getImageAutoResize(),
       ...(resizeOptions ? { resizeOptions } : {}),
@@ -738,17 +741,17 @@ export class AgentSession {
     };
   }
 
-  private async _executeNestedToolCall(
+  private async executeNestedToolCall(
     parentToolCallId: string,
     name: string,
     args: unknown,
     options: ExecuteToolOptions,
   ): Promise<AgentToolCallOutcome> {
-    this._nestedToolCalls ??= new NestedToolCallRunner({
-      getTools: () => this._getCallableTools(),
+    this.nestedToolCalls ??= new NestedToolCallRunner({
+      getTools: () => this.getCallableTools(),
       isSequential: () => this.agent.toolExecution === "sequential",
       runToolCall: (toolCall, parentId, signal, onUpdate) => {
-        const assistantMessage = this._findLastAssistantMessage();
+        const assistantMessage = this.findLastAssistantMessage();
         if (!assistantMessage) {
           return Promise.resolve({
             toolCall,
@@ -760,24 +763,24 @@ export class AgentSession {
           });
         }
         return runToolCall(toolCall, {
-          tools: this._getCallableTools(),
+          tools: this.getCallableTools(),
           assistantMessage,
           context: { messages: this.agent.state.messages, tools: this.agent.state.tools },
-          beforeToolCall: (context) => this._beforeToolCall(context, parentId),
-          afterToolCall: (context) => this._afterToolCall(context, parentId),
+          beforeToolCall: (context) => this.beforeToolCall(context, parentId),
+          afterToolCall: (context) => this.afterToolCall(context, parentId),
           ...(signal ? { signal } : {}),
           onUpdate,
         });
       },
       emit: async (event) => {
-        await this._extensionRunner.emit(event);
-        this._emit(event);
+        await this.extensionRunnerInternal.emit(event);
+        this.emit(event);
       },
     });
-    return this._nestedToolCalls.execute(parentToolCallId, name, args, options);
+    return this.nestedToolCalls.execute(parentToolCallId, name, args, options);
   }
 
-  private _exceedsCompactionThreshold(model: Model<any>, projection: SessionProjection): boolean {
+  private exceedsCompactionThreshold(model: Model<any>, projection: SessionProjection): boolean {
     if (model.contextWindow <= 0) return false;
     return shouldCompact(
       estimateProjectedContextTokens(projection, this.sessionManager.getBranch()).tokens,
@@ -786,21 +789,21 @@ export class AgentSession {
     );
   }
 
-  private async _compactBeforeNextAssistantResponse(context: AgentContext): Promise<AgentContext> {
+  private async compactBeforeNextAssistantResponse(context: AgentContext): Promise<AgentContext> {
     const projection = this.sessionManager.buildSessionProjection();
     const model = this.model;
-    if (!model || isVirtualModel(model) || !this._exceedsCompactionThreshold(model, projection)) {
+    if (!model || isVirtualModel(model) || !this.exceedsCompactionThreshold(model, projection)) {
       return { ...context, messages: projection.messages };
     }
-    await this._runAutoCompaction("threshold", false);
+    await this.runAutoCompaction("threshold", false);
     return { ...context, messages: this.sessionManager.buildSessionProjection().messages };
   }
 
-  private _installAgentRequestProjection(): void {
+  private installAgentRequestProjection(): void {
     const previousPrepareRequest = this.agent.prepareRequest;
     this.agent.prepareRequest = async (request, signal) => {
-      const failed = this._failedResponse;
-      this._failedResponse = undefined;
+      const failed = this.failedResponse;
+      this.failedResponse = undefined;
       const prepare = async () => {
         const projection = this.sessionManager.buildSessionProjection();
         const canonicalContext = {
@@ -831,13 +834,17 @@ export class AgentSession {
         .slice(lastResponse + 1)
         .some((message) => message.role === "user");
       const state = getVirtualModelState(this.sessionManager.getBranch(), model.provider, model.id);
-      const route = await this._modelRuntime.resolveModel(model, convertToLlm(context.messages), {
-        reason: failed ? "retry" : userTurn ? "user" : "continuation",
-        thinkingLevel,
-        signal,
-        failed,
-        state,
-      });
+      const route = await this.modelRuntimeInternal.resolveModel(
+        model,
+        convertToLlm(context.messages),
+        {
+          reason: failed ? "retry" : userTurn ? "user" : "continuation",
+          thinkingLevel,
+          signal,
+          failed,
+          state,
+        },
+      );
       if (route.state !== undefined && route.state !== state) {
         const data: VirtualModelStateData = {
           provider: model.provider,
@@ -847,30 +854,30 @@ export class AgentSession {
         const entry = this.sessionManager.getEntry(
           this.sessionManager.appendCustomEntry(VIRTUAL_MODEL_STATE_ENTRY, data),
         );
-        if (entry) this._emit({ type: "entry_appended", entry });
+        if (entry) this.emit({ type: "entry_appended", entry });
       }
-      if (this._exceedsCompactionThreshold(route.model, projection)) {
-        await this._runAutoCompaction("threshold", false);
+      if (this.exceedsCompactionThreshold(route.model, projection)) {
+        await this.runAutoCompaction("threshold", false);
         ({ previous, context } = await prepare());
       }
       return { ...previous, context, model: route.model, thinkingLevel: route.thinkingLevel };
     };
   }
 
-  private async _dispatchTurnEndBoundary(
+  private async dispatchTurnEndBoundary(
     message: AssistantMessage,
     toolResults: ToolResultMessage[],
   ): Promise<boolean> {
-    this._lastActivityOutcome =
+    this.lastActivityOutcome =
       message.stopReason === "aborted"
         ? "aborted"
         : message.stopReason === "error"
           ? "error"
           : "completed";
-    const messageEntryId = this._findPersistedMessageEntryId(message);
-    if (!this._extensionRunner.hasHandlers("turn_end")) return false;
+    const messageEntryId = this.findPersistedMessageEntryId(message);
+    if (!this.extensionRunnerInternal.hasHandlers("turn_end")) return false;
     if (!messageEntryId) {
-      this._extensionRunner.emitError({
+      this.extensionRunnerInternal.emitError({
         extensionPath: "<boundary>",
         event: "turn_end",
         error: "turn_end could not resolve the persisted assistant entry ID",
@@ -878,34 +885,34 @@ export class AgentSession {
       return false;
     }
     const toolResultEntryIds = toolResults.flatMap((result) => {
-      const entryId = this._findPersistedMessageEntryId(result);
+      const entryId = this.findPersistedMessageEntryId(result);
       return entryId ? [entryId] : [];
     });
-    const boundary = await this._extensionRunner.emitBoundary(
+    const boundary = await this.extensionRunnerInternal.emitBoundary(
       {
         type: "turn_end",
-        turnIndex: this._turnIndex,
+        turnIndex: this.turnIndex,
         message,
         toolResults,
         messageEntryId,
         toolResultEntryIds,
-        outcome: this._lastActivityOutcome,
+        outcome: this.lastActivityOutcome,
       },
-      (entries) => this._buildBoundaryContext(entries, "turn_end"),
+      (entries) => this.buildBoundaryContext(entries, "turn_end"),
     );
-    this._commitBoundaryDrafts(boundary.entries);
-    if (boundary.continue && !this._buildBoundaryContext([], "turn_end").canContinue) {
-      this._reportInvalidBoundaryContinuation("turn_end");
+    this.commitBoundaryDrafts(boundary.entries);
+    if (boundary.continue && !this.buildBoundaryContext([], "turn_end").canContinue) {
+      this.reportInvalidBoundaryContinuation("turn_end");
       return false;
     }
     return boundary.continue;
   }
 
-  private _installAgentBoundaryHooks(): void {
+  private installAgentBoundaryHooks(): void {
     const previousFinishTurn = this.agent.finishTurn;
     this.agent.finishTurn = async (turn, signal) => {
-      this._boundaryDispatchedMessages.add(turn.message);
-      const extensionContinue = await this._dispatchTurnEndBoundary(turn.message, turn.toolResults);
+      this.boundaryDispatchedMessages.add(turn.message);
+      const extensionContinue = await this.dispatchTurnEndBoundary(turn.message, turn.toolResults);
       const previousDecision = await previousFinishTurn?.(turn, signal);
       if (previousDecision?.action === "end") return previousDecision;
       if (extensionContinue || previousDecision?.action === "continue")
@@ -914,7 +921,7 @@ export class AgentSession {
     };
   }
 
-  private _installAgentNextTurnRefresh(): void {
+  private installAgentNextTurnRefresh(): void {
     const previousPrepareNextTurnWithContext =
       this.agent.prepareNextTurnWithContext ??
       (this.agent.prepareNextTurn
@@ -922,24 +929,24 @@ export class AgentSession {
             await this.agent.prepareNextTurn?.(signal)
         : undefined);
     this.agent.prepareNextTurnWithContext = async (turn, signal) => {
-      const context = await this._compactBeforeNextAssistantResponse(turn.context);
+      const context = await this.compactBeforeNextAssistantResponse(turn.context);
       const previousSnapshot = await previousPrepareNextTurnWithContext?.(
         { ...turn, context },
         signal,
       );
       const nextContext = previousSnapshot?.context ?? context;
-      const runOptions = this._runSystemPromptOptions ?? this._baseSystemPromptOptions;
+      const runOptions = this.runSystemPromptOptions ?? this.baseSystemPromptOptions;
       const options = normalizeBuildSystemPromptOptions({
         ...runOptions,
         selectedTools: this.getActiveToolNames(),
-        toolSnippets: { ...this._baseSystemPromptOptions.toolSnippets, ...runOptions.toolSnippets },
+        toolSnippets: { ...this.baseSystemPromptOptions.toolSnippets, ...runOptions.toolSnippets },
         toolGuidelines: {
-          ...this._baseSystemPromptOptions.toolGuidelines,
+          ...this.baseSystemPromptOptions.toolGuidelines,
           ...runOptions.toolGuidelines,
         },
       });
-      const updateMessage = this._preparePromptAndToolLoadout(options, nextContext.messages);
-      this._runSystemPromptOptions = options;
+      const updateMessage = this.preparePromptAndToolLoadout(options, nextContext.messages);
+      this.runSystemPromptOptions = options;
 
       return {
         ...previousSnapshot,
@@ -956,16 +963,16 @@ export class AgentSession {
     };
   }
 
-  private _refreshFinalizedContext(): void {
+  private refreshFinalizedContext(): void {
     const projection = this.sessionManager.buildSessionProjection();
     for (const entry of projection.entries) {
       for (const message of entry.messages)
-        this._entryIdsByMessage.set(message, entry.sourceEntry.id);
+        this.entryIdsByMessage.set(message, entry.sourceEntry.id);
     }
     this.agent.state.messages = projection.messages;
   }
 
-  private _applyBoundaryDrafts(
+  private applyBoundaryDrafts(
     manager: SessionManager,
     drafts: SessionBoundaryDraft[],
   ): SessionEntry[] {
@@ -1009,32 +1016,32 @@ export class AgentSession {
     return appended;
   }
 
-  private _createBoundaryPreviewManager(drafts: SessionBoundaryDraft[]): SessionManager {
+  private createBoundaryPreviewManager(drafts: SessionBoundaryDraft[]): SessionManager {
     const header = this.sessionManager.getHeader();
     if (!header) throw new Error("Session header is missing");
-    const manager = SessionManager.inMemory(this._cwd, undefined, [
+    const manager = SessionManager.inMemory(this.cwd, undefined, [
       header,
       ...this.sessionManager.getBranch(),
     ]);
-    this._applyBoundaryDrafts(manager, drafts);
+    this.applyBoundaryDrafts(manager, drafts);
     return manager;
   }
 
-  private _getPendingBoundaryMessages(): AgentMessage[] {
-    return [...this.agent.peekQueuedMessages(), ...this._pendingCustomMessages];
+  private getPendingBoundaryMessages(): AgentMessage[] {
+    return [...this.agent.peekQueuedMessages(), ...this.pendingCustomMessages];
   }
 
-  private _buildBoundaryContext(
+  private buildBoundaryContext(
     drafts: SessionBoundaryDraft[],
     boundary: "turn_end" | "agent_before_settle",
   ): BoundaryContextPreview {
-    const projection = this._createBoundaryPreviewManager(drafts).buildSessionProjection();
-    const pendingMessages = this._getPendingBoundaryMessages();
+    const projection = this.createBoundaryPreviewManager(drafts).buildSessionProjection();
+    const pendingMessages = this.getPendingBoundaryMessages();
     const llmMessages = convertToLlm(projection.messages);
     const finalRole = llmMessages[llmMessages.length - 1]?.role;
     const hasNonSystemContext = llmMessages.some((message) => message.role !== "system");
     const contextCanContinue = hasNonSystemContext && finalRole !== "assistant";
-    const pendingCustomContext = this._pendingCustomMessages.length > 0;
+    const pendingCustomContext = this.pendingCustomMessages.length > 0;
     return {
       contextEntries: projection.entries,
       contextMessages: projection.messages,
@@ -1049,91 +1056,91 @@ export class AgentSession {
     };
   }
 
-  private _commitBoundaryDrafts(drafts: SessionBoundaryDraft[]): void {
-    const appended = this._applyBoundaryDrafts(this.sessionManager, drafts);
-    this._refreshFinalizedContext();
-    for (const entry of appended) this._emit({ type: "entry_appended", entry });
+  private commitBoundaryDrafts(drafts: SessionBoundaryDraft[]): void {
+    const appended = this.applyBoundaryDrafts(this.sessionManager, drafts);
+    this.refreshFinalizedContext();
+    for (const entry of appended) this.emit({ type: "entry_appended", entry });
   }
 
-  private _reportInvalidBoundaryContinuation(event: "turn_end" | "agent_before_settle"): void {
-    this._extensionRunner.emitError({
+  private reportInvalidBoundaryContinuation(event: "turn_end" | "agent_before_settle"): void {
+    this.extensionRunnerInternal.emitError({
       extensionPath: "<boundary>",
       event,
       error: `${event} requested continuation without runnable model context`,
     });
   }
 
-  private _emit(event: AgentSessionEvent): void {
-    for (const l of this._eventListeners) {
+  private emit(event: AgentSessionEvent): void {
+    for (const l of this.eventListeners) {
       l(event);
     }
   }
 
-  private _emitQueueUpdate(): void {
-    this._emit({
+  private emitQueueUpdate(): void {
+    this.emit({
       type: "queue_update",
-      steering: [...this._steeringMessages],
-      followUp: [...this._followUpMessages],
+      steering: [...this.steeringMessages],
+      followUp: [...this.followUpMessages],
     });
   }
 
-  private async _emitSessionCompactFailed(
+  private async emitSessionCompactFailed(
     event: Omit<SessionCompactFailedEvent, "type">,
   ): Promise<void> {
-    if (this._extensionRunner.hasHandlers("session_compact_failed")) {
-      await this._extensionRunner.emit({ type: "session_compact_failed", ...event });
+    if (this.extensionRunnerInternal.hasHandlers("session_compact_failed")) {
+      await this.extensionRunnerInternal.emit({ type: "session_compact_failed", ...event });
     }
   }
 
-  private _getIdleWaitPromise(): Promise<void> {
-    if (!this._idleWaitPromise) {
-      this._idleWaitPromise = new Promise((resolve) => {
-        this._resolveIdleWait = resolve;
+  private getIdleWaitPromise(): Promise<void> {
+    if (!this.idleWaitPromise) {
+      this.idleWaitPromise = new Promise((resolve) => {
+        this.resolveIdleWait = resolve;
       });
     }
-    return this._idleWaitPromise;
+    return this.idleWaitPromise;
   }
 
-  private _resolveIdleWaitIfIdle(): void {
-    if (!this.isIdle || !this._resolveIdleWait) {
+  private resolveIdleWaitIfIdle(): void {
+    if (!this.isIdle || !this.resolveIdleWait) {
       return;
     }
-    const resolve = this._resolveIdleWait;
-    this._idleWaitPromise = undefined;
-    this._resolveIdleWait = undefined;
+    const resolve = this.resolveIdleWait;
+    this.idleWaitPromise = undefined;
+    this.resolveIdleWait = undefined;
     resolve();
   }
 
-  private async _emitAgentSettled(): Promise<void> {
-    this._cacheWarmer?.onAgentSettled();
-    this._isAgentRunActive = false;
-    this._isEmittingAgentSettled = true;
+  private async emitAgentSettled(): Promise<void> {
+    this.cacheWarmer?.onAgentSettled();
+    this.isAgentRunActive = false;
+    this.isEmittingAgentSettled = true;
     try {
-      const aborted = this._agentRunAbortRequested;
-      await this._extensionRunner.emit({ type: "agent_settled", aborted });
-      this._emit({ type: "agent_settled", aborted });
+      const aborted = this.agentRunAbortRequested;
+      await this.extensionRunnerInternal.emit({ type: "agent_settled", aborted });
+      this.emit({ type: "agent_settled", aborted });
     } finally {
-      this._isEmittingAgentSettled = false;
+      this.isEmittingAgentSettled = false;
     }
 
-    const deferred = this._deferredSettledActions.splice(0);
+    const deferred = this.deferredSettledActions.splice(0);
     if (deferred.length > 0) {
       try {
         for (const action of deferred) await action();
       } finally {
-        this._resolveIdleWaitIfIdle();
+        this.resolveIdleWaitIfIdle();
       }
       return;
     }
-    this._resolveIdleWaitIfIdle();
+    this.resolveIdleWaitIfIdle();
   }
 
-  private _handleAgentEvent = async (event: AgentEvent): Promise<void> => {
-    if (event.type === "agent_start" && this._agentRunAbortRequested) this.agent.abort();
-    if (this._nestedToolCalls) {
+  private handleAgentEvent = async (event: AgentEvent): Promise<void> => {
+    if (event.type === "agent_start" && this.agentRunAbortRequested) this.agent.abort();
+    if (this.nestedToolCalls) {
       if (event.type === "message_start" && event.message.role === "toolResult") {
         const message = event.message;
-        const summary = this._nestedToolCalls.takeRecord(message.toolCallId);
+        const summary = this.nestedToolCalls.takeRecord(message.toolCallId);
         if (summary?.calls) message.nestedCalls = summary.calls;
         if (summary?.usage) {
           message.usage = message.usage
@@ -1141,32 +1148,32 @@ export class AgentSession {
             : summary.usage;
         }
       } else if (event.type === "agent_end") {
-        this._nestedToolCalls.clear();
+        this.nestedToolCalls.clear();
       }
     }
-    if (event.type === "tool_execution_start") this._goal.noteToolUse();
+    if (event.type === "tool_execution_start") this.goalInternal.noteToolUse();
     if (event.type === "message_start" && event.message.role === "user") {
-      this._overflowRecoveryAttempted = false;
+      this.overflowRecoveryAttempted = false;
       const messageText = contentText(event.message.content, "");
       if (messageText) {
-        const steeringIndex = this._steeringMessages.indexOf(messageText);
+        const steeringIndex = this.steeringMessages.indexOf(messageText);
         if (steeringIndex !== -1) {
-          this._steeringMessages.splice(steeringIndex, 1);
-          this._emitQueueUpdate();
+          this.steeringMessages.splice(steeringIndex, 1);
+          this.emitQueueUpdate();
         } else {
-          const followUpIndex = this._followUpMessages.indexOf(messageText);
+          const followUpIndex = this.followUpMessages.indexOf(messageText);
           if (followUpIndex !== -1) {
-            this._followUpMessages.splice(followUpIndex, 1);
-            this._emitQueueUpdate();
+            this.followUpMessages.splice(followUpIndex, 1);
+            this.emitQueueUpdate();
           }
         }
       }
     }
 
-    await this._emitExtensionEvent(event);
-    this._emit(
+    await this.emitExtensionEvent(event);
+    this.emit(
       event.type === "agent_end"
-        ? { ...event, willRetry: this._willRetryAfterAgentEnd(event) }
+        ? { ...event, willRetry: this.willRetryAfterAgentEnd(event) }
         : event,
     );
 
@@ -1187,50 +1194,50 @@ export class AgentSession {
       ) {
         entryId = this.sessionManager.appendMessage(event.message);
       }
-      if (entryId) this._entryIdsByMessage.set(event.message, entryId);
+      if (entryId) this.entryIdsByMessage.set(event.message, entryId);
 
       if (event.message.role === "assistant") {
         const assistantMsg = event.message as AssistantMessage;
-        this._lastAssistantMessage = assistantMsg;
+        this.lastAssistantMessage = assistantMsg;
         if (assistantMsg.stopReason !== "error" && assistantMsg.stopReason !== "length") {
-          this._overflowRecoveryAttempted = false;
+          this.overflowRecoveryAttempted = false;
         }
 
-        if (assistantMsg.stopReason !== "error" && this._retryAttempt > 0) {
-          this._emit({
+        if (assistantMsg.stopReason !== "error" && this.retryAttemptInternal > 0) {
+          this.emit({
             type: "auto_retry_end",
             success: true,
-            attempt: this._retryAttempt,
+            attempt: this.retryAttemptInternal,
           });
-          this._retryAttempt = 0;
+          this.retryAttemptInternal = 0;
         }
       }
     }
 
     if (event.type === "turn_end") {
-      this._lastAssistantToolResults = event.toolResults;
-      this._flushPendingCustomMessages();
+      this.lastAssistantToolResults = event.toolResults;
+      this.flushPendingCustomMessages();
     }
   };
 
-  private _willRetryAfterAgentEnd(event: Extract<AgentEvent, { type: "agent_end" }>): boolean {
-    if (this._agentRunAbortRequested) return false;
+  private willRetryAfterAgentEnd(event: Extract<AgentEvent, { type: "agent_end" }>): boolean {
+    if (this.agentRunAbortRequested) return false;
     const settings = this.settingsManager.getRetrySettings();
-    if (!settings.enabled || this._retryAttempt >= settings.maxRetries) {
+    if (!settings.enabled || this.retryAttemptInternal >= settings.maxRetries) {
       return false;
     }
 
     for (let i = event.messages.length - 1; i >= 0; i--) {
       const message = event.messages[i];
       if (message?.role === "assistant") {
-        return this._isRetryableError(message as AssistantMessage);
+        return this.isRetryableError(message as AssistantMessage);
       }
     }
     return false;
   }
 
-  private _findPersistedMessageEntryId(message: AgentMessage): string | undefined {
-    const mapped = this._entryIdsByMessage.get(message);
+  private findPersistedMessageEntryId(message: AgentMessage): string | undefined {
+    const mapped = this.entryIdsByMessage.get(message);
     if (mapped) return mapped;
     for (const entry of [...this.sessionManager.getBranch()].reverse()) {
       if (entry.type === "message" && entry.message === message) return entry.id;
@@ -1243,7 +1250,7 @@ export class AgentSession {
     for (const entry of projection.entries) {
       for (let i = 0; i < entry.messages.length; i++) {
         if (projectedIndex === messageIndex) {
-          this._entryIdsByMessage.set(message, entry.sourceEntry.id);
+          this.entryIdsByMessage.set(message, entry.sourceEntry.id);
           return entry.sourceEntry.id;
         }
         projectedIndex++;
@@ -1252,9 +1259,9 @@ export class AgentSession {
     return undefined;
   }
 
-  private _omitRecoveryAttempt(message: AssistantMessage, toolResults: AgentMessage[] = []): void {
+  private omitRecoveryAttempt(message: AssistantMessage, toolResults: AgentMessage[] = []): void {
     const targets = [message, ...toolResults];
-    const targetIds = targets.map((target) => this._findPersistedMessageEntryId(target));
+    const targetIds = targets.map((target) => this.findPersistedMessageEntryId(target));
     const unresolvedProjectedTarget = targets.some(
       (target, index) =>
         targetIds[index] === undefined && this.agent.state.messages.includes(target),
@@ -1268,12 +1275,12 @@ export class AgentSession {
       if (!targetId) continue;
       const editId = this.sessionManager.appendContextEdit(targetId, null);
       const entry = this.sessionManager.getEntry(editId);
-      if (entry) this._emit({ type: "entry_appended", entry });
+      if (entry) this.emit({ type: "entry_appended", entry });
     }
-    this._refreshFinalizedContext();
+    this.refreshFinalizedContext();
   }
 
-  private _findLastAssistantMessage(): AssistantMessage | undefined {
+  private findLastAssistantMessage(): AssistantMessage | undefined {
     const messages = this.agent.state.messages;
     for (let i = messages.length - 1; i >= 0; i--) {
       const msg = messages[i];
@@ -1284,7 +1291,7 @@ export class AgentSession {
     return undefined;
   }
 
-  private _replaceMessageInPlace(target: AgentMessage, replacement: AgentMessage): void {
+  private replaceMessageInPlace(target: AgentMessage, replacement: AgentMessage): void {
     if (target === replacement) {
       return;
     }
@@ -1296,46 +1303,46 @@ export class AgentSession {
     Object.assign(targetRecord, replacement);
   }
 
-  private async _emitExtensionEvent(event: AgentEvent): Promise<void> {
+  private async emitExtensionEvent(event: AgentEvent): Promise<void> {
     if (event.type === "agent_start") {
-      this._turnIndex = 0;
-      await this._extensionRunner.emit({ type: "agent_start" });
+      this.turnIndex = 0;
+      await this.extensionRunnerInternal.emit({ type: "agent_start" });
     } else if (event.type === "agent_end") {
-      await this._extensionRunner.emit({ type: "agent_end", messages: event.messages });
+      await this.extensionRunnerInternal.emit({ type: "agent_end", messages: event.messages });
     } else if (event.type === "turn_start") {
       const extensionEvent: TurnStartEvent = {
         type: "turn_start",
-        turnIndex: this._turnIndex,
+        turnIndex: this.turnIndex,
         timestamp: Date.now(),
       };
-      await this._extensionRunner.emit(extensionEvent);
+      await this.extensionRunnerInternal.emit(extensionEvent);
     } else if (event.type === "turn_end") {
       if (
         event.message.role === "assistant" &&
-        !this._boundaryDispatchedMessages.delete(event.message)
+        !this.boundaryDispatchedMessages.delete(event.message)
       ) {
-        await this._dispatchTurnEndBoundary(event.message, event.toolResults);
+        await this.dispatchTurnEndBoundary(event.message, event.toolResults);
       }
-      this._turnIndex++;
+      this.turnIndex++;
     } else if (event.type === "message_start") {
       const extensionEvent: MessageStartEvent = {
         type: "message_start",
         message: event.message,
       };
-      await this._extensionRunner.emit(extensionEvent);
+      await this.extensionRunnerInternal.emit(extensionEvent);
     } else if (event.type === "message_update") {
       const extensionEvent: MessageUpdateEvent = {
         type: "message_update",
         message: event.message,
         assistantMessageEvent: event.assistantMessageEvent,
       };
-      await this._extensionRunner.emit(extensionEvent);
+      await this.extensionRunnerInternal.emit(extensionEvent);
     } else if (event.type === "message_end") {
       const extensionEvent: MessageEndEvent = {
         type: "message_end",
         message: event.message,
       };
-      const replacement = await this._extensionRunner.emitMessageEnd(extensionEvent);
+      const replacement = await this.extensionRunnerInternal.emitMessageEnd(extensionEvent);
       if (replacement) {
         const normalized =
           (replacement.role === "user" ||
@@ -1345,7 +1352,7 @@ export class AgentSession {
           replacement.content == null
             ? ({ ...replacement, content: [] } as AgentMessage)
             : replacement;
-        this._replaceMessageInPlace(event.message, normalized);
+        this.replaceMessageInPlace(event.message, normalized);
       }
     } else if (event.type === "tool_execution_start") {
       const extensionEvent: ToolExecutionStartEvent = {
@@ -1354,7 +1361,7 @@ export class AgentSession {
         toolName: event.toolName,
         args: event.args,
       };
-      await this._extensionRunner.emit(extensionEvent);
+      await this.extensionRunnerInternal.emit(extensionEvent);
     } else if (event.type === "tool_execution_update") {
       const extensionEvent: ToolExecutionUpdateEvent = {
         type: "tool_execution_update",
@@ -1363,7 +1370,7 @@ export class AgentSession {
         args: event.args,
         partialResult: event.partialResult,
       };
-      await this._extensionRunner.emit(extensionEvent);
+      await this.extensionRunnerInternal.emit(extensionEvent);
     } else if (event.type === "tool_execution_end") {
       const extensionEvent: ToolExecutionEndEvent = {
         type: "tool_execution_end",
@@ -1373,25 +1380,25 @@ export class AgentSession {
         isError: event.isError,
         ...(event.durationMs === undefined ? {} : { durationMs: event.durationMs }),
       };
-      await this._extensionRunner.emit(extensionEvent);
+      await this.extensionRunnerInternal.emit(extensionEvent);
     }
   }
 
   subscribe(listener: AgentSessionEventListener): () => void {
-    this._eventListeners.push(listener);
+    this.eventListeners.push(listener);
 
     return () => {
-      const index = this._eventListeners.indexOf(listener);
+      const index = this.eventListeners.indexOf(listener);
       if (index !== -1) {
-        this._eventListeners.splice(index, 1);
+        this.eventListeners.splice(index, 1);
       }
     };
   }
 
-  private _disconnectFromAgent(): void {
-    if (this._unsubscribeAgent) {
-      this._unsubscribeAgent();
-      this._unsubscribeAgent = undefined;
+  private disconnectFromAgent(): void {
+    if (this.unsubscribeAgent) {
+      this.unsubscribeAgent();
+      this.unsubscribeAgent = undefined;
     }
   }
 
@@ -1401,27 +1408,27 @@ export class AgentSession {
       this.abortCompaction();
       this.abortBranchSummary();
       this.abortBash();
-      this._goal.abort();
+      this.goalInternal.abort();
       this.agent.abort();
     } catch {}
-    void this._orchestrator?.dispose().catch(() => undefined);
-    this._memory?.close();
-    this._memory = undefined;
+    void this.orchestratorInternal?.dispose().catch(() => undefined);
+    this.memoryInternal?.close();
+    this.memoryInternal = undefined;
 
-    this._extensionRunner.invalidate(
+    this.extensionRunnerInternal.invalidate(
       "This extension ctx is stale after session replacement or reload. Do not use a captured msa or command ctx after ctx.newSession(), ctx.fork(), ctx.switchSession(), or ctx.reload(). For newSession, fork, and switchSession, move post-replacement work into withSession and use the ctx passed to withSession. For reload, do not use the old ctx after await ctx.reload().",
     );
-    this._disconnectFromAgent();
-    this._eventListeners = [];
-    if (this._cacheWarmer) {
-      this._cacheWarmer.onWarmed = undefined;
-      this._cacheWarmer.cancel();
+    this.disconnectFromAgent();
+    this.eventListeners = [];
+    if (this.cacheWarmer) {
+      this.cacheWarmer.onWarmed = undefined;
+      this.cacheWarmer.cancel();
     }
     cleanupSessionResources(this.sessionId);
   }
 
   refreshContext(): void {
-    this._refreshFinalizedContext();
+    this.refreshFinalizedContext();
   }
 
   get state(): AgentState {
@@ -1429,12 +1436,12 @@ export class AgentSession {
   }
 
   get cacheWarmingStatus(): CacheWarmingStatus | undefined {
-    return this._cacheWarmer?.status;
+    return this.cacheWarmer?.status;
   }
 
   setCacheWarmingMode(mode: CacheWarmingMode): void {
     this.settingsManager.setCacheWarmingMode(mode);
-    this._cacheWarmer?.onModeChanged();
+    this.cacheWarmer?.onModeChanged();
   }
 
   get model(): Model<any> | undefined {
@@ -1448,24 +1455,25 @@ export class AgentSession {
   get routedModel(): { model: Model<any>; thinkingLevel?: ThinkingLevel | undefined } | undefined {
     if (!this.model || !isVirtualModel(this.model)) return undefined;
     const latest = findLatestResponse(this.agent.state.messages);
-    const model = latest && this._modelRuntime.getPhysicalModel(latest.provider, latest.model);
+    const model =
+      latest && this.modelRuntimeInternal.getPhysicalModel(latest.provider, latest.model);
     return model && { model, thinkingLevel: latest?.thinkingLevel };
   }
 
   get isStreaming(): boolean {
-    return this._isAgentRunActive;
+    return this.isAgentRunActive;
   }
 
   get isIdle(): boolean {
-    return !this._isAgentRunActive && !this.isCompacting;
+    return !this.isAgentRunActive && !this.isCompacting;
   }
 
   get systemPrompt(): string {
-    return buildSystemPrompt(this._runSystemPromptOptions ?? this._baseSystemPromptOptions);
+    return buildSystemPrompt(this.runSystemPromptOptions ?? this.baseSystemPromptOptions);
   }
 
   get retryAttempt(): number {
-    return this._retryAttempt;
+    return this.retryAttemptInternal;
   }
 
   getActiveToolNames(): string[] {
@@ -1473,16 +1481,16 @@ export class AgentSession {
   }
 
   getCallableToolNames(): string[] {
-    return this._getCallableTools().map((t) => t.name);
+    return this.getCallableTools().map((t) => t.name);
   }
 
   getAllTools(): ToolInfo[] {
-    return Array.from(this._toolDefinitions.values()).map(({ definition, sourceInfo }) => ({
+    return Array.from(this.toolDefinitions.values()).map(({ definition, sourceInfo }) => ({
       name: definition.name,
       description: definition.description,
       parameters: definition.parameters,
       promptGuidelines: definition.promptGuidelines,
-      exposure: this._getToolExposure(definition.name),
+      exposure: this.getToolExposure(definition.name),
       ...(definition.namespace ? { namespace: definition.namespace } : {}),
       ...(definition.annotations ? { annotations: { ...definition.annotations } } : {}),
       ...(definition.reachesTools ? { reachesTools: definition.reachesTools } : {}),
@@ -1491,42 +1499,42 @@ export class AgentSession {
   }
 
   getToolDefinition(name: string): ToolDefinition | undefined {
-    return this._toolDefinitions.get(name)?.definition;
+    return this.toolDefinitions.get(name)?.definition;
   }
 
   setActiveToolsByName(toolNames: string[]): void {
     const previous = this.getActiveToolNames();
-    this._setActiveTools(toolNames);
+    this.setActiveTools(toolNames);
     const active = new Set(this.getActiveToolNames());
-    if (previous.some((name) => !active.has(name))) this._pendingToolNames.clear();
+    if (previous.some((name) => !active.has(name))) this.pendingToolNames.clear();
   }
 
-  private _setActiveTools(toolNames: string[]): void {
-    const tools = this._applyToolLoadout(toolNames);
-    for (const tool of tools) this._pendingToolNames.delete(tool.name);
-    this._rebuildSystemPrompt(tools.map((tool) => tool.name));
+  private setActiveTools(toolNames: string[]): void {
+    const tools = this.applyToolLoadout(toolNames);
+    for (const tool of tools) this.pendingToolNames.delete(tool.name);
+    this.rebuildSystemPrompt(tools.map((tool) => tool.name));
   }
 
-  private _isAllowedTool(name: string): boolean {
-    if (this._excludedTools?.(name)) return false;
-    if (!this._allowedTools || this._allowedTools(name)) return true;
-    return !this._allowlistFiltersMcp && isMcpToolName(name);
+  private isAllowedTool(name: string): boolean {
+    if (this.excludedTools?.(name)) return false;
+    if (!this.allowedTools || this.allowedTools(name)) return true;
+    return !this.allowlistFiltersMcp && isMcpToolName(name);
   }
 
-  private _isActivatable(name: string): boolean {
-    if (!this._allowedTools || this._allowedTools(name) || !isMcpToolName(name)) return true;
-    return this._getToolExposure(name) !== "direct" && this._toolRegistry.has("tool_search");
+  private isActivatable(name: string): boolean {
+    if (!this.allowedTools || this.allowedTools(name) || !isMcpToolName(name)) return true;
+    return this.getToolExposure(name) !== "direct" && this.toolRegistry.has("tool_search");
   }
 
-  private _getToolExposure(name: string): ToolExposure {
-    return this._toolDefinitions.get(name)?.definition.exposure ?? "direct";
+  private getToolExposure(name: string): ToolExposure {
+    return this.toolDefinitions.get(name)?.definition.exposure ?? "direct";
   }
 
-  private _getCallableTools(
+  private getCallableTools(
     active: ReadonlySet<string> = new Set(this.getActiveToolNames()),
   ): AgentTool[] {
-    return [...this._toolRegistry.values()].filter((tool) => {
-      const exposure = this._getToolExposure(tool.name);
+    return [...this.toolRegistry.values()].filter((tool) => {
+      const exposure = this.getToolExposure(tool.name);
       return (
         exposure === "codemode" ||
         exposure === "deferred" ||
@@ -1535,15 +1543,15 @@ export class AgentSession {
     });
   }
 
-  private _applyToolLoadout(toolNames: string[]): AgentTool[] {
+  private applyToolLoadout(toolNames: string[]): AgentTool[] {
     const tools = [...new Set(toolNames)].flatMap((name) => {
-      const tool = this._toolRegistry.get(name);
-      return tool && this._getToolExposure(name) !== "hidden" && this._isActivatable(name)
+      const tool = this.toolRegistry.get(name);
+      return tool && this.getToolExposure(name) !== "hidden" && this.isActivatable(name)
         ? [tool]
         : [];
     });
     const hooks = tools.flatMap((tool) => {
-      const entry = this._toolDefinitions.get(tool.name);
+      const entry = this.toolDefinitions.get(tool.name);
       return entry?.definition.prepareLoadout ? [entry] : [];
     });
     const hidden = new Set<string>();
@@ -1551,11 +1559,11 @@ export class AgentSession {
     if (hooks.length > 0) {
       const loadout: ToolLoadout = {
         declared: tools,
-        callable: this._getCallableTools(new Set(tools.map((tool) => tool.name))),
-        registered: [...this._toolRegistry.values()],
-        getExposure: (name) => this._getToolExposure(name),
-        getNamespace: (name) => this._toolDefinitions.get(name)?.definition.namespace,
-        getPromptGuidelines: (name) => this._toolPromptGuidelines.get(name) ?? [],
+        callable: this.getCallableTools(new Set(tools.map((tool) => tool.name))),
+        registered: [...this.toolRegistry.values()],
+        getExposure: (name) => this.getToolExposure(name),
+        getNamespace: (name) => this.toolDefinitions.get(name)?.definition.namespace,
+        getPromptGuidelines: (name) => this.toolPromptGuidelines.get(name) ?? [],
       };
       const descriptions = new Map<string, string>();
       for (const { definition, sourceInfo } of hooks) {
@@ -1566,7 +1574,7 @@ export class AgentSession {
           }
           for (const name of changes?.hiddenDeclarations ?? []) hidden.add(name);
         } catch (error) {
-          this._extensionRunner.emitError({
+          this.extensionRunnerInternal.emitError({
             extensionPath: sourceInfo.path,
             event: "prepare_loadout",
             error: toErrorMessage(error),
@@ -1579,16 +1587,16 @@ export class AgentSession {
         return description === undefined ? tool : { ...tool, description };
       });
     }
-    this._hiddenDeclarations = hidden;
+    this.hiddenDeclarations = hidden;
     this.agent.state.tools = declared;
     return declared;
   }
 
   get isCompacting(): boolean {
     return (
-      this._autoCompactionAbortController !== undefined ||
-      this._compactionAbortController !== undefined ||
-      this._branchSummaryAbortController !== undefined
+      this.autoCompactionAbortController !== undefined ||
+      this.compactionAbortController !== undefined ||
+      this.branchSummaryAbortController !== undefined
     );
   }
 
@@ -1620,20 +1628,20 @@ export class AgentSession {
     model: Model<any>;
     thinkingLevel?: ThinkingLevel | undefined;
   }> {
-    return this._scopedModels;
+    return this.scopedModelsInternal;
   }
 
   setScopedModels(
     scopedModels: Array<{ model: Model<any>; thinkingLevel?: ThinkingLevel | undefined }>,
   ): void {
-    this._scopedModels = scopedModels;
+    this.scopedModelsInternal = scopedModels;
   }
 
   get promptTemplates(): ReadonlyArray<PromptTemplate> {
-    return this._resourceLoader.getPrompts().prompts;
+    return this.resourceLoaderInternal.getPrompts().prompts;
   }
 
-  private _normalizePromptSnippet(text: string | undefined): string | undefined {
+  private normalizePromptSnippet(text: string | undefined): string | undefined {
     if (!text) return undefined;
     const oneLine = text
       .replace(/[\r\n]+/g, " ")
@@ -1642,7 +1650,7 @@ export class AgentSession {
     return oneLine.length > 0 ? oneLine : undefined;
   }
 
-  private _normalizePromptGuidelines(guidelines: string[] | undefined): string[] {
+  private normalizePromptGuidelines(guidelines: string[] | undefined): string[] {
     if (!guidelines || guidelines.length === 0) {
       return [];
     }
@@ -1657,40 +1665,40 @@ export class AgentSession {
     return Array.from(unique);
   }
 
-  private _rebuildSystemPrompt(toolNames: string[]): void {
-    const validToolNames = toolNames.filter((name) => this._toolRegistry.has(name));
+  private rebuildSystemPrompt(toolNames: string[]): void {
+    const validToolNames = toolNames.filter((name) => this.toolRegistry.has(name));
     const toolSnippets: Record<string, string> = {};
-    for (const name of this._toolRegistry.keys()) {
-      const snippet = this._toolPromptSnippets.get(name);
+    for (const name of this.toolRegistry.keys()) {
+      const snippet = this.toolPromptSnippets.get(name);
       if (snippet) toolSnippets[name] = snippet;
     }
 
-    const loaderSystemPrompt = this._resourceLoader.getSystemPrompt();
-    const loaderAppendSystemPrompt = this._resourceLoader.getAppendSystemPrompt();
+    const loaderSystemPrompt = this.resourceLoaderInternal.getSystemPrompt();
+    const loaderAppendSystemPrompt = this.resourceLoaderInternal.getAppendSystemPrompt();
     const appendSystemPrompt =
       loaderAppendSystemPrompt.length > 0 ? loaderAppendSystemPrompt.join("\n\n") : "";
-    const loadedSkills = this._resourceLoader.getSkills().skills;
-    const loadedContextFiles = this._resourceLoader.getAgentsFiles().agentsFiles;
+    const loadedSkills = this.resourceLoaderInternal.getSkills().skills;
+    const loadedContextFiles = this.resourceLoaderInternal.getAgentsFiles().agentsFiles;
 
-    this._baseSystemPromptOptions = normalizeBuildSystemPromptOptions({
-      cwd: this._cwd,
+    this.baseSystemPromptOptions = normalizeBuildSystemPromptOptions({
+      cwd: this.cwd,
       skills: loadedSkills,
       contextFiles: loadedContextFiles,
       customPrompt: loaderSystemPrompt,
       appendSystemPrompt,
       selectedTools: validToolNames,
-      hiddenTools: [...this._hiddenDeclarations],
+      hiddenTools: [...this.hiddenDeclarations],
       toolSnippets,
-      toolGuidelines: Object.fromEntries(this._toolPromptGuidelines),
+      toolGuidelines: Object.fromEntries(this.toolPromptGuidelines),
     });
   }
 
-  private _preparePromptAndToolLoadout(
+  private preparePromptAndToolLoadout(
     options: NormalizedBuildSystemPromptOptions,
     messages: AgentMessage[] = this.agent.state.messages,
   ): SystemMessage | undefined {
-    options.selectedTools = this._applyToolLoadout(options.selectedTools).map((tool) => tool.name);
-    options.hiddenTools = [...this._hiddenDeclarations];
+    options.selectedTools = this.applyToolLoadout(options.selectedTools).map((tool) => tool.name);
+    options.hiddenTools = [...this.hiddenDeclarations];
     const sections = diffSystemPromptSections(
       getCurrentSystemMessage(messages)?.sections ?? {},
       buildSystemPromptSections(options),
@@ -1698,13 +1706,13 @@ export class AgentSession {
     return sections ? { role: "system", content: "", sections, timestamp: Date.now() } : undefined;
   }
 
-  private _installHiddenDeclarationsProjection(): void {
+  private installHiddenDeclarationsProjection(): void {
     const previousTransformContext = this.agent.transformContext;
     this.agent.transformContext = async (messages, signal) => {
       const transformed = previousTransformContext
         ? await previousTransformContext(messages, signal)
         : messages;
-      const hidden = this._hiddenDeclarations;
+      const hidden = this.hiddenDeclarations;
       if (hidden.size === 0) return transformed;
       return transformed.map((message) => {
         if (message.role !== "system" || (!message.toolsAdded && !message.toolsRemoved))
@@ -1721,13 +1729,13 @@ export class AgentSession {
     };
   }
 
-  private _installAgentForcedPromptProjection(): void {
+  private installAgentForcedPromptProjection(): void {
     const previousTransformContext = this.agent.transformContext;
     this.agent.transformContext = async (messages, signal) => {
       const transformed = previousTransformContext
         ? await previousTransformContext(messages, signal)
         : messages;
-      const forced = this._runSystemPromptOptions?.forceSystemPrompt;
+      const forced = this.runSystemPromptOptions?.forceSystemPrompt;
       if (forced === undefined) return transformed;
       const current = getCurrentSystemMessage(transformed);
       const head: SystemMessage = {
@@ -1740,74 +1748,74 @@ export class AgentSession {
     };
   }
 
-  private _restoreToolsFromTranscript(modifiers: readonly string[] = []): void {
-    this._pendingToolNames.clear();
+  private restoreToolsFromTranscript(modifiers: readonly string[] = []): void {
+    this.pendingToolNames.clear();
     const current = getCurrentSystemMessage(this.sessionManager.buildSessionContext().messages);
     if (!current) return;
     const names = applyToolModifiers(
       (current.toolsAdded ?? []).map((tool) => tool.name),
       modifiers,
     );
-    this._pendingToolNames = new Set(names.filter((name) => this._isAllowedTool(name)));
-    this._setActiveTools(names);
+    this.pendingToolNames = new Set(names.filter((name) => this.isAllowedTool(name)));
+    this.setActiveTools(names);
   }
 
-  private async _startRun(trigger: BeforeAgentStartTrigger, onStarted?: () => void): Promise<void> {
-    this._isAgentRunActive = true;
-    this._agentRunAbortRequested = false;
+  private async startRun(trigger: BeforeAgentStartTrigger, onStarted?: () => void): Promise<void> {
+    this.isAgentRunActive = true;
+    this.agentRunAbortRequested = false;
     let messages: AgentMessage[];
     try {
-      messages = await this._prepareRun(trigger);
+      messages = await this.prepareRun(trigger);
     } catch (error) {
-      this._isAgentRunActive = false;
-      this._flushPendingBashMessages();
-      this._flushPendingCustomMessages();
-      this._resolveIdleWaitIfIdle();
+      this.isAgentRunActive = false;
+      this.flushPendingBashMessages();
+      this.flushPendingCustomMessages();
+      this.resolveIdleWaitIfIdle();
       throw error;
     }
-    this._flushPendingBashMessages();
-    this._flushPendingCustomMessages();
+    this.flushPendingBashMessages();
+    this.flushPendingCustomMessages();
     onStarted?.();
 
-    this._failedResponse = undefined;
-    this._recordSelection();
-    this._pendingToolNames.clear();
-    this._goal.resetGuards();
+    this.failedResponse = undefined;
+    this.recordSelection();
+    this.pendingToolNames.clear();
+    this.goalInternal.resetGuards();
     try {
       await this.agent.prompt(messages);
-      while (!this._agentRunAbortRequested) {
-        if (await this._handlePostAgentRun()) {
-          if (this._agentRunAbortRequested) break;
+      while (!this.agentRunAbortRequested) {
+        if (await this.handlePostAgentRun()) {
+          if (this.agentRunAbortRequested) break;
           await this.agent.continue();
           continue;
         }
-        if (this._agentRunAbortRequested) break;
+        if (this.agentRunAbortRequested) break;
         const continueRun =
-          (await this._runBeforeSettleBoundary()) ||
-          (!this._agentRunAbortRequested && (await this._goal.afterRun()));
-        if (!continueRun || this._agentRunAbortRequested) break;
+          (await this.runBeforeSettleBoundary()) ||
+          (!this.agentRunAbortRequested && (await this.goalInternal.afterRun()));
+        if (!continueRun || this.agentRunAbortRequested) break;
         await this.agent.continue();
       }
     } finally {
-      if (this._agentRunAbortRequested) this._finishCancelledRetry();
-      this._failedResponse = undefined;
-      this._runSystemPromptOptions = undefined;
-      this._flushPendingBashMessages();
-      this._flushPendingCustomMessages();
-      await this._emitAgentSettled();
+      if (this.agentRunAbortRequested) this.finishCancelledRetry();
+      this.failedResponse = undefined;
+      this.runSystemPromptOptions = undefined;
+      this.flushPendingBashMessages();
+      this.flushPendingCustomMessages();
+      await this.emitAgentSettled();
     }
   }
 
-  private async _prepareRun(trigger: BeforeAgentStartTrigger): Promise<AgentMessage[]> {
-    const lastAssistant = this._findLastAssistantMessage();
+  private async prepareRun(trigger: BeforeAgentStartTrigger): Promise<AgentMessage[]> {
+    const lastAssistant = this.findLastAssistantMessage();
     if (lastAssistant) {
-      await this._checkCompaction(lastAssistant, false);
+      await this.checkCompaction(lastAssistant, false);
     }
 
-    const selectedToolsBefore = this._baseSystemPromptOptions.selectedTools;
-    const result = await this._extensionRunner.emitBeforeAgentStart(
+    const selectedToolsBefore = this.baseSystemPromptOptions.selectedTools;
+    const result = await this.extensionRunnerInternal.emitBeforeAgentStart(
       trigger,
-      this._baseSystemPromptOptions,
+      this.baseSystemPromptOptions,
     );
     const handlerEditedTools =
       result.systemPromptOptions.selectedTools.length !== selectedToolsBefore.length ||
@@ -1820,7 +1828,7 @@ export class AgentSession {
     if (trigger.messageType === "custom") {
       messages.push(trigger.message);
     } else {
-      const normalized = await this._normalizePromptImages(trigger.images);
+      const normalized = await this.normalizePromptImages(trigger.images);
       const text =
         normalized.hints.length > 0
           ? `${trigger.prompt}\n\n${normalized.hints.join("\n")}`
@@ -1830,8 +1838,8 @@ export class AgentSession {
         content: [{ type: "text", text }, ...normalized.images],
         timestamp: Date.now(),
       });
-      if (this._memory) {
-        const recalled = await this._memory.recall(trigger.prompt);
+      if (this.memoryInternal) {
+        const recalled = await this.memoryInternal.recall(trigger.prompt);
         if (recalled.length > 0) {
           messages.unshift({
             role: "custom",
@@ -1843,8 +1851,8 @@ export class AgentSession {
         }
       }
     }
-    messages.push(...this._pendingNextTurnMessages);
-    this._pendingNextTurnMessages = [];
+    messages.push(...this.pendingNextTurnMessages);
+    this.pendingNextTurnMessages = [];
     for (const msg of result.messages) {
       messages.push({
         role: "custom",
@@ -1855,86 +1863,86 @@ export class AgentSession {
         timestamp: Date.now(),
       });
     }
-    const updateMessage = this._preparePromptAndToolLoadout(result.systemPromptOptions);
-    this._runSystemPromptOptions = result.systemPromptOptions;
+    const updateMessage = this.preparePromptAndToolLoadout(result.systemPromptOptions);
+    this.runSystemPromptOptions = result.systemPromptOptions;
     if (updateMessage) messages.unshift(updateMessage);
     return messages;
   }
 
-  private async _handlePostAgentRun(): Promise<boolean> {
-    const message = this._lastAssistantMessage;
-    const toolResults = this._lastAssistantToolResults;
-    this._lastAssistantMessage = undefined;
-    this._lastAssistantToolResults = [];
-    if (this._agentRunAbortRequested) {
-      this._finishCancelledRetry();
+  private async handlePostAgentRun(): Promise<boolean> {
+    const message = this.lastAssistantMessage;
+    const toolResults = this.lastAssistantToolResults;
+    this.lastAssistantMessage = undefined;
+    this.lastAssistantToolResults = [];
+    if (this.agentRunAbortRequested) {
+      this.finishCancelledRetry();
       return false;
     }
     if (!message) return this.agent.hasQueuedMessages();
 
-    if (this._isRetryableError(message) && (await this._prepareRetry(message))) {
-      if (this._agentRunAbortRequested) this._finishCancelledRetry();
-      this._failedResponse = message;
-      return !this._agentRunAbortRequested;
+    if (this.isRetryableError(message) && (await this.prepareRetry(message))) {
+      if (this.agentRunAbortRequested) this.finishCancelledRetry();
+      this.failedResponse = message;
+      return !this.agentRunAbortRequested;
     }
-    if (this._agentRunAbortRequested) {
-      this._finishCancelledRetry();
+    if (this.agentRunAbortRequested) {
+      this.finishCancelledRetry();
       return false;
     }
 
-    if (message.stopReason === "error" && this._retryAttempt > 0) {
-      this._emit({
+    if (message.stopReason === "error" && this.retryAttemptInternal > 0) {
+      this.emit({
         type: "auto_retry_end",
         success: false,
-        attempt: this._retryAttempt,
+        attempt: this.retryAttemptInternal,
         finalError: message.errorMessage,
       });
-      this._retryAttempt = 0;
+      this.retryAttemptInternal = 0;
     }
 
-    if (await this._checkCompaction(message, true, toolResults)) {
-      return !this._agentRunAbortRequested;
+    if (await this.checkCompaction(message, true, toolResults)) {
+      return !this.agentRunAbortRequested;
     }
 
-    return !this._agentRunAbortRequested && this.agent.hasQueuedMessages();
+    return !this.agentRunAbortRequested && this.agent.hasQueuedMessages();
   }
 
-  private async _runBeforeSettleBoundary(): Promise<boolean> {
-    if (!this._extensionRunner.hasHandlers("agent_before_settle"))
+  private async runBeforeSettleBoundary(): Promise<boolean> {
+    if (!this.extensionRunnerInternal.hasHandlers("agent_before_settle"))
       return this.agent.hasQueuedMessages();
-    this._isBeforeSettle = true;
-    this._abortDuringBeforeSettle = false;
+    this.isBeforeSettle = true;
+    this.abortDuringBeforeSettle = false;
     try {
-      const result = await this._extensionRunner.emitBoundary(
-        { type: "agent_before_settle", outcome: this._lastActivityOutcome },
-        (entries) => this._buildBoundaryContext(entries, "agent_before_settle"),
+      const result = await this.extensionRunnerInternal.emitBoundary(
+        { type: "agent_before_settle", outcome: this.lastActivityOutcome },
+        (entries) => this.buildBoundaryContext(entries, "agent_before_settle"),
       );
-      this._commitBoundaryDrafts(result.entries);
-      this._flushPendingCustomMessages();
-      const finalContext = this._buildBoundaryContext([], "agent_before_settle");
-      if (this._abortDuringBeforeSettle) return false;
+      this.commitBoundaryDrafts(result.entries);
+      this.flushPendingCustomMessages();
+      const finalContext = this.buildBoundaryContext([], "agent_before_settle");
+      if (this.abortDuringBeforeSettle) return false;
       const shouldContinue = result.continue || this.agent.hasQueuedMessages();
       if (shouldContinue && !finalContext.canContinue) {
-        if (result.continue) this._reportInvalidBoundaryContinuation("agent_before_settle");
+        if (result.continue) this.reportInvalidBoundaryContinuation("agent_before_settle");
         return false;
       }
       return shouldContinue;
     } finally {
-      this._isBeforeSettle = false;
+      this.isBeforeSettle = false;
     }
   }
 
-  private async _runInputHandlers(
+  private async runInputHandlers(
     text: string,
     images: ImageContent[] | undefined,
     source: InputSource,
     streamingBehavior?: "steer" | "followUp",
   ): Promise<{ text: string; images: ImageContent[] | undefined } | undefined> {
-    if (!this._extensionRunner.hasHandlers("input")) {
+    if (!this.extensionRunnerInternal.hasHandlers("input")) {
       return { text, images };
     }
 
-    const inputResult = await this._extensionRunner.emitInput(
+    const inputResult = await this.extensionRunnerInternal.emitInput(
       text,
       images,
       source,
@@ -1949,7 +1957,7 @@ export class AgentSession {
     return { text, images };
   }
 
-  private async _normalizePromptImages(
+  private async normalizePromptImages(
     images: ImageContent[] | undefined,
   ): Promise<{ images: ImageContent[]; hints: string[] }> {
     if (!images) return { images: [], hints: [] };
@@ -1959,7 +1967,7 @@ export class AgentSession {
     for (const image of images) {
       const processed = await processImage(Buffer.from(image.data, "base64"), image.mimeType, {
         autoResizeImages: this.settingsManager.getImageAutoResize(),
-        resizeOptions: this._limitsModel()?.inputLimits?.images?.resize,
+        resizeOptions: this.limitsModel()?.inputLimits?.images?.resize,
       });
       if (!processed.ok) {
         hints.push(processed.message);
@@ -1972,37 +1980,37 @@ export class AgentSession {
   }
 
   async prompt(text: string, options?: PromptOptions): Promise<void> {
-    if (this._isEmittingAgentSettled) {
-      this._deferredSettledActions.push(async () => await this.prompt(text, options));
+    if (this.isEmittingAgentSettled) {
+      this.deferredSettledActions.push(async () => await this.prompt(text, options));
       return;
     }
     const expandPromptTemplates = options?.expandPromptTemplates ?? true;
     const preflightResult = options?.preflightResult;
     const goalCommand = expandPromptTemplates ? parseGoalCommand(text) : undefined;
     if (goalCommand) {
-      await this._runGoalCommand(goalCommand, options);
+      await this.runGoalCommand(goalCommand, options);
       return;
     }
     const memoryCommand = expandPromptTemplates ? parseMemoryCommand(text) : undefined;
     if (memoryCommand) {
-      await this._runMemoryCommand(memoryCommand, options);
+      await this.runMemoryCommand(memoryCommand, options);
       return;
     }
     if (expandPromptTemplates && text.startsWith("/")) {
-      const handled = await this._tryExecuteExtensionCommand(text);
+      const handled = await this.tryExecuteExtensionCommand(text);
       if (handled) {
         preflightResult?.("handled");
         return;
       }
     }
 
-    if (this._compactionAbortController !== undefined) {
+    if (this.compactionAbortController !== undefined) {
       throw new Error(
         "Cannot submit a prompt while compaction is in progress. Wait for compaction to finish and retry.",
       );
     }
 
-    const processedInput = await this._runInputHandlers(
+    const processedInput = await this.runInputHandlers(
       text,
       options?.images,
       options?.source ?? "interactive",
@@ -2016,7 +2024,7 @@ export class AgentSession {
 
     let expandedText = currentText;
     if (expandPromptTemplates) {
-      expandedText = this._expandSkillCommand(expandedText);
+      expandedText = this.expandSkillCommand(expandedText);
       expandedText = expandPromptTemplate(expandedText, [...this.promptTemplates]);
     }
 
@@ -2027,9 +2035,9 @@ export class AgentSession {
         );
       }
       if (options.streamingBehavior === "followUp") {
-        await this._queueFollowUp(expandedText, currentImages);
+        await this.queueFollowUp(expandedText, currentImages);
       } else {
-        await this._queueSteer(expandedText, currentImages);
+        await this.queueSteer(expandedText, currentImages);
       }
       preflightResult?.("queued");
       return;
@@ -2040,10 +2048,10 @@ export class AgentSession {
     }
 
     const hasConfiguredAuth =
-      this._modelRuntime.hasConfiguredAuth(this.model.provider) ||
-      (await this._modelRuntime.checkAuth(this.model.provider)) !== undefined;
+      this.modelRuntimeInternal.hasConfiguredAuth(this.model.provider) ||
+      (await this.modelRuntimeInternal.checkAuth(this.model.provider)) !== undefined;
     if (!hasConfiguredAuth) {
-      const isOAuth = this._modelRuntime.isUsingOAuth(this.model.provider);
+      const isOAuth = this.modelRuntimeInternal.isUsingOAuth(this.model.provider);
       if (isOAuth) {
         throw new Error(
           `Authentication failed for "${this.model.provider}". ` +
@@ -2054,26 +2062,26 @@ export class AgentSession {
       throw new Error(formatNoApiKeyFoundMessage(this.model.provider));
     }
 
-    await this._startRun({ messageType: "user", prompt: expandedText, images: currentImages }, () =>
+    await this.startRun({ messageType: "user", prompt: expandedText, images: currentImages }, () =>
       preflightResult?.("started"),
     );
   }
 
-  private async _tryExecuteExtensionCommand(text: string): Promise<boolean> {
+  private async tryExecuteExtensionCommand(text: string): Promise<boolean> {
     const spaceIndex = text.indexOf(" ");
     const commandName = spaceIndex === -1 ? text.slice(1) : text.slice(1, spaceIndex);
     const args = spaceIndex === -1 ? "" : text.slice(spaceIndex + 1);
 
-    const command = this._extensionRunner.getCommand(commandName);
-    if (!command || this._isSkillCommand(text)) return false;
+    const command = this.extensionRunnerInternal.getCommand(commandName);
+    if (!command || this.isSkillCommand(text)) return false;
 
-    const ctx = this._extensionRunner.createCommandContext();
+    const ctx = this.extensionRunnerInternal.createCommandContext();
 
     try {
       await command.handler(args, ctx);
       return true;
     } catch (err) {
-      this._extensionRunner.emitError({
+      this.extensionRunnerInternal.emitError({
         extensionPath: `command:${commandName}`,
         event: "command",
         error: toErrorMessage(err),
@@ -2082,12 +2090,12 @@ export class AgentSession {
     }
   }
 
-  private _isSkillCommand(text: string): boolean {
+  private isSkillCommand(text: string): boolean {
     const name = slashCommandName(text);
     return this.resourceLoader.getSkills().skills.some((skill) => skill.name === name);
   }
 
-  private _expandSkillCommand(text: string): string {
+  private expandSkillCommand(text: string): string {
     if (!text.startsWith("/")) return text;
 
     const spaceIndex = text.indexOf(" ");
@@ -2103,7 +2111,7 @@ export class AgentSession {
       const skillBlock = `<skill name="${skill.name}" location="${skill.filePath}">\nReferences are relative to ${skill.baseDir}.\n\n${body}\n</skill>`;
       return args ? `${skillBlock}\n\n${args}` : skillBlock;
     } catch (err) {
-      this._extensionRunner.emitError({
+      this.extensionRunnerInternal.emitError({
         extensionPath: skill.filePath,
         event: "skill_expansion",
         error: toErrorMessage(err),
@@ -2112,17 +2120,17 @@ export class AgentSession {
     }
   }
 
-  private async _queueUserInput(
+  private async queueUserInput(
     text: string,
     images: ImageContent[] | undefined,
     behavior: "steer" | "followUp",
     source: InputSource,
   ): Promise<QueuedInputDisposition> {
     if (text.startsWith("/")) {
-      this._throwIfExtensionCommand(text);
+      this.throwIfExtensionCommand(text);
     }
 
-    const processedInput = await this._runInputHandlers(
+    const processedInput = await this.runInputHandlers(
       text,
       images,
       source,
@@ -2130,13 +2138,13 @@ export class AgentSession {
     );
     if (!processedInput) return "handled";
 
-    let expandedText = this._expandSkillCommand(processedInput.text);
+    let expandedText = this.expandSkillCommand(processedInput.text);
     expandedText = expandPromptTemplate(expandedText, [...this.promptTemplates]);
 
     if (behavior === "steer") {
-      await this._queueSteer(expandedText, processedInput.images);
+      await this.queueSteer(expandedText, processedInput.images);
     } else {
-      await this._queueFollowUp(expandedText, processedInput.images);
+      await this.queueFollowUp(expandedText, processedInput.images);
     }
     return "queued";
   }
@@ -2146,7 +2154,7 @@ export class AgentSession {
     images?: ImageContent[],
     options?: { source?: InputSource },
   ): Promise<QueuedInputDisposition> {
-    return this._queueUserInput(text, images, "steer", options?.source ?? "interactive");
+    return this.queueUserInput(text, images, "steer", options?.source ?? "interactive");
   }
 
   async followUp(
@@ -2154,12 +2162,12 @@ export class AgentSession {
     images?: ImageContent[],
     options?: { source?: InputSource },
   ): Promise<QueuedInputDisposition> {
-    return this._queueUserInput(text, images, "followUp", options?.source ?? "interactive");
+    return this.queueUserInput(text, images, "followUp", options?.source ?? "interactive");
   }
 
-  private async _queueSteer(text: string, images?: ImageContent[]): Promise<void> {
-    this._steeringMessages.push(text);
-    this._emitQueueUpdate();
+  private async queueSteer(text: string, images?: ImageContent[]): Promise<void> {
+    this.steeringMessages.push(text);
+    this.emitQueueUpdate();
     const content: (TextContent | ImageContent)[] = [{ type: "text", text }];
     if (images) {
       content.push(...images);
@@ -2171,9 +2179,9 @@ export class AgentSession {
     });
   }
 
-  private async _queueFollowUp(text: string, images?: ImageContent[]): Promise<void> {
-    this._followUpMessages.push(text);
-    this._emitQueueUpdate();
+  private async queueFollowUp(text: string, images?: ImageContent[]): Promise<void> {
+    this.followUpMessages.push(text);
+    this.emitQueueUpdate();
     const content: (TextContent | ImageContent)[] = [{ type: "text", text }];
     if (images) {
       content.push(...images);
@@ -2181,12 +2189,12 @@ export class AgentSession {
     this.agent.followUp({ role: "user", content, timestamp: Date.now() });
   }
 
-  private _throwIfExtensionCommand(text: string): void {
+  private throwIfExtensionCommand(text: string): void {
     const spaceIndex = text.indexOf(" ");
     const commandName = spaceIndex === -1 ? text.slice(1) : text.slice(1, spaceIndex);
-    const command = this._extensionRunner.getCommand(commandName);
+    const command = this.extensionRunnerInternal.getCommand(commandName);
 
-    if (command && !this._isSkillCommand(text)) {
+    if (command && !this.isSkillCommand(text)) {
       throw new Error(
         `Extension command "/${commandName}" cannot be queued. Use prompt() or execute the command when not streaming.`,
       );
@@ -2206,7 +2214,7 @@ export class AgentSession {
       timestamp: Date.now(),
     } satisfies CustomMessage<T>;
     if (options?.deliverAs === "nextTurn") {
-      this._pendingNextTurnMessages.push(appMessage);
+      this.pendingNextTurnMessages.push(appMessage);
     } else if (this.isStreaming && options?.triggerTurn !== false) {
       if (options?.deliverAs === "followUp") {
         this.agent.followUp(appMessage);
@@ -2214,39 +2222,39 @@ export class AgentSession {
         this.agent.steer(appMessage);
       }
     } else if (options?.triggerTurn) {
-      if (this._isEmittingAgentSettled) {
-        this._deferredSettledActions.push(
+      if (this.isEmittingAgentSettled) {
+        this.deferredSettledActions.push(
           async () => await this.sendCustomMessage(message, options),
         );
         return;
       }
-      await this._startRun({ messageType: "custom", message: appMessage });
+      await this.startRun({ messageType: "custom", message: appMessage });
     } else if (this.isStreaming) {
-      this._pendingCustomMessages.push(appMessage);
+      this.pendingCustomMessages.push(appMessage);
     } else {
-      this._appendCustomMessage(appMessage);
+      this.appendCustomMessage(appMessage);
     }
   }
 
-  private _appendCustomMessage(appMessage: CustomMessage): void {
+  private appendCustomMessage(appMessage: CustomMessage): void {
     this.sessionManager.appendCustomMessageEntry(
       appMessage.customType,
       appMessage.content,
       appMessage.display,
       appMessage.details,
     );
-    this._refreshFinalizedContext();
-    this._emit({ type: "message_start", message: appMessage });
-    this._emit({ type: "message_end", message: appMessage });
+    this.refreshFinalizedContext();
+    this.emit({ type: "message_start", message: appMessage });
+    this.emit({ type: "message_end", message: appMessage });
   }
 
-  private _flushPendingCustomMessages(): void {
-    if (this._pendingCustomMessages.length === 0) return;
+  private flushPendingCustomMessages(): void {
+    if (this.pendingCustomMessages.length === 0) return;
 
-    const pending = this._pendingCustomMessages;
-    this._pendingCustomMessages = [];
+    const pending = this.pendingCustomMessages;
+    this.pendingCustomMessages = [];
     for (const appMessage of pending) {
-      this._appendCustomMessage(appMessage);
+      this.appendCustomMessage(appMessage);
     }
   }
 
@@ -2282,40 +2290,40 @@ export class AgentSession {
   }
 
   clearQueue(): { steering: string[]; followUp: string[] } {
-    const steering = [...this._steeringMessages];
-    const followUp = [...this._followUpMessages];
-    this._steeringMessages = [];
-    this._followUpMessages = [];
+    const steering = [...this.steeringMessages];
+    const followUp = [...this.followUpMessages];
+    this.steeringMessages = [];
+    this.followUpMessages = [];
     this.agent.clearAllQueues();
-    this._emitQueueUpdate();
+    this.emitQueueUpdate();
     return { steering, followUp };
   }
 
   get pendingMessageCount(): number {
-    return this._steeringMessages.length + this._followUpMessages.length;
+    return this.steeringMessages.length + this.followUpMessages.length;
   }
 
   getSteeringMessages(): readonly string[] {
-    return this._steeringMessages;
+    return this.steeringMessages;
   }
 
   getFollowUpMessages(): readonly string[] {
-    return this._followUpMessages;
+    return this.followUpMessages;
   }
 
   get resourceLoader(): ResourceLoader {
-    return this._resourceLoader;
+    return this.resourceLoaderInternal;
   }
 
   async abort(): Promise<void> {
-    if (this._isAgentRunActive) {
-      this._agentRunAbortRequested = true;
+    if (this.isAgentRunActive) {
+      this.agentRunAbortRequested = true;
     }
     this.abortRetry();
     this.abortCompaction();
     this.abortBranchSummary();
-    this._goal.abort();
-    if (this._isBeforeSettle) this._abortDuringBeforeSettle = true;
+    this.goalInternal.abort();
+    if (this.isBeforeSettle) this.abortDuringBeforeSettle = true;
     this.agent.abort();
     await this.waitForIdle();
   }
@@ -2324,33 +2332,33 @@ export class AgentSession {
     if (this.isIdle) {
       return;
     }
-    await this._getIdleWaitPromise();
+    await this.getIdleWaitPromise();
   }
 
   get orchestrator(): Orchestrator | undefined {
-    return this._orchestrator;
+    return this.orchestratorInternal;
   }
 
   get memory(): MemoryService | undefined {
-    return this._memory;
+    return this.memoryInternal;
   }
 
   get goal(): GoalSnapshot | undefined {
-    return this._goal.snapshot;
+    return this.goalInternal.snapshot;
   }
 
   setGoal(condition: string): void {
-    this._goal.set(condition);
+    this.goalInternal.set(condition);
   }
 
   clearGoal(): boolean {
-    return this._goal.clear();
+    return this.goalInternal.clear();
   }
 
-  private async _runGoalCommand(command: GoalCommand, options?: PromptOptions): Promise<void> {
+  private async runGoalCommand(command: GoalCommand, options?: PromptOptions): Promise<void> {
     if (command.kind === "set") {
-      this._goal.set(command.condition);
-      const goal = this._goal.snapshot;
+      this.goalInternal.set(command.condition);
+      const goal = this.goalInternal.snapshot;
       if (!goal) return;
       await this.prompt(goal.condition, {
         ...options,
@@ -2359,21 +2367,21 @@ export class AgentSession {
       });
       return;
     }
-    if (command.kind === "status" || !this._goal.clear()) {
-      this._emit({ type: "goal_status", goal: this._goal.snapshot });
+    if (command.kind === "status" || !this.goalInternal.clear()) {
+      this.emit({ type: "goal_status", goal: this.goalInternal.snapshot });
     }
     options?.preflightResult?.("handled");
   }
 
-  private _recordGoalEntry(data: GoalEntryData): void {
+  private recordGoalEntry(data: GoalEntryData): void {
     const entry = this.sessionManager.getEntry(
       this.sessionManager.appendCustomEntry(GOAL_ENTRY_TYPE, data),
     );
-    if (entry) this._emit({ type: "entry_appended", entry });
+    if (entry) this.emit({ type: "entry_appended", entry });
   }
 
-  private async _runMemoryCommand(command: MemoryCommand, options?: PromptOptions): Promise<void> {
-    const memory = this._memory;
+  private async runMemoryCommand(command: MemoryCommand, options?: PromptOptions): Promise<void> {
+    const memory = this.memoryInternal;
     let text: string;
     if (!memory) {
       text = "Memory is disabled (settings: memory.enabled).";
@@ -2398,29 +2406,29 @@ export class AgentSession {
           break;
       }
     }
-    this._emit({ type: "memory_status", text });
+    this.emit({ type: "memory_status", text });
     options?.preflightResult?.("handled");
   }
 
-  private _totalSessionTokens(): number {
+  private totalSessionTokens(): number {
     const entryCount = this.sessionManager.getEntryCount();
-    if (this._totalTokensCache?.entryCount !== entryCount) {
-      this._totalTokensCache = { entryCount, total: this.getSessionStats().tokens.total };
+    if (this.totalTokensCache?.entryCount !== entryCount) {
+      this.totalTokensCache = { entryCount, total: this.getSessionStats().tokens.total };
     }
-    return this._totalTokensCache.total;
+    return this.totalTokensCache.total;
   }
 
-  private _resolveOrchestratorModel(reference: string): Model<any> {
+  private resolveOrchestratorModel(reference: string): Model<any> {
     const result = resolveModelReference(
       { text: reference, thinkingSuffix: "none", fuzzy: false },
-      this._modelRuntime.getAvailableSnapshot(),
+      this.modelRuntimeInternal.getAvailableSnapshot(),
       () => true,
     );
     if (result.status !== "resolved") throw new Error(`"${reference}" is not an available model`);
     return result.model;
   }
 
-  private _orchestratorDefaults(): OrchestratorDefaults {
+  private orchestratorDefaults(): OrchestratorDefaults {
     const current = this.model;
     if (!current) throw new Error(formatNoModelSelectedMessage());
     const currentReference = `${current.provider}/${current.id}`;
@@ -2435,9 +2443,9 @@ export class AgentSession {
     };
   }
 
-  private _goalEvaluatorModel(): Model<any> {
+  private goalEvaluatorModel(): Model<any> {
     const configured = this.settingsManager.getGoalEvaluatorModel();
-    const available = this._modelRuntime.getAvailableSnapshot();
+    const available = this.modelRuntimeInternal.getAvailableSnapshot();
     if (configured) {
       const result = resolveModelReference(
         { text: configured, thinkingSuffix: "none", fuzzy: false },
@@ -2449,17 +2457,17 @@ export class AgentSession {
       }
       return result.model;
     }
-    const current = this._limitsModel();
+    const current = this.limitsModel();
     if (!current) throw new Error(formatNoModelSelectedMessage());
     return pickEvaluatorModel(current, available);
   }
 
-  private async _evaluateGoal(prompt: string, signal: AbortSignal): Promise<string> {
+  private async evaluateGoal(prompt: string, signal: AbortSignal): Promise<string> {
     const {
       model,
       thinkingLevel: _thinkingLevel,
       ...credentials
-    } = await this._getSummarizationRequestAuth(this._goalEvaluatorModel(), signal);
+    } = await this.getSummarizationRequestAuth(this.goalEvaluatorModel(), signal);
     const response = await completeSummarization(
       model,
       normalizeContext({
@@ -2484,7 +2492,7 @@ export class AgentSession {
         response.model,
         response.usage,
       );
-      this._emit({ type: "entry_appended", entry });
+      this.emit({ type: "entry_appended", entry });
     }
     if (response.stopReason === "aborted") throw new Error("cancelled");
     if (response.stopReason === "error") throw new Error(response.errorMessage || "Unknown error");
@@ -2492,13 +2500,13 @@ export class AgentSession {
     return contentText(response.content, "\n").trim();
   }
 
-  private async _emitModelSelect(
+  private async emitModelSelect(
     nextModel: Model<any>,
     previousModel: Model<any> | undefined,
     source: "set" | "cycle" | "restore",
   ): Promise<void> {
     if (modelsAreEqual(previousModel, nextModel)) return;
-    await this._extensionRunner.emit({
+    await this.extensionRunnerInternal.emit({
       type: "model_select",
       model: nextModel,
       previousModel,
@@ -2507,29 +2515,29 @@ export class AgentSession {
   }
 
   async setModel(model: Model<any>, options: ModelMutationOptions = {}): Promise<void> {
-    if (!(await this._modelRuntime.checkAuth(model.provider))) {
+    if (!(await this.modelRuntimeInternal.checkAuth(model.provider))) {
       throw new Error(`No API key for ${model.provider}/${model.id}`);
     }
 
     const previousModel = this.model;
-    const thinkingLevel = this._getThinkingLevelForModelSwitch(model);
+    const thinkingLevel = this.getThinkingLevelForModelSwitch(model);
     this.agent.state.model = model;
     this.sessionManager.appendModelChange(model.provider, model.id);
     if (options.persist) {
       this.settingsManager.setDefaultModelAndProvider(model.provider, model.id);
-      this._addPersistedDefaultToNonEmptyScope(model);
+      this.addPersistedDefaultToNonEmptyScope(model);
     }
 
     this.setThinkingLevel(thinkingLevel);
 
-    await this._emitModelSelect(model, previousModel, "set");
+    await this.emitModelSelect(model, previousModel, "set");
   }
 
-  private _addPersistedDefaultToNonEmptyScope(model: Model<any>): void {
-    if (this._scopedModels.length === 0) return;
-    if (this._scopedModels.some((scoped) => modelsAreEqual(scoped.model, model))) return;
+  private addPersistedDefaultToNonEmptyScope(model: Model<any>): void {
+    if (this.scopedModelsInternal.length === 0) return;
+    if (this.scopedModelsInternal.some((scoped) => modelsAreEqual(scoped.model, model))) return;
 
-    this._scopedModels = [...this._scopedModels, { model }];
+    this.scopedModelsInternal = [...this.scopedModelsInternal, { model }];
 
     const enabledModels = this.settingsManager.getEnabledModels();
     if (!enabledModels?.length) return;
@@ -2544,20 +2552,22 @@ export class AgentSession {
     direction: "forward" | "backward" = "forward",
     options: ModelMutationOptions = {},
   ): Promise<ModelCycleResult | undefined> {
-    if (this._scopedModels.length > 0) {
-      return this._cycleScopedModel(direction, options);
+    if (this.scopedModelsInternal.length > 0) {
+      return this.cycleScopedModel(direction, options);
     }
-    return this._cycleAvailableModel(direction, options);
+    return this.cycleAvailableModel(direction, options);
   }
 
-  private async _cycleScopedModel(
+  private async cycleScopedModel(
     direction: "forward" | "backward",
     options: ModelMutationOptions,
   ): Promise<ModelCycleResult | undefined> {
     const availableIds = new Set(
-      this._modelRuntime.getAvailableSnapshot().map((model) => `${model.provider}\0${model.id}`),
+      this.modelRuntimeInternal
+        .getAvailableSnapshot()
+        .map((model) => `${model.provider}\0${model.id}`),
     );
-    const scopedModels = this._scopedModels.filter((scoped) =>
+    const scopedModels = this.scopedModelsInternal.filter((scoped) =>
       availableIds.has(`${scoped.model.provider}\0${scoped.model.id}`),
     );
     if (scopedModels.length <= 1) return undefined;
@@ -2571,27 +2581,27 @@ export class AgentSession {
       direction === "forward" ? (currentIndex + 1) % len : (currentIndex - 1 + len) % len;
     const next = scopedModels[nextIndex];
     if (next === undefined) return undefined;
-    const thinkingLevel = this._getThinkingLevelForModelSwitch(next.model, next.thinkingLevel);
+    const thinkingLevel = this.getThinkingLevelForModelSwitch(next.model, next.thinkingLevel);
 
     this.agent.state.model = next.model;
     this.sessionManager.appendModelChange(next.model.provider, next.model.id);
     if (options.persist) {
       this.settingsManager.setDefaultModelAndProvider(next.model.provider, next.model.id);
-      this._addPersistedDefaultToNonEmptyScope(next.model);
+      this.addPersistedDefaultToNonEmptyScope(next.model);
     }
 
     this.setThinkingLevel(thinkingLevel);
 
-    await this._emitModelSelect(next.model, currentModel, "cycle");
+    await this.emitModelSelect(next.model, currentModel, "cycle");
 
     return { model: next.model, thinkingLevel: this.thinkingLevel, isScoped: true };
   }
 
-  private async _cycleAvailableModel(
+  private async cycleAvailableModel(
     direction: "forward" | "backward",
     options: ModelMutationOptions,
   ): Promise<ModelCycleResult | undefined> {
-    const availableModels = this._modelRuntime.getAvailableSnapshot();
+    const availableModels = this.modelRuntimeInternal.getAvailableSnapshot();
     if (availableModels.length <= 1) return undefined;
 
     const currentModel = this.model;
@@ -2604,17 +2614,17 @@ export class AgentSession {
     const nextModel = availableModels[nextIndex];
     if (nextModel === undefined) return undefined;
 
-    const thinkingLevel = this._getThinkingLevelForModelSwitch(nextModel);
+    const thinkingLevel = this.getThinkingLevelForModelSwitch(nextModel);
     this.agent.state.model = nextModel;
     this.sessionManager.appendModelChange(nextModel.provider, nextModel.id);
     if (options.persist) {
       this.settingsManager.setDefaultModelAndProvider(nextModel.provider, nextModel.id);
-      this._addPersistedDefaultToNonEmptyScope(nextModel);
+      this.addPersistedDefaultToNonEmptyScope(nextModel);
     }
 
     this.setThinkingLevel(thinkingLevel);
 
-    await this._emitModelSelect(nextModel, currentModel, "cycle");
+    await this.emitModelSelect(nextModel, currentModel, "cycle");
 
     return { model: nextModel, thinkingLevel: this.thinkingLevel, isScoped: false };
   }
@@ -2623,7 +2633,7 @@ export class AgentSession {
     const availableLevels = this.getAvailableThinkingLevels();
     const effectiveLevel = availableLevels.includes(level)
       ? level
-      : this._clampThinkingLevel(level, availableLevels);
+      : this.clampThinkingLevel(level, availableLevels);
 
     const previousLevel = this.agent.state.thinkingLevel;
     const isChanging = effectiveLevel !== previousLevel;
@@ -2636,8 +2646,8 @@ export class AgentSession {
 
     if (isChanging) {
       this.sessionManager.appendThinkingLevelChange(effectiveLevel);
-      this._emit({ type: "thinking_level_changed", level: effectiveLevel });
-      void this._extensionRunner.emit({
+      this.emit({ type: "thinking_level_changed", level: effectiveLevel });
+      void this.extensionRunnerInternal.emit({
         type: "thinking_level_select",
         level: effectiveLevel,
         previousLevel,
@@ -2667,7 +2677,7 @@ export class AgentSession {
     return !!this.model?.reasoning;
   }
 
-  private _getThinkingLevelForModelSwitch(
+  private getThinkingLevelForModelSwitch(
     targetModel?: Model<any>,
     explicitLevel?: ThinkingLevel,
   ): ThinkingLevel {
@@ -2688,7 +2698,7 @@ export class AgentSession {
     );
   }
 
-  private _clampThinkingLevel(
+  private clampThinkingLevel(
     level: ThinkingLevel,
     _availableLevels: ThinkingLevel[],
   ): ThinkingLevel {
@@ -2710,14 +2720,14 @@ export class AgentSession {
     this.settingsManager.setFollowUpMode(mode);
   }
 
-  private async _runDefaultCompaction(
+  private async runDefaultCompaction(
     preparation: CompactionPreparation,
     model: Model<any>,
     customInstructions: string | undefined,
     signal: AbortSignal,
     reason: "manual" | "threshold" | "overflow",
   ): Promise<CompactionResult> {
-    const request = await this._getSummarizationRequestAuth(model, signal);
+    const request = await this.getSummarizationRequestAuth(model, signal);
     return compact(
       preparation,
       request.model,
@@ -2729,20 +2739,20 @@ export class AgentSession {
       this.agent.streamFunction,
       request.env,
       this.settingsManager.getRetrySettings(),
-      this._summarizationRetryCallbacks({ source: "compaction", reason }),
+      this.summarizationRetryCallbacks({ source: "compaction", reason }),
       undefined,
     );
   }
 
-  private _clearManualCompactionState(): void {
-    this._compactionAbortController = undefined;
-    this._resolveIdleWaitIfIdle();
+  private clearManualCompactionState(): void {
+    this.compactionAbortController = undefined;
+    this.resolveIdleWaitIfIdle();
   }
 
   async compact(customInstructions?: string): Promise<CompactionResult> {
     await this.abort();
-    this._compactionAbortController = new AbortController();
-    this._emit({ type: "compaction_start", reason: "manual" });
+    this.compactionAbortController = new AbortController();
+    this.emit({ type: "compaction_start", reason: "manual" });
     let fromExtension = false;
     let cancelledByExtension = false;
 
@@ -2766,15 +2776,15 @@ export class AgentSession {
 
       let extensionCompaction: CompactionResult | undefined;
 
-      if (this._extensionRunner.hasHandlers("session_before_compact")) {
-        const result = (await this._extensionRunner.emit({
+      if (this.extensionRunnerInternal.hasHandlers("session_before_compact")) {
+        const result = (await this.extensionRunnerInternal.emit({
           type: "session_before_compact",
           preparation,
           branchEntries: pathEntries,
           customInstructions,
           reason: "manual",
           willRetry: false,
-          signal: this._compactionAbortController.signal,
+          signal: this.compactionAbortController.signal,
         })) as SessionBeforeCompactResult | undefined;
 
         if (result?.cancel) {
@@ -2801,11 +2811,11 @@ export class AgentSession {
         usage = extensionCompaction.usage;
         details = extensionCompaction.details;
       } else {
-        const result = await this._runDefaultCompaction(
+        const result = await this.runDefaultCompaction(
           preparation,
           model,
           customInstructions,
-          this._compactionAbortController.signal,
+          this.compactionAbortController.signal,
           "manual",
         );
         summary = result.summary;
@@ -2815,7 +2825,7 @@ export class AgentSession {
         details = result.details;
       }
 
-      if (this._compactionAbortController.signal.aborted) {
+      if (this.compactionAbortController.signal.aborted) {
         throw new Error("Compaction cancelled");
       }
 
@@ -2828,7 +2838,7 @@ export class AgentSession {
         usage,
       );
       const newEntries = this.sessionManager.getEntries();
-      this._refreshFinalizedContext();
+      this.refreshFinalizedContext();
       const estimatedTokensAfter = estimateMessagesTokens(
         this.sessionManager.buildSessionProjection().messages,
       );
@@ -2837,8 +2847,8 @@ export class AgentSession {
         (e) => e.type === "compaction" && e.summary === summary,
       ) as CompactionEntry | undefined;
 
-      if (this._extensionRunner && savedCompactionEntry) {
-        await this._extensionRunner.emit({
+      if (this.extensionRunnerInternal && savedCompactionEntry) {
+        await this.extensionRunnerInternal.emit({
           type: "session_compact",
           compactionEntry: savedCompactionEntry,
           fromExtension,
@@ -2855,8 +2865,8 @@ export class AgentSession {
         usage,
         details,
       };
-      this._clearManualCompactionState();
-      this._emit({
+      this.clearManualCompactionState();
+      this.emit({
         type: "compaction_end",
         reason: "manual",
         result: compactionResult,
@@ -2866,10 +2876,10 @@ export class AgentSession {
       return compactionResult;
     } catch (error) {
       const message = toErrorMessage(error);
-      const aborted = this._compactionAbortController.signal.aborted || cancelledByExtension;
+      const aborted = this.compactionAbortController.signal.aborted || cancelledByExtension;
       const errorMessage = aborted ? undefined : `Compaction failed: ${message}`;
-      this._clearManualCompactionState();
-      this._emit({
+      this.clearManualCompactionState();
+      this.emit({
         type: "compaction_end",
         reason: "manual",
         result: undefined,
@@ -2877,7 +2887,7 @@ export class AgentSession {
         willRetry: false,
         errorMessage,
       });
-      await this._emitSessionCompactFailed({
+      await this.emitSessionCompactFailed({
         reason: "manual",
         errorMessage,
         aborted,
@@ -2886,20 +2896,20 @@ export class AgentSession {
       });
       throw error;
     } finally {
-      this._clearManualCompactionState();
+      this.clearManualCompactionState();
     }
   }
 
   abortCompaction(): void {
-    this._compactionAbortController?.abort();
-    this._autoCompactionAbortController?.abort();
+    this.compactionAbortController?.abort();
+    this.autoCompactionAbortController?.abort();
   }
 
   abortBranchSummary(): void {
-    this._branchSummaryAbortController?.abort();
+    this.branchSummaryAbortController?.abort();
   }
 
-  private async _checkCompaction(
+  private async checkCompaction(
     assistantMessage: AssistantMessage,
     skipAbortedCheck = true,
     toolResults: AgentMessage[] = [],
@@ -2909,7 +2919,7 @@ export class AgentSession {
 
     if (skipAbortedCheck && assistantMessage.stopReason === "aborted") return false;
 
-    const messageModel = this._modelForMessage(assistantMessage);
+    const messageModel = this.modelForMessage(assistantMessage);
     const sameModel = messageModel !== undefined;
     const contextWindow = (messageModel ?? this.model)?.contextWindow ?? 0;
 
@@ -2922,7 +2932,7 @@ export class AgentSession {
     }
 
     const currentProjection = this.sessionManager.buildSessionProjection();
-    const assistantEntryId = this._findPersistedMessageEntryId(assistantMessage);
+    const assistantEntryId = this.findPersistedMessageEntryId(assistantMessage);
     const assistantIsProjected =
       assistantEntryId === undefined ||
       currentProjection.entries.some(
@@ -2963,14 +2973,14 @@ export class AgentSession {
       const willRetry = assistantMessage.stopReason !== "stop";
 
       if (!willRetry) {
-        return await this._runAutoCompaction("overflow", false);
+        return await this.runAutoCompaction("overflow", false);
       }
 
-      if (this._overflowRecoveryAttempted) {
+      if (this.overflowRecoveryAttempted) {
         const errorMessage = contextOverflow
           ? "Context overflow recovery failed after one compact-and-retry attempt. Try reducing context or switching to a larger-context model."
           : "Truncated response recovery failed after one compact-and-retry attempt.";
-        this._emit({
+        this.emit({
           type: "compaction_end",
           reason: "overflow",
           result: undefined,
@@ -2978,7 +2988,7 @@ export class AgentSession {
           willRetry: false,
           errorMessage,
         });
-        await this._emitSessionCompactFailed({
+        await this.emitSessionCompactFailed({
           reason: "overflow",
           errorMessage,
           aborted: false,
@@ -2988,10 +2998,10 @@ export class AgentSession {
         return false;
       }
 
-      this._overflowRecoveryAttempted = true;
-      this._omitRecoveryAttempt(assistantMessage, toolResults);
-      const retry = await this._runAutoCompaction("overflow", willRetry);
-      if (retry) this._failedResponse = assistantMessage;
+      this.overflowRecoveryAttempted = true;
+      this.omitRecoveryAttempt(assistantMessage, toolResults);
+      const retry = await this.runAutoCompaction("overflow", willRetry);
+      if (retry) this.failedResponse = assistantMessage;
       return retry;
     }
 
@@ -3023,12 +3033,12 @@ export class AgentSession {
       contextTokens = directContextTokens;
     }
     if (shouldCompact(contextTokens, contextWindow, settings)) {
-      return await this._runAutoCompaction("threshold", false);
+      return await this.runAutoCompaction("threshold", false);
     }
     return false;
   }
 
-  private async _runAutoCompaction(
+  private async runAutoCompaction(
     reason: "overflow" | "threshold",
     willRetry: boolean,
   ): Promise<boolean> {
@@ -3051,15 +3061,15 @@ export class AgentSession {
       }
 
       abortController = new AbortController();
-      this._autoCompactionAbortController = abortController;
+      this.autoCompactionAbortController = abortController;
       started = true;
-      this._emit({ type: "compaction_start", reason });
+      this.emit({ type: "compaction_start", reason });
       abortController.signal.throwIfAborted();
 
       let extensionCompaction: CompactionResult | undefined;
 
-      if (this._extensionRunner.hasHandlers("session_before_compact")) {
-        const extensionResult = (await this._extensionRunner.emit({
+      if (this.extensionRunnerInternal.hasHandlers("session_before_compact")) {
+        const extensionResult = (await this.extensionRunnerInternal.emit({
           type: "session_before_compact",
           preparation,
           branchEntries: pathEntries,
@@ -3094,7 +3104,7 @@ export class AgentSession {
         usage = extensionCompaction.usage;
         details = extensionCompaction.details;
       } else {
-        const compactResult = await this._runDefaultCompaction(
+        const compactResult = await this.runDefaultCompaction(
           preparation,
           model,
           undefined,
@@ -3118,7 +3128,7 @@ export class AgentSession {
         usage,
       );
       const newEntries = this.sessionManager.getEntries();
-      this._refreshFinalizedContext();
+      this.refreshFinalizedContext();
       const estimatedTokensAfter = estimateMessagesTokens(
         this.sessionManager.buildSessionProjection().messages,
       );
@@ -3127,8 +3137,8 @@ export class AgentSession {
         (e) => e.type === "compaction" && e.summary === summary,
       ) as CompactionEntry | undefined;
 
-      if (this._extensionRunner && savedCompactionEntry) {
-        await this._extensionRunner.emit({
+      if (this.extensionRunnerInternal && savedCompactionEntry) {
+        await this.extensionRunnerInternal.emit({
           type: "session_compact",
           compactionEntry: savedCompactionEntry,
           fromExtension,
@@ -3145,7 +3155,7 @@ export class AgentSession {
         usage,
         details,
       };
-      this._emit({ type: "compaction_end", reason, result, aborted: false, willRetry });
+      this.emit({ type: "compaction_end", reason, result, aborted: false, willRetry });
 
       if (willRetry) return true;
 
@@ -3159,7 +3169,7 @@ export class AgentSession {
           : reason === "overflow"
             ? `Context overflow recovery failed: ${message}`
             : `Auto-compaction failed: ${message}`;
-        this._emit({
+        this.emit({
           type: "compaction_end",
           reason,
           result: undefined,
@@ -3167,7 +3177,7 @@ export class AgentSession {
           willRetry: false,
           errorMessage,
         });
-        await this._emitSessionCompactFailed({
+        await this.emitSessionCompactFailed({
           reason,
           errorMessage,
           aborted,
@@ -3177,10 +3187,10 @@ export class AgentSession {
       }
       return false;
     } finally {
-      if (this._autoCompactionAbortController === abortController) {
-        this._autoCompactionAbortController = undefined;
+      if (this.autoCompactionAbortController === abortController) {
+        this.autoCompactionAbortController = undefined;
       }
-      this._resolveIdleWaitIfIdle();
+      this.resolveIdleWaitIfIdle();
     }
   }
 
@@ -3194,39 +3204,39 @@ export class AgentSession {
 
   async bindExtensions(bindings: ExtensionBindings): Promise<void> {
     if (bindings.uiContext !== undefined) {
-      this._extensionUIContext = bindings.uiContext;
+      this.extensionUIContext = bindings.uiContext;
     }
     if (bindings.mode !== undefined) {
-      this._extensionMode = bindings.mode;
+      this.extensionMode = bindings.mode;
     }
     if (bindings.commandContextActions !== undefined) {
-      this._extensionCommandContextActions = bindings.commandContextActions;
+      this.extensionCommandContextActions = bindings.commandContextActions;
     }
     if (bindings.abortHandler !== undefined) {
-      this._extensionAbortHandler = bindings.abortHandler;
+      this.extensionAbortHandler = bindings.abortHandler;
     }
     if (bindings.shutdownHandler !== undefined) {
-      this._extensionShutdownHandler = bindings.shutdownHandler;
+      this.extensionShutdownHandler = bindings.shutdownHandler;
     }
     if (bindings.onError !== undefined) {
-      this._extensionErrorListener = bindings.onError;
+      this.extensionErrorListener = bindings.onError;
     }
 
-    this._applyExtensionBindings(this._extensionRunner);
-    await this._extensionRunner.emit(this._sessionStartEvent);
-    this._extensionRunner.reportUnhandledMcpServers();
+    this.applyExtensionBindings(this.extensionRunnerInternal);
+    await this.extensionRunnerInternal.emit(this.sessionStartEvent);
+    this.extensionRunnerInternal.reportUnhandledMcpServers();
     await this.extendResourcesFromExtensions(
-      this._sessionStartEvent.reason === "reload" ? "reload" : "startup",
+      this.sessionStartEvent.reason === "reload" ? "reload" : "startup",
     );
   }
 
   private async extendResourcesFromExtensions(reason: "startup" | "reload"): Promise<void> {
-    if (!this._extensionRunner.hasHandlers("resources_discover")) {
+    if (!this.extensionRunnerInternal.hasHandlers("resources_discover")) {
       return;
     }
 
     const { skillPaths, promptPaths, themePaths } =
-      await this._extensionRunner.emitResourcesDiscover(this._cwd, reason);
+      await this.extensionRunnerInternal.emitResourcesDiscover(this.cwd, reason);
 
     if (skillPaths.length === 0 && promptPaths.length === 0 && themePaths.length === 0) {
       return;
@@ -3238,8 +3248,8 @@ export class AgentSession {
       themePaths: this.buildExtensionResourcePaths(themePaths),
     };
 
-    this._resourceLoader.extendResources(extensionPaths);
-    this._rebuildSystemPrompt(this.getActiveToolNames());
+    this.resourceLoaderInternal.extendResources(extensionPaths);
+    this.rebuildSystemPrompt(this.getActiveToolNames());
   }
 
   private buildExtensionResourcePaths(
@@ -3274,23 +3284,26 @@ export class AgentSession {
     return `extension:${name}`;
   }
 
-  private _applyExtensionBindings(runner: ExtensionRunner): void {
-    runner.setUIContext(this._extensionUIContext, this._extensionMode);
-    runner.bindCommandContext(this._extensionCommandContextActions);
+  private applyExtensionBindings(runner: ExtensionRunner): void {
+    runner.setUIContext(this.extensionUIContext, this.extensionMode);
+    runner.bindCommandContext(this.extensionCommandContextActions);
 
-    this._extensionErrorUnsubscriber?.();
-    this._extensionErrorUnsubscriber = this._extensionErrorListener
-      ? runner.onError(this._extensionErrorListener)
+    this.extensionErrorUnsubscriber?.();
+    this.extensionErrorUnsubscriber = this.extensionErrorListener
+      ? runner.onError(this.extensionErrorListener)
       : undefined;
   }
 
-  private _refreshCurrentModelFromRegistry(): void {
+  private refreshCurrentModelFromRegistry(): void {
     const currentModel = this.model;
     if (!currentModel) {
       return;
     }
 
-    const refreshedModel = this._modelRuntime.getModel(currentModel.provider, currentModel.id);
+    const refreshedModel = this.modelRuntimeInternal.getModel(
+      currentModel.provider,
+      currentModel.id,
+    );
     if (!refreshedModel || refreshedModel === currentModel) {
       return;
     }
@@ -3298,7 +3311,7 @@ export class AgentSession {
     this.agent.state.model = refreshedModel;
   }
 
-  private _bindExtensionCore(runner: ExtensionRunner): void {
+  private bindExtensionCore(runner: ExtensionRunner): void {
     const getCommands = (): SlashCommandInfo[] => {
       const extensionCommands: SlashCommandInfo[] = runner
         .getRegisteredCommands()
@@ -3316,12 +3329,14 @@ export class AgentSession {
         sourceInfo: template.sourceInfo,
       }));
 
-      const skills: SlashCommandInfo[] = this._resourceLoader.getSkills().skills.map((skill) => ({
-        name: skill.name,
-        description: skill.description,
-        source: "skill",
-        sourceInfo: skill.sourceInfo,
-      }));
+      const skills: SlashCommandInfo[] = this.resourceLoaderInternal
+        .getSkills()
+        .skills.map((skill) => ({
+          name: skill.name,
+          description: skill.description,
+          source: "skill",
+          sourceInfo: skill.sourceInfo,
+        }));
 
       return withSkillCommands([...extensionCommands, ...templates], skills);
     };
@@ -3350,7 +3365,7 @@ export class AgentSession {
           const entryId = this.sessionManager.appendCustomEntry(customType, data);
           const entry = this.sessionManager.getEntry(entryId);
           if (entry) {
-            this._emit({ type: "entry_appended", entry });
+            this.emit({ type: "entry_appended", entry });
           }
         },
         setSessionName: (name) => {
@@ -3366,10 +3381,10 @@ export class AgentSession {
         getAllTools: () => this.getAllTools(),
         getSettings: () => this.settingsManager.getSettings(),
         setActiveTools: (toolNames) => this.setActiveToolsByName(toolNames),
-        refreshTools: () => this._refreshToolRegistry(),
+        refreshTools: () => this.refreshToolRegistry(),
         getCommands,
         setModel: async (model) => {
-          if (!this._modelRuntime.hasConfiguredAuth(model.provider)) return false;
+          if (!this.modelRuntimeInternal.hasConfiguredAuth(model.provider)) return false;
           await this.setModel(model);
           return true;
         },
@@ -3378,20 +3393,20 @@ export class AgentSession {
       },
       {
         getModel: () => this.model,
-        getScopedModels: () => this._scopedModels,
+        getScopedModels: () => this.scopedModelsInternal,
         isIdle: () => this.isIdle,
         isProjectTrusted: () => this.settingsManager.isProjectTrusted(),
         getSignal: () => this.agent.signal,
         abort: () => {
-          if (this._extensionAbortHandler) {
-            this._extensionAbortHandler();
+          if (this.extensionAbortHandler) {
+            this.extensionAbortHandler();
             return;
           }
           void this.abort();
         },
         hasPendingMessages: () => this.pendingMessageCount > 0,
         shutdown: () => {
-          this._extensionShutdownHandler?.();
+          this.extensionShutdownHandler?.();
         },
         getContextUsage: () => this.getContextUsage(),
         compact: (options) => {
@@ -3406,57 +3421,57 @@ export class AgentSession {
           })();
         },
         getSystemPrompt: () => this.systemPrompt,
-        getSystemPromptOptions: () => this._baseSystemPromptOptions,
+        getSystemPromptOptions: () => this.baseSystemPromptOptions,
         executeTool: (callerId, name, args, options) =>
-          this._executeNestedToolCall(callerId, name, args, options),
-        getCallableTools: () => this._getCallableTools(),
+          this.executeNestedToolCall(callerId, name, args, options),
+        getCallableTools: () => this.getCallableTools(),
       },
       {
         registerProvider: (name, config) => {
-          this._modelRuntime.registerProvider(name, config);
-          this._refreshCurrentModelFromRegistry();
+          this.modelRuntimeInternal.registerProvider(name, config);
+          this.refreshCurrentModelFromRegistry();
         },
         registerNativeProvider: (provider) => {
-          this._modelRuntime.registerNativeProvider(provider);
-          this._refreshCurrentModelFromRegistry();
+          this.modelRuntimeInternal.registerNativeProvider(provider);
+          this.refreshCurrentModelFromRegistry();
         },
         unregisterProvider: (name) => {
-          this._modelRuntime.unregisterProvider(name);
-          this._refreshCurrentModelFromRegistry();
+          this.modelRuntimeInternal.unregisterProvider(name);
+          this.refreshCurrentModelFromRegistry();
         },
         registerVirtualModel: (definition) => {
-          this._modelRuntime.registerVirtualModel(definition);
-          this._refreshCurrentModelFromRegistry();
+          this.modelRuntimeInternal.registerVirtualModel(definition);
+          this.refreshCurrentModelFromRegistry();
         },
         unregisterVirtualModel: (provider, id) => {
-          this._modelRuntime.unregisterVirtualModel(provider, id);
-          this._refreshCurrentModelFromRegistry();
+          this.modelRuntimeInternal.unregisterVirtualModel(provider, id);
+          this.refreshCurrentModelFromRegistry();
         },
       },
     );
   }
 
-  private _refreshToolRegistry(options?: {
+  private refreshToolRegistry(options?: {
     activeToolNames?: string[];
     includeAllExtensionTools?: boolean | undefined;
   }): void {
     const previousActivatedOnRegistration = new Set(
-      [...this._toolRegistry.keys()].filter((name) => this._isActivatedOnRegistration(name)),
+      [...this.toolRegistry.keys()].filter((name) => this.isActivatedOnRegistration(name)),
     );
     const previousActiveToolNames = this.getActiveToolNames();
-    const allowedTools = this._allowedTools;
+    const allowedTools = this.allowedTools;
 
-    const registeredTools = this._extensionRunner.getAllRegisteredTools();
+    const registeredTools = this.extensionRunnerInternal.getAllRegisteredTools();
     const allCustomTools = [
       ...registeredTools,
-      ...this._customTools.map((definition) => ({
+      ...this.customTools.map((definition) => ({
         definition,
         sourceInfo: createSyntheticSourceInfo(`<sdk:${definition.name}>`, { source: "sdk" }),
       })),
-    ].filter((tool) => this._isAllowedTool(tool.definition.name));
+    ].filter((tool) => this.isAllowedTool(tool.definition.name));
     const definitionRegistry = new Map<string, ToolDefinitionEntry>(
-      Array.from(this._baseToolDefinitions.entries())
-        .filter(([name]) => this._isAllowedTool(name))
+      Array.from(this.baseToolDefinitions.entries())
+        .filter(([name]) => this.isAllowedTool(name))
         .map(([name, definition]) => [
           name,
           {
@@ -3473,28 +3488,28 @@ export class AgentSession {
         sourceInfo: tool.sourceInfo,
       });
     }
-    this._toolDefinitions = definitionRegistry;
-    this._toolPromptSnippets = new Map(
+    this.toolDefinitions = definitionRegistry;
+    this.toolPromptSnippets = new Map(
       Array.from(definitionRegistry.values())
         .map(({ definition }) => {
-          const snippet = this._normalizePromptSnippet(definition.promptSnippet);
+          const snippet = this.normalizePromptSnippet(definition.promptSnippet);
           return snippet ? ([definition.name, snippet] as const) : undefined;
         })
         .filter((entry): entry is readonly [string, string] => entry !== undefined),
     );
-    this._toolPromptGuidelines = new Map(
+    this.toolPromptGuidelines = new Map(
       Array.from(definitionRegistry.values())
         .map(({ definition }) => {
-          const guidelines = this._normalizePromptGuidelines(definition.promptGuidelines);
+          const guidelines = this.normalizePromptGuidelines(definition.promptGuidelines);
           return guidelines.length > 0 ? ([definition.name, guidelines] as const) : undefined;
         })
         .filter((entry): entry is readonly [string, string[]] => entry !== undefined),
     );
-    const runner = this._extensionRunner;
+    const runner = this.extensionRunnerInternal;
     const wrappedExtensionTools = wrapRegisteredTools(allCustomTools, runner);
     const wrappedBuiltInTools = wrapRegisteredTools(
-      Array.from(this._baseToolDefinitions.values())
-        .filter((definition) => this._isAllowedTool(definition.name))
+      Array.from(this.baseToolDefinitions.values())
+        .filter((definition) => this.isAllowedTool(definition.name))
         .map((definition) => ({
           definition,
           sourceInfo: createSyntheticSourceInfo(`${BUILTIN_PATH_PREFIX}${definition.name}`, {
@@ -3508,50 +3523,49 @@ export class AgentSession {
     for (const tool of wrappedExtensionTools as AgentTool[]) {
       toolRegistry.set(tool.name, tool);
     }
-    this._toolRegistry = toolRegistry;
+    this.toolRegistry = toolRegistry;
 
     const nextActiveToolNames = (
       options?.activeToolNames ? [...options.activeToolNames] : [...previousActiveToolNames]
-    ).filter((name) => this._isAllowedTool(name));
+    ).filter((name) => this.isAllowedTool(name));
 
     if (allowedTools) {
-      for (const toolName of this._toolRegistry.keys()) {
-        if (allowedTools(toolName) && this._isDeclarable(toolName)) {
+      for (const toolName of this.toolRegistry.keys()) {
+        if (allowedTools(toolName) && this.isDeclarable(toolName)) {
           nextActiveToolNames.push(toolName);
         }
       }
     } else if (options?.includeAllExtensionTools) {
       for (const tool of wrappedExtensionTools) {
-        if (this._isActivatedOnRegistration(tool.name)) nextActiveToolNames.push(tool.name);
+        if (this.isActivatedOnRegistration(tool.name)) nextActiveToolNames.push(tool.name);
       }
     } else if (!options?.activeToolNames) {
-      for (const toolName of this._toolRegistry.keys()) {
+      for (const toolName of this.toolRegistry.keys()) {
         if (
           !previousActivatedOnRegistration.has(toolName) &&
-          this._isActivatedOnRegistration(toolName)
+          this.isActivatedOnRegistration(toolName)
         ) {
           nextActiveToolNames.push(toolName);
         }
       }
     }
-    nextActiveToolNames.push(...this._pendingToolNames);
+    nextActiveToolNames.push(...this.pendingToolNames);
 
-    this._setActiveTools([...new Set(nextActiveToolNames)]);
+    this.setActiveTools([...new Set(nextActiveToolNames)]);
   }
 
-  private _isDeclarable(name: string): boolean {
-    const exposure = this._getToolExposure(name);
+  private isDeclarable(name: string): boolean {
+    const exposure = this.getToolExposure(name);
     return exposure === "direct" || exposure === "model-only";
   }
 
-  private _isActivatedOnRegistration(name: string): boolean {
+  private isActivatedOnRegistration(name: string): boolean {
     return (
-      this._isDeclarable(name) &&
-      this._toolDefinitions.get(name)?.definition.defaultActive !== false
+      this.isDeclarable(name) && this.toolDefinitions.get(name)?.definition.defaultActive !== false
     );
   }
 
-  private _buildRuntime(options: {
+  private buildRuntime(options: {
     activeToolNames?: string[] | undefined;
     flagValues?: Map<string, boolean | string>;
     includeAllExtensionTools?: boolean;
@@ -3560,78 +3574,80 @@ export class AgentSession {
     const shellCommandPrefix = this.settingsManager.getShellCommandPrefix();
     const shellPath = this.settingsManager.getShellPath();
     const memorySettings = this.settingsManager.getMemorySettings();
-    this._memory?.close();
-    this._memory = memorySettings.enabled
-      ? new MemoryService({ settings: memorySettings, cwd: this._cwd })
+    this.memoryInternal?.close();
+    this.memoryInternal = memorySettings.enabled
+      ? new MemoryService({ settings: memorySettings, cwd: this.cwd })
       : undefined;
-    this._memory?.warm();
-    const baseToolDefinitions = this._baseToolsOverride
+    this.memoryInternal?.warm();
+    const baseToolDefinitions = this.baseToolsOverride
       ? Object.fromEntries(
-          Object.entries(this._baseToolsOverride).map(([name, tool]) => [
+          Object.entries(this.baseToolsOverride).map(([name, tool]) => [
             name,
             createToolDefinitionFromAgentTool(tool),
           ]),
         )
       : {
-          ...createAllToolDefinitions(this._cwd, {
+          ...createAllToolDefinitions(this.cwd, {
             read: { autoResizeImages },
             bash: { commandPrefix: shellCommandPrefix, shellPath },
           }),
-          ...(this._memory ? { memory: createMemoryToolDefinition(this._memory) } : {}),
+          ...(this.memoryInternal
+            ? { memory: createMemoryToolDefinition(this.memoryInternal) }
+            : {}),
         };
 
-    this._baseToolDefinitions = new Map(
+    this.baseToolDefinitions = new Map(
       Object.entries(baseToolDefinitions).map(([name, tool]) => [name, tool as ToolDefinition]),
     );
-    if (this._orchestrator && !this._baseToolsOverride) {
+    if (this.orchestratorInternal && !this.baseToolsOverride) {
       for (const [name, tool] of Object.entries(
-        createOrchestratorToolDefinitions(this._orchestrator),
+        createOrchestratorToolDefinitions(this.orchestratorInternal),
       )) {
-        this._baseToolDefinitions.set(name, tool);
+        this.baseToolDefinitions.set(name, tool);
       }
     }
 
-    const extensionsResult = this._resourceLoader.getExtensions();
+    const extensionsResult = this.resourceLoaderInternal.getExtensions();
     if (options.flagValues) {
       for (const [name, value] of options.flagValues) {
         extensionsResult.runtime.flagValues.set(name, value);
       }
     }
 
-    this._extensionRunner = new ExtensionRunner(
+    this.extensionRunnerInternal = new ExtensionRunner(
       extensionsResult.extensions,
       extensionsResult.runtime,
-      this._cwd,
+      this.cwd,
       this.sessionManager,
-      new ModelRegistry(this._modelRuntime),
+      new ModelRegistry(this.modelRuntimeInternal),
     );
-    if (this._extensionRunnerRef) {
-      this._extensionRunnerRef.current = this._extensionRunner;
+    if (this.extensionRunnerRef) {
+      this.extensionRunnerRef.current = this.extensionRunnerInternal;
     }
-    this._bindExtensionCore(this._extensionRunner);
-    this._applyExtensionBindings(this._extensionRunner);
+    this.bindExtensionCore(this.extensionRunnerInternal);
+    this.applyExtensionBindings(this.extensionRunnerInternal);
 
-    if (!this._baseToolsOverride) this._addExternalServiceTools();
+    if (!this.baseToolsOverride) this.addExternalServiceTools();
 
-    const defaultActiveToolNames = this._baseToolsOverride
-      ? Object.keys(this._baseToolsOverride)
+    const defaultActiveToolNames = this.baseToolsOverride
+      ? Object.keys(this.baseToolsOverride)
       : [...DEFAULT_TOOL_NAMES];
     const baseActiveToolNames = options.activeToolNames ?? defaultActiveToolNames;
-    this._refreshToolRegistry({
+    this.refreshToolRegistry({
       activeToolNames: baseActiveToolNames,
       includeAllExtensionTools: options.includeAllExtensionTools,
     });
   }
 
   getExternalServices(): ExternalService[] {
-    return [...EXTERNAL_SERVICES, ...this._extensionRunner.getExternalServices()];
+    return [...EXTERNAL_SERVICES, ...this.extensionRunnerInternal.getExternalServices()];
   }
 
-  private _addExternalServiceTools(): string[] {
+  private addExternalServiceTools(): string[] {
     const names: string[] = [];
     for (const service of this.getExternalServices()) {
       for (const tool of service.tools?.() ?? []) {
-        this._baseToolDefinitions.set(tool.name, tool);
+        this.baseToolDefinitions.set(tool.name, tool);
         names.push(tool.name);
       }
     }
@@ -3639,15 +3655,15 @@ export class AgentSession {
   }
 
   refreshExternalServiceTools(): void {
-    if (this._baseToolsOverride) return;
-    const names = this._addExternalServiceTools();
-    const defaultTools = this._usesDefaultTools
+    if (this.baseToolsOverride) return;
+    const names = this.addExternalServiceTools();
+    const defaultTools = this.usesDefaultTools
       ? applyToolModifiers(
           this.settingsManager.getDefaultTools() ?? DEFAULT_TOOL_NAMES,
-          this._defaultToolModifiers,
+          this.defaultToolModifiers,
         )
       : [];
-    this._refreshToolRegistry({
+    this.refreshToolRegistry({
       activeToolNames: [
         ...this.getActiveToolNames(),
         ...names.filter((name) => defaultTools.includes(name)),
@@ -3656,59 +3672,59 @@ export class AgentSession {
   }
 
   async reload(options?: { beforeSessionStart?: () => void | Promise<void> }): Promise<void> {
-    const oldRunner = this._extensionRunner;
+    const oldRunner = this.extensionRunnerInternal;
     const previousFlagValues = oldRunner.getFlagValues();
     await emitSessionShutdownEvent(oldRunner, { type: "session_shutdown", reason: "reload" });
     oldRunner.invalidate();
     const getDefaultTools = () =>
-      this._usesDefaultTools
+      this.usesDefaultTools
         ? applyToolModifiers(
             this.settingsManager.getDefaultTools() ?? DEFAULT_TOOL_NAMES,
-            this._defaultToolModifiers,
+            this.defaultToolModifiers,
           )
         : [];
     const previousDefaultTools = new Set(getDefaultTools());
     await this.settingsManager.reload();
     this.syncQueueModesFromSettings();
     resetApiProviders();
-    await this._resourceLoader.reload();
+    await this.resourceLoaderInternal.reload();
     const addedDefaultTools = getDefaultTools().filter((name) => !previousDefaultTools.has(name));
-    for (const name of this.getActiveToolNames()) this._pendingToolNames.add(name);
-    this._buildRuntime({
+    for (const name of this.getActiveToolNames()) this.pendingToolNames.add(name);
+    this.buildRuntime({
       activeToolNames: [...this.getActiveToolNames(), ...addedDefaultTools],
       flagValues: previousFlagValues,
       includeAllExtensionTools: true,
     });
 
     const hasBindings =
-      this._extensionUIContext ||
-      this._extensionCommandContextActions ||
-      this._extensionShutdownHandler ||
-      this._extensionErrorListener;
+      this.extensionUIContext ||
+      this.extensionCommandContextActions ||
+      this.extensionShutdownHandler ||
+      this.extensionErrorListener;
     if (hasBindings) {
       await options?.beforeSessionStart?.();
-      await this._extensionRunner.emit({ type: "session_start", reason: "reload" });
-      this._extensionRunner.reportUnhandledMcpServers();
+      await this.extensionRunnerInternal.emit({ type: "session_start", reason: "reload" });
+      this.extensionRunnerInternal.reportUnhandledMcpServers();
       await this.extendResourcesFromExtensions("reload");
     }
   }
 
-  private _isRetryableError(message: AssistantMessage): boolean {
+  private isRetryableError(message: AssistantMessage): boolean {
     if (
-      isContextOverflow(message, (this._modelForMessage(message) ?? this.model)?.contextWindow ?? 0)
+      isContextOverflow(message, (this.modelForMessage(message) ?? this.model)?.contextWindow ?? 0)
     )
       return false;
     return isRetryableAssistantError(message);
   }
 
-  private _summarizationRetryCallbacks(
+  private summarizationRetryCallbacks(
     source:
       | { source: "branchSummary" }
       | { source: "compaction"; reason: "manual" | "threshold" | "overflow" },
   ): RetryCallbacks {
     return {
       onRetryScheduled: (attempt, maxAttempts, delayMs, errorMessage) => {
-        this._emit({
+        this.emit({
           type: "summarization_retry_scheduled",
           attempt,
           maxAttempts,
@@ -3717,22 +3733,22 @@ export class AgentSession {
         });
       },
       onRetryAttemptStart: () => {
-        this._emit({
+        this.emit({
           type: "summarization_retry_attempt_start",
           ...source,
         });
       },
       onRetryFinished: () => {
-        this._emit({ type: "summarization_retry_finished" });
+        this.emit({ type: "summarization_retry_finished" });
       },
     };
   }
 
-  private _finishCancelledRetry(): void {
-    if (this._retryAttempt === 0) return;
-    const attempt = this._retryAttempt;
-    this._retryAttempt = 0;
-    this._emit({
+  private finishCancelledRetry(): void {
+    if (this.retryAttemptInternal === 0) return;
+    const attempt = this.retryAttemptInternal;
+    this.retryAttemptInternal = 0;
+    this.emit({
       type: "auto_retry_end",
       success: false,
       attempt,
@@ -3740,50 +3756,50 @@ export class AgentSession {
     });
   }
 
-  private async _prepareRetry(message: AssistantMessage): Promise<boolean> {
+  private async prepareRetry(message: AssistantMessage): Promise<boolean> {
     const settings = this.settingsManager.getRetrySettings();
     if (!settings.enabled) {
       return false;
     }
 
-    this._retryAttempt++;
+    this.retryAttemptInternal++;
 
-    if (this._retryAttempt > settings.maxRetries) {
-      this._retryAttempt--;
+    if (this.retryAttemptInternal > settings.maxRetries) {
+      this.retryAttemptInternal--;
       return false;
     }
 
-    const delayMs = retryDelayMs(settings, this._retryAttempt);
+    const delayMs = retryDelayMs(settings, this.retryAttemptInternal);
 
-    this._emit({
+    this.emit({
       type: "auto_retry_start",
-      attempt: this._retryAttempt,
+      attempt: this.retryAttemptInternal,
       maxAttempts: settings.maxRetries,
       delayMs,
       errorMessage: message.errorMessage || "Unknown error",
     });
 
-    this._omitRecoveryAttempt(message);
+    this.omitRecoveryAttempt(message);
 
-    this._retryAbortController = new AbortController();
+    this.retryAbortController = new AbortController();
     try {
-      await delay(delayMs, undefined, { signal: this._retryAbortController.signal });
+      await delay(delayMs, undefined, { signal: this.retryAbortController.signal });
     } catch {
-      this._finishCancelledRetry();
+      this.finishCancelledRetry();
       return false;
     } finally {
-      this._retryAbortController = undefined;
+      this.retryAbortController = undefined;
     }
 
     return true;
   }
 
   abortRetry(): void {
-    this._retryAbortController?.abort();
+    this.retryAbortController?.abort();
   }
 
   get isRetrying(): boolean {
-    return this._retryAbortController !== undefined;
+    return this.retryAbortController !== undefined;
   }
 
   get autoRetryEnabled(): boolean {
@@ -3804,7 +3820,7 @@ export class AgentSession {
     },
   ): Promise<BashResult> {
     const abortController = new AbortController();
-    this._bashAbortControllers.add(abortController);
+    this.bashAbortControllers.add(abortController);
 
     const prefix = this.settingsManager.getShellCommandPrefix();
     const shellPath = this.settingsManager.getShellPath();
@@ -3818,7 +3834,7 @@ export class AgentSession {
         {
           onChunk: (delta) => {
             onChunk?.(delta);
-            this._emit({ type: "bash_execution_update", id: options?.id, delta });
+            this.emit({ type: "bash_execution_update", id: options?.id, delta });
           },
           signal: abortController.signal,
         },
@@ -3827,7 +3843,7 @@ export class AgentSession {
       this.recordBashResult(command, result, options);
       return result;
     } finally {
-      this._bashAbortControllers.delete(abortController);
+      this.bashAbortControllers.delete(abortController);
     }
   }
 
@@ -3849,35 +3865,35 @@ export class AgentSession {
     };
 
     if (this.isStreaming) {
-      this._pendingBashMessages.push(bashMessage);
+      this.pendingBashMessages.push(bashMessage);
     } else {
       this.sessionManager.appendMessage(bashMessage);
-      this._refreshFinalizedContext();
+      this.refreshFinalizedContext();
     }
   }
 
   abortBash(): void {
-    for (const abortController of [...this._bashAbortControllers]) {
+    for (const abortController of [...this.bashAbortControllers]) {
       abortController.abort();
     }
   }
 
   get isBashRunning(): boolean {
-    return this._bashAbortControllers.size > 0;
+    return this.bashAbortControllers.size > 0;
   }
 
   get hasPendingBashMessages(): boolean {
-    return this._pendingBashMessages.length > 0;
+    return this.pendingBashMessages.length > 0;
   }
 
-  private _flushPendingBashMessages(): void {
-    if (this._pendingBashMessages.length === 0) return;
+  private flushPendingBashMessages(): void {
+    if (this.pendingBashMessages.length === 0) return;
 
-    for (const bashMessage of this._pendingBashMessages) {
+    for (const bashMessage of this.pendingBashMessages) {
       this.sessionManager.appendMessage(bashMessage);
     }
-    this._pendingBashMessages = [];
-    this._refreshFinalizedContext();
+    this.pendingBashMessages = [];
+    this.refreshFinalizedContext();
   }
 
   setSessionName(name: string): void {
@@ -3886,8 +3902,8 @@ export class AgentSession {
       type: "session_info_changed",
       name: this.sessionManager.getSessionName(),
     } as const;
-    this._emit(event);
-    void this._extensionRunner.emit(event);
+    this.emit(event);
+    void this.extensionRunnerInternal.emit(event);
   }
 
   async navigateTree(
@@ -3951,17 +3967,17 @@ export class AgentSession {
       label,
     };
 
-    this._branchSummaryAbortController = new AbortController();
+    this.branchSummaryAbortController = new AbortController();
 
     try {
       let extensionSummary: { summary: string; details?: unknown; usage?: Usage } | undefined;
       let fromExtension = false;
 
-      if (this._extensionRunner.hasHandlers("session_before_tree")) {
-        const result = (await this._extensionRunner.emit({
+      if (this.extensionRunnerInternal.hasHandlers("session_before_tree")) {
+        const result = (await this.extensionRunnerInternal.emit({
           type: "session_before_tree",
           preparation,
-          signal: this._branchSummaryAbortController.signal,
+          signal: this.branchSummaryAbortController.signal,
         })) as SessionBeforeTreeResult | undefined;
 
         if (result?.cancel) {
@@ -3988,17 +4004,17 @@ export class AgentSession {
       let summaryDetails: unknown;
       let summaryUsage: Usage | undefined;
       if (options.summarize && entriesToSummarize.length > 0 && !extensionSummary) {
-        const signal = this._branchSummaryAbortController.signal;
+        const signal = this.branchSummaryAbortController.signal;
         const branchSummarySettings = this.settingsManager.getBranchSummarySettings();
         const result = await generateBranchSummary(entriesToSummarize, {
-          ...(await this._getSummarizationRequestAuth(this.model!, signal)),
+          ...(await this.getSummarizationRequestAuth(this.model!, signal)),
           signal,
           customInstructions,
           replaceInstructions,
           reserveTokens: branchSummarySettings.reserveTokens,
           streamFn: this.agent.streamFunction,
           retry: this.settingsManager.getRetrySettings(),
-          callbacks: this._summarizationRetryCallbacks({ source: "branchSummary" }),
+          callbacks: this.summarizationRetryCallbacks({ source: "branchSummary" }),
         });
         if (result.aborted) {
           return { cancelled: true, aborted: true };
@@ -4055,10 +4071,10 @@ export class AgentSession {
         this.sessionManager.appendLabelChange(targetId, label);
       }
 
-      this._refreshFinalizedContext();
-      this._restoreToolsFromTranscript();
+      this.refreshFinalizedContext();
+      this.restoreToolsFromTranscript();
 
-      await this._extensionRunner.emit({
+      await this.extensionRunnerInternal.emit({
         type: "session_tree",
         newLeafId: this.sessionManager.getLeafId(),
         oldLeafId,
@@ -4068,8 +4084,8 @@ export class AgentSession {
 
       return { editorText, cancelled: false, summaryEntry };
     } finally {
-      this._branchSummaryAbortController = undefined;
-      this._resolveIdleWaitIfIdle();
+      this.branchSummaryAbortController = undefined;
+      this.resolveIdleWaitIfIdle();
     }
   }
 
@@ -4146,7 +4162,7 @@ export class AgentSession {
   }
 
   getContextUsage(): ContextUsage | undefined {
-    const model = this._limitsModel();
+    const model = this.limitsModel();
     if (!model) return undefined;
 
     const contextWindow = model.contextWindow ?? 0;
@@ -4197,7 +4213,7 @@ export class AgentSession {
 
     const toolRenderer: ToolHtmlRenderer = createToolHtmlRenderer({
       getToolRenderers: (name) =>
-        this._extensionRunner.resolveToolRenderers(name, () => this.getToolDefinition(name)),
+        this.extensionRunnerInternal.resolveToolRenderers(name, () => this.getToolDefinition(name)),
       theme,
       cwd: this.sessionManager.getCwd(),
     });
@@ -4222,7 +4238,7 @@ export class AgentSession {
       throw new Error("No model selected");
     }
     return generateBugReportSummary({
-      ...(await this._getSummarizationRequestAuth(model, options.signal)),
+      ...(await this.getSummarizationRequestAuth(model, options.signal)),
       messages: this.messages,
       hint: options.hint,
       signal: options.signal,
@@ -4258,7 +4274,7 @@ export class AgentSession {
   createReplacedSessionContext(): ReplacedSessionContext {
     const context = Object.defineProperties(
       {},
-      Object.getOwnPropertyDescriptors(this._extensionRunner.createCommandContext()),
+      Object.getOwnPropertyDescriptors(this.extensionRunnerInternal.createCommandContext()),
     ) as ReplacedSessionContext;
     context.sendMessage = (message, options) => this.sendCustomMessage(message, options);
     context.sendUserMessage = (content, options) => this.sendUserMessage(content, options);
@@ -4266,10 +4282,10 @@ export class AgentSession {
   }
 
   hasExtensionHandlers(eventType: string): boolean {
-    return this._extensionRunner.hasHandlers(eventType);
+    return this.extensionRunnerInternal.hasHandlers(eventType);
   }
 
   get extensionRunner(): ExtensionRunner {
-    return this._extensionRunner;
+    return this.extensionRunnerInternal;
   }
 }

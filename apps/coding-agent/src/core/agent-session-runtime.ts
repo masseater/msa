@@ -58,11 +58,11 @@ function extractUserMessageText(content: string | Array<{ type: string; text?: s
 export class AgentSessionRuntime {
   private rebindSession?: ((session: AgentSession) => Promise<void>) | undefined;
   private beforeSessionInvalidate?: (() => void) | undefined;
-  private _session: AgentSession;
-  private _services: AgentSessionServices;
+  private sessionInternal: AgentSession;
+  private servicesInternal: AgentSessionServices;
   private readonly createRuntime: CreateAgentSessionRuntimeFactory;
-  private _diagnostics: AgentSessionRuntimeDiagnostic[];
-  private _modelFallbackMessage?: string | undefined;
+  private diagnosticsInternal: AgentSessionRuntimeDiagnostic[];
+  private modelFallbackMessageInternal?: string | undefined;
 
   constructor(
     _session: AgentSession,
@@ -71,31 +71,31 @@ export class AgentSessionRuntime {
     _diagnostics: AgentSessionRuntimeDiagnostic[] = [],
     _modelFallbackMessage?: string,
   ) {
-    this._session = _session;
-    this._services = _services;
+    this.sessionInternal = _session;
+    this.servicesInternal = _services;
     this.createRuntime = createRuntime;
-    this._diagnostics = _diagnostics;
-    this._modelFallbackMessage = _modelFallbackMessage;
+    this.diagnosticsInternal = _diagnostics;
+    this.modelFallbackMessageInternal = _modelFallbackMessage;
   }
 
   get services(): AgentSessionServices {
-    return this._services;
+    return this.servicesInternal;
   }
 
   get session(): AgentSession {
-    return this._session;
+    return this.sessionInternal;
   }
 
   get cwd(): string {
-    return this._services.cwd;
+    return this.servicesInternal.cwd;
   }
 
   get diagnostics(): readonly AgentSessionRuntimeDiagnostic[] {
-    return this._diagnostics;
+    return this.diagnosticsInternal;
   }
 
   get modelFallbackMessage(): string | undefined {
-    return this._modelFallbackMessage;
+    return this.modelFallbackMessageInternal;
   }
 
   setRebindSession(rebindSession?: (session: AgentSession) => Promise<void>): void {
@@ -155,10 +155,10 @@ export class AgentSessionRuntime {
   }
 
   private apply(result: CreateAgentSessionRuntimeResult): void {
-    this._session = result.session;
-    this._services = result.services;
-    this._diagnostics = result.diagnostics;
-    this._modelFallbackMessage = result.modelFallbackMessage;
+    this.sessionInternal = result.session;
+    this.servicesInternal = result.services;
+    this.diagnosticsInternal = result.diagnostics;
+    this.modelFallbackMessageInternal = result.modelFallbackMessage;
   }
 
   private async finishSessionReplacement(
