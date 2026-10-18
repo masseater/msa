@@ -43,6 +43,16 @@ export const cwdFactory = <TOptions, TResult>(
   make: (cwd: string, options?: TOptions) => TResult,
 ): CwdFactory<TOptions, TResult> => dual((args) => typeof args[0] === "string", make);
 
+export interface ConfiguredFactory<TConfig, TOptions, TResult> {
+  (config: TConfig, options?: TOptions): (cwd: string) => TResult;
+  (cwd: string, config: TConfig, options?: TOptions): TResult;
+}
+
+export const configuredFactory = <TConfig, TOptions, TResult>(
+  make: (cwd: string, config: TConfig, options?: TOptions) => TResult,
+): ConfiguredFactory<TConfig, TOptions, TResult> =>
+  dual((args) => typeof args[0] === "string", make);
+
 export interface NamedFactory<TName extends string, TOptions, TResult> {
   (cwd: string, options?: TOptions): (name: TName) => TResult;
   (name: TName, cwd: string, options?: TOptions): TResult;

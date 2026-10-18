@@ -2,8 +2,10 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import { Clock, Effect, ManagedRuntime, Path, Predicate } from "effect";
 import { dual } from "effect/Function";
 
+import { ForeignError } from "./foreign-error.ts";
 import { ToolFailure } from "./tool-failure.ts";
 
+export { ForeignError } from "./foreign-error.ts";
 export { ToolFailure } from "./tool-failure.ts";
 
 export const platformRuntime = ManagedRuntime.make(NodeServices.layer);
@@ -78,3 +80,23 @@ export const nonEmptyOr: {
 } = dual(2, (value: string | undefined, fallback: string): string =>
   value === undefined || value === "" ? fallback : value,
 );
+
+export const fromPromise = <A>(
+  evaluate: (signal: AbortSignal) => PromiseLike<A> | A,
+): Effect.Effect<A, ForeignError> =>
+  Effect.tryPromise({
+    try: (signal) => Promise.resolve(evaluate(signal)),
+    catch: (cause) =>
+      new ForeignError({ cause, message: cause instanceof Error ? cause.message : String(cause) }),
+  });
+
+export const unwrapForeign = <A, E, R>(
+  effect: Effect.Effect<A, E, R>,
+): Effect.Effect<A, Exclude<E, ForeignError>, R> =>
+  effect.pipe(
+    Effect.catch((error) =>
+      error instanceof ForeignError
+        ? Effect.die(error.cause)
+        : Effect.fail(error as Exclude<E, ForeignError>),
+    ),
+  );

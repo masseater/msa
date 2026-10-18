@@ -6,12 +6,12 @@ import {
   type BashToolDetails,
   type BashToolInput,
   type BashToolOptions,
-  type createBashTool,
   createLocalShellOperations,
   createShellToolDefinition,
   type ShellToolConfig,
+  type createBashTool,
 } from "./bash.ts";
-import { wrapToolDefinition } from "./tool-definition-wrapper.ts";
+import { type CwdFactory, cwdFactory, wrapToolDefinition } from "./tool-definition-wrapper.ts";
 
 const UTF8_OUTPUT_PREFIX =
   "try { [Console]::OutputEncoding=[System.Text.Encoding]::UTF8 } catch {}\n";
@@ -52,20 +52,20 @@ const powershellToolConfig: ShellToolConfig = {
   tempFilePrefix: "msa-powershell",
 };
 
-export function createPowerShellToolDefinition(
-  cwd: string,
-  options?: PowerShellToolOptions,
-): ReturnType<typeof createShellToolDefinition> {
-  return createShellToolDefinition(cwd, powershellToolConfig, {
+export const createPowerShellToolDefinition: CwdFactory<
+  PowerShellToolOptions,
+  ReturnType<typeof createShellToolDefinition>
+> = cwdFactory((cwd, options) =>
+  createShellToolDefinition(cwd, powershellToolConfig, {
     ...options,
     operations: options?.operations ?? createLocalPowerShellOperations(),
-  });
-}
+  }),
+);
 
-export function createPowerShellTool(
-  cwd: string,
-  options?: PowerShellToolOptions,
-): ReturnType<typeof createBashTool> {
+export const createPowerShellTool: CwdFactory<
+  PowerShellToolOptions,
+  ReturnType<typeof createBashTool>
+> = cwdFactory((cwd, options) => {
   const definition = createPowerShellToolDefinition(cwd, options);
   const tool = wrapToolDefinition(definition);
   Object.assign(tool, {
@@ -73,4 +73,4 @@ export function createPowerShellTool(
     promptGuidelines: definition.promptGuidelines,
   });
   return tool;
-}
+});
