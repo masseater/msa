@@ -10,7 +10,7 @@ import {
   type SimpleStreamOptions,
   type TranscriptContext,
 } from "@msa/ai";
-import { currentTimeMillis, toJsonText } from "@msa/testing";
+import { currentTimeMillis, gate, toJsonText } from "@msa/testing";
 import { Effect } from "effect";
 import { Type } from "typebox";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
@@ -109,10 +109,7 @@ function createAbortableCompactionHarness(): Promise<{
 }> {
   return Effect.runPromise(
     Effect.gen(function* () {
-      let markCompactionStarted = () => {};
-      const compactionStarted = new Promise<void>((resolve) => {
-        markCompactionStarted = resolve;
-      });
+      const compactionStarted = gate();
       const harness = yield* Effect.promise(() =>
         createHarness({
           settings: { compaction: { keepRecentTokens: 1 } },
@@ -125,7 +122,7 @@ function createAbortableCompactionHarness(): Promise<{
                     event.signal.addEventListener("abort", () => resolve({ cancel: true }), {
                       once: true,
                     });
-                    markCompactionStarted();
+                    compactionStarted.release();
                   }),
               );
             },
@@ -558,14 +555,8 @@ const includesSteeringQueuedDuringCompactionIn = Effect.gen(function* () {
         details: {},
       }),
   };
-  let markCompactionStarted = () => {};
-  const compactionStarted = new Promise<void>((resolve) => {
-    markCompactionStarted = resolve;
-  });
-  let releaseCompaction = () => {};
-  const compactionReleased = new Promise<void>((resolve) => {
-    releaseCompaction = resolve;
-  });
+  const compactionStarted = gate();
+  const compactionReleased = gate();
   const harness = yield* Effect.promise(() =>
     createHarness({
       models: [{ id: "faux-1", contextWindow: 2600, maxTokens: 100 }],
@@ -576,7 +567,7 @@ const includesSteeringQueuedDuringCompactionIn = Effect.gen(function* () {
           msa.on("session_before_compact", (event) =>
             runPromise(
               Effect.gen(function* () {
-                markCompactionStarted();
+                compactionStarted.release();
                 yield* Effect.promise(() => compactionReleased);
                 return {
                   compaction: {
@@ -611,7 +602,7 @@ const includesSteeringQueuedDuringCompactionIn = Effect.gen(function* () {
   const promptPromise = harness.session.prompt("run the large tool");
   yield* Effect.promise(() => compactionStarted);
   yield* Effect.promise(() => harness.session.steer("change direction"));
-  releaseCompaction();
+  compactionReleased.release();
   yield* Effect.promise(() => promptPromise);
 
   expect(resumedRequest).toContain("change direction");

@@ -16,7 +16,7 @@ import {
   type TranscriptContext,
 } from "@msa/ai";
 import type { ToolResultMessage, Usage } from "@msa/ai/compat";
-import { fromJsonText, joinPath } from "@msa/testing";
+import { fromJsonText, joinPath, nowIso } from "@msa/testing";
 import { Effect, FileSystem, ManagedRuntime } from "effect";
 import { Type } from "typebox";
 import { afterEach, beforeEach, describe, expect, it, type MockInstance, vi } from "vite-plus/test";

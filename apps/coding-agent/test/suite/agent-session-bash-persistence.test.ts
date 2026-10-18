@@ -76,14 +76,15 @@ const defersBashResultsWhileStreamingAnd = Effect.gen(function* () {
     fauxAssistantMessage("after flush"),
   ]);
 
-  const sawToolStart = new Promise<void>((resolve) => {
+  const sawToolStart = gate();
+  {
     const unsubscribe = harness.session.subscribe((event) => {
       if (event.type === "tool_execution_start") {
         unsubscribe();
-        resolve();
+        sawToolStart.release();
       }
     });
-  });
+  }
 
   const firstPrompt = harness.session.prompt("start");
   yield* Effect.promise(() => sawToolStart);
@@ -280,14 +281,15 @@ const persistsAbortedAssistantMessages = Effect.gen(function* () {
   harnesses.push(harness);
   harness.setResponses([fauxAssistantMessage("x".repeat(20_000))]);
 
-  const sawMessageUpdate = new Promise<void>((resolve) => {
+  const sawMessageUpdate = gate();
+  {
     const unsubscribe = harness.session.subscribe((event) => {
       if (event.type === "message_update") {
         unsubscribe();
-        resolve();
+        sawMessageUpdate.release();
       }
     });
-  });
+  }
 
   const promptPromise = harness.session.prompt("hi");
   yield* Effect.promise(() => sawMessageUpdate);

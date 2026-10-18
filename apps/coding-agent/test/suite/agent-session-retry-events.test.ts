@@ -1,5 +1,6 @@
 import type { AgentTool } from "@msa/agent-core";
 import { fauxAssistantMessage, fauxThinking, fauxToolCall } from "@msa/ai";
+import { gate } from "@msa/testing";
 import { Effect } from "effect";
 import { Type } from "typebox";
 import { afterEach, describe, expect, it } from "vite-plus/test";
@@ -211,14 +212,15 @@ const cancelsRetrySleepWhenAbortretryIs = Effect.gen(function* () {
     fauxAssistantMessage("", { stopReason: "error", errorMessage: "overloaded_error" }),
   ]);
 
-  const sawRetryStart = new Promise<void>((resolve) => {
+  const sawRetryStart = gate();
+  {
     const unsubscribe = harness.session.subscribe((event) => {
       if (event.type === "auto_retry_start") {
         unsubscribe();
-        resolve();
+        sawRetryStart.release();
       }
     });
-  });
+  }
 
   const promptPromise = harness.session.prompt("test");
   yield* Effect.promise(() => sawRetryStart);
@@ -455,14 +457,15 @@ const emitsAgentEndForAbortedRuns = Effect.gen(function* () {
   harnesses.push(harness);
   harness.setResponses([fauxAssistantMessage("x".repeat(20_000))]);
 
-  const sawMessageUpdate = new Promise<void>((resolve) => {
+  const sawMessageUpdate = gate();
+  {
     const unsubscribe = harness.session.subscribe((event) => {
       if (event.type === "message_update") {
         unsubscribe();
-        resolve();
+        sawMessageUpdate.release();
       }
     });
-  });
+  }
 
   const promptPromise = harness.session.prompt("hi");
   yield* Effect.promise(() => sawMessageUpdate);

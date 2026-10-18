@@ -58,14 +58,15 @@ const treatsExtensionOriginQueuedSlashCommand = Effect.gen(function* () {
     fauxAssistantMessage("queued follow-up handled by model"),
   ]);
 
-  const sawToolStart = new Promise<void>((resolve) => {
+  const sawToolStart = gate();
+  {
     const unsubscribe = harness.session.subscribe((event) => {
       if (event.type === "tool_execution_start" && event.toolName === "wait") {
         unsubscribe();
-        resolve();
+        sawToolStart.release();
       }
     });
-  });
+  }
 
   const promptPromise = harness.session.prompt("start");
   yield* Effect.promise(() => sawToolStart);

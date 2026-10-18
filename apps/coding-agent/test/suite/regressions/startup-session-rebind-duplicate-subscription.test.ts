@@ -1,3 +1,4 @@
+import { gate } from "@msa/testing";
 import { Effect } from "effect";
 import { describe, expect, it, vi } from "vite-plus/test";
 
@@ -29,15 +30,9 @@ const doesNotSubscribeFromTheStale = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
   const startupSession = {};
   const replacementSession = {};
-  let resolveStartupBind!: () => void;
-  let resolveReplacementBind!: () => void;
 
-  const startupBind = new Promise<void>((resolve) => {
-    resolveStartupBind = resolve;
-  });
-  const replacementBind = new Promise<void>((resolve) => {
-    resolveReplacementBind = resolve;
-  });
+  const startupBind = gate();
+  const replacementBind = gate();
 
   const subscribeToAgent = vi.fn();
   const updateTerminalTitle = vi.fn();
@@ -69,13 +64,13 @@ const doesNotSubscribeFromTheStale = Effect.gen(function* () {
   expect(bindCount).toBe(2);
   expect(subscribeToAgent).toHaveBeenCalledTimes(1);
 
-  resolveStartupBind();
+  startupBind.release();
   yield* Effect.promise(() => startupRebind);
 
   expect(subscribeToAgent).toHaveBeenCalledTimes(1);
   expect(updateTerminalTitle).not.toHaveBeenCalled();
 
-  resolveReplacementBind();
+  replacementBind.release();
   yield* Effect.promise(() => replacementRebind);
 
   expect(subscribeToAgent).toHaveBeenCalledTimes(1);

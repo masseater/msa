@@ -1,4 +1,5 @@
 import { fauxAssistantMessage } from "@msa/ai";
+import { gate } from "@msa/testing";
 import { Container, Text } from "@msa/tui";
 import { Effect } from "effect";
 import { describe, expect, it, vi } from "vite-plus/test";
@@ -510,14 +511,8 @@ const keepsTheReloadBlockerFocusedUntil = Effect.gen(function* () {
   const editor = {};
   let focused: unknown;
   let chatRestored = false;
-  let markReloadWaiting!: () => void;
-  let finishReload!: () => void;
-  const reloadWaiting = new Promise<void>((resolve) => {
-    markReloadWaiting = resolve;
-  });
-  const reloadFinished = new Promise<void>((resolve) => {
-    finishReload = resolve;
-  });
+  const reloadWaiting = gate();
+  const reloadFinished = gate();
 
   const context = createReloadCommandContext({
     editor,
@@ -526,7 +521,7 @@ const keepsTheReloadBlockerFocusedUntil = Effect.gen(function* () {
         runPromise(
           Effect.gen(function* () {
             yield* Effect.promise(() => Promise.resolve(options?.beforeSessionStart?.()));
-            markReloadWaiting();
+            reloadWaiting.release();
             yield* Effect.promise(() => reloadFinished);
           }),
         ),
@@ -547,7 +542,7 @@ const keepsTheReloadBlockerFocusedUntil = Effect.gen(function* () {
   expect(chatRestored).toBe(true);
   expect(focused).not.toBe(editor);
 
-  finishReload();
+  reloadFinished.release();
   yield* Effect.promise(() => reloadPromise);
 
   expect(focused).toBe(editor);

@@ -132,14 +132,15 @@ const extensionCommandWaitforidleWaitsForSession = Effect.gen(function* () {
       },
     }),
   );
-  const toolStarted = new Promise<void>((resolve) => {
+  const toolStarted = gate();
+  {
     const unsubscribe = harness.session.subscribe((event) => {
       if (event.type === "tool_execution_start" && event.toolName === "wait") {
         unsubscribe();
-        resolve();
+        toolStarted.release();
       }
     });
-  });
+  }
   harness.setResponses([
     fauxAssistantMessage(fauxToolCall("wait", {}), { stopReason: "toolUse" }),
     fauxAssistantMessage("done"),

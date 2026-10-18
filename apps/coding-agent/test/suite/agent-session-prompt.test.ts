@@ -7,7 +7,7 @@ import {
   type Model,
   type TranscriptContext,
 } from "@msa/ai";
-import { joinPath, toJsonText } from "@msa/testing";
+import { gate, joinPath, toJsonText } from "@msa/testing";
 import { Effect, FileSystem, ManagedRuntime } from "effect";
 import { Type } from "typebox";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
@@ -593,14 +593,8 @@ const throwsWhenPromptedDuringStreamingWithout = Effect.gen(function* () {
 
 const throwsWhenPromptedDuringManualCompaction = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-  let markCompactionStarted = () => {};
-  const compactionStarted = new Promise<void>((resolve) => {
-    markCompactionStarted = resolve;
-  });
-  let releaseCompaction = () => {};
-  const compactionReleased = new Promise<void>((resolve) => {
-    releaseCompaction = resolve;
-  });
+  const compactionStarted = gate();
+  const compactionReleased = gate();
   const harness = yield* Effect.promise(() =>
     createHarness({
       settings: { compaction: { keepRecentTokens: 1 } },
@@ -609,7 +603,7 @@ const throwsWhenPromptedDuringManualCompaction = Effect.gen(function* () {
           msa.on("session_before_compact", (event) =>
             runPromise(
               Effect.gen(function* () {
-                markCompactionStarted();
+                compactionStarted.release();
                 yield* Effect.promise(() => compactionReleased);
                 return {
                   compaction: {
@@ -641,7 +635,7 @@ const throwsWhenPromptedDuringManualCompaction = Effect.gen(function* () {
       ),
     );
   } finally {
-    releaseCompaction();
+    compactionReleased.release();
     yield* Effect.promise(() => compactPromise);
   }
 });

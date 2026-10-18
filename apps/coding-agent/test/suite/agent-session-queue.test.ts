@@ -56,14 +56,15 @@ function createWaitingHarness(
         }),
       );
 
-      const waitForToolStart = new Promise<void>((resolve) => {
+      const waitForToolStart = gate();
+      {
         const unsubscribe = harness.session.subscribe((event) => {
           if (event.type === "tool_execution_start" && event.toolName === "wait") {
             unsubscribe();
-            resolve();
+            waitForToolStart.release();
           }
         });
-      });
+      }
 
       return {
         harness,
