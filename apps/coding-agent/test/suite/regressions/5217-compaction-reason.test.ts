@@ -5,7 +5,7 @@ import type { ExtensionFactory } from "../../../src/index.ts";
 import { createHarness, type Harness } from "../harness.ts";
 
 type SessionWithCompactionInternals = {
-  _runAutoCompaction: (reason: "overflow" | "threshold", willRetry: boolean) => Promise<boolean>;
+  runAutoCompaction: (reason: "overflow" | "threshold", willRetry: boolean) => Promise<boolean>;
 };
 
 interface RecordedCompactionEvent {
@@ -72,7 +72,7 @@ describe("issue #5217 compaction reason on extension events", () => {
     harnesses.push(harness);
     const sessionInternals = harness.session as unknown as SessionWithCompactionInternals;
 
-    await sessionInternals._runAutoCompaction("threshold", false);
+    await sessionInternals.runAutoCompaction("threshold", false);
 
     expect(recorded).toEqual([
       { type: "session_before_compact", reason: "threshold", willRetry: false },
@@ -86,7 +86,7 @@ describe("issue #5217 compaction reason on extension events", () => {
     harnesses.push(harness);
     const sessionInternals = harness.session as unknown as SessionWithCompactionInternals;
 
-    await sessionInternals._runAutoCompaction("overflow", true);
+    await sessionInternals.runAutoCompaction("overflow", true);
 
     expect(recorded).toEqual([
       { type: "session_before_compact", reason: "overflow", willRetry: true },

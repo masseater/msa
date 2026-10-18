@@ -129,12 +129,12 @@ describe("AgentSession auto-compaction queue resume", () => {
 
     const runAutoCompaction = (
       session as unknown as {
-        _runAutoCompaction: (
+        runAutoCompaction: (
           reason: "overflow" | "threshold",
           willRetry: boolean,
         ) => Promise<boolean>;
       }
-    )._runAutoCompaction.bind(session);
+    ).runAutoCompaction.bind(session);
 
     await expect(runAutoCompaction("threshold", false)).resolves.toBe(true);
 
@@ -165,12 +165,12 @@ describe("AgentSession auto-compaction queue resume", () => {
     const runAutoCompactionSpy = vi
       .spyOn(
         session as unknown as {
-          _runAutoCompaction: (
+          runAutoCompaction: (
             reason: "overflow" | "threshold",
             willRetry: boolean,
           ) => Promise<void>;
         },
-        "_runAutoCompaction",
+        "runAutoCompaction",
       )
       .mockResolvedValue();
 
@@ -183,12 +183,12 @@ describe("AgentSession auto-compaction queue resume", () => {
 
     const checkCompaction = (
       session as unknown as {
-        _checkCompaction: (
+        checkCompaction: (
           assistantMessage: AssistantMessage,
           skipAbortedCheck?: boolean,
         ) => Promise<void>;
       }
-    )._checkCompaction.bind(session);
+    ).checkCompaction.bind(session);
 
     await checkCompaction(overflowMessage);
     await checkCompaction({ ...overflowMessage, timestamp: Date.now() + 1 });
@@ -248,23 +248,23 @@ describe("AgentSession auto-compaction queue resume", () => {
     const runAutoCompactionSpy = vi
       .spyOn(
         session as unknown as {
-          _runAutoCompaction: (
+          runAutoCompaction: (
             reason: "overflow" | "threshold",
             willRetry: boolean,
           ) => Promise<void>;
         },
-        "_runAutoCompaction",
+        "runAutoCompaction",
       )
       .mockResolvedValue();
 
     const checkCompaction = (
       session as unknown as {
-        _checkCompaction: (
+        checkCompaction: (
           assistantMessage: AssistantMessage,
           skipAbortedCheck?: boolean,
         ) => Promise<void>;
       }
-    )._checkCompaction.bind(session);
+    ).checkCompaction.bind(session);
 
     await checkCompaction(staleAssistant, false);
 
@@ -331,23 +331,23 @@ describe("AgentSession auto-compaction queue resume", () => {
     const runAutoCompactionSpy = vi
       .spyOn(
         session as unknown as {
-          _runAutoCompaction: (
+          runAutoCompaction: (
             reason: "overflow" | "threshold",
             willRetry: boolean,
           ) => Promise<void>;
         },
-        "_runAutoCompaction",
+        "runAutoCompaction",
       )
       .mockResolvedValue();
 
     const checkCompaction = (
       session as unknown as {
-        _checkCompaction: (
+        checkCompaction: (
           assistantMessage: AssistantMessage,
           skipAbortedCheck?: boolean,
         ) => Promise<void>;
       }
-    )._checkCompaction.bind(session);
+    ).checkCompaction.bind(session);
 
     await checkCompaction(errorAssistant);
 
@@ -385,23 +385,23 @@ describe("AgentSession auto-compaction queue resume", () => {
     const runAutoCompactionSpy = vi
       .spyOn(
         session as unknown as {
-          _runAutoCompaction: (
+          runAutoCompaction: (
             reason: "overflow" | "threshold",
             willRetry: boolean,
           ) => Promise<void>;
         },
-        "_runAutoCompaction",
+        "runAutoCompaction",
       )
       .mockResolvedValue();
 
     const checkCompaction = (
       session as unknown as {
-        _checkCompaction: (
+        checkCompaction: (
           assistantMessage: AssistantMessage,
           skipAbortedCheck?: boolean,
         ) => Promise<void>;
       }
-    )._checkCompaction.bind(session);
+    ).checkCompaction.bind(session);
 
     await checkCompaction(errorAssistant);
 
@@ -486,23 +486,23 @@ describe("AgentSession auto-compaction queue resume", () => {
     const runAutoCompactionSpy = vi
       .spyOn(
         session as unknown as {
-          _runAutoCompaction: (
+          runAutoCompaction: (
             reason: "overflow" | "threshold",
             willRetry: boolean,
           ) => Promise<void>;
         },
-        "_runAutoCompaction",
+        "runAutoCompaction",
       )
       .mockResolvedValue();
 
     const checkCompaction = (
       session as unknown as {
-        _checkCompaction: (
+        checkCompaction: (
           assistantMessage: AssistantMessage,
           skipAbortedCheck?: boolean,
         ) => Promise<void>;
       }
-    )._checkCompaction.bind(session);
+    ).checkCompaction.bind(session);
 
     await checkCompaction(errorAssistant);
 
