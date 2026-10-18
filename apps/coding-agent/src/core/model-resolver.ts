@@ -15,6 +15,7 @@ import { minimatch } from "minimatch";
 
 import { isValidThinkingLevel } from "../cli/args.ts";
 import { DEFAULT_THINKING_LEVEL } from "./defaults.ts";
+import { describeModelPolicyDenial, type ModelPolicy } from "./model-policy.ts";
 import type { ModelRuntime } from "./model-runtime.ts";
 
 /** Default chat model IDs for providers with built-in chat models. */
@@ -295,6 +296,47 @@ function buildFallbackModel(
   };
 }
 
+/**
+ * The model policy denial behind a reference that names nothing usable, or undefined when the policy
+ * is not the reason. The lookup runs against the full catalog, which keeps hidden models.
+ */
+export function findModelPolicyDenial(options: {
+  reference: string;
+  provider?: string | undefined;
+  policy: ModelPolicy;
+  catalogModels: readonly Model<Api>[];
+}): { model: Model<Api>; message: string } | undefined {
+  const result = resolveModelReference(
+    {
+      text: options.reference,
+      provider: options.provider,
+      thinkingSuffix: "lenient",
+      fuzzy: true,
+    },
+    options.catalogModels,
+    () => true,
+  );
+  const candidates =
+    result.status === "resolved"
+      ? [result.model]
+      : result.status === "ambiguous"
+        ? result.candidates
+        : [];
+  for (const model of candidates) {
+    const message = describeModelPolicyDenial(options.policy, model);
+    if (message) return { model, message };
+  }
+  return undefined;
+}
+
+/** The error shown when `--model` or `/model` names a model the policy hides. */
+export function formatModelPolicyDenialError(denial: {
+  model: Model<Api>;
+  message: string;
+}): string {
+  return `Model "${denial.model.provider}/${denial.model.id}" is ${denial.message}. Open /model to change it.`;
+}
+
 export interface ModelScopeDiagnostic {
   type: "warning";
   code: "no-match" | "invalid-thinking-level" | "ambiguous";
@@ -495,6 +537,19 @@ export function resolveCliModel(options: {
       thinkingLevel: result.thinkingLevel,
       warning: result.warning,
       error: undefined,
+    };
+  }
+  const denial = findModelPolicyDenial({
+    reference: cliModel,
+    provider,
+    policy: modelRuntime.getModelPolicy(),
+    catalogModels: modelRuntime.getCatalogModels(),
+  });
+  if (denial) {
+    return {
+      model: undefined,
+      warning: undefined,
+      error: formatModelPolicyDenialError(denial),
     };
   }
   if (result.status === "ambiguous") {

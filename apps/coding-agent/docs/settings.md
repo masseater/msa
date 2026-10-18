@@ -14,6 +14,7 @@ Add `"$schema": "https://raw.githubusercontent.com/masseater/msa/main/apps/codin
 | `modelThinkingLevels`  | object                                                                  | None                                | Per-model startup thinking levels keyed by exact `provider/modelId`.                                                                                                                                                 |
 | `thinkingBudgets`      | object                                                                  | Built-in budgets                    | Token budgets for `minimal`, `low`, `medium`, and `high` thinking levels.                                                                                                                                            |
 | `enabledModels`        | `string[]`                                                              | All available models                | Model patterns used for startup selection and model cycling. Uses the same format as `--models`.                                                                                                                     |
+| `modelPolicy`          | `{ allow?: string[], deny?: string[] }`                                 | No restriction                      | Model patterns this session may use. Deny wins, and a non-empty `allow` list leaves only the models it names usable. Uses the same format as `--models`.                                                             |
 | `goal.evaluatorModel`  | string                                                                  | Small model of the working provider | Model that judges `/goal` conditions, as `provider/id`. The default is the strongest haiku, flash, mini, lite, or small model of the working model's provider that costs no more than it, or else the working model. |
 | `hideThinkingBlock`    | boolean                                                                 | `true`                              | Hide thinking blocks in the transcript. Click a hidden block to show it.                                                                                                                                             |
 | `showCacheMissNotices` | boolean                                                                 | `false`                             | Show notices for significant cache misses, successful cache warming, compaction usage, and provider recovery.                                                                                                        |
@@ -22,6 +23,23 @@ Add `"$schema": "https://raw.githubusercontent.com/masseater/msa/main/apps/codin
 Cache warming runs only when the model declares a cache lifetime and msa estimates at least $0.05 in avoided cache-miss cost. Refresh usage counts toward session totals but does not enter model context. `/status` shows the next decision; extensions can override it with `cache_warming_decision`. See [Describe model input and caching](models.md#describe-model-input-and-caching).
 
 See [Choose a Model](models.md) for model selection and thinking controls.
+
+### Restrict models
+
+`modelPolicy` decides which models exist for this session. `enabledModels` only narrows what msa offers at startup and on `Ctrl+P`; a model it leaves out is still usable when you name it. `modelPolicy` is the restriction: a hidden model is absent from `--list-models`, `/model`, and `Ctrl+P`, and naming it with `--model` or `/model` fails with the pattern that hides it.
+
+```json
+{
+  "modelPolicy": {
+    "allow": ["anthropic-api/*", "openai/*"],
+    "deny": ["openai/gpt-4*", "*:free"]
+  }
+}
+```
+
+Deny patterns win over allow patterns. Agent-directory and project patterns combine, so a project cannot lift a deny pattern set for the machine. Patterns use the `--models` forms: `*`, `provider/*`, an exact `provider/model`, or a glob on the model id. A `*` does not cross `/` in a model id such as `openai/gpt-4` on a gateway; use the exact id there.
+
+`/model` lists hidden models under the `hidden` scope with the pattern that hides each one. `Ctrl+E` denies the selected model or allows it again, and `Ctrl+P` toggles its provider. The `model_policy` tool makes the same changes from the model's side.
 
 ## Interaction
 
@@ -43,7 +61,15 @@ See [Choose a Model](models.md) for model selection and thinking controls.
 | `codemode.mode`         | `"on"` \| `"only"` | `"on"`                          | How the `codemode` tool presents tools while it is active. `on`: declared tools get a note on calling them from scripts appended to their description, and `codemode` lists only tools that are not declared. `only`: `codemode` lists every tool scripts can call, and active built-in and extension tools are hidden from the model, so it reaches them through `codemode`. |
 | `codemode.inlineBudget` | number             | `3000`                          | Estimated tokens (characters / 4) the `codemode` tool's description may spend on tool declarations. Tools that do not fit are left out and found with `searchTools()`. `0` lists only namespaces.                                                                                                                                                                             |
 
-Available built-in tools are `read`, `bash`, `powershell`, `edit`, `write`, `grep`, `find`, `ls`, `memory`, and `pr_watch`. `memory` and `pr_watch` are on by default. `defaultTools` can also name `codemode` and `tool_search`, which built-in extensions register inactive, and other extension tools registered inactive.
+Available built-in tools are `read`, `bash`, `powershell`, `edit`, `write`, `grep`, `find`, `ls`, `memory`, and `pr_watch`. The default selection is `read`, `bash`, `edit`, `write`, `memory`, `pr_watch`, `model_policy`, and `model_upgrade`; `web_search` and `web_fetch` join it when the `treg` CLI is installed. `defaultTools` can also name `codemode` and `tool_search`, which built-in extensions register inactive, and other extension tools registered inactive.
+
+`model_policy` reads and changes `modelPolicy` from the model's side, and `model_upgrade` lists and applies [model upgrades](models.md#upgrade-models). A plain-name list replaces the default selection, so name them again to keep them:
+
+```json
+{
+  "defaultTools": ["read", "bash", "edit", "write", "model_policy", "model_upgrade"]
+}
+```
 
 A list of only `+name` and `-name` entries changes the inherited selection instead of replacing it. For example, this enables `codemode` next to the default tools:
 

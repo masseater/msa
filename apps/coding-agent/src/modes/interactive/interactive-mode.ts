@@ -108,10 +108,20 @@ import { describeGoalEntry, describeGoalStatus } from "../../core/goal.ts";
 import { configureHttpDispatcher, formatHttpIdleTimeoutMs } from "../../core/http-dispatcher.ts";
 import { type AppKeybinding, KeybindingsManager } from "../../core/keybindings.ts";
 import { createCompactionSummaryMessage, createCustomMessage } from "../../core/messages.ts";
+import { saveModelPolicy } from "../../core/model-policy.ts";
 import {
   findExactModelReferenceMatch,
+  findModelPolicyDenial,
+  formatModelPolicyDenialError,
   resolveModelScopeFromModels,
 } from "../../core/model-resolver.ts";
+import {
+  candidatesNamedByChanges,
+  createUpgradeReplacements,
+  findModelUpgrades,
+  planModelUpgrades,
+  rewriteModelReferencesInSettings,
+} from "../../core/model-upgrade.ts";
 import { ORCHESTRATOR_REPORT_MESSAGE_TYPE } from "../../core/orchestrator/orchestrator.ts";
 import { DefaultPackageManager } from "../../core/package-manager.ts";
 import type { ResourceDiagnostic } from "../../core/resource-loader.ts";
@@ -187,6 +197,7 @@ import { wordmark } from "./components/logo.ts";
 import { MemoryView } from "./components/memory-view.ts";
 import { createMermaidMarkdownTransformer } from "./components/mermaid.ts";
 import { ModelSelectorComponent } from "./components/model-selector.ts";
+import { ModelUpgradeSelectorComponent } from "./components/model-upgrade-selector.ts";
 import { ScopedModelsSelectorComponent } from "./components/scoped-models-selector.ts";
 import { SessionSelectorComponent } from "./components/session-selector.ts";
 import { SettingsSelectorComponent } from "./components/settings-selector.ts";
@@ -4590,6 +4601,10 @@ export class InteractiveMode {
       this.showModelSelector();
       return;
     }
+    if (searchTerm === "upgrade") {
+      this.showModelUpgradeSelector();
+      return;
+    }
 
     const model = await this.findExactModelMatch(searchTerm);
     if (model) {
@@ -4604,7 +4619,56 @@ export class InteractiveMode {
       return;
     }
 
+    const denial = findModelPolicyDenial({
+      reference: searchTerm,
+      policy: this.session.modelRuntime.getModelPolicy(),
+      catalogModels: this.session.modelRuntime.getCatalogModels(),
+    });
+    if (denial) {
+      this.showError(formatModelPolicyDenialError(denial));
+      return;
+    }
+
     this.showModelSelector(searchTerm);
+  }
+
+  private showModelUpgradeSelector(): void {
+    const candidates = findModelUpgrades(this.session.modelRuntime.getCatalogModels());
+    const plan = planModelUpgrades({
+      candidates,
+      layers: {
+        global: this.settingsManager.getGlobalSettings(),
+        project: this.settingsManager.getProjectSettings(),
+      },
+    });
+    const named = candidatesNamedByChanges(candidates, plan.changes);
+    const shown = named.length > 0 ? named : candidates.filter((entry) => entry.confident);
+    if (shown.length === 0) {
+      this.showStatus("No model upgrades found");
+      return;
+    }
+    this.editorSlot.showSelector((done) => {
+      const component = new ModelUpgradeSelectorComponent(shown, {
+        onApply: async (candidate) => {
+          const replacements = createUpgradeReplacements([candidate]);
+          const written = this.settingsManager.rewriteModelReferences((layer) =>
+            rewriteModelReferencesInSettings(layer, replacements),
+          );
+          await this.settingsManager.flush();
+          const count = written.global.length + written.project.length;
+          this.footer.invalidate();
+          return count === 0
+            ? `${candidate.from.id} → ${candidate.to.id} · no setting names it`
+            : `${candidate.from.id} → ${candidate.to.id} · ${count} setting${count === 1 ? "" : "s"}`;
+        },
+        onCancel: () => {
+          done();
+          this.ui.requestRender();
+        },
+        requestRender: () => this.ui.requestRender(),
+      });
+      return { component, focus: component, dispose: () => {} };
+    });
   }
 
   private async findExactModelMatch(searchTerm: string): Promise<Model<any> | undefined> {
@@ -4738,6 +4802,18 @@ export class InteractiveMode {
         defaultProvider && defaultModel
           ? { provider: defaultProvider, id: defaultModel }
           : undefined,
+        {
+          getPolicy: () => this.session.modelRuntime.getModelPolicy(),
+          getCatalogModels: () => this.session.modelRuntime.getCatalogModels(),
+          savePolicy: (policy) =>
+            saveModelPolicy(
+              {
+                settingsManager: this.settingsManager,
+                modelRuntime: this.session.modelRuntime,
+              },
+              policy,
+            ),
+        },
       );
       return { component: selector, focus: selector, dispose: () => selector.dispose() };
     });

@@ -12,6 +12,7 @@ import { normalizePath, resolvePath } from "../utils/paths.ts";
 import { stripBom } from "../utils/text.ts";
 import { DEFAULT_HTTP_IDLE_TIMEOUT_MS, parseHttpIdleTimeoutMs } from "./http-dispatcher.ts";
 import type { ResolvedMemorySettings } from "./memory/memory.ts";
+import { EMPTY_MODEL_POLICY, mergeModelPolicies, type ModelPolicy } from "./model-policy.ts";
 import { SETTINGS_DEFAULTS } from "./settings-defaults.ts";
 import type {
   CacheWarmingMode,
@@ -40,6 +41,7 @@ export type {
   MarkdownSettings,
   MemorySettings,
   MermaidRenderingMode,
+  ModelPolicySettings,
   PackageSource,
   ProviderRetrySettings,
   QuietStartup,
@@ -99,6 +101,8 @@ export const DEFAULT_TOOL_NAMES: readonly string[] = [
   "write",
   "memory",
   "pr_watch",
+  "model_policy",
+  "model_upgrade",
   "web_search",
   "web_fetch",
 ];
@@ -174,6 +178,17 @@ function deepMergeSettings(base: Settings, overrides: Settings): Settings {
   ) as Settings;
   const defaultTools = mergeDefaultTools(base.defaultTools, overrides.defaultTools);
   return defaultTools === undefined ? merged : { ...merged, defaultTools };
+}
+
+/** One settings layer's model policy, ignoring a malformed value written by hand. */
+function readModelPolicy(settings: Settings): ModelPolicy {
+  const policy = settings.modelPolicy;
+  if (!policy || typeof policy !== "object") return EMPTY_MODEL_POLICY;
+  const patterns = (value: unknown): string[] =>
+    Array.isArray(value)
+      ? value.filter((entry): entry is string => typeof entry === "string" && entry.trim() !== "")
+      : [];
+  return { allow: patterns(policy.allow), deny: patterns(policy.deny) };
 }
 
 function parseTimeoutSetting(value: unknown, settingName: string): number | undefined {
@@ -1469,6 +1484,66 @@ export class SettingsManager {
 
   setEnabledModels(patterns: string[] | undefined): void {
     this.setGlobalSetting("enabledModels", patterns);
+  }
+
+  /**
+   * The effective model policy. Both layers are combined instead of overriding, so a project cannot
+   * lift a deny pattern set for the machine.
+   */
+  getModelPolicy(): ModelPolicy {
+    return mergeModelPolicies(
+      readModelPolicy(this.globalSettings),
+      this.projectTrusted ? readModelPolicy(this.projectSettings) : EMPTY_MODEL_POLICY,
+    );
+  }
+
+  /** Replace the agent-directory model policy. */
+  setModelPolicy(policy: ModelPolicy): void {
+    const allow = policy.allow.map((pattern) => pattern.trim()).filter(Boolean);
+    const deny = policy.deny.map((pattern) => pattern.trim()).filter(Boolean);
+    const saved = { ...(allow.length > 0 ? { allow } : {}), ...(deny.length > 0 ? { deny } : {}) };
+    this.setGlobalSetting(
+      "modelPolicy",
+      allow.length === 0 && deny.length === 0 ? undefined : saved,
+    );
+  }
+
+  /**
+   * Rewrite the settings that name a model, in the agent-directory and project layers. `rewrite`
+   * edits one layer in place and returns the changes it made, which are returned per layer.
+   */
+  rewriteModelReferences<TChange>(rewrite: (settings: Settings) => TChange[]): {
+    global: TChange[];
+    project: TChange[];
+  } {
+    const rewriteLayer = (
+      scope: SettingsScope,
+      current: Settings,
+      apply: (settings: Settings) => void,
+    ): TChange[] => {
+      const next = structuredClone(current) as Record<string, unknown>;
+      const changes = rewrite(next as Settings);
+      if (changes.length === 0) return changes;
+      for (const key of new Set([...Object.keys(current), ...Object.keys(next)])) {
+        if (JSON.stringify((current as Record<string, unknown>)[key]) === JSON.stringify(next[key]))
+          continue;
+        if (scope === "global") this.markModified(key as keyof Settings);
+        else this.markProjectModified(key as keyof Settings);
+      }
+      apply(next as Settings);
+      return changes;
+    };
+
+    const global = rewriteLayer("global", this.globalSettings, (settings) => {
+      this.globalSettings = settings;
+      this.save();
+    });
+    const project = this.projectTrusted
+      ? rewriteLayer("project", this.projectSettings, (settings) =>
+          this.saveProjectSettings(settings),
+        )
+      : [];
+    return { global, project };
   }
 
   getDoubleEscapeAction(): "fork" | "tree" | "none" {

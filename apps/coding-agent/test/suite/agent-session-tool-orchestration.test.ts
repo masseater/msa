@@ -140,6 +140,8 @@ describe("AgentSession tool orchestration", () => {
       "write",
       "memory",
       "pr_watch",
+      "model_policy",
+      "model_upgrade",
     ]);
 
     // --tools and the defaultTools setting name them explicitly.

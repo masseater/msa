@@ -85,6 +85,8 @@ describe("defaultTools setting", () => {
       "grep",
       "ls",
       "memory",
+      "model_policy",
+      "model_upgrade",
       "powershell",
       "pr_watch",
       "read",
@@ -124,6 +126,8 @@ describe("defaultTools setting", () => {
       "edit",
       "inactive_tool",
       "memory",
+      "model_policy",
+      "model_upgrade",
       "pr_watch",
       "read",
     ]);
@@ -223,6 +227,8 @@ describe("defaultTools setting", () => {
       "grep",
       "inactive_tool",
       "memory",
+      "model_policy",
+      "model_upgrade",
       "pr_watch",
       "read",
     ]);
@@ -291,6 +297,8 @@ describe("defaultTools setting", () => {
         "write",
         "memory",
         "pr_watch",
+        "model_policy",
+        "model_upgrade",
       ]);
       session.setActiveToolsByName(["read", "edit", "write"]);
 
@@ -352,6 +360,8 @@ describe("defaultTools setting", () => {
         "edit",
         "inactive_tool",
         "memory",
+        "model_policy",
+        "model_upgrade",
         "pr_watch",
         "read",
         "write",
@@ -464,6 +474,8 @@ describe("defaultTools setting", () => {
         "bash",
         "edit",
         "memory",
+        "model_policy",
+        "model_upgrade",
         "pr_watch",
         "read",
         "write",
@@ -493,6 +505,8 @@ describe("defaultTools setting", () => {
       "grep",
       "ls",
       "memory",
+      "model_policy",
+      "model_upgrade",
       "powershell",
       "pr_watch",
       "read",

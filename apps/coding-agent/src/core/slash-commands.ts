@@ -26,7 +26,7 @@ export const BUILTIN_SLASH_COMMANDS: ReadonlyArray<BuiltinSlashCommand> = [
   {
     name: "model",
     description: "Select model (opens selector UI)",
-    argumentHint: "<provider/model>",
+    argumentHint: "<provider/model>|upgrade",
   },
   {
     name: "effort",

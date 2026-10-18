@@ -61,6 +61,8 @@ describe("system prompt updates", () => {
         "write",
         "memory",
         "pr_watch",
+        "model_policy",
+        "model_upgrade",
       ]);
       expect(getSystemMessageText(head)).toBe(harness.session.systemPrompt);
     } finally {

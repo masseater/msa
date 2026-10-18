@@ -160,6 +160,7 @@ On native Windows, `app.suspend` has no default because Windows terminals do not
 | `app.model.cycleForward`  | `ctrl+p`                                    | Cycle to next model                                                       |
 | `app.model.cycleBackward` | `shift+ctrl+p` (`alt+p` on Windows and WSL) | Cycle to previous model                                                   |
 | `app.models.save`         | `ctrl+s`                                    | Save the selected default model or scoped model configuration to settings |
+| `app.models.policy`       | `ctrl+e`                                    | Deny the selected model, or allow it again                                |
 | `app.thinking.cycle`      | `shift+tab`                                 | Cycle thinking level                                                      |
 | `app.thinking.save`       | `ctrl+s`                                    | Save current thinking level to settings                                   |
 | `app.thinking.toggle`     | `ctrl+t`                                    | Collapse or expand thinking blocks                                        |
@@ -191,12 +192,13 @@ On native Windows, `app.suspend` has no default because Windows terminals do not
 
 ### Scoped Models Selector
 
-Used inside the scoped models selector (opened via `/scoped-models`).
+Used inside the scoped models selector (opened via `/scoped-models`) and the model selector (opened via `/model`).
 
 | Keybinding id               | Default    | Description                                            |
 | --------------------------- | ---------- | ------------------------------------------------------ |
 | `app.models.enableAll`      | `ctrl+a`   | Enable all models (or all matching the current search) |
 | `app.models.clearAll`       | `ctrl+x`   | Clear all models (or all matching the current search)  |
 | `app.models.toggleProvider` | `ctrl+p`   | Toggle all models for the current provider             |
+| `app.models.policy`         | `ctrl+e`   | Deny or allow the selected model                       |
 | `app.models.reorderUp`      | `alt+up`   | Move the selected model up in the cycle order          |
 | `app.models.reorderDown`    | `alt+down` | Move the selected model down in the cycle order        |

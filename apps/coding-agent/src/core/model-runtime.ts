@@ -74,6 +74,7 @@ import { toErrorMessage } from "../utils/errors.ts";
 import { AuthStorage as DefaultAuthStorage } from "./auth-storage.ts";
 import { cliAgentProviders } from "./cli-agents/index.ts";
 import { ModelConfig } from "./model-config.ts";
+import { EMPTY_MODEL_POLICY, type ModelPolicy, withModelPolicy } from "./model-policy.ts";
 import { FileModelsStore, InMemoryCodingAgentModelsStore } from "./models-store.ts";
 import {
   type AuthStatus,
@@ -190,6 +191,9 @@ export class ModelRuntime implements Models {
   private readonly extensionProviders = new Map<string, ProviderConfigInput>();
   /** Virtual models by provider id, then model id. */
   private readonly virtualModels = new Map<string, Map<string, RegisteredVirtualModel>>();
+  /** Composed providers before the model policy, so hidden models stay reviewable. */
+  private readonly catalogProvidersById = new Map<string, Provider>();
+  private policy: ModelPolicy = EMPTY_MODEL_POLICY;
   private readonly compositionErrors = new Map<string, string>();
   private readonly modelsPath: string | undefined;
   private readonly modelNetworkEnabled: boolean;
@@ -296,17 +300,58 @@ export class ModelRuntime implements Models {
     ]);
   }
 
-  /** Returns the provider without virtual models, or undefined when only virtual models define it. */
+  /**
+   * Returns the provider without the model policy applied, or undefined when nothing defines it.
+   * The policy is applied here, once, so every listing, lookup, and availability check sees the
+   * same set of models.
+   */
   private recomposeProvider(providerId: string): Provider | undefined {
     const provider = this.composeProvider(providerId);
     const virtualModels = [...(this.virtualModels.get(providerId)?.values() ?? [])].map(
       (entry) => entry.model,
     );
-    if (virtualModels.length > 0)
-      this.models.setProvider(withVirtualModels(providerId, provider, virtualModels));
-    else if (provider) this.models.setProvider(provider);
-    else this.models.deleteProvider(providerId);
+    const composed =
+      virtualModels.length > 0 ? withVirtualModels(providerId, provider, virtualModels) : provider;
+    if (!composed) {
+      this.models.deleteProvider(providerId);
+      this.catalogProvidersById.delete(providerId);
+      return undefined;
+    }
+    this.catalogProvidersById.set(providerId, composed);
+    this.models.setProvider(withModelPolicy(composed, this.policy));
     return provider;
+  }
+
+  /** The model policy every listing, resolution, and session start is filtered by. */
+  getModelPolicy(): ModelPolicy {
+    return this.policy;
+  }
+
+  /** Replace the model policy. The next listing, lookup, and selection sees it; running sessions keep their model. */
+  setModelPolicy(policy: ModelPolicy): void {
+    if (
+      policy.allow.join("\n") === this.policy.allow.join("\n") &&
+      policy.deny.join("\n") === this.policy.deny.join("\n")
+    ) {
+      return;
+    }
+    this.policy = policy;
+    this.rebuildProviders();
+  }
+
+  /**
+   * Every catalog chat model, ignoring the model policy. Model selection screens and denial
+   * messages use it to show a hidden model with the pattern that hides it.
+   */
+  getCatalogModels(providerId?: string): readonly Model<Api>[] {
+    const providers = providerId
+      ? [
+          ...(this.catalogProvidersById.get(providerId)
+            ? [this.catalogProvidersById.get(providerId)!]
+            : []),
+        ]
+      : [...this.catalogProvidersById.values()];
+    return providers.flatMap((provider) => provider.getModels());
   }
 
   /** The provider without virtual models, or undefined when nothing defines it. */
@@ -334,6 +379,7 @@ export class ModelRuntime implements Models {
     );
     this.models.clearProviders();
     this.compositionErrors.clear();
+    this.catalogProvidersById.clear();
     for (const providerId of this.providerIds()) this.recomposeProvider(providerId);
     this.updateModelSnapshot();
   }

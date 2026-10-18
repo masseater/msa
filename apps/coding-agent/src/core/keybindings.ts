@@ -167,6 +167,10 @@ const APP_KEYBINDINGS = {
     defaultKeys: "ctrl+p",
     description: "Toggle all models for provider",
   },
+  "app.models.policy": {
+    defaultKeys: "ctrl+e",
+    description: "Deny or allow the selected model",
+  },
   "app.models.reorderUp": {
     defaultKeys: "alt+up",
     description: "Move model up in order",

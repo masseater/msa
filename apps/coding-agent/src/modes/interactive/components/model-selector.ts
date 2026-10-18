@@ -10,6 +10,13 @@ import {
   type TUI,
 } from "@msa/tui";
 
+import {
+  addModelPolicyPattern,
+  allowModelReference,
+  evaluateModelPolicy,
+  type ModelPolicy,
+  removeModelPolicyPattern,
+} from "../../../core/model-policy.ts";
 import type { ModelRuntime } from "../../../core/model-runtime.ts";
 import { toErrorMessage } from "../../../utils/errors.ts";
 import { refreshModelCatalogs } from "../model-catalog-refresh.ts";
@@ -22,6 +29,20 @@ interface ModelItem {
   provider: string;
   id: string;
   model: Model<any>;
+  /**
+   * The model policy pattern that hides the model, or undefined when it is usable. An empty string
+   * means the allow list leaves the model out, so no deny pattern names it.
+   */
+  deniedBy?: string | undefined;
+}
+
+/** Lets the selector show the models the model policy hides and change the policy in place. */
+export interface ModelSelectorPolicyOptions {
+  getPolicy(): ModelPolicy;
+  /** Every catalog model, including the ones the policy hides. */
+  getCatalogModels(): readonly Model<any>[];
+  /** Persist a policy and apply it to the catalog. Returns the policy in effect. */
+  savePolicy(policy: ModelPolicy): ModelPolicy;
 }
 
 interface ScopedModelItem {
@@ -34,7 +55,7 @@ interface DefaultModelReference {
   id: string;
 }
 
-type ModelScope = "all" | "scoped";
+type ModelScope = "all" | "scoped" | "hidden";
 
 /**
  * Component that renders a model selector with search
@@ -54,6 +75,7 @@ export class ModelSelectorComponent extends Container implements Focusable {
   private listContainer: Container;
   private allModels: ModelItem[] = [];
   private scopedModelItems: ModelItem[] = [];
+  private hiddenModelItems: ModelItem[] = [];
   private activeModels: ModelItem[] = [];
   private filteredModels: ModelItem[] = [];
   private selectedIndex: number = 0;
@@ -68,9 +90,11 @@ export class ModelSelectorComponent extends Container implements Focusable {
   private tui: TUI;
   private scopedModels: ReadonlyArray<ScopedModelItem>;
   private defaultModel?: DefaultModelReference | undefined;
+  private policyOptions?: ModelSelectorPolicyOptions | undefined;
   private scope: ModelScope = "all";
   private scopeText?: Text;
   private scopeHintText?: Text;
+  private policyHintText?: Text;
   private readonly refreshAbortController = new AbortController();
   private refreshTimeout?: ReturnType<typeof setTimeout>;
   private closed = false;
@@ -85,10 +109,12 @@ export class ModelSelectorComponent extends Container implements Focusable {
     initialSearchInput?: string,
     onSelectAsDefault?: (model: Model<any>) => void,
     defaultModel?: DefaultModelReference,
+    policyOptions?: ModelSelectorPolicyOptions,
   ) {
     super();
 
     this.tui = tui;
+    this.policyOptions = policyOptions;
     this.currentModel = currentModel;
     this.modelRuntime = modelRuntime;
     this.scopedModels = scopedModels;
@@ -103,7 +129,7 @@ export class ModelSelectorComponent extends Container implements Focusable {
     this.addChild(new Spacer(1));
 
     // Add hint about model filtering
-    if (scopedModels.length > 0) {
+    if (scopedModels.length > 0 || policyOptions) {
       this.scopeText = new Text(this.getScopeText(), 0, 0);
       this.addChild(this.scopeText);
       this.scopeHintText = new Text(this.getScopeHintText(), 0, 0);
@@ -151,6 +177,11 @@ export class ModelSelectorComponent extends Container implements Focusable {
       );
     }
 
+    if (policyOptions) {
+      this.policyHintText = new Text(this.getPolicyHintText(), 0, 0);
+      this.addChild(this.policyHintText);
+    }
+
     // Add bottom border
     this.addChild(new DynamicBorder());
 
@@ -178,7 +209,9 @@ export class ModelSelectorComponent extends Container implements Focusable {
       id: scoped.model.id,
       model: scoped.model,
     }));
-    this.activeModels = this.scope === "scoped" ? this.scopedModelItems : this.allModels;
+    this.hiddenModelItems = this.buildHiddenItems();
+    this.syncScope();
+    this.activeModels = this.scopeItems(this.scope);
     this.filteredModels = this.activeModels;
     const currentIndex = this.filteredModels.findIndex((item) =>
       modelsAreEqual(this.currentModel, item.model),
@@ -187,6 +220,45 @@ export class ModelSelectorComponent extends Container implements Focusable {
       currentIndex >= 0
         ? currentIndex
         : Math.min(this.selectedIndex, Math.max(0, this.filteredModels.length - 1));
+  }
+
+  /** The catalog models the model policy hides, with the pattern that hides each one. */
+  private buildHiddenItems(): ModelItem[] {
+    const options = this.policyOptions;
+    if (!options) return [];
+    const policy = options.getPolicy();
+    const items: ModelItem[] = [];
+    for (const model of options.getCatalogModels()) {
+      if (!this.modelRuntime.hasConfiguredAuth(model.provider)) continue;
+      const decision = evaluateModelPolicy(policy, model);
+      if (decision.allowed) continue;
+      items.push({
+        provider: model.provider,
+        id: model.id,
+        model,
+        deniedBy: decision.reason === "deny" ? decision.pattern : "",
+      });
+    }
+    return items.sort((a, b) => a.provider.localeCompare(b.provider) || a.id.localeCompare(b.id));
+  }
+
+  private scopeItems(scope: ModelScope): ModelItem[] {
+    if (scope === "scoped") return this.scopedModelItems;
+    if (scope === "hidden") return this.hiddenModelItems;
+    return this.allModels;
+  }
+
+  /** The scopes the selector can show, in Tab order. */
+  private availableScopes(): ModelScope[] {
+    const scopes: ModelScope[] = ["all"];
+    if (this.scopedModelItems.length > 0) scopes.push("scoped");
+    if (this.policyOptions && this.hiddenModelItems.length > 0) scopes.push("hidden");
+    return scopes;
+  }
+
+  private syncScope(): void {
+    if (this.availableScopes().includes(this.scope)) return;
+    this.scope = "all";
   }
 
   private async refreshModels(): Promise<void> {
@@ -257,14 +329,24 @@ export class ModelSelectorComponent extends Container implements Focusable {
   }
 
   private getScopeText(): string {
-    const allText = this.scope === "all" ? theme.fg("accent", "all") : theme.fg("muted", "all");
-    const scopedText =
-      this.scope === "scoped" ? theme.fg("accent", "scoped") : theme.fg("muted", "scoped");
-    return `${theme.fg("muted", "Scope: ")}${allText}${theme.fg("muted", " | ")}${scopedText}`;
+    const labels = this.availableScopes().map((scope) =>
+      scope === this.scope ? theme.fg("accent", scope) : theme.fg("muted", scope),
+    );
+    return `${theme.fg("muted", "Scope: ")}${labels.join(theme.fg("muted", " | "))}`;
   }
 
   private getScopeHintText(): string {
-    return keyHint("tui.input.tab", "scope") + theme.fg("muted", " (all/scoped)");
+    return keyHint("tui.input.tab", "scope");
+  }
+
+  /** What the policy keys do for the selected row. */
+  private getPolicyHintText(): string {
+    const selected = this.filteredModels[this.selectedIndex];
+    const verb = selected?.deniedBy === undefined ? "deny" : "allow";
+    return theme.fg(
+      "dim",
+      `  ${keyDisplayText("app.models.policy")} ${verb} · ${keyDisplayText("app.models.toggleProvider")} provider`,
+    );
   }
 
   private isDefaultModel(model: Model<any>): boolean {
@@ -279,7 +361,7 @@ export class ModelSelectorComponent extends Container implements Focusable {
   private setScope(scope: ModelScope): void {
     if (this.scope === scope) return;
     this.scope = scope;
-    this.activeModels = this.scope === "scoped" ? this.scopedModelItems : this.allModels;
+    this.activeModels = this.scopeItems(scope);
     const currentIndex = this.activeModels.findIndex((item) =>
       modelsAreEqual(this.currentModel, item.model),
     );
@@ -340,12 +422,19 @@ export class ModelSelectorComponent extends Container implements Focusable {
       const isCurrent = modelsAreEqual(this.currentModel, item.model);
       const isDefault = this.isDefaultModel(item.model);
       const defaultBadge = isDefault ? theme.fg("muted", " · default") : "";
+      const denied = item.deniedBy !== undefined;
 
       const cursor = isSelected ? theme.fg("accent", "→ ") : "  ";
-      const currentMarker = isCurrent ? theme.fg("accent", "✓ ") : "  ";
-      const modelText = isSelected ? theme.fg("accent", item.id) : item.id;
+      const currentMarker = denied
+        ? theme.fg("warning", "✕ ")
+        : isCurrent
+          ? theme.fg("accent", "✓ ")
+          : "  ";
+      const plainId = denied ? theme.fg("dim", theme.strikethrough(item.id)) : item.id;
+      const modelText = isSelected ? theme.fg("accent", plainId) : plainId;
       const providerBadge = theme.fg("muted", `[${item.provider}]`);
-      const line = `${cursor}${currentMarker}${modelText} ${providerBadge}${defaultBadge}`;
+      const deniedBadge = denied ? theme.fg("warning", ` · ${item.deniedBy || "allow list"}`) : "";
+      const line = `${cursor}${currentMarker}${modelText} ${providerBadge}${defaultBadge}${deniedBadge}`;
 
       this.listContainer.addChild(new Text(line, 0, 0));
     }
@@ -377,6 +466,7 @@ export class ModelSelectorComponent extends Container implements Focusable {
         );
       }
     }
+    this.policyHintText?.setText(this.getPolicyHintText());
     if (this.refreshStatusMessage) {
       this.listContainer.addChild(new Spacer(1));
       this.listContainer.addChild(
@@ -395,13 +485,22 @@ export class ModelSelectorComponent extends Container implements Focusable {
   handleInput(keyData: string): void {
     const kb = getKeybindings();
     if (kb.matches(keyData, "tui.input.tab")) {
-      if (this.scopedModelItems.length > 0) {
-        const nextScope: ModelScope = this.scope === "all" ? "scoped" : "all";
-        this.setScope(nextScope);
-        if (this.scopeHintText) {
-          this.scopeHintText.setText(this.getScopeHintText());
-        }
+      const scopes = this.availableScopes();
+      if (scopes.length > 1) {
+        const index = scopes.indexOf(this.scope);
+        const next = scopes[(index + 1) % scopes.length] ?? "all";
+        this.setScope(next);
+        this.scopeText?.setText(this.getScopeText());
+        if (this.scopeHintText) this.scopeHintText.setText(this.getScopeHintText());
       }
+      return;
+    }
+    if (this.policyOptions && kb.matches(keyData, "app.models.policy")) {
+      this.toggleModelPolicy();
+      return;
+    }
+    if (this.policyOptions && kb.matches(keyData, "app.models.toggleProvider")) {
+      this.toggleProviderPolicy();
       return;
     }
     // Up arrow - wrap to bottom when at top
@@ -421,9 +520,14 @@ export class ModelSelectorComponent extends Container implements Focusable {
     // Enter
     else if (kb.matches(keyData, "tui.select.confirm")) {
       const selectedModel = this.filteredModels[this.selectedIndex];
-      if (selectedModel) {
-        this.handleSelect(selectedModel.model);
+      if (!selectedModel) return;
+      if (selectedModel.deniedBy !== undefined) {
+        this.errorMessage = `${selectedModel.provider}/${selectedModel.id} denied by ${selectedModel.deniedBy || "the allow list"}`;
+        this.updateList();
+        this.tui.requestRender();
+        return;
       }
+      this.handleSelect(selectedModel.model);
     }
     // Escape or Ctrl+C
     else if (kb.matches(keyData, "tui.select.cancel")) {
@@ -448,6 +552,62 @@ export class ModelSelectorComponent extends Container implements Focusable {
   private handleSelect(model: Model<any>): void {
     this.dispose();
     this.onSelectCallback(model);
+  }
+
+  /**
+   * Deny the selected model, or allow it again when the policy already hides it. The change is
+   * saved at once and the list is rebuilt, so the next selection sees it.
+   */
+  private toggleModelPolicy(): void {
+    const options = this.policyOptions;
+    const item = this.filteredModels[this.selectedIndex];
+    if (!options || !item) return;
+    const reference = `${item.provider}/${item.id}`;
+    const policy = options.getPolicy();
+    const next =
+      item.deniedBy === undefined
+        ? addModelPolicyPattern(policy, "deny", reference)
+        : allowModelReference(policy, reference);
+    this.applyPolicy(options.savePolicy(next), reference, item);
+  }
+
+  /** Deny or allow every model of the selected provider with a `provider/*` pattern. */
+  private toggleProviderPolicy(): void {
+    const options = this.policyOptions;
+    const item = this.filteredModels[this.selectedIndex];
+    if (!options || !item) return;
+    const pattern = `${item.provider}/*`;
+    const policy = options.getPolicy();
+    const denied = policy.deny.some((entry) => entry.toLowerCase() === pattern.toLowerCase());
+    const next = denied
+      ? removeModelPolicyPattern(policy, pattern)
+      : addModelPolicyPattern(policy, "deny", pattern);
+    this.applyPolicy(options.savePolicy(next), pattern, item);
+  }
+
+  private applyPolicy(policy: ModelPolicy, changed: string, item: ModelItem): void {
+    this.errorMessage = undefined;
+    this.loadModelsFromSnapshot();
+    this.scopeText?.setText(this.getScopeText());
+    this.filterModels(this.searchInput.getValue());
+    const refreshed = this.filteredModels.find(
+      (entry) => entry.provider === item.provider && entry.id === item.id,
+    );
+    if (refreshed) {
+      this.selectedIndex = this.filteredModels.indexOf(refreshed);
+      this.updateList();
+    }
+    const decision = evaluateModelPolicy(policy, item.model);
+    const stillHidden =
+      !decision.allowed && decision.reason === "deny" && decision.pattern !== changed;
+    this.refreshStatusMessage = decision.allowed
+      ? `Allowed ${changed}`
+      : stillHidden
+        ? `${changed} denied; also hidden by ${decision.pattern}`
+        : `Denied ${changed}`;
+    this.refreshStatusSuccess = decision.allowed;
+    this.updateList();
+    this.tui.requestRender();
   }
 
   getSearchInput(): Input {

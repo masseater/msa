@@ -192,6 +192,8 @@ import {
 import { type BashOperations, createLocalBashOperations } from "./tools/bash.ts";
 import { createAllToolDefinitions } from "./tools/index.ts";
 import { createMemoryToolDefinition } from "./tools/memory.ts";
+import { createModelPolicyToolDefinition } from "./tools/model-policy.ts";
+import { createModelUpgradeToolDefinition } from "./tools/model-upgrade.ts";
 import { createPrWatchToolDefinition } from "./tools/pr-watch.ts";
 import { createToolDefinitionFromAgentTool } from "./tools/tool-definition-wrapper.ts";
 import { addUsageToTotals, combineUsage, createUsageTotals } from "./usage-totals.ts";
@@ -585,6 +587,7 @@ export class AgentSession {
     this._customTools = config.customTools ?? [];
     this._cwd = config.cwd;
     this._modelRuntime = config.modelRuntime;
+    this._modelRuntime.setModelPolicy(this.settingsManager.getModelPolicy());
     this._cacheWarmer = config.cacheWarmer;
     if (this._cacheWarmer) {
       this._cacheWarmer.onWarmed = (entry) => this._emit({ type: "entry_appended", entry });
@@ -4216,6 +4219,15 @@ export class AgentSession {
           }),
           ...(this._memory ? { memory: createMemoryToolDefinition(this._memory) } : {}),
           pr_watch: createPrWatchToolDefinition(this._prWatch),
+          model_policy: createModelPolicyToolDefinition({
+            settingsManager: this.settingsManager,
+            modelRuntime: this._modelRuntime,
+            currentModel: () => this.model,
+          }),
+          model_upgrade: createModelUpgradeToolDefinition({
+            settingsManager: this.settingsManager,
+            modelRuntime: this._modelRuntime,
+          }),
         };
 
     this._baseToolDefinitions = new Map(

@@ -10,6 +10,7 @@ import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 
 import { AgentSession } from "../src/core/agent-session.ts";
 import { AuthStorage } from "../src/core/auth-storage.ts";
+import { EMPTY_MODEL_POLICY } from "../src/core/model-policy.ts";
 import {
   defaultModelPerProvider,
   findInitialModel,
@@ -516,10 +517,21 @@ describe("resolveModelScopeWithDiagnostics", () => {
 });
 
 describe("resolveCliModel", () => {
-  test("does not strip invalid :suffix as thinking level in --model (treat as raw id)", () => {
-    const registry = {
-      getModels: () => allModels,
+  /** A ModelRuntime stub with no model policy, so every listed model is usable. */
+  function policyFreeRuntime(
+    models: readonly unknown[] | (() => readonly unknown[]),
+    hasConfiguredAuth?: (provider: string) => boolean,
+  ) {
+    const list = () => (typeof models === "function" ? models() : models);
+    return {
+      getModels: list,
+      getCatalogModels: list,
+      getModelPolicy: () => EMPTY_MODEL_POLICY,
+      ...(hasConfiguredAuth ? { hasConfiguredAuth } : {}),
     } as unknown as Parameters<typeof resolveCliModel>[0]["modelRuntime"];
+  }
+  test("does not strip invalid :suffix as thinking level in --model (treat as raw id)", () => {
+    const registry = policyFreeRuntime(allModels);
 
     const result = resolveCliModel({
       cliProvider: "openai",
@@ -533,9 +545,7 @@ describe("resolveCliModel", () => {
   });
 
   test("allows custom model ids for explicit providers without double prefixing", () => {
-    const registry = {
-      getModels: () => allModels,
-    } as unknown as Parameters<typeof resolveCliModel>[0]["modelRuntime"];
+    const registry = policyFreeRuntime(allModels);
 
     const result = resolveCliModel({
       cliProvider: "openrouter",
@@ -549,9 +559,7 @@ describe("resolveCliModel", () => {
   });
 
   test("returns a clear error when there are no models", () => {
-    const registry = {
-      getModels: () => [],
-    } as unknown as Parameters<typeof resolveCliModel>[0]["modelRuntime"];
+    const registry = policyFreeRuntime([]);
 
     const result = resolveCliModel({
       cliProvider: "openai",
@@ -576,10 +584,7 @@ describe("resolveCliModel", () => {
       provider: "custom-gateway",
     };
     const registry = (configured: string[]) =>
-      ({
-        getModels: () => [direct, openrouter, gateway],
-        hasConfiguredAuth: (provider: string) => configured.includes(provider),
-      }) as unknown as Parameters<typeof resolveCliModel>[0]["modelRuntime"];
+      policyFreeRuntime([direct, openrouter, gateway], (provider) => configured.includes(provider));
 
     test("selects the authenticated gateway, with or without a thinking suffix", () => {
       for (const [cliModel, thinkingLevel] of [
@@ -640,9 +645,7 @@ describe("resolveCliModel", () => {
     const modelsWithNeuralwatt = [...allModels, neuralwattModel];
 
     test("strips :thinking suffix from custom model id in fallback path", () => {
-      const registry = {
-        getModels: () => modelsWithNeuralwatt,
-      } as unknown as Parameters<typeof resolveCliModel>[0]["modelRuntime"];
+      const registry = policyFreeRuntime(modelsWithNeuralwatt);
 
       const result = resolveCliModel({
         cliModel: "neuralwatt/zai-org/GLM-5.1-FP8:high",
@@ -658,9 +661,7 @@ describe("resolveCliModel", () => {
     });
 
     test("custom model without thinking suffix works normally in fallback path", () => {
-      const registry = {
-        getModels: () => modelsWithNeuralwatt,
-      } as unknown as Parameters<typeof resolveCliModel>[0]["modelRuntime"];
+      const registry = policyFreeRuntime(modelsWithNeuralwatt);
 
       const result = resolveCliModel({
         cliModel: "neuralwatt/zai-org/GLM-5.1-FP8",
@@ -674,9 +675,7 @@ describe("resolveCliModel", () => {
     });
 
     test("all valid thinking levels work in fallback path", () => {
-      const registry = {
-        getModels: () => modelsWithNeuralwatt,
-      } as unknown as Parameters<typeof resolveCliModel>[0]["modelRuntime"];
+      const registry = policyFreeRuntime(modelsWithNeuralwatt);
 
       for (const level of ["off", "minimal", "low", "medium", "high", "xhigh", "max"]) {
         const result = resolveCliModel({
@@ -691,9 +690,7 @@ describe("resolveCliModel", () => {
     });
 
     test("invalid thinking suffix on custom model is treated as part of model id", () => {
-      const registry = {
-        getModels: () => modelsWithNeuralwatt,
-      } as unknown as Parameters<typeof resolveCliModel>[0]["modelRuntime"];
+      const registry = policyFreeRuntime(modelsWithNeuralwatt);
 
       const result = resolveCliModel({
         cliModel: "neuralwatt/zai-org/GLM-5.1-FP8:banana",
@@ -708,9 +705,7 @@ describe("resolveCliModel", () => {
     });
 
     test("explicit --provider with custom model:thinking strips suffix correctly", () => {
-      const registry = {
-        getModels: () => modelsWithNeuralwatt,
-      } as unknown as Parameters<typeof resolveCliModel>[0]["modelRuntime"];
+      const registry = policyFreeRuntime(modelsWithNeuralwatt);
 
       const result = resolveCliModel({
         cliProvider: "neuralwatt",
@@ -725,9 +720,7 @@ describe("resolveCliModel", () => {
     });
 
     test("with explicit --thinking, :suffix is kept as part of model id", () => {
-      const registry = {
-        getModels: () => modelsWithNeuralwatt,
-      } as unknown as Parameters<typeof resolveCliModel>[0]["modelRuntime"];
+      const registry = policyFreeRuntime(modelsWithNeuralwatt);
 
       const result = resolveCliModel({
         cliModel: "neuralwatt/zai-org/GLM-5.1-FP8:high",
