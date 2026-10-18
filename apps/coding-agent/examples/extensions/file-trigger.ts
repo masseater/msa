@@ -1,8 +1,6 @@
-import { Effect, FileSystem, ManagedRuntime, Stream } from "effect";
-
 import { NodeServices } from "@effect/platform-node";
-
 import type { ExtensionAPI } from "@msa/coding-agent";
+import { Effect, FileSystem, ManagedRuntime, Stream } from "effect";
 
 const TRIGGER_FILE = "/tmp/agent-trigger.txt";
 

@@ -1,5 +1,3 @@
-import { Effect } from "effect";
-
 import type { Message } from "@msa/ai";
 import type {
   ExtensionAPI,
@@ -7,6 +5,7 @@ import type {
   ModelRoute,
   ModelRouteRequest,
 } from "@msa/coding-agent";
+import { Effect } from "effect";
 
 const PROVIDER = "openai-codex";
 const SOL = "gpt-5.6-sol";

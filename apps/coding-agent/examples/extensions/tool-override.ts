@@ -1,9 +1,7 @@
-import { DateTime, Effect, FileSystem, ManagedRuntime, Option, Path } from "effect";
-
 import { NodeServices } from "@effect/platform-node";
-
 import type { TextContent } from "@msa/ai";
 import { type ExtensionAPI, getAgentDir } from "@msa/coding-agent";
+import { DateTime, Effect, FileSystem, ManagedRuntime, Option, Path } from "effect";
 import { Type } from "typebox";
 
 const runtime = ManagedRuntime.make(NodeServices.layer);

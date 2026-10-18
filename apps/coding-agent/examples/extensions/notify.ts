@@ -1,4 +1,10 @@
+import { NodeServices } from "@effect/platform-node";
+import { readProcessEnv } from "@msa/ai/utils/env";
 import type { ExtensionAPI } from "@msa/coding-agent";
+import { Effect, ManagedRuntime } from "effect";
+import { ChildProcess, ChildProcessSpawner } from "effect/process";
+
+const runtime = ManagedRuntime.make(NodeServices.layer);
 
 function windowsToastScript(title: string, body: string): string {
   const type = "Windows.UI.Notifications";
@@ -23,17 +29,27 @@ function notifyOSC99(title: string, body: string): void {
 }
 
 function notifyWindows(title: string, body: string): void {
-  const { execFile } = require("child_process");
-  execFile("powershell.exe", ["-NoProfile", "-Command", windowsToastScript(title, body)]);
+  runtime.runFork(
+    Effect.scoped(
+      Effect.gen(function* () {
+        const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+        const handle = yield* spawner.spawn(
+          ChildProcess.make("powershell.exe", [
+            "-NoProfile",
+            "-Command",
+            windowsToastScript(title, body),
+          ]),
+        );
+        yield* handle.exitCode;
+      }),
+    ).pipe(Effect.ignore),
+  );
 }
 
 function notify(title: string, body: string): void {
-  if (process.env["WT_SESSION"] !== undefined && process.env["WT_SESSION"].length > 0) {
+  if ((readProcessEnv("WT_SESSION") ?? "").length > 0) {
     notifyWindows(title, body);
-  } else if (
-    process.env["KITTY_WINDOW_ID"] !== undefined &&
-    process.env["KITTY_WINDOW_ID"].length > 0
-  ) {
+  } else if ((readProcessEnv("KITTY_WINDOW_ID") ?? "").length > 0) {
     notifyOSC99(title, body);
   } else {
     notifyOSC777(title, body);

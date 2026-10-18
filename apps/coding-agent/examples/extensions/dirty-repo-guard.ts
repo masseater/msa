@@ -1,6 +1,5 @@
-import { Effect } from "effect";
-
 import type { ExtensionAPI, ExtensionContext } from "@msa/coding-agent";
+import { Effect } from "effect";
 
 const checkDirtyRepo = (msa: ExtensionAPI, ctx: ExtensionContext, action: string) =>
   Effect.runPromise(

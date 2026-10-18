@@ -1,6 +1,5 @@
-import { Effect } from "effect";
-
 import type { ExtensionAPI } from "@msa/coding-agent";
+import { Effect } from "effect";
 
 export default function (msa: ExtensionAPI) {
   const dangerousPatterns = [
