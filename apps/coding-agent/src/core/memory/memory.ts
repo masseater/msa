@@ -1,19 +1,47 @@
-import { execFileSync } from "node:child_process";
-import { basename } from "node:path";
+import { Effect, FileSystem } from "effect";
 
+import { runCommand } from "../platform/command.ts";
+import {
+  currentTimeMillis,
+  fromPromise,
+  pathOperations,
+  platformRuntime,
+  ToolFailure,
+  unwrapForeign,
+} from "../platform/index.ts";
 import { EmbeddingClient } from "./embeddings.ts";
+import { formatMemoryStats, formatMemoryStatus, isMemoryKind } from "./memory-format.ts";
+import type {
+  MemorySaveOutcome,
+  MemoryServiceOptions,
+  MemorySaveRequest,
+  ResolvedMemorySettings,
+} from "./memory-types.ts";
 import {
   MEMORY_KINDS,
   MemoryStore,
-  type MemoryKind,
   type MemoryRecord,
-  type MemorySaveResult,
-  type MemoryScope,
   type MemoryScore,
   type MemoryStoreStats,
 } from "./store.ts";
 
 export const MEMORY_RECALL_MESSAGE_TYPE = "msa.memory.recall";
+
+export {
+  formatAge,
+  formatMemoryList,
+  formatRecallBlock,
+  formatSearchResults,
+  isMemoryKind,
+  type MemoryCommand,
+  parseMemoryCommand,
+} from "./memory-format.ts";
+export type {
+  MemorySaveOutcome,
+  MemoryServiceOptions,
+  MemorySaveRequest,
+  ResolvedMemorySettings,
+} from "./memory-types.ts";
 
 const EMBEDDING_FAILURE_COOLDOWN_MS = 60_000;
 
@@ -21,141 +49,34 @@ const REEMBED_BATCH_LIMIT = 25;
 
 const EXPLICIT_SEARCH_MIN_SCORE = 0.1;
 
-export interface ResolvedMemorySettings {
-  enabled: boolean;
-  database: string;
-  embedding: {
-    enabled: boolean;
-    baseUrl: string;
-    model: string;
-    queryPrefix: string;
-    documentPrefix: string;
-    apiKey?: string;
-    timeoutMs: number;
-  };
-  recall: {
-    enabled: boolean;
-    limit: number;
-    minScore: number;
-  };
-}
+const projectNameOf = (dir: string) =>
+  fromPromise(() =>
+    runCommand({ file: "git", args: ["rev-parse", "--show-toplevel"], cwd: dir }),
+  ).pipe(
+    Effect.map(({ exitCode, lines }) => {
+      const top = (lines[0] ?? "").trim();
+      return exitCode === 0 && top !== "" ? pathOperations.basename(top) : undefined;
+    }),
+    Effect.orElseSucceed((): string | undefined => undefined),
+  );
 
-export interface MemoryServiceOptions {
-  settings: ResolvedMemorySettings;
-  cwd: string;
-  project?: string;
-}
-
-export interface MemorySaveRequest {
-  content: string;
-  kind?: MemoryKind;
-  scope?: MemoryScope;
-}
-
-export interface MemorySaveOutcome extends MemorySaveResult {
-  embedded: boolean;
-  embeddingError?: string;
-}
-
-export type MemoryCommand =
-  | { kind: "status" }
-  | { kind: "list" }
-  | { kind: "stats" }
-  | { kind: "search"; query: string }
-  | { kind: "forget"; id: string };
-
-export function parseMemoryCommand(text: string): MemoryCommand | undefined {
-  const match = /^\/memory(?:\s+([\s\S]*))?$/u.exec(text.trim());
-  if (match === null) return undefined;
-  const args = (match[1] ?? "").trim();
-  if (args === "") return { kind: "status" };
-  const [head = "", ...rest] = args.split(/\s+/u);
-  const tail = rest.join(" ").trim();
-  switch (head) {
-    case "list":
-      return { kind: "list" };
-    case "stats":
-      return { kind: "stats" };
-    case "search":
-      return tail === "" ? { kind: "status" } : { kind: "search", query: tail };
-    case "forget":
-      return tail === "" ? { kind: "status" } : { kind: "forget", id: tail };
-    default:
-      return { kind: "search", query: args };
-  }
-}
-
-export function isMemoryKind(value: string): value is MemoryKind {
-  return (MEMORY_KINDS as readonly string[]).includes(value);
-}
-
-function truncate(text: string, max = 160): string {
-  const line = text.replace(/\s+/gu, " ").trim();
-  return line.length > max ? `${line.slice(0, max)}…` : line;
-}
-
-export function formatAge(timestamp: number, now = Date.now()): string {
-  const seconds = Math.max(0, Math.floor((now - timestamp) / 1000));
-  if (seconds < 60) return `${seconds}s ago`;
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.floor(hours / 24)}d ago`;
-}
-
-function scopeLabel(record: MemoryRecord): string {
-  return record.scope === "project" ? `project:${record.project ?? "?"}` : "global";
-}
-
-export function formatRecallBlock(records: readonly MemoryRecord[]): string {
-  return [
-    "<memory>",
-    "Long-term memory from previous sessions, recalled for this request. The memory tool can save, search, and forget memories.",
-    ...records.map((record) => `- [${record.kind} · ${scopeLabel(record)}] ${record.content}`),
-    "</memory>",
-  ].join("\n");
-}
-
-export function formatMemoryList(records: readonly MemoryRecord[], now = Date.now()): string {
-  if (records.length === 0) return "No memories stored yet.";
-  return [
-    `${records.length} ${records.length === 1 ? "memory" : "memories"}:`,
-    ...records.map(
-      (record) =>
-        `- ${record.id} [${record.kind} · ${scopeLabel(record)}] ${truncate(record.content)} (${formatAge(record.updatedAt, now)})`,
-    ),
-  ].join("\n");
-}
-
-function formatSignals(scored: MemoryScore): string {
-  const signals = [`keywords ${Math.round(scored.keyword * 100)}%`];
-  if (scored.vector !== undefined) signals.unshift(`similarity ${scored.vector.toFixed(2)}`);
-  return signals.join(", ");
-}
-
-export function formatSearchResults(scores: readonly MemoryScore[], now = Date.now()): string {
-  if (scores.length === 0) return "No matching memories.";
-  return [
-    `${scores.length} ${scores.length === 1 ? "match" : "matches"}:`,
-    ...scores.map(
-      (scored) =>
-        `- ${scored.record.id} [${scored.record.kind} · ${scopeLabel(scored.record)}] ${formatSignals(scored)}: ${truncate(scored.record.content, 200)} (${formatAge(scored.record.updatedAt, now)})`,
-    ),
-  ].join("\n");
-}
+export const resolveProjectName = (dir: string): Promise<string> =>
+  platformRuntime.runPromise(
+    projectNameOf(dir).pipe(Effect.map((name) => name ?? (pathOperations.basename(dir) || dir))),
+  );
 
 export class MemoryService {
   readonly settings: ResolvedMemorySettings;
-  readonly project: string;
+  private projectName: string;
   private store: MemoryStore | undefined;
   private embedding: EmbeddingClient | undefined;
   private embeddingFailedAt: number | undefined;
   private lastEmbeddingError: string | undefined;
+  private readonly ready: Promise<void>;
 
   constructor(options: MemoryServiceOptions) {
     this.settings = options.settings;
-    this.project = options.project ?? resolveProjectName(options.cwd);
+    this.projectName = options.project ?? (pathOperations.basename(options.cwd) || options.cwd);
     if (this.settings.embedding.enabled) {
       const apiKey = this.settings.embedding.apiKey;
       this.embedding = new EmbeddingClient({
@@ -165,6 +86,11 @@ export class MemoryService {
         timeoutMs: this.settings.embedding.timeoutMs,
       });
     }
+    this.ready = platformRuntime.runPromise(this.prepare(options));
+  }
+
+  get project(): string {
+    return this.projectName;
   }
 
   get enabled(): boolean {
@@ -177,115 +103,28 @@ export class MemoryService {
 
   warm(): void {
     if (!this.recallEnabled) return;
-    void this.embedQuery("warmup")
-      .then(() => this.reembedStale())
-      .catch(() => undefined);
+    platformRuntime.runFork(
+      this.embedQuery("warmup").pipe(
+        Effect.andThen(this.reembedStaleEffect(REEMBED_BATCH_LIMIT)),
+        Effect.ignore,
+      ),
+    );
   }
 
-  async reembedStale(limit = REEMBED_BATCH_LIMIT): Promise<number> {
-    if (!this.settings.enabled || this.embedding === undefined) return 0;
-    let reembedded = 0;
-    for (const record of this.ensureStore().listStale(this.settings.embedding.model, limit)) {
-      const vector = await this.embedDocument(record.content);
-      if (vector === undefined) break;
-      this.ensureStore().setEmbedding(record.id, vector, this.settings.embedding.model);
-      reembedded++;
-    }
-    return reembedded;
+  reembedStale(limit = REEMBED_BATCH_LIMIT): Promise<number> {
+    return platformRuntime.runPromise(unwrapForeign(this.reembedStaleEffect(limit)));
   }
 
-  private ensureStore(): MemoryStore {
-    this.store ??= new MemoryStore(this.settings.database);
-    return this.store;
+  recall(query: string, signal?: AbortSignal): Promise<MemoryRecord[]> {
+    return platformRuntime.runPromise(this.recallEffect(query, signal));
   }
 
-  private async embed(text: string, signal?: AbortSignal): Promise<Float32Array | undefined> {
-    const client = this.embedding;
-    if (client === undefined) return undefined;
-    const failedAt = this.embeddingFailedAt;
-    if (failedAt !== undefined && Date.now() - failedAt < EMBEDDING_FAILURE_COOLDOWN_MS) {
-      return undefined;
-    }
-    try {
-      const vector = await client.embed(text, signal);
-      this.embeddingFailedAt = undefined;
-      this.lastEmbeddingError = undefined;
-      return vector;
-    } catch (error) {
-      this.embeddingFailedAt = Date.now();
-      this.lastEmbeddingError = error instanceof Error ? error.message : String(error);
-      return undefined;
-    }
+  save(request: MemorySaveRequest): Promise<MemorySaveOutcome> {
+    return platformRuntime.runPromise(unwrapForeign(this.saveEffect(request)));
   }
 
-  private embedDocument(text: string, signal?: AbortSignal): Promise<Float32Array | undefined> {
-    return this.embed(`${this.settings.embedding.documentPrefix}${text}`, signal);
-  }
-
-  private embedQuery(text: string, signal?: AbortSignal): Promise<Float32Array | undefined> {
-    return this.embed(`${this.settings.embedding.queryPrefix}${text}`, signal);
-  }
-
-  async recall(query: string, signal?: AbortSignal): Promise<MemoryRecord[]> {
-    if (!this.recallEnabled || !query.trim()) return [];
-    try {
-      const embedding = await this.embedQuery(query, signal);
-      const scores = this.ensureStore().search({
-        text: query,
-        ...(embedding === undefined ? {} : { embedding }),
-        project: this.project,
-        limit: this.settings.recall.limit,
-        minScore: this.settings.recall.minScore,
-      });
-      const records = scores.map((scored) => scored.record);
-      if (records.length > 0) this.ensureStore().markUsed(records.map((record) => record.id));
-      return records;
-    } catch {
-      return [];
-    }
-  }
-
-  async save(request: MemorySaveRequest): Promise<MemorySaveOutcome> {
-    const content = request.content.trim();
-    if (content === "") throw new Error("Memory content is empty");
-    const kind = request.kind ?? "fact";
-    if (!isMemoryKind(kind)) {
-      throw new Error(`Unknown memory kind "${kind}"; use one of ${MEMORY_KINDS.join(", ")}`);
-    }
-    const scope = request.scope ?? "project";
-    if (scope !== "project" && scope !== "global") {
-      throw new Error(`Unknown memory scope "${scope}"; use project or global`);
-    }
-    const embedding = await this.embedDocument(content);
-    const result = this.ensureStore().save({
-      content,
-      kind,
-      scope,
-      project: this.project,
-      ...(embedding === undefined
-        ? {}
-        : { embedding, embeddingModel: this.settings.embedding.model }),
-    });
-    return {
-      ...result,
-      embedded: embedding !== undefined,
-      ...(embedding === undefined &&
-      this.lastEmbeddingError !== undefined &&
-      this.lastEmbeddingError !== ""
-        ? { embeddingError: this.lastEmbeddingError }
-        : {}),
-    };
-  }
-
-  async search(query: string, limit = 5): Promise<MemoryScore[]> {
-    const embedding = await this.embedQuery(query);
-    return this.ensureStore().search({
-      text: query,
-      ...(embedding === undefined ? {} : { embedding }),
-      project: this.project,
-      limit,
-      minScore: EXPLICIT_SEARCH_MIN_SCORE,
-    });
+  search(query: string, limit = 5): Promise<MemoryScore[]> {
+    return platformRuntime.runPromise(unwrapForeign(this.searchEffect(query, limit)));
   }
 
   list(limit = 20): MemoryRecord[] {
@@ -302,50 +141,159 @@ export class MemoryService {
 
   describeStatus(): string {
     if (!this.settings.enabled) return "Memory is disabled (settings: memory.enabled).";
-    const stats = this.ensureStore().stats();
-    const embedding = this.settings.embedding.enabled
-      ? this.lastEmbeddingError !== undefined && this.lastEmbeddingError !== ""
-        ? `unavailable: ${truncate(this.lastEmbeddingError, 120)}`
-        : `${this.settings.embedding.model} at ${this.settings.embedding.baseUrl}`
-      : "disabled";
-    return [
-      "Memory is enabled.",
-      `Project: ${this.project}`,
-      `Database: ${this.settings.database}`,
-      `Stored: ${stats.total} (${stats.embedded} embedded, ${stats.projects} projects)`,
-      `Embedding: ${embedding}`,
-      "Commands: /memory list, /memory search <query>, /memory forget <id>, /memory stats",
-    ].join("\n");
+    return formatMemoryStatus({
+      settings: this.settings,
+      project: this.project,
+      stats: this.ensureStore().stats(),
+      lastEmbeddingError: this.lastEmbeddingError,
+    });
   }
 
   describeStats(): string {
     if (!this.settings.enabled) return "Memory is disabled (settings: memory.enabled).";
-    const stats = this.ensureStore().stats();
-    const kinds = Object.entries(stats.byKind)
-      .map(([kind, count]) => `${kind}: ${count}`)
-      .join(", ");
-    return [
-      `Total: ${stats.total} (${stats.embedded} embedded)`,
-      kinds === "" ? "Kinds: none" : `Kinds: ${kinds}`,
-      `Projects: ${stats.projects}`,
-      `Database: ${this.settings.database}`,
-    ].join("\n");
+    return formatMemoryStats({ settings: this.settings, stats: this.ensureStore().stats() });
   }
 
   close(): void {
     this.store?.close();
     this.store = undefined;
   }
-}
 
-export function resolveProjectName(dir: string): string {
-  try {
-    const top = execFileSync("git", ["rev-parse", "--show-toplevel"], {
-      cwd: dir,
-      stdio: ["ignore", "pipe", "ignore"],
-      encoding: "utf8",
-    }).trim();
-    if (top !== "") return basename(top);
-  } catch {}
-  return basename(dir) || dir;
+  private prepare(options: MemoryServiceOptions) {
+    return Effect.gen({ self: this }, function* () {
+      if (options.project === undefined) {
+        const name = yield* projectNameOf(options.cwd);
+        if (name !== undefined) this.projectName = name;
+      }
+      if (this.settings.database !== ":memory:") {
+        const directory = pathOperations.dirname(this.settings.database);
+        yield* FileSystem.FileSystem.use((fs) => fs.makeDirectory(directory, { recursive: true }));
+      }
+    }).pipe(Effect.ignore);
+  }
+
+  private ensureStore(): MemoryStore {
+    this.store ??= new MemoryStore(this.settings.database);
+    return this.store;
+  }
+
+  private embed(text: string, signal?: AbortSignal) {
+    return Effect.gen({ self: this }, function* () {
+      const client = this.embedding;
+      if (client === undefined) return undefined;
+      const failedAt = this.embeddingFailedAt;
+      if (
+        failedAt !== undefined &&
+        currentTimeMillis() - failedAt < EMBEDDING_FAILURE_COOLDOWN_MS
+      ) {
+        return undefined;
+      }
+      return yield* fromPromise(() => client.embed(text, signal)).pipe(
+        Effect.map((vector) => {
+          this.embeddingFailedAt = undefined;
+          this.lastEmbeddingError = undefined;
+          return vector;
+        }),
+        Effect.catchTag("ForeignError", (failure) =>
+          Effect.sync(() => {
+            this.embeddingFailedAt = currentTimeMillis();
+            this.lastEmbeddingError = failure.message;
+            return undefined;
+          }),
+        ),
+      );
+    });
+  }
+
+  private embedDocument(text: string, signal?: AbortSignal) {
+    return this.embed(`${this.settings.embedding.documentPrefix}${text}`, signal);
+  }
+
+  private embedQuery(text: string, signal?: AbortSignal) {
+    return this.embed(`${this.settings.embedding.queryPrefix}${text}`, signal);
+  }
+
+  private reembedStaleEffect(limit: number) {
+    return Effect.gen({ self: this }, function* () {
+      if (!this.settings.enabled || this.embedding === undefined) return 0;
+      let reembedded = 0;
+      for (const record of this.ensureStore().listStale(this.settings.embedding.model, limit)) {
+        const vector = yield* this.embedDocument(record.content);
+        if (vector === undefined) break;
+        this.ensureStore().setEmbedding(record.id, vector, this.settings.embedding.model);
+        reembedded++;
+      }
+      return reembedded;
+    });
+  }
+
+  private recallEffect(query: string, signal: AbortSignal | undefined) {
+    return Effect.gen({ self: this }, function* () {
+      if (!this.recallEnabled || query.trim() === "") return [];
+      yield* fromPromise(() => this.ready);
+      const embedding = yield* this.embedQuery(query, signal);
+      const scores = this.ensureStore().search({
+        text: query,
+        ...(embedding === undefined ? {} : { embedding }),
+        project: this.project,
+        limit: this.settings.recall.limit,
+        minScore: this.settings.recall.minScore,
+      });
+      const records = scores.map((scored) => scored.record);
+      if (records.length > 0) this.ensureStore().markUsed(records.map((record) => record.id));
+      return records;
+    }).pipe(Effect.catchCause(() => Effect.succeed<MemoryRecord[]>([])));
+  }
+
+  private saveEffect(request: MemorySaveRequest) {
+    return Effect.gen({ self: this }, function* () {
+      const content = request.content.trim();
+      if (content === "") return yield* new ToolFailure({ message: "Memory content is empty" });
+      const kind = request.kind ?? "fact";
+      if (!isMemoryKind(kind)) {
+        return yield* new ToolFailure({
+          message: `Unknown memory kind "${kind}"; use one of ${MEMORY_KINDS.join(", ")}`,
+        });
+      }
+      const scope = request.scope ?? "project";
+      if (scope !== "project" && scope !== "global") {
+        return yield* new ToolFailure({
+          message: `Unknown memory scope "${scope}"; use project or global`,
+        });
+      }
+      yield* fromPromise(() => this.ready);
+      const embedding = yield* this.embedDocument(content);
+      const result = this.ensureStore().save({
+        content,
+        kind,
+        scope,
+        project: this.project,
+        ...(embedding === undefined
+          ? {}
+          : { embedding, embeddingModel: this.settings.embedding.model }),
+      });
+      const failure = this.lastEmbeddingError;
+      return {
+        ...result,
+        embedded: embedding !== undefined,
+        ...(embedding === undefined && failure !== undefined && failure !== ""
+          ? { embeddingError: failure }
+          : {}),
+      };
+    });
+  }
+
+  private searchEffect(query: string, limit: number) {
+    return Effect.gen({ self: this }, function* () {
+      yield* fromPromise(() => this.ready);
+      const embedding = yield* this.embedQuery(query);
+      return this.ensureStore().search({
+        text: query,
+        ...(embedding === undefined ? {} : { embedding }),
+        project: this.project,
+        limit,
+        minScore: EXPLICIT_SEARCH_MIN_SCORE,
+      });
+    });
+  }
 }

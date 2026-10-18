@@ -1,147 +1,41 @@
-import { randomBytes } from "node:crypto";
-import { mkdirSync } from "node:fs";
-import { dirname } from "node:path";
 import { DatabaseSync, type StatementSync } from "node:sqlite";
 
-export type MemoryKind = "fact" | "preference" | "decision" | "note";
-export type MemoryScope = "project" | "global";
+import { currentTimeMillis } from "../platform/index.ts";
+import { type MemoryRow, toRecord } from "./store-row.ts";
+import {
+  type MemoryRecord,
+  type MemorySaveInput,
+  type MemorySaveResult,
+  type MemoryScore,
+  type MemoryStoreSearchOptions,
+  type MemoryStoreStats,
+} from "./store-types.ts";
+import {
+  cosineSimilarity,
+  encodeVector,
+  phrase,
+  reciprocalRankFusion,
+  segmentWords,
+} from "./store-vectors.ts";
 
-export const MEMORY_KINDS: readonly MemoryKind[] = ["fact", "preference", "decision", "note"];
+export {
+  MEMORY_KINDS,
+  type MemoryKind,
+  type MemoryRecord,
+  type MemorySaveInput,
+  type MemorySaveResult,
+  type MemoryScope,
+  type MemoryScore,
+  type MemoryStoreSearchOptions,
+  type MemoryStoreStats,
+  RRF_K,
+} from "./store-types.ts";
+export { cosineSimilarity, reciprocalRankFusion, segmentWords } from "./store-vectors.ts";
 
-export interface MemoryRecord {
-  id: string;
-  content: string;
-  kind: MemoryKind;
-  scope: MemoryScope;
-  project: string | null;
-  createdAt: number;
-  updatedAt: number;
-  useCount: number;
-  lastUsedAt: number | null;
-  embedding: Float32Array | null;
-  embeddingModel: string | null;
-}
-
-export interface MemoryStoreSearchOptions {
-  text: string;
-  embedding?: Float32Array;
-  project?: string;
-  limit: number;
-  minScore: number;
-}
-
-export interface MemoryScore {
-  record: MemoryRecord;
-  score: number;
-  keyword: number;
-  vector: number | undefined;
-}
-
-export interface MemorySaveInput {
-  content: string;
-  kind: MemoryKind;
-  scope: MemoryScope;
-  project: string | null;
-  embedding?: Float32Array;
-  embeddingModel?: string;
-  now?: number;
-}
-
-export interface MemorySaveResult {
-  record: MemoryRecord;
-  created: boolean;
-}
-
-export interface MemoryStoreStats {
-  total: number;
-  embedded: number;
-  projects: number;
-  byKind: Record<string, number>;
-}
-
-export const RRF_K = 60;
-
-const segmenter = new Intl.Segmenter("ja", { granularity: "word" });
-
-export function segmentWords(text: string): string[] {
-  const words: string[] = [];
-  for (const segment of segmenter.segment(text.toLowerCase())) {
-    if (segment.isWordLike === true) words.push(segment.segment);
-  }
-  return words;
-}
-
-function phrase(word: string): string {
-  return `"${word.replaceAll('"', '""')}"`;
-}
-
-export function cosineSimilarity(a: Float32Array, b: Float32Array): number {
-  if (a.length === 0 || a.length !== b.length) return 0;
-  let dot = 0;
-  let normA = 0;
-  let normB = 0;
-  for (let index = 0; index < a.length; index++) {
-    const left = a[index]!;
-    const right = b[index]!;
-    dot += left * right;
-    normA += left * left;
-    normB += right * right;
-  }
-  if (normA === 0 || normB === 0) return 0;
-  return dot / (Math.sqrt(normA) * Math.sqrt(normB));
-}
-
-export function reciprocalRankFusion(
-  rankings: readonly (readonly string[])[],
-  k = RRF_K,
-): Map<string, number> {
-  const fused = new Map<string, number>();
-  for (const ranking of rankings) {
-    ranking.forEach((id, index) => {
-      fused.set(id, (fused.get(id) ?? 0) + 1 / (k + index + 1));
-    });
-  }
-  return fused;
-}
-
-function encodeVector(vector: Float32Array): Uint8Array {
-  return new Uint8Array(vector.buffer.slice(0), vector.byteOffset, vector.byteLength);
-}
-
-function decodeVector(bytes: Uint8Array): Float32Array {
-  const copy = bytes.slice();
-  return new Float32Array(copy.buffer, 0, Math.floor(copy.byteLength / 4));
-}
-
-interface MemoryRow {
-  id: string;
-  content: string;
-  kind: string;
-  scope: string;
-  project: string | null;
-  created_at: number;
-  updated_at: number;
-  use_count: number;
-  last_used_at: number | null;
-  embedding: Uint8Array | null;
-  embedding_model: string | null;
-}
-
-function toRecord(row: MemoryRow): MemoryRecord {
-  return {
-    id: row.id,
-    content: row.content,
-    kind: row.kind as MemoryKind,
-    scope: row.scope as MemoryScope,
-    project: row.project,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-    useCount: row.use_count,
-    lastUsedAt: row.last_used_at,
-    embedding: row.embedding === null ? null : decodeVector(row.embedding),
-    embeddingModel: row.embedding_model,
-  };
-}
+const randomHex = (byteCount: number): string =>
+  Array.from(globalThis.crypto.getRandomValues(new Uint8Array(byteCount)), (byte) =>
+    byte.toString(16).padStart(2, "0"),
+  ).join("");
 
 export class MemoryStore {
   readonly databasePath: string;
@@ -151,7 +45,6 @@ export class MemoryStore {
 
   constructor(databasePath: string) {
     this.databasePath = databasePath;
-    if (databasePath !== ":memory:") mkdirSync(dirname(databasePath), { recursive: true });
     this.database = new DatabaseSync(databasePath, { timeout: 5_000 });
     this.database.exec("PRAGMA journal_mode = WAL");
     this.database.exec("PRAGMA synchronous = NORMAL");
@@ -229,7 +122,7 @@ export class MemoryStore {
   }
 
   save(input: MemorySaveInput): MemorySaveResult {
-    const now = input.now ?? Date.now();
+    const now = input.now ?? currentTimeMillis();
     const content = input.content.trim();
     const project = input.scope === "project" ? input.project : null;
     const existing = this.statement(
@@ -246,7 +139,7 @@ export class MemoryStore {
       ) as unknown as MemoryRow;
       return { record: toRecord(refreshed), created: false };
     }
-    const id = `mem_${now.toString(36)}_${randomBytes(4).toString("hex")}`;
+    const id = `mem_${now.toString(36)}_${randomHex(4)}`;
     this.transaction(() => {
       this.statement(
         `INSERT INTO memories
@@ -360,7 +253,7 @@ export class MemoryStore {
     return true;
   }
 
-  markUsed(ids: readonly string[], now = Date.now()): void {
+  markUsed(ids: readonly string[], now = currentTimeMillis()): void {
     const statement = this.statement(
       `UPDATE memories SET use_count = use_count + 1, last_used_at = ? WHERE id = ?`,
     );
