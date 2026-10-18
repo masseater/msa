@@ -1,7 +1,4 @@
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-
+import { Effect, Schema } from "effect";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vite-plus/test";
 
 import {
@@ -16,6 +13,7 @@ import {
   inspectProvider,
   loadConfiguredModelRuntime,
 } from "../evals/configured-runtime.ts";
+import { files, pathOperations } from "../src/platform.ts";
 
 const PROVIDER_ID = OPENAI_PROVIDER_ID;
 const MODEL = {
@@ -30,49 +28,61 @@ const MODEL = {
 };
 const server = createAcmeServer("openai");
 const temporaryDirectories: string[] = [];
+const encodeJson = Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown));
 
-afterEach(async () => {
-  await Promise.all(
-    temporaryDirectories.splice(0).map((path) => rm(path, { recursive: true, force: true })),
-  );
-});
-beforeAll(() => server.start());
+afterEach(() =>
+  Effect.runPromise(
+    Effect.forEach(temporaryDirectories.splice(0), files.remove, { discard: true }),
+  ),
+);
+beforeAll(() => Effect.runPromise(server.start));
 beforeEach(() => server.reset());
-afterAll(() => server.stop());
+afterAll(() => Effect.runPromise(server.stop));
 
-async function agentDirWith(modelsJson: unknown) {
-  const directory = await mkdtemp(join(tmpdir(), "msa-eval-provider-probe-"));
-  temporaryDirectories.push(directory);
-  await writeFile(join(directory, "models.json"), `${JSON.stringify(modelsJson)}\n`);
-  return directory;
-}
+const run = (effect: Effect.Effect<void>) => Effect.runPromise(effect);
 
-async function runtimeWith(modelsJson: unknown) {
-  return loadConfiguredModelRuntime(await agentDirWith(modelsJson));
-}
+const agentDirWithText = (modelsJson: string) =>
+  Effect.gen(function* () {
+    const directory = yield* files.makeTempDirectory("msa-eval-provider-probe-");
+    temporaryDirectories.push(directory);
+    yield* files.writeFileString(pathOperations.join(directory, "models.json"), modelsJson);
+    return directory;
+  });
 
-function acmeModelsJson() {
-  return {
-    providers: {
-      [PROVIDER_ID]: {
-        baseUrl: server.baseUrl(),
-        api: "openai-completions",
-        apiKey: "$ACME_API_KEY",
-        models: [
-          {
-            id: MODEL.id,
-            name: MODEL.name,
-            reasoning: MODEL.reasoning,
-            input: MODEL.input,
-            cost: MODEL.cost,
-            contextWindow: MODEL.contextWindow,
-            maxTokens: MODEL.maxTokens,
-          },
-        ],
-      },
+const agentDirWith = (modelsJson: unknown) =>
+  Effect.flatMap(Effect.orDie(encodeJson(modelsJson)), (text) => agentDirWithText(`${text}\n`));
+
+const runtimeWith = (modelsJson: unknown) =>
+  Effect.flatMap(agentDirWith(modelsJson), loadConfiguredModelRuntime);
+
+const modelEntry = (model: {
+  id: string;
+  name: string;
+  reasoning: boolean;
+  input: string[];
+  cost: unknown;
+  contextWindow: number;
+  maxTokens: number;
+}) => ({
+  id: model.id,
+  name: model.name,
+  reasoning: model.reasoning,
+  input: model.input,
+  cost: model.cost,
+  contextWindow: model.contextWindow,
+  maxTokens: model.maxTokens,
+});
+
+const acmeModelsJson = () => ({
+  providers: {
+    [PROVIDER_ID]: {
+      baseUrl: server.baseUrl(),
+      api: "openai-completions",
+      apiKey: "$ACME_API_KEY",
+      models: [modelEntry(MODEL)],
     },
-  };
-}
+  },
+});
 
 function probe(content: string, apiKey: string) {
   return {
@@ -86,135 +96,136 @@ function probe(content: string, apiKey: string) {
   };
 }
 
-describe("inspectProvider", () => {
-  it("probes a models.json provider through ModelRuntime", async () => {
-    const runtime = await runtimeWith(acmeModelsJson());
-    await expect(
-      inspectProvider(runtime, probe(OPENAI_PROBE_PROMPT, "resolved-acme-key")),
-    ).resolves.toEqual({
-      result: {
-        validRequestReceived: true,
-        model: MODEL,
-        response: {
-          text: OPENAI_PROBE_RESPONSE,
-          stopReason: "stop",
-          inputTokens: 3,
-          outputTokens: 2,
-        },
-      },
-    });
-  });
+const probedResponse = {
+  text: OPENAI_PROBE_RESPONSE,
+  stopReason: "stop",
+  inputTokens: 3,
+  outputTokens: 2,
+};
 
-  it("keeps a non-probe completion distinct from a valid probe", async () => {
-    const runtime = await runtimeWith(acmeModelsJson());
-    await expect(inspectProvider(runtime, probe("hello", "resolved-acme-key"))).resolves.toEqual({
-      result: {
-        validRequestReceived: false,
-        model: MODEL,
-        response: {
-          text: OPENAI_PROBE_RESPONSE,
-          stopReason: "stop",
-          inputTokens: 3,
-          outputTokens: 2,
-        },
-      },
-    });
-  });
+describe("inspectProvider probing", () => {
+  it("probes a models.json provider through ModelRuntime", () =>
+    run(
+      Effect.gen(function* () {
+        const runtime = yield* runtimeWith(acmeModelsJson());
+        const output = yield* inspectProvider(
+          runtime,
+          probe(OPENAI_PROBE_PROMPT, "resolved-acme-key"),
+        );
+        expect(output).toEqual({
+          result: { validRequestReceived: true, model: MODEL, response: probedResponse },
+        });
+      }),
+    ));
 
-  it("returns a structured error when the configured model is missing", async () => {
-    const runtime = await runtimeWith({ providers: {} });
-    await expect(
-      inspectProvider(runtime, probe(OPENAI_PROBE_PROMPT, "resolved-acme-key")),
-    ).resolves.toEqual({
-      result: { error: `Model ${PROVIDER_ID}/${OPENAI_MODEL_ID} is unavailable after reload.` },
-    });
-    expect(server.validRequestReceived()).toBe(false);
-  });
+  it("keeps a non-probe completion distinct from a valid probe", () =>
+    run(
+      Effect.gen(function* () {
+        const runtime = yield* runtimeWith(acmeModelsJson());
+        const output = yield* inspectProvider(runtime, probe("hello", "resolved-acme-key"));
+        expect(output).toEqual({
+          result: { validRequestReceived: false, model: MODEL, response: probedResponse },
+        });
+      }),
+    ));
 
-  it("returns a structured error when models.json cannot be parsed", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "msa-eval-provider-probe-"));
-    temporaryDirectories.push(directory);
-    await writeFile(join(directory, "models.json"), "{");
-    const output = await inspectProvider(
-      await loadConfiguredModelRuntime(directory),
-      probe(OPENAI_PROBE_PROMPT, "resolved-acme-key"),
-    );
-    expect(output).toEqual({
-      result: { error: expect.stringContaining("Failed to parse models.json") },
-    });
-    expect(server.validRequestReceived()).toBe(false);
-  });
-
-  it("does not treat an unauthorized completion as a valid probe", async () => {
-    const runtime = await runtimeWith(acmeModelsJson());
-    await expect(
-      inspectProvider(runtime, probe(OPENAI_PROBE_PROMPT, "wrong-key")),
-    ).resolves.toEqual({
-      result: {
-        validRequestReceived: false,
-        model: MODEL,
-        response: { text: "", stopReason: "error", inputTokens: 0, outputTokens: 0 },
-      },
-    });
-  });
+  it("does not treat an unauthorized completion as a valid probe", () =>
+    run(
+      Effect.gen(function* () {
+        const runtime = yield* runtimeWith(acmeModelsJson());
+        const output = yield* inspectProvider(runtime, probe(OPENAI_PROBE_PROMPT, "wrong-key"));
+        expect(output).toEqual({
+          result: {
+            validRequestReceived: false,
+            model: MODEL,
+            response: { text: "", stopReason: "error", inputTokens: 0, outputTokens: 0 },
+          },
+        });
+      }),
+    ));
 });
 
+describe("inspectProvider failures", () => {
+  it("returns a structured error when the configured model is missing", () =>
+    run(
+      Effect.gen(function* () {
+        const runtime = yield* runtimeWith({ providers: {} });
+        const output = yield* inspectProvider(
+          runtime,
+          probe(OPENAI_PROBE_PROMPT, "resolved-acme-key"),
+        );
+        expect(output).toEqual({
+          result: {
+            error: `Model ${PROVIDER_ID}/${OPENAI_MODEL_ID} is unavailable after reload.`,
+          },
+        });
+        expect(server.validRequestReceived()).toBe(false);
+      }),
+    ));
+
+  it("returns a structured error when models.json cannot be parsed", () =>
+    run(
+      Effect.gen(function* () {
+        const runtime = yield* loadConfiguredModelRuntime(yield* agentDirWithText("{"));
+        const output = yield* inspectProvider(
+          runtime,
+          probe(OPENAI_PROBE_PROMPT, "resolved-acme-key"),
+        );
+        expect(output).toEqual({
+          result: { error: expect.stringContaining("Failed to parse models.json") },
+        });
+        expect(server.validRequestReceived()).toBe(false);
+      }),
+    ));
+});
+
+const ADDED_PROVIDER = "openai";
+const ADDED_MODEL_ID = "fixture-chat";
+const ADDED_MODEL = {
+  id: ADDED_MODEL_ID,
+  name: "Fixture Chat",
+  provider: ADDED_PROVIDER,
+  reasoning: true,
+  input: ["text"],
+  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+  contextWindow: 32768,
+  maxTokens: 4096,
+};
+
 describe("inspectAddedModel", () => {
-  const PROVIDER = "openai";
-  const MODEL_ID = "fixture-chat";
-  const ADDED_MODEL = {
-    id: MODEL_ID,
-    name: "Fixture Chat",
-    provider: PROVIDER,
-    reasoning: true,
-    input: ["text"],
-    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-    contextWindow: 32768,
-    maxTokens: 4096,
-  };
+  it("loads an added model without dropping built-in models", () =>
+    run(
+      Effect.gen(function* () {
+        const directory = yield* agentDirWith({
+          providers: { [ADDED_PROVIDER]: { models: [modelEntry(ADDED_MODEL)] } },
+        });
+        const runtime = yield* loadConfiguredModelRuntime(directory);
+        const output = yield* inspectAddedModel(runtime, ADDED_PROVIDER, ADDED_MODEL_ID);
+        expect(output).toEqual({ result: { model: ADDED_MODEL, existingModelsPreserved: true } });
+      }),
+    ));
 
-  it("loads an added model without dropping built-in models", async () => {
-    const directory = await agentDirWith({
-      providers: {
-        [PROVIDER]: {
-          models: [
-            {
-              id: ADDED_MODEL.id,
-              name: ADDED_MODEL.name,
-              reasoning: ADDED_MODEL.reasoning,
-              input: ADDED_MODEL.input,
-              cost: ADDED_MODEL.cost,
-              contextWindow: ADDED_MODEL.contextWindow,
-              maxTokens: ADDED_MODEL.maxTokens,
-            },
-          ],
-        },
-      },
-    });
-    await expect(
-      inspectAddedModel(await loadConfiguredModelRuntime(directory), PROVIDER, MODEL_ID),
-    ).resolves.toEqual({
-      result: { model: ADDED_MODEL, existingModelsPreserved: true },
-    });
-  });
+  it("returns a structured error when the added model is missing", () =>
+    run(
+      Effect.gen(function* () {
+        const runtime = yield* runtimeWith({ providers: {} });
+        const output = yield* inspectAddedModel(runtime, ADDED_PROVIDER, ADDED_MODEL_ID);
+        expect(output).toEqual({
+          result: {
+            error: `Model ${ADDED_PROVIDER}/${ADDED_MODEL_ID} is unavailable after reload.`,
+          },
+        });
+      }),
+    ));
 
-  it("returns a structured error when the added model is missing", async () => {
-    const directory = await agentDirWith({ providers: {} });
-    await expect(
-      inspectAddedModel(await loadConfiguredModelRuntime(directory), PROVIDER, MODEL_ID),
-    ).resolves.toEqual({
-      result: { error: `Model ${PROVIDER}/${MODEL_ID} is unavailable after reload.` },
-    });
-  });
-
-  it("returns a structured error when models.json cannot be parsed", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "msa-eval-provider-probe-"));
-    temporaryDirectories.push(directory);
-    await writeFile(join(directory, "models.json"), "{");
-    await expect(
-      inspectAddedModel(await loadConfiguredModelRuntime(directory), PROVIDER, MODEL_ID),
-    ).resolves.toEqual({
-      result: { error: expect.stringContaining("Failed to parse models.json") },
-    });
-  });
+  it("returns a structured error when models.json cannot be parsed", () =>
+    run(
+      Effect.gen(function* () {
+        const runtime = yield* loadConfiguredModelRuntime(yield* agentDirWithText("{"));
+        const output = yield* inspectAddedModel(runtime, ADDED_PROVIDER, ADDED_MODEL_ID);
+        expect(output).toEqual({
+          result: { error: expect.stringContaining("Failed to parse models.json") },
+        });
+      }),
+    ));
 });

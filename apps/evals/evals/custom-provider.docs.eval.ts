@@ -1,7 +1,9 @@
+import { Effect } from "effect";
 import { afterAll, beforeAll, beforeEach } from "vite-plus/test";
 import { describeEval, StructuredOutputJudge } from "vitest-evals";
 
 import { createMsaDocumentationEvalHarness } from "../src/harness.ts";
+import { setEnv, unsetEnv } from "../src/platform.ts";
 import {
   createAcmeServer,
   STREAM_API_DOCUMENTATION,
@@ -17,13 +19,13 @@ const STREAM_API_KEY = "resolved-stream-key";
 const server = createAcmeServer("stream");
 
 beforeAll(() => {
-  process.env["ACME_STREAM_API_KEY"] = STREAM_API_KEY;
-  return server.start();
+  setEnv("ACME_STREAM_API_KEY", STREAM_API_KEY);
+  return Effect.runPromise(server.start);
 });
 beforeEach(() => server.reset());
 afterAll(() => {
-  delete process.env["ACME_STREAM_API_KEY"];
-  return server.stop();
+  unsetEnv("ACME_STREAM_API_KEY");
+  return Effect.runPromise(server.stop);
 });
 
 const expected: ProviderRuntimeOutput = {
@@ -62,8 +64,8 @@ describeEval(
   "Add custom streaming provider",
   { harness, judges: [judge], judgeThreshold: null },
   (it) => {
-    it("implements a provider from an API fixture", async ({ run }) => {
-      await run([
+    it("implements a provider from an API fixture", ({ run }) =>
+      run([
         {
           type: "prompt",
           content: `Configure this running msa installation with Acme Stream as a provider. Do not create a project package or modify project source. Its provider ID is ${STREAM_PROVIDER_ID}, its API is at ${server.origin()}, and its API documentation is in ./${DOCUMENTATION_PATH}. Read its credential from the ACME_STREAM_API_KEY environment variable.
@@ -71,7 +73,6 @@ describeEval(
 It offers one model, ${STREAM_MODEL_ID}, shown as “Acme Stream Chat”. The model accepts text, does not support reasoning, has a 16,384-token context window and a 2,048-token maximum output, and has no usage cost.`,
         },
         { type: "reload" },
-      ]);
-    });
+      ]));
   },
 );

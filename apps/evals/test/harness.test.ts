@@ -4,15 +4,16 @@ import { getDocsPath, getExamplesPath, getReadmePath } from "@msa/coding-agent";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import { buildSystemPrompt } from "../../coding-agent/src/core/system-prompt.ts";
+import { createMsaDocumentationEvalHarness } from "../src/harness.ts";
+import { applyIsolatedEnvironment } from "../src/isolation.ts";
+import { resolveModelSelection } from "../src/model-selection.ts";
+import { readEnv } from "../src/platform.ts";
 import {
-  applyIsolatedEnvironment,
-  createMsaDocumentationEvalHarness,
   DOCUMENTATION_EVAL_TOOLS,
   excludeMsaDocumentation,
   resolveDocumentationVariant,
-  resolveModelSelection,
   verifySystemPrompt,
-} from "../src/harness.ts";
+} from "../src/system-prompt.ts";
 
 describe("resolveModelSelection", () => {
   it("prefers an explicit harness model", () => {
@@ -50,19 +51,19 @@ describe("isolateProcessEnvironment", () => {
   it("removes runner metadata and restores the process environment", () => {
     vi.stubEnv("MSA_EVAL_VARIANT", "with_docs");
     vi.stubEnv("MSA_EVAL_ARTIFACT_DIR", "/tmp/artifacts");
-    const oldHome = process.env["HOME"];
+    const oldHome = readEnv("HOME");
     try {
       const restore = applyIsolatedEnvironment("/tmp/eval-home", "/tmp/eval-agent");
       try {
         expect(homedir()).toBe("/tmp/eval-home");
-        expect(process.env["MSA_CODING_AGENT_DIR"]).toBe("/tmp/eval-agent");
-        expect(process.env["MSA_EVAL_VARIANT"]).toBeUndefined();
-        expect(process.env["MSA_EVAL_ARTIFACT_DIR"]).toBeUndefined();
+        expect(readEnv("MSA_CODING_AGENT_DIR")).toBe("/tmp/eval-agent");
+        expect(readEnv("MSA_EVAL_VARIANT")).toBeUndefined();
+        expect(readEnv("MSA_EVAL_ARTIFACT_DIR")).toBeUndefined();
       } finally {
         restore();
       }
-      expect(process.env["HOME"]).toBe(oldHome);
-      expect(process.env["MSA_EVAL_VARIANT"]).toBe("with_docs");
+      expect(readEnv("HOME")).toBe(oldHome);
+      expect(readEnv("MSA_EVAL_VARIANT")).toBe("with_docs");
     } finally {
       vi.unstubAllEnvs();
     }
@@ -77,7 +78,9 @@ describe("documentation variant", () => {
   it.each([undefined, "", "other"])("rejects invalid variant %s", (variant) => {
     expect(() => resolveDocumentationVariant(variant)).toThrow("MSA_EVAL_VARIANT");
   });
+});
 
+describe("documentation system prompt", () => {
   it("strips only the documentation routing section from the default msa prompt", () => {
     const prompt = buildSystemPrompt({
       cwd: "/workspace",

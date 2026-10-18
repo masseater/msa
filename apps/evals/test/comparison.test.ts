@@ -2,12 +2,9 @@ import { stripVTControlCharacters } from "node:util";
 
 import { describe, expect, it } from "vite-plus/test";
 
-import {
-  type EvalObservation,
-  type ExpectedEvalRun,
-  formatEvalComparisonReport,
-  summarizeEvalObservations,
-} from "../src/report.ts";
+import { formatEvalComparisonReport } from "../src/report-format.ts";
+import { summarizeEvalObservations } from "../src/report-summary.ts";
+import type { EvalObservation, ExpectedEvalRun } from "../src/report-types.ts";
 
 function scored(
   variant: EvalObservation["variant"],
@@ -107,7 +104,9 @@ describe("summarizeEvalObservations", () => {
     ]);
     expect(report.operationalTotals[0]?.totalTokens).toEqual({ availableRuns: 2, total: 300 });
   });
+});
 
+describe("summarizeEvalObservations metrics", () => {
   it("blocks duplicate observations and keeps missing metrics distinct from zero", () => {
     const withoutTokens = scored("without_docs", 1, 1);
     delete withoutTokens.totalTokens;

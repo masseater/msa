@@ -14,7 +14,7 @@ Runner code lives in `src/`:
 - `cli.ts` orchestrates a comparison
 - `docker.ts` builds the two images, discovers cases, and runs one isolated arm
 - `plan.ts` expands cases into `(case, variant, repetition)` tasks
-- `report.ts` reads Vitest JSON, pairs arms, and computes lift
+- `report-read.ts` reads Vitest JSON, `report-summary.ts` pairs arms and computes lift, `report-format.ts` prints it
 - `harness.ts` is the vitest-evals adapter
 
 Eval suites and their fixtures live under `evals/`. Image build files live in `docker/`.

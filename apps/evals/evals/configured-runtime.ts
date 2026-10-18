@@ -1,5 +1,4 @@
-import { join } from "node:path";
-
+import * as NodePath from "@effect/platform-node/NodePath";
 import {
   type Api,
   type Context,
@@ -8,6 +7,7 @@ import {
   type ModelsSimpleStreamOptions,
 } from "@msa/ai";
 import { ModelRuntime } from "@msa/coding-agent";
+import { Cause, Effect, Exit, Function, ManagedRuntime, Path } from "effect";
 
 type ModelFields = {
   id: string;
@@ -60,79 +60,106 @@ function modelFields(model: Model<Api>): ModelFields {
   };
 }
 
-export function loadConfiguredModelRuntime(agentDir: string): Promise<ModelRuntime> {
-  return ModelRuntime.create({
-    modelsPath: join(agentDir, "models.json"),
-    authPath: join(agentDir, "auth.json"),
-    modelsStorePath: join(agentDir, "models-store.json"),
-    allowModelNetwork: false,
-  });
-}
+const errorMessage = (error: unknown): string =>
+  error instanceof Error ? error.message : String(error);
 
-export async function inspectProvider(
+const nodePath = ManagedRuntime.make(NodePath.layer).runSync(Path.Path);
+
+export const loadConfiguredModelRuntime = (agentDir: string): Effect.Effect<ModelRuntime> =>
+  Effect.promise(() =>
+    ModelRuntime.create({
+      modelsPath: nodePath.join(agentDir, "models.json"),
+      authPath: nodePath.join(agentDir, "auth.json"),
+      modelsStorePath: nodePath.join(agentDir, "models-store.json"),
+      allowModelNetwork: false,
+    }),
+  );
+
+const failure = (error: string): { result: { error: string } } => ({ result: { error } });
+
+const completeProbe = (
   runtime: ModelRuntime,
   scenario: ProviderScenario,
-): Promise<ProviderRuntimeOutput> {
-  await runtime.refresh({ allowNetwork: false });
-  const configurationError = runtime.getError();
-  if (configurationError) return { result: { error: configurationError } };
-  const model = runtime.getModel(scenario.providerId, scenario.modelId);
-  if (!model) {
-    return {
-      result: {
-        error: `Model ${scenario.providerId}/${scenario.modelId} is unavailable after reload.`,
-      },
-    };
-  }
-  try {
-    const response = await runtime.completeSimple(
-      model,
-      scenario.createContext(),
-      scenario.options,
-    );
-    return {
-      result: {
-        validRequestReceived: scenario.validRequestReceived(),
-        model: modelFields(model),
-        response: {
-          text: contentText(response.content, "\n"),
-          stopReason: response.stopReason,
-          inputTokens: response.usage.input,
-          outputTokens: response.usage.output,
-        },
-      },
-    };
-  } catch (error) {
-    return { result: { error: error instanceof Error ? error.message : String(error) } };
-  }
-}
+  model: Model<Api>,
+): Effect.Effect<ProviderRuntimeOutput> =>
+  Effect.promise(() =>
+    runtime.completeSimple(model, scenario.createContext(), scenario.options),
+  ).pipe(
+    Effect.exit,
+    Effect.map((exit) =>
+      Exit.isFailure(exit)
+        ? failure(errorMessage(Cause.squash(exit.cause)))
+        : {
+            result: {
+              validRequestReceived: scenario.validRequestReceived(),
+              model: modelFields(model),
+              response: {
+                text: contentText(exit.value.content, "\n"),
+                stopReason: exit.value.stopReason,
+                inputTokens: exit.value.usage.input,
+                outputTokens: exit.value.usage.output,
+              },
+            },
+          },
+    ),
+  );
 
-export async function inspectAddedModel(
-  runtime: ModelRuntime,
-  providerId: string,
-  modelId: string,
-): Promise<AddedModelOutput> {
-  const pristineRuntime = await ModelRuntime.create({ modelsPath: null, allowModelNetwork: false });
-  const pristineProvider = pristineRuntime.getProvider(providerId);
-  if (!pristineProvider)
-    return { result: { error: `Built-in provider ${providerId} is unavailable.` } };
-  const existingModelIds = pristineProvider.getModels().map(({ id }) => id);
-  if (existingModelIds.length === 0) {
-    return { result: { error: `Built-in provider ${providerId} has no models.` } };
-  }
-  await runtime.refresh({ allowNetwork: false });
-  const configurationError = runtime.getError();
-  if (configurationError) return { result: { error: configurationError } };
-  const model = runtime.getModel(providerId, modelId);
-  if (!model) {
-    return { result: { error: `Model ${providerId}/${modelId} is unavailable after reload.` } };
-  }
-  return {
-    result: {
-      model: modelFields(model),
-      existingModelsPreserved: existingModelIds.every(
-        (id) => runtime.getModel(providerId, id) !== undefined,
-      ),
-    },
-  };
-}
+export const inspectProvider: {
+  (scenario: ProviderScenario): (runtime: ModelRuntime) => Effect.Effect<ProviderRuntimeOutput>;
+  (runtime: ModelRuntime, scenario: ProviderScenario): Effect.Effect<ProviderRuntimeOutput>;
+} = Function.dual(
+  2,
+  (runtime: ModelRuntime, scenario: ProviderScenario): Effect.Effect<ProviderRuntimeOutput> =>
+    Effect.gen(function* () {
+      yield* Effect.promise(() => runtime.refresh({ allowNetwork: false }));
+      const configurationError = runtime.getError();
+      if (configurationError !== undefined && configurationError !== "") {
+        return failure(configurationError);
+      }
+      const model = runtime.getModel(scenario.providerId, scenario.modelId);
+      if (model === undefined) {
+        return failure(
+          `Model ${scenario.providerId}/${scenario.modelId} is unavailable after reload.`,
+        );
+      }
+      return yield* completeProbe(runtime, scenario, model);
+    }),
+);
+
+export const inspectAddedModel: {
+  (providerId: string, modelId: string): (runtime: ModelRuntime) => Effect.Effect<AddedModelOutput>;
+  (runtime: ModelRuntime, providerId: string, modelId: string): Effect.Effect<AddedModelOutput>;
+} = Function.dual(
+  3,
+  (runtime: ModelRuntime, providerId: string, modelId: string): Effect.Effect<AddedModelOutput> =>
+    Effect.gen(function* () {
+      const pristineRuntime = yield* Effect.promise(() =>
+        ModelRuntime.create({ modelsPath: null, allowModelNetwork: false }),
+      );
+      const pristineProvider = pristineRuntime.getProvider(providerId);
+      if (pristineProvider === undefined) {
+        return failure(`Built-in provider ${providerId} is unavailable.`);
+      }
+      const existingModelIds = pristineProvider.getModels().map(({ id }) => id);
+      if (existingModelIds.length === 0) {
+        return failure(`Built-in provider ${providerId} has no models.`);
+      }
+      yield* Effect.promise(() => runtime.refresh({ allowNetwork: false }));
+      const configurationError = runtime.getError();
+      if (configurationError !== undefined && configurationError !== "") {
+        return failure(configurationError);
+      }
+      const model = runtime.getModel(providerId, modelId);
+      if (model === undefined) {
+        return failure(`Model ${providerId}/${modelId} is unavailable after reload.`);
+      }
+      return {
+        result: {
+          model: modelFields(model),
+          existingModelsPreserved: existingModelIds.every(
+            (id) => runtime.getModel(providerId, id) !== undefined,
+          ),
+        },
+      };
+    }),
+);

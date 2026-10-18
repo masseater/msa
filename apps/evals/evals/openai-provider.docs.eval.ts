@@ -1,3 +1,4 @@
+import { Effect } from "effect";
 import { afterAll, beforeAll, beforeEach } from "vite-plus/test";
 import { describeEval, StructuredOutputJudge } from "vitest-evals";
 
@@ -13,9 +14,9 @@ import { inspectProvider, type ProviderRuntimeOutput } from "./configured-runtim
 
 const server = createAcmeServer("openai");
 
-beforeAll(() => server.start());
+beforeAll(() => Effect.runPromise(server.start));
 beforeEach(() => server.reset());
-afterAll(() => server.stop());
+afterAll(() => Effect.runPromise(server.stop));
 
 const expected: ProviderRuntimeOutput = {
   result: {
@@ -52,8 +53,8 @@ describeEval(
   "Add OpenAI-compatible provider",
   { harness, judges: [judge], judgeThreshold: null },
   (it) => {
-    it("configures a provider that works through msa", async ({ run }) => {
-      await run([
+    it("configures a provider that works through msa", ({ run }) =>
+      run([
         {
           type: "prompt",
           content: `Configure this running msa installation with Acme as a provider. Do not create project-local configuration. Its provider ID is ${OPENAI_PROVIDER_ID}, its API is at ${server.baseUrl()}, and it uses OpenAI Chat Completions. Read its API key from the ACME_API_KEY environment variable.
@@ -61,7 +62,6 @@ describeEval(
 The provider offers one model, ${OPENAI_MODEL_ID}, shown as “Acme Chat”. It accepts text, does not support reasoning, has a 32,768-token context window and a 4,096-token maximum output, and has no usage cost.`,
         },
         { type: "reload" },
-      ]);
-    });
+      ]));
   },
 );

@@ -11,7 +11,7 @@ export default mergeConfig(
     resolve: {
       alias: [
         {
-          find: /^@msa\/coding-agent$/,
+          find: /^@msa\/coding-agent$/u,
           replacement: workspaceSourcePaths.codingAgentIndex,
         },
       ],
