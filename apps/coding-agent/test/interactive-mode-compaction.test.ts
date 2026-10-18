@@ -1,5 +1,7 @@
 import type { Usage } from "@msa/ai";
+import { awaited, runTest } from "@msa/testing";
 import { Container } from "@msa/tui";
+import { Effect } from "effect";
 import { describe, expect, test, vi } from "vite-plus/test";
 
 import type { SessionEntry } from "../src/core/session-manager.ts";
@@ -110,134 +112,142 @@ describe("InteractiveMode compaction events", () => {
     );
   });
 
-  test("renders retained entries and appends the latest summary cost at the bottom", async () => {
-    const usage: Usage = {
-      input: 10,
-      output: 20,
-      cacheRead: 30,
-      cacheWrite: 40,
-      totalTokens: 100,
-      cost: { input: 0.01, output: 0.02, cacheRead: 0.03, cacheWrite: 0.065, total: 0.125 },
-    };
-    const latestCompaction: SessionEntry = {
-      type: "compaction",
-      id: "latest",
-      parentId: "previous",
-      timestamp: "2025-01-02T00:00:00Z",
-      summary: "summary",
-      firstKeptEntryId: "kept",
-      tokensBefore: 123,
-      usage,
-    };
-    const previousCompaction: SessionEntry = {
-      type: "compaction",
-      id: "previous",
-      parentId: null,
-      timestamp: "2025-01-01T00:00:00Z",
-      summary: "previous summary",
-      firstKeptEntryId: "kept",
-      tokensBefore: 100,
-      usage,
-    };
-    const fakeThis = {
-      isInitialized: true,
-      footer: { invalidate: vi.fn() },
-      programStatus: { handleEvent: vi.fn() },
-      autoCompactionEscapeHandler: undefined as (() => void) | undefined,
-      autoCompactionLoader: undefined,
-      defaultEditor: {},
-      statusContainer: { clear: vi.fn() },
-      chatContainer: { clear: vi.fn() },
-      sessionManager: {
-        buildContextEntries: vi.fn().mockReturnValue([latestCompaction, previousCompaction]),
-      },
-      renderSessionEntries: vi.fn(),
-      addMessageToChat: vi.fn(),
-      addCompactionCostNotice: vi.fn(),
-      showError: vi.fn(),
-      showStatus: vi.fn(),
-      clearStatusIndicator: vi.fn(),
-      flushCompactionQueue: vi.fn().mockResolvedValue(undefined),
-      settingsManager: { getShowTerminalProgress: () => false },
-      ui: { requestRender: vi.fn(), terminal: { setProgress: vi.fn() } },
-    };
+  test("renders retained entries and appends the latest summary cost at the bottom", () =>
+    runTest(
+      Effect.gen(function* () {
+        const usage: Usage = {
+          input: 10,
+          output: 20,
+          cacheRead: 30,
+          cacheWrite: 40,
+          totalTokens: 100,
+          cost: { input: 0.01, output: 0.02, cacheRead: 0.03, cacheWrite: 0.065, total: 0.125 },
+        };
+        const latestCompaction: SessionEntry = {
+          type: "compaction",
+          id: "latest",
+          parentId: "previous",
+          timestamp: "2025-01-02T00:00:00Z",
+          summary: "summary",
+          firstKeptEntryId: "kept",
+          tokensBefore: 123,
+          usage,
+        };
+        const previousCompaction: SessionEntry = {
+          type: "compaction",
+          id: "previous",
+          parentId: null,
+          timestamp: "2025-01-01T00:00:00Z",
+          summary: "previous summary",
+          firstKeptEntryId: "kept",
+          tokensBefore: 100,
+          usage,
+        };
+        const fakeThis = {
+          isInitialized: true,
+          footer: { invalidate: vi.fn() },
+          programStatus: { handleEvent: vi.fn() },
+          autoCompactionEscapeHandler: undefined as (() => void) | undefined,
+          autoCompactionLoader: undefined,
+          defaultEditor: {},
+          statusContainer: { clear: vi.fn() },
+          chatContainer: { clear: vi.fn() },
+          sessionManager: {
+            buildContextEntries: vi.fn().mockReturnValue([latestCompaction, previousCompaction]),
+          },
+          renderSessionEntries: vi.fn(),
+          addMessageToChat: vi.fn(),
+          addCompactionCostNotice: vi.fn(),
+          showError: vi.fn(),
+          showStatus: vi.fn(),
+          clearStatusIndicator: vi.fn(),
+          flushCompactionQueue: vi.fn().mockResolvedValue(undefined),
+          settingsManager: { getShowTerminalProgress: () => false },
+          ui: { requestRender: vi.fn(), terminal: { setProgress: vi.fn() } },
+        };
 
-    const handleEvent = Reflect.get(InteractiveMode.prototype, "handleEvent") as (
-      this: typeof fakeThis,
-      event: {
-        type: "compaction_end";
-        reason: "manual" | "threshold" | "overflow";
-        result: { tokensBefore: number; summary: string; usage?: Usage } | undefined;
-        aborted: boolean;
-        willRetry: boolean;
-        errorMessage?: string;
-      },
-    ) => Promise<void>;
+        const handleEvent = Reflect.get(InteractiveMode.prototype, "handleEvent") as (
+          this: typeof fakeThis,
+          event: {
+            type: "compaction_end";
+            reason: "manual" | "threshold" | "overflow";
+            result: { tokensBefore: number; summary: string; usage?: Usage } | undefined;
+            aborted: boolean;
+            willRetry: boolean;
+            errorMessage?: string;
+          },
+        ) => Promise<void>;
 
-    await handleEvent.call(fakeThis, {
-      type: "compaction_end",
-      reason: "manual",
-      result: {
-        tokensBefore: 123,
-        summary: "summary",
-        usage,
-      },
-      aborted: false,
-      willRetry: false,
-    });
+        yield* awaited(
+          handleEvent.call(fakeThis, {
+            type: "compaction_end",
+            reason: "manual",
+            result: {
+              tokensBefore: 123,
+              summary: "summary",
+              usage,
+            },
+            aborted: false,
+            willRetry: false,
+          }),
+        );
 
-    expect(fakeThis.chatContainer.clear).toHaveBeenCalledTimes(1);
-    expect(fakeThis.renderSessionEntries).toHaveBeenCalledWith([previousCompaction]);
-    expect(fakeThis.addMessageToChat).toHaveBeenCalledTimes(1);
-    expect(fakeThis.addMessageToChat).toHaveBeenCalledWith(
-      expect.objectContaining({
-        role: "compactionSummary",
-        tokensBefore: 123,
-        summary: "summary",
+        expect(fakeThis.chatContainer.clear).toHaveBeenCalledTimes(1);
+        expect(fakeThis.renderSessionEntries).toHaveBeenCalledWith([previousCompaction]);
+        expect(fakeThis.addMessageToChat).toHaveBeenCalledTimes(1);
+        expect(fakeThis.addMessageToChat).toHaveBeenCalledWith(
+          expect.objectContaining({
+            role: "compactionSummary",
+            tokensBefore: 123,
+            summary: "summary",
+          }),
+        );
+        expect(fakeThis.addCompactionCostNotice).toHaveBeenCalledWith({
+          type: "compaction_cost",
+          kind: "compaction",
+          usage,
+        });
+        expect(fakeThis.flushCompactionQueue).toHaveBeenCalledWith({ willRetry: false });
       }),
-    );
-    expect(fakeThis.addCompactionCostNotice).toHaveBeenCalledWith({
-      type: "compaction_cost",
-      kind: "compaction",
-      usage,
-    });
-    expect(fakeThis.flushCompactionQueue).toHaveBeenCalledWith({ willRetry: false });
-  });
+    ));
 
-  test("updates the working state when the same agent run resumes after compaction", async () => {
-    const fakeThis = {
-      isInitialized: true,
-      footer: { invalidate: vi.fn() },
-      programStatus: { handleEvent: vi.fn() },
-      activeStatusIndicator: undefined,
-      workingVisible: true,
-      showWorkingStatusIndicator: vi.fn(),
-      clearStatusIndicator: vi.fn(),
-      settingsManager: { getShowTerminalProgress: () => true },
-      ui: { requestRender: vi.fn(), terminal: { setProgress: vi.fn() } },
-    };
-    const handleEvent = Reflect.get(InteractiveMode.prototype, "handleEvent") as (
-      this: typeof fakeThis,
-      event: { type: "turn_start" },
-    ) => Promise<void>;
+  test("updates the working state when the same agent run resumes after compaction", () =>
+    runTest(
+      Effect.gen(function* () {
+        const fakeThis = {
+          isInitialized: true,
+          footer: { invalidate: vi.fn() },
+          programStatus: { handleEvent: vi.fn() },
+          activeStatusIndicator: undefined,
+          workingVisible: true,
+          showWorkingStatusIndicator: vi.fn(),
+          clearStatusIndicator: vi.fn(),
+          settingsManager: { getShowTerminalProgress: () => true },
+          ui: { requestRender: vi.fn(), terminal: { setProgress: vi.fn() } },
+        };
+        const handleEvent = Reflect.get(InteractiveMode.prototype, "handleEvent") as (
+          this: typeof fakeThis,
+          event: { type: "turn_start" },
+        ) => Promise<void>;
 
-    await handleEvent.call(fakeThis, { type: "turn_start" });
+        yield* awaited(handleEvent.call(fakeThis, { type: "turn_start" }));
 
-    expect(fakeThis.ui.terminal.setProgress).toHaveBeenCalledWith(true);
-    expect(fakeThis.showWorkingStatusIndicator).toHaveBeenCalledTimes(1);
-    expect(fakeThis.clearStatusIndicator).not.toHaveBeenCalled();
-    expect(fakeThis.ui.requestRender).toHaveBeenCalledTimes(1);
+        expect(fakeThis.ui.terminal.setProgress).toHaveBeenCalledWith(true);
+        expect(fakeThis.showWorkingStatusIndicator).toHaveBeenCalledTimes(1);
+        expect(fakeThis.clearStatusIndicator).not.toHaveBeenCalled();
+        expect(fakeThis.ui.requestRender).toHaveBeenCalledTimes(1);
 
-    fakeThis.workingVisible = false;
-    await handleEvent.call(fakeThis, { type: "turn_start" });
+        fakeThis.workingVisible = false;
+        yield* awaited(handleEvent.call(fakeThis, { type: "turn_start" }));
 
-    expect(fakeThis.showWorkingStatusIndicator).toHaveBeenCalledTimes(1);
-    expect(fakeThis.clearStatusIndicator).toHaveBeenCalledTimes(1);
-    expect(fakeThis.ui.requestRender).toHaveBeenCalledTimes(2);
-  });
+        expect(fakeThis.showWorkingStatusIndicator).toHaveBeenCalledTimes(1);
+        expect(fakeThis.clearStatusIndicator).toHaveBeenCalledTimes(1);
+        expect(fakeThis.ui.requestRender).toHaveBeenCalledTimes(2);
+      }),
+    ));
 
   test("routes interactive response aborts through AgentSession", () => {
-    const abort = vi.fn(async () => {});
+    const abort = vi.fn(() => runTest(Effect.sync(() => {})));
     const ui = {
       clearAllQueues: () => ({ steering: [], followUp: [] }),
       updatePendingMessagesDisplay: vi.fn(),
@@ -253,31 +263,34 @@ describe("InteractiveMode compaction events", () => {
     expect(abort).toHaveBeenCalledOnce();
   });
 
-  test("preserves steering behavior when flushing into an active agent run", async () => {
-    const fakeThis = {
-      compactionQueuedMessages: [{ text: "change direction", mode: "steer" as const }],
-      session: {
-        clearQueue: vi.fn(),
-        prompt: vi.fn().mockResolvedValue(undefined),
-        steer: vi.fn().mockResolvedValue(undefined),
-        followUp: vi.fn().mockResolvedValue(undefined),
-      },
-      isExtensionCommand: vi.fn().mockReturnValue(false),
-      updatePendingMessagesDisplay: vi.fn(),
-      showError: vi.fn(),
-    };
+  test("preserves steering behavior when flushing into an active agent run", () =>
+    runTest(
+      Effect.gen(function* () {
+        const fakeThis = {
+          compactionQueuedMessages: [{ text: "change direction", mode: "steer" as const }],
+          session: {
+            clearQueue: vi.fn(),
+            prompt: vi.fn().mockResolvedValue(undefined),
+            steer: vi.fn().mockResolvedValue(undefined),
+            followUp: vi.fn().mockResolvedValue(undefined),
+          },
+          isExtensionCommand: vi.fn().mockReturnValue(false),
+          updatePendingMessagesDisplay: vi.fn(),
+          showError: vi.fn(),
+        };
 
-    const flushCompactionQueue = Reflect.get(InteractiveMode.prototype, "flushCompactionQueue") as (
-      this: typeof fakeThis,
-      options?: { willRetry?: boolean },
-    ) => Promise<void>;
+        const flushCompactionQueue = Reflect.get(
+          InteractiveMode.prototype,
+          "flushCompactionQueue",
+        ) as (this: typeof fakeThis, options?: { willRetry?: boolean }) => Promise<void>;
 
-    await flushCompactionQueue.call(fakeThis, { willRetry: false });
+        yield* awaited(flushCompactionQueue.call(fakeThis, { willRetry: false }));
 
-    expect(fakeThis.session.prompt).toHaveBeenCalledWith("change direction", {
-      streamingBehavior: "steer",
-    });
-    expect(fakeThis.compactionQueuedMessages).toEqual([]);
-    expect(fakeThis.showError).not.toHaveBeenCalled();
-  });
+        expect(fakeThis.session.prompt).toHaveBeenCalledWith("change direction", {
+          streamingBehavior: "steer",
+        });
+        expect(fakeThis.compactionQueuedMessages).toEqual([]);
+        expect(fakeThis.showError).not.toHaveBeenCalled();
+      }),
+    ));
 });
