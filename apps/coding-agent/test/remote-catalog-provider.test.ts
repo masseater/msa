@@ -8,7 +8,7 @@ import {
   type Provider,
   type RefreshModelsContext,
 } from "@msa/ai";
-import { awaited, runTest, abortController, toJsonText } from "@msa/testing";
+import { awaited, runTest, abortController, toJsonText, dateFromMillis } from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
@@ -196,10 +196,10 @@ describe("remote catalog provider", () => {
         const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
         const localGeneratedAt = Date.parse("2026-07-23T10:00:00.000Z");
-        const newerHeader = new Date(localGeneratedAt + 60_000).toUTCString();
+        const newerHeader = dateFromMillis(localGeneratedAt + 60_000).toUTCString();
         const responses = [
           new Response(yield* toJsonText({ old: model("old") }), {
-            headers: { "last-modified": new Date(localGeneratedAt - 60_000).toUTCString() },
+            headers: { "last-modified": dateFromMillis(localGeneratedAt - 60_000).toUTCString() },
           }),
           new Response(yield* toJsonText({ newer: model("newer") }), {
             headers: { "last-modified": newerHeader },

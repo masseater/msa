@@ -19,6 +19,7 @@ import {
   writeTextFile,
   changeMode,
   joinPath,
+  dateFromMillis,
 } from "@msa/testing";
 import { Effect, Stream } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
@@ -80,7 +81,7 @@ describe("Claude Code accounts", () => {
 
   it("blocks an account that hit its usage limit until the reset", () => {
     const account = { name: "main" };
-    const resetsAt = new Date(2026, 9, 19, 15, 0).getTime();
+    const resetsAt = dateFromMillis(2026).getTime();
     expect(
       blockIfUnusable(account, {
         error: "You've hit your weekly limit",

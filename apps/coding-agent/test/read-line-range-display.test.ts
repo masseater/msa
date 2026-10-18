@@ -3,7 +3,14 @@ import { tmpdir } from "node:os";
 import { stripVTControlCharacters } from "node:util";
 import { runInNewContext } from "node:vm";
 
-import { awaited, runTest, readTextFile, writeTextFile, joinPath } from "@msa/testing";
+import {
+  awaited,
+  runTest,
+  readTextFile,
+  writeTextFile,
+  joinPath,
+  isoFromMillis,
+} from "@msa/testing";
 import type { TUI } from "@msa/tui";
 import { Effect } from "effect";
 import { afterAll, beforeAll, describe, expect, it } from "vite-plus/test";
@@ -84,7 +91,7 @@ describe("read line range display", () => {
           type: "message" as const,
           id: "assistant",
           parentId: null,
-          timestamp: new Date(0).toISOString(),
+          timestamp: isoFromMillis(0),
           message: {
             role: "assistant",
             content: [{ type: "toolCall" as const, id: "call", name: "read", arguments: args }],

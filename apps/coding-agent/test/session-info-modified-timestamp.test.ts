@@ -2,7 +2,14 @@ import { writeFileSync } from "node:fs";
 import { stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 
-import { awaited, runTest, currentTimeMillis, joinPath, dirnameOf } from "@msa/testing";
+import {
+  awaited,
+  runTest,
+  currentTimeMillis,
+  joinPath,
+  dirnameOf,
+  isoFromMillis,
+} from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vite-plus/test";
 
@@ -15,7 +22,7 @@ function createSessionFile(path: string): void {
     type: "session" as const,
     id: "test-session",
     version: 3,
-    timestamp: new Date(0).toISOString(),
+    timestamp: isoFromMillis(0),
     cwd: "/tmp",
   };
   writeFileSync(path, `${JSON.stringify(header)}\n`, "utf8");

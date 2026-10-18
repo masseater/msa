@@ -1,6 +1,6 @@
 import { stripVTControlCharacters } from "node:util";
 
-import { currentTimeMillis, currentDate } from "@msa/testing";
+import { currentTimeMillis, currentDate, dateFromMillis } from "@msa/testing";
 import { setKeybindings, visibleWidth } from "@msa/tui";
 import { beforeAll, beforeEach, describe, expect, test } from "vite-plus/test";
 
@@ -334,7 +334,7 @@ describe("TreeSelectorComponent", () => {
         assistantMessage("asst-1", "user-1", "hi"),
       ];
       const tree = buildTree(entries);
-      const labelDate = new Date(2026, 2, 28, 14, 32, 0);
+      const labelDate = dateFromMillis(2026);
       tree[0]!.label = "checkpoint";
       tree[0]!.labelTimestamp = labelDate.toISOString();
 

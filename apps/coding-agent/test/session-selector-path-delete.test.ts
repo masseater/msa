@@ -1,7 +1,7 @@
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 
-import { awaited, runTest, joinPath } from "@msa/testing";
+import { awaited, runTest, joinPath, dateFromMillis } from "@msa/testing";
 import { setKeybindings } from "@msa/tui";
 import { Effect } from "effect";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vite-plus/test";
@@ -52,8 +52,8 @@ function makeSession(overrides: Partial<SessionInfo> & { id: string }): SessionI
     ...(overrides.parentSessionPath === undefined
       ? {}
       : { parentSessionPath: overrides.parentSessionPath }),
-    created: overrides.created ?? new Date(0),
-    modified: overrides.modified ?? new Date(0),
+    created: overrides.created ?? dateFromMillis(0),
+    modified: overrides.modified ?? dateFromMillis(0),
     messageCount: overrides.messageCount ?? 1,
     firstMessage: overrides.firstMessage ?? "hello",
     allMessagesText: overrides.allMessagesText ?? "hello",
@@ -306,14 +306,14 @@ describe("session selector path/delete interactions", () => {
             id: "parent",
             path: paths.parentAliasB,
             name: "Parent",
-            modified: new Date("2026-01-01T00:00:00.000Z"),
+            modified: dateFromMillis("2026-01-01T00:00:00.000Z"),
           }),
           makeSession({
             id: "child",
             path: paths.childAliasB,
             parentSessionPath: paths.parentAliasA,
             name: "Child",
-            modified: new Date("2025-12-31T00:00:00.000Z"),
+            modified: dateFromMillis("2025-12-31T00:00:00.000Z"),
           }),
         ];
 
@@ -342,18 +342,18 @@ describe("session selector path/delete interactions", () => {
         const parentOne = makeSession({
           id: "parent-one",
           name: "Parent one",
-          modified: new Date("2026-01-02T00:00:00.000Z"),
+          modified: dateFromMillis("2026-01-02T00:00:00.000Z"),
         });
         const parentTwo = makeSession({
           id: "parent-two",
           name: "Parent two",
-          modified: new Date("2026-01-01T00:00:00.000Z"),
+          modified: dateFromMillis("2026-01-01T00:00:00.000Z"),
         });
         const childTwo = makeSession({
           id: "child-two",
           name: "Child two",
           parentSessionPath: parentTwo.path,
-          modified: new Date("2026-01-03T00:00:00.000Z"),
+          modified: dateFromMillis("2026-01-03T00:00:00.000Z"),
         });
 
         const selector = new SessionSelectorComponent(

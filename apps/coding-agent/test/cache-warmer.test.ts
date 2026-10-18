@@ -8,7 +8,7 @@ import {
   type Usage,
 } from "@msa/ai";
 import { getBuiltinModel } from "@msa/ai/providers/all";
-import { awaited, runTest, abortController } from "@msa/testing";
+import { awaited, runTest, abortController, isoFromMillis } from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
@@ -78,7 +78,7 @@ function branchWithPrompt(promptTokens: number): SessionEntry[] {
       type: "message" as const,
       id: "a",
       parentId: null,
-      timestamp: new Date(0).toISOString(),
+      timestamp: isoFromMillis(0),
       message: {
         ...response(adaptiveModel),
         usage: {

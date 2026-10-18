@@ -10,6 +10,12 @@ export const nowIso = (): string => DateTime.formatIso(DateTime.makeUnsafe(curre
 
 export const currentDate = (): Date => DateTime.toDate(DateTime.makeUnsafe(currentTimeMillis()));
 
+export const dateFromMillis = (value: string | number | Date): Date =>
+  DateTime.toDate(DateTime.makeUnsafe(value));
+
+export const isoFromMillis = (value: string | number | Date): string =>
+  DateTime.formatIso(DateTime.makeUnsafe(value));
+
 export const awaited = <A>(value: A | PromiseLike<A>): Effect.Effect<A> =>
   Effect.promise(() => Promise.resolve(value));
 

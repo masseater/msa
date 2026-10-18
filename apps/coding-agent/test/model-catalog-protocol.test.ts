@@ -2,7 +2,7 @@ import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 
 import { InMemoryCredentialStore } from "@msa/ai";
-import { awaited, runTest } from "@msa/testing";
+import { awaited, runTest, dateFromMillis } from "@msa/testing";
 import { Effect } from "effect";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vite-plus/test";
 
@@ -22,7 +22,7 @@ const legacyRevision = `sha256-${"a".repeat(64)}`;
 const mixedApiRevision = `sha256-${"b".repeat(64)}`;
 const modelId = "anthropic/claude-sonnet-5";
 
-const lastModified = new Date("2099-01-01T00:00:00Z").toUTCString();
+const lastModified = dateFromMillis("2099-01-01T00:00:00Z").toUTCString();
 const commonModel = {
   id: modelId,
   name: "Claude Sonnet 5",

@@ -1,4 +1,4 @@
-import { awaited, runTest } from "@msa/testing";
+import { awaited, runTest, dateFromMillis } from "@msa/testing";
 import { setKeybindings } from "@msa/tui";
 import { Effect } from "effect";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vite-plus/test";
@@ -26,8 +26,8 @@ function makeSession(overrides: Partial<SessionInfo> & { id: string }): SessionI
     id: overrides.id,
     cwd: overrides.cwd ?? "",
     ...(overrides.name === undefined ? {} : { name: overrides.name }),
-    created: overrides.created ?? new Date(0),
-    modified: overrides.modified ?? new Date(0),
+    created: overrides.created ?? dateFromMillis(0),
+    modified: overrides.modified ?? dateFromMillis(0),
     messageCount: overrides.messageCount ?? 1,
     firstMessage: overrides.firstMessage ?? "hello",
     allMessagesText: overrides.allMessagesText ?? "hello",
