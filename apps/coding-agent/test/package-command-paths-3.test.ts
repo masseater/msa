@@ -272,4 +272,23 @@ describe("package commands", () => {
         }
       }),
     ));
+
+  it("shows a friendly error for missing install source", () =>
+    runTest(
+      Effect.gen(function* () {
+        const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+        try {
+          yield* awaited(expect(main(["install"])).resolves.toBeUndefined());
+
+          const stderr = errorSpy.mock.calls.map(([message]) => String(message)).join("\n");
+          expect(stderr).toContain("Missing install source.");
+          expect(stderr).toContain("Usage: msa install <source> [-l]");
+          expect(stderr).not.toContain("at ");
+          expect(process.exitCode).toBe(1);
+        } finally {
+          errorSpy.mockRestore();
+        }
+      }),
+    ));
 });

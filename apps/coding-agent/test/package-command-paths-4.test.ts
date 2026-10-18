@@ -15,7 +15,6 @@ import { beforeEach, afterEach, describe, expect, it, vi } from "vite-plus/test"
 
 import { PACKAGE_NAME, VERSION } from "../src/config.ts";
 import { readEnv } from "../src/core/process-env.ts";
-import { main } from "../src/main.ts";
 import {
   type PackageTestState,
   env,
@@ -44,25 +43,6 @@ describe("package commands", () => {
   beforeEach(() => runTest(setupPackageTest).then(assignState));
 
   afterEach(() => runTest(teardownPackageTest(state)));
-
-  it("shows a friendly error for missing install source", () =>
-    runTest(
-      Effect.gen(function* () {
-        const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-
-        try {
-          yield* awaited(expect(main(["install"])).resolves.toBeUndefined());
-
-          const stderr = errorSpy.mock.calls.map(([message]) => String(message)).join("\n");
-          expect(stderr).toContain("Missing install source.");
-          expect(stderr).toContain("Usage: msa install <source> [-l]");
-          expect(stderr).not.toContain("at ");
-          expect(process.exitCode).toBe(1);
-        } finally {
-          errorSpy.mockRestore();
-        }
-      }),
-    ));
 
   it("allows explicit self-update checks when automatic version checks are disabled", () =>
     runTest(
