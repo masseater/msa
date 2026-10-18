@@ -4,14 +4,8 @@ import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import {
-  gates,
-  behaviors,
-  log,
-  directories,
-  toolCalls,
-  blockingTool,
-} from "./harness-structured-support.ts";
+import { toolCalls, blockingTool } from "./harness-structured-events.ts";
+import { gates, behaviors, log, directories } from "./harness-structured-support.ts";
 import {
   allEntries,
   chatSetup,

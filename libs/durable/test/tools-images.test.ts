@@ -2,8 +2,6 @@ import { createCodingTools } from "@msa/durable/tools";
 import { Effect } from "effect";
 import { afterAll, beforeAll, describe, expect, it } from "vite-plus/test";
 
-import { getOrThrow } from "../src/env/index.ts";
-import { NodeExecutionEnv } from "../src/env/node.ts";
 import { DEFAULT_IMAGE_LIMITS, type ImageProcessor, toBase64 } from "../src/tools/image.ts";
 import { createReadTool } from "../src/tools/read.ts";
 import { awaited, failure, appendBytes, joinPath } from "./support.ts";
@@ -21,6 +19,7 @@ import {
   messages,
   onlyImage,
   read,
+  readEnv,
   removeImageDirectory,
 } from "./tools-images-support.ts";
 
@@ -35,40 +34,6 @@ beforeAll(() =>
 );
 
 afterAll(removeImageDirectory);
-
-function readEnv(
-  onRead: (offset: number, length: number) => Effect.Effect<void> = () => Effect.void,
-) {
-  const env = new NodeExecutionEnv({ cwd: directory });
-  const reads = { largest: 0 };
-  const open = env.openBinaryReader.bind(env);
-  env.openBinaryReader = (path, options, ctx) =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
-        const reader = getOrThrow(yield* awaited(open(path, options, ctx)));
-        return {
-          ok: true,
-          value: {
-            info: (c) => reader.info(c),
-            scanLines: (o, c) => reader.scanLines(o, c),
-            close: (c) => reader.close(c),
-            read: (offset, length, c) =>
-              runPromise(
-                Effect.gen(function* () {
-                  reads.largest = Math.max(reads.largest, length);
-                  const result = yield* awaited(reader.read(offset, length, c));
-                  yield* onRead(offset, length);
-                  return result;
-                }),
-              ),
-          },
-        };
-      }),
-    );
-  return { env, reads };
-}
 
 const returnsSupportedImage = Effect.gen(function* () {
   const png = encode(8, 6, "png");

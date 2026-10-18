@@ -5,6 +5,7 @@ import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
+import { toolCalls } from "./harness-structured-events.ts";
 import { seed, COMPLETED } from "./harness-structured-recovery-cases.ts";
 import {
   state,
@@ -19,7 +20,6 @@ import {
   parentOf,
   directories,
   sqlitePath,
-  toolCalls,
 } from "./harness-structured-support.ts";
 import {
   allEntries,

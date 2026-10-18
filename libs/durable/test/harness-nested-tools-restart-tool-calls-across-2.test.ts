@@ -204,45 +204,43 @@ describe("nested tool calls across a restart", () => {
     Effect.runPromise(abandonsChildTasks));
 });
 
-const leavesBackgroundWork = Effect.gen(function* () {
-  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
-  const { path, setup, started, Background } = yield* backgroundWorkSetup();
-  let background: TaskId | undefined;
-  addTool(
-    setup.registry,
-    tool("spawn", (_args, api, callContext) =>
-      runPromise(
-        Effect.gen(function* () {
-          const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
-          background = yield* awaited(
-            api.commit(
-              (tx) =>
-                runPromise(
-                  Effect.gen(function* () {
-                    const child = yield* awaited(
-                      tx.createConversation({
-                        ownership: { kind: "task", taskId: api.taskId },
-                      }),
-                    );
-                    return yield* awaited(
-                      tx.createTask(Background, null, {
-                        conversationId: child.id,
-                        ownership: { kind: "conversation" },
-                        background: true,
-                      }),
-                    );
-                  }),
-                ),
-              callContext,
-            ),
-          );
-          return yield* awaited(aborted(callContext.abortSignal!));
-        }),
-      ),
+const backgroundSpawnTool = (
+  Background: Effect.Success<ReturnType<typeof backgroundWorkSetup>>["Background"],
+  seen: { background?: TaskId },
+) =>
+  tool("spawn", (_args, api, callContext) =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+        seen.background = yield* awaited(
+          api.commit(
+            (tx) =>
+              runPromise(
+                Effect.gen(function* () {
+                  const child = yield* awaited(
+                    tx.createConversation({ ownership: { kind: "task", taskId: api.taskId } }),
+                  );
+                  return yield* awaited(
+                    tx.createTask(Background, null, {
+                      conversationId: child.id,
+                      ownership: { kind: "conversation" },
+                      background: true,
+                    }),
+                  );
+                }),
+              ),
+            callContext,
+          ),
+        );
+        return yield* awaited(aborted(callContext.abortSignal!));
+      }),
     ),
   );
+
+const leavesBackgroundWork = Effect.gen(function* () {
+  const { path, setup, started, Background } = yield* backgroundWorkSetup();
+  const seen: { background?: TaskId } = {};
+  addTool(setup.registry, backgroundSpawnTool(Background, seen));
   addTool(
     setup.registry,
     tool("batch", (_args, api, callContext) =>
@@ -258,11 +256,11 @@ const leavesBackgroundWork = Effect.gen(function* () {
   ).toBe("done");
   const [spawn] = yield* nestedTasks(opened.harness);
   expect(spawn).toMatchObject({ abortReason: "restart", state: { status: "terminal" } });
-  expect(yield* awaited(opened.harness.getTask(background!, context))).toMatchObject({
+  expect(yield* awaited(opened.harness.getTask(seen.background!, context))).toMatchObject({
     abortRequested: false,
     state: { status: "running" },
   });
-  yield* awaited(opened.harness.abortTask(background!, context));
+  yield* awaited(opened.harness.abortTask(seen.background!, context));
   yield* awaited(opened.harness.close(context));
 });
 

@@ -13,6 +13,7 @@ import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { invalidFinalStream } from "./harness-generation-support.ts";
+import { toolCalls, blockingTool } from "./harness-structured-events.ts";
 import {
   state,
   outcomeOf,
@@ -25,8 +26,6 @@ import {
   owned,
   script,
   directories,
-  toolCalls,
-  blockingTool,
 } from "./harness-structured-support.ts";
 import {
   allEntries,

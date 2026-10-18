@@ -3,6 +3,7 @@ import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { awaited } from "./effect-support.ts";
+import { spawnAndFinish } from "./harness-structured-events.ts";
 import {
   state,
   outcomeOf,
@@ -20,7 +21,6 @@ import {
   waitOn,
   spawn,
   script,
-  spawnAndFinish,
   directories,
 } from "./harness-structured-support.ts";
 import { removeDir } from "./platform-support.ts";

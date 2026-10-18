@@ -4,11 +4,11 @@ import type { ToolDiagnostic, ToolExecutionApi, ToolExecutionResult } from "@msa
 import { Effect } from "effect";
 import { expect } from "vite-plus/test";
 
+import { getOrThrow } from "../src/env/index.ts";
 import { NodeExecutionEnv } from "../src/env/node.ts";
 import type { ImageProcessor } from "../src/tools/image.ts";
 import { createReadTool } from "../src/tools/read.ts";
-import { awaited } from "./effect-support.ts";
-import { makeTempDir, removeDir, writeTempFile } from "./platform-support.ts";
+import { awaited, makeTempDir, removeDir, writeTempFile } from "./support.ts";
 
 export const directory = await Effect.runPromise(makeTempDir("msa-durable-images-"));
 
@@ -55,4 +55,38 @@ export function messages(result: ToolExecutionResult): string[] {
 export function onlyImage(result: ToolExecutionResult): { data: string; mimeType: string } {
   expect(result.output).toHaveLength(1);
   return (result.output as { data: string; mimeType: string }[])[0]!;
+}
+
+export function readEnv(
+  onRead: (offset: number, length: number) => Effect.Effect<void> = () => Effect.void,
+) {
+  const env = new NodeExecutionEnv({ cwd: directory });
+  const reads = { largest: 0 };
+  const open = env.openBinaryReader.bind(env);
+  env.openBinaryReader = (path, options, ctx) =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
+        const reader = getOrThrow(yield* awaited(open(path, options, ctx)));
+        return {
+          ok: true,
+          value: {
+            info: (c) => reader.info(c),
+            scanLines: (o, c) => reader.scanLines(o, c),
+            close: (c) => reader.close(c),
+            read: (offset, length, c) =>
+              runPromise(
+                Effect.gen(function* () {
+                  reads.largest = Math.max(reads.largest, length);
+                  const result = yield* awaited(reader.read(offset, length, c));
+                  yield* onRead(offset, length);
+                  return result;
+                }),
+              ),
+          },
+        };
+      }),
+    );
+  return { env, reads };
 }
