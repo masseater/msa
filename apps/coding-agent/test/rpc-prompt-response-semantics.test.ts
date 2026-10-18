@@ -50,7 +50,7 @@ function createAssistantMessage(text: string): AssistantMessage {
     role: "assistant",
     content: [{ type: "text", text }],
     api: "anthropic-messages",
-    provider: "anthropic",
+    provider: "anthropic-api",
     model: "claude-sonnet-4-5",
     usage: {
       input: 0,
@@ -102,7 +102,7 @@ async function createRuntimeHost(options: {
   // Memory stays out of these tests: recall would add a real embedding request and timing noise.
   writeFileSync(join(tempDir, "settings.json"), JSON.stringify({ memory: { enabled: false } }));
 
-  const model = options.model ?? getModel("anthropic", "claude-sonnet-4-5");
+  const model = options.model ?? getModel("anthropic-api", "claude-sonnet-4-5");
   if (!model) {
     throw new Error("Test model not found");
   }
@@ -131,7 +131,7 @@ async function createRuntimeHost(options: {
   const authStorage = AuthStorage.create(join(tempDir, "auth.json"));
   const modelRegistry = await createInMemoryModelRegistry(authStorage);
   if (options.withAuth) {
-    await authStorage.modify("anthropic", async () => ({ type: "api_key", key: "test-key" }));
+    await authStorage.modify("anthropic-api", async () => ({ type: "api_key", key: "test-key" }));
   }
 
   const session = new AgentSession({

@@ -28,7 +28,7 @@ function msg(
       role,
       content: [{ type: "text", text }],
       api: "anthropic-messages",
-      provider: "anthropic",
+      provider: "anthropic-api",
       model: "claude-test",
       usage: {
         input: 1,
@@ -161,7 +161,7 @@ describe("buildSessionContext", () => {
         msg("2", "1", "assistant", "hi"),
       ];
       const ctx = buildSessionContext(entries);
-      expect(ctx.model).toEqual({ provider: "anthropic", modelId: "claude-test" });
+      expect(ctx.model).toEqual({ provider: "anthropic-api", modelId: "claude-test" });
     });
 
     it("tracks model from model change entry", () => {
@@ -172,7 +172,7 @@ describe("buildSessionContext", () => {
       ];
       const ctx = buildSessionContext(entries);
       // Assistant message overwrites model change
-      expect(ctx.model).toEqual({ provider: "anthropic", modelId: "claude-test" });
+      expect(ctx.model).toEqual({ provider: "anthropic-api", modelId: "claude-test" });
     });
   });
 

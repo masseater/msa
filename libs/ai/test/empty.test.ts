@@ -15,8 +15,7 @@ type StreamOptionsWithExtras = StreamOptions & Record<string, unknown>;
 import { resolveApiKey } from "./oauth.ts";
 
 // Resolve OAuth tokens at module level (async, runs before tests)
-const oauthTokens = await Promise.all([resolveApiKey("anthropic"), resolveApiKey("openai-codex")]);
-const [anthropicOAuthToken, openaiCodexToken] = oauthTokens;
+const openaiCodexToken = await resolveApiKey("openai-codex");
 
 async function testEmptyMessage<TApi extends Api>(
   llm: Model<TApi>,
@@ -212,7 +211,7 @@ describe("AI Providers Empty Message Tests", () => {
   );
 
   describe.skipIf(!process.env["ANTHROPIC_API_KEY"])("Anthropic Provider Empty Messages", () => {
-    const llm = getModel("anthropic", "claude-haiku-4-5");
+    const llm = getModel("anthropic-api", "claude-haiku-4-5");
 
     it("should handle empty content array", { retry: 3, timeout: 30000 }, async () => {
       await testEmptyMessage(llm);
@@ -238,42 +237,6 @@ describe("AI Providers Empty Message Tests", () => {
   // =========================================================================
   // OAuth-based providers (credentials from ~/.msa/agent/oauth.json)
   // =========================================================================
-
-  describe("Anthropic OAuth Provider Empty Messages", () => {
-    const llm = getModel("anthropic", "claude-haiku-4-5");
-
-    it.skipIf(!anthropicOAuthToken)(
-      "should handle empty content array",
-      { retry: 3, timeout: 30000 },
-      async () => {
-        await testEmptyMessage(llm, { apiKey: anthropicOAuthToken });
-      },
-    );
-
-    it.skipIf(!anthropicOAuthToken)(
-      "should handle empty string content",
-      { retry: 3, timeout: 30000 },
-      async () => {
-        await testEmptyStringMessage(llm, { apiKey: anthropicOAuthToken });
-      },
-    );
-
-    it.skipIf(!anthropicOAuthToken)(
-      "should handle whitespace-only content",
-      { retry: 3, timeout: 30000 },
-      async () => {
-        await testWhitespaceOnlyMessage(llm, { apiKey: anthropicOAuthToken });
-      },
-    );
-
-    it.skipIf(!anthropicOAuthToken)(
-      "should handle empty assistant message in conversation",
-      { retry: 3, timeout: 30000 },
-      async () => {
-        await testEmptyAssistantMessage(llm, { apiKey: anthropicOAuthToken });
-      },
-    );
-  });
 
   describe("OpenAI Codex Provider Empty Messages", () => {
     it.skipIf(!openaiCodexToken)(

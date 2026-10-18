@@ -79,7 +79,7 @@ const anthropicModel: Model<"anthropic-messages"> = {
   id: "claude-test",
   name: "Claude Test",
   api: "anthropic-messages",
-  provider: "anthropic",
+  provider: "anthropic-api",
   baseUrl: "https://api.anthropic.com",
   reasoning: false,
   input: ["text"],
@@ -157,7 +157,6 @@ describe("Anthropic workload identity federation", () => {
     expect(mockState.constructorOpts?.["config"]).toEqual(expectedConfig);
     const headers = mockState.constructorOpts?.["defaultHeaders"] as Record<string, string | null>;
     expect(headers["Authorization"]).toBeUndefined();
-    expect(mockState.createParams?.["betas"] ?? []).not.toContain("oauth-2025-04-20");
   });
 
   it("threads authContext federation variables through Models", async () => {

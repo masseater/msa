@@ -88,7 +88,7 @@ describe("lazy provider module loading", () => {
 				id: "claude-sonnet-4-6",
 				name: "Claude Sonnet 4",
 				api: "anthropic-messages",
-				provider: "anthropic",
+				provider: "anthropic-api",
 				baseUrl: "https://api.anthropic.com",
 				reasoning: true,
 				input: ["text"],
@@ -106,7 +106,7 @@ describe("lazy provider module loading", () => {
   it("loads only the Anthropic SDK when dispatching through streamSimple", () => {
     const result = runProbe(`
 			const compat = await import(${JSON.stringify(compatEntryUrl)});
-			const model = compat.getModel("anthropic", "claude-sonnet-4-6");
+			const model = compat.getModel("anthropic-api", "claude-sonnet-4-6");
 			const context = { messages: [{ role: "user", content: "hi" }] };
 			await compat.streamSimple(model, context).result();
 		`);

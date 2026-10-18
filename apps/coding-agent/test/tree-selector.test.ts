@@ -44,7 +44,7 @@ function assistantMessage(id: string, parentId: string | null, text: string): Se
       role: "assistant",
       content: [{ type: "text", text }],
       api: "anthropic-messages",
-      provider: "anthropic",
+      provider: "anthropic-api",
       model: "claude-sonnet-4",
       usage: {
         input: 0,
@@ -71,7 +71,7 @@ function toolCallOnlyAssistant(id: string, parentId: string | null): SessionMess
       role: "assistant",
       content: [{ type: "toolCall", id: `tc-${id}`, name: "read", arguments: { path: "test.ts" } }],
       api: "anthropic-messages",
-      provider: "anthropic",
+      provider: "anthropic-api",
       model: "claude-sonnet-4",
       usage: {
         input: 0,
@@ -94,7 +94,7 @@ function modelChange(id: string, parentId: string | null): ModelChangeEntry {
     id,
     parentId,
     timestamp: new Date().toISOString(),
-    provider: "anthropic",
+    provider: "anthropic-api",
     modelId: "claude-sonnet-4",
   };
 }

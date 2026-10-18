@@ -28,7 +28,7 @@ describe("AgentSession auto-compaction queue resume", () => {
     tempDir = join(tmpdir(), `msa-auto-compaction-queue-${Date.now()}`);
     mkdirSync(tempDir, { recursive: true });
 
-    const model = getModel("anthropic", "claude-sonnet-4-5")!;
+    const model = getModel("anthropic-api", "claude-sonnet-4-5")!;
     const agent = new Agent({
       streamFn: streamSimple,
       initialState: {
@@ -41,7 +41,7 @@ describe("AgentSession auto-compaction queue resume", () => {
     sessionManager = SessionManager.inMemory();
     settingsManager = SettingsManager.create(tempDir, tempDir);
     const authStorage = AuthStorage.create(join(tempDir, "auth.json"));
-    await authStorage.modify("anthropic", async () => ({ type: "api_key", key: "test-key" }));
+    await authStorage.modify("anthropic-api", async () => ({ type: "api_key", key: "test-key" }));
     const modelRegistry = await createModelRegistry(authStorage, tempDir);
 
     session = new AgentSession({

@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Changed
+
+- The `anthropic` provider is now `anthropic-api` and `claude-code` is now `claude-subs`, so the pay-per-token API and Claude subscriptions read apart; credentials, `models.json` and settings move to the new ids on startup
+- `claude-subs` and `opencode-free` are part of msa instead of built-in extensions, so `--no-extensions` keeps them; they are listed only when `claude` / `opencode` is installed
+- `anthropic-api` takes API keys only: the Claude Pro/Max sign-in, `ANTHROPIC_OAUTH_TOKEN`, and the requests that posed as Claude Code are gone; a stored Claude Pro/Max sign-in is dropped on startup. Use `claude-subs` for a subscription
+- `/accounts claude add|remove` rebuilds the `claude-subs-<account>` providers without reloading the session
+
 ## [0.0.3] - 2026-10-17
 
 v0.0.2 was never tagged, so this is the first release after 0.0.1 and also carries the 0.0.2 fixes below.

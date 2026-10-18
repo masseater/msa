@@ -16,7 +16,7 @@ import { getUsageCostBreakdown } from "../src/core/usage-totals.ts";
 import { createInMemoryModelRegistry, getModelRuntime } from "./model-runtime-test-utils.ts";
 import { createTestResourceLoader } from "./utilities.ts";
 
-const model = getModel("anthropic", "claude-sonnet-4-5")!;
+const model = getModel("anthropic-api", "claude-sonnet-4-5")!;
 
 function createUsage(totalTokens: number): Usage {
   return {
@@ -76,7 +76,7 @@ async function createSession() {
   const settingsManager = SettingsManager.inMemory();
   const sessionManager = SessionManager.inMemory();
   const authStorage = AuthStorage.inMemory();
-  await authStorage.modify("anthropic", async () => ({ type: "api_key", key: "test-key" }));
+  await authStorage.modify("anthropic-api", async () => ({ type: "api_key", key: "test-key" }));
   const session = new AgentSession({
     agent: new Agent({
       getApiKey: () => "test-key",

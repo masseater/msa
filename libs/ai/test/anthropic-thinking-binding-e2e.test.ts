@@ -5,7 +5,7 @@ import { getModel, normalizeContext } from "../src/compat.ts";
 import type { AssistantMessage, Context } from "../src/types.ts";
 
 const enabled = Boolean(process.env["ANTHROPIC_API_KEY"]);
-const model = getModel("anthropic", "claude-fable-5-1");
+const model = getModel("anthropic-api", "claude-fable-5-1");
 const user = (content: string, timestamp: number) => ({
   role: "user" as const,
   content,

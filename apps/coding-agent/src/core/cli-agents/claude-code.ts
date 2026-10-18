@@ -23,6 +23,7 @@ import type {
   JsonObject,
   Message,
   Model,
+  Provider,
   SimpleStreamOptions,
   Tool,
   ToolResultMessage,
@@ -30,7 +31,6 @@ import type {
   UserMessage,
 } from "@msa/ai/compat";
 
-import type { ExtensionAPI } from "../../core/extensions/types.ts";
 import {
   accountEnv,
   blockIfUnusable,
@@ -40,10 +40,11 @@ import {
   type Account,
   type RunFailure,
 } from "./claude-accounts.ts";
+import { cliAgentProvider } from "./provider.ts";
 import { createReply, type ReplyBuilder } from "./reply.ts";
 import { flattenTranscript, textFromContent } from "./transcript.ts";
 
-const PROVIDER_ID = "claude-code";
+const PROVIDER_ID = "claude-subs";
 const SERVER = "msa";
 const TOOL_PREFIX = `mcp__${SERVER}__`;
 const IDLE_CLOSE_MS = 30 * 60_000;
@@ -51,10 +52,10 @@ const IDLE_CLOSE_MS = 30 * 60_000;
 const MAX_IDLE_SESSIONS = 2;
 
 const MODELS = [
-  { id: "fable", name: "Claude Code Fable" },
-  { id: "opus", name: "Claude Code Opus" },
-  { id: "sonnet", name: "Claude Code Sonnet" },
-  { id: "haiku", name: "Claude Code Haiku" },
+  { id: "fable", name: "Claude Fable" },
+  { id: "opus", name: "Claude Opus" },
+  { id: "sonnet", name: "Claude Sonnet" },
+  { id: "haiku", name: "Claude Haiku" },
 ] as const;
 
 type Effort = "low" | "medium" | "high" | "xhigh" | "max";
@@ -625,40 +626,39 @@ const streamFor =
     return reply.stream;
   };
 
-function registerProvider(msa: ExtensionAPI, id: string, name: string, account?: Account): void {
-  msa.registerProvider(id, {
+function provider(id: string, name: string, account?: Account): Provider {
+  return cliAgentProvider({
+    id,
     name,
-    baseUrl: "http://127.0.0.1:1/v1",
-    apiKey: "local",
-    api: "openai-completions",
     models: MODELS.map((model) => ({
       id: model.id,
       name: model.name,
       reasoning: true,
-      input: ["text", "image"] as const,
-      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+      input: ["text", "image"],
       contextWindow: 1_000_000,
       maxTokens: 128_000,
     })),
-    streamSimple: streamFor(account) as never,
+    executable: claudeExecutable,
+    streamSimple: streamFor(account),
   });
 }
 
 /**
- * `claude-code` runs under the first available account and moves on when one is
- * blocked; `claude-code-<account>` stays on that account.
+ * `claude-subs` runs under the first available account and moves on when one is
+ * blocked; `claude-subs-<account>` stays on that account.
  */
-export function registerClaudeCode(msa: ExtensionAPI): void {
+export function claudeCodeProviders(): Provider[] {
   const accounts = loadAccounts();
-  registerProvider(msa, PROVIDER_ID, "Claude Code");
-  if (accounts.length > 1) {
-    for (const account of accounts) {
-      registerProvider(
-        msa,
-        `${PROVIDER_ID}-${account.name}`,
-        `Claude Code (${account.name})`,
-        account,
-      );
-    }
-  }
+  return [
+    provider(PROVIDER_ID, "Claude subscription"),
+    ...(accounts.length > 1
+      ? accounts.map((account) =>
+          provider(
+            `${PROVIDER_ID}-${account.name}`,
+            `Claude subscription (${account.name})`,
+            account,
+          ),
+        )
+      : []),
+  ];
 }

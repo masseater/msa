@@ -16,7 +16,7 @@ const model: Model<"anthropic-messages"> = {
   id: "claude-haiku-4-5",
   name: "Test Claude",
   api: "anthropic-messages",
-  provider: "anthropic",
+  provider: "anthropic-api",
   baseUrl: "https://anthropic.example",
   reasoning: false,
   input: ["text"],
@@ -165,7 +165,7 @@ describe("Anthropic preferred strict tool fallback", () => {
         },
       },
       transcript,
-      { ...options, apiKey: "sk-ant-oat-test" },
+      { ...options, apiKey: "sk-ant-test" },
     ).result();
     expect(result.stopReason).toBe("stop");
     expect(payloads).toHaveLength(2);

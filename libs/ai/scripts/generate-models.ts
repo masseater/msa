@@ -358,7 +358,7 @@ function supportsOpenAiMax(model: Model<Api>): boolean {
   );
 }
 
-const VERIFIED_ANTHROPIC_MID_CONVO_EFFORT_PROVIDERS = new Set(["anthropic", "openrouter"]);
+const VERIFIED_ANTHROPIC_MID_CONVO_EFFORT_PROVIDERS = new Set(["anthropic-api", "openrouter"]);
 // OpenRouter rejects `configuration_update` system messages on Opus 5 ("Mid-conversation
 // reasoning effort (configuration_update) is not supported on anthropic/claude-opus-5-20260723")
 // while accepting them on Fable 5.1, so gate that model there.
@@ -570,7 +570,7 @@ function applyAnthropicMessagesCompatMetadata(model: Model<Api>): void {
 }
 
 function isAnthropicFallbackMetadataModel(model: Model<Api>): model is Model<"anthropic-messages"> {
-  if (model.provider !== "anthropic" || model.api !== "anthropic-messages") return false;
+  if (model.provider !== "anthropic-api" || model.api !== "anthropic-messages") return false;
   return (
     model.id in ANTHROPIC_ALLOWED_FALLBACK_MODELS ||
     Object.values(ANTHROPIC_ALLOWED_FALLBACK_MODELS).some((fallbackModelIds) =>
@@ -608,7 +608,7 @@ function applyStrictToolCompatMetadata(model: Model<Api>): void {
       ...(model.compat as OpenAIResponsesCompat | undefined),
       supportsStrictMode: true,
     };
-  } else if (model.provider === "anthropic" && model.api === "anthropic-messages") {
+  } else if (model.provider === "anthropic-api" && model.api === "anthropic-messages") {
     mergeAnthropicMessagesCompat(model, { supportsStrictTools: true });
   }
 }
@@ -721,7 +721,7 @@ function applyOpenAIMidConvoEffortMetadata(model: Model<Api>): void {
 const ANTHROPIC_PROMPT_CACHE: ModelPromptCache = { short: 300, long: 3600 };
 
 function applyPromptCacheMetadata(model: Model<Api>): void {
-  if (model.provider === "anthropic" && model.api === "anthropic-messages") {
+  if (model.provider === "anthropic-api" && model.api === "anthropic-messages") {
     model.promptCache = ANTHROPIC_PROMPT_CACHE;
   }
   // Do not add OpenAI lifetimes yet. Before enabling warming for explicit
@@ -733,7 +733,7 @@ function applyImageInputMetadata(model: AnyModel): void {
   if (!model.input.includes("image")) return;
 
   const providerLimits: AnyModel["inputLimits"] =
-    model.provider === "anthropic"
+    model.provider === "anthropic-api"
       ? {
           maxRequestBytes: 32 * 1024 * 1024,
           images: {
@@ -899,7 +899,7 @@ function getAnthropicMessagesCompat(
   ) {
     compat.supportsMidConvoEffort = true;
   }
-  if (provider === "anthropic" && supportsAnthropicMidConvoSystemMessages(modelId)) {
+  if (provider === "anthropic-api" && supportsAnthropicMidConvoSystemMessages(modelId)) {
     compat.supportsMidConvoSystemMessages = true;
     compat.supportsMidConvoToolChanges = true;
   }
@@ -993,7 +993,7 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
           id: modelId,
           name: m.name || modelId,
           api: "anthropic-messages",
-          provider: "anthropic",
+          provider: "anthropic-api",
           baseUrl: "https://api.anthropic.com",
           reasoning: m.reasoning === true,
           input: m.modalities?.input?.includes("image") ? ["text", "image"] : ["text"],
@@ -1001,7 +1001,7 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
           contextWindow: m.limit?.context || 4096,
           maxTokens: m.limit?.output || 4096,
         });
-        recordModelsDevReasoningOptions("anthropic", modelId, m);
+        recordModelsDevReasoningOptions("anthropic-api", modelId, m);
       }
     }
 
@@ -1218,7 +1218,7 @@ async function generateModels() {
   for (const candidate of allModels) {
     // models.dev may list Opus 5.5, Sonnet 5.5, and Haiku 5.5 before their effort metadata is complete.
     if (
-      candidate.provider === "anthropic" &&
+      candidate.provider === "anthropic-api" &&
       (candidate.id === "claude-opus-5-5" ||
         candidate.id === "claude-sonnet-5-5" ||
         candidate.id === "claude-haiku-5-5")
@@ -1236,7 +1236,7 @@ async function generateModels() {
     }
 
     if (
-      (candidate.provider === "anthropic" ||
+      (candidate.provider === "anthropic-api" ||
         candidate.provider === "opencode" ||
         candidate.provider === "opencode-go") &&
       (candidate.id === "claude-opus-4-6" ||

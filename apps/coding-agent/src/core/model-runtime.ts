@@ -72,6 +72,7 @@ import { getAgentDir } from "../config.ts";
 import { operationSignal, raceWithAbortSignal } from "../utils/abort.ts";
 import { toErrorMessage } from "../utils/errors.ts";
 import { AuthStorage as DefaultAuthStorage } from "./auth-storage.ts";
+import { cliAgentProviders } from "./cli-agents/index.ts";
 import { ModelConfig } from "./model-config.ts";
 import { FileModelsStore, InMemoryCodingAgentModelsStore } from "./models-store.ts";
 import {
@@ -183,7 +184,8 @@ function mergeHeaders(
 export class ModelRuntime implements Models {
   private readonly models: MutableModels;
   private readonly credentials: RuntimeCredentials;
-  private readonly builtins: ReadonlyMap<string, Provider>;
+  private readonly catalogProviders: readonly Provider[];
+  private builtins: ReadonlyMap<string, Provider> = new Map();
   private readonly nativeExtensionProviders = new Map<string, Provider>();
   private readonly extensionProviders = new Map<string, ProviderConfigInput>();
   /** Virtual models by provider id, then model id. */
@@ -218,7 +220,7 @@ export class ModelRuntime implements Models {
     this.config = config;
     this.modelsPath = modelsPath;
     this.modelNetworkEnabled = modelNetworkEnabled;
-    this.builtins = new Map(providers.map((provider) => [provider.id, provider]));
+    this.catalogProviders = providers;
     this.models = createModels({ credentials, modelsStore });
     this.rebuildProviders();
   }
@@ -327,6 +329,9 @@ export class ModelRuntime implements Models {
   }
 
   private rebuildProviders(): void {
+    this.builtins = new Map(
+      [...this.catalogProviders, ...cliAgentProviders()].map((provider) => [provider.id, provider]),
+    );
     this.models.clearProviders();
     this.compositionErrors.clear();
     for (const providerId of this.providerIds()) this.recomposeProvider(providerId);

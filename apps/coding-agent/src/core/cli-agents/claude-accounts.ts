@@ -1,5 +1,5 @@
 /**
- * Claude accounts the claude-code provider can run Claude Code under, and which
+ * Claude accounts the claude-subs provider can run Claude Code under, and which
  * of them are currently blocked (usage limit, logged out, disabled org).
  *
  * <agent dir>/claude-code-accounts.json:
@@ -12,7 +12,7 @@
  * a shell command that prints a `claude setup-token` token; the token is given
  * only to that account's Claude Code process. Without the file there is one
  * account, "default", that inherits msa's environment. `auto: false` keeps an
- * account out of the `claude-code` rotation; it is used only through its own
+ * account out of the `claude-subs` rotation; it is used only through its own
  * provider.
  *
  * `/accounts claude` edits the file; an account added there without a
@@ -114,7 +114,7 @@ export function removeAccount(name: string): void {
   saveBlocks(blocks);
 }
 
-/** Put an account first, so the `claude-code` rotation tries it before the others. */
+/** Put an account first, so the `claude-subs` rotation tries it before the others. */
 export function preferAccount(name: string): void {
   editAccounts((accounts) => {
     const account = findAccount(accounts, name);

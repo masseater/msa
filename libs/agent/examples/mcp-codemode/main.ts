@@ -22,7 +22,7 @@ if (!command) {
 
 const models = createModels();
 models.setProvider(anthropicProvider());
-const model = models.getModel("anthropic", "claude-sonnet-4-6");
+const model = models.getModel("anthropic-api", "claude-sonnet-4-6");
 if (!model) throw new Error("Model not found");
 
 const client = new McpClient({ name: "msa-agent-example", version: "1.0.0" });

@@ -69,7 +69,7 @@ async function capturePayload(
 
 describe("Anthropic temperature compatibility", () => {
   it("omits temperature for Claude Opus 4.7", async () => {
-    const payload = await capturePayload(getModel("anthropic", "claude-opus-4-7"), {
+    const payload = await capturePayload(getModel("anthropic-api", "claude-opus-4-7"), {
       temperature: 0,
     });
 
@@ -77,7 +77,7 @@ describe("Anthropic temperature compatibility", () => {
   });
 
   it("omits temperature for Claude Opus 4.8", async () => {
-    const payload = await capturePayload(getModel("anthropic", "claude-opus-4-8"), {
+    const payload = await capturePayload(getModel("anthropic-api", "claude-opus-4-8"), {
       temperature: 0,
     });
 
@@ -85,7 +85,7 @@ describe("Anthropic temperature compatibility", () => {
   });
 
   it("omits default temperature for Claude Opus 4.7", async () => {
-    const payload = await capturePayload(getModel("anthropic", "claude-opus-4-7"), {
+    const payload = await capturePayload(getModel("anthropic-api", "claude-opus-4-7"), {
       temperature: 1,
     });
 
@@ -93,7 +93,7 @@ describe("Anthropic temperature compatibility", () => {
   });
 
   it("keeps temperature for Claude Opus 4.6", async () => {
-    const payload = await capturePayload(getModel("anthropic", "claude-opus-4-6"), {
+    const payload = await capturePayload(getModel("anthropic-api", "claude-opus-4-6"), {
       temperature: 0,
     });
 
@@ -101,7 +101,7 @@ describe("Anthropic temperature compatibility", () => {
   });
 
   it("keeps temperature for Claude Sonnet 4.6", async () => {
-    const payload = await capturePayload(getModel("anthropic", "claude-sonnet-4-6"), {
+    const payload = await capturePayload(getModel("anthropic-api", "claude-sonnet-4-6"), {
       temperature: 0,
     });
 
