@@ -1,0 +1,246 @@
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+
+import { DefaultPackageManager } from "../src/core/package-manager.ts";
+import { SettingsManager } from "../src/core/settings-manager.ts";
+import { pathEndsWith, isEnabled, isDisabled } from "./package-manager-support.ts";
+
+describe("DefaultPackageManager", () => {
+  let tempDir: string;
+
+  let agentDir: string;
+
+  let settingsManager: SettingsManager;
+
+  let packageManager: DefaultPackageManager;
+
+  let previousOfflineEnv: string | undefined;
+
+  beforeEach(() => {
+    previousOfflineEnv = process.env["MSA_OFFLINE"];
+    delete process.env["MSA_OFFLINE"];
+    tempDir = join(tmpdir(), `pm-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    mkdirSync(tempDir, { recursive: true });
+    agentDir = join(tempDir, "agent");
+    mkdirSync(agentDir, { recursive: true });
+
+    settingsManager = SettingsManager.inMemory();
+    packageManager = new DefaultPackageManager({
+      cwd: tempDir,
+      agentDir,
+      settingsManager,
+    });
+  });
+
+  afterEach(() => {
+    if (previousOfflineEnv === undefined) {
+      delete process.env["MSA_OFFLINE"];
+    } else {
+      process.env["MSA_OFFLINE"] = previousOfflineEnv;
+    }
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  describe("HTTPS git URL parsing (old behavior)", () => {
+    it("should deduplicate git URLs with different supported formats", async () => {
+      const pkgDir = join(tempDir, "https-dedup-pkg");
+      mkdirSync(join(pkgDir, "extensions"), { recursive: true });
+      writeFileSync(join(pkgDir, "extensions", "test.ts"), "export default function() {}");
+
+      settingsManager.setPackages([
+        "https://github.com/user/repo",
+        "git:github.com/user/repo",
+        "https://github.com/user/repo.git",
+      ]);
+
+      const id1 = (packageManager as any).getPackageIdentity("https://github.com/user/repo");
+      const id2 = (packageManager as any).getPackageIdentity("git:github.com/user/repo");
+      const id3 = (packageManager as any).getPackageIdentity("https://github.com/user/repo.git");
+
+      expect(id1).toBe(id2);
+      expect(id2).toBe(id3);
+    });
+
+    it("should handle HTTPS URLs with refs in resolve", async () => {
+      const parsed = (packageManager as any).parseSource("https://github.com/user/repo@main");
+      expect(parsed.ref).toBe("main");
+      expect(parsed.pinned).toBe(true);
+
+      const parsed2 = (packageManager as any).parseSource(
+        "https://github.com/user/repo@feature/branch",
+      );
+      expect(parsed2.ref).toBe("feature/branch");
+    });
+  });
+
+  describe("pattern filtering in top-level arrays", () => {
+    it("should expand ~ in exclusion and exact patterns", async () => {
+      const previousHome = process.env["HOME"];
+      process.env["HOME"] = tempDir;
+
+      try {
+        const skillsDir = join(tempDir, "extra", "skills");
+        for (const name of ["keep", "glob-excluded", "exact-excluded"]) {
+          mkdirSync(join(skillsDir, name), { recursive: true });
+          writeFileSync(
+            join(skillsDir, name, "SKILL.md"),
+            `---\nname: ${name}\ndescription: ${name}\n---\n`,
+          );
+        }
+
+        settingsManager.setSkillPaths([
+          "~/extra/skills",
+          "!~/extra/skills/glob-*",
+          "-~/extra/skills/exact-excluded",
+        ]);
+
+        const result = await packageManager.resolve();
+        expect(result.skills.some((r) => isEnabled(r, "keep/SKILL.md"))).toBe(true);
+        expect(result.skills.some((r) => isDisabled(r, "glob-excluded/SKILL.md"))).toBe(true);
+        expect(result.skills.some((r) => isDisabled(r, "exact-excluded/SKILL.md"))).toBe(true);
+      } finally {
+        if (previousHome === undefined) {
+          delete process.env["HOME"];
+        } else {
+          process.env["HOME"] = previousHome;
+        }
+      }
+    });
+
+    it("should exclude extensions with ! pattern", async () => {
+      const extDir = join(agentDir, "extensions");
+      mkdirSync(extDir, { recursive: true });
+      writeFileSync(join(extDir, "keep.ts"), "export default function() {}");
+      writeFileSync(join(extDir, "remove.ts"), "export default function() {}");
+
+      settingsManager.setExtensionPaths(["extensions", "!**/remove.ts"]);
+
+      const result = await packageManager.resolve();
+      expect(result.extensions.some((r) => isEnabled(r, "keep.ts"))).toBe(true);
+      expect(result.extensions.some((r) => isDisabled(r, "remove.ts"))).toBe(true);
+    });
+
+    it("should filter themes with glob patterns", async () => {
+      const themesDir = join(agentDir, "themes");
+      mkdirSync(themesDir, { recursive: true });
+      writeFileSync(join(themesDir, "dark.json"), "{}");
+      writeFileSync(join(themesDir, "light.json"), "{}");
+      writeFileSync(join(themesDir, "funky.json"), "{}");
+
+      settingsManager.setThemePaths(["themes", "!funky.json"]);
+
+      const result = await packageManager.resolve();
+      expect(result.themes.some((r) => isEnabled(r, "dark.json"))).toBe(true);
+      expect(result.themes.some((r) => isEnabled(r, "light.json"))).toBe(true);
+      expect(result.themes.some((r) => isDisabled(r, "funky.json"))).toBe(true);
+    });
+
+    it("should filter prompts with exclusion pattern", async () => {
+      const promptsDir = join(agentDir, "prompts");
+      mkdirSync(promptsDir, { recursive: true });
+      writeFileSync(join(promptsDir, "review.md"), "Review code");
+      writeFileSync(join(promptsDir, "explain.md"), "Explain code");
+
+      settingsManager.setPromptTemplatePaths(["prompts", "!explain.md"]);
+
+      const result = await packageManager.resolve();
+      expect(result.prompts.some((r) => isEnabled(r, "review.md"))).toBe(true);
+      expect(result.prompts.some((r) => isDisabled(r, "explain.md"))).toBe(true);
+    });
+
+    it("should filter skills with exclusion pattern", async () => {
+      const skillsDir = join(agentDir, "skills");
+      mkdirSync(join(skillsDir, "good-skill"), { recursive: true });
+      mkdirSync(join(skillsDir, "bad-skill"), { recursive: true });
+      writeFileSync(
+        join(skillsDir, "good-skill", "SKILL.md"),
+        "---\nname: good-skill\ndescription: Good\n---\nContent",
+      );
+      writeFileSync(
+        join(skillsDir, "bad-skill", "SKILL.md"),
+        "---\nname: bad-skill\ndescription: Bad\n---\nContent",
+      );
+
+      settingsManager.setSkillPaths(["skills", "!**/bad-skill"]);
+
+      const result = await packageManager.resolve();
+      expect(result.skills.some((r) => isEnabled(r, "good-skill", "includes"))).toBe(true);
+      expect(result.skills.some((r) => isDisabled(r, "bad-skill", "includes"))).toBe(true);
+    });
+
+    it("should work without patterns (backward compatible)", async () => {
+      const extDir = join(agentDir, "extensions");
+      mkdirSync(extDir, { recursive: true });
+      const extPath = join(extDir, "my-ext.ts");
+      writeFileSync(extPath, "export default function() {}");
+
+      settingsManager.setExtensionPaths(["extensions/my-ext.ts"]);
+
+      const result = await packageManager.resolve();
+      expect(result.extensions.some((r) => r.path === extPath && r.enabled)).toBe(true);
+    });
+  });
+
+  describe("pattern filtering in msa manifest", () => {
+    it("should support glob patterns in manifest extensions", async () => {
+      const pkgDir = join(tempDir, "manifest-pkg");
+      mkdirSync(join(pkgDir, "extensions"), { recursive: true });
+      mkdirSync(join(pkgDir, "node_modules/dep/extensions"), { recursive: true });
+      writeFileSync(join(pkgDir, "extensions", "local.ts"), "export default function() {}");
+      writeFileSync(
+        join(pkgDir, "node_modules/dep/extensions", "remote.ts"),
+        "export default function() {}",
+      );
+      writeFileSync(
+        join(pkgDir, "node_modules/dep/extensions", "skip.ts"),
+        "export default function() {}",
+      );
+      writeFileSync(
+        join(pkgDir, "package.json"),
+        JSON.stringify({
+          name: "manifest-pkg",
+          msa: {
+            extensions: ["extensions", "node_modules/dep/extensions", "!**/skip.ts"],
+          },
+        }),
+      );
+
+      const result = await packageManager.resolveExtensionSources([pkgDir]);
+      expect(result.extensions.some((r) => isEnabled(r, "local.ts"))).toBe(true);
+      expect(result.extensions.some((r) => isEnabled(r, "remote.ts"))).toBe(true);
+      expect(result.extensions.some((r) => pathEndsWith(r.path, "skip.ts"))).toBe(false);
+    });
+
+    it("should support glob patterns in manifest skills", async () => {
+      const pkgDir = join(tempDir, "skill-manifest-pkg");
+      mkdirSync(join(pkgDir, "skills/good-skill"), { recursive: true });
+      mkdirSync(join(pkgDir, "skills/bad-skill"), { recursive: true });
+      writeFileSync(
+        join(pkgDir, "skills/good-skill", "SKILL.md"),
+        "---\nname: good-skill\ndescription: Good\n---\nContent",
+      );
+      writeFileSync(
+        join(pkgDir, "skills/bad-skill", "SKILL.md"),
+        "---\nname: bad-skill\ndescription: Bad\n---\nContent",
+      );
+      writeFileSync(
+        join(pkgDir, "package.json"),
+        JSON.stringify({
+          name: "skill-manifest-pkg",
+          msa: {
+            skills: ["skills", "!**/bad-skill"],
+          },
+        }),
+      );
+
+      const result = await packageManager.resolveExtensionSources([pkgDir]);
+      expect(result.skills.some((r) => isEnabled(r, "good-skill", "includes"))).toBe(true);
+      expect(result.skills.some((r) => r.path.includes("bad-skill"))).toBe(false);
+    });
+  });
+});

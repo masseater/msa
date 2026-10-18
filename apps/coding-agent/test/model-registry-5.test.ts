@@ -1,0 +1,198 @@
+import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+import { AnthropicMessagesCompat } from "@msa/ai/compat";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
+
+import { AuthStorage } from "../src/core/auth-storage.ts";
+import { clearApiKeyCache, type ModelRegistry } from "../src/core/model-registry.ts";
+import { createModelRegistry } from "./model-runtime-test-utils.ts";
+
+describe("ModelRegistry", () => {
+  let tempDir: string;
+
+  let modelsJsonPath: string;
+
+  let authStorage: AuthStorage;
+
+  function getModelsForProvider(registry: ModelRegistry, provider: string) {
+    return registry.getAll().filter((m) => m.provider === provider);
+  }
+
+  function writeRawModelsJson(providers: Record<string, unknown>) {
+    writeFileSync(modelsJsonPath, JSON.stringify({ providers }));
+  }
+
+  beforeEach(() => {
+    tempDir = join(
+      tmpdir(),
+      `msa-test-model-registry-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    );
+    mkdirSync(tempDir, { recursive: true });
+    modelsJsonPath = join(tempDir, "models.json");
+    authStorage = AuthStorage.inMemory();
+  });
+
+  afterEach(() => {
+    if (tempDir && existsSync(tempDir)) {
+      rmSync(tempDir, { recursive: true });
+    }
+    clearApiKeyCache();
+    vi.restoreAllMocks();
+  });
+
+  describe("modelOverrides (per-model customization)", () => {
+    test("empty allowed fallback model override disables server-side fallback", async () => {
+      writeRawModelsJson({
+        anthropic: {
+          modelOverrides: {
+            "claude-fable-5": { compat: { allowedFallbackModels: [] } },
+          },
+        },
+      });
+
+      const registry = await createModelRegistry(authStorage, modelsJsonPath);
+      const compat = registry.find("anthropic", "claude-fable-5")?.compat as
+        | AnthropicMessagesCompat
+        | undefined;
+
+      expect(registry.getError()).toBeUndefined();
+      expect(compat?.allowedFallbackModels).toEqual([]);
+    });
+
+    test("custom models and model overrides carry sampling params", async () => {
+      writeRawModelsJson({
+        openrouter: {
+          baseUrl: "https://my-proxy.example.com/v1",
+          api: "openai-completions",
+          models: [
+            {
+              id: "custom/sampling-model",
+              samplingParams: { temperature: 1, top_p: 0.95, top_k: 0 },
+              samplingParamsByThinkingLevel: {
+                low: { temperature: 0.6, top_p: 0.95 },
+                high: { temperature: 0.8 },
+              },
+            },
+          ],
+          modelOverrides: {
+            "custom/sampling-model": {
+              samplingParamsByThinkingLevel: {
+                low: { temperature: 0.5, top_k: 20 },
+                max: { temperature: 1 },
+              },
+            },
+            "anthropic/claude-sonnet-4.5": {
+              samplingParams: { top_p: 0.9 },
+              samplingParamsByThinkingLevel: { high: { temperature: 0.8 } },
+            },
+          },
+        },
+      });
+
+      const registry = await createModelRegistry(authStorage, modelsJsonPath);
+      const models = getModelsForProvider(registry, "openrouter");
+
+      const custom = models.find((m) => m.id === "custom/sampling-model");
+      expect(custom?.samplingParams).toEqual({ temperature: 1, top_p: 0.95, top_k: 0 });
+      expect(custom?.samplingParamsByThinkingLevel).toEqual({
+        low: { temperature: 0.5, top_p: 0.95, top_k: 20 },
+        high: { temperature: 0.8 },
+        max: { temperature: 1 },
+      });
+
+      const sonnet = models.find((m) => m.id === "anthropic/claude-sonnet-4.5");
+      expect(sonnet?.samplingParams).toEqual({ top_p: 0.9 });
+      expect(sonnet?.samplingParamsByThinkingLevel).toEqual({ high: { temperature: 0.8 } });
+
+      const opus = models.find((m) => m.id === "anthropic/claude-opus-4.1");
+      expect(opus?.samplingParams).toBeUndefined();
+      expect(opus?.samplingParamsByThinkingLevel).toBeUndefined();
+    });
+
+    test("custom model and model override carry prompt cache lifetimes", async () => {
+      writeRawModelsJson({
+        openrouter: {
+          baseUrl: "https://my-proxy.example.com/v1",
+          api: "openai-completions",
+          models: [{ id: "custom/cached-model", promptCache: { short: 120 } }],
+          modelOverrides: {
+            "anthropic/claude-sonnet-4.5": { promptCache: { short: 300 } },
+          },
+        },
+        anthropic: {
+          modelOverrides: {
+            "claude-sonnet-4-6": { promptCache: { long: 1800 } },
+          },
+        },
+      });
+
+      const registry = await createModelRegistry(authStorage, modelsJsonPath);
+      const openrouter = getModelsForProvider(registry, "openrouter");
+
+      expect(registry.getError()).toBeUndefined();
+      expect(openrouter.find((m) => m.id === "custom/cached-model")?.promptCache).toEqual({
+        short: 120,
+      });
+      expect(openrouter.find((m) => m.id === "anthropic/claude-sonnet-4.5")?.promptCache).toEqual({
+        short: 300,
+      });
+      expect(
+        openrouter.find((m) => m.id === "anthropic/claude-opus-4.1")?.promptCache,
+      ).toBeUndefined();
+
+      expect(registry.find("anthropic", "claude-sonnet-4-6")?.promptCache).toEqual({
+        short: 300,
+        long: 1800,
+      });
+    });
+
+    test("model override deep-merges image resize limits", async () => {
+      writeRawModelsJson({
+        test: {
+          baseUrl: "https://example.com",
+          apiKey: "test-key",
+          api: "openai-completions",
+          models: [
+            {
+              id: "vision-model",
+              input: ["text", "image"],
+              inputLimits: {
+                maxRequestBytes: 32 * 1024 * 1024,
+                images: {
+                  maxPerRequest: 100,
+                  resize: {
+                    maxWidth: 2000,
+                    maxHeight: 2000,
+                    maxBytes: 4.5 * 1024 * 1024,
+                    jpegQuality: 80,
+                  },
+                },
+              },
+            },
+          ],
+          modelOverrides: {
+            "vision-model": {
+              inputLimits: {
+                images: { resize: { maxWidth: 1568, maxBytes: 524288, jpegQuality: 75 } },
+              },
+            },
+          },
+        },
+      });
+
+      const registry = await createModelRegistry(authStorage, modelsJsonPath);
+      const model = registry.find("test", "vision-model");
+
+      expect(registry.getError()).toBeUndefined();
+      expect(model?.inputLimits).toMatchObject({
+        maxRequestBytes: 32 * 1024 * 1024,
+        images: {
+          maxPerRequest: 100,
+          resize: { maxWidth: 1568, maxHeight: 2000, maxBytes: 524288, jpegQuality: 75 },
+        },
+      });
+    });
+  });
+});
