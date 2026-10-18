@@ -29,19 +29,6 @@
     "resolveJsonModule": true,
     "allowImportingTsExtensions": true,
     "rewriteRelativeImportExtensions": true,
-    "types": ["node"],
-    "plugins": [
-      {
-        "name": "@effect/language-service",
-        "overrides": [
-          {
-            "include": ["apps/coding-agent/test/orchestrator-sdk.test.ts"],
-            "options": {
-              "allowedUnstableApis": ["effect/FileSystem", "@effect/platform-node"]
-            }
-          }
-        ]
-      }
-    ]
+    "types": ["node"]
   }
 }
