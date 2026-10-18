@@ -90,7 +90,7 @@ export const BUILTIN_SLASH_COMMANDS: ReadonlyArray<BuiltinSlashCommand> = [
     description: "Open the memory view, or manage long-term memory with an argument",
     argumentHint: "[list|search <query>|forget <id>|stats]",
   },
-  { name: "sessions", description: "Show the sessions the orchestrator started" },
+  { name: "tasks", description: "Show the task DAG the orchestrator runs", aliases: ["sessions"] },
   {
     name: "reload",
     description: "Reload keybindings, extensions, skills, prompts, themes, and context files",

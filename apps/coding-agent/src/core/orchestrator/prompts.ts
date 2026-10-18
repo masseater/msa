@@ -1,0 +1,138 @@
+import type { Note, Report, Task, TaskView } from "./types.ts";
+
+const REPORT_LIMIT = 6000;
+
+function truncateReport(text: string): string {
+  return text.length <= REPORT_LIMIT ? text : `${text.slice(0, REPORT_LIMIT)}\n[truncated]`;
+}
+
+function notesBlock(notes: readonly Note[]): string {
+  if (notes.length === 0) return "";
+  return [
+    "<shared-notes>",
+    "Messages sent to this work while it was waiting or between turns. Follow them.",
+    ...notes.map((note) => `<note id="${note.id}" from="${note.author}">\n${note.content}\n</note>`),
+    "</shared-notes>",
+  ].join("\n");
+}
+
+function dependencyBlock(dependencies: readonly TaskView[]): string {
+  if (dependencies.length === 0) return "";
+  return [
+    "<dependency-reports>",
+    ...dependencies.map((dependency) => {
+      const report = latestReport(dependency);
+      return `<task id="${dependency.id}" title="${dependency.title}" status="${dependency.status}">\n${report === undefined ? "(no report)" : truncateReport(report.content)}\n</task>`;
+    }),
+    "</dependency-reports>",
+  ].join("\n");
+}
+
+function latestReport(task: TaskView): Report | undefined {
+  return task.reports.at(-1);
+}
+
+function workerPrompt(
+  tasks: readonly TaskView[],
+  dependencies: readonly TaskView[],
+  notes: readonly Note[],
+): string {
+  const work =
+    tasks.length === 1
+      ? `<task id="${tasks[0]?.id ?? ""}" title="${tasks[0]?.title ?? ""}">\n${tasks[0]?.prompt ?? ""}\n</task>`
+      : [
+          "You are doing several tasks that touch the same paths, so they run in this one session.",
+          ...tasks.map(
+            (task) => `<task id="${task.id}" title="${task.title}">\n${task.prompt}\n</task>`,
+          ),
+        ].join("\n\n");
+  return [work, dependencyBlock(dependencies), notesBlock(notes)].filter(Boolean).join("\n\n");
+}
+
+function taskReviewerPrompt(
+  tasks: readonly TaskView[],
+  workerReport: string,
+  notes: readonly Note[],
+): string {
+  const work = tasks
+    .map(
+      (task) =>
+        `<task id="${task.id}" title="${task.title}">\n${task.prompt}\n</task>\n<worker-report>\n${truncateReport(workerReport)}\n</worker-report>`,
+    )
+    .join("\n\n");
+  return [
+    "You are reviewing work another session just did. You did not write it.",
+    "Read the report, inspect the changed files and the surrounding code, and check the work against the task. Do not redo it and do not edit files.",
+    "Report what is wrong, what is missing, and what you checked. Say clearly whether the work is acceptable.",
+    "",
+    work,
+    notesBlock(notes),
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+function roundReviewPrompt(
+  round: string,
+  tasks: readonly TaskView[],
+  notes: readonly Note[],
+): string {
+  const reports = tasks
+    .map(
+      (task) =>
+        `<task id="${task.id}" title="${task.title}" status="${task.status}">\n${task.reports
+          .map((report) => `[${report.role}/${report.status}]\n${truncateReport(report.content)}`)
+          .join("\n\n")}\n</task>`,
+    )
+    .join("\n\n");
+  return [
+    `You are the closing reviewer of round "${round}" of an orchestrated project. Every task of the round has finished, and nothing of the round runs while you work.`,
+    "Step back and review the work as a whole, not task by task: check the results against each other and against the original intent, read the code they changed, and find gaps, conflicts, duplicated work, and wrong assumptions.",
+    "Then redesign: say what should change in the overall approach and lay out the remaining work as tasks with their dependencies, so the orchestrator can start the next round. If nothing is left, say so.",
+    "",
+    "<round-tasks>",
+    reports,
+    "</round-tasks>",
+    notesBlock(notes),
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+function taskHeading(task: Task): string {
+  return `${task.id} [${task.kind}, ${task.status}, round ${task.round}, priority ${task.priority}] ${task.title}`;
+}
+
+function formatTaskList(tasks: readonly TaskView[]): string {
+  if (tasks.length === 0) return "No tasks.";
+  return tasks.map(describeTask).join("\n");
+}
+
+function assignmentText(task: TaskView): string {
+  const sessions = task.assignments.map(
+    (assignment) => `${assignment.role} ${assignment.sessionId}`,
+  );
+  return sessions.length > 0 ? sessions.join(", ") : "unassigned";
+}
+
+function describeTask(task: TaskView): string {
+  const dependencies = task.dependsOn.length > 0 ? task.dependsOn.join(", ") : "-";
+  const paths = task.paths.length > 0 ? ` paths ${task.paths.join(", ")}` : "";
+  const condition = task.condition === null ? "" : ` condition "${task.condition}"`;
+  return `${taskHeading(task)} — depends on ${dependencies}; ${assignmentText(task)}${paths}${condition}`;
+}
+
+function formatTaskDetail(task: TaskView, sessions: readonly string[]): string {
+  const reports = task.reports.map(
+    (report) => `<report role="${report.role}" status="${report.status}">\n${report.content}\n</report>`,
+  );
+  return [
+    describeTask(task),
+    `Dependents: ${task.dependents.join(", ") || "-"}`,
+    sessions.length > 0 ? `Sessions: ${sessions.join(", ")}` : "Sessions: -",
+    `<prompt>\n${task.prompt}\n</prompt>`,
+    ...reports,
+  ].join("\n\n");
+}
+
+export const prompts = { notesBlock, dependencyBlock, latestReport, workerPrompt, taskReviewerPrompt, roundReviewPrompt, taskHeading, formatTaskList, formatTaskDetail };

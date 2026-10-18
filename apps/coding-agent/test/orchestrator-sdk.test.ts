@@ -1,46 +1,38 @@
+// oxlint-disable-next-line effecttsgo/node-builtin-import -- the test needs a scratch directory
 import { mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
 
 import { fauxAssistantMessage, registerFauxProvider } from "@msa/ai/compat";
-import neo4j from "neo4j-driver";
-import { afterAll, describe, expect, it } from "vite-plus/test";
+import { Effect } from "effect";
+import { afterAll, expect, it } from "vite-plus/test";
 
 import { AuthStorage } from "../src/core/auth-storage.ts";
 import { ModelRuntime } from "../src/core/model-runtime.ts";
 import { createAgentSession } from "../src/core/sdk.ts";
 import { SessionManager } from "../src/core/session-manager.ts";
+import { harness } from "./orchestrator-harness.ts";
 
-const password = process.env["NEO4J_PASSWORD"];
-const project = `sdk-test-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-const tempDir = join(tmpdir(), project);
+const { waitFor } = harness;
+const tempDir = `${tmpdir()}/msa-orchestrator-sdk-${process.pid}`;
 
-afterAll(async () => {
+afterAll(() => {
   rmSync(tempDir, { recursive: true, force: true });
-  if (!password) return;
-  const driver = neo4j.driver(
-    process.env["NEO4J_URI"] ?? "bolt://localhost:7687",
-    neo4j.auth.basic(process.env["NEO4J_USERNAME"] ?? "neo4j", password),
-  );
-  await driver.executeQuery("MATCH (s:MsaSession {project: $project}) DETACH DELETE s", {
-    project,
-  });
-  await driver.close();
 });
 
-describe.runIf(password)("orchestrator workers", () => {
-  it("keep their transcripts out of the sessions --continue and /resume pick from", async () => {
+function createHarness() {
+  return Effect.gen(function* () {
     mkdirSync(tempDir, { recursive: true });
-    const sessionDir = join(tempDir, "sessions");
+    const sessionDir = `${tempDir}/sessions`;
     const faux = registerFauxProvider();
-    faux.setResponses([fauxAssistantMessage("done"), fauxAssistantMessage("reviewed")]);
+    faux.setResponses(Array.from({ length: 6 }, (_, index) => fauxAssistantMessage(`reply ${index}`)));
     const model = faux.getModel();
     const authStorage = AuthStorage.inMemory();
-    await authStorage.modify(model.provider, async () => ({ type: "api_key", key: "faux-key" }));
-    const modelRuntime = await ModelRuntime.create({
-      credentials: authStorage,
-      modelsPath: join(tempDir, "models.json"),
-    });
+    yield* Effect.promise(() =>
+      authStorage.modify(model.provider, () => Promise.resolve({ type: "api_key", key: "faux-key" })),
+    );
+    const modelRuntime = yield* Effect.promise(() =>
+      ModelRuntime.create({ credentials: authStorage, modelsPath: `${tempDir}/models.json` }),
+    );
     modelRuntime.registerProvider(model.provider, {
       baseUrl: model.baseUrl,
       api: model.api,
@@ -58,33 +50,45 @@ describe.runIf(password)("orchestrator workers", () => {
         },
       ],
     });
-    const sessionManager = SessionManager.create(tempDir, sessionDir, { id: project });
-    const { session } = await createAgentSession({
-      cwd: tempDir,
-      agentDir: tempDir,
-      modelRuntime,
-      model,
-      sessionManager,
-      orchestrator: true,
-    });
-    sessionManager.appendMessage({ role: "user", content: "start", timestamp: Date.now() });
-    const orchestrator = session.orchestrator;
-    if (!orchestrator) throw new Error("orchestrator missing");
-
-    const { session: started } = await orchestrator.start({
-      title: "t",
-      prompt: "do t",
-      dependsOn: [],
-    });
-    await expect
-      .poll(async () => (await orchestrator.read(started.id)).status, { timeout: 10_000 })
-      .toBe("completed");
-
-    const worker = await orchestrator.read(started.id);
-    expect(dirname(worker.sessionFile ?? "")).toBe(join(sessionDir, "workers"));
-    expect(SessionManager.continueRecent(tempDir, sessionDir).getSessionFile()).toBe(
-      sessionManager.getSessionFile(),
+    const sessionManager = SessionManager.create(tempDir, sessionDir, { id: "sdk" });
+    const { session } = yield* Effect.promise(() =>
+      createAgentSession({
+        cwd: tempDir,
+        agentDir: tempDir,
+        modelRuntime,
+        model,
+        sessionManager,
+        orchestrator: true,
+      }),
     );
-    session.dispose();
+    sessionManager.appendMessage({ role: "user", content: "start", timestamp: 1 });
+    return { session, sessionManager, sessionDir };
   });
-});
+}
+
+it("keeps worker transcripts out of the sessions --continue and /resume pick from", () =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const { session, sessionManager, sessionDir } = yield* createHarness();
+      const orchestrator = session.orchestrator;
+      if (orchestrator === undefined) throw new Error("orchestrator missing");
+      const task = yield* Effect.promise(() => orchestrator.createTask({ title: "t", prompt: "do t" }));
+      yield* waitFor(
+        () => orchestrator.snapshot.tasks.find((item) => item.id === task.id)?.status === "completed",
+        3000,
+      );
+      const worker = yield* Effect.promise(() => orchestrator.read(task.id));
+      const assignment = worker.assignments.find((item) => item.role === "worker");
+      const sessionFile = orchestrator.snapshot.sessions.find(
+        (candidate) => candidate.id === assignment?.sessionId,
+      )?.sessionFile;
+      if (sessionFile === null || sessionFile === undefined) {
+        throw new Error("worker session file missing");
+      }
+      expect(sessionFile.slice(0, sessionDir.length + "/workers".length)).toBe(`${sessionDir}/workers`);
+      expect(SessionManager.continueRecent(tempDir, sessionDir).getSessionFile()).toBe(
+        sessionManager.getSessionFile(),
+      );
+      session.dispose();
+    }),
+  ));

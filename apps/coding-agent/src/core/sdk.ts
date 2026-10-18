@@ -114,7 +114,7 @@ export interface CreateAgentSessionOptions {
   /** Session start event metadata for extension runtime startup. */
   sessionStartEvent?: SessionStartEvent | undefined;
   /**
-   * Register the orchestrator tools (`start_session` and the rest). They start inactive; activate
+   * Register the orchestrator tools (`create_task` and the rest). They start inactive; activate
    * them with `tools` or the `defaultTools` setting.
    */
   orchestrator?: boolean | undefined;

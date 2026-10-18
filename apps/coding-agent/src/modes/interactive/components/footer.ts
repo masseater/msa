@@ -13,7 +13,7 @@ import {
   type UsageTotals,
 } from "../../../core/usage-totals.ts";
 import { theme } from "../theme/theme.ts";
-import { describeSessionCounts } from "./sessions-view.ts";
+import { viewHelpers } from "./tasks-view-helpers.ts";
 
 /**
  * Sanitize text for display in a single-line status.
@@ -320,11 +320,11 @@ export class FooterComponent implements Component {
       );
     }
 
-    const sessions = describeSessionCounts(this.session.orchestrator?.sessions ?? []);
-    if (sessions) {
+    const tasks = viewHelpers.describeTaskCounts(this.session.orchestrator?.snapshot.tasks ?? []);
+    if (tasks) {
       lines.push(
         truncateToWidth(
-          `${sessions}  ${theme.fg("dim", "/sessions")}`,
+          `${tasks}  ${theme.fg("dim", "/tasks")}`,
           width,
           theme.fg("dim", "..."),
         ),
