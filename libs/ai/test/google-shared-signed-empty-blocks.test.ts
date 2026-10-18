@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { convertMessages } from "../src/api/google-shared.ts";
+import { convertMessages } from "../src/api/google-messages.ts";
 import type { AssistantMessage, Context, Model } from "../src/types.ts";
 import { currentTimeMillis } from "../src/utils/clock.ts";
 import { normalizeContext } from "../src/utils/transcript.ts";

@@ -1,413 +1,27 @@
-import {
-  type GenerateContentConfig,
-  type GenerateContentParameters,
-  GoogleGenAI,
-  type ThinkingConfig,
-} from "@google/genai";
-import { Effect, Stream } from "effect";
+import { GoogleGenAI } from "@google/genai";
 
-import { calculateCost, clampThinkingLevel } from "../models.ts";
 import type {
-  Api,
-  AssistantMessage,
   Model,
   ProviderHeaders,
   SimpleStreamOptions,
   StreamFunction,
-  StreamOptions,
-  TextContent,
   ThinkingBudgets,
-  ThinkingContent,
-  ToolCall,
   TranscriptContext,
 } from "../types.ts";
-import { currentTimeMillis } from "../utils/clock.ts";
-import { formatProviderError, normalizeProviderError } from "../utils/error-body.ts";
-import { AssistantMessageEventStream } from "../utils/event-stream.ts";
+import type { AssistantMessageEventStream } from "../utils/event-stream.ts";
 import { providerHeadersToRecord } from "../utils/headers.ts";
-import { callHook } from "../utils/hooks.ts";
-import { encodeJsonSync } from "../utils/json-codec.ts";
 import { modelCall } from "../utils/model-call.ts";
-import { sanitizeSurrogates } from "../utils/sanitize-unicode.ts";
-import { getSystemMessageText } from "../utils/text.ts";
-import {
-  collapseSystemMessages,
-  getCurrentTools,
-  getInitialSystemMessage,
-} from "../utils/transcript.ts";
 import { getMsaUserAgent } from "../utils/user-agent.ts";
-import type { GoogleApiThinkingLevel, ResolvedGoogleThinkingLevel } from "./google-shared.ts";
-import {
-  convertMessages,
-  convertTools,
-  getDisabledGoogleThinkingConfig,
-  isThinkingPart,
-  mapStopReason,
-  resolveGoogleFunctionCallingMode,
-  resolveGoogleThinkingLevel,
-  retainThoughtSignature,
-  retryGoogleRequest,
-  supportsGoogleStrictToolSampling,
-  toGoogleSdkThinkingLevel,
-  toGoogleThinkingLevel,
-  usesGoogleThinkingLevel,
-} from "./google-shared.ts";
-import { buildBaseOptions } from "./simple-options.ts";
+import type { GoogleRequestOptions } from "./google-params.ts";
+import { googleSimpleOptions } from "./google-simple-options.ts";
+import { runGoogleStream } from "./google-stream.ts";
+import type { ResolvedGoogleThinkingLevel } from "./google-thinking.ts";
 
-export interface GoogleOptions extends StreamOptions {
-  toolChoice?: "auto" | "none" | "any" | undefined;
-  thinking?: {
-    enabled: boolean;
-    budgetTokens?: number;
-    level?: GoogleApiThinkingLevel;
-  };
-}
-
-let toolCallCounter = 0;
-
-export const stream = modelCall<
-  Parameters<StreamFunction<"google-generative-ai", GoogleOptions>>[0],
-  Parameters<StreamFunction<"google-generative-ai", GoogleOptions>>[1],
-  NonNullable<Parameters<StreamFunction<"google-generative-ai", GoogleOptions>>[2]>,
-  ReturnType<StreamFunction<"google-generative-ai", GoogleOptions>>
->(
-  (
-    model: Model<"google-generative-ai">,
-    context: TranscriptContext,
-    options?: GoogleOptions,
-  ): AssistantMessageEventStream => {
-    const events = new AssistantMessageEventStream();
-    const normalizedContext = collapseSystemMessages(context);
-
-    Effect.runFork(
-      Effect.gen(function* () {
-        const output: AssistantMessage = {
-          role: "assistant",
-          content: [],
-          api: "google-generative-ai" as Api,
-          provider: model.provider,
-          model: model.id,
-          usage: {
-            input: 0,
-            output: 0,
-            cacheRead: 0,
-            cacheWrite: 0,
-            totalTokens: 0,
-            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-          },
-          stopReason: "pending",
-          timestamp: currentTimeMillis(),
-        };
-        yield* Effect.gen(function* () {
-          if (options?.fetch !== undefined && options.fetch !== globalThis.fetch) {
-            throw new Error("Custom fetch is not supported by the Google Generative AI adapter");
-          }
-          const apiKey = options?.apiKey;
-          if (apiKey === undefined || apiKey === "") {
-            throw new Error(`No API key for provider: ${model.provider}`);
-          }
-          const client = createClient(model, apiKey, options?.headers);
-          let params = buildParams(model, normalizedContext, options);
-          const nextParams = yield* callHook(() => options?.onPayload?.(params, model));
-          if (nextParams !== undefined) {
-            params = nextParams as GenerateContentParameters;
-          }
-          const googleStream = yield* retryGoogleRequest(
-            () => client.models.generateContentStream(params),
-            options,
-          );
-          events.push({ type: "start", partial: output });
-          let currentBlock = null as TextContent | ThinkingContent | null;
-          const blocks = output.content;
-          const blockIndex = () => blocks.length - 1;
-          yield* Stream.fromAsyncIterable(googleStream, (error) => error).pipe(
-            Stream.orDie,
-            Stream.runForEach((chunk) =>
-              Effect.gen(function* () {
-                yield* callHook(() => options?.onProviderStreamEvent?.(chunk, model));
-                output.responseId ||= chunk.responseId;
-                const candidate = chunk.candidates?.[0];
-                if (candidate?.content?.parts !== undefined) {
-                  for (const part of candidate.content.parts) {
-                    if (part.text !== undefined) {
-                      const isThinking = isThinkingPart(part);
-                      if (
-                        currentBlock === null ||
-                        (isThinking && currentBlock.type !== "thinking") ||
-                        (!isThinking && currentBlock.type !== "text")
-                      ) {
-                        if (currentBlock !== null) {
-                          if (currentBlock.type === "text") {
-                            events.push({
-                              type: "text_end",
-                              contentIndex: blocks.length - 1,
-                              content: currentBlock.text,
-                              partial: output,
-                            });
-                          } else {
-                            events.push({
-                              type: "thinking_end",
-                              contentIndex: blockIndex(),
-                              content: currentBlock.thinking,
-                              partial: output,
-                            });
-                          }
-                        }
-                        if (isThinking) {
-                          currentBlock = {
-                            type: "thinking",
-                            thinking: "",
-                            thinkingSignature: undefined,
-                          };
-                          output.content.push(currentBlock);
-                          events.push({
-                            type: "thinking_start",
-                            contentIndex: blockIndex(),
-                            partial: output,
-                          });
-                        } else {
-                          currentBlock = { type: "text", text: "" };
-                          output.content.push(currentBlock);
-                          events.push({
-                            type: "text_start",
-                            contentIndex: blockIndex(),
-                            partial: output,
-                          });
-                        }
-                      }
-                      if (currentBlock.type === "thinking") {
-                        currentBlock.thinking += part.text;
-                        currentBlock.thinkingSignature = retainThoughtSignature(
-                          currentBlock.thinkingSignature,
-                          part.thoughtSignature,
-                        );
-                        events.push({
-                          type: "thinking_delta",
-                          contentIndex: blockIndex(),
-                          delta: part.text,
-                          partial: output,
-                        });
-                      } else {
-                        currentBlock.text += part.text;
-                        currentBlock.textSignature = retainThoughtSignature(
-                          currentBlock.textSignature,
-                          part.thoughtSignature,
-                        );
-                        events.push({
-                          type: "text_delta",
-                          contentIndex: blockIndex(),
-                          delta: part.text,
-                          partial: output,
-                        });
-                      }
-                    }
-
-                    if (part.functionCall !== undefined) {
-                      if (currentBlock !== null) {
-                        if (currentBlock.type === "text") {
-                          events.push({
-                            type: "text_end",
-                            contentIndex: blockIndex(),
-                            content: currentBlock.text,
-                            partial: output,
-                          });
-                        } else {
-                          events.push({
-                            type: "thinking_end",
-                            contentIndex: blockIndex(),
-                            content: currentBlock.thinking,
-                            partial: output,
-                          });
-                        }
-                        currentBlock = null;
-                      }
-
-                      const providedId = part.functionCall.id;
-                      const needsNewId =
-                        providedId === undefined ||
-                        providedId === "" ||
-                        output.content.some((b) => b.type === "toolCall" && b.id === providedId);
-                      const toolCallId = needsNewId
-                        ? `${part.functionCall.name}_${currentTimeMillis()}_${++toolCallCounter}`
-                        : providedId;
-
-                      const toolCall: ToolCall = {
-                        type: "toolCall",
-                        id: toolCallId,
-                        name: part.functionCall.name || "",
-                        arguments: (part.functionCall.args as Record<string, any>) ?? {},
-                        ...(part.thoughtSignature && { thoughtSignature: part.thoughtSignature }),
-                      };
-
-                      output.content.push(toolCall);
-                      events.push({
-                        type: "toolcall_start",
-                        contentIndex: blockIndex(),
-                        partial: output,
-                      });
-                      events.push({
-                        type: "toolcall_delta",
-                        contentIndex: blockIndex(),
-                        delta: encodeJsonSync(toolCall.arguments),
-                        partial: output,
-                      });
-                      events.push({
-                        type: "toolcall_end",
-                        contentIndex: blockIndex(),
-                        toolCall,
-                        partial: output,
-                      });
-                    }
-                  }
-                }
-                if (candidate?.finishReason !== undefined) {
-                  output.rawStopReason = candidate.finishReason;
-                  output.stopReason = mapStopReason(candidate.finishReason);
-                  if (
-                    output.content.some((b) => b.type === "toolCall") &&
-                    output.stopReason === "stop"
-                  ) {
-                    output.stopReason = "toolUse";
-                  }
-                }
-                if (chunk.usageMetadata !== undefined) {
-                  output.usage = {
-                    input:
-                      (chunk.usageMetadata.promptTokenCount || 0) -
-                      (chunk.usageMetadata.cachedContentTokenCount || 0),
-                    output:
-                      (chunk.usageMetadata.candidatesTokenCount || 0) +
-                      (chunk.usageMetadata.thoughtsTokenCount || 0),
-                    cacheRead: chunk.usageMetadata.cachedContentTokenCount || 0,
-                    cacheWrite: 0,
-                    reasoning: chunk.usageMetadata.thoughtsTokenCount || 0,
-                    totalTokens: chunk.usageMetadata.totalTokenCount || 0,
-                    cost: {
-                      input: 0,
-                      output: 0,
-                      cacheRead: 0,
-                      cacheWrite: 0,
-                      total: 0,
-                    },
-                  };
-                  calculateCost(model, output.usage);
-                }
-              }),
-            ),
-          );
-          if (currentBlock !== null) {
-            if (currentBlock.type === "text") {
-              events.push({
-                type: "text_end",
-                contentIndex: blockIndex(),
-                content: currentBlock.text,
-                partial: output,
-              });
-            } else {
-              events.push({
-                type: "thinking_end",
-                contentIndex: blockIndex(),
-                content: currentBlock.thinking,
-                partial: output,
-              });
-            }
-          }
-          if (options?.signal?.aborted === true) {
-            throw new Error("Request was aborted");
-          }
-          if (output.stopReason === "pending") {
-            throw new Error("Google stream ended without a finish reason");
-          }
-          if (output.stopReason === "aborted" || output.stopReason === "error") {
-            const errorMessage =
-              output.rawStopReason !== undefined && output.rawStopReason !== ""
-                ? `Provider stopped with: ${output.rawStopReason}`
-                : "An unknown error occurred";
-            throw new Error(errorMessage);
-          }
-          events.push({ type: "done", reason: output.stopReason, message: output });
-          events.end();
-        }).pipe(
-          Effect.catchDefect((error) =>
-            Effect.sync(() => {
-              for (const block of output.content) {
-                if ("index" in block) {
-                  delete (block as { index?: number }).index;
-                }
-              }
-              output.stopReason = options?.signal?.aborted === true ? "aborted" : "error";
-              output.errorMessage = formatProviderError(normalizeProviderError(error));
-              events.push({ type: "error", reason: output.stopReason, error: output });
-              events.end();
-            }),
-          ),
-        );
-      }),
-    );
-
-    return events;
-  },
-);
-
-export const streamSimple = modelCall<
-  Parameters<StreamFunction<"google-generative-ai", SimpleStreamOptions>>[0],
-  Parameters<StreamFunction<"google-generative-ai", SimpleStreamOptions>>[1],
-  NonNullable<Parameters<StreamFunction<"google-generative-ai", SimpleStreamOptions>>[2]>,
-  ReturnType<StreamFunction<"google-generative-ai", SimpleStreamOptions>>
->(
-  (
-    model: Model<"google-generative-ai">,
-    context: TranscriptContext,
-    options?: SimpleStreamOptions,
-  ): AssistantMessageEventStream => {
-    const apiKey = options?.apiKey;
-    if (apiKey === undefined || apiKey === "") {
-      throw new Error(`No API key for provider: ${model.provider}`);
-    }
-
-    const base = {
-      ...buildBaseOptions(model, context, options, apiKey),
-      toolChoice: options?.toolChoice,
-    } satisfies GoogleOptions;
-    if (options?.reasoning === undefined) {
-      return stream(model, context, {
-        ...base,
-        thinking: { enabled: false },
-      } satisfies GoogleOptions);
-    }
-
-    const clampedReasoning = clampThinkingLevel(model, options.reasoning);
-    if (clampedReasoning === "off") {
-      return stream(model, context, {
-        ...base,
-        thinking: { enabled: false },
-      } satisfies GoogleOptions);
-    }
-    const resolvedLevel = resolveGoogleThinkingLevel(model, clampedReasoning);
-
-    if (usesGoogleThinkingLevel(model)) {
-      return stream(model, context, {
-        ...base,
-        thinking: {
-          enabled: true,
-          level: toGoogleThinkingLevel(resolvedLevel),
-        },
-      } satisfies GoogleOptions);
-    }
-
-    return stream(model, context, {
-      ...base,
-      thinking: {
-        enabled: true,
-        budgetTokens: getGoogleBudget(model, resolvedLevel, options.thinkingBudgets),
-      },
-    } satisfies GoogleOptions);
-  },
-);
+export interface GoogleOptions extends GoogleRequestOptions {}
 
 function createClient(
   model: Model<"google-generative-ai">,
-  apiKey?: string,
+  apiKey: string,
   optionsHeaders?: ProviderHeaders,
 ): GoogleGenAI {
   const httpOptions: { baseUrl?: string; apiVersion?: string; headers?: Record<string, string> } =
@@ -424,113 +38,72 @@ function createClient(
   if (headers !== undefined) {
     httpOptions.headers = headers;
   }
-
   return new GoogleGenAI({
-    ...(apiKey === undefined ? {} : { apiKey }),
+    apiKey,
     ...(Object.keys(httpOptions).length > 0 ? { httpOptions } : {}),
   });
 }
 
-function buildParams(
-  model: Model<"google-generative-ai">,
-  context: TranscriptContext,
-  options: GoogleOptions = {},
-): GenerateContentParameters {
-  const contents = convertMessages(model, context);
-  const initialSystemMessage = getInitialSystemMessage(context.messages);
-  const currentTools = getCurrentTools(context.messages);
-
-  const generationConfig: GenerateContentConfig = {};
-  if (options.temperature !== undefined) {
-    generationConfig.temperature = options.temperature;
+function requireApiKey(model: Model<"google-generative-ai">, apiKey: string | undefined): string {
+  if (apiKey === undefined || apiKey === "") {
+    throw new Error(`No API key for provider: ${model.provider}`);
   }
-  if (options.maxTokens !== undefined) {
-    generationConfig.maxOutputTokens = options.maxTokens;
-  }
+  return apiKey;
+}
 
-  const supportsStrictMode = supportsGoogleStrictToolSampling(model.id);
-  const functionCallingMode =
-    currentTools.length > 0
-      ? resolveGoogleFunctionCallingMode(currentTools, options.toolChoice, supportsStrictMode)
-      : undefined;
-  const systemInstruction =
-    initialSystemMessage === undefined ? "" : getSystemMessageText(initialSystemMessage);
-  const tools = convertTools(currentTools, false, supportsStrictMode);
-  const config: GenerateContentConfig = {
-    ...(Object.keys(generationConfig).length > 0 && generationConfig),
-    ...(systemInstruction && { systemInstruction: sanitizeSurrogates(systemInstruction) }),
-    ...(tools !== undefined && { tools }),
-    ...(functionCallingMode !== undefined && {
-      toolConfig: { functionCallingConfig: { mode: functionCallingMode } },
+const GEMINI_25_BUDGETS: readonly [string, Record<ResolvedGoogleThinkingLevel, number>][] = [
+  ["2.5-pro", { minimal: 128, low: 2048, medium: 8192, high: 32768 }],
+  ["2.5-flash-lite", { minimal: 512, low: 2048, medium: 8192, high: 24576 }],
+  ["2.5-flash", { minimal: 128, low: 2048, medium: 8192, high: 24576 }],
+];
+
+const googleBudget =
+  (model: Model<"google-generative-ai">) =>
+  (level: ResolvedGoogleThinkingLevel, customBudgets: ThinkingBudgets | undefined): number => {
+    const custom = customBudgets?.[level];
+    if (custom !== undefined) return custom;
+    const match = GEMINI_25_BUDGETS.find(([marker]) => model.id.includes(marker));
+    return match === undefined ? -1 : match[1][level];
+  };
+
+export const stream = modelCall<
+  Parameters<StreamFunction<"google-generative-ai", GoogleOptions>>[0],
+  Parameters<StreamFunction<"google-generative-ai", GoogleOptions>>[1],
+  NonNullable<Parameters<StreamFunction<"google-generative-ai", GoogleOptions>>[2]>,
+  ReturnType<StreamFunction<"google-generative-ai", GoogleOptions>>
+>(
+  (
+    model: Model<"google-generative-ai">,
+    context: TranscriptContext,
+    options?: GoogleOptions,
+  ): AssistantMessageEventStream =>
+    runGoogleStream({
+      model,
+      context,
+      options,
+      adapterName: "Google Generative AI",
+      streamName: "Google",
+      createClient: (requestOptions) =>
+        createClient(model, requireApiKey(model, requestOptions?.apiKey), requestOptions?.headers),
     }),
-  };
+);
 
-  if (options.thinking?.enabled === true && model.reasoning) {
-    const thinkingConfig: ThinkingConfig = { includeThoughts: true };
-    if (options.thinking.level !== undefined) {
-      thinkingConfig.thinkingLevel = toGoogleSdkThinkingLevel(options.thinking.level);
-    } else if (options.thinking.budgetTokens !== undefined) {
-      thinkingConfig.thinkingBudget = options.thinking.budgetTokens;
-    }
-    config.thinkingConfig = thinkingConfig;
-  } else if (model.reasoning && options.thinking !== undefined && !options.thinking.enabled) {
-    config.thinkingConfig = getDisabledGoogleThinkingConfig(model);
-  }
-
-  if (options.signal !== undefined) {
-    if (options.signal.aborted) {
-      throw new Error("Request aborted");
-    }
-    config.abortSignal = options.signal;
-  }
-
-  const params: GenerateContentParameters = {
-    model: model.id,
-    contents,
-    config,
-  };
-
-  return params;
-}
-
-function getGoogleBudget(
-  model: Model<"google-generative-ai">,
-  level: ResolvedGoogleThinkingLevel,
-  customBudgets?: ThinkingBudgets,
-): number {
-  if (customBudgets?.[level] !== undefined) {
-    return customBudgets[level]!;
-  }
-
-  if (model.id.includes("2.5-pro")) {
-    const budgets: Record<ResolvedGoogleThinkingLevel, number> = {
-      minimal: 128,
-      low: 2048,
-      medium: 8192,
-      high: 32768,
-    };
-    return budgets[level];
-  }
-
-  if (model.id.includes("2.5-flash-lite")) {
-    const budgets: Record<ResolvedGoogleThinkingLevel, number> = {
-      minimal: 512,
-      low: 2048,
-      medium: 8192,
-      high: 24576,
-    };
-    return budgets[level];
-  }
-
-  if (model.id.includes("2.5-flash")) {
-    const budgets: Record<ResolvedGoogleThinkingLevel, number> = {
-      minimal: 128,
-      low: 2048,
-      medium: 8192,
-      high: 24576,
-    };
-    return budgets[level];
-  }
-
-  return -1;
-}
+export const streamSimple = modelCall<
+  Parameters<StreamFunction<"google-generative-ai", SimpleStreamOptions>>[0],
+  Parameters<StreamFunction<"google-generative-ai", SimpleStreamOptions>>[1],
+  NonNullable<Parameters<StreamFunction<"google-generative-ai", SimpleStreamOptions>>[2]>,
+  ReturnType<StreamFunction<"google-generative-ai", SimpleStreamOptions>>
+>(
+  (
+    model: Model<"google-generative-ai">,
+    context: TranscriptContext,
+    options?: SimpleStreamOptions,
+  ): AssistantMessageEventStream => {
+    const apiKey = requireApiKey(model, options?.apiKey);
+    return stream(
+      model,
+      context,
+      googleSimpleOptions({ model, context, options, apiKey, budgetFor: googleBudget(model) }),
+    );
+  },
+);

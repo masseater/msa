@@ -3,7 +3,7 @@ import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { streamSimple as streamSimpleGoogle } from "../src/api/google-generative-ai.ts";
-import { resolveGoogleThinkingLevel } from "../src/api/google-shared.ts";
+import { resolveGoogleThinkingLevel } from "../src/api/google-thinking.ts";
 import { streamSimple as streamSimpleVertex } from "../src/api/google-vertex.ts";
 import type { Model, ThinkingBudgets, ThinkingLevel, ThinkingLevelMap } from "../src/types.ts";
 import { normalizeContext } from "../src/utils/transcript.ts";

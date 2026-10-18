@@ -4,7 +4,7 @@ import {
   convertTools,
   resolveGoogleFunctionCallingMode,
   supportsGoogleStrictToolSampling,
-} from "../src/api/google-shared.ts";
+} from "../src/api/google-tools.ts";
 import type { Tool } from "../src/types.ts";
 
 function makeTool(parameters: Record<string, unknown>): Tool {
