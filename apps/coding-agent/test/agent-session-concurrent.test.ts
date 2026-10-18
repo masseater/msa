@@ -69,7 +69,7 @@ describe("AgentSession concurrent prompt guard", () => {
       Effect.sync(() => {
         delete (globalThis as typeof globalThis & { testExtensionApi?: unknown }).testExtensionApi;
         delete (globalThis as typeof globalThis & { testCommandRuns?: unknown }).testCommandRuns;
-        if (session != null) {
+        if (session !== null && session !== undefined) {
           session.dispose();
         }
         if (tempDir.length > 0 && existsSync(tempDir)) {

@@ -32,6 +32,7 @@ describe("AuthStorage", () => {
   beforeEach(() =>
     runTest(
       Effect.gen(function* () {
+        yield* Effect.void;
         if (existsSync(tempDir)) rmSync(tempDir, { recursive: true });
         mkdirSync(tempDir, { recursive: true });
       }),
@@ -41,6 +42,7 @@ describe("AuthStorage", () => {
   afterEach(() =>
     runTest(
       Effect.gen(function* () {
+        yield* Effect.void;
         if (existsSync(tempDir)) rmSync(tempDir, { recursive: true });
         vi.restoreAllMocks();
       }),

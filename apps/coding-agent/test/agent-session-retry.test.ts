@@ -66,7 +66,7 @@ describe("AgentSession retry", () => {
   afterEach(() =>
     runTest(
       Effect.gen(function* () {
-        if (session != null) {
+        if (session !== null && session !== undefined) {
           session.dispose();
         }
         if (tempDir.length > 0 && (yield* pathExists(tempDir))) {

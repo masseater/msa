@@ -17,7 +17,11 @@ interface NavigationGroup {
 const docsRoot = resolve(import.meta.dirname, "../docs");
 
 function requireObject(value: unknown, location: string): Record<string, unknown> {
-  if (!(value != null) || typeof value !== "object" || Array.isArray(value)) {
+  if (
+    !(value !== null && value !== undefined) ||
+    typeof value !== "object" ||
+    Array.isArray(value)
+  ) {
     throw new Error(`${location} must be an object`);
   }
   return value as Record<string, unknown>;

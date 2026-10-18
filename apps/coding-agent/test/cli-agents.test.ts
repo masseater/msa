@@ -55,6 +55,7 @@ const savedEnv = { ...envSnapshot() };
 beforeEach(() =>
   runTest(
     Effect.gen(function* () {
+      yield* Effect.void;
       dir = mkdtempSync(joinPath(tmpdir(), "msa-cli-agents-"));
       process.env[ENV_AGENT_DIR] = dir;
     }),

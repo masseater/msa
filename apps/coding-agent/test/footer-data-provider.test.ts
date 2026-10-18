@@ -118,6 +118,7 @@ describe("FooterDataProvider reftable branch detection", () => {
   beforeEach(() =>
     runTest(
       Effect.gen(function* () {
+        yield* Effect.void;
         originalCwd = process.cwd();
         tempDir = mkdtempSync(joinPath(tmpdir(), "footer-data-provider-"));
         resolvedBranch = "main";

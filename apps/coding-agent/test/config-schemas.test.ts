@@ -57,7 +57,8 @@ describe("generated configuration schemas", () => {
   it("preserves editor guidance in the generated theme schema", () => {
     const schema = JSON.parse(renderedSchemas.get("schemas/theme.schema.json") ?? "");
     const accent = schema.properties.colors.properties.accent;
-    const colorValue = accent.$ref == null ? accent : schema.$defs.ColorValue;
+    const colorValue =
+      accent.$ref === null || accent.$ref === undefined ? accent : schema.$defs.ColorValue;
     expect(schema).toMatchObject({
       title: "msa Coding Agent Theme",
       description: "Theme schema for msa coding agent",

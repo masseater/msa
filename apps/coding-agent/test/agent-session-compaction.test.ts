@@ -37,7 +37,7 @@ describe.skipIf(!(API_KEY !== undefined && API_KEY.length > 0))(
     afterEach(() =>
       runTest(
         Effect.sync(() => {
-          if (session != null) {
+          if (session !== null && session !== undefined) {
             session.dispose();
           }
           if (tempDir.length > 0 && existsSync(tempDir)) {

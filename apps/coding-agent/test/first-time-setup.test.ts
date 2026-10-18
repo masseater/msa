@@ -19,6 +19,7 @@ describe("shouldRunFirstTimeSetup", () => {
   beforeEach(() =>
     runTest(
       Effect.gen(function* () {
+        yield* Effect.void;
         tempDir = mkdtempSync(joinPath(tmpdir(), "msa-first-time-setup-"));
         settingsPath = joinPath(tempDir, "settings.json");
         writeEnv("MSA_EXPERIMENTAL", "1");
