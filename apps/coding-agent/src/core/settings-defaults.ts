@@ -75,6 +75,7 @@ export const SETTINGS_DEFAULTS = {
   },
   prWatch: {
     intervalSeconds: 45,
+    statusIntervalSeconds: 300,
   },
   cacheWarming: "streaming",
   tuiMode: "fullscreen",

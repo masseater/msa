@@ -268,6 +268,13 @@ const PrWatchSettingsSchema = Type.Object({
       default: SETTINGS_DEFAULTS.prWatch.intervalSeconds,
     }),
   ),
+  statusIntervalSeconds: Type.Optional(
+    Type.Number({
+      minimum: 30,
+      description: "Seconds without a change before a watch reports its status again.",
+      default: SETTINGS_DEFAULTS.prWatch.statusIntervalSeconds,
+    }),
+  ),
 });
 
 const PackageSourceSchema = Type.Union(

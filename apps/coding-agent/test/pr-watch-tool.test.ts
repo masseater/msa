@@ -9,11 +9,24 @@ import {
   pendingChecks,
   scriptedGh,
   snapshotOf,
+  STATUS_INTERVAL_MS,
   waitFor,
 } from "./pr-watch-support.ts";
 
 const textOf = (result: { content: readonly { type: string; text?: string }[] }): string =>
   result.content.map((part) => part.text ?? "").join("");
+
+const createService = (
+  gh: ReturnType<typeof scriptedGh>["gh"],
+  host: ReturnType<typeof createHost>,
+  intervalMs: number,
+): PrWatch =>
+  new PrWatch({
+    gh,
+    host: host.host,
+    defaultIntervalMs: () => intervalMs,
+    statusIntervalMs: () => STATUS_INTERVAL_MS,
+  });
 
 const createTool = (service: PrWatch): ReturnType<typeof createPrWatchToolDefinition> =>
   createPrWatchToolDefinition(service);
@@ -26,11 +39,7 @@ const run = (
 describe("pr_watch tool", () => {
   it("answers at once while the watch runs in the background", async () => {
     const host = createHost();
-    const service = new PrWatch({
-      gh: neverGh(),
-      host: host.host,
-      defaultIntervalMs: () => 45_000,
-    });
+    const service = createService(neverGh(), host, 45_000);
     try {
       const tool = createTool(service);
       const result = await run(tool, { action: "watch", number: 12 });
@@ -44,11 +53,7 @@ describe("pr_watch tool", () => {
 
   it("takes the interval from the call", async () => {
     const host = createHost();
-    const service = new PrWatch({
-      gh: neverGh(),
-      host: host.host,
-      defaultIntervalMs: () => 45_000,
-    });
+    const service = createService(neverGh(), host, 45_000);
     try {
       const result = await run(createTool(service), {
         action: "watch",
@@ -64,11 +69,7 @@ describe("pr_watch tool", () => {
 
   it("registers the same pull request once", async () => {
     const host = createHost();
-    const service = new PrWatch({
-      gh: neverGh(),
-      host: host.host,
-      defaultIntervalMs: () => 45_000,
-    });
+    const service = createService(neverGh(), host, 45_000);
     try {
       const tool = createTool(service);
       await run(tool, { action: "watch", number: 12 });
@@ -83,11 +84,7 @@ describe("pr_watch tool", () => {
 
   it("stops a watch", async () => {
     const host = createHost();
-    const service = new PrWatch({
-      gh: neverGh(),
-      host: host.host,
-      defaultIntervalMs: () => 45_000,
-    });
+    const service = createService(neverGh(), host, 45_000);
     try {
       const tool = createTool(service);
       await run(tool, { action: "watch", number: 12 });
@@ -100,10 +97,12 @@ describe("pr_watch tool", () => {
   });
 
   it("lists the watches with their last state and notification", async () => {
-    const failed = snapshotOf({ checks: { total: 2, passed: 1, failed: 1, pending: 0 } });
+    const failed = snapshotOf({
+      checks: { total: 2, passed: 1, failed: 1, pending: 0, pendingNames: [] },
+    });
     const script = scriptedGh([pendingChecks, failed]);
     const host = createHost();
-    const service = new PrWatch({ gh: script.gh, host: host.host, defaultIntervalMs: () => 500 });
+    const service = createService(script.gh, host, 500);
     try {
       const tool = createTool(service);
       await run(tool, { action: "watch", number: 12 });
@@ -119,11 +118,7 @@ describe("pr_watch tool", () => {
 
   it("lists nothing when no pull request is watched", async () => {
     const host = createHost();
-    const service = new PrWatch({
-      gh: neverGh(),
-      host: host.host,
-      defaultIntervalMs: () => 45_000,
-    });
+    const service = createService(neverGh(), host, 45_000);
     try {
       expect(textOf(await run(createTool(service), { action: "list" }))).toBe(
         "No pull requests watched",
@@ -135,11 +130,7 @@ describe("pr_watch tool", () => {
 
   it("rejects a watch without a pull request number", async () => {
     const host = createHost();
-    const service = new PrWatch({
-      gh: neverGh(),
-      host: host.host,
-      defaultIntervalMs: () => 45_000,
-    });
+    const service = createService(neverGh(), host, 45_000);
     try {
       await expect(run(createTool(service), { action: "watch" })).rejects.toThrow(
         "action watch requires a pull request number",
@@ -163,6 +154,7 @@ describe("pr_watch delivery", () => {
     host.notify({
       label: "CI failed",
       text: "#12: CI finished: 1 failed. Fix the failing checks.",
+      wake: true,
     });
 
     expect(sent).toEqual([

@@ -60,6 +60,7 @@ describe("system prompt updates", () => {
         "edit",
         "write",
         "memory",
+        "pr_watch",
       ]);
       expect(getSystemMessageText(head)).toBe(harness.session.systemPrompt);
     } finally {

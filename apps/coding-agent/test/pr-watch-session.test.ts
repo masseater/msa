@@ -42,32 +42,37 @@ const createSession = async (defaultTools?: string[]) => {
 };
 
 describe("pr_watch in a session", () => {
-  it("registers pr_watch without enabling it by default", async () => {
+  it("enables pr_watch by default and lists it in the system prompt", async () => {
     const session = await createSession();
     try {
       expect(session.getAllTools().map((tool) => tool.name)).toContain("pr_watch");
-      expect(session.getActiveToolNames()).not.toContain("pr_watch");
-      expect(session.systemPrompt).not.toContain("- pr_watch:");
+      expect(session.getActiveToolNames()).toContain("pr_watch");
+      expect(session.systemPrompt).toContain("- pr_watch: Watch a GitHub pull request");
       expect(session.prWatch.entries).toEqual([]);
     } finally {
       session.dispose();
     }
   });
 
-  it("activates pr_watch with +pr_watch and lists it in the system prompt", async () => {
-    const session = await createSession(["+pr_watch"]);
+  it("keeps pr_watch out when a plain tool list replaces the defaults", async () => {
+    const session = await createSession(["read", "grep"]);
     try {
-      expect(session.getActiveToolNames()).toContain("pr_watch");
-      expect(session.systemPrompt).toContain("- pr_watch: Watch a GitHub pull request");
+      expect(session.getAllTools().map((tool) => tool.name)).toContain("pr_watch");
+      expect(session.getActiveToolNames()).toEqual(["read", "grep"]);
+      expect(session.systemPrompt).not.toContain("- pr_watch:");
     } finally {
       session.dispose();
     }
   });
 
-  it("reads the check interval from settings", async () => {
-    const settingsManager = SettingsManager.inMemory({ prWatch: { intervalSeconds: 90 } });
+  it("reads the check and status intervals from settings", async () => {
+    const settingsManager = SettingsManager.inMemory({
+      prWatch: { intervalSeconds: 90, statusIntervalSeconds: 600 },
+    });
 
     expect(settingsManager.getPrWatchIntervalMs()).toBe(90_000);
+    expect(settingsManager.getPrWatchStatusIntervalMs()).toBe(600_000);
     expect(SettingsManager.inMemory({}).getPrWatchIntervalMs()).toBe(45_000);
+    expect(SettingsManager.inMemory({}).getPrWatchStatusIntervalMs()).toBe(300_000);
   });
 });

@@ -16,6 +16,7 @@ import {
   scriptedGh,
   type ScriptedGh,
   snapshotOf,
+  STATUS_INTERVAL_MS,
 } from "./pr-watch-support.ts";
 
 interface RunResult {
@@ -23,11 +24,12 @@ interface RunResult {
   readonly notifications: PrNotification[];
   readonly changes: number;
   readonly calls: number;
+  readonly behindCalls: number;
 }
 
 const runPolls = async (script: ScriptedGh, advances: readonly number[]): Promise<RunResult> => {
   const host = createHost();
-  const entry = createPrWatchEntry({ number: 12 }, INTERVAL_MS);
+  const entry = createPrWatchEntry({ number: 12 }, INTERVAL_MS, STATUS_INTERVAL_MS);
   await Effect.runPromise(
     Effect.scoped(
       Effect.gen(function* () {
@@ -50,8 +52,20 @@ const runPolls = async (script: ScriptedGh, advances: readonly number[]): Promis
     notifications: host.notifications,
     changes: host.changes.count,
     calls: script.calls.count,
+    behindCalls: script.behindCalls.count,
   };
 };
+
+const seen = (result: RunResult) =>
+  result.notifications.map(({ label, text }) => ({ label, text }));
+
+const finishedChecks = snapshotOf({
+  checks: { total: 3, passed: 2, failed: 1, pending: 0, pendingNames: [] },
+});
+
+const passedChecks = snapshotOf({
+  checks: { total: 2, passed: 2, failed: 0, pending: 0, pendingNames: [] },
+});
 
 describe("pull request watch loop", () => {
   it("treats the first read as the baseline and reports nothing", async () => {
@@ -63,38 +77,33 @@ describe("pull request watch loop", () => {
   });
 
   it("reports CI finishing with the pass and fail counts", async () => {
-    const finished = snapshotOf({ checks: { total: 3, passed: 2, failed: 1, pending: 0 } });
-    const result = await runPolls(scriptedGh([pendingChecks, finished, finished]), [
+    const result = await runPolls(scriptedGh([pendingChecks, finishedChecks, finishedChecks]), [
       INTERVAL_MS,
       INTERVAL_MS,
     ]);
 
-    expect(result.notifications).toEqual([
+    expect(seen(result)).toEqual([
       {
         label: "CI failed",
         text: "#12: CI finished: 2 passed, 1 failed. Fix the failing checks and push.",
       },
     ]);
+    expect(result.notifications[0]?.wake).toBe(true);
   });
 
   it("reports CI passing with the pass count", async () => {
-    const finished = snapshotOf({ checks: { total: 2, passed: 2, failed: 0, pending: 0 } });
-    const result = await runPolls(scriptedGh([pendingChecks, finished]), [INTERVAL_MS]);
+    const result = await runPolls(scriptedGh([pendingChecks, passedChecks]), [INTERVAL_MS]);
 
-    expect(result.notifications).toEqual([
-      {
-        label: "CI passed",
-        text: "#12: CI finished: 2 passed. Merge it once it is approved.",
-      },
+    expect(seen(result)).toEqual([
+      { label: "CI passed", text: "#12: CI finished: 2 passed. Merge it once it is approved." },
     ]);
   });
 
   it("reports an approval", async () => {
-    const ciPassed = snapshotOf({ checks: { total: 2, passed: 2, failed: 0, pending: 0 } });
-    const approved = { ...ciPassed, reviewDecision: "APPROVED" };
+    const approved = { ...passedChecks, reviewDecision: "APPROVED" };
+    const result = await runPolls(scriptedGh([passedChecks, approved]), [INTERVAL_MS]);
 
-    const result = await runPolls(scriptedGh([ciPassed, approved]), [INTERVAL_MS]);
-    expect(result.notifications).toEqual([
+    expect(seen(result)).toEqual([
       { label: "approved", text: "#12: approved. Merge it when you are ready." },
     ]);
   });
@@ -103,7 +112,7 @@ describe("pull request watch loop", () => {
     const requested = snapshotOf({ reviewDecision: "CHANGES_REQUESTED" });
     const result = await runPolls(scriptedGh([pendingChecks, requested]), [INTERVAL_MS]);
 
-    expect(result.notifications).toEqual([
+    expect(seen(result)).toEqual([
       {
         label: "changes requested",
         text: "#12: has changes requested. Address the review comments and push.",
@@ -115,10 +124,35 @@ describe("pull request watch loop", () => {
     const conflicting = snapshotOf({ mergeable: "CONFLICTING", mergeStateStatus: "DIRTY" });
     const result = await runPolls(scriptedGh([pendingChecks, conflicting]), [INTERVAL_MS]);
 
-    expect(result.notifications).toEqual([
+    expect(seen(result)).toEqual([
       {
         label: "conflict",
         text: "#12: now conflicts with its base. Rebase onto the base branch and push.",
+      },
+    ]);
+  });
+
+  it("reports the base moving ahead as its own change", async () => {
+    const behind = snapshotOf({ mergeStateStatus: "BEHIND" });
+    const result = await runPolls(scriptedGh([pendingChecks, behind], 2), [INTERVAL_MS]);
+
+    expect(seen(result)).toEqual([
+      {
+        label: "base moved",
+        text: "#12: its base moved ahead by 2 commits. Rebase or update the branch; CI does not run until it is up to date.",
+      },
+    ]);
+    expect(result.behindCalls).toBeGreaterThan(0);
+  });
+
+  it("reports a base move that only the compare count shows", async () => {
+    const unknown = snapshotOf({ mergeStateStatus: "UNKNOWN" });
+    const result = await runPolls(scriptedGh([pendingChecks, unknown], 3), [INTERVAL_MS]);
+
+    expect(seen(result)).toEqual([
+      {
+        label: "base moved",
+        text: "#12: its base moved ahead by 3 commits. Rebase or update the branch; CI does not run until it is up to date.",
       },
     ]);
   });
@@ -127,7 +161,7 @@ describe("pull request watch loop", () => {
     const commented = snapshotOf({ comments: 2 });
     const result = await runPolls(scriptedGh([pendingChecks, commented]), [INTERVAL_MS]);
 
-    expect(result.notifications).toEqual([
+    expect(seen(result)).toEqual([
       { label: "comment", text: "#12: has 2 new comments. Read them before the next push." },
     ]);
   });
@@ -139,7 +173,7 @@ describe("pull request watch loop", () => {
       INTERVAL_MS,
     ]);
 
-    expect(result.notifications).toEqual([
+    expect(seen(result)).toEqual([
       {
         label: "merged",
         text: "#12: merged. The watch stopped; pull the base branch before you continue.",
@@ -156,7 +190,7 @@ describe("pull request watch loop", () => {
       INTERVAL_MS,
     ]);
 
-    expect(result.notifications).toEqual([
+    expect(seen(result)).toEqual([
       {
         label: "closed",
         text: "#12: closed without merging. The watch stopped; reopen it or open a new pull request.",
@@ -164,6 +198,52 @@ describe("pull request watch loop", () => {
     ]);
     expect(result.calls).toBe(2);
     expect(result.entry.status).toBe("stopped");
+  });
+
+  it("reports its status when nothing changed for five minutes", async () => {
+    const result = await runPolls(scriptedGh([pendingChecks]), [7 * INTERVAL_MS]);
+
+    expect(seen(result)).toEqual([
+      { label: "status", text: "#12: checks running (verify), mergeable, review required" },
+    ]);
+    expect(result.notifications[0]?.wake).toBe(false);
+  });
+
+  it("keeps reporting its status every five quiet minutes", async () => {
+    const result = await runPolls(scriptedGh([pendingChecks]), [14 * INTERVAL_MS]);
+
+    expect(result.notifications.map((notification) => notification.label)).toEqual([
+      "status",
+      "status",
+    ]);
+  });
+
+  it("says CI is stalled when the checks stay pending", async () => {
+    const result = await runPolls(scriptedGh([pendingChecks]), [21 * INTERVAL_MS]);
+
+    expect(seen(result)).toEqual([
+      { label: "status", text: "#12: checks running (verify), mergeable, review required" },
+      {
+        label: "status",
+        text: "#12: CI stalled 10m (verify), mergeable, review required — it may be stalled; check the run or push again",
+      },
+      {
+        label: "status",
+        text: "#12: CI stalled 15m (verify), mergeable, review required — it may be stalled; check the run or push again",
+      },
+    ]);
+  });
+
+  it("reports a base move in its status with how long it has been behind", async () => {
+    const behind = snapshotOf({ mergeStateStatus: "BEHIND" });
+    const result = await runPolls(scriptedGh([behind], 2), [7 * INTERVAL_MS]);
+
+    expect(seen(result)).toEqual([
+      {
+        label: "status",
+        text: "#12: checks running (verify), base 2 behind for 5m, review required",
+      },
+    ]);
   });
 
   it("keeps polling at a longer interval after a rate limit", async () => {
@@ -176,22 +256,36 @@ describe("pull request watch loop", () => {
       4 * INTERVAL_MS,
     ]);
 
-    expect(result.notifications).toEqual([
-      {
-        label: "gh error",
-        text: "#12: gh hit the GitHub rate limit. Retrying every 180s.",
-      },
+    expect(seen(result)).toEqual([
+      { label: "gh error", text: "#12: gh hit the GitHub rate limit. Retrying every 180s." },
     ]);
     expect(result.entry.status).toBe("watching");
     expect(result.entry.intervalMs).toBe(INTERVAL_MS);
     expect(result.calls).toBe(3);
   });
 
+  it("reports its status again after a rate limit clears", async () => {
+    const rateLimited = new PrWatchGhError({
+      kind: "rate-limit",
+      message: "gh hit the GitHub rate limit",
+    });
+    const result = await runPolls(scriptedGh([pendingChecks, rateLimited, pendingChecks]), [
+      INTERVAL_MS,
+      4 * INTERVAL_MS,
+      7 * INTERVAL_MS,
+    ]);
+
+    expect(result.notifications.map((notification) => notification.label)).toEqual([
+      "gh error",
+      "status",
+    ]);
+  });
+
   it("stops watching when gh cannot run at all", async () => {
     const missing = new PrWatchGhError({ kind: "missing", message: "gh is not on PATH" });
     const result = await runPolls(scriptedGh([missing, pendingChecks]), [INTERVAL_MS]);
 
-    expect(result.notifications).toEqual([
+    expect(seen(result)).toEqual([
       {
         label: "watch stopped",
         text: "#12: gh is not on PATH. The watch stopped; start it again after fixing this.",

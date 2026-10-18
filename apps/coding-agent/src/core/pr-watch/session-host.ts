@@ -21,7 +21,7 @@ export function createPrWatchHost(delivery: PrWatchDelivery): PrWatchHost {
     notify: (notification) => {
       delivery.sendMessage(
         { customType: PR_WATCH_MESSAGE_TYPE, content: notification.text, display: true },
-        { triggerTurn: true, deliverAs: "steer" },
+        { triggerTurn: notification.wake, deliverAs: "steer" },
       );
     },
     changed: () => delivery.changed(),

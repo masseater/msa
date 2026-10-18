@@ -12,7 +12,14 @@ export class PrWatchGhError extends Data.TaggedError("PrWatchGhError")<{
   readonly message: string;
 }> {}
 
-export type PrWatchGh = (target: PrWatchTarget) => Effect.Effect<PrSnapshot, PrWatchGhError>;
+export interface PrWatchGh {
+  readonly view: (target: PrWatchTarget) => Effect.Effect<PrSnapshot, PrWatchGhError>;
+  readonly behind: (
+    target: PrWatchTarget,
+    baseRefName: string,
+    headRefOid: string,
+  ) => Effect.Effect<number, PrWatchGhError>;
+}
 
 const PR_WATCH_FIELDS = [
   "state",
@@ -22,6 +29,8 @@ const PR_WATCH_FIELDS = [
   "reviewDecision",
   "comments",
   "updatedAt",
+  "baseRefName",
+  "headRefOid",
 ] as const;
 
 const GH_VIEW_TIMEOUT_MS = 30_000;
@@ -35,6 +44,20 @@ export function ghPrViewArgs(target: PrWatchTarget): string[] {
   if (target.repository !== undefined) args.push("--repo", target.repository);
   args.push("--json", PR_WATCH_FIELDS.join(","));
   return args;
+}
+
+export function ghCompareArgs(
+  target: PrWatchTarget,
+  baseRefName: string,
+  headRefOid: string,
+): string[] {
+  const repository = target.repository ?? "{owner}/{repo}";
+  return [
+    "api",
+    `repos/${repository}/compare/${baseRefName}...${headRefOid}`,
+    "--jq",
+    ".behind_by",
+  ];
 }
 
 function firstLine(text: string): string {
@@ -91,27 +114,49 @@ export function makeGh(options: PrWatchGhOptions): PrWatchGh {
     options.run ??
     ((args: string[]) => execCommand("gh", args, options.cwd, { timeout: GH_VIEW_TIMEOUT_MS }));
 
-  return (target) => {
+  const exec = (args: string[]): Effect.Effect<ExecResult, PrWatchGhError> => {
     if (find("gh") === null) {
       return Effect.fail(new PrWatchGhError({ kind: "missing", message: "gh is not on PATH" }));
     }
     return Effect.tryPromise({
-      try: () => run(ghPrViewArgs(target)),
+      try: () => run(args),
       catch: (cause) => new PrWatchGhError({ kind: "other", message: toErrorMessage(cause) }),
     }).pipe(
-      Effect.flatMap((result) => {
-        if (result.code !== 0) return Effect.fail(ghErrorFrom(result));
-        const snapshot = parsePrView(result.stdout);
-        if (snapshot === undefined) {
+      Effect.filterOrFail(
+        (result) => result.code === 0,
+        (result) => ghErrorFrom(result),
+      ),
+    );
+  };
+
+  return {
+    view: (target) =>
+      exec(ghPrViewArgs(target)).pipe(
+        Effect.flatMap((result) => {
+          const snapshot = parsePrView(result.stdout);
+          if (snapshot === undefined) {
+            return Effect.fail(
+              new PrWatchGhError({
+                kind: "other",
+                message: "gh pr view printed JSON this version cannot read",
+              }),
+            );
+          }
+          return Effect.succeed(snapshot);
+        }),
+      ),
+    behind: (target, baseRefName, headRefOid) =>
+      exec(ghCompareArgs(target, baseRefName, headRefOid)).pipe(
+        Effect.flatMap((result) => {
+          const behindBy = Number.parseInt(result.stdout.trim(), 10);
+          if (Number.isFinite(behindBy)) return Effect.succeed(behindBy);
           return Effect.fail(
             new PrWatchGhError({
               kind: "other",
-              message: "gh pr view printed JSON this version cannot read",
+              message: "gh api compare printed no behind_by count",
             }),
           );
-        }
-        return Effect.succeed(snapshot);
-      }),
-    );
+        }),
+      ),
   };
 }

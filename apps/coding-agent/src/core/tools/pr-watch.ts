@@ -97,7 +97,6 @@ export function createPrWatchToolDefinition(
     promptSnippet: prWatchToolSystemPromptContribution.snippet,
     promptGuidelines: [...prWatchToolSystemPromptContribution.guidelines],
     parameters: prWatchSchema,
-    defaultActive: false,
     execute(_toolCallId, params): Promise<AgentToolResult<PrWatchToolDetails>> {
       return Effect.runPromise(
         Effect.sync(() => {

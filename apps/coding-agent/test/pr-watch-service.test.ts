@@ -11,6 +11,7 @@ import {
   scriptedGh,
   sleep,
   snapshotOf,
+  STATUS_INTERVAL_MS,
   waitFor,
 } from "./pr-watch-support.ts";
 
@@ -23,7 +24,13 @@ const createService = (
   gh: ReturnType<typeof scriptedGh>["gh"],
   host: HostLog,
   intervalMs = TICK_MS,
-): PrWatch => new PrWatch({ gh, host: host.host, defaultIntervalMs: () => intervalMs });
+): PrWatch =>
+  new PrWatch({
+    gh,
+    host: host.host,
+    defaultIntervalMs: () => intervalMs,
+    statusIntervalMs: () => STATUS_INTERVAL_MS,
+  });
 
 describe("pull request watches", () => {
   it("keeps one watch when the same pull request is registered twice", async () => {
@@ -108,7 +115,7 @@ describe("pull request watches", () => {
 
   it("shows a watched pull request in the footer line", async () => {
     const script = scriptedGh([
-      snapshotOf({ checks: { total: 2, passed: 2, failed: 1, pending: 0 } }),
+      snapshotOf({ checks: { total: 2, passed: 2, failed: 1, pending: 0, pendingNames: [] } }),
     ]);
     const host = createHost();
     const service = createService(script.gh, host);
@@ -146,11 +153,7 @@ describe("pull request watches", () => {
 
   it("does not wait for the first read", async () => {
     const host = createHost();
-    const service = new PrWatch({
-      gh: neverGh(),
-      host: host.host,
-      defaultIntervalMs: () => TICK_MS,
-    });
+    const service = createService(neverGh(), host);
     try {
       const outcome = service.watch({ number: 12 });
 

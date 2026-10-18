@@ -1,9 +1,16 @@
-import { describeChecks, type PrCheckCounts, type PrSnapshot } from "./snapshot.ts";
+import {
+  describeChecks,
+  isBehind,
+  isConflicting,
+  type PrCheckCounts,
+  type PrSnapshot,
+} from "./snapshot.ts";
 
 export type PrChangeKind =
   | "merged"
   | "closed"
   | "conflict"
+  | "base-moved"
   | "checks-failed"
   | "checks-passed"
   | "review"
@@ -69,6 +76,17 @@ function reviewChange(previous: string, current: string): PrChange | undefined {
   return undefined;
 }
 
+function baseMovedChange(current: PrSnapshot): PrChange {
+  const behind = current.behindBy;
+  const distance =
+    behind === undefined || behind === 0 ? "" : ` by ${behind} commit${behind === 1 ? "" : "s"}`;
+  return change(
+    "base-moved",
+    "base moved",
+    `its base moved ahead${distance}. Rebase or update the branch; CI does not run until it is up to date.`,
+  );
+}
+
 export function describeChanges(previous: PrSnapshot, current: PrSnapshot): readonly PrChange[] {
   if (current.state === "MERGED" && previous.state !== "MERGED") {
     return [
@@ -92,7 +110,7 @@ export function describeChanges(previous: PrSnapshot, current: PrSnapshot): read
   }
 
   const changes: PrChange[] = [];
-  if (previous.mergeable !== "CONFLICTING" && current.mergeable === "CONFLICTING") {
+  if (!isConflicting(previous) && isConflicting(current)) {
     changes.push(
       change(
         "conflict",
@@ -100,13 +118,16 @@ export function describeChanges(previous: PrSnapshot, current: PrSnapshot): read
         "now conflicts with its base. Rebase onto the base branch and push.",
       ),
     );
+  } else if (!isBehind(previous) && isBehind(current)) {
+    changes.push(baseMovedChange(current));
   }
   const checks = checkChange(previous.checks, current.checks);
   if (checks) changes.push(checks);
   const review = reviewChange(previous.reviewDecision, current.reviewDecision);
   if (review) changes.push(review);
-  if (current.comments > previous.comments)
+  if (current.comments > previous.comments) {
     changes.push(commentChange(current.comments - previous.comments));
+  }
   return changes;
 }
 

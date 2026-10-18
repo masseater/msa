@@ -707,7 +707,16 @@ describe("SettingsManager", () => {
     it("applies +name and -name to the default selection", () => {
       expect(
         SettingsManager.inMemory({ defaultTools: ["+codemode", "-write"] }).getDefaultTools(),
-      ).toEqual(["read", "bash", "edit", "memory", "web_search", "web_fetch", "codemode"]);
+      ).toEqual([
+        "read",
+        "bash",
+        "edit",
+        "memory",
+        "pr_watch",
+        "web_search",
+        "web_fetch",
+        "codemode",
+      ]);
       expect(
         SettingsManager.inMemory({ defaultTools: ["read", "+grep", "+read"] }).getDefaultTools(),
       ).toEqual(["read", "grep"]);
@@ -742,6 +751,7 @@ describe("SettingsManager", () => {
         "edit",
         "write",
         "memory",
+        "pr_watch",
         "web_search",
         "web_fetch",
         "codemode",

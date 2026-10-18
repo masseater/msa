@@ -15,6 +15,7 @@ export interface PrWatchOptions {
   readonly gh: PrWatchGh;
   readonly host: PrWatchHost;
   readonly defaultIntervalMs: () => number;
+  readonly statusIntervalMs: () => number;
 }
 
 export interface PrWatchStart {
@@ -39,6 +40,7 @@ export class PrWatch {
   readonly #gh: PrWatchGh;
   readonly #host: PrWatchHost;
   readonly #defaultIntervalMs: () => number;
+  readonly #statusIntervalMs: () => number;
   readonly #runtime: ManagedRuntime.ManagedRuntime<never, never>;
   #last: PrWatchLastNotification | undefined;
 
@@ -46,6 +48,7 @@ export class PrWatch {
     this.#gh = options.gh;
     this.#host = options.host;
     this.#defaultIntervalMs = options.defaultIntervalMs;
+    this.#statusIntervalMs = options.statusIntervalMs;
     this.#runtime = ManagedRuntime.make(Layer.empty);
   }
 
@@ -55,7 +58,11 @@ export class PrWatch {
     if (existing !== undefined && existing.status === "watching") {
       return { entry: existing, started: false };
     }
-    const entry = createPrWatchEntry(target, intervalMs ?? this.#defaultIntervalMs());
+    const entry = createPrWatchEntry(
+      target,
+      intervalMs ?? this.#defaultIntervalMs(),
+      this.#statusIntervalMs(),
+    );
     this.#entries.set(key, entry);
     const fiber = this.#runtime.runFork(
       prWatchLoop({ gh: this.#gh, entry, host: this.#hostFor(entry) }),

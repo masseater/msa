@@ -11,6 +11,7 @@ export interface PrCheckCounts {
   readonly passed: number;
   readonly failed: number;
   readonly pending: number;
+  readonly pendingNames: readonly string[];
 }
 
 export interface PrSnapshot {
@@ -21,7 +22,12 @@ export interface PrSnapshot {
   readonly updatedAt: string;
   readonly comments: number;
   readonly checks: PrCheckCounts;
+  readonly baseRefName: string;
+  readonly headRefOid: string;
+  readonly behindBy: number | undefined;
 }
+
+const PENDING_NAME_LIMIT = 3;
 
 const optionalString = Schema.String.pipe(Schema.NullOr, Schema.optionalKey);
 const optionalComments = Schema.Unknown.pipe(Schema.Array, Schema.NullOr, Schema.optionalKey);
@@ -43,6 +49,8 @@ const GhPrView = Schema.Struct({
   comments: optionalComments,
   statusCheckRollup: RollupEntry.pipe(Schema.Array, Schema.NullOr, Schema.optionalKey),
   updatedAt: Schema.optionalKey(Schema.String),
+  baseRefName: Schema.optionalKey(Schema.String),
+  headRefOid: Schema.optionalKey(Schema.String),
 });
 
 const GhPrViewJson = Schema.fromJsonString(GhPrView);
@@ -75,10 +83,15 @@ function rollupOutcome(entry: RollupEntryValue): CheckOutcome {
   return checkRunOutcome(status, conclusion);
 }
 
+function rollupName(entry: RollupEntryValue): string {
+  return entry.name ?? entry.context ?? "";
+}
+
 function countChecks(entries: readonly RollupEntryValue[]): PrCheckCounts {
   let passed = 0;
   let failed = 0;
   let pending = 0;
+  const pendingNames: string[] = [];
   for (const entry of entries) {
     switch (rollupOutcome(entry)) {
       case "passed":
@@ -87,12 +100,15 @@ function countChecks(entries: readonly RollupEntryValue[]): PrCheckCounts {
       case "failed":
         failed += 1;
         break;
-      case "pending":
+      case "pending": {
         pending += 1;
+        const name = rollupName(entry);
+        if (name && pendingNames.length < PENDING_NAME_LIMIT) pendingNames.push(name);
         break;
+      }
     }
   }
-  return { total: entries.length, passed, failed, pending };
+  return { total: entries.length, passed, failed, pending, pendingNames };
 }
 
 export function parsePrView(json: string): PrSnapshot | undefined {
@@ -107,6 +123,9 @@ export function parsePrView(json: string): PrSnapshot | undefined {
     updatedAt: value.updatedAt ?? "",
     comments: value.comments?.length ?? 0,
     checks: countChecks(value.statusCheckRollup ?? []),
+    baseRefName: value.baseRefName ?? "",
+    headRefOid: value.headRefOid ?? "",
+    behindBy: undefined,
   };
 }
 
@@ -116,4 +135,13 @@ export function describeChecks(checks: PrCheckCounts): string {
   if (checks.failed > 0) parts.push(`${checks.failed} failed`);
   if (checks.pending > 0) parts.push(`${checks.pending} pending`);
   return parts.length > 0 ? parts.join(", ") : "no checks";
+}
+
+export function isBehind(snapshot: PrSnapshot): boolean {
+  if (snapshot.mergeStateStatus === "BEHIND") return true;
+  return (snapshot.behindBy ?? 0) > 0;
+}
+
+export function isConflicting(snapshot: PrSnapshot): boolean {
+  return snapshot.mergeable === "CONFLICTING" || snapshot.mergeStateStatus === "DIRTY";
 }

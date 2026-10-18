@@ -124,6 +124,7 @@ describe("defaultTools setting", () => {
       "edit",
       "inactive_tool",
       "memory",
+      "pr_watch",
       "read",
     ]);
     session.dispose();
@@ -222,6 +223,7 @@ describe("defaultTools setting", () => {
       "grep",
       "inactive_tool",
       "memory",
+      "pr_watch",
       "read",
     ]);
     session.dispose();
@@ -282,7 +284,14 @@ describe("defaultTools setting", () => {
     // #10245
     it("activates only tools newly added to defaultTools", async () => {
       const session = await createFileSession();
-      expect(session.getActiveToolNames()).toEqual(["read", "bash", "edit", "write", "memory"]);
+      expect(session.getActiveToolNames()).toEqual([
+        "read",
+        "bash",
+        "edit",
+        "write",
+        "memory",
+        "pr_watch",
+      ]);
       session.setActiveToolsByName(["read", "edit", "write"]);
 
       writeSettings({ defaultTools: ["+inactive_tool", "+grep"] });
@@ -343,6 +352,7 @@ describe("defaultTools setting", () => {
         "edit",
         "inactive_tool",
         "memory",
+        "pr_watch",
         "read",
         "write",
       ]);
@@ -454,6 +464,7 @@ describe("defaultTools setting", () => {
         "bash",
         "edit",
         "memory",
+        "pr_watch",
         "read",
         "write",
       ]);

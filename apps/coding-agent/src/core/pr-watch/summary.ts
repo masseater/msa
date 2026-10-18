@@ -1,5 +1,77 @@
 import type { PrWatchSnapshot } from "./service.ts";
+import { isBehind, isConflicting, type PrSnapshot } from "./snapshot.ts";
 import type { PrWatchEntry } from "./watch.ts";
+
+export const CI_STALL_MS = 10 * 60_000;
+
+function formatElapsed(ms: number): string {
+  const totalSeconds = Math.max(0, Math.round(ms / 1000));
+  if (totalSeconds < 60) return `${totalSeconds}s`;
+  const totalMinutes = Math.floor(totalSeconds / 60);
+  if (totalMinutes < 60) return `${totalMinutes}m`;
+  return `${Math.floor(totalMinutes / 60)}h ${totalMinutes % 60}m`;
+}
+
+function reviewLabel(reviewDecision: string): string | undefined {
+  switch (reviewDecision) {
+    case "APPROVED":
+      return "approved";
+    case "CHANGES_REQUESTED":
+      return "changes requested";
+    case "REVIEW_REQUIRED":
+      return "review required";
+    default:
+      return undefined;
+  }
+}
+
+function behindLabel(snapshot: PrSnapshot): string {
+  const behind = snapshot.behindBy;
+  if (behind === undefined || behind === 0) return "base moved ahead";
+  return `base ${behind} behind`;
+}
+
+function checksLabel(entry: PrWatchEntry, now: number): string {
+  const checks = entry.snapshot?.checks;
+  if (checks === undefined || checks.total === 0) return "no checks";
+  if (checks.pending > 0) {
+    const names = checks.pendingNames.length > 0 ? ` (${checks.pendingNames.join(", ")})` : "";
+    if (entry.pendingSince !== undefined && now - entry.pendingSince >= CI_STALL_MS) {
+      return `CI stalled ${formatElapsed(now - entry.pendingSince)}${names}`;
+    }
+    return `checks running${names}`;
+  }
+  if (checks.failed > 0) return `${checks.failed} failed`;
+  return "CI passed";
+}
+
+function isStalled(entry: PrWatchEntry, now: number): boolean {
+  return (
+    entry.pendingSince !== undefined &&
+    (entry.snapshot?.checks.pending ?? 0) > 0 &&
+    now - entry.pendingSince >= CI_STALL_MS
+  );
+}
+
+export function describeWatchStatus(entry: PrWatchEntry, now: number): string | undefined {
+  const snapshot = entry.snapshot;
+  if (entry.error !== undefined) return undefined;
+  if (snapshot === undefined) return "no read from gh yet";
+  const parts = [checksLabel(entry, now)];
+  if (isConflicting(snapshot)) {
+    parts.push("conflict");
+  } else if (isBehind(snapshot)) {
+    const moved =
+      entry.baseMovedAt === undefined ? "" : ` for ${formatElapsed(now - entry.baseMovedAt)}`;
+    parts.push(`${behindLabel(snapshot)}${moved}`);
+  } else {
+    parts.push("mergeable");
+  }
+  const review = reviewLabel(snapshot.reviewDecision);
+  if (review !== undefined) parts.push(review);
+  const stalled = isStalled(entry, now) ? " — it may be stalled; check the run or push again" : "";
+  return `${parts.join(", ")}${stalled}`;
+}
 
 export function describePrWatchState(entry: PrWatchEntry): string {
   if (entry.error !== undefined) return "gh error";
@@ -7,7 +79,8 @@ export function describePrWatchState(entry: PrWatchEntry): string {
   if (snapshot === undefined) return "waiting for gh";
   if (snapshot.state === "MERGED") return "merged";
   if (snapshot.state === "CLOSED") return "closed";
-  if (snapshot.mergeable === "CONFLICTING") return "conflict";
+  if (isConflicting(snapshot)) return "conflict";
+  if (isBehind(snapshot)) return behindLabel(snapshot);
   if (snapshot.checks.pending > 0) {
     return `CI ${snapshot.checks.passed + snapshot.checks.failed}/${snapshot.checks.total}`;
   }

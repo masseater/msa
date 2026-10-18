@@ -43,7 +43,7 @@ See [Choose a Model](models.md) for model selection and thinking controls.
 | `codemode.mode`         | `"on"` \| `"only"` | `"on"`                          | How the `codemode` tool presents tools while it is active. `on`: declared tools get a note on calling them from scripts appended to their description, and `codemode` lists only tools that are not declared. `only`: `codemode` lists every tool scripts can call, and active built-in and extension tools are hidden from the model, so it reaches them through `codemode`. |
 | `codemode.inlineBudget` | number             | `3000`                          | Estimated tokens (characters / 4) the `codemode` tool's description may spend on tool declarations. Tools that do not fit are left out and found with `searchTools()`. `0` lists only namespaces.                                                                                                                                                                             |
 
-Available built-in tools are `read`, `bash`, `powershell`, `edit`, `write`, `grep`, `find`, `ls`, `memory`, and `pr_watch`. `memory` is on by default. `defaultTools` can also name `codemode` and `tool_search`, which built-in extensions register inactive, and other extension tools registered inactive. `pr_watch` is inactive too; add it with `+pr_watch`.
+Available built-in tools are `read`, `bash`, `powershell`, `edit`, `write`, `grep`, `find`, `ls`, `memory`, and `pr_watch`. `memory` and `pr_watch` are on by default. `defaultTools` can also name `codemode` and `tool_search`, which built-in extensions register inactive, and other extension tools registered inactive.
 
 A list of only `+name` and `-name` entries changes the inherited selection instead of replacing it. For example, this enables `codemode` next to the default tools:
 
@@ -106,9 +106,10 @@ See [Long-Term Memory](memory.md) for scopes, embeddings, and the `/memory` comm
 
 ## Pull request watches
 
-| Setting                   | Type   | Default | Description                                         |
-| ------------------------- | ------ | ------- | --------------------------------------------------- |
-| `prWatch.intervalSeconds` | number | `45`    | Seconds between reads of each watched pull request. |
+| Setting                         | Type   | Default | Description                                                 |
+| ------------------------------- | ------ | ------- | ----------------------------------------------------------- |
+| `prWatch.intervalSeconds`       | number | `45`    | Seconds between reads of each watched pull request.         |
+| `prWatch.statusIntervalSeconds` | number | `300`   | Seconds without a change before a watch reports its status. |
 
 See [Watch Pull Requests](pr-watch.md) for the `pr_watch` actions and the messages it sends.
 

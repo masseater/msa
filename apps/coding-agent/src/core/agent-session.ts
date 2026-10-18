@@ -642,6 +642,7 @@ export class AgentSession {
         changed: () => this._emit({ type: "pr_watch_changed", prWatch: this._prWatch.snapshot() }),
       }),
       defaultIntervalMs: () => this.settingsManager.getPrWatchIntervalMs(),
+      statusIntervalMs: () => this.settingsManager.getPrWatchStatusIntervalMs(),
     });
 
     const createWorkerSession = config.createWorkerSession;

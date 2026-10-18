@@ -5,6 +5,7 @@ import type { PrSnapshot } from "../src/core/pr-watch/snapshot.ts";
 import type { PrNotification, PrWatchHost } from "../src/core/pr-watch/watch.ts";
 
 export const INTERVAL_MS = 45_000;
+export const STATUS_INTERVAL_MS = 300_000;
 
 export const snapshotOf = (overrides: Partial<PrSnapshot> = {}): PrSnapshot => ({
   state: "OPEN",
@@ -13,7 +14,16 @@ export const snapshotOf = (overrides: Partial<PrSnapshot> = {}): PrSnapshot => (
   reviewDecision: "REVIEW_REQUIRED",
   updatedAt: "2024-05-01T00:00:00Z",
   comments: 0,
-  checks: { total: 2, passed: 0, failed: 0, pending: 2 },
+  checks: {
+    total: 2,
+    passed: 0,
+    failed: 0,
+    pending: 2,
+    pendingNames: ["verify"],
+  },
+  baseRefName: "main",
+  headRefOid: "head-oid",
+  behindBy: undefined,
   ...overrides,
 });
 
@@ -45,21 +55,35 @@ export const createHost = (): HostLog => {
 export interface ScriptedGh {
   readonly gh: PrWatchGh;
   readonly calls: { count: number };
+  readonly behindCalls: { count: number };
 }
 
-export const scriptedGh = (steps: ReadonlyArray<PrSnapshot | PrWatchGhError>): ScriptedGh => {
+export const scriptedGh = (
+  steps: ReadonlyArray<PrSnapshot | PrWatchGhError>,
+  behindBy?: number,
+): ScriptedGh => {
   const calls = { count: 0 };
+  const behindCalls = { count: 0 };
   return {
     calls,
-    gh: () => {
-      const step = steps[Math.min(calls.count, steps.length - 1)]!;
-      calls.count += 1;
-      return step instanceof PrWatchGhError ? Effect.fail(step) : Effect.succeed(step);
+    behindCalls,
+    gh: {
+      view: () => {
+        const step = steps[Math.min(calls.count, steps.length - 1)]!;
+        calls.count += 1;
+        return step instanceof PrWatchGhError ? Effect.fail(step) : Effect.succeed(step);
+      },
+      behind: () => {
+        behindCalls.count += 1;
+        return behindBy === undefined
+          ? Effect.fail(new PrWatchGhError({ kind: "other", message: "no compare" }))
+          : Effect.succeed(behindBy);
+      },
     },
   };
 };
 
-export const neverGh = (): PrWatchGh => () => Effect.never;
+export const neverGh = (): PrWatchGh => ({ view: () => Effect.never, behind: () => Effect.never });
 
 export const waitFor = async (predicate: () => boolean, timeoutMs = 3000): Promise<void> => {
   const deadline = Date.now() + timeoutMs;
