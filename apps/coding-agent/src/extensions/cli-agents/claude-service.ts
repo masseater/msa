@@ -15,7 +15,10 @@ const INSTALL_COMMAND = "curl -fsSL https://claude.ai/install.sh | bash";
 const NEW_ACCOUNT = "Add a new account";
 
 function loginAccounts(): Account[] {
-  return loadAccounts().filter((account) => account.configDir || !account.tokenCommand);
+  return loadAccounts().filter(
+    (account) =>
+      account.configDir || account.tokenCommand === undefined || account.tokenCommand === "",
+  );
 }
 
 async function withLabels(accounts: Account[]) {
@@ -24,7 +27,7 @@ async function withLabels(accounts: Account[]) {
     return {
       account,
       loggedIn: status.loggedIn,
-      label: state ? `${account.name} (${state})` : account.name,
+      label: state === "" ? account.name : `${account.name} (${state})`,
     };
   });
 }
@@ -47,13 +50,15 @@ export const claudeCodeService: ExternalService = {
   name: "Claude Code",
   purpose: "Claude models through the claude-code provider",
   async status() {
-    if (!claudeExecutable()) return { installed: false, install: INSTALL_COMMAND };
+    const executable = claudeExecutable();
+    if (executable === undefined || executable === "")
+      return { installed: false, install: INSTALL_COMMAND };
     const accounts = await withLabels(loginAccounts());
     return { installed: true, signedIn: accounts.some((entry) => entry.loggedIn) };
   },
   async login(interaction) {
     const account = await chooseAccount(interaction, await withLabels(loginAccounts()));
-    if (!account) throw new Error("No Claude account to sign in");
+    if (account === undefined) throw new Error("No Claude account to sign in");
     await loginAccount(account, {
       askCode: (url) => {
         interaction.showPage({ url });
@@ -74,6 +79,6 @@ export const claudeCodeService: ExternalService = {
             accounts.map((entry) => entry.label),
           );
     const account = accounts.find((entry) => entry.label === choice)?.account;
-    if (account) await logoutAccount(account);
+    if (account !== undefined) await logoutAccount(account);
   },
 };

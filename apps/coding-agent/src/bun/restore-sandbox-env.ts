@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 
 export function restoreSandboxEnv(): void {
-  if (!process.versions?.["bun"]) return;
+  if (process.versions?.["bun"] === undefined || process.versions?.["bun"] === "") return;
 
   if (Object.keys(process.env).length > 0) return;
 

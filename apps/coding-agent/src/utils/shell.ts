@@ -11,8 +11,8 @@ export interface ShellConfig {
 }
 
 function isLegacyWslBashPath(path: string): boolean {
-  const normalized = path.replace(/\//g, "\\").toLowerCase();
-  return /^[a-z]:\\windows\\(?:system32|sysnative)\\bash\.exe$/.test(normalized);
+  const normalized = path.replace(/\//gu, "\\").toLowerCase();
+  return /^[a-z]:\\windows\\(?:system32|sysnative)\\bash\.exe$/u.test(normalized);
 }
 
 function getBashShellConfig(shell: string): ShellConfig {
@@ -29,9 +29,9 @@ export function findExecutableOnPath(executable: string): string | null {
         timeout: 5000,
         windowsHide: true,
       });
-      if (result.status === 0 && result.stdout) {
-        const firstMatch = result.stdout.trim().split(/\r?\n/)[0];
-        if (firstMatch && existsSync(firstMatch)) {
+      if (result.status === 0 && result.stdout !== "") {
+        const firstMatch = result.stdout.trim().split(/\r?\n/u)[0];
+        if (firstMatch !== undefined && firstMatch !== "" && existsSync(firstMatch)) {
           return firstMatch;
         }
       }
@@ -41,9 +41,9 @@ export function findExecutableOnPath(executable: string): string | null {
 
   try {
     const result = spawnSync("which", [executable], { encoding: "utf-8", timeout: 5000 });
-    if (result.status === 0 && result.stdout) {
-      const firstMatch = result.stdout.trim().split(/\r?\n/)[0];
-      if (firstMatch) {
+    if (result.status === 0 && result.stdout !== "") {
+      const firstMatch = result.stdout.trim().split(/\r?\n/u)[0];
+      if (firstMatch !== undefined && firstMatch !== "") {
         return firstMatch;
       }
     }
@@ -52,7 +52,7 @@ export function findExecutableOnPath(executable: string): string | null {
 }
 
 export function getShellConfig(customShellPath?: string): ShellConfig {
-  if (customShellPath) {
+  if (customShellPath !== undefined && customShellPath !== "") {
     if (existsSync(customShellPath)) {
       return getBashShellConfig(customShellPath);
     }
@@ -62,11 +62,11 @@ export function getShellConfig(customShellPath?: string): ShellConfig {
   if (process.platform === "win32") {
     const paths: string[] = [];
     const programFiles = process.env["ProgramFiles"];
-    if (programFiles) {
+    if (programFiles !== undefined && programFiles !== "") {
       paths.push(`${programFiles}\\Git\\bin\\bash.exe`);
     }
     const programFilesX86 = process.env["ProgramFiles(x86)"];
-    if (programFilesX86) {
+    if (programFilesX86 !== undefined && programFilesX86 !== "") {
       paths.push(`${programFilesX86}\\Git\\bin\\bash.exe`);
     }
 
@@ -77,7 +77,7 @@ export function getShellConfig(customShellPath?: string): ShellConfig {
     }
 
     const bashOnPath = findExecutableOnPath("bash.exe");
-    if (bashOnPath) {
+    if (bashOnPath !== null && bashOnPath !== "") {
       return getBashShellConfig(bashOnPath);
     }
 
@@ -95,7 +95,7 @@ export function getShellConfig(customShellPath?: string): ShellConfig {
   }
 
   const bashOnPath = findExecutableOnPath("bash");
-  if (bashOnPath) {
+  if (bashOnPath !== null && bashOnPath !== "") {
     return getBashShellConfig(bashOnPath);
   }
 
@@ -116,7 +116,7 @@ export function getPowerShellConfig(): ShellConfig {
   }
 
   const shell = findExecutableOnPath("pwsh.exe") ?? findExecutableOnPath("powershell.exe");
-  if (!shell) {
+  if (shell === null || shell === "") {
     throw new Error(
       "No PowerShell executable found. Install PowerShell or add powershell.exe/pwsh.exe to PATH.",
     );
@@ -142,7 +142,7 @@ export function getShellEnv(): NodeJS.ProcessEnv {
 }
 
 export function sanitizeBinaryOutput(str: string): string {
-  return str.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\uFFF9-\uFFFB]/g, "");
+  return str.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\uFFF9-\uFFFB]/gu, "");
 }
 
 const trackedDetachedChildPids = new Set<number>();

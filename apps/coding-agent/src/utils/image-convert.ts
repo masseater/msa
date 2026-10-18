@@ -22,7 +22,7 @@ function encodePng(photon: Photon, bytes: Uint8Array): Uint8Array | null {
 
 export async function convertImageBytesToPng(bytes: Uint8Array): Promise<Uint8Array | null> {
   const photon = await loadPhoton();
-  if (!photon) {
+  if (photon === null) {
     return null;
   }
   return encodePng(photon, bytes);
@@ -38,7 +38,7 @@ export async function convertToPng(
 
   const bytes = new Uint8Array(Buffer.from(base64Data, "base64"));
   const pngBytes = await convertImageBytesToPng(bytes);
-  if (!pngBytes) {
+  if (pngBytes === null) {
     return null;
   }
 
@@ -50,10 +50,10 @@ export async function convertToPng(
 
 export async function loadPngTranscoder(): Promise<ImageTranscoder | undefined> {
   const photon = await loadPhoton();
-  if (!photon) return undefined;
+  if (photon === null) return undefined;
   return (base64Data) => {
     const pngBytes = encodePng(photon, new Uint8Array(Buffer.from(base64Data, "base64")));
-    return pngBytes ? Buffer.from(pngBytes).toString("base64") : null;
+    return pngBytes === null ? null : Buffer.from(pngBytes).toString("base64");
   };
 }
 
@@ -63,7 +63,7 @@ let pngTranscoderRegistered = false;
 export function ensurePngTranscoder(onRegistered: () => void): void {
   if (pngTranscoderRegistered || getCapabilities().images !== "kitty") return;
   pngTranscoderLoad ??= loadPngTranscoder().then((transcoder) => {
-    if (!transcoder) return false;
+    if (transcoder === undefined) return false;
     setImageTranscoder(transcoder);
     pngTranscoderRegistered = true;
     return true;

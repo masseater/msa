@@ -22,7 +22,7 @@ const DOWNLOAD_TIMEOUT_MS = 120_000;
 
 function isOfflineModeEnabled(): boolean {
   const value = process.env["MSA_OFFLINE"];
-  if (!value) return false;
+  if (value === undefined || value === "") return false;
   return value === "1" || value.toLowerCase() === "true" || value.toLowerCase() === "yes";
 }
 
@@ -89,7 +89,7 @@ function commandExists(cmd: string): boolean {
 
 export function getToolPath(tool: "fd" | "rg"): string | null {
   const config = TOOLS[tool];
-  if (!config) return null;
+  if (config === undefined) return null;
 
   const localPath = join(TOOLS_DIR, config.binaryName + (platform() === "win32" ? ".exe" : ""));
   if (existsSync(localPath)) {
@@ -122,17 +122,17 @@ export async function getLatestVersion(repo: string): Promise<string> {
 
   const location =
     response.status >= 300 && response.status < 400 ? response.headers.get("location") : null;
-  if (!location) {
+  if (location === null || location === "") {
     throw new Error(
       `Failed to resolve latest ${repo} release: HTTP ${response.status} without redirect`,
     );
   }
 
   const tag = new URL(location, "https://github.com").pathname.split("/").pop();
-  if (!tag || !location.includes("/releases/tag/")) {
+  if (tag === undefined || tag === "" || !location.includes("/releases/tag/")) {
     throw new Error(`Failed to resolve latest ${repo} release: unexpected redirect to ${location}`);
   }
-  return decodeURIComponent(tag).replace(/^v/, "");
+  return decodeURIComponent(tag).replace(/^v/u, "");
 }
 
 async function downloadFile(url: string, dest: string): Promise<void> {
@@ -142,7 +142,7 @@ async function downloadFile(url: string, dest: string): Promise<void> {
     throw new Error(`Download failed with HTTP ${response.status}: ${url}`);
   }
 
-  if (!response.body) {
+  if (response.body === null) {
     throw new Error("No response body");
   }
 
@@ -155,7 +155,7 @@ function findBinaryRecursively(rootDir: string, binaryFileName: string): string 
 
   while (stack.length > 0) {
     const currentDir = stack.pop();
-    if (!currentDir) continue;
+    if (currentDir === undefined || currentDir === "") continue;
 
     const entries = readdirSync(currentDir, { withFileTypes: true });
     for (const entry of entries) {
@@ -173,15 +173,15 @@ function findBinaryRecursively(rootDir: string, binaryFileName: string): string 
 }
 
 function formatSpawnFailure(result: SpawnSyncReturns<Buffer>): string {
-  if (result.error?.message) {
+  if (result.error?.message !== undefined && result.error?.message !== "") {
     return result.error.message;
   }
   const stderr = result.stderr?.toString().trim();
-  if (stderr) {
+  if (stderr !== "") {
     return stderr;
   }
   const stdout = result.stdout?.toString().trim();
-  if (stdout) {
+  if (stdout !== "") {
     return stdout;
   }
   return `exit status ${result.status ?? "unknown"}`;
@@ -189,7 +189,7 @@ function formatSpawnFailure(result: SpawnSyncReturns<Buffer>): string {
 
 function runExtractionCommand(command: string, args: string[]): string | null {
   const result = spawnSync(command, args, { stdio: "pipe" });
-  if (!result.error && result.status === 0) {
+  if (result.error === undefined && result.status === 0) {
     return null;
   }
   return `${command}: ${formatSpawnFailure(result)}`;
@@ -197,14 +197,14 @@ function runExtractionCommand(command: string, args: string[]): string | null {
 
 function extractTarGzArchive(archivePath: string, extractDir: string, assetName: string): void {
   const failure = runExtractionCommand("tar", ["xzf", archivePath, "-C", extractDir]);
-  if (failure) {
+  if (failure !== null && failure !== "") {
     throw new Error(`Failed to extract ${assetName}: ${failure}`);
   }
 }
 
 function getWindowsTarCommand(): string {
   const systemRoot = process.env["SystemRoot"] ?? process.env["WINDIR"];
-  if (systemRoot) {
+  if (systemRoot !== undefined && systemRoot !== "") {
     const systemTar = join(systemRoot, "System32", "tar.exe");
     if (existsSync(systemTar)) {
       return systemTar;
@@ -223,7 +223,7 @@ function extractZipArchive(archivePath: string, extractDir: string, assetName: s
       "-C",
       extractDir,
     ]);
-    if (!tarFailure) return;
+    if (tarFailure === null || tarFailure === "") return;
     failures.push(tarFailure);
 
     const script =
@@ -239,15 +239,15 @@ function extractZipArchive(archivePath: string, extractDir: string, assetName: s
       archivePath,
       extractDir,
     ]);
-    if (!powershellFailure) return;
+    if (powershellFailure === null || powershellFailure === "") return;
     failures.push(powershellFailure);
   } else {
     const unzipFailure = runExtractionCommand("unzip", ["-q", archivePath, "-d", extractDir]);
-    if (!unzipFailure) return;
+    if (unzipFailure === null || unzipFailure === "") return;
     failures.push(unzipFailure);
 
     const tarFailure = runExtractionCommand("tar", ["xf", archivePath, "-C", extractDir]);
-    if (!tarFailure) return;
+    if (tarFailure === null || tarFailure === "") return;
     failures.push(tarFailure);
   }
 
@@ -256,7 +256,7 @@ function extractZipArchive(archivePath: string, extractDir: string, assetName: s
 
 async function downloadTool(tool: "fd" | "rg"): Promise<string> {
   const config = TOOLS[tool];
-  if (!config) throw new Error(`Unknown tool: ${tool}`);
+  if (config === undefined) throw new Error(`Unknown tool: ${tool}`);
 
   const plat = platform();
   const architecture = arch();
@@ -267,7 +267,7 @@ async function downloadTool(tool: "fd" | "rg"): Promise<string> {
       : await getLatestVersion(config.repo);
 
   const assetName = config.getAssetName(version, plat, architecture);
-  if (!assetName) {
+  if (assetName === null || assetName === "") {
     throw new Error(`Unsupported platform: ${plat}/${architecture}`);
   }
 
@@ -296,18 +296,18 @@ async function downloadTool(tool: "fd" | "rg"): Promise<string> {
     }
 
     const binaryFileName = config.binaryName + binaryExt;
-    const extractedDir = join(extractDir, assetName.replace(/\.(tar\.gz|zip)$/, ""));
+    const extractedDir = join(extractDir, assetName.replace(/\.(tar\.gz|zip)$/u, ""));
     const extractedBinaryCandidates = [
       join(extractedDir, binaryFileName),
       join(extractDir, binaryFileName),
     ];
     let extractedBinary = extractedBinaryCandidates.find((candidate) => existsSync(candidate));
 
-    if (!extractedBinary) {
+    if (extractedBinary === undefined || extractedBinary === "") {
       extractedBinary = findBinaryRecursively(extractDir, binaryFileName) ?? undefined;
     }
 
-    if (extractedBinary) {
+    if (extractedBinary !== undefined && extractedBinary !== "") {
       renameSync(extractedBinary, binaryPath);
     } else {
       throw new Error(
@@ -341,12 +341,12 @@ export async function ensureTool(
   onStatus?: (status: ToolStatus) => void,
 ): Promise<string | undefined> {
   const existingPath = getToolPath(tool);
-  if (existingPath) {
+  if (existingPath !== null && existingPath !== "") {
     return existingPath;
   }
 
   const config = TOOLS[tool];
-  if (!config) return undefined;
+  if (config === undefined) return undefined;
 
   if (isOfflineModeEnabled()) {
     onStatus?.({

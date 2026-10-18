@@ -54,7 +54,7 @@ for (const [name, language] of Object.entries(eagerLanguages)) {
 let allLanguagesPromise: Promise<void> | undefined;
 
 export function loadAllHighlightLanguages(): Promise<void> {
-  if (!allLanguagesPromise) {
+  if (allLanguagesPromise === undefined) {
     allLanguagesPromise = new Promise((resolve) => {
       setImmediate(() => {
         void import("highlight.js/lib/index.js").then(
@@ -83,13 +83,13 @@ const SPAN_CLOSE = "</span>";
 const HIGHLIGHT_CLASS_PREFIX = "hljs-";
 
 function getScopeFromSpanTag(tag: string): string | undefined {
-  const match = /\sclass\s*=\s*(?:"([^"]*)"|'([^']*)')/.exec(tag);
+  const match = /\sclass\s*=\s*(?:"([^"]*)"|'([^']*)')/u.exec(tag);
   const classValue = match?.[1] ?? match?.[2];
-  if (!classValue) {
+  if (classValue === undefined || classValue === "") {
     return undefined;
   }
 
-  for (const className of classValue.split(/\s+/)) {
+  for (const className of classValue.split(/\s+/u)) {
     if (className.startsWith(HIGHLIGHT_CLASS_PREFIX)) {
       return className.slice(HIGHLIGHT_CLASS_PREFIX.length);
     }
@@ -100,14 +100,14 @@ function getScopeFromSpanTag(tag: string): string | undefined {
 
 function getScopeFormatter(scope: string, theme: HighlightTheme): HighlightFormatter | undefined {
   const exact = theme[scope];
-  if (exact) {
+  if (exact !== undefined) {
     return exact;
   }
 
   const dotIndex = scope.indexOf(".");
   if (dotIndex !== -1) {
     const prefixFormatter = theme[scope.slice(0, dotIndex)];
-    if (prefixFormatter) {
+    if (prefixFormatter !== undefined) {
       return prefixFormatter;
     }
   }
@@ -115,7 +115,7 @@ function getScopeFormatter(scope: string, theme: HighlightTheme): HighlightForma
   const dashIndex = scope.indexOf("-");
   if (dashIndex !== -1) {
     const prefixFormatter = theme[scope.slice(0, dashIndex)];
-    if (prefixFormatter) {
+    if (prefixFormatter !== undefined) {
       return prefixFormatter;
     }
   }
@@ -129,11 +129,11 @@ function getActiveFormatter(
 ): HighlightFormatter | undefined {
   for (let i = scopes.length - 1; i >= 0; i--) {
     const scope = scopes[i];
-    if (!scope) {
+    if (scope === undefined || scope === "") {
       continue;
     }
     const formatter = getScopeFormatter(scope, theme);
-    if (formatter) {
+    if (formatter !== undefined) {
       return formatter;
     }
   }
@@ -160,16 +160,17 @@ export function renderHighlightedHtml(html: string, theme: HighlightTheme = {}):
   const scopes: Array<string | undefined> = [];
 
   const flushText = () => {
-    if (!textBuffer) {
+    if (textBuffer === "") {
       return;
     }
     const formatter = getActiveFormatter(scopes, theme);
-    output += formatter
-      ? textBuffer
-          .split("\n")
-          .map((line) => (line ? formatter(line) : line))
-          .join("\n")
-      : textBuffer;
+    output +=
+      formatter === undefined
+        ? textBuffer
+        : textBuffer
+            .split("\n")
+            .map((line) => (line === "" ? line : formatter(line)))
+            .join("\n");
     textBuffer = "";
   };
 
@@ -198,7 +199,7 @@ export function renderHighlightedHtml(html: string, theme: HighlightTheme = {}):
 
     if (html[index] === "&") {
       const decoded = decodeHtmlEntityAt(html, index);
-      if (decoded) {
+      if (decoded !== undefined) {
         textBuffer += decoded.text;
         index += decoded.length;
         continue;
@@ -214,12 +215,13 @@ export function renderHighlightedHtml(html: string, theme: HighlightTheme = {}):
 }
 
 export function highlight(code: string, options: HighlightOptions = {}): string {
-  const html = options.language
-    ? hljs.highlight(code, {
-        language: options.language,
-        ignoreIllegals: options.ignoreIllegals,
-      }).value
-    : hljs.highlightAuto(code, options.languageSubset).value;
+  const html =
+    options.language !== undefined && options.language !== ""
+      ? hljs.highlight(code, {
+          language: options.language,
+          ignoreIllegals: options.ignoreIllegals,
+        }).value
+      : hljs.highlightAuto(code, options.languageSubset).value;
   return renderHighlightedHtml(html, options.theme);
 }
 

@@ -44,7 +44,7 @@ export async function processFileArguments(
 
     const mimeType = await detectSupportedImageMimeTypeFromFile(absolutePath);
 
-    if (mimeType) {
+    if (mimeType !== null && mimeType !== "") {
       const content = await readFile(absolutePath);
       const processed = await processImage(content, mimeType, { autoResizeImages });
 

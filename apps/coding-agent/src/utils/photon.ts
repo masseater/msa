@@ -43,12 +43,12 @@ function patchPhotonWasmRead(): () => void {
     const [file, options] = args;
     const resolvedPath = pathOrNull(file);
 
-    if (resolvedPath?.endsWith(WASM_FILENAME)) {
+    if (resolvedPath?.endsWith(WASM_FILENAME) === true) {
       try {
         return originalReadFileSync(...args);
       } catch (error) {
         const err = error as NodeJS.ErrnoException;
-        if (err?.code && err.code !== "ENOENT") {
+        if (err?.code !== undefined && err?.code !== "" && err.code !== "ENOENT") {
           throw error;
         }
 
@@ -93,11 +93,11 @@ function patchPhotonWasmRead(): () => void {
 }
 
 export async function loadPhoton(): Promise<typeof import("@silvia-odwyer/photon-node") | null> {
-  if (photonModule) {
+  if (photonModule !== null) {
     return photonModule;
   }
 
-  if (loadPromise) {
+  if (loadPromise !== null) {
     return loadPromise;
   }
 

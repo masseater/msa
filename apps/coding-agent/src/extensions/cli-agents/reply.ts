@@ -44,7 +44,7 @@ export function createReply(model: Model<string>) {
   const block = (key: string, kind: "text" | "thinking") => {
     const mapKey = `${kind}:${key}`;
     let entry = open.get(mapKey);
-    if (!entry) {
+    if (entry === undefined) {
       start();
       entry = { index: message.content.length, kind };
       message.content.push(
@@ -72,7 +72,7 @@ export function createReply(model: Model<string>) {
   };
 
   const appendText = (key: string, delta: string) => {
-    if (!delta) return;
+    if (delta === "") return;
     const index = block(key, "text");
     (message.content[index] as { text: string }).text += delta;
     stream.push({ type: "text_delta", contentIndex: index, delta, partial: message });
@@ -92,13 +92,14 @@ export function createReply(model: Model<string>) {
 
     setText(key: string, full: string) {
       const current = open.get(`text:${key}`);
-      const have = current ? (message.content[current.index] as { text: string }).text : "";
+      const have =
+        current === undefined ? "" : (message.content[current.index] as { text: string }).text;
       if (full.length > have.length && full.startsWith(have))
         appendText(key, full.slice(have.length));
     },
     appendText,
     appendThinking(key: string, delta: string) {
-      if (!delta) return;
+      if (delta === "") return;
       const index = block(key, "thinking");
       (message.content[index] as { thinking: string }).thinking += delta;
       stream.push({ type: "thinking_delta", contentIndex: index, delta, partial: message });

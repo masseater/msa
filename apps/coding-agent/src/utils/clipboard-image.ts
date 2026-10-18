@@ -52,7 +52,7 @@ function selectPreferredImageMimeType(mimeTypes: string[]): string | null {
 
   for (const preferred of SUPPORTED_IMAGE_MIME_TYPES) {
     const match = normalized.find((t) => t.base === preferred);
-    if (match) {
+    if (match !== undefined) {
       return match.raw;
     }
   }
@@ -68,7 +68,7 @@ function isSupportedImageMimeType(mimeType: string): boolean {
 
 async function convertToPng(bytes: Uint8Array): Promise<Uint8Array | null> {
   const photon = await loadPhoton();
-  if (!photon) {
+  if (photon === null) {
     return null;
   }
 
@@ -92,12 +92,12 @@ async function readClipboardImageViaWlPaste(): Promise<ClipboardImage | null | u
 
   const types = list
     .toString("utf-8")
-    .split(/\r?\n/)
+    .split(/\r?\n/u)
     .map((t) => t.trim())
     .filter(Boolean);
 
   const selectedType = selectPreferredImageMimeType(types);
-  if (!selectedType) {
+  if (selectedType === null || selectedType === "") {
     return null;
   }
 
@@ -120,7 +120,7 @@ async function readClipboardImageViaPowerShell(): Promise<ClipboardImage | null>
     }
 
     const winPath = winPathResult.toString("utf-8").trim();
-    if (!winPath) {
+    if (winPath === "") {
       return null;
     }
 
@@ -177,11 +177,11 @@ async function readClipboardImageViaXclip(): Promise<ClipboardImage | null | und
 
   const candidateTypes = targets
     .toString("utf-8")
-    .split(/\r?\n/)
+    .split(/\r?\n/u)
     .map((t) => t.trim())
     .filter(Boolean);
   const preferred = selectPreferredImageMimeType(candidateTypes);
-  if (!preferred) return null;
+  if (preferred === null || preferred === "") return null;
 
   const data = await runClipboardCommand("xclip", [
     "-selection",
@@ -198,7 +198,7 @@ async function readClipboardImageViaXclip(): Promise<ClipboardImage | null | und
 async function readClipboardImageViaNativeClipboard(): Promise<ClipboardImage | null | undefined> {
   const bytes = await getNativeClipboard()?.getImage();
   if (bytes === undefined) return undefined;
-  if (!bytes?.length) return null;
+  if (bytes?.length === undefined || bytes?.length === 0) return null;
   return { bytes, mimeType: detectSupportedImageMimeType(bytes) ?? "application/octet-stream" };
 }
 
@@ -230,7 +230,7 @@ export async function readClipboardImage(options?: {
   const env = options?.env ?? process.env;
   const platform = options?.platform ?? process.platform;
 
-  if (env["TERMUX_VERSION"]) {
+  if (env["TERMUX_VERSION"] !== undefined && env["TERMUX_VERSION"] !== "") {
     return null;
   }
 
@@ -243,19 +243,20 @@ export async function readClipboardImage(options?: {
     }
     if (image === undefined) image = await readClipboardImageViaXclip();
 
-    if (!image && wsl) image = (await readClipboardImageViaPowerShell()) ?? image;
+    if ((image === undefined || image === null) && wsl)
+      image = (await readClipboardImageViaPowerShell()) ?? image;
     if (image === undefined) image = await readClipboardImageViaNativeClipboard();
   } else {
     image = await readClipboardImageViaNativeClipboard();
   }
 
-  return image ? toSupportedImage(image) : null;
+  return image !== undefined && image !== null ? toSupportedImage(image) : null;
 }
 
 async function toSupportedImage(image: ClipboardImage): Promise<ClipboardImage | null> {
   if (!isSupportedImageMimeType(image.mimeType)) {
     const pngBytes = await convertToPng(image.bytes);
-    if (!pngBytes) {
+    if (pngBytes === null) {
       return null;
     }
     return { bytes: pngBytes, mimeType: "image/png" };

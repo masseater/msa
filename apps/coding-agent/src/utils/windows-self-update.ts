@@ -50,7 +50,7 @@ function getLoadedSharedObjectsInPackageDir(packageDir: string): string[] {
 
 export function cleanupWindowsSelfUpdateQuarantine(packageDir: string): void {
   const quarantineRoot = getQuarantineRoot(packageDir);
-  if (!quarantineRoot) {
+  if (quarantineRoot === undefined || quarantineRoot === "") {
     return;
   }
   try {
@@ -61,7 +61,7 @@ export function cleanupWindowsSelfUpdateQuarantine(packageDir: string): void {
 export function quarantineWindowsNativeDependencies(packageDir: string): void {
   const resolvedPackageDir = normalizePath(packageDir);
   const quarantineRoot = getQuarantineRoot(resolvedPackageDir);
-  if (!quarantineRoot) {
+  if (quarantineRoot === undefined || quarantineRoot === "") {
     return;
   }
 

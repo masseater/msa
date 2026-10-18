@@ -118,7 +118,7 @@ export function toCodemodeDeclaration(
   guidelines: readonly string[] = [],
 ): Omit<CodemodeTool, "execute"> {
   const bullets = guidelines.flatMap((guideline) =>
-    guideline.trim() ? [`- ${guideline.trim()}`] : [],
+    guideline.trim() === "" ? [] : [`- ${guideline.trim()}`],
   );
   return {
     name: tool.name,
@@ -188,12 +188,12 @@ export function createCodemodeDescription(
   options: CodemodeDescriptionOptions = {},
 ): string {
   const declarations = getCodemodeCallableTools(tools)
-    .filter((tool) => !options.deferred?.has(tool.name))
+    .filter((tool) => options.deferred?.has(tool.name) !== true)
     .map((tool) => toCodemodeDeclaration(tool, options.guidelines?.get(tool.name)));
   const groups = new Map<string, CatalogGroup>([["", { namespace: undefined, entries: [] }]]);
   for (const declaration of declarations) {
     const namespace = options.namespaces?.get(declaration.name);
-    const key = namespace ? `ns:${namespace.name}` : "";
+    const key = namespace === undefined ? "" : `ns:${namespace.name}`;
     const group = groups.get(key) ?? { namespace, entries: [] };
     groups.set(key, group);
     const section = renderToolSection(declaration);
@@ -218,7 +218,7 @@ export function createCodemodeDescription(
   const toolSections = ["Nested tools:"];
   for (const { namespace, entries } of ordered) {
     const visible = entries.filter((entry) => shown.has(entry.name));
-    if (namespace) {
+    if (namespace !== undefined) {
       const listing =
         visible.length === entries.length
           ? ""
@@ -226,7 +226,9 @@ export function createCodemodeDescription(
             ? " (tools not listed)"
             : " (some tools not listed)";
       const description = namespace.description?.trim();
-      toolSections.push(`## ${namespace.name}${listing}${description ? `\n${description}` : ""}`);
+      toolSections.push(
+        `## ${namespace.name}${listing}${description !== undefined && description !== "" ? `\n${description}` : ""}`,
+      );
     }
     for (const entry of visible) toolSections.push(entry.section);
   }
@@ -241,7 +243,7 @@ function describeFields(schema: unknown, depth: number): string | undefined {
   const requiredNames = new Set(Array.isArray(required) ? required : []);
   const fields = Object.entries(properties).map(([name, field]) => {
     const nested = depth > 0 ? describeFields(field, depth - 1) : undefined;
-    return `${name}${requiredNames.has(name) ? "" : "?"}${nested ? `: ${nested}` : ""}`;
+    return `${name}${requiredNames.has(name) ? "" : "?"}${nested !== undefined && nested !== "" ? `: ${nested}` : ""}`;
   });
   return `{ ${fields.join(", ")} }`;
 }
@@ -250,7 +252,7 @@ function describeOutput(schema: CodemodeJsonSchema | undefined): string {
   const type = renderToolOutputType(schema);
   if (type === "string") return "a string";
   const fields = describeFields(schema, 1);
-  return `\`${fields ?? type.replace(/\s+/g, " ")}\``;
+  return `\`${fields ?? type.replace(/\s+/gu, " ")}\``;
 }
 
 function describeScriptCall(tool: AgentTool<any>): string {
@@ -275,7 +277,7 @@ function prepareCodemodeLoadout(
   const namespaces = new Map(
     listed.flatMap((tool) => {
       const namespace = loadout.getNamespace(tool.name);
-      return namespace ? [[tool.name, namespace] as const] : [];
+      return namespace === undefined ? [] : [[tool.name, namespace] as const];
     }),
   );
   const guidelines = new Map(
@@ -304,11 +306,11 @@ function prepareCodemodeLoadout(
   };
 }
 
-const DISCOVERY_GLOBALS = /\b(searchTools|describeNamespace|describeTool|ALL_TOOLS)\b/;
+const DISCOVERY_GLOBALS = /\b(searchTools|describeNamespace|describeTool|ALL_TOOLS)\b/u;
 
 function getScriptReach(code: unknown): "all" | readonly string[] {
   if (typeof code !== "string") return [];
-  return DISCOVERY_GLOBALS.test(code) ? "all" : (code.match(/\w+/g) ?? []);
+  return DISCOVERY_GLOBALS.test(code) ? "all" : (code.match(/\w+/gu) ?? []);
 }
 
 export function createCodemodeToolDefinition(

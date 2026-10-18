@@ -18,7 +18,7 @@ export function flattenTranscript(messages: readonly Message[]): string {
   const blocks: string[] = [];
   for (const message of messages) {
     let text = textFromContent(message.content).trim();
-    if (!text) continue;
+    if (text === "") continue;
     if (message.role === "user") blocks.push(`User: ${text}`);
     else if (message.role === "assistant") blocks.push(`Assistant: ${text}`);
     else if (message.role === "toolResult") {

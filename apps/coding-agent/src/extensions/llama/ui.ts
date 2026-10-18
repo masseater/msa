@@ -37,7 +37,8 @@ interface ProgressState extends LlamaProgress {
 
 function contextLabel(model: LlamaModelInfo): string | undefined {
   const context = model.meta?.n_ctx ?? model.meta?.n_ctx_train;
-  if (context) return context >= 1000 ? `${Math.round(context / 1000)}k` : String(context);
+  if (context !== undefined && context !== 0)
+    return context >= 1000 ? `${Math.round(context / 1000)}k` : String(context);
   const args = model.status.args ?? [];
   for (let index = 0; index < args.length - 1; index++) {
     if (args[index] !== "--ctx-size" && args[index] !== "-c" && args[index] !== "-ctx") continue;
@@ -54,7 +55,7 @@ function modelDescription(model: LlamaModelInfo): string {
   if (loaded) details.push("loaded");
   else if (model.status.value !== "unloaded") details.push(model.status.value);
   const context = loaded ? contextLabel(model) : undefined;
-  if (context) details.push(`${context} context`);
+  if (context !== undefined && context !== "") details.push(`${context} context`);
   return details.join(" · ");
 }
 
@@ -73,7 +74,7 @@ function frame(theme: Theme, title: string, body: Component[], footer?: string):
   container.addChild(new DynamicBorder((text: string) => theme.fg("accent", text)));
   container.addChild(new Text(theme.fg("accent", theme.bold(title)), 1, 0));
   for (const child of body) container.addChild(child);
-  if (footer) {
+  if (footer !== undefined && footer !== "") {
     container.addChild(new Spacer(1));
     container.addChild(new Text(theme.fg("dim", footer), 1, 0));
   }
@@ -163,7 +164,7 @@ class HuggingFaceSearch extends Container implements Focusable {
     const end = Math.min(start + maxVisible, this.filteredResults.length);
     for (let index = start; index < end; index++) {
       const model = this.filteredResults[index];
-      if (!model) continue;
+      if (model === undefined) continue;
       const prefix = index === this.selectedIndex ? "→ " : "  ";
       const details = `${compactCount(model.downloads)} downloads`;
       this.resultsContainer.addChild(
@@ -194,20 +195,20 @@ class HuggingFaceSearch extends Container implements Focusable {
   }
 
   private filterResults(): void {
-    if (this.query) {
+    if (this.query === "") {
+      this.filteredResults = this.results;
+    } else {
       const matches = new Set(
         fuzzyFilter(this.results, this.query, (model) => model.id).map((model) => model.id),
       );
       this.filteredResults = this.results.filter((model) => matches.has(model.id));
-    } else {
-      this.filteredResults = this.results;
     }
     this.selectedIndex = Math.min(this.selectedIndex, Math.max(0, this.filteredResults.length - 1));
     this.updateResults();
   }
 
   private scheduleSearch(): void {
-    if (this.debounce) clearTimeout(this.debounce);
+    if (this.debounce !== undefined) clearTimeout(this.debounce);
     this.request?.abort();
     this.request = undefined;
     if (this.query.length < 2) {
@@ -216,7 +217,7 @@ class HuggingFaceSearch extends Container implements Focusable {
       return;
     }
     const cached = this.cache.get(this.query.toLowerCase());
-    if (cached) {
+    if (cached !== undefined) {
       this.results = cached;
       this.status = cached.length === 0 ? "No GGUF models found" : "";
       this.filterResults();
@@ -251,7 +252,7 @@ class HuggingFaceSearch extends Container implements Focusable {
   private close(model: string | undefined): void {
     if (this.closed) return;
     this.closed = true;
-    if (this.debounce) clearTimeout(this.debounce);
+    if (this.debounce !== undefined) clearTimeout(this.debounce);
     this.request?.abort();
     this.onSelectModel(model);
   }
@@ -276,7 +277,7 @@ class HuggingFaceSearch extends Container implements Focusable {
     if (this.keybindings.matches(data, "tui.select.confirm")) {
       const exact = /^[^/\s]+\/[^:\s]+(?::[^\s:]+)?$/u.test(this.query) ? this.query : undefined;
       const selected = exact ?? this.filteredResults[this.selectedIndex]?.id;
-      if (selected) this.close(selected);
+      if (selected !== undefined && selected !== "") this.close(selected);
       return;
     }
     if (this.keybindings.matches(data, "tui.select.cancel")) {
@@ -319,7 +320,7 @@ class LlamaView implements LlamaUi, Focusable {
 
   set focused(value: boolean) {
     this._focused = value;
-    if (this.inputTarget) this.inputTarget.focused = value;
+    if (this.inputTarget !== undefined) this.inputTarget.focused = value;
   }
 
   private setContent(
@@ -327,14 +328,14 @@ class LlamaView implements LlamaUi, Focusable {
     inputHandler?: { handleInput?(data: string): void },
     inputTarget?: Focusable,
   ): void {
-    if (this.inputTarget) this.inputTarget.focused = false;
+    if (this.inputTarget !== undefined) this.inputTarget.focused = false;
     this.progressPromise = undefined;
     this.progressResolver = undefined;
     this.showingProgress = false;
     this.content = content;
     this.inputHandler = inputHandler;
     this.inputTarget = inputTarget;
-    if (this.inputTarget) this.inputTarget.focused = this._focused;
+    if (this.inputTarget !== undefined) this.inputTarget.focused = this._focused;
     this.tui.requestRender();
   }
 
@@ -366,7 +367,7 @@ class LlamaView implements LlamaUi, Focusable {
         if (item.value === DOWNLOAD_VALUE) resolve({ type: "download" });
         else {
           const model = byId.get(item.value);
-          if (model) resolve({ type: "model", model });
+          if (model !== undefined) resolve({ type: "model", model });
         }
       };
       list.onCancel = () => resolve({ type: "close" });
@@ -447,7 +448,7 @@ class LlamaView implements LlamaUi, Focusable {
   }
 
   progress(state: ProgressState): Promise<void> {
-    if (!this.progressPromise) {
+    if (this.progressPromise === undefined) {
       this.progressPromise = new Promise((resolve) => {
         this.progressResolver = resolve;
       });
@@ -478,14 +479,18 @@ class LlamaView implements LlamaUi, Focusable {
         ),
       );
     }
-    if (state.detail) body.push(new Text(this.theme.fg("dim", state.detail), 1, 0));
+    if (state.detail !== undefined && state.detail !== "")
+      body.push(new Text(this.theme.fg("dim", state.detail), 1, 0));
     this.content = frame(this.theme, state.title, body, keyHint("tui.select.cancel", "stop"));
     this.inputHandler = undefined;
     this.tui.requestRender();
   }
 
   handleInput(data: string): void {
-    if (this.progressResolver && this.keybindings.matches(data, "tui.select.cancel")) {
+    if (
+      this.progressResolver !== undefined &&
+      this.keybindings.matches(data, "tui.select.cancel")
+    ) {
       const resolve = this.progressResolver;
       this.progressPromise = undefined;
       this.progressResolver = undefined;

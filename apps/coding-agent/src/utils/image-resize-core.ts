@@ -57,7 +57,7 @@ export async function resizeImageInProcess(
   const inputBase64Size = Math.ceil(inputBytes.byteLength / 3) * 4;
 
   const photon = await loadPhoton();
-  if (!photon) {
+  if (photon === null) {
     return null;
   }
 
@@ -155,7 +155,7 @@ export async function resizeImageInProcess(
   } catch {
     return null;
   } finally {
-    if (image) {
+    if (image !== undefined) {
       image.free();
     }
   }

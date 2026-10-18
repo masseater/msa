@@ -69,7 +69,7 @@ function loadThemes(resources: ResolvedResource[]): Theme[] {
     if (!resource.enabled) continue;
     try {
       const loadedTheme = loadThemeFromPath(resource.path);
-      if (loadedTheme.name) {
+      if (loadedTheme.name !== undefined && loadedTheme.name !== "") {
         if (seen.has(loadedTheme.name)) continue;
         seen.add(loadedTheme.name);
       }
@@ -146,7 +146,7 @@ export function shouldRunFirstTimeSetup(settingsPath: string = getSettingsPath()
   if (!areExperimentalFeaturesEnabled()) {
     return false;
   }
-  if (process.env[ENV_AGENT_DIR]) {
+  if (process.env[ENV_AGENT_DIR] !== undefined && process.env[ENV_AGENT_DIR] !== "") {
     return false;
   }
   return !existsSync(settingsPath);
@@ -192,7 +192,7 @@ export async function showFirstTimeSetup(settingsManager: SettingsManager): Prom
         return;
       }
       settled = true;
-      if (result) {
+      if (result !== undefined) {
         settingsManager.setTheme(result.theme);
         settingsManager.setEnableAnalytics(result.shareAnalytics);
         await settingsManager.flush();

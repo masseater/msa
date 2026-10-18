@@ -35,7 +35,7 @@ async function copyViaWindowsClipboard(text: string): Promise<boolean> {
     const winPath = (await runClipboardCommand("wslpath", ["-w", tmpFile], { timeoutMs: 1000 }))
       ?.toString("utf8")
       .trim();
-    if (!winPath) return false;
+    if (winPath === undefined || winPath === "") return false;
     const script = `Set-Clipboard -Value ([System.IO.File]::ReadAllText('${winPath.replaceAll("'", "''")}', [System.Text.Encoding]::UTF8))`;
     const result = await runClipboardCommand("powershell.exe", ["-NoProfile", "-Command", script], {
       timeoutMs: 5000,
@@ -53,11 +53,12 @@ async function copyViaWindowsClipboard(text: string): Promise<boolean> {
 export async function readClipboardText(): Promise<string | null> {
   const commands: [string, string[]][] = [];
 
-  if (process.env["TERMUX_VERSION"]) commands.push(["termux-clipboard-get", []]);
+  if (process.env["TERMUX_VERSION"] !== undefined && process.env["TERMUX_VERSION"] !== "")
+    commands.push(["termux-clipboard-get", []]);
   if (platform() === "linux") {
-    if (process.env["WAYLAND_DISPLAY"])
+    if (process.env["WAYLAND_DISPLAY"] !== undefined && process.env["WAYLAND_DISPLAY"] !== "")
       commands.push(["wl-paste", ["--no-newline", "--type", "text"]]);
-    if (process.env["DISPLAY"]) {
+    if (process.env["DISPLAY"] !== undefined && process.env["DISPLAY"] !== "") {
       commands.push(
         ["xclip", ["-selection", "clipboard", "-out"]],
         ["xsel", ["--clipboard", "--output"]],
@@ -77,7 +78,7 @@ export async function readClipboardText(): Promise<string | null> {
 
 export async function readClipboardFilePaths(): Promise<string[] | null> {
   const paths = await getNativeClipboard()?.getFilePaths?.();
-  return paths?.length ? paths : null;
+  return paths?.length !== undefined && paths?.length !== 0 ? paths : null;
 }
 
 export async function copyToClipboard(text: string): Promise<void> {
@@ -88,7 +89,7 @@ export async function copyToClipboard(text: string): Promise<void> {
   if (p !== "linux") {
     try {
       const clipboard = getNativeClipboard();
-      if (clipboard?.setText) {
+      if (clipboard?.setText !== undefined) {
         await clipboard.setText(text);
         copied = true;
       }
@@ -99,9 +100,11 @@ export async function copyToClipboard(text: string): Promise<void> {
     if (p === "darwin") commands.push(["pbcopy", []]);
     else if (p === "win32") commands.push(["clip", []]);
     else {
-      if (env["TERMUX_VERSION"]) commands.push(["termux-clipboard-set", []]);
-      if (env["WAYLAND_DISPLAY"]) commands.push(["wl-copy", []]);
-      if (env["DISPLAY"]) {
+      if (env["TERMUX_VERSION"] !== undefined && env["TERMUX_VERSION"] !== "")
+        commands.push(["termux-clipboard-set", []]);
+      if (env["WAYLAND_DISPLAY"] !== undefined && env["WAYLAND_DISPLAY"] !== "")
+        commands.push(["wl-copy", []]);
+      if (env["DISPLAY"] !== undefined && env["DISPLAY"] !== "") {
         commands.push(["xclip", ["-selection", "clipboard"]], ["xsel", ["--clipboard", "--input"]]);
       }
     }
@@ -116,12 +119,15 @@ export async function copyToClipboard(text: string): Promise<void> {
   }
   let osc52Emitted = false;
   if (!copied && p === "linux" && isWSL(env)) {
-    if (env["WT_SESSION"]) osc52Emitted = emitOsc52(text);
+    if (env["WT_SESSION"] !== undefined && env["WT_SESSION"] !== "") osc52Emitted = emitOsc52(text);
     copied = osc52Emitted || (await copyViaWindowsClipboard(text));
   }
 
   const headless =
-    p === "linux" && !env["DISPLAY"] && !env["WAYLAND_DISPLAY"] && !env["TERMUX_VERSION"];
+    p === "linux" &&
+    (env["DISPLAY"] === undefined || env["DISPLAY"] === "") &&
+    (env["WAYLAND_DISPLAY"] === undefined || env["WAYLAND_DISPLAY"] === "") &&
+    (env["TERMUX_VERSION"] === undefined || env["TERMUX_VERSION"] === "");
   let oversized = false;
   if (!osc52Emitted && (isRemoteSession(env) || (!copied && headless))) {
     if (emitOsc52(text)) copied = true;
@@ -129,16 +135,16 @@ export async function copyToClipboard(text: string): Promise<void> {
   }
   if (copied) return;
   if (oversized) throw new Error("Clipboard unavailable: text exceeds the OSC 52 size limit");
-  if (env["TERMUX_VERSION"]) {
+  if (env["TERMUX_VERSION"] !== undefined && env["TERMUX_VERSION"] !== "") {
     throw new Error("Clipboard unavailable: install the Termux:API app and `termux-api` package");
   }
   if (p === "linux") {
-    if (env["WAYLAND_DISPLAY"]) {
+    if (env["WAYLAND_DISPLAY"] !== undefined && env["WAYLAND_DISPLAY"] !== "") {
       throw new Error(
         "Clipboard unavailable: install `wl-clipboard` (`wl-copy`) or check Wayland access",
       );
     }
-    if (env["DISPLAY"]) {
+    if (env["DISPLAY"] !== undefined && env["DISPLAY"] !== "") {
       throw new Error("Clipboard unavailable: install `xclip` or `xsel`, or check X11 access");
     }
   }

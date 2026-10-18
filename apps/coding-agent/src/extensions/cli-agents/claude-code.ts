@@ -123,7 +123,7 @@ class Input implements AsyncIterable<SDKUserMessage> {
       type: "user",
       message: { role: "user", content },
       parent_tool_use_id: null,
-      ...(priority ? { priority } : {}),
+      ...(priority === undefined ? {} : { priority }),
     });
     this.wake?.();
   }
@@ -136,7 +136,7 @@ class Input implements AsyncIterable<SDKUserMessage> {
   async *[Symbol.asyncIterator](): AsyncIterator<SDKUserMessage> {
     while (true) {
       const next = this.queue.shift();
-      if (next) {
+      if (next !== undefined) {
         yield next;
         continue;
       }
@@ -208,7 +208,7 @@ class Session {
         };
       }
       const result = this.ready.get(id);
-      if (result) {
+      if (result !== undefined) {
         this.ready.delete(id);
         return result;
       }
@@ -220,8 +220,10 @@ class Session {
       prompt: this.input,
       options: {
         model: config.model,
-        ...(config.effort ? { effort: config.effort } : {}),
-        ...(executable ? { pathToClaudeCodeExecutable: executable } : {}),
+        ...(config.effort === undefined ? {} : { effort: config.effort }),
+        ...(executable !== undefined && executable !== ""
+          ? { pathToClaudeCodeExecutable: executable }
+          : {}),
         systemPrompt: config.systemPrompt,
         tools: [],
         settingSources: [],
@@ -262,7 +264,7 @@ class Session {
 
   private holdOpen(hold: boolean): void {
     const child = this.child;
-    if (!child) return;
+    if (child === undefined) return;
     for (const handle of [child, child.stdin, child.stdout, child.stderr] as Array<{
       ref?(): void;
       unref?(): void;
@@ -304,11 +306,11 @@ class Session {
   deliver(id: string, result: CallToolResult): void {
     this.pending.delete(id);
     const resolve = this.waiting.get(id);
-    if (resolve) {
+    if (resolve === undefined) {
+      this.ready.set(id, result);
+    } else {
       this.waiting.delete(id);
       resolve(result);
-    } else {
-      this.ready.set(id, result);
     }
   }
 
@@ -389,7 +391,7 @@ async function attach(messages: readonly Message[], config: SessionConfig): Prom
   for (const session of idle.slice(MAX_IDLE_SESSIONS - 1)) session.close();
 
   const account = config.accounts[0];
-  if (!account) throw new Error("No Claude account available");
+  if (account === undefined) throw new Error("No Claude account available");
   const session = new Session(await loadSdk(), config, account, await accountEnv(account));
   session.busy = true;
   session.send([
@@ -427,13 +429,18 @@ async function pump(
 
   while (true) {
     const next = await session.next();
-    if (next.done) return { error: session.exitDetail || "Claude Code exited" };
+    if (next.done === true) return { error: session.exitDetail || "Claude Code exited" };
     const event = next.value;
     try {
       await options?.onProviderStreamEvent?.(event, model);
     } catch {}
 
-    if ("parent_tool_use_id" in event && event.parent_tool_use_id) continue;
+    if (
+      "parent_tool_use_id" in event &&
+      event.parent_tool_use_id !== null &&
+      event.parent_tool_use_id !== ""
+    )
+      continue;
 
     if (event.type === "stream_event") {
       sawPartials = true;
@@ -453,7 +460,7 @@ async function pump(
         else if (inner.delta.type === "thinking_delta")
           reply.appendThinking(key, inner.delta.thinking);
       } else if (inner.type === "message_delta") {
-        if (inner.delta.stop_reason) stopReason = inner.delta.stop_reason;
+        if (inner.delta.stop_reason !== null) stopReason = inner.delta.stop_reason;
         reply.addUsage({ output: inner.usage.output_tokens - messageOutput });
         messageOutput = inner.usage.output_tokens;
       } else if (inner.type === "message_stop" && stopReason === "tool_use" && calledTools > 0) {
@@ -493,8 +500,14 @@ async function pump(
           usageLimitPrefixes.some((prefix) => error.startsWith(prefix));
         return {
           error: error || "Claude Code run failed",
-          ...(limited ? { cause: "usage_limit" } : apiError ? { cause: apiError } : {}),
-          ...(rejectedResetsAt ? { resetsAt: rejectedResetsAt } : {}),
+          ...(limited
+            ? { cause: "usage_limit" }
+            : apiError === undefined
+              ? {}
+              : { cause: apiError }),
+          ...(rejectedResetsAt !== undefined && rejectedResetsAt !== 0
+            ? { resetsAt: rejectedResetsAt }
+            : {}),
         };
       }
       reply.done("stop");
@@ -510,11 +523,14 @@ const streamFor =
     const reply = createReply(model);
     const messages = context.messages;
     const config: SessionConfig = {
-      accounts: fixed
-        ? [fixed]
-        : loadAccounts().filter((account) => account.auto !== false && !blockOf(account)),
+      accounts:
+        fixed === undefined
+          ? loadAccounts().filter(
+              (account) => account.auto !== false && blockOf(account) === undefined,
+            )
+          : [fixed],
       model: model.id,
-      effort: options?.reasoning ? EFFORT[options.reasoning] : undefined,
+      effort: options?.reasoning === undefined ? undefined : EFFORT[options.reasoning],
       systemPrompt: getCurrentSystemPrompt(messages),
       tools: getCurrentTools(messages),
     };
@@ -526,7 +542,7 @@ const streamFor =
         session?.close();
         reply.fail("aborted", "aborted");
       };
-      if (options?.signal?.aborted) return onAbort();
+      if (options?.signal?.aborted === true) return onAbort();
       options?.signal?.addEventListener("abort", onAbort, { once: true });
       try {
         try {
@@ -538,7 +554,7 @@ const streamFor =
         const failures: string[] = [];
         while (true) {
           let account = config.accounts[0];
-          if (!account) {
+          if (account === undefined) {
             const failed = new Set(failures.map((line) => line.slice(0, line.indexOf(":"))));
             const blocked = loadAccounts()
               .filter((candidate) => candidate.auto !== false && !failed.has(candidate.name))
@@ -555,19 +571,19 @@ const streamFor =
           } catch (error) {
             failure = { error: error instanceof Error ? error.message : String(error) };
           }
-          if (session) {
+          if (session !== undefined) {
             account = session.account;
             failure = await pump(session, reply, model, options);
-            if (!failure || options?.signal?.aborted) return undefined;
+            if (failure === undefined || (options?.signal?.aborted ?? false)) return undefined;
             session.close();
             session = undefined;
           }
-          if (!failure) return undefined;
+          if (failure === undefined) return undefined;
           const failed = account;
           const blocked = blockIfUnusable(failed, failure);
           const detail = `${failed.name}: ${failure.error}`;
           failures.push(detail);
-          if (fixed || !blocked || reply.hasContent) {
+          if (fixed !== undefined || !blocked || reply.hasContent) {
             reply.fail("error", detail);
             return undefined;
           }
@@ -579,7 +595,7 @@ const streamFor =
         return undefined;
       } finally {
         options?.signal?.removeEventListener("abort", onAbort);
-        if (session) {
+        if (session !== undefined) {
           session.busy = false;
           session.touch();
         }

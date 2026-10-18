@@ -23,22 +23,21 @@ export async function resolveCredentialForPrint(
 ): Promise<string> {
   const { provider: cliProvider, model: cliModel } = validateAuthCommandArgs(args, kind);
   const credentialTypes = new Map<string, CredentialInfo["type"]>(
-    (await modelRuntime.listCredentials(signal ? { signal } : {})).map((credential) => [
-      credential.providerId,
-      credential.type,
-    ]),
+    (await modelRuntime.listCredentials(signal === undefined ? {} : { signal })).map(
+      (credential) => [credential.providerId, credential.type],
+    ),
   );
   const providers: Array<{ id: string; model?: Model<Api> }> = [];
-  if (cliProvider) {
+  if (cliProvider !== undefined && cliProvider !== "") {
     const provider = modelRuntime.getProvider(cliProvider);
-    if (!provider) {
+    if (provider === undefined) {
       throw new AuthCommandError(
         `Unknown provider "${cliProvider}". Use --list-models to see available providers.`,
       );
     }
-    if (cliModel) {
+    if (cliModel !== undefined && cliModel !== "") {
       const resolved = resolveCliModel({ cliProvider: provider.id, cliModel, modelRuntime });
-      if (resolved.error || !resolved.model) {
+      if ((resolved.error !== undefined && resolved.error !== "") || resolved.model === undefined) {
         throw new AuthCommandError(
           resolved.error ?? "Unable to resolve the requested provider/model",
         );
@@ -75,26 +74,33 @@ export async function resolveCredentialForPrint(
       ...(kind === "bearer_token"
         ? { minOAuthValidityMs: minExpiryMs ?? DEFAULT_BEARER_TOKEN_MIN_EXPIRY_MS }
         : {}),
-      ...(signal ? { signal } : {}),
+      ...(signal === undefined ? {} : { signal }),
     };
-    const auth = provider.model
-      ? await modelRuntime.getAuth(provider.model, authOptions)
-      : await modelRuntime.getAuth(provider.id, authOptions);
+    const auth =
+      provider.model === undefined
+        ? await modelRuntime.getAuth(provider.id, authOptions)
+        : await modelRuntime.getAuth(provider.model, authOptions);
     const value = getAuthCredential(auth);
-    if (value) credentials.push({ providerId: provider.id, value });
+    if (value !== undefined && value !== "") credentials.push({ providerId: provider.id, value });
   }
 
   const [onlyCredential] = credentials;
   if (credentials.length === 1 && onlyCredential !== undefined) return onlyCredential.value;
   if (credentials.length === 0) {
     const providerId = providers[0]?.id;
-    const type = providerId ? credentialTypes.get(providerId) : undefined;
-    if (cliProvider && kind === "api_key" && type === "oauth") {
+    const type =
+      providerId !== undefined && providerId !== "" ? credentialTypes.get(providerId) : undefined;
+    if (cliProvider !== undefined && cliProvider !== "" && kind === "api_key" && type === "oauth") {
       throw new AuthCommandError(
         `Provider "${providerId}" is configured with OAuth, not an API key`,
       );
     }
-    if (cliProvider && kind === "bearer_token" && type !== "oauth") {
+    if (
+      cliProvider !== undefined &&
+      cliProvider !== "" &&
+      kind === "bearer_token" &&
+      type !== "oauth"
+    ) {
       throw new AuthCommandError(
         `Provider "${providerId}" is not configured with an OAuth bearer token`,
       );

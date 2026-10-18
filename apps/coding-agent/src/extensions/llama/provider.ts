@@ -26,7 +26,9 @@ export const LLAMA_PROVIDER_ID = "llama.cpp";
 export const DEFAULT_LLAMA_SERVER_URL = "http://127.0.0.1:8080";
 function credentialServerUrl(credential: ApiKeyCredential | undefined): string | undefined {
   const value = credential?.env?.["LLAMA_BASE_URL"];
-  return typeof value === "string" && value.trim() ? normalizeLlamaServerUrl(value) : undefined;
+  return typeof value === "string" && value.trim() !== ""
+    ? normalizeLlamaServerUrl(value)
+    : undefined;
 }
 
 async function resolveServerUrl(
@@ -34,7 +36,9 @@ async function resolveServerUrl(
   credential: ApiKeyCredential | undefined,
 ): Promise<string | undefined> {
   const configured = credentialServerUrl(credential) ?? (await ctx.env("LLAMA_BASE_URL"))?.trim();
-  return configured ? normalizeLlamaServerUrl(configured) : undefined;
+  return configured !== undefined && configured !== ""
+    ? normalizeLlamaServerUrl(configured)
+    : undefined;
 }
 
 function modelIsSelectable(model: LlamaModelInfo, routerAutoload: boolean): boolean {
@@ -45,7 +49,7 @@ function modelIsSelectable(model: LlamaModelInfo, routerAutoload: boolean): bool
   return (
     routerAutoload &&
     model.status.value === "unloaded" &&
-    !model.status.failed &&
+    model.status.failed !== true &&
     model.source === "preset"
   );
 }
@@ -77,12 +81,18 @@ function configuredContextWindow(model: LlamaModelInfo): number | undefined {
 
 function contextWindowOf(model: LlamaModelInfo, cachedContextWindow?: number): number {
   const runtimeContextWindow = model.meta?.n_ctx;
-  if (runtimeContextWindow && runtimeContextWindow > 0) return runtimeContextWindow;
+  if (runtimeContextWindow !== undefined && runtimeContextWindow !== 0 && runtimeContextWindow > 0)
+    return runtimeContextWindow;
   const configuredContext = configuredContextWindow(model);
-  if (configuredContext) return configuredContext;
-  if (cachedContextWindow && cachedContextWindow > 0) return cachedContextWindow;
+  if (configuredContext !== undefined && configuredContext !== 0) return configuredContext;
+  if (cachedContextWindow !== undefined && cachedContextWindow !== 0 && cachedContextWindow > 0)
+    return cachedContextWindow;
   const trainingContextWindow = model.meta?.n_ctx_train;
-  return trainingContextWindow && trainingContextWindow > 0 ? trainingContextWindow : 128000;
+  return trainingContextWindow !== undefined &&
+    trainingContextWindow !== 0 &&
+    trainingContextWindow > 0
+    ? trainingContextWindow
+    : 128000;
 }
 
 type LlamaClassifierApi = "llama-cpp-classify" | "typesafe-system-one";
@@ -148,7 +158,10 @@ function toMsaModel(
         xhigh: null,
       },
     }),
-    input: model.architecture?.input_modalities?.includes("image") ? ["text", "image"] : ["text"],
+    input:
+      model.architecture?.input_modalities?.includes("image") === true
+        ? ["text", "image"]
+        : ["text"],
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
     contextWindow,
     maxTokens: contextWindow,
@@ -224,18 +237,21 @@ export function createLlamaProvider(): LlamaProviderController {
         },
         check: async ({ ctx, credential }) => {
           const serverUrl = await resolveServerUrl(ctx, credential);
-          return serverUrl
-            ? { type: "api_key", source: credential ? "stored credential" : "LLAMA_BASE_URL" }
+          return serverUrl !== undefined && serverUrl !== ""
+            ? {
+                type: "api_key",
+                source: credential === undefined ? "LLAMA_BASE_URL" : "stored credential",
+              }
             : undefined;
         },
         resolve: async ({ ctx, credential }): Promise<AuthResult | undefined> => {
           const serverUrl = await resolveServerUrl(ctx, credential);
-          if (!serverUrl) return undefined;
+          if (serverUrl === undefined || serverUrl === "") return undefined;
           const apiKey = credential?.key ?? (await ctx.env("LLAMA_API_KEY")) ?? "local";
           return {
             auth: { apiKey, baseUrl: llamaInferenceUrl(serverUrl) },
             env: { ...credential?.env, LLAMA_BASE_URL: serverUrl },
-            source: credential ? "stored credential" : "LLAMA_BASE_URL",
+            source: credential === undefined ? "LLAMA_BASE_URL" : "stored credential",
           };
         },
       },
@@ -244,7 +260,7 @@ export function createLlamaProvider(): LlamaProviderController {
     getAllModels: () => [...models, ...classifiers],
     refreshModels: async (context: RefreshModelsContext): Promise<void> => {
       const cachedContextWindows = new Map<string, number>();
-      if (context.stored) {
+      if (context.stored !== undefined) {
         const stored = context.stored.models.filter(
           (model) => model.provider === LLAMA_PROVIDER_ID,
         );
@@ -271,7 +287,7 @@ export function createLlamaProvider(): LlamaProviderController {
       if (!context.allowNetwork || context.signal.aborted || context.credential?.type !== "api_key")
         return;
       const serverUrl = credentialServerUrl(context.credential);
-      if (!serverUrl) return;
+      if (serverUrl === undefined || serverUrl === "") return;
       const client = new LlamaClient(serverUrl, context.credential.key);
       const catalog = await client.list({ signal: context.signal });
       if (context.signal.aborted) return;

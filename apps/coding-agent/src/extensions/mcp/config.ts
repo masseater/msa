@@ -82,7 +82,7 @@ function readConfigFile(path: string, scope: "global" | "project", state: McpCon
     if (scope === "project" && isRecord(value) && isOverride(value)) {
       const base = servers.get(name);
       const extra = Object.keys(value).filter((key) => !OVERRIDE_KEYS.includes(key));
-      if (!base) {
+      if (base === undefined) {
         errors.push(
           `${path}: server "${name}" needs "command" or "url", or a global server to override`,
         );
@@ -106,11 +106,11 @@ function readConfigFile(path: string, scope: "global" | "project", state: McpCon
     const clash = [...servers.keys()].find(
       (other) => other !== name && mcpNamespace(other) === mcpNamespace(name),
     );
-    if (clash) {
+    if (clash !== undefined && clash !== "") {
       errors.push(`${path}: server "${name}" conflicts with "${clash}"`);
       continue;
     }
-    if (scope === "project" && "url" in config && config.auth) {
+    if (scope === "project" && "url" in config && config.auth !== undefined) {
       errors.push(`${path}: server "${name}": auth is only allowed in the global mcp.json`);
       continue;
     }
@@ -128,14 +128,15 @@ export function loadMcpConfig(options: {
   const projectConfig = options.projectTrusted
     ? join(options.cwd, CONFIG_DIR_NAME, "mcp.json")
     : undefined;
-  if (projectConfig) readConfigFile(projectConfig, "project", state);
+  if (projectConfig !== undefined && projectConfig !== "")
+    readConfigFile(projectConfig, "project", state);
   return {
     servers: [...state.servers.values()],
     ...(state.autoEnableCodemode === undefined
       ? {}
       : { autoEnableCodemode: state.autoEnableCodemode }),
     errors: state.errors,
-    ...(projectConfig ? { projectConfig } : {}),
+    ...(projectConfig !== undefined && projectConfig !== "" ? { projectConfig } : {}),
   };
 }
 
@@ -152,7 +153,7 @@ export function updateMcpServerConfig(
 ): void {
   editMcpServers(path, (servers, parsed) => {
     let server = servers?.[name];
-    if (server === undefined && options.override) {
+    if (server === undefined && options.override === true) {
       server = {};
       parsed["mcpServers"] = { ...servers, [name]: server };
     }
@@ -186,7 +187,7 @@ export function removeMcpServerConfig(path: string, name: string): boolean {
   if (!existsSync(path)) return false;
   let removed = false;
   editMcpServers(path, (servers) => {
-    if (!servers || servers[name] === undefined) return false;
+    if (servers === undefined || servers[name] === undefined) return false;
     delete servers[name];
     removed = true;
     return true;
@@ -208,7 +209,7 @@ function editMcpServers(
   }
   const servers = isRecord(parsed["mcpServers"]) ? parsed["mcpServers"] : undefined;
   if (!edit(servers, parsed)) return;
-  const indent = (text && /^([ \t]+)\S/m.exec(text)?.[1]) || "  ";
+  const indent = (text && /^([ \t]+)\S/mu.exec(text)?.[1]) || "  ";
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, `${JSON.stringify(parsed, null, indent)}\n`);
 }

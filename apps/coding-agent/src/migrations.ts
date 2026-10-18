@@ -46,9 +46,9 @@ export function migrateAuthToAuthJson(): string[] {
     try {
       const content = readFileSync(settingsPath, "utf-8");
       const settings = JSON.parse(stripBom(content));
-      if (settings.apiKeys && typeof settings.apiKeys === "object") {
+      if (typeof settings.apiKeys === "object" && settings.apiKeys !== null) {
         for (const [provider, key] of Object.entries(settings.apiKeys)) {
-          if (!migrated[provider] && typeof key === "string") {
+          if (migrated[provider] === undefined && typeof key === "string") {
             migrated[provider] = { type: "api_key", key };
             providers.push(provider);
           }
@@ -85,14 +85,15 @@ export function migrateSessionsFromAgentRoot(): void {
     try {
       const content = readFileSync(file, "utf8");
       const firstLine = content.split("\n")[0];
-      if (!firstLine?.trim()) continue;
+      if (firstLine === undefined || firstLine.trim() === "") continue;
 
       const header = JSON.parse(firstLine);
-      if (header.type !== "session" || !header.cwd) continue;
+      if (header.type !== "session" || typeof header.cwd !== "string" || header.cwd === "")
+        continue;
 
       const cwd: string = header.cwd;
 
-      const safePath = `--${cwd.replace(/^[/\\]/, "").replace(/[/\\:]/g, "-")}--`;
+      const safePath = `--${cwd.replace(/^[/\\]/u, "").replace(/[/\\:]/gu, "-")}--`;
       const correctDir = join(agentDir, "sessions", safePath);
 
       if (!existsSync(correctDir)) {
@@ -163,19 +164,14 @@ function migrateToolsToBin(): void {
         mkdirSync(binDir, { recursive: true });
       }
       if (existsSync(newPath)) {
-        // Target exists, just delete the old one
         try {
           rmSync?.(oldPath, { force: true });
-        } catch {
-          // Ignore
-        }
+        } catch {}
       } else {
         try {
           renameSync(oldPath, newPath);
           movedAny = true;
-        } catch {
-          // Ignore errors
-        }
+        } catch {}
       }
     }
   }

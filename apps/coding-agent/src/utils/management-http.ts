@@ -35,16 +35,17 @@ export async function fetchWithRetry(
   for (let attempt = 0; ; attempt++) {
     parentSignal?.throwIfAborted();
     timeoutSignal?.throwIfAborted();
-    const attemptTimeoutSignal = attemptTimeoutMs
-      ? AbortSignal.timeout(attemptTimeoutMs)
-      : undefined;
+    const attemptTimeoutSignal =
+      attemptTimeoutMs !== undefined && attemptTimeoutMs !== 0
+        ? AbortSignal.timeout(attemptTimeoutMs)
+        : undefined;
     const signals = [parentSignal, timeoutSignal, attemptTimeoutSignal].filter(
       (signal): signal is AbortSignal => signal !== undefined,
     );
     const signal = signals.length > 1 ? AbortSignal.any(signals) : signals[0];
 
     try {
-      const response = await fetch(input, signal ? { ...init, signal } : init);
+      const response = await fetch(input, signal === undefined ? init : { ...init, signal });
       const shouldRetry =
         retryOnStatus && RETRYABLE_STATUS_CODES.has(response.status) && attempt < maxRetries;
       if (!shouldRetry) return response;
@@ -53,10 +54,12 @@ export async function fetchWithRetry(
       } catch {}
     } catch (error) {
       const attemptTimedOut =
-        attemptTimeoutSignal?.aborted === true && !parentSignal?.aborted && !timeoutSignal?.aborted;
+        attemptTimeoutSignal?.aborted === true &&
+        parentSignal?.aborted !== true &&
+        timeoutSignal?.aborted !== true;
       if (
-        parentSignal?.aborted ||
-        timeoutSignal?.aborted ||
+        parentSignal?.aborted === true ||
+        timeoutSignal?.aborted === true ||
         (error instanceof Error &&
           error.name === "AbortError" &&
           !attemptTimedOut &&

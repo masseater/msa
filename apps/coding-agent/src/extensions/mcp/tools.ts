@@ -67,7 +67,7 @@ export function createMcpToolName(
   tool: string,
   isTaken: (name: string) => boolean = () => false,
 ): string {
-  const name = `mcp__${server}__${tool}`.replace(/[^A-Za-z0-9_]/g, "_");
+  const name = `mcp__${server}__${tool}`.replace(/[^A-Za-z0-9_]/gu, "_");
   if (name.length <= MAX_TOOL_NAME_LENGTH && !isTaken(name)) return name;
   const hash = createHash("sha256").update(`${server}\0${tool}`).digest("hex").slice(0, 8);
   return `${name.slice(0, MAX_TOOL_NAME_LENGTH - hash.length - 1)}_${hash}`;
@@ -139,9 +139,10 @@ export function createMcpResultSchema(
     properties: {
       content: { type: "array", items: CONTENT_BLOCK_SCHEMA },
 
-      structuredContent: structuredContentSchema
-        ? relocateSchema(structuredContentSchema, "#/properties/structuredContent")
-        : {},
+      structuredContent:
+        structuredContentSchema === undefined
+          ? {}
+          : relocateSchema(structuredContentSchema, "#/properties/structuredContent"),
       isError: { type: "boolean" },
     },
     required: ["content"],
@@ -169,7 +170,7 @@ export async function limitMcpContent(
   const text = `Warning: truncated output (original token count: ${tokens})\nTotal output lines: ${truncation.totalLines}\n\n${truncation.content}\n\n${where}`;
   return {
     content: [{ type: "text", text }, ...content.filter((block) => block.type === "image")],
-    ...(fullOutputPath ? { fullOutputPath } : {}),
+    ...(fullOutputPath !== undefined && fullOutputPath !== "" ? { fullOutputPath } : {}),
   };
 }
 
@@ -181,11 +182,11 @@ export interface ConvertMcpResultOptions {
 
 function extensionOf(uri: string): string {
   const path = URL.canParse(uri) ? new URL(uri).pathname : uri;
-  return /\.[A-Za-z0-9]{1,8}$/.exec(path)?.[0] ?? ".bin";
+  return /\.[A-Za-z0-9]{1,8}$/u.exec(path)?.[0] ?? ".bin";
 }
 
 function isTextMimeType(mimeType: string | undefined): boolean {
-  if (!mimeType) return false;
+  if (mimeType === undefined || mimeType === "") return false;
   const type = (mimeType.split(";", 1)[0] ?? "").trim().toLowerCase();
   return (
     type.startsWith("text/") ||
@@ -205,10 +206,12 @@ async function blockToContent(
       block.mimeType,
       block.size === undefined ? undefined : formatSize(block.size),
     ].filter(Boolean);
-    const read = options.readableResources
-      ? `. Read it with ${READ_MCP_RESOURCE_TOOL} (server "${server}")`
-      : "";
-    const description = block.description ? `: ${block.description}` : "";
+    const read =
+      options.readableResources === true
+        ? `. Read it with ${READ_MCP_RESOURCE_TOOL} (server "${server}")`
+        : "";
+    const description =
+      block.description !== undefined && block.description !== "" ? `: ${block.description}` : "";
     return [
       {
         type: "text",
@@ -219,7 +222,7 @@ async function blockToContent(
   if (
     block.type === "resource" &&
     "blob" in block.resource &&
-    !block.resource.mimeType?.startsWith("image/")
+    block.resource.mimeType?.startsWith("image/") !== true
   ) {
     const { uri, mimeType, blob } = block.resource;
     const data = Buffer.from(blob, "base64");
@@ -256,16 +259,20 @@ export async function convertMcpResult(
     result.content.length > 0
       ? await toModelContent(server, result.content, options)
       : toLlmContent(result);
-  if (result.isError && textOf(converted) === "") {
+  if (result.isError === true && textOf(converted) === "") {
     converted.push({ type: "text", text: `MCP tool ${server}/${tool} returned an error` });
   }
   const { content, fullOutputPath } = await limitMcpContent(converted, options.saveOutput);
   const { _meta: _ignored, ...scriptResult } = result;
   return {
     content,
-    details: { server, tool, ...(fullOutputPath ? { fullOutputPath } : {}) },
+    details: {
+      server,
+      tool,
+      ...(fullOutputPath !== undefined && fullOutputPath !== "" ? { fullOutputPath } : {}),
+    },
     structuredContent: scriptResult as unknown as JsonValue,
-    ...(result.isError ? { isError: true } : {}),
+    ...(result.isError === true ? { isError: true } : {}),
   };
 }
 
@@ -316,12 +323,12 @@ export function createMcpToolDefinition(options: {
     outputSchema: createMcpResultSchema(tool.outputSchema),
     exposure: toToolExposure(options.exposure),
     namespace: options.namespace,
-    ...(annotations ? { annotations } : {}),
+    ...(annotations === undefined ? {} : { annotations }),
     ...createMcpToolRenderers(label),
     async execute(_toolCallId, params, signal, onUpdate) {
       const client = await options.getClient();
       const result = await client.callTool(tool.name, (params ?? {}) as Record<string, unknown>, {
-        ...(signal ? { signal } : {}),
+        ...(signal === undefined ? {} : { signal }),
         timeoutMs: options.timeoutMs,
         onProgress: (progress) => {
           const total = progress.total === undefined ? "" : `/${progress.total}`;
@@ -347,7 +354,7 @@ export function createMcpToolRenderers(label: string): ToolRenderers {
       const component = (context.lastComponent as Container | undefined) ?? new Container();
       component.clear();
       const output = getTextOutput(result, context.showImages).trim();
-      if (!output) return component;
+      if (output === "") return component;
       const color = context.isError ? "error" : "toolOutput";
       const styled = replaceTabs(output)
         .split("\n")
@@ -360,7 +367,7 @@ export function createMcpToolRenderers(label: string): ToolRenderers {
       }
       component.addChild(new Text(styled, 0, 0));
       const fullOutputPath = (result.details as McpToolDetails | undefined)?.fullOutputPath;
-      if (fullOutputPath)
+      if (fullOutputPath !== undefined && fullOutputPath !== "")
         component.addChild(new Text(theme.fg("muted", `Full output: ${fullOutputPath}`), 0, 0));
       return component;
     },

@@ -50,12 +50,12 @@ async function normalizeImage(
   mimeType: string,
 ): Promise<NormalizedImage | null> {
   const normalizedMimeType = normalizeSupportedImageMimeType(mimeType);
-  if (normalizedMimeType) {
+  if (normalizedMimeType !== null && normalizedMimeType !== "") {
     return { bytes, mimeType: normalizedMimeType };
   }
 
   const pngBytes = await convertImageBytesToPng(bytes);
-  if (!pngBytes) {
+  if (pngBytes === null) {
     return null;
   }
 
@@ -67,7 +67,7 @@ async function normalizeImage(
 }
 
 function conversionHint(from: string | undefined, to: string): string | undefined {
-  if (!from || from === to) return undefined;
+  if (from === undefined || from === "" || from === to) return undefined;
   return `[Image converted from ${from} to ${to}.]`;
 }
 
@@ -78,7 +78,7 @@ export async function processImage(
 ): Promise<ProcessImageResult> {
   const autoResizeImages = options?.autoResizeImages ?? true;
   const normalized = await normalizeImage(bytes, mimeType);
-  if (!normalized) {
+  if (normalized === null) {
     return {
       ok: false,
       message: "[Image omitted: could not be converted to a supported inline image format.]",
@@ -91,7 +91,7 @@ export async function processImage(
       normalized.mimeType,
       options?.resizeOptions,
     );
-    if (!resized) {
+    if (resized === null) {
       return {
         ok: false,
         message: "[Image omitted: could not be resized below the inline image size limit.]",
@@ -100,9 +100,9 @@ export async function processImage(
 
     const hints: string[] = [];
     const convertedHint = conversionHint(normalized.convertedFrom, resized.mimeType);
-    if (convertedHint) hints.push(convertedHint);
+    if (convertedHint !== undefined && convertedHint !== "") hints.push(convertedHint);
     const dimensionNote = formatDimensionNote(resized);
-    if (dimensionNote) hints.push(dimensionNote);
+    if (dimensionNote !== undefined && dimensionNote !== "") hints.push(dimensionNote);
 
     return {
       ok: true,
@@ -114,7 +114,7 @@ export async function processImage(
 
   const hints: string[] = [];
   const convertedHint = conversionHint(normalized.convertedFrom, normalized.mimeType);
-  if (convertedHint) hints.push(convertedHint);
+  if (convertedHint !== undefined && convertedHint !== "") hints.push(convertedHint);
 
   return {
     ok: true,

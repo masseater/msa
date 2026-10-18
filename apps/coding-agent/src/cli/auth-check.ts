@@ -27,24 +27,26 @@ export async function checkProviderAuth(
 ): Promise<AuthCheckResult> {
   const { provider: cliProvider, model: cliModel } = validateAuthCommandArgs(args, "check");
   let provider = cliProvider;
-  if (cliModel) {
+  if (cliModel !== undefined && cliModel !== "") {
     const resolved = resolveCliModel({ cliProvider, cliModel, modelRuntime });
-    if (resolved.error || !resolved.model) {
+    if ((resolved.error !== undefined && resolved.error !== "") || resolved.model === undefined) {
       throw new AuthCommandError(resolved.error ?? `Unable to resolve model "${cliModel}"`);
     }
     provider = resolved.model.provider;
   }
-  if (!provider) throw new AuthCommandError("Unable to resolve an auth provider");
-  if (modelRuntime.getError()) {
+  if (provider === undefined || provider === "")
+    throw new AuthCommandError("Unable to resolve an auth provider");
+  if (modelRuntime.getError() !== undefined) {
     return { status: "invalid", provider, reason: "invalid_state" };
   }
-  if (!modelRuntime.getProvider(provider)) {
+  if (modelRuntime.getProvider(provider) === undefined) {
     return { status: "not_ready", provider, reason: "provider_not_found" };
   }
   try {
     const auth = await modelRuntime.checkAuth(provider);
-    if (!auth) return { status: "not_ready", provider, reason: "credentials_not_configured" };
-    if (options.refresh && !(await modelRuntime.getAuth(provider))) {
+    if (auth === undefined)
+      return { status: "not_ready", provider, reason: "credentials_not_configured" };
+    if (options.refresh && (await modelRuntime.getAuth(provider)) === undefined) {
       return { status: "not_ready", provider, reason: "credentials_not_configured" };
     }
     return { status: "ready", provider, authType: auth.type };

@@ -9,7 +9,7 @@ export default function accountsExtension(msa: ExtensionAPI): void {
     description: `Manage accounts: ${KINDS.map((kind) => kind.name).join(", ")}`,
     getArgumentCompletions: (prefix) => {
       const trimmed = prefix.trimStart();
-      const space = trimmed.search(/\s/);
+      const space = trimmed.search(/\s/u);
       if (space < 0) {
         return KINDS.filter((kind) => kind.name.startsWith(trimmed)).map((kind) => ({
           value: `${kind.name} `,
@@ -25,9 +25,9 @@ export default function accountsExtension(msa: ExtensionAPI): void {
       );
     },
     handler: async (args, ctx) => {
-      const [name, ...rest] = args.trim().split(/\s+/).filter(Boolean);
+      const [name, ...rest] = args.trim().split(/\s+/u).filter(Boolean);
       try {
-        if (!name) {
+        if (name === undefined || name === "") {
           const sections = await Promise.all(
             KINDS.map(async (kind) => `${kind.name}:\n${await kind.describe()}`),
           );
@@ -35,7 +35,7 @@ export default function accountsExtension(msa: ExtensionAPI): void {
           return;
         }
         const kind = KINDS.find((candidate) => candidate.name === name);
-        if (!kind) {
+        if (kind === undefined) {
           throw new Error(
             `Unknown account kind "${name}". Kinds: ${KINDS.map((k) => k.name).join(", ")}`,
           );

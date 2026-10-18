@@ -16,7 +16,7 @@ export const isBunBinary =
   import.meta.url.includes("~BUN") ||
   import.meta.url.includes("%7EBUN");
 
-export const isBunRuntime = !!process.versions["bun"];
+export const isBunRuntime = process.versions["bun"] !== undefined && process.versions["bun"] !== "";
 
 declare const MSA_BUNDLED_NODE: boolean;
 export const isBundledNode = typeof MSA_BUNDLED_NODE !== "undefined" && MSA_BUNDLED_NODE;
@@ -49,7 +49,7 @@ function makeSelfUpdateCommand(
   installStep: SelfUpdateCommandStep,
   uninstallStep?: SelfUpdateCommandStep,
 ): SelfUpdateCommand {
-  if (!uninstallStep) return installStep;
+  if (uninstallStep === undefined) return installStep;
   return {
     ...installStep,
     display: `${uninstallStep.display} && ${installStep.display}`,
@@ -61,7 +61,7 @@ function makeSelfUpdateCommandStep(command: string, args: string[]): SelfUpdateC
   return {
     command,
     args,
-    display: [command, ...args].map((arg) => (/\s/.test(arg) ? `"${arg}"` : arg)).join(" "),
+    display: [command, ...args].map((arg) => (/\s/u.test(arg) ? `"${arg}"` : arg)).join(" "),
   };
 }
 
@@ -70,7 +70,7 @@ export function detectInstallMethod(): InstallMethod {
     return "bun-binary";
   }
 
-  const resolvedPath = `${__dirname}\0${process.execPath || ""}`.toLowerCase().replace(/\\/g, "/");
+  const resolvedPath = `${__dirname}\0${process.execPath || ""}`.toLowerCase().replace(/\\/gu, "/");
 
   if (resolvedPath.includes("/pnpm/") || resolvedPath.includes("/.pnpm/")) {
     return "pnpm";
@@ -102,7 +102,7 @@ function getInferredNpmInstall(): { root: string; prefix: string } | undefined {
   } else if (path.basename(parent) === "node_modules") {
     root = parent;
   }
-  if (!root) return undefined;
+  if (root === undefined || root === "") return undefined;
   const rootParent = path.dirname(root);
   if (path.basename(rootParent) === "lib") return { root, prefix: path.dirname(rootParent) };
 
@@ -120,9 +120,11 @@ function getSelfUpdateCommandForMethod(
     case "bun-binary":
       return undefined;
     case "pnpm": {
-      const match = readCommandOutput("pnpm", ["root", "-g"])
-        ? undefined
-        : /^(.*[\\/]global[\\/][^\\/]+)[\\/]\.pnpm[\\/]/.exec(getPackageDir());
+      const globalRoot = readCommandOutput("pnpm", ["root", "-g"]);
+      const match =
+        globalRoot !== undefined && globalRoot !== ""
+          ? undefined
+          : /^(.*[\\/]global[\\/][^\\/]+)[\\/]\.pnpm[\\/]/u.exec(getPackageDir());
       const globalDir = match?.[1];
       const binDirArgs =
         globalDir === undefined
@@ -174,8 +176,14 @@ function getSelfUpdateCommandForMethod(
       );
     case "npm": {
       const [command = "npm", ...npmArgs] = npmCommand ?? [];
-      const inferred = npmCommand?.length ? undefined : getInferredNpmInstall();
-      const prefixArgs = [...npmArgs, ...(inferred ? ["--prefix", inferred.prefix] : [])];
+      const inferred =
+        npmCommand?.length !== undefined && npmCommand?.length !== 0
+          ? undefined
+          : getInferredNpmInstall();
+      const prefixArgs = [
+        ...npmArgs,
+        ...(inferred === undefined ? [] : ["--prefix", inferred.prefix]),
+      ];
 
       const installStep = makeSelfUpdateCommandStep(command, [
         ...prefixArgs,
@@ -211,7 +219,7 @@ function readCommandOutput(
     stdio: ["ignore", "pipe", "pipe"],
   });
   if (result.status === 0) return result.stdout.trim() || undefined;
-  if (options.requireSuccess) {
+  if (options.requireSuccess === true) {
     const reason =
       result.error?.message || result.stderr.trim() || `exit code ${result.status ?? "unknown"}`;
     throw new Error(`Failed to run ${[command, ...args].join(" ")}: ${reason}`);
@@ -226,14 +234,14 @@ function getGlobalPackageRoots(
 ): string[] {
   switch (method) {
     case "npm": {
-      const configured = !!npmCommand?.length;
+      const configured = npmCommand?.length !== undefined && npmCommand?.length !== 0;
       const [command = "npm", ...npmArgs] = npmCommand ?? [];
       if (configured && command === "bun") {
         const bunBin = readCommandOutput(command, [...npmArgs, "pm", "bin", "-g"], {
           requireSuccess: true,
         });
         const roots = [join(homedir(), ".bun", "install", "global", "node_modules")];
-        if (bunBin) {
+        if (bunBin !== undefined && bunBin !== "") {
           roots.push(join(dirname(bunBin), "install", "global", "node_modules"));
         }
         return roots;
@@ -242,23 +250,23 @@ function getGlobalPackageRoots(
         requireSuccess: configured,
       });
       const inferred = configured ? undefined : getInferredNpmInstall();
-      return [root, inferred?.root].filter((x): x is string => !!x);
+      return [root, inferred?.root].filter((x): x is string => x !== undefined && x !== "");
     }
     case "pnpm": {
       const root = readCommandOutput("pnpm", ["root", "-g"]);
-      if (root) return [root, dirname(root)];
-      const match = /^(.*[\\/]global[\\/][^\\/]+)[\\/]\.pnpm[\\/]/.exec(getPackageDir());
+      if (root !== undefined && root !== "") return [root, dirname(root)];
+      const match = /^(.*[\\/]global[\\/][^\\/]+)[\\/]\.pnpm[\\/]/u.exec(getPackageDir());
       const globalDir = match?.[1];
       return globalDir === undefined ? [] : [globalDir];
     }
     case "yarn": {
       const dir = readCommandOutput("yarn", ["global", "dir"]);
-      return dir ? [dir, join(dir, "node_modules")] : [];
+      return dir !== undefined && dir !== "" ? [dir, join(dir, "node_modules")] : [];
     }
     case "bun": {
       const bunBin = readCommandOutput("bun", ["pm", "bin", "-g"]);
       const roots = [join(homedir(), ".bun", "install", "global", "node_modules")];
-      if (bunBin) {
+      if (bunBin !== undefined && bunBin !== "") {
         roots.push(join(dirname(bunBin), "install", "global", "node_modules"));
       }
       return roots;
@@ -297,14 +305,14 @@ function getPathComparisonCandidates(path: string): string[] {
       [
         normalizeExistingPathForComparison(path, false),
         normalizeExistingPathForComparison(path, true),
-      ].filter((candidate): candidate is string => !!candidate),
+      ].filter((candidate): candidate is string => candidate !== undefined && candidate !== ""),
     ),
   );
 }
 
 function getEntrypointPackageDir(): string | undefined {
   const entrypoint = process.argv[1];
-  if (!entrypoint) return undefined;
+  if (entrypoint === undefined || entrypoint === "") return undefined;
   let dir = dirname(entrypoint);
   while (dir !== dirname(dir)) {
     if (existsSync(join(dir, "package.json"))) {
@@ -332,7 +340,7 @@ function isManagedByGlobalPackageManager(
   npmCommand?: string[],
 ): boolean {
   const packageDirs = [getPackageDir(), getEntrypointPackageDir()].filter(
-    (dir): dir is string => !!dir,
+    (dir): dir is string => dir !== undefined && dir !== "",
   );
   const packageDirCandidates = packageDirs.flatMap((dir) => getPathComparisonCandidates(dir));
   return getGlobalPackageRoots(method, packageName, npmCommand).some((root) => {
@@ -356,7 +364,7 @@ export function getSelfUpdateCommand(
     npmCommand,
   );
   if (
-    !command ||
+    command === undefined ||
     !isManagedByGlobalPackageManager(method, packageName, npmCommand) ||
     !isSelfUpdatePathWritable()
   ) {
@@ -376,7 +384,7 @@ export function getSelfUpdateUnavailableInstruction(
     return `Download from: ${RELEASES_URL}/latest`;
   }
   const command = getSelfUpdateCommandForMethod(method, packageName, target, npmCommand);
-  if (command) {
+  if (command !== undefined) {
     if (
       isManagedByGlobalPackageManager(method, packageName, npmCommand) &&
       !isSelfUpdatePathWritable()
@@ -391,7 +399,7 @@ export function getSelfUpdateUnavailableInstruction(
 export function getUpdateInstruction(packageName: string): string {
   const method = detectInstallMethod();
   const command = getSelfUpdateCommandForMethod(method, packageName);
-  if (command) {
+  if (command !== undefined) {
     return `Run: ${command.display}`;
   }
   return getSelfUpdateUnavailableInstruction(packageName);
@@ -415,7 +423,7 @@ export function findNodePackageDir(startDir: string): string {
 
 export function getPackageDir(): string {
   const envDir = process.env["MSA_PACKAGE_DIR"];
-  if (envDir) {
+  if (envDir !== undefined && envDir !== "") {
     return normalizePath(envDir);
   }
 
@@ -515,14 +523,16 @@ export type InstallChange = { kind: "updated"; version: string } | { kind: "remo
 export function detectInstallChange(
   packageJsonPath = startupPackageJsonPath,
 ): InstallChange | undefined {
-  if (isBunBinary || !packageJsonPath) return undefined;
+  if (isBunBinary || packageJsonPath === undefined || packageJsonPath === "") return undefined;
   let installed: PackageJson;
   try {
     installed = JSON.parse(stripBom(readFileSync(packageJsonPath, "utf-8"))) as PackageJson;
   } catch (error) {
     return (error as NodeJS.ErrnoException).code === "ENOENT" ? { kind: "removed" } : undefined;
   }
-  return installed.version && installed.version !== VERSION
+  return installed.version !== undefined &&
+    installed.version !== "" &&
+    installed.version !== VERSION
     ? { kind: "updated", version: installed.version }
     : undefined;
 }
@@ -551,7 +561,8 @@ try {
 const msaConfigName: string | undefined = pkg.msaConfig?.name;
 export const PACKAGE_NAME: string = pkg.name || "@msa/coding-agent";
 export const APP_NAME: string = msaConfigName || "msa";
-export const APP_TITLE: string = msaConfigName ? APP_NAME : "msa";
+export const APP_TITLE: string =
+  msaConfigName !== undefined && msaConfigName !== "" ? APP_NAME : "msa";
 export const CONFIG_DIR_NAME: string = pkg.msaConfig?.configDir || ".msa";
 export const VERSION: string = pkg.version || "0.0.0";
 export const RELEASES_URL = "https://github.com/masseater/msa/releases";
@@ -572,7 +583,7 @@ export function getShareViewerUrl(gistId: string): string {
 
 export function getAgentDir(): string {
   const envDir = process.env[ENV_AGENT_DIR];
-  if (envDir) {
+  if (envDir !== undefined && envDir !== "") {
     return expandTildePath(envDir);
   }
   return join(homedir(), CONFIG_DIR_NAME, "agent");

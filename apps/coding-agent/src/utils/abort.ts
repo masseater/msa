@@ -13,7 +13,7 @@ export function raceWithAbortSignal<T>(
   operation: Promise<T>,
   signal: AbortSignal | undefined,
 ): Promise<T> {
-  if (!signal) return operation;
+  if (signal === undefined) return operation;
   if (signal.aborted) {
     void operation.catch(() => {});
     return Promise.reject(abortReason(signal));

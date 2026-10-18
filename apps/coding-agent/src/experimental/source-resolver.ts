@@ -20,7 +20,8 @@ const repositoryRoot = fileURLToPath(new URL("../../../..", import.meta.url));
 const tsconfigPath = resolve(repositoryRoot, "tsconfig.json");
 const tsconfig = JSON.parse(readFileSync(tsconfigPath, "utf8")) as TsConfig;
 const paths = tsconfig.compilerOptions?.paths;
-if (!paths) throw new Error(`Source runtime requires compilerOptions.paths in ${tsconfigPath}`);
+if (paths === undefined)
+  throw new Error(`Source runtime requires compilerOptions.paths in ${tsconfigPath}`);
 
 const aliases: SourceAlias[] = Object.entries(paths)
   .filter(([pattern]) => pattern.startsWith("@msa/"))
@@ -47,10 +48,11 @@ registerHooks({
       matchedPattern ??= alias.pattern;
       for (const replacement of alias.replacements) {
         const resolved = resolveSourcePath(replacement.replace("*", wildcard));
-        if (resolved) return { url: pathToFileURL(resolved).href, shortCircuit: true };
+        if (resolved !== undefined && resolved !== "")
+          return { url: pathToFileURL(resolved).href, shortCircuit: true };
       }
     }
-    if (matchedPattern) {
+    if (matchedPattern !== undefined && matchedPattern !== "") {
       throw new Error(
         `Source runtime could not resolve ${specifier} through tsconfig path ${matchedPattern}`,
       );
@@ -78,11 +80,12 @@ function resolveSourcePath(replacement: string): string | undefined {
         : extension === ".cjs"
           ? ".cts"
           : undefined;
-  const candidates = sourceExtension
-    ? [basePath, `${basePath.slice(0, -extension.length)}${sourceExtension}`]
-    : extension === ".ts" || extension === ".mts" || extension === ".cts" || extension === ".json"
-      ? [basePath]
-      : [basePath, `${basePath}.ts`, resolve(basePath, "index.ts")];
+  const candidates =
+    sourceExtension === undefined
+      ? extension === ".ts" || extension === ".mts" || extension === ".cts" || extension === ".json"
+        ? [basePath]
+        : [basePath, `${basePath}.ts`, resolve(basePath, "index.ts")]
+      : [basePath, `${basePath.slice(0, -extension.length)}${sourceExtension}`];
   for (const candidate of candidates) {
     if (existsSync(candidate) && statSync(candidate).isFile()) return candidate;
   }

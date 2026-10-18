@@ -23,11 +23,13 @@ export async function listModels(
   signal?: AbortSignal,
 ): Promise<void> {
   const loadError = modelRuntime.getError();
-  if (loadError) {
+  if (loadError !== undefined && loadError !== "") {
     console.error(chalk.yellow(`Warning: errors loading models.json:\n${loadError}`));
   }
 
-  const models = [...(await modelRuntime.getAvailable(undefined, signal ? { signal } : {}))];
+  const models = [
+    ...(await modelRuntime.getAvailable(undefined, signal === undefined ? {} : { signal })),
+  ];
 
   if (models.length === 0) {
     console.log(formatNoModelsAvailableMessage());
@@ -35,7 +37,7 @@ export async function listModels(
   }
 
   let filteredModels: Model<Api>[] = models;
-  if (searchPattern) {
+  if (searchPattern !== undefined && searchPattern !== "") {
     filteredModels = fuzzyFilter(models, searchPattern, (m) => `${m.provider} ${m.id}`);
   }
 

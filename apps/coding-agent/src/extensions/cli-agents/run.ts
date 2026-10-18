@@ -139,7 +139,7 @@ export function streamViaCli<Event>(
       }
       await finished;
       if (aborted) return { ok: false, detail: "aborted" };
-      if (spawnError) return { ok: false, detail: spawnError };
+      if (spawnError !== "") return { ok: false, detail: spawnError };
       if (exitCode === 0 && !failed) return { ok: true, detail: "" };
       return {
         ok: false,

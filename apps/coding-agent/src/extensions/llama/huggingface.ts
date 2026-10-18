@@ -26,12 +26,12 @@ export interface HuggingFaceModelDetails {
 function payloadError(payload: unknown, fallback: string): string {
   if (typeof payload !== "object" || payload === null) return fallback;
   const error = (payload as { error?: unknown }).error;
-  return typeof error === "string" && error ? error : fallback;
+  return typeof error === "string" && error !== "" ? error : fallback;
 }
 
 function parseRateLimitDelay(value: string | null): number | undefined {
   const match = value?.match(/(?:^|;)t=(\d+)/u);
-  return match ? Number(match[1]) : undefined;
+  return match !== undefined && match !== null ? Number(match[1]) : undefined;
 }
 
 async function readToken(path: string): Promise<string | undefined> {
@@ -47,17 +47,21 @@ export async function findHuggingFaceToken(
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<string | undefined> {
   const fromEnvironment = env["HF_TOKEN"]?.trim();
-  if (fromEnvironment) return fromEnvironment;
+  if (fromEnvironment !== undefined && fromEnvironment !== "") return fromEnvironment;
 
   const paths = [
     env["HF_TOKEN_PATH"],
-    env["HF_HOME"] ? join(env["HF_HOME"], "token") : undefined,
-    env["XDG_CACHE_HOME"] ? join(env["XDG_CACHE_HOME"], "huggingface", "token") : undefined,
+    env["HF_HOME"] !== undefined && env["HF_HOME"] !== ""
+      ? join(env["HF_HOME"], "token")
+      : undefined,
+    env["XDG_CACHE_HOME"] !== undefined && env["XDG_CACHE_HOME"] !== ""
+      ? join(env["XDG_CACHE_HOME"], "huggingface", "token")
+      : undefined,
     join(homedir(), ".cache", "huggingface", "token"),
   ].filter((path): path is string => Boolean(path));
   for (const path of new Set(paths)) {
     const token = await readToken(path);
-    if (token) return token;
+    if (token !== undefined && token !== "") return token;
   }
   return undefined;
 }
@@ -73,11 +77,12 @@ export class HuggingFaceClient {
 
   private async request(path: string, signal?: AbortSignal): Promise<unknown> {
     const headers = new Headers();
-    if (this.token) headers.set("Authorization", `Bearer ${this.token}`);
+    if (this.token !== undefined && this.token !== "")
+      headers.set("Authorization", `Bearer ${this.token}`);
     const timeout = AbortSignal.timeout(15_000);
     const response = await fetch(`${this.baseUrl}${path}`, {
       headers,
-      signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
+      signal: signal === undefined ? timeout : AbortSignal.any([signal, timeout]),
     });
     let payload: unknown;
     try {
@@ -92,7 +97,7 @@ export class HuggingFaceClient {
           Number(response.headers.get("retry-after")) ||
           parseRateLimitDelay(response.headers.get("ratelimit"));
         throw new Error(
-          delay
+          delay !== undefined && delay !== 0
             ? `Hugging Face rate limit reached; retry in ${delay}s`
             : "Hugging Face rate limit reached",
         );
@@ -144,7 +149,7 @@ export class HuggingFaceClient {
         if (filename.toLowerCase().startsWith("mmproj")) continue;
         const stem = filename.slice(0, -5).replace(SHARD_SUFFIX_PATTERN, "");
         const quantization = stem.match(QUANTIZATION_PATTERN)?.[1]?.toUpperCase();
-        if (!quantization) continue;
+        if (quantization === undefined || quantization === "") continue;
         const current = sizes.get(quantization) ?? { total: 0, complete: true };
         if (typeof file.size === "number") current.total += file.size;
         else current.complete = false;

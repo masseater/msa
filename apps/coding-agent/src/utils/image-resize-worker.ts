@@ -15,13 +15,13 @@ interface ResizeImageWorkerRequest {
 }
 
 function isResizeImageWorkerRequest(value: unknown): value is ResizeImageWorkerRequest {
-  if (!value || typeof value !== "object") return false;
+  if (typeof value !== "object" || value === null) return false;
   const record = value as Record<string, unknown>;
   return record["inputBytes"] instanceof Uint8Array && typeof record["mimeType"] === "string";
 }
 
 const port = parentPort;
-if (!port) {
+if (port === null) {
   throw new Error("image resize worker requires parentPort");
 }
 

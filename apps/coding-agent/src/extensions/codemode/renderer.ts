@@ -14,7 +14,7 @@ import { highlightCode, type Theme } from "../../modes/interactive/theme/theme.t
 import type { CodemodeNestedCall, CodemodeToolDetails } from "./tool.ts";
 
 const COLLAPSED_ARGS_CHARS = 80;
-const SCRIPT_HEADER = /^Script (completed|failed)\nWall time [\d.]+ seconds\nOutput:\n$/;
+const SCRIPT_HEADER = /^Script (completed|failed)\nWall time [\d.]+ seconds\nOutput:\n$/u;
 
 function formatDuration(ms: number | undefined): string {
   if (ms === undefined) return "";
@@ -45,10 +45,11 @@ function formatCall(call: CodemodeNestedCall, theme: Theme, expanded: boolean): 
       : call.args;
   const duration = formatDuration(call.durationMs);
   let line = `${statusIcon(call, theme)} ${theme.fg("toolTitle", call.name)}`;
-  if (args) line += ` ${theme.fg("muted", args)}`;
-  if (duration) line += ` ${theme.fg("dim", duration)}`;
-  if (call.cost) line += ` ${theme.fg("dim", formatCost(call.cost))}`;
-  if (expanded && call.error)
+  if (args !== "") line += ` ${theme.fg("muted", args)}`;
+  if (duration !== "") line += ` ${theme.fg("dim", duration)}`;
+  if (call.cost !== undefined && call.cost !== 0)
+    line += ` ${theme.fg("dim", formatCost(call.cost))}`;
+  if (expanded && call.error !== undefined && call.error !== "")
     line += `\n    ${theme.fg("error", call.error.split("\n").join("\n    "))}`;
   return line;
 }
@@ -68,16 +69,16 @@ export const codemodeRenderers: Pick<
       component.addChild(new Text(`${title} ${theme.fg("error", "[invalid arg]")}`, 0, 0));
       return component;
     }
-    const source = code.replace(/\r/g, "").trimEnd();
+    const source = code.replace(/\r/gu, "").trimEnd();
     if (!context.expanded) {
-      const lines = source ? source.split("\n").length : 0;
+      const lines = source === "" ? 0 : source.split("\n").length;
       component.addChild(
         new SingleLine(lines > 0 ? `${title} ${expandHint(`${lines} lines of code`)}` : title),
       );
       return component;
     }
     component.addChild(new Text(title, 0, 0));
-    if (source) {
+    if (source !== "") {
       component.addChild(
         new Text(highlightCode(replaceTabs(source), "javascript").join("\n"), 0, 0),
       );
@@ -113,12 +114,12 @@ export const codemodeRenderers: Pick<
           { ...result, content: hasHeader ? rest : result.content },
           context.showImages,
         ).trim();
-    if (output && !options.expanded) {
+    if (output !== "" && !options.expanded) {
       component.addChild(new Spacer(1));
       component.addChild(collapsedOutput(output, "first", timerText));
       return component;
     }
-    if (output) {
+    if (output !== "") {
       const color = context.isError ? "error" : "toolOutput";
       const styled = replaceTabs(output)
         .split("\n")
@@ -127,7 +128,7 @@ export const codemodeRenderers: Pick<
       component.addChild(new Spacer(1));
       component.addChild(new Text(styled, 0, 0));
     }
-    if (timerText) {
+    if (timerText !== undefined && timerText !== "") {
       component.addChild(new Spacer(1));
       component.addChild(new Text(theme.fg("muted", timerText), 0, 0));
     }

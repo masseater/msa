@@ -44,7 +44,7 @@ function isMcpAppResource(item: {
   mimeType?: string;
 }): boolean {
   const uri = item.uri ?? item.uriTemplate ?? "";
-  return uri.startsWith("ui://") || /;\s*profile\s*=\s*"?mcp-app"?/i.test(item.mimeType ?? "");
+  return uri.startsWith("ui://") || /;\s*profile\s*=\s*"?mcp-app"?/iu.test(item.mimeType ?? "");
 }
 
 function listed<T extends { _meta?: unknown }>(server: string, item: T): Record<string, unknown> {
@@ -190,7 +190,11 @@ async function jsonResult(
   ]);
   return {
     content,
-    details: { server: server ?? "", tool, ...(fullOutputPath ? { fullOutputPath } : {}) },
+    details: {
+      server: server ?? "",
+      tool,
+      ...(fullOutputPath !== undefined && fullOutputPath !== "" ? { fullOutputPath } : {}),
+    },
     structuredContent: payload as unknown as JsonValue,
   };
 }
@@ -204,10 +208,10 @@ export function createMcpResourceToolDefinitions(options: {
   const findServer = (name: string): McpResourceServer => {
     const servers = options.servers();
     const server = servers.find((candidate) => candidate.name === name);
-    if (server) return server;
+    if (server !== undefined) return server;
     const available = servers.map((candidate) => candidate.name).join(", ");
     throw new Error(
-      `MCP server "${name}" has no resources${available ? `. Servers with resources: ${available}` : ""}`,
+      `MCP server "${name}" has no resources${available === "" ? "" : `. Servers with resources: ${available}`}`,
     );
   };
 
@@ -229,10 +233,10 @@ export function createMcpResourceToolDefinitions(options: {
     const cursor = stringArgument(params, "cursor");
     const visible = (item: T) =>
       !isMcpAppResource(item as { uri?: string; uriTemplate?: string; mimeType?: string });
-    if (serverName) {
+    if (serverName !== undefined && serverName !== "") {
       const server = findServer(serverName);
       const result = await page(server, cursor, {
-        ...(signal ? { signal } : {}),
+        ...(signal === undefined ? {} : { signal }),
         timeoutMs: server.timeoutMs,
       });
       return {
@@ -241,11 +245,12 @@ export function createMcpResourceToolDefinitions(options: {
         ...(result.nextCursor === undefined ? {} : { nextCursor: result.nextCursor }),
       };
     }
-    if (cursor) throw new Error("cursor can only be used when a server is specified");
+    if (cursor !== undefined && cursor !== "")
+      throw new Error("cursor can only be used when a server is specified");
     const servers = [...options.servers()].sort((a, b) => a.name.localeCompare(b.name));
     const results = await Promise.allSettled(
       servers.map((server) =>
-        all(server, { ...(signal ? { signal } : {}), timeoutMs: server.timeoutMs }),
+        all(server, { ...(signal === undefined ? {} : { signal }), timeoutMs: server.timeoutMs }),
       ),
     );
     const items: Record<string, unknown>[] = [];
@@ -324,11 +329,11 @@ export function createMcpResourceToolDefinitions(options: {
     async execute(_toolCallId, params, signal) {
       const serverName = stringArgument(params, "server");
       const uri = stringArgument(params, "uri");
-      if (!serverName) throw new Error("server must be provided");
-      if (!uri) throw new Error("uri must be provided");
+      if (serverName === undefined || serverName === "") throw new Error("server must be provided");
+      if (uri === undefined || uri === "") throw new Error("uri must be provided");
       const server = findServer(serverName);
       const result = await server.readResource(uri, {
-        ...(signal ? { signal } : {}),
+        ...(signal === undefined ? {} : { signal }),
         timeoutMs: server.timeoutMs,
       });
 
@@ -348,7 +353,7 @@ export function createMcpResourceToolDefinitions(options: {
         details: {
           server: server.name,
           tool: READ_MCP_RESOURCE_TOOL,
-          ...(fullOutputPath ? { fullOutputPath } : {}),
+          ...(fullOutputPath !== undefined && fullOutputPath !== "" ? { fullOutputPath } : {}),
         },
         structuredContent: { server: server.name, uri, contents } as unknown as JsonValue,
       };

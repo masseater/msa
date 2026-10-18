@@ -122,7 +122,7 @@ function reportDiagnostics(diagnostics: readonly AgentSessionRuntimeDiagnostic[]
 }
 
 function isTruthyEnvFlag(value: string | undefined): boolean {
-  if (!value) return false;
+  if (value === undefined || value === "") return false;
   return value === "1" || value.toLowerCase() === "true" || value.toLowerCase() === "yes";
 }
 
@@ -133,7 +133,7 @@ function resolveAppMode(parsed: Args, stdinIsTTY: boolean, stdoutIsTTY: boolean)
   if (parsed.mode === "json") {
     return "json";
   }
-  if (parsed.print || !stdinIsTTY || !stdoutIsTTY) {
+  if (parsed.print === true || !stdinIsTTY || !stdoutIsTTY) {
     return "print";
   }
   return "interactive";
@@ -145,7 +145,7 @@ function toPrintOutputMode(appMode: AppMode): Exclude<Mode, "rpc"> {
 
 function isPlainRuntimeMetadataCommand(parsed: Args): boolean {
   return (
-    !parsed.print &&
+    parsed.print !== true &&
     parsed.mode === undefined &&
     (parsed.help === true || parsed.listModels !== undefined)
   );
@@ -167,7 +167,7 @@ async function runAuthCommand(args: string[]): Promise<boolean> {
     process.exitCode = 1;
     return true;
   }
-  if (!command) return false;
+  if (command === undefined) return false;
 
   const parsed = parseArgs(command.args);
   if (parsed.unknownFlags.size > 0) {
@@ -210,7 +210,7 @@ async function runAuthCommand(args: string[]): Promise<boolean> {
         credential = await getProviderCredential(result.provider, modelRuntime, credentials, {
           refresh: !command.noRefresh,
         });
-        if (!credential) {
+        if (credential === undefined || credential === "") {
           result = {
             status: "not_ready",
             provider: result.provider,
@@ -226,7 +226,10 @@ async function runAuthCommand(args: string[]): Promise<boolean> {
       };
     }
     const output = command.json
-      ? JSON.stringify({ ...result, ...(credential ? { credentials: credential } : {}) })
+      ? JSON.stringify({
+          ...result,
+          ...(credential !== undefined && credential !== "" ? { credentials: credential } : {}),
+        })
       : (credential ?? result.status);
     process.stdout.write(`${output}\n`);
     process.exitCode = result.status === "ready" ? 0 : result.status === "not_ready" ? 1 : 2;
@@ -271,7 +274,7 @@ function findLocalSessionByExactId(
   sessionDir?: string,
 ): { type: "local"; path: string } | undefined {
   const path = SessionManager.findById(cwd, sessionId, sessionDir);
-  return path ? { type: "local", path } : undefined;
+  return path !== undefined && path !== "" ? { type: "local", path } : undefined;
 }
 
 async function resolveSessionPath(
@@ -284,14 +287,14 @@ async function resolveSessionPath(
   }
 
   const exactLocalMatch = findLocalSessionByExactId(sessionArg, cwd, sessionDir);
-  if (exactLocalMatch) {
+  if (exactLocalMatch !== undefined) {
     return exactLocalMatch;
   }
 
   const localSessions = await SessionManager.list(cwd, sessionDir);
   const localMatch = localSessions.find((s) => s.id.startsWith(sessionArg));
 
-  if (localMatch) {
+  if (localMatch !== undefined) {
     return { type: "local", path: localMatch.path };
   }
 
@@ -300,7 +303,7 @@ async function resolveSessionPath(
     allSessions.find((s) => s.id === sessionArg) ??
     allSessions.find((s) => s.id.startsWith(sessionArg));
 
-  if (globalMatch) {
+  if (globalMatch !== undefined) {
     return { type: "global", path: globalMatch.path, cwd: globalMatch.cwd };
   }
 
@@ -321,13 +324,13 @@ async function promptConfirm(message: string): Promise<boolean> {
 }
 
 function validateForkFlags(parsed: Args): void {
-  if (!parsed.fork) return;
+  if (parsed.fork === undefined || parsed.fork === "") return;
 
   const conflictingFlags = [
-    parsed.session ? "--session" : undefined,
-    parsed.continue ? "--continue" : undefined,
-    parsed.resume ? "--resume" : undefined,
-    parsed.noSession ? "--no-session" : undefined,
+    parsed.session !== undefined && parsed.session !== "" ? "--session" : undefined,
+    parsed.continue === true ? "--continue" : undefined,
+    parsed.resume === true ? "--resume" : undefined,
+    parsed.noSession === true ? "--no-session" : undefined,
   ].filter((flag): flag is string => flag !== undefined);
 
   if (conflictingFlags.length > 0) {
@@ -342,9 +345,9 @@ function validateSessionIdFlags(parsed: Args): void {
   if (parsed.sessionId === undefined) return;
 
   const conflictingFlags = [
-    parsed.session ? "--session" : undefined,
-    parsed.continue ? "--continue" : undefined,
-    parsed.resume ? "--resume" : undefined,
+    parsed.session !== undefined && parsed.session !== "" ? "--session" : undefined,
+    parsed.continue === true ? "--continue" : undefined,
+    parsed.resume === true ? "--resume" : undefined,
   ].filter((flag): flag is string => flag !== undefined);
 
   if (conflictingFlags.length > 0) {
@@ -394,17 +397,17 @@ export async function createSessionManager(
   sessionDir: string | undefined,
   settingsManager: SettingsManager,
 ): Promise<SessionManager> {
-  if (parsed.noSession || parsed.help || parsed.listModels !== undefined) {
+  if (parsed.noSession === true || parsed.help === true || parsed.listModels !== undefined) {
     return SessionManager.inMemory(
       cwd,
       parsed.sessionId === undefined ? undefined : { id: parsed.sessionId },
     );
   }
 
-  if (parsed.fork) {
-    if (parsed.sessionId) {
+  if (parsed.fork !== undefined && parsed.fork !== "") {
+    if (parsed.sessionId !== undefined && parsed.sessionId !== "") {
       const existingTarget = findLocalSessionByExactId(parsed.sessionId, cwd, sessionDir);
-      if (existingTarget) {
+      if (existingTarget !== undefined) {
         console.error(chalk.red(`Session already exists with id '${parsed.sessionId}'`));
         process.exit(1);
       }
@@ -424,7 +427,7 @@ export async function createSessionManager(
     }
   }
 
-  if (parsed.session) {
+  if (parsed.session !== undefined && parsed.session !== "") {
     const resolved = await resolveSessionPath(parsed.session, cwd, sessionDir);
 
     switch (resolved.type) {
@@ -448,14 +451,14 @@ export async function createSessionManager(
     }
   }
 
-  if (parsed.resume) {
+  if (parsed.resume === true) {
     try {
       const selectedPath = await selectSession(
         (onProgress, signal) => SessionManager.list(cwd, sessionDir, onProgress, signal),
         (onProgress, signal) => SessionManager.listAll(sessionDir, onProgress, signal),
         settingsManager,
       );
-      if (!selectedPath) {
+      if (selectedPath === null || selectedPath === "") {
         console.log(chalk.dim("No session selected"));
         process.exit(0);
       }
@@ -465,13 +468,13 @@ export async function createSessionManager(
     }
   }
 
-  if (parsed.continue) {
+  if (parsed.continue === true) {
     return SessionManager.continueRecent(cwd, sessionDir);
   }
 
-  if (parsed.sessionId) {
+  if (parsed.sessionId !== undefined && parsed.sessionId !== "") {
     const existingSession = findLocalSessionByExactId(parsed.sessionId, cwd, sessionDir);
-    if (existingSession) {
+    if (existingSession !== undefined) {
       return SessionManager.open(existingSession.path, sessionDir);
     }
     console.error(
@@ -499,13 +502,17 @@ function buildSessionOptions(
   const diagnostics: AgentSessionRuntimeDiagnostic[] = [];
   let cliThinkingFromModel = false;
 
-  if (parsed.provider && !parsed.model) {
+  if (
+    parsed.provider !== undefined &&
+    parsed.provider !== "" &&
+    (parsed.model === undefined || parsed.model === "")
+  ) {
     diagnostics.push({
       type: "error",
       message: `--provider requires --model (for example: --provider ${parsed.provider} --model <pattern>)`,
     });
   }
-  if (parsed.model) {
+  if (parsed.model !== undefined && parsed.model !== "") {
     const resolved = resolveCliModel({
       cliProvider: parsed.provider,
       cliModel: parsed.model,
@@ -513,16 +520,16 @@ function buildSessionOptions(
       inlineApiKey: Boolean(parsed.apiKey),
       modelRuntime,
     });
-    if (resolved.warning) {
+    if (resolved.warning !== undefined && resolved.warning !== "") {
       diagnostics.push({ type: "warning", message: resolved.warning });
     }
-    if (resolved.error) {
+    if (resolved.error !== undefined && resolved.error !== "") {
       diagnostics.push({ type: "error", message: resolved.error });
     }
-    if (resolved.model) {
+    if (resolved.model !== undefined) {
       options.model = resolved.model;
 
-      if (!parsed.thinking && resolved.thinkingLevel) {
+      if (parsed.thinking === undefined && resolved.thinkingLevel !== undefined) {
         options.thinkingLevel = resolved.thinkingLevel;
         cliThinkingFromModel = true;
       }
@@ -530,33 +537,37 @@ function buildSessionOptions(
   }
 
   const firstScopedModel = scopedModels[0];
-  if (!options.model && firstScopedModel !== undefined && !hasExistingSession) {
+  if (options.model === undefined && firstScopedModel !== undefined && !hasExistingSession) {
     const savedProvider = settingsManager.getDefaultProvider();
     const savedModelId = settingsManager.getDefaultModel();
     const savedModel =
-      savedProvider && savedModelId
+      savedProvider !== undefined &&
+      savedProvider !== "" &&
+      savedModelId !== undefined &&
+      savedModelId !== ""
         ? modelRuntime.getModel(savedProvider, savedModelId)
         : undefined;
-    const savedInScope = savedModel
-      ? scopedModels.find((sm) => modelsAreEqual(sm.model, savedModel))
-      : undefined;
+    const savedInScope =
+      savedModel === undefined
+        ? undefined
+        : scopedModels.find((sm) => modelsAreEqual(sm.model, savedModel));
 
-    if (savedInScope) {
-      options.model = savedInScope.model;
-
-      if (!parsed.thinking && savedInScope.thinkingLevel) {
-        options.thinkingLevel = savedInScope.thinkingLevel;
-      }
-    } else {
+    if (savedInScope === undefined) {
       options.model = firstScopedModel.model;
 
-      if (!parsed.thinking && firstScopedModel.thinkingLevel) {
+      if (parsed.thinking === undefined && firstScopedModel.thinkingLevel !== undefined) {
         options.thinkingLevel = firstScopedModel.thinkingLevel;
+      }
+    } else {
+      options.model = savedInScope.model;
+
+      if (parsed.thinking === undefined && savedInScope.thinkingLevel !== undefined) {
+        options.thinkingLevel = savedInScope.thinkingLevel;
       }
     }
   }
 
-  if (parsed.thinking) {
+  if (parsed.thinking !== undefined) {
     options.thinkingLevel = parsed.thinking;
   }
 
@@ -567,15 +578,15 @@ function buildSessionOptions(
     }));
   }
 
-  if (parsed.noTools) {
+  if (parsed.noTools === true) {
     options.noTools = "all";
-  } else if (parsed.noBuiltinTools) {
+  } else if (parsed.noBuiltinTools === true) {
     options.noTools = "builtin";
   }
-  if (parsed.tools) {
+  if (parsed.tools !== undefined) {
     options.tools = [...parsed.tools];
   }
-  if (parsed.orchestrator) {
+  if (parsed.orchestrator === true) {
     const tools = options.tools ?? [];
     options.tools = [
       ...tools,
@@ -584,7 +595,7 @@ function buildSessionOptions(
         : ORCHESTRATOR_TOOL_NAMES),
     ];
   }
-  if (parsed.excludeTools) {
+  if (parsed.excludeTools !== undefined) {
     options.excludeTools = [...parsed.excludeTools];
   }
 
@@ -664,12 +675,12 @@ export async function main(args: string[], options?: MainOptions) {
   }
   time("parseArgs");
 
-  if (parsed.version) {
+  if (parsed.version === true) {
     console.log(VERSION);
     process.exit(0);
   }
 
-  if (parsed.export) {
+  if (parsed.export !== undefined && parsed.export !== "") {
     let result: string;
     try {
       const outputPath = parsed.messages.length > 0 ? parsed.messages[0] : undefined;
@@ -705,7 +716,7 @@ export async function main(args: string[], options?: MainOptions) {
 
   if (
     appMode === "interactive" &&
-    !parsed.help &&
+    parsed.help !== true &&
     parsed.listModels === undefined &&
     shouldRunFirstTimeSetup()
   ) {
@@ -719,18 +730,22 @@ export async function main(args: string[], options?: MainOptions) {
 
   const envSessionDir = process.env[ENV_SESSION_DIR];
   const sessionDir =
-    (parsed.sessionDir ? normalizePath(parsed.sessionDir) : undefined) ??
-    (envSessionDir ? expandTildePath(envSessionDir) : undefined) ??
+    (parsed.sessionDir !== undefined && parsed.sessionDir !== ""
+      ? normalizePath(parsed.sessionDir)
+      : undefined) ??
+    (envSessionDir !== undefined && envSessionDir !== ""
+      ? expandTildePath(envSessionDir)
+      : undefined) ??
     startupSettingsManager.getSessionDir();
   let sessionManager = await createSessionManager(parsed, cwd, sessionDir, startupSettingsManager);
   const missingSessionCwdIssue = getMissingSessionCwdIssue(sessionManager, cwd);
-  if (missingSessionCwdIssue) {
+  if (missingSessionCwdIssue !== undefined) {
     if (appMode === "interactive") {
       const selectedCwd = await promptForMissingSessionCwd(
         missingSessionCwdIssue,
         startupSettingsManager,
       );
-      if (!selectedCwd) {
+      if (selectedCwd === undefined || selectedCwd === "") {
         process.exit(0);
       }
       sessionManager = SessionManager.open(
@@ -760,7 +775,7 @@ export async function main(args: string[], options?: MainOptions) {
       ? sessionCwd
       : undefined;
   const trustPromptMode: AppMode =
-    parsed.help || parsed.listModels !== undefined ? "print" : appMode;
+    parsed.help === true || parsed.listModels !== undefined ? "print" : appMode;
   const projectTrustByCwd = new Map<string, boolean>();
 
   const resolvedExtensionPaths = resolveCliPaths(cwd, parsed.extensions);
@@ -827,7 +842,7 @@ export async function main(args: string[], options?: MainOptions) {
         additionalPromptTemplatePaths: resolvedPromptTemplatePaths,
         additionalThemePaths: resolvedThemePaths,
         noExtensions: parsed.noExtensions,
-        disabledBuiltinExtensions: parsed.noMcp ? ["mcp"] : undefined,
+        disabledBuiltinExtensions: parsed.noMcp === true ? ["mcp"] : undefined,
         noSkills: parsed.noSkills,
         noPromptTemplates: parsed.noPromptTemplates,
         noThemes: parsed.noThemes,
@@ -854,7 +869,7 @@ export async function main(args: string[], options?: MainOptions) {
 
     const modelPatterns = parsed.models ?? settingsManager.getEnabledModels();
     const scopedModels =
-      modelPatterns && modelPatterns.length > 0
+      modelPatterns !== undefined && modelPatterns.length > 0
         ? await resolveModelScope(modelPatterns, modelRuntime, {
             signal: AbortSignal.timeout(15_000),
           })
@@ -872,15 +887,15 @@ export async function main(args: string[], options?: MainOptions) {
     );
     diagnostics.push(...sessionOptionDiagnostics);
 
-    if (parsed.apiKey) {
-      if (sessionOptions.model) {
-        await modelRuntime.setRuntimeApiKey(sessionOptions.model.provider, parsed.apiKey);
-      } else {
+    if (parsed.apiKey !== undefined && parsed.apiKey !== "") {
+      if (sessionOptions.model === undefined) {
         diagnostics.push({
           type: "error",
           message:
             "--api-key requires a model to be specified via --model, --provider/--model, or --models",
         });
+      } else {
+        await modelRuntime.setRuntimeApiKey(sessionOptions.model.provider, parsed.apiKey);
       }
     }
 
@@ -898,7 +913,7 @@ export async function main(args: string[], options?: MainOptions) {
       orchestrator: true,
     });
     const cliThinkingOverride = parsed.thinking !== undefined || cliThinkingFromModel;
-    if (created.session.model && cliThinkingOverride) {
+    if (created.session.model !== undefined && cliThinkingOverride) {
       created.session.setThinkingLevel(created.session.thinkingLevel);
     }
 
@@ -922,7 +937,7 @@ export async function main(args: string[], options?: MainOptions) {
   applyHttpProxySettings(settingsManager.getGlobalSettings().httpProxy);
   configureHttpDispatcher(settingsManager.getHttpIdleTimeoutMs());
 
-  if (parsed.help) {
+  if (parsed.help === true) {
     reportDiagnostics(startupSettingsDiagnostics);
     const extensionFlags = resourceLoader
       .getExtensions()
@@ -977,7 +992,7 @@ export async function main(args: string[], options?: MainOptions) {
   }
   time("createAgentSession");
 
-  if (appMode !== "interactive" && !session.model) {
+  if (appMode !== "interactive" && session.model === undefined) {
     console.error(chalk.red(formatNoModelsAvailableMessage()));
     process.exit(1);
   }

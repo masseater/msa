@@ -71,11 +71,11 @@ interface CallbackSettings {
 
 function callbackSettings(settings: McpOAuthSettings): CallbackSettings {
   const url = new URL(settings.callbackUrl ?? `http://${CALLBACK_HOST}${CALLBACK_PATH}`);
-  const address = url.hostname.replace(/^\[|\]$/g, "");
-  const port = url.port ? Number(url.port) : settings.callbackPort;
+  const address = url.hostname.replace(/^\[|\]$/gu, "");
+  const port = url.port === "" ? settings.callbackPort : Number(url.port);
   let fixedRedirectUrl: string | undefined;
 
-  if (url.port) fixedRedirectUrl = settings.callbackUrl;
+  if (url.port !== "") fixedRedirectUrl = settings.callbackUrl;
   else if (port !== undefined) {
     url.port = String(port);
     fixedRedirectUrl = url.href;
@@ -90,14 +90,16 @@ function callbackSettings(settings: McpOAuthSettings): CallbackSettings {
 }
 
 function mergeScopes(...scopes: (string | undefined)[]): string | undefined {
-  const merged = [...new Set(scopes.flatMap((scope) => scope?.split(/\s+/).filter(Boolean) ?? []))];
+  const merged = [
+    ...new Set(scopes.flatMap((scope) => scope?.split(/\s+/u).filter(Boolean) ?? [])),
+  ];
   return merged.length > 0 ? merged.join(" ") : undefined;
 }
 
 type StoredStates = Record<string, McpOAuthState>;
 
 function parseStates(content: string | undefined): StoredStates {
-  if (!content?.trim()) return {};
+  if (content === undefined || content.trim() === "") return {};
   const parsed: unknown = JSON.parse(content);
   return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
     ? (parsed as StoredStates)
@@ -124,7 +126,7 @@ export class McpOAuthCredentialStore {
 
   constructor(backend?: AuthStorageBackend, lockDir?: string) {
     this.backend = backend ?? new FileAuthStorageBackend(join(getAgentDir(), "mcp-auth.json"));
-    this.lockDir = backend ? lockDir : getAgentDir();
+    this.lockDir = backend === undefined ? getAgentDir() : lockDir;
   }
 
   forServer(name: string, serverUrl: string): McpOAuthServerStore {
@@ -133,7 +135,8 @@ export class McpOAuthCredentialStore {
       load: () =>
         this.backend.withLock((current) => {
           const states = parseStates(current);
-          if (states[key] || !states[legacyKey]) return { result: states[key] };
+          if (states[key] !== undefined || states[legacyKey] === undefined)
+            return { result: states[key] };
           states[key] = states[legacyKey];
           delete states[legacyKey];
           return { result: states[key], next: serializeStates(states) };
@@ -147,7 +150,7 @@ export class McpOAuthCredentialStore {
   }
 
   private async withRefreshLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
-    if (!this.lockDir) return fn();
+    if (this.lockDir === undefined || this.lockDir === "") return fn();
     mkdirSync(this.lockDir, { recursive: true, mode: 0o700 });
     const hash = createHash("sha256").update(key).digest("hex").slice(0, 16);
     const release = await lockfile.lock(join(this.lockDir, `mcp-auth-refresh-${hash}`), {
@@ -180,7 +183,7 @@ export class McpOAuthCredentialStore {
     return this.backend.withLock((current) => {
       const states = parseStates(current);
       const stored = key in states ? key : legacyKey in states ? legacyKey : undefined;
-      if (!stored) return { result: false };
+      if (stored === undefined || stored === "") return { result: false };
       delete states[stored];
       return { result: true, next: serializeStates(states) };
     });
@@ -200,13 +203,16 @@ function timedFetch(fetch: McpFetch = globalThis.fetch): McpFetch {
     const timeout = AbortSignal.timeout(OAUTH_REQUEST_TIMEOUT_MS);
     return fetch(input, {
       ...init,
-      signal: init?.signal ? AbortSignal.any([init.signal, timeout]) : timeout,
+      signal:
+        init?.signal !== undefined && init?.signal !== null
+          ? AbortSignal.any([init.signal, timeout])
+          : timeout,
     });
   };
 }
 
 function registeredRedirectUrls(client: OAuthClientInformationMixed | undefined): string[] {
-  return client && "redirect_uris" in client ? client.redirect_uris : [];
+  return client !== undefined && "redirect_uris" in client ? client.redirect_uris : [];
 }
 
 function callbackId(serverUrl: string): string {
@@ -221,14 +227,14 @@ function clientMetadataDocument(
   metadata: AuthorizationServerMetadata | undefined,
 ): OAuthClientMetadataDocument {
   if (
-    !metadata?.client_id_metadata_document_supported ||
-    !metadata.token_endpoint_auth_methods_supported?.includes("none")
+    metadata?.client_id_metadata_document_supported !== true ||
+    metadata.token_endpoint_auth_methods_supported?.includes("none") !== true
   ) {
     throw new Error(
       'The authorization server does not support Client ID Metadata Documents for public clients; remove oauth.clientRegistration "cimd"',
     );
   }
-  if (metadata.authorization_response_iss_parameter_supported) {
+  if (metadata.authorization_response_iss_parameter_supported === true) {
     return { url: `${CLIENT_METADATA_BASE_URL}/client.json`, redirectUrl };
   }
   const id = callbackId(serverUrl);
@@ -283,7 +289,8 @@ export function createMcpAuthProvider(options: {
       .withRefreshLock(async () => {
         const state = await store.load();
         if (state?.tokens?.access_token !== staleToken) return;
-        if (!state?.tokens?.refresh_token) throw new McpOAuthAuthorizationRequiredError();
+        if (state?.tokens?.refresh_token === undefined || state?.tokens?.refresh_token === "")
+          throw new McpOAuthAuthorizationRequiredError();
         const settings = options.settings();
         const redirectUrl =
           callbackSettings(settings).fixedRedirectUrl ??
@@ -297,8 +304,10 @@ export function createMcpAuthProvider(options: {
         const result = await toPromise(
           authorizeMcp(provider, {
             serverUrl,
-            ...(resourceMetadataUrl ? { resourceMetadataUrl } : {}),
-            ...(authorizationServerMetadataUrl ? { authorizationServerMetadataUrl } : {}),
+            ...(resourceMetadataUrl === undefined ? {} : { resourceMetadataUrl }),
+            ...(authorizationServerMetadataUrl === undefined
+              ? {}
+              : { authorizationServerMetadataUrl }),
             ...(scope === undefined ? {} : { scope }),
             fetch: timedFetch(fetch),
           }),
@@ -318,7 +327,12 @@ export function createMcpAuthProvider(options: {
       const token = state?.tokens?.access_token;
       const expired =
         state?.tokensExpireAt !== undefined && state.tokensExpireAt - REFRESH_SKEW_MS <= Date.now();
-      if (!expired || !state?.tokens?.refresh_token) return token;
+      if (
+        !expired ||
+        state?.tokens?.refresh_token === undefined ||
+        state?.tokens?.refresh_token === ""
+      )
+        return token;
 
       await refresh(token).catch(() => undefined);
       return (await store.load())?.tokens?.access_token;
@@ -367,11 +381,13 @@ function responseFromRedirectUrl(
     throw new Error("The redirect URL does not match this sign-in's redirect URI");
   }
   const error = url.searchParams.get("error");
-  if (error) throw new Error(url.searchParams.get("error_description") ?? error);
+  if (error !== null && error !== "")
+    throw new Error(url.searchParams.get("error_description") ?? error);
   if (url.searchParams.get("state") !== state)
     throw new Error("The redirect URL belongs to a different sign-in");
   const code = url.searchParams.get("code");
-  if (!code) throw new Error("The redirect URL does not contain an authorization code");
+  if (code === null || code === "")
+    throw new Error("The redirect URL does not contain an authorization code");
   const iss = url.searchParams.get("iss");
   return { code, ...(iss === null ? {} : { iss }) };
 }
@@ -384,10 +400,11 @@ async function waitForAuthorizationResponse(
   signal: AbortSignal | undefined,
 ): Promise<AuthorizationResponse> {
   const controller = new AbortController();
-  const promptSignal = signal ? AbortSignal.any([controller.signal, signal]) : controller.signal;
+  const promptSignal =
+    signal === undefined ? controller.signal : AbortSignal.any([controller.signal, signal]);
   const fromBrowser = callback.waitForCallback(state, redirectUrl.pathname);
   const fromUser = prompt.promptForRedirectUrl(promptSignal).then((input) => {
-    if (!input?.trim()) throw new McpSignInCancelledError();
+    if (input === undefined || input.trim() === "") throw new McpSignInCancelledError();
     return responseFromRedirectUrl(input, state, redirectUrl);
   });
   try {
@@ -432,15 +449,15 @@ export async function signInMcpServer(options: {
   signal?: AbortSignal | undefined;
 }): Promise<void> {
   const { serverUrl, store, settings, signal } = options;
-  if (signal?.aborted) throw new McpSignInCancelledError();
+  if (signal?.aborted === true) throw new McpSignInCancelledError();
   const stored = await store.load();
   const stepUp = options.challenge?.error === "insufficient_scope";
   const callbackOptions = callbackSettings(settings);
 
   const registered = registeredRedirectUrls(stored?.clientInformation)[0];
-  const preferredPort =
-    callbackOptions.port ??
-    (registered ? Number(new URL(registered).port) || undefined : undefined);
+  const registeredPort =
+    registered !== undefined && registered !== "" ? Number(new URL(registered).port) : 0;
+  const preferredPort = callbackOptions.port ?? (registeredPort > 0 ? registeredPort : undefined);
   const cimd = settings.clientRegistration === "cimd";
   const callback = await listenForCallback(
     callbackOptions,
@@ -451,7 +468,7 @@ export async function signInMcpServer(options: {
   );
   const redirectUrl = callbackOptions.fixedRedirectUrl ?? callback.redirectUrl;
   try {
-    if (stored) {
+    if (stored !== undefined) {
       const next: McpOAuthState = { ...stored };
 
       delete next.oauthState;
@@ -459,9 +476,9 @@ export async function signInMcpServer(options: {
       const keepClient =
         settings.clientId ||
         (cimd
-          ? !stored.clientInformation
+          ? stored.clientInformation === undefined
           : registeredRedirectUrls(stored.clientInformation).includes(redirectUrl));
-      if (!keepClient) {
+      if (keepClient === false || keepClient === "") {
         delete next.clientInformation;
         delete next.tokens;
         delete next.tokensExpireAt;
@@ -485,16 +502,17 @@ export async function signInMcpServer(options: {
     const flow = {
       serverUrl,
       fetch: timedFetch(),
-      ...(signal ? { signal } : {}),
-      ...(resourceMetadataUrl ? { resourceMetadataUrl } : {}),
-      ...(authorizationServerMetadataUrl ? { authorizationServerMetadataUrl } : {}),
+      ...(signal === undefined ? {} : { signal }),
+      ...(resourceMetadataUrl === undefined ? {} : { resourceMetadataUrl }),
+      ...(authorizationServerMetadataUrl === undefined ? {} : { authorizationServerMetadataUrl }),
       ...(scope === undefined ? {} : { scope }),
     };
 
     const skipRefresh = stepUp;
     if ((await toPromise(authorizeMcp(provider, { ...flow, skipRefresh }))) === "AUTHORIZED")
       return;
-    if (!authorizationUrl) throw new Error("OAuth flow did not produce an authorization URL");
+    if (authorizationUrl === undefined)
+      throw new Error("OAuth flow did not produce an authorization URL");
 
     const state = await provider.state();
 
@@ -517,7 +535,7 @@ export async function signInMcpServer(options: {
       }),
     );
   } catch (error) {
-    if (signal?.aborted) throw new McpSignInCancelledError();
+    if (signal?.aborted ?? false) throw new McpSignInCancelledError();
     throw error;
   } finally {
     await callback.close();

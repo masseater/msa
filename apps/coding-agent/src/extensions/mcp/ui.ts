@@ -58,7 +58,7 @@ function frame(theme: Theme, title: string, body: Component[], footer?: string):
   container.addChild(new DynamicBorder((text: string) => theme.fg("accent", text)));
   container.addChild(new Text(theme.fg("accent", theme.bold(title)), 1, 0));
   for (const child of body) container.addChild(child);
-  if (footer) {
+  if (footer !== undefined && footer !== "") {
     container.addChild(new Spacer(1));
     container.addChild(new Text(theme.fg("dim", footer), 1, 0));
   }
@@ -90,7 +90,7 @@ export class McpManagerView implements McpUi, Component, Focusable {
 
   set focused(value: boolean) {
     this._focused = value;
-    if (this.inputTarget) this.inputTarget.focused = value;
+    if (this.inputTarget !== undefined) this.inputTarget.focused = value;
   }
 
   private setContent(
@@ -98,11 +98,11 @@ export class McpManagerView implements McpUi, Component, Focusable {
     inputHandler?: (data: string) => void,
     inputTarget?: Focusable,
   ): void {
-    if (this.inputTarget) this.inputTarget.focused = false;
+    if (this.inputTarget !== undefined) this.inputTarget.focused = false;
     this.content = content;
     this.inputHandler = inputHandler;
     this.inputTarget = inputTarget;
-    if (this.inputTarget) this.inputTarget.focused = this._focused;
+    if (this.inputTarget !== undefined) this.inputTarget.focused = this._focused;
     this.tui.requestRender();
   }
 
@@ -124,8 +124,10 @@ export class McpManagerView implements McpUi, Component, Focusable {
         const menu = build();
         const wanted = selected ?? menu.selected;
         const body: Component[] = [];
-        if (menu.details) body.push(new Text(this.theme.fg("muted", menu.details), 1, 0));
-        if (menu.error) body.push(new Text(this.theme.fg("error", menu.error), 1, 0));
+        if (menu.details !== undefined && menu.details !== "")
+          body.push(new Text(this.theme.fg("muted", menu.details), 1, 0));
+        if (menu.error !== undefined && menu.error !== "")
+          body.push(new Text(this.theme.fg("error", menu.error), 1, 0));
         body.push(new Spacer(1));
         const footer = `${keyHint("tui.select.confirm", menu.confirmLabel)} • ${keyHint("tui.select.cancel", menu.cancelLabel)}`;
         if (menu.items.length === 0) {
@@ -165,7 +167,7 @@ export class McpManagerView implements McpUi, Component, Focusable {
 
   status(title: string, message: string, onCancel?: () => void): void {
     const body = [new Spacer(1), new Text(this.theme.fg("muted", message), 1, 0)];
-    if (!onCancel) {
+    if (onCancel === undefined) {
       this.setContent(frame(this.theme, title, body));
       return;
     }
@@ -227,7 +229,7 @@ export class McpManagerView implements McpUi, Component, Focusable {
         (data) => {
           if (this.keybindings.matches(data, "tui.select.confirm")) {
             const value = input.getValue().trim();
-            if (value) finish(value);
+            if (value !== "") finish(value);
             return;
           }
           if (this.keybindings.matches(data, "tui.select.cancel")) {

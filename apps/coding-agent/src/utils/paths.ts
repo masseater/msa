@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 
 import { spawnProcessSync } from "./child-process.ts";
 
-const UNICODE_SPACES = /[\u00A0\u2000-\u200A\u202F\u205F\u3000]/g;
+const UNICODE_SPACES = /[\u00A0\u2000-\u200A\u202F\u205F\u3000]/gu;
 
 export interface PathInputOptions {
   trim?: boolean;
@@ -56,7 +56,7 @@ export function isLocalPath(value: string): boolean {
 export function normalizeWindowsShellPath(filePath: string): string {
   if (!filePath.startsWith("/") || filePath.startsWith("//") || filePath.includes("\\"))
     return filePath;
-  const match = filePath.match(/^\/(?:mnt\/|cygdrive\/)?([a-z])(?:\/(.*))?$/i);
+  const match = filePath.match(/^\/(?:mnt\/|cygdrive\/)?([a-z])(?:\/(.*))?$/iu);
   const [, drive, rest] = match ?? [];
   if (drive === undefined) return filePath;
   const suffix = rest?.replaceAll("/", "\\");
@@ -64,11 +64,11 @@ export function normalizeWindowsShellPath(filePath: string): string {
 }
 
 export function normalizePath(input: string, options: PathInputOptions = {}): string {
-  let normalized = options.trim ? input.trim() : input;
-  if (options.normalizeUnicodeSpaces) {
+  let normalized = options.trim === true ? input.trim() : input;
+  if (options.normalizeUnicodeSpaces === true) {
     normalized = normalized.replace(UNICODE_SPACES, " ");
   }
-  if (options.stripAtPrefix && normalized.startsWith("@")) {
+  if (options.stripAtPrefix === true && normalized.startsWith("@")) {
     normalized = normalized.slice(1);
   }
   if (process.platform === "win32") {
@@ -86,7 +86,7 @@ export function normalizePath(input: string, options: PathInputOptions = {}): st
     }
   }
 
-  if (/^file:\/\//.test(normalized)) {
+  if (/^file:\/\//u.test(normalized)) {
     return fileURLToPath(normalized);
   }
 
@@ -113,11 +113,11 @@ export function getCwdRelativePath(filePath: string, cwd: string): string | unde
     relativePath === "" ||
     (relativePath !== ".." && !relativePath.startsWith(`..${sep}`) && !isAbsolute(relativePath));
 
-  return isInsideCwd ? relativePath || "." : undefined;
+  return isInsideCwd ? (relativePath === "" ? "." : relativePath) : undefined;
 }
 
 export function abbreviateHomePath(filePath: string, home: string = homedir()): string {
-  if (!home || !filePath.startsWith(home)) return filePath;
+  if (home === "" || !filePath.startsWith(home)) return filePath;
   const rest = filePath.slice(home.length);
   if (rest !== "" && !rest.startsWith("/") && !rest.startsWith("\\")) return filePath;
   return `~${rest}`;

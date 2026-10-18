@@ -61,7 +61,7 @@ export function parseAuthCommand(args: string[]): AuthCommand | undefined {
         : args[1] === "print-bearer-token"
           ? "bearer_token"
           : undefined;
-  if (!kind) {
+  if (kind === undefined) {
     throw new AuthCommandError(
       `Unknown auth command "${args[1] ?? ""}". Use "${APP_NAME} auth print-api-key", "${APP_NAME} auth print-bearer-token", or "${APP_NAME} auth check".`,
     );
@@ -79,8 +79,10 @@ export function parseAuthCommand(args: string[]): AuthCommand | undefined {
       if (kind !== "bearer_token")
         throw new AuthCommandError("--min-expiry is only supported by print-bearer-token");
       const value = args[++index];
-      const match = value ? /^(\d+)(ms|s|m|h)$/iu.exec(value) : undefined;
-      if (!match) throw new AuthCommandError("--min-expiry must use a duration such as 30m or 1h");
+      const match =
+        value !== undefined && value !== "" ? /^(\d+)(ms|s|m|h)$/iu.exec(value) : undefined;
+      if (match === undefined || match === null)
+        throw new AuthCommandError("--min-expiry must use a duration such as 30m or 1h");
       const amount = Number(match[1]);
       const unit = match[2];
       minExpiryMs =
@@ -116,12 +118,12 @@ export function validateAuthCommandArgs(
     throw new AuthCommandError("Auth commands only accept --provider and --model");
   }
   if (kind === "check") {
-    if (!provider && !model) {
+    if ((provider === undefined || provider === "") && (model === undefined || model === "")) {
       throw new AuthCommandError("Auth checks require --provider <provider> or --model <model>");
     }
     return { provider, model };
   }
-  if (!provider && !model) {
+  if ((provider === undefined || provider === "") && (model === undefined || model === "")) {
     throw new AuthCommandError(
       "Credential printing requires --provider <provider> or --model <model>",
     );
@@ -130,7 +132,7 @@ export function validateAuthCommandArgs(
 }
 
 export function getAuthCredential(auth: AuthResult | undefined): string | undefined {
-  if (auth?.auth.apiKey) return auth.auth.apiKey;
+  if (auth?.auth.apiKey !== undefined && auth?.auth.apiKey !== "") return auth.auth.apiKey;
   const authorization = Object.entries(auth?.auth.headers ?? {}).find(
     ([name]) => name.toLowerCase() === "authorization",
   )?.[1];

@@ -96,7 +96,7 @@ function toModelInfo(model: AnyModel): Record<string, unknown> {
 }
 
 function withArticle(word: string): string {
-  return `${/^[aeiou]/.test(word) ? "an" : "a"} ${word}`;
+  return `${/^[aeiou]/u.test(word) ? "an" : "a"} ${word}`;
 }
 
 type ScriptValue = { readonly [key: string]: unknown } | null | undefined;
@@ -273,21 +273,21 @@ function valueText(value: unknown): string {
 }
 
 function formatOutput(output: readonly CodemodeOutputItem[]): (TextContent | ImageContent)[] {
-  const total = output.filter((item) => item.type === "text" && !item.console).length;
+  const total = output.filter((item) => item.type === "text" && item.console === undefined).length;
   const items: (TextContent | ImageContent)[] = [];
   const consoleLines: string[] = [];
   let index = 0;
   for (const item of output) {
     if (item.type === "image") {
       items.push(item);
-    } else if (item.console) {
-      consoleLines.push(item.text);
-    } else {
+    } else if (item.console === undefined) {
       index++;
       items.push({
         type: "text",
         text: total > 1 ? `==> text ${index}/${total} <==\n${item.text}` : item.text,
       });
+    } else {
+      consoleLines.push(item.text);
     }
   }
   if (consoleLines.length > 0) {
@@ -369,7 +369,8 @@ async function saveImages(
     const bytes = Buffer.from(data, "base64");
     const kind = `${mimeType}, ${formatSize(bytes.length)}`;
     const extension = IMAGE_EXTENSIONS[mimeType];
-    if (!extension) throw new Error(`No file extension for image type ${mimeType}`);
+    if (extension === undefined || extension === "")
+      throw new Error(`No file extension for image type ${mimeType}`);
 
     try {
       const path = await writeOutputFile("msa-codemode", extension, bytes);
@@ -382,7 +383,7 @@ async function saveImages(
     items.map(async (item): Promise<(TextContent | ImageContent)[]> => {
       if (item.type !== "image") return [item];
       let pending = labels.get(item.data);
-      if (!pending) {
+      if (pending === undefined) {
         pending = label(item);
         labels.set(item.data, pending);
       }
@@ -421,7 +422,8 @@ async function truncateOutput(
 
 function toScriptValue(tool: AgentTool<any>, outcome: AgentToolCallOutcome): unknown {
   const { result } = outcome;
-  if (tool.outputSchema && result.structuredContent !== undefined) return result.structuredContent;
+  if (tool.outputSchema !== undefined && result.structuredContent !== undefined)
+    return result.structuredContent;
   const text = textOf(result);
   if (outcome.isError) throw new Error(text || `Tool "${tool.name}" failed`);
   return text;
@@ -446,7 +448,7 @@ export async function executeCodemode(
     generatedImages += count;
   };
   const addModelUsage = (usage: Usage) => {
-    modelUsage = modelUsage ? combineUsage(modelUsage, usage) : usage;
+    modelUsage = modelUsage === undefined ? usage : combineUsage(modelUsage, usage);
   };
 
   const snapshot = (): CodemodeToolDetails => ({ calls: calls.map((call) => ({ ...call })) });
@@ -454,7 +456,7 @@ export async function executeCodemode(
 
   publish();
 
-  const callable = ctx ? getCodemodeCallableTools(ctx.tools) : [];
+  const callable = ctx === undefined ? [] : getCodemodeCallableTools(ctx.tools);
 
   const guidelines = options.getToolGuidelines?.();
   const samples = new Map(
@@ -479,7 +481,7 @@ export async function executeCodemode(
         publish();
         const callStartedAt = performance.now();
 
-        if (!ctx) throw new Error("Tool calls need a session");
+        if (ctx === undefined) throw new Error("Tool calls need a session");
         const outcome = await ctx.executeTool(tool.name, args, { signal: callSignal });
         record.id = outcome.toolCall.id;
         record.durationMs = performance.now() - callStartedAt;
@@ -503,7 +505,7 @@ export async function executeCodemode(
     tools: sandboxTools,
     globals: [
       ...createDiscoveryGlobals(callable, samples, options),
-      ...(options.models && ctx
+      ...(options.models === true && ctx !== undefined
         ? createModelGlobals(
             ctx.modelRegistry,
             toolCallId,
@@ -533,8 +535,8 @@ export async function executeCodemode(
 
   let result: CodemodeResult;
   try {
-    const store = ctx ? readCodemodeStore(ctx.sessionManager.getBranch()) : {};
-    result = await sandbox.execute(code, { ...(signal ? { signal } : {}), store });
+    const store = ctx === undefined ? {} : readCodemodeStore(ctx.sessionManager.getBranch());
+    result = await sandbox.execute(code, { ...(signal === undefined ? {} : { signal }), store });
   } finally {
     await sandbox.close();
   }
@@ -572,11 +574,12 @@ export async function executeCodemode(
   const wallTime = ((performance.now() - startedAt) / 1000).toFixed(1);
   const header = `${result.ok ? "Script completed" : "Script failed"}\nWall time ${wallTime} seconds\nOutput:\n`;
   const details = snapshot();
-  if (truncated.fullOutputPath) details.fullOutputPath = truncated.fullOutputPath;
+  if (truncated.fullOutputPath !== undefined && truncated.fullOutputPath !== "")
+    details.fullOutputPath = truncated.fullOutputPath;
   return {
     content: [{ type: "text", text: header }, ...output],
     details,
-    ...(modelUsage ? { usage: modelUsage } : {}),
+    ...(modelUsage === undefined ? {} : { usage: modelUsage }),
     ...(result.ok ? {} : { isError: true }),
   };
 }
@@ -618,7 +621,12 @@ function createDiscoveryGlobals(
         }
         const documents = tools.flatMap((tool) => {
           const toolNamespace = options.getToolNamespace?.(tool.name);
-          if (namespace && (!toolNamespace || !isNamespaceName(toolNamespace, namespace)))
+          if (
+            namespace !== undefined &&
+            namespace !== null &&
+            namespace !== "" &&
+            (toolNamespace === undefined || !isNamespaceName(toolNamespace, namespace))
+          )
             return [];
           return [createToolSearchDocument(tool, toolNamespace)];
         });
@@ -634,7 +642,7 @@ function createDiscoveryGlobals(
         const tool = tools.find(
           (candidate) => candidate.name === name || toCodemodeIdentifier(candidate.name) === name,
         );
-        return tool ? samples.get(tool.name) : undefined;
+        return tool === undefined ? undefined : samples.get(tool.name);
       },
     },
     {
@@ -648,15 +656,19 @@ function createDiscoveryGlobals(
         const names: string[] = [];
         for (const tool of tools) {
           const toolNamespace = options.getToolNamespace?.(tool.name);
-          if (!toolNamespace || !isNamespaceName(toolNamespace, name)) continue;
+          if (toolNamespace === undefined || !isNamespaceName(toolNamespace, name)) continue;
           namespace ??= toolNamespace;
           names.push(toCodemodeIdentifier(tool.name));
         }
-        if (!namespace) return undefined;
+        if (namespace === undefined) return undefined;
         return {
           name: namespace.name,
-          ...(namespace.description ? { description: namespace.description } : {}),
-          ...(namespace.instructions ? { instructions: namespace.instructions } : {}),
+          ...(namespace.description !== undefined && namespace.description !== ""
+            ? { description: namespace.description }
+            : {}),
+          ...(namespace.instructions !== undefined && namespace.instructions !== ""
+            ? { instructions: namespace.instructions }
+            : {}),
           tools: names,
         };
       },
@@ -701,13 +713,13 @@ function createModelGlobals(
     const id = given["id"];
     const ref = `${provider}/${id}`;
     const resolved = models.getModelOfType(type, provider, id);
-    if (!resolved) {
+    if (resolved === undefined) {
       const actualType = [...MODEL_TYPES].find(
         (other) =>
           other !== type && models.getModelOfType(other as ModelType, provider, id) !== undefined,
       );
       throw new Error(
-        actualType
+        actualType !== undefined && actualType !== ""
           ? `"${ref}" is ${withArticle(actualType)} model, not ${withArticle(type)} model. ${listHint}`
           : `Unknown ${type} model "${ref}". ${listHint}`,
       );
@@ -727,8 +739,9 @@ function createModelGlobals(
     record.durationMs = performance.now() - startedAt;
     record.status =
       result.stopReason === "stop" ? "ok" : result.stopReason === "aborted" ? "cancelled" : "error";
-    if (result.errorMessage) record.error = truncateText(result.errorMessage, ERROR_PREVIEW_CHARS);
-    if (result.usage) {
+    if (result.errorMessage !== undefined && result.errorMessage !== "")
+      record.error = truncateText(result.errorMessage, ERROR_PREVIEW_CHARS);
+    if (result.usage !== undefined) {
       record.cost = result.usage.cost.total;
       addUsage(result.usage);
     }

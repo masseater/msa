@@ -3,7 +3,7 @@ import { type FSWatcher, type WatchListener, watch } from "node:fs";
 export const FS_WATCH_RETRY_DELAY_MS = 5000;
 
 export function closeWatcher(watcher: FSWatcher | null | undefined): void {
-  if (!watcher) {
+  if (watcher === undefined || watcher === null) {
     return;
   }
 

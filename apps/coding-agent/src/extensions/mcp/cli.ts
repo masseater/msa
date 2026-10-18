@@ -154,7 +154,7 @@ function parseOptions(
     }
     const name = arg.slice(2);
     const kind = known[name];
-    if (!kind) {
+    if (kind === undefined) {
       error(`Unknown option ${arg}.\n${HELP_HINT}`);
       return undefined;
     }
@@ -204,7 +204,7 @@ export async function runMcpCommand(args: string[], options: McpCommandOptions):
   switch (command) {
     case "list": {
       const parsed = parseOptions(rest, { json: "flag" }, error);
-      if (!parsed) return 1;
+      if (parsed === undefined) return 1;
       if (parsed.positional.length > 0) {
         error(`Usage: ${APP_NAME} mcp list [--json]\n${HELP_HINT}`);
         return 1;
@@ -214,22 +214,22 @@ export async function runMcpCommand(args: string[], options: McpCommandOptions):
     case "login":
     case "logout": {
       const parsed = parseOptions(rest, command === "login" ? { timeout: "value" } : {}, error);
-      if (!parsed) return 1;
+      if (parsed === undefined) return 1;
       const [name, ...extra] = parsed.positional;
-      if (!name || extra.length > 0) {
+      if (name === undefined || name === "" || extra.length > 0) {
         error(`Usage: ${APP_NAME} mcp ${command} <server>\n${HELP_HINT}`);
         return 1;
       }
       const entry = loaded.servers.find((server) => server.name === name);
-      if (!entry) {
+      if (entry === undefined) {
         error(
-          `No MCP server named "${name}".${untrustedNote ? ` ${untrustedNote}` : ""} Configured: ${loaded.servers.map((server) => server.name).join(", ") || "none"}.`,
+          `No MCP server named "${name}".${untrustedNote !== undefined && untrustedNote !== "" ? ` ${untrustedNote}` : ""} Configured: ${loaded.servers.map((server) => server.name).join(", ") || "none"}.`,
         );
         return 1;
       }
       const connection = createConnection(entry, options, credentials);
       const url = connection.oauthUrl;
-      if (!url) {
+      if (url === undefined || url === "") {
         error(
           `MCP server "${name}" does not use OAuth. Only HTTP servers without an Authorization header do.`,
         );
@@ -271,7 +271,7 @@ export async function runMcpCommand(args: string[], options: McpCommandOptions):
 }
 
 function parsePairs(option: string, pairs: string[] | undefined, error: (line: string) => void) {
-  if (!pairs) return {};
+  if (pairs === undefined) return {};
   const record: Record<string, string> = {};
   for (const pair of pairs) {
     const separator = pair.indexOf("=");
@@ -311,11 +311,11 @@ function add(
     error,
     2,
   );
-  if (!parsed) return 1;
+  if (parsed === undefined) return 1;
   const { positional, values, lists } = parsed;
   const [name, ...command] = positional;
   const url = values.get("url");
-  if (!name || (url === undefined) === (command.length === 0)) {
+  if (name === undefined || name === "" || (url === undefined) === (command.length === 0)) {
     error(usage);
     return 1;
   }
@@ -336,7 +336,7 @@ function add(
   const misplaced = (url === undefined ? httpOnly : stdioOnly).find(
     (option) => values.has(option) || lists.has(option),
   );
-  if (misplaced) {
+  if (misplaced !== undefined && misplaced !== "") {
     error(
       `--${misplaced} only applies to ${url === undefined ? "HTTP servers (--url)" : "stdio servers"}.`,
     );
@@ -346,7 +346,7 @@ function add(
   let config: Record<string, unknown>;
   if (typeof url === "string") {
     const headers = parsePairs("header", lists.get("header"), error);
-    if (!headers) return 1;
+    if (headers === undefined) return 1;
     const bearer = value("bearer-token-env-var");
     if (bearer !== undefined) headers["Authorization"] = `Bearer \${${bearer}}`;
     const port = value("oauth-callback-port");
@@ -367,7 +367,7 @@ function add(
     };
   } else {
     const env = parsePairs("env", lists.get("env"), error);
-    if (!env) return 1;
+    if (env === undefined) return 1;
     const [executable, ...commandArgs] = command;
     config = {
       command: executable,
@@ -421,9 +421,9 @@ function remove(
   error: (line: string) => void,
 ): number {
   const parsed = parseOptions(args, { local: "flag" }, error);
-  if (!parsed) return 1;
+  if (parsed === undefined) return 1;
   const [name, ...extra] = parsed.positional;
-  if (!name || extra.length > 0) {
+  if (name === undefined || name === "" || extra.length > 0) {
     error(`Usage: ${APP_NAME} mcp remove <server> [-l]\n${HELP_HINT}`);
     return 1;
   }
@@ -448,7 +448,7 @@ function remove(
     projectTrusted: true,
   }).servers.find((server) => server.name === name && server.scope !== scope);
   error(
-    `No ${scope} MCP server named "${name}" in ${path}.${other ? ` It is defined in ${other.source}${other.scope === "project" ? "; use --local" : "; omit --local"}.` : ""}`,
+    `No ${scope} MCP server named "${name}" in ${path}.${other === undefined ? "" : ` It is defined in ${other.source}${other.scope === "project" ? "; use --local" : "; omit --local"}.`}`,
   );
   return 1;
 }
@@ -467,7 +467,9 @@ async function list(
         name: entry.name,
         scope: entry.scope ?? "global",
         source: entry.source,
-        ...(entry.override ? { override: entry.override } : {}),
+        ...(entry.override !== undefined && entry.override !== ""
+          ? { override: entry.override }
+          : {}),
         enabled: entry.config.enabled !== false,
         exposure: entry.config.exposure ?? "codemode",
         transport: describeTransport(entry),
@@ -487,7 +489,12 @@ async function list(
       });
       if (overrides.length > 0) report.toolExposure = Object.fromEntries(overrides);
       if (connection.hasResources) report.resources = true;
-      if (connection.state !== "connected" && connection.error) report.error = connection.error;
+      if (
+        connection.state !== "connected" &&
+        connection.error !== undefined &&
+        connection.error !== ""
+      )
+        report.error = connection.error;
       await connection.close();
       return report;
     }),
@@ -502,7 +509,7 @@ async function list(
         {
           servers: reports,
           errors: loaded.errors,
-          ...(untrustedNote ? { note: untrustedNote } : {}),
+          ...(untrustedNote !== undefined && untrustedNote !== "" ? { note: untrustedNote } : {}),
         },
         null,
         2,
@@ -524,20 +531,22 @@ async function list(
           : report.state;
     log(`${report.name}: ${state} (${report.exposure}, ${report.scope})`);
     log(`  ${report.transport}`);
-    if (report.override) log(`  project override: ${report.override}`);
+    if (report.override !== undefined && report.override !== "")
+      log(`  project override: ${report.override}`);
     if (report.state === "needs-auth") log(`  sign in with: ${APP_NAME} mcp login ${report.name}`);
     if (report.tools.length > 0) {
       const tools = report.tools.map((tool) => {
         const exposure = report.toolExposure?.[tool];
-        return exposure ? `${tool} [${exposure}]` : tool;
+        return exposure !== undefined && exposure !== "" ? `${tool} [${exposure}]` : tool;
       });
       log(`  tools: ${tools.join(", ")}`);
     }
-    if (report.resources) log("  offers resources");
-    if (report.error) log(`  ${report.error.split("\n").join("\n  ")}`);
+    if (report.resources !== undefined) log("  offers resources");
+    if (report.error !== undefined && report.error !== "")
+      log(`  ${report.error.split("\n").join("\n  ")}`);
   }
   for (const configError of loaded.errors) log(`config error: ${configError}`);
-  if (untrustedNote) log(untrustedNote);
+  if (untrustedNote !== undefined && untrustedNote !== "") log(untrustedNote);
   return failed ? 1 : 0;
 }
 

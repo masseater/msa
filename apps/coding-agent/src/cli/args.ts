@@ -168,7 +168,7 @@ export function parseArgs(args: string[]): Args {
         .map((s) => s.trim())
         .filter((name) => name.length > 0);
       const error = getToolListError(tools);
-      if (error) {
+      if (error !== undefined && error !== "") {
         result.diagnostics.push({ type: "error", message: `${arg}: ${error}` });
       } else {
         result.tools = tools;
@@ -300,7 +300,7 @@ export function parseArgs(args: string[]): Args {
 
 export function printHelp(extensionFlags?: ExtensionFlag[]): void {
   const extensionFlagsText =
-    extensionFlags && extensionFlags.length > 0
+    extensionFlags !== undefined && extensionFlags.length > 0
       ? `\n${chalk.bold("Extension CLI Flags:")}\n${extensionFlags
           .map((flag) => {
             const value = flag.type === "string" ? " <value>" : "";

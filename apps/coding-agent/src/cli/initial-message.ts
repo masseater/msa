@@ -24,7 +24,7 @@ export function buildInitialMessage({
   if (stdinContent !== undefined) {
     parts.push(stdinContent);
   }
-  if (fileText) {
+  if (fileText !== undefined && fileText !== "") {
     parts.push(fileText);
   }
 
@@ -35,6 +35,6 @@ export function buildInitialMessage({
 
   return {
     initialMessage: parts.length > 0 ? parts.join("") : undefined,
-    initialImages: fileImages && fileImages.length > 0 ? fileImages : undefined,
+    initialImages: fileImages !== undefined && fileImages.length > 0 ? fileImages : undefined,
   };
 }

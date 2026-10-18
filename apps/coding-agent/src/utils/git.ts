@@ -15,14 +15,14 @@ export type GitSource = {
 };
 
 function splitRef(url: string): { repo: string; ref?: string } {
-  const scpLikeMatch = url.match(/^git@([^:]+):(.+)$/);
-  if (scpLikeMatch) {
+  const scpLikeMatch = url.match(/^git@([^:]+):(.+)$/u);
+  if (scpLikeMatch !== null) {
     const pathWithMaybeRef = scpLikeMatch[2] ?? "";
     const refSeparator = pathWithMaybeRef.indexOf("@");
     if (refSeparator < 0) return { repo: url };
     const repoPath = pathWithMaybeRef.slice(0, refSeparator);
     const ref = pathWithMaybeRef.slice(refSeparator + 1);
-    if (!repoPath || !ref) return { repo: url };
+    if (repoPath === "" || ref === "") return { repo: url };
     return {
       repo: `git@${scpLikeMatch[1] ?? ""}:${repoPath}`,
       ref,
@@ -32,15 +32,15 @@ function splitRef(url: string): { repo: string; ref?: string } {
   if (url.includes("://")) {
     try {
       const parsed = new URL(url);
-      const pathWithMaybeRef = parsed.pathname.replace(/^\/+/, "");
+      const pathWithMaybeRef = parsed.pathname.replace(/^\/+/u, "");
       const refSeparator = pathWithMaybeRef.indexOf("@");
       if (refSeparator < 0) return { repo: url };
       const repoPath = pathWithMaybeRef.slice(0, refSeparator);
       const ref = pathWithMaybeRef.slice(refSeparator + 1);
-      if (!repoPath || !ref) return { repo: url };
+      if (repoPath === "" || ref === "") return { repo: url };
       parsed.pathname = `/${repoPath}`;
       return {
-        repo: parsed.toString().replace(/\/$/, ""),
+        repo: parsed.toString().replace(/\/$/u, ""),
         ref,
       };
     } catch {
@@ -60,7 +60,7 @@ function splitRef(url: string): { repo: string; ref?: string } {
   }
   const repoPath = pathWithMaybeRef.slice(0, refSeparator);
   const ref = pathWithMaybeRef.slice(refSeparator + 1);
-  if (!repoPath || !ref) {
+  if (repoPath === "" || ref === "") {
     return { repo: url };
   }
   return {
@@ -106,8 +106,8 @@ function buildGitSource(args: {
   if (args.path.startsWith("/")) {
     return null;
   }
-  const normalizedPath = args.path.replace(/\.git$/, "").replace(/^\/+/, "");
-  if (!args.host || !normalizedPath || normalizedPath.split("/").length < 2) {
+  const normalizedPath = args.path.replace(/\.git$/u, "").replace(/^\/+/u, "");
+  if (args.host === "" || normalizedPath === "" || normalizedPath.split("/").length < 2) {
     return null;
   }
   if (hasUnsafeGitInstallPart(args.host, false) || hasUnsafeGitInstallPart(normalizedPath, true)) {
@@ -130,8 +130,8 @@ function parseGenericGitUrl(url: string): GitSource | null {
   let host = "";
   let path = "";
 
-  const scpLikeMatch = repoWithoutRef.match(/^git@([^:]+):(.+)$/);
-  if (scpLikeMatch) {
+  const scpLikeMatch = repoWithoutRef.match(/^git@([^:]+):(.+)$/u);
+  if (scpLikeMatch !== null) {
     host = scpLikeMatch[1] ?? "";
     path = scpLikeMatch[2] ?? "";
   } else if (
@@ -143,7 +143,7 @@ function parseGenericGitUrl(url: string): GitSource | null {
     try {
       const parsed = new URL(repoWithoutRef);
       host = parsed.hostname;
-      path = parsed.pathname.replace(/^\/+/, "");
+      path = parsed.pathname.replace(/^\/+/u, "");
     } catch {
       return null;
     }
@@ -168,19 +168,20 @@ export function parseGitUrl(source: string): GitSource | null {
   const hasGitPrefix = trimmed.startsWith("git:");
   const url = hasGitPrefix ? trimmed.slice(4).trim() : trimmed;
 
-  if (!hasGitPrefix && !/^(https?|ssh|git):\/\//i.test(url)) {
+  if (!hasGitPrefix && !/^(https?|ssh|git):\/\//iu.test(url)) {
     return null;
   }
 
   const split = splitRef(url);
 
-  const hostedCandidates = [split.ref ? `${split.repo}#${split.ref}` : undefined, url].filter(
-    (value): value is string => Boolean(value),
-  );
+  const hostedCandidates = [
+    split.ref !== undefined && split.ref !== "" ? `${split.repo}#${split.ref}` : undefined,
+    url,
+  ].filter((value): value is string => Boolean(value));
   for (const candidate of hostedCandidates) {
     const info = hostedGitInfo.fromUrl(candidate);
-    if (info) {
-      if (split.ref && info.project?.includes("@")) {
+    if (info !== undefined) {
+      if (split.ref !== undefined && split.ref !== "" && info.project?.includes("@")) {
         continue;
       }
       const useHttpsPrefix =
@@ -199,13 +200,13 @@ export function parseGitUrl(source: string): GitSource | null {
   }
 
   const httpsCandidates = [
-    split.ref ? `https://${split.repo}#${split.ref}` : undefined,
+    split.ref !== undefined && split.ref !== "" ? `https://${split.repo}#${split.ref}` : undefined,
     `https://${url}`,
   ].filter((value): value is string => Boolean(value));
   for (const candidate of httpsCandidates) {
     const info = hostedGitInfo.fromUrl(candidate);
-    if (info) {
-      if (split.ref && info.project?.includes("@")) {
+    if (info !== undefined) {
+      if (split.ref !== undefined && split.ref !== "" && info.project?.includes("@")) {
         continue;
       }
       return buildGitSource({

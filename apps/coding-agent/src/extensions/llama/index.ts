@@ -36,13 +36,13 @@ function parseHuggingFaceModel(value: string): { repository: string; quantizatio
 
 async function configuredClient(ctx: ExtensionCommandContext): Promise<LlamaClient | undefined> {
   const result = await ctx.modelRegistry.getProviderAuth(LLAMA_PROVIDER_ID);
-  if (!result) {
+  if (result === undefined) {
     ctx.ui.notify(`Configure llama.cpp with /login ${LLAMA_PROVIDER_ID}`, "warning");
     return undefined;
   }
   const configuredUrl = result.env?.["LLAMA_BASE_URL"];
   const serverUrl = normalizeLlamaServerUrl(
-    typeof configuredUrl === "string" && configuredUrl
+    typeof configuredUrl === "string" && configuredUrl !== ""
       ? configuredUrl
       : (result.auth.baseUrl ?? ""),
   );
@@ -69,7 +69,7 @@ export default function llamaExtension(msa: ExtensionAPI): void {
     });
     if (result.aborted) throw new Error("Model catalog refresh timed out.");
     const refreshError = result.errors.get(LLAMA_PROVIDER_ID);
-    if (refreshError) throw refreshError;
+    if (refreshError !== undefined) throw refreshError;
     return current;
   };
 
@@ -87,7 +87,7 @@ export default function llamaExtension(msa: ExtensionAPI): void {
         `${loaded.length} model${loaded.length === 1 ? " is" : "s are"} loaded`,
         ["Unload all and load", "Keep loaded and load", "Cancel"],
       );
-      if (!choice || choice === "Cancel") return;
+      if (choice === undefined || choice === "" || choice === "Cancel") return;
       replace = choice === "Unload all and load";
     }
 
@@ -150,11 +150,11 @@ export default function llamaExtension(msa: ExtensionAPI): void {
   ): Promise<void> => {
     const huggingFace = new HuggingFaceClient(await findHuggingFaceToken());
     const selected = await ui.searchModels((query, signal) => huggingFace.search(query, signal));
-    if (!selected) return;
+    if (selected === undefined || selected === "") return;
     const parsed = parseHuggingFaceModel(selected);
     ui.showStatus("Loading model details", parsed.repository);
     const details = await huggingFace.details(parsed.repository);
-    if (details.gated) {
+    if (details.gated !== false) {
       const approval =
         details.gated === "manual" ? "Manual approval is required" : "Accept the access terms";
       const choice = await ui.select(
@@ -164,7 +164,7 @@ export default function llamaExtension(msa: ExtensionAPI): void {
       if (choice !== "Continue") return;
     }
     let quantization = parsed.quantization;
-    if (!quantization && details.quantizations.length > 0) {
+    if ((quantization === undefined || quantization === "") && details.quantizations.length > 0) {
       const options = details.quantizations.map((entry) => {
         const detail = [
           entry.size === undefined ? undefined : formatBytes(entry.size),
@@ -172,14 +172,17 @@ export default function llamaExtension(msa: ExtensionAPI): void {
         ]
           .filter((value): value is string => Boolean(value))
           .join(" · ");
-        return detail ? `${entry.name} · ${detail}` : entry.name;
+        return detail === "" ? entry.name : `${entry.name} · ${detail}`;
       });
       const choice = await ui.select(`Select quantization\n${details.id}`, options);
-      if (!choice) return;
+      if (choice === undefined || choice === "") return;
       quantization = details.quantizations[options.indexOf(choice)]?.name;
-      if (!quantization) return;
+      if (quantization === undefined || quantization === "") return;
     }
-    const model = quantization ? `${details.id}:${quantization}` : details.id;
+    const model =
+      quantization !== undefined && quantization !== ""
+        ? `${details.id}:${quantization}`
+        : details.id;
     const result = await runWithProgress(ui, {
       title: "Downloading model",
       model,
@@ -202,7 +205,7 @@ export default function llamaExtension(msa: ExtensionAPI): void {
         return;
       }
       const client = await configuredClient(ctx);
-      if (!client) return;
+      if (client === undefined) return;
       await showLlamaUi(ctx, async (ui) => {
         const readCatalog = async (): Promise<LlamaModelInfo[] | undefined> => {
           while (true) {
@@ -220,7 +223,7 @@ export default function llamaExtension(msa: ExtensionAPI): void {
         };
 
         let catalog = await readCatalog();
-        if (!catalog) return;
+        if (catalog === undefined) return;
         while (true) {
           const action = await ui.showModels(client.serverUrl, catalog);
           if (action.type === "close") return;
@@ -235,9 +238,9 @@ export default function llamaExtension(msa: ExtensionAPI): void {
             actionError = error;
           }
           const refreshed = await readCatalog();
-          if (!refreshed) return;
+          if (refreshed === undefined) return;
           catalog = refreshed;
-          if (actionError && !isConnectionError(actionError)) {
+          if (actionError !== undefined && !isConnectionError(actionError)) {
             ctx.ui.notify(toErrorMessage(actionError), "error");
           }
         }

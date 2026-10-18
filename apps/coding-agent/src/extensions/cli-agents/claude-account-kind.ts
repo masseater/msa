@@ -32,17 +32,20 @@ const ACTIONS: Record<string, string> = {
 async function describeAccounts(): Promise<string> {
   return (await withAuthStatus(loadAccounts()))
     .map(({ account, status }, index) => {
-      const auth = account.configDir
-        ? `configDir ${account.configDir}`
-        : account.tokenCommand
-          ? "tokenCommand"
-          : "msa environment";
+      const auth =
+        account.configDir !== undefined && account.configDir !== ""
+          ? `configDir ${account.configDir}`
+          : account.tokenCommand !== undefined && account.tokenCommand !== ""
+            ? "tokenCommand"
+            : "msa environment";
       const loginText =
-        describeLogin(status) || `not logged in${status.detail ? ` (${status.detail})` : ""}`;
+        describeLogin(status) ||
+        `not logged in${status.detail !== undefined && status.detail !== "" ? ` (${status.detail})` : ""}`;
       const block = blockOf(account);
-      const state = block
-        ? `blocked until ${new Date(block.until).toLocaleString()} (${block.reason})`
-        : "available";
+      const state =
+        block === undefined
+          ? "available"
+          : `blocked until ${new Date(block.until).toLocaleString()} (${block.reason})`;
       return `${index + 1}. ${account.name}  ${auth}  ${loginText}  ${state}${account.auto === false ? "  (not in rotation)" : ""}`;
     })
     .join("\n");
@@ -58,29 +61,30 @@ async function login(account: Account, ctx: ExtensionCommandContext): Promise<vo
   });
   const status = await authStatus(account);
   ctx.ui.notify(
-    `"${account.name}" ${status.loggedIn ? `logged in${status.email ? ` as ${status.email}` : ""}` : "is still not logged in"}`,
+    `"${account.name}" ${status.loggedIn ? `logged in${status.email !== undefined && status.email !== "" ? ` as ${status.email}` : ""}` : "is still not logged in"}`,
     status.loggedIn ? "info" : "warning",
   );
 }
 
 function named(name: string | undefined): Account {
-  if (!name) throw new Error("Give an account name");
+  if (name === undefined || name === "") throw new Error("Give an account name");
   const account = loadAccounts().find((candidate) => candidate.name === name);
-  if (!account) throw new Error(`No Claude account named "${name}"`);
+  if (account === undefined) throw new Error(`No Claude account named "${name}"`);
   return account;
 }
 
 async function run(args: string, ctx: ExtensionCommandContext): Promise<void> {
-  const [action = "", name, ...rest] = args.trim().split(/\s+/).filter(Boolean);
+  const [action = "", name, ...rest] = args.trim().split(/\s+/u).filter(Boolean);
   const before = loadAccounts().length;
   switch (action) {
     case "":
       break;
     case "add": {
-      if (!name) throw new Error(`Usage: /accounts claude ${ACTIONS["add"]}`);
+      if (name === undefined || name === "")
+        throw new Error(`Usage: /accounts claude ${ACTIONS["add"]}`);
       const account = addAccount(name, rest.join(" ") || undefined);
 
-      if (!account.tokenCommand)
+      if (account.tokenCommand === undefined || account.tokenCommand === "")
         await login(account, ctx).catch((error: Error) => ctx.ui.notify(error.message, "warning"));
       break;
     }
@@ -118,7 +122,7 @@ async function run(args: string, ctx: ExtensionCommandContext): Promise<void> {
 }
 
 function completions(prefix: string): AutocompleteItem[] | null {
-  const [action = "", name, ...rest] = prefix.trimStart().split(/\s+/);
+  const [action = "", name, ...rest] = prefix.trimStart().split(/\s+/u);
   if (name === undefined) {
     return Object.entries(ACTIONS)
       .filter(([item]) => item.startsWith(action))

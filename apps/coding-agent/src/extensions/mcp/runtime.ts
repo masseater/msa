@@ -69,12 +69,12 @@ function isTransientError(error: unknown): boolean {
 
 function signInRequiredMessage(entry: McpServerEntry): string {
   const provider = "url" in entry.config ? entry.config.auth?.provider : undefined;
-  return `MCP server "${entry.name}" requires sign-in. Run ${provider ? `/login ${provider}` : "/mcp"} to sign in.`;
+  return `MCP server "${entry.name}" requires sign-in. Run ${provider !== undefined && provider !== "" ? `/login ${provider}` : "/mcp"} to sign in.`;
 }
 
 function usesOAuth(entry: McpServerEntry): boolean {
   const { config } = entry;
-  if (!("url" in config) || config.auth) return false;
+  if (!("url" in config) || config.auth !== undefined) return false;
   return !Object.keys(config.headers ?? {}).some(
     (header) => header.toLowerCase() === "authorization",
   );
@@ -98,8 +98,8 @@ export function createDefaultTransport(
     const headers = resolveHeadersOrThrow(config.headers, `MCP server "${name}"`);
     return new StreamableHttpTransport({
       url: config.url,
-      ...(headers ? { headers } : {}),
-      ...(authProvider ? { authProvider } : {}),
+      ...(headers === undefined ? {} : { headers }),
+      ...(authProvider === undefined ? {} : { authProvider }),
     });
   }
   const env: Record<string, string> = {};
@@ -108,7 +108,7 @@ export function createDefaultTransport(
   }
   return new StdioTransport({
     command: expandHome(config.command),
-    ...(config.args ? { args: config.args.map(expandHome) } : {}),
+    ...(config.args === undefined ? {} : { args: config.args.map(expandHome) }),
     cwd: resolve(cwd, expandHome(config.cwd ?? ".")),
     env,
     stderr: "pipe",
@@ -177,18 +177,19 @@ export class McpServerConnection implements McpToolCaller, McpResourceServer {
     this.log = options.log;
     const url = this.oauthUrl;
     const provider = "url" in this.entry.config ? this.entry.config.auth?.provider : undefined;
-    this.authProvider = url
-      ? createMcpAuthProvider({
-          serverUrl: url,
-          store: options.credentials.forServer(this.entry.name, url),
-          settings: () => this.oauthSettings(),
-          onChallenge: (challenge) => {
-            this.challenge = challenge;
-          },
-        })
-      : provider
-        ? { token: async () => options.providerToken?.(provider), settled: async () => {} }
-        : undefined;
+    this.authProvider =
+      url !== undefined && url !== ""
+        ? createMcpAuthProvider({
+            serverUrl: url,
+            store: options.credentials.forServer(this.entry.name, url),
+            settings: () => this.oauthSettings(),
+            onChallenge: (challenge) => {
+              this.challenge = challenge;
+            },
+          })
+        : provider !== undefined && provider !== ""
+          ? { token: async () => options.providerToken?.(provider), settled: async () => {} }
+          : undefined;
   }
 
   get name(): string {
@@ -209,7 +210,7 @@ export class McpServerConnection implements McpToolCaller, McpResourceServer {
 
   oauthSettings(): McpOAuthSettings {
     const oauth = "url" in this.entry.config ? this.entry.config.oauth : undefined;
-    if (!oauth) return {};
+    if (oauth === undefined) return {};
     return {
       clientId: oauth.clientId,
       clientSecret:
@@ -224,9 +225,10 @@ export class McpServerConnection implements McpToolCaller, McpResourceServer {
       scope: oauth.scope,
       clientName: oauth.clientName,
       clientRegistration: oauth.clientRegistration,
-      authServerMetadataUrl: oauth.authServerMetadataUrl
-        ? new URL(oauth.authServerMetadataUrl)
-        : undefined,
+      authServerMetadataUrl:
+        oauth.authServerMetadataUrl !== undefined && oauth.authServerMetadataUrl !== ""
+          ? new URL(oauth.authServerMetadataUrl)
+          : undefined,
     };
   }
 
@@ -307,13 +309,13 @@ export class McpServerConnection implements McpToolCaller, McpResourceServer {
 
   async reconnect(): Promise<void> {
     await this.opening?.catch(() => undefined);
-    if (this.client) await this.dropClient(this.client);
+    if (this.client !== undefined) await this.dropClient(this.client);
     await this.getClient();
   }
 
   async signOut(): Promise<void> {
     await this.opening?.catch(() => undefined);
-    if (this.client) await this.dropClient(this.client);
+    if (this.client !== undefined) await this.dropClient(this.client);
     if (!this.closed) this.markNeedsAuth();
   }
 
@@ -366,7 +368,7 @@ export class McpServerConnection implements McpToolCaller, McpResourceServer {
       roots: [{ uri: pathToFileURL(this.cwd).href, name: basename(this.cwd) }],
     });
     const log = this.log;
-    if (log)
+    if (log !== undefined)
       client.onNotification("notifications/message", (params) =>
         log.write(this.entry.name, params),
       );
@@ -387,7 +389,7 @@ export class McpServerConnection implements McpToolCaller, McpResourceServer {
       const stdio = transport instanceof StdioTransport ? transport : undefined;
       client.onClose(() => this.handleClientClose(client, stdio));
 
-      const tools = client.serverCapabilities?.tools ? await client.listTools() : [];
+      const tools = client.serverCapabilities?.tools === undefined ? [] : await client.listTools();
       if (this.closed) throw new Error("shut down while connecting");
       if (client.connectionState !== "connected") throw new Error("connection closed during setup");
       this.client = client;
@@ -416,9 +418,10 @@ export class McpServerConnection implements McpToolCaller, McpResourceServer {
       return new Error(signInRequiredMessage(this.entry));
     }
     this.state = this.closed ? "closed" : "failed";
-    this.error = this.stderrTail
-      ? `${toErrorMessage(error)}\n${this.stderrTail}`
-      : toErrorMessage(error);
+    this.error =
+      this.stderrTail !== undefined && this.stderrTail !== ""
+        ? `${toErrorMessage(error)}\n${this.stderrTail}`
+        : toErrorMessage(error);
     this.changed();
     return new Error(`MCP server "${this.entry.name}" failed to connect: ${this.error}`);
   }
@@ -428,7 +431,8 @@ export class McpServerConnection implements McpToolCaller, McpResourceServer {
     this.client = undefined;
     this.state = "disconnected";
     const stderr = stdio?.stderr.trim().slice(-STDERR_TAIL_CHARS);
-    this.error = stderr ? `Connection closed\n${stderr}` : "Connection closed";
+    this.error =
+      stderr !== undefined && stderr !== "" ? `Connection closed\n${stderr}` : "Connection closed";
     this.changed();
   }
 

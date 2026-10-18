@@ -42,7 +42,9 @@ function readAccounts(): Account[] {
 
 export function loadAccounts(): Account[] {
   return readAccounts().map((account) =>
-    account.configDir ? { ...account, configDir: expandTildePath(account.configDir) } : account,
+    account.configDir !== undefined && account.configDir !== ""
+      ? { ...account, configDir: expandTildePath(account.configDir) }
+      : account,
   );
 }
 
@@ -56,17 +58,18 @@ function editAccounts(change: (accounts: Account[]) => Account[]): void {
 
 function findAccount(accounts: Account[], name: string): Account {
   const account = accounts.find((candidate) => candidate.name === name);
-  if (!account) throw new Error(`No Claude account named "${name}"`);
+  if (account === undefined) throw new Error(`No Claude account named "${name}"`);
   return account;
 }
 
 export function addAccount(name: string, tokenCommand?: string): Account {
-  if (!/^[a-z0-9][a-z0-9_-]*$/.test(name)) {
+  if (!/^[a-z0-9][a-z0-9_-]*$/u.test(name)) {
     throw new Error(`Account name "${name}" must be lowercase letters, digits, "-" or "_"`);
   }
-  const account: Account = tokenCommand
-    ? { name, tokenCommand }
-    : { name, configDir: managedDir(name) };
+  const account: Account =
+    tokenCommand !== undefined && tokenCommand !== ""
+      ? { name, tokenCommand }
+      : { name, configDir: managedDir(name) };
   editAccounts((accounts) => {
     if (accounts.some((candidate) => candidate.name === name)) {
       throw new Error(`Claude account "${name}" already exists`);
@@ -82,7 +85,11 @@ export function removeAccount(name: string): void {
     removed = findAccount(accounts, name);
     return accounts.filter((candidate) => candidate !== removed);
   });
-  if (removed?.configDir && expandTildePath(removed.configDir) === managedDir(name)) {
+  if (
+    removed?.configDir !== undefined &&
+    removed?.configDir !== "" &&
+    expandTildePath(removed.configDir) === managedDir(name)
+  ) {
     rmSync(managedDir(name), { recursive: true, force: true });
   }
   const blocks = loadBlocks();
@@ -125,19 +132,24 @@ async function runTokenCommand(command: string): Promise<string> {
     });
   }
   const token = stdout.trim();
-  if (!token) throw new Error(`tokenCommand ${command}: printed nothing`);
+  if (token === "") throw new Error(`tokenCommand ${command}: printed nothing`);
   return token;
 }
 
 export async function accountEnv(account: Account): Promise<Record<string, string>> {
   const env = { ...process.env } as Record<string, string>;
   delete env["CLAUDECODE"];
-  if (account.configDir || account.tokenCommand) delete env["CLAUDE_CODE_OAUTH_TOKEN"];
-  if (account.configDir) env["CLAUDE_CONFIG_DIR"] = account.configDir;
+  if (
+    (account.configDir !== undefined && account.configDir !== "") ||
+    (account.tokenCommand !== undefined && account.tokenCommand !== "")
+  )
+    delete env["CLAUDE_CODE_OAUTH_TOKEN"];
+  if (account.configDir !== undefined && account.configDir !== "")
+    env["CLAUDE_CONFIG_DIR"] = account.configDir;
   const command = account.tokenCommand;
-  if (command) {
+  if (command !== undefined && command !== "") {
     let token = tokens.get(command);
-    if (!token) {
+    if (token === undefined) {
       token = runTokenCommand(command);
       tokens.set(command, token);
       token.catch(() => tokens.delete(command));
@@ -154,7 +166,9 @@ export interface AuthStatus {
 }
 
 export function describeLogin(status: AuthStatus): string {
-  return status.loggedIn ? `logged in${status.email ? ` as ${status.email}` : ""}` : "";
+  return status.loggedIn
+    ? `logged in${status.email !== undefined && status.email !== "" ? ` as ${status.email}` : ""}`
+    : "";
 }
 
 export async function withAuthStatus(
@@ -172,7 +186,10 @@ export async function authStatus(account: Account): Promise<AuthStatus> {
       { env: await accountEnv(account), timeout: 15_000 },
     );
     const status = JSON.parse(stdout) as { loggedIn?: boolean; email?: string };
-    return { loggedIn: status.loggedIn === true, ...(status.email ? { email: status.email } : {}) };
+    return {
+      loggedIn: status.loggedIn === true,
+      ...(status.email !== undefined && status.email !== "" ? { email: status.email } : {}),
+    };
   } catch (error) {
     const stdout = String((error as { stdout?: unknown }).stdout ?? "");
     try {
@@ -191,10 +208,15 @@ export interface LoginPrompts {
 }
 
 export async function loginAccount(account: Account, prompts: LoginPrompts): Promise<void> {
-  if (!account.configDir && account.tokenCommand) {
+  if (
+    (account.configDir === undefined || account.configDir === "") &&
+    account.tokenCommand !== undefined &&
+    account.tokenCommand !== ""
+  ) {
     throw new Error(`"${account.name}" signs in with its tokenCommand, not a Claude login`);
   }
-  if (account.configDir) mkdirSync(account.configDir, { recursive: true });
+  if (account.configDir !== undefined && account.configDir !== "")
+    mkdirSync(account.configDir, { recursive: true });
   const child = spawnProcess(claudeExecutable() ?? "claude", ["auth", "login"], {
     env: await accountEnv(account),
     stdio: ["pipe", "pipe", "pipe"],
@@ -205,12 +227,18 @@ export async function loginAccount(account: Account, prompts: LoginPrompts): Pro
   let cancelled = false;
   const onOutput = (chunk: Buffer) => {
     output = (output + String(chunk)).slice(-4_000);
-    const url = /https:\/\/\S+/.exec(output)?.[0];
-    if (asked || !url || !/\r?\n/.test(output.slice(output.indexOf(url)))) return;
+    const url = /https:\/\/\S+/u.exec(output)?.[0];
+    if (
+      asked ||
+      url === undefined ||
+      url === "" ||
+      !/\r?\n/u.test(output.slice(output.indexOf(url)))
+    )
+      return;
     asked = true;
     void prompts.askCode(url, exited.signal).then((code) => {
       if (exited.signal.aborted) return;
-      if (code?.trim()) child.stdin.write(`${code.trim()}\n`);
+      if (code !== undefined && code.trim() !== "") child.stdin.write(`${code.trim()}\n`);
       else {
         cancelled = true;
         child.kill();
@@ -257,7 +285,7 @@ function saveBlocks(blocks: Record<string, Block>): void {
 
 export function blockOf(account: Account, now = Date.now()): Block | undefined {
   const block = loadBlocks()[account.name];
-  return block && block.until > now ? block : undefined;
+  return block !== undefined && block.until > now ? block : undefined;
 }
 
 export function clearBlocks(): void {
@@ -284,8 +312,8 @@ export function blockIfUnusable(account: Account, failure: RunFailure): boolean 
   if (cause === "usage_limit") until = failure.resetsAt ?? Date.now() + FALLBACK_BLOCK_MS;
   else if (
     cause === "authentication_failed" ||
-    /^tokenCommand /.test(error) ||
-    /not logged in|please run \/login/i.test(error)
+    /^tokenCommand /u.test(error) ||
+    /not logged in|please run \/login/iu.test(error)
   ) {
     until = Date.now() + LOGGED_OUT_BLOCK_MS;
   } else if (DISABLED_CAUSES.has(cause)) {

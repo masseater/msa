@@ -50,7 +50,7 @@ function errorMessage(payload: unknown, fallback: string): string {
   const error = (payload as { error?: unknown }).error;
   if (typeof error !== "object" || error === null) return fallback;
   const message = (error as { message?: unknown }).message;
-  return typeof message === "string" && message ? message : fallback;
+  return typeof message === "string" && message !== "" ? message : fallback;
 }
 
 function isModelInfo(value: unknown): value is LlamaModelInfo {
@@ -60,7 +60,7 @@ function isModelInfo(value: unknown): value is LlamaModelInfo {
 }
 
 function linkSignal(source: AbortSignal | undefined, target: AbortController): () => void {
-  if (!source) return () => {};
+  if (source === undefined) return () => {};
   if (source.aborted) {
     target.abort(source.reason);
     return () => {};
@@ -72,7 +72,7 @@ function linkSignal(source: AbortSignal | undefined, target: AbortController): (
 
 function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
-    if (signal?.aborted) {
+    if (signal?.aborted === true) {
       reject(signal.reason ?? new Error("Cancelled"));
       return;
     }
@@ -110,12 +110,15 @@ function parseLoadProgress(data: unknown): LlamaProgress | undefined {
   const stageRatio =
     typeof value.value === "number" ? Math.max(0, Math.min(1, value.value)) : undefined;
   let ratio = stageRatio;
-  if (stage && stages.length > 0) {
+  if (stage !== undefined && stage !== "" && stages.length > 0) {
     const index = stages.indexOf(stage);
     if (index >= 0) ratio = (index + (stageRatio ?? 0)) / stages.length;
   }
   return {
-    message: stage ? `Loading ${stage.replaceAll("_", " ")}` : "Loading model",
+    message:
+      stage !== undefined && stage !== ""
+        ? `Loading ${stage.replaceAll("_", " ")}`
+        : "Loading model",
     ratio,
   };
 }
@@ -180,9 +183,13 @@ export class LlamaClient {
   private async request(path: string, init: RequestInit = {}): Promise<unknown> {
     const headers = new Headers(init.headers);
     if (init.body !== undefined) headers.set("Content-Type", "application/json");
-    if (this.apiKey) headers.set("Authorization", `Bearer ${this.apiKey}`);
+    if (this.apiKey !== undefined && this.apiKey !== "")
+      headers.set("Authorization", `Bearer ${this.apiKey}`);
     const timeout = AbortSignal.timeout(15_000);
-    const signal = init.signal ? AbortSignal.any([init.signal, timeout]) : timeout;
+    const signal =
+      init.signal !== undefined && init.signal !== null
+        ? AbortSignal.any([init.signal, timeout])
+        : timeout;
     const response = await fetch(`${this.serverUrl}${path}`, { ...init, headers, signal });
     let payload: unknown;
     try {
@@ -198,7 +205,7 @@ export class LlamaClient {
   async list(
     options: { reload?: boolean; signal?: AbortSignal | undefined } = {},
   ): Promise<LlamaModelInfo[]> {
-    const payload = await this.request(`/models${options.reload ? "?reload=1" : ""}`, {
+    const payload = await this.request(`/models${options.reload === true ? "?reload=1" : ""}`, {
       signal: options.signal ?? null,
     });
     if (
@@ -214,9 +221,10 @@ export class LlamaClient {
   }
 
   async props(options: { model?: string; signal?: AbortSignal } = {}): Promise<LlamaServerProps> {
-    const query = options.model
-      ? `?${new URLSearchParams({ model: options.model, autoload: "false" })}`
-      : "";
+    const query =
+      options.model !== undefined && options.model !== ""
+        ? `?${new URLSearchParams({ model: options.model, autoload: "false" })}`
+        : "";
     const payload = await this.request(`/props${query}`, { signal: options.signal ?? null });
     if (typeof payload !== "object" || payload === null) return {};
     const { models_autoload: modelsAutoload, chat_template: chatTemplate } = payload as Record<
@@ -249,7 +257,7 @@ export class LlamaClient {
     await this.unload(model, signal);
     while (true) {
       const entry = (await this.list({ signal })).find((candidate) => candidate.id === model);
-      if (!entry || entry.status.value === "unloaded") return;
+      if (entry === undefined || entry.status.value === "unloaded") return;
       await sleep(100, signal);
     }
   }
@@ -264,12 +272,13 @@ export class LlamaClient {
 
   async watch(onEvent: (event: LlamaModelEvent) => void, signal?: AbortSignal): Promise<void> {
     const headers = new Headers();
-    if (this.apiKey) headers.set("Authorization", `Bearer ${this.apiKey}`);
+    if (this.apiKey !== undefined && this.apiKey !== "")
+      headers.set("Authorization", `Bearer ${this.apiKey}`);
     const response = await fetch(`${this.serverUrl}/models/sse`, {
       headers,
       signal: signal ?? null,
     });
-    if (!response.ok || !response.body)
+    if (!response.ok || response.body === null)
       throw new Error(`llama.cpp SSE returned HTTP ${response.status}`);
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
@@ -287,11 +296,10 @@ export class LlamaClient {
           .filter((line) => line.startsWith("data:"))
           .map((line) => line.slice(5).trimStart())
           .join("\n");
-        if (data) {
+        if (data !== "") {
           try {
             const event = JSON.parse(data) as LlamaModelEvent;
-            if (event && typeof event.model === "string" && typeof event.event === "string")
-              onEvent(event);
+            if (typeof event?.model === "string" && typeof event.event === "string") onEvent(event);
           } catch {}
         }
         boundary = buffer.indexOf("\n\n");
@@ -315,17 +323,17 @@ export class LlamaClient {
       if (data?.status === "loaded") eventLoaded = true;
       if (data?.status === "unloaded") eventError = "Model failed to load";
       const progress = parseLoadProgress(event.data);
-      if (progress) onProgress(progress);
+      if (progress !== undefined) onProgress(progress);
     }, watcher.signal).catch(() => {});
     try {
       await this.load(model, signal);
       onProgress({ message: "Loading model" });
       while (true) {
-        if (signal?.aborted) throw signal.reason ?? new Error("Cancelled");
+        if (signal?.aborted === true) throw signal.reason ?? new Error("Cancelled");
         const entry = (await this.list({ signal })).find((candidate) => candidate.id === model);
         if (entry?.status.value === "loaded") return entry;
-        if (eventLoaded && !entry) return { id: model, status: { value: "loaded" } };
-        if (entry?.status.failed || eventError) {
+        if (eventLoaded && entry === undefined) return { id: model, status: { value: "loaded" } };
+        if (entry?.status.failed === true || (eventError !== undefined && eventError !== "")) {
           throw new Error(
             entry?.status.exit_code === undefined
               ? (eventError ?? "Model failed to load")
@@ -358,23 +366,23 @@ export class LlamaClient {
       if (event.event === "download_progress") {
         sawDownloading = true;
         const progress = parseDownloadProgress(event.data);
-        if (progress) onProgress(progress);
+        if (progress !== undefined) onProgress(progress);
       }
     }, watcher.signal).catch(() => {});
     try {
       await this.download(model, signal);
       onProgress({ message: "Downloading model" });
       while (true) {
-        if (signal?.aborted) throw signal.reason ?? new Error("Cancelled");
-        if (failure) throw new Error(failure);
+        if (signal?.aborted === true) throw signal.reason ?? new Error("Cancelled");
+        if (failure !== undefined && failure !== "") throw new Error(failure);
         const models = await this.list({ signal });
         polls++;
         const entry = models.find((candidate) => candidate.id === model);
         if (entry?.status.value === "downloading") {
           sawDownloading = true;
           const progress = parseDownloadProgress(entry.status.progress);
-          if (progress) onProgress(progress);
-        } else if (finished || (entry && (sawDownloading || polls >= 2))) {
+          if (progress !== undefined) onProgress(progress);
+        } else if (finished || (entry !== undefined && (sawDownloading || polls >= 2))) {
           return this.list({ reload: true, signal });
         }
         await sleep(500, signal);

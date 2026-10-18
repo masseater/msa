@@ -53,7 +53,7 @@ export function waitForChildProcess(child: ChildProcess): Promise<number | null>
     let stderrEnded = child.stderr === null;
 
     const cleanup = () => {
-      if (postExitTimer) {
+      if (postExitTimer !== undefined) {
         clearTimeout(postExitTimer);
         postExitTimer = undefined;
       }
@@ -83,7 +83,7 @@ export function waitForChildProcess(child: ChildProcess): Promise<number | null>
     };
 
     const armIdleTimer = () => {
-      if (postExitTimer) clearTimeout(postExitTimer);
+      if (postExitTimer !== undefined) clearTimeout(postExitTimer);
       postExitTimer = setTimeout(() => finalize(exitCode), EXIT_STDIO_GRACE_MS);
     };
 

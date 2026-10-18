@@ -85,7 +85,7 @@ const backend: CliBackend<OpenCodeEvent> = {
       sink.fail(event.error?.message ?? "");
     } else if (event.type === "text" && part.type === "text") {
       sink.setText(part.id ?? "text", part.text ?? "");
-    } else if (event.type === "step_finish" && part.tokens) {
+    } else if (event.type === "step_finish" && part.tokens !== undefined) {
       const tokens = part.tokens;
       sink.addUsage({
         input: tokens.input ?? 0,
@@ -96,7 +96,7 @@ const backend: CliBackend<OpenCodeEvent> = {
       });
     }
   },
-  shouldRetry: (detail) => /readiness|server-connection|database is locked/i.test(detail),
+  shouldRetry: (detail) => /readiness|server-connection|database is locked/iu.test(detail),
 };
 
 export function registerOpenCode(msa: ExtensionAPI): void {

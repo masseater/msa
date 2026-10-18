@@ -62,7 +62,7 @@ function reportSettingsErrors(settingsManager: SettingsManager, context: string)
   const errors = settingsManager.drainErrors();
   for (const { scope, error } of errors) {
     console.error(chalk.yellow(`Warning (${context}, ${scope} settings): ${error.message}`));
-    if (error.stack) {
+    if (error.stack !== undefined && error.stack !== "") {
       console.error(chalk.dim(error.stack));
     }
   }
@@ -191,7 +191,7 @@ function parsePackageCommand(args: string[]): PackageCommandOptions | undefined 
   ) {
     command = rawCommand;
   }
-  if (!command) {
+  if (command === undefined) {
     return undefined;
   }
 
@@ -289,9 +289,9 @@ function parsePackageCommand(args: string[]): PackageCommandOptions | undefined 
       }
 
       const value = rest[index + 1];
-      if (!value || value.startsWith("-")) {
+      if (value === undefined || value === "" || value.startsWith("-")) {
         missingOptionValue = missingOptionValue ?? arg;
-      } else if (extensionFlagSource) {
+      } else if (extensionFlagSource !== undefined && extensionFlagSource !== "") {
         conflictingOptions = conflictingOptions ?? "--extension can only be provided once";
         index++;
       } else {
@@ -306,7 +306,7 @@ function parsePackageCommand(args: string[]): PackageCommandOptions | undefined 
       continue;
     }
 
-    if (source) {
+    if (source !== undefined && source !== "") {
       invalidArgument = invalidArgument ?? arg;
     } else {
       source = arg;
@@ -316,39 +316,50 @@ function parsePackageCommand(args: string[]): PackageCommandOptions | undefined 
   let updateTarget: UpdateTarget | undefined;
   let showExtensionsSkippedNote = false;
   if (command === "update") {
-    if (allFlag && (selfFlag || extensionsFlag || modelsFlag || extensionFlagSource)) {
+    if (
+      allFlag &&
+      (selfFlag ||
+        extensionsFlag ||
+        modelsFlag ||
+        (extensionFlagSource !== undefined && extensionFlagSource !== ""))
+    ) {
       conflictingOptions =
         conflictingOptions ??
         "--all cannot be combined with --self, --extensions, --models, or --extension";
     }
-    if (allFlag && source) {
+    if (allFlag && source !== undefined && source !== "") {
       conflictingOptions =
         conflictingOptions ?? "--all cannot be combined with a positional source";
     }
 
     if (modelsFlag) {
-      if (selfFlag || extensionsFlag || allFlag || extensionFlagSource) {
+      if (
+        selfFlag ||
+        extensionsFlag ||
+        allFlag ||
+        (extensionFlagSource !== undefined && extensionFlagSource !== "")
+      ) {
         conflictingOptions =
           conflictingOptions ??
           "--models cannot be combined with --self, --extensions, --all, or --extension";
       }
-      if (source) {
+      if (source !== undefined && source !== "") {
         conflictingOptions =
           conflictingOptions ?? "--models cannot be combined with a positional source";
       }
       updateTarget = { type: "models" };
-    } else if (extensionFlagSource) {
+    } else if (extensionFlagSource !== undefined && extensionFlagSource !== "") {
       if (selfFlag || extensionsFlag || allFlag) {
         conflictingOptions =
           conflictingOptions ??
           "--extension cannot be combined with --self, --extensions, or --all";
       }
-      if (source) {
+      if (source !== undefined && source !== "") {
         conflictingOptions =
           conflictingOptions ?? "--extension cannot be combined with a positional source";
       }
       updateTarget = { type: "extensions", source: extensionFlagSource };
-    } else if (source) {
+    } else if (source !== undefined && source !== "") {
       const sourceIsSelf = source === "self" || source === "msa";
       if (sourceIsSelf) {
         updateTarget = extensionsFlag ? { type: "all" } : { type: "self" };
@@ -437,7 +448,7 @@ function printSelfUpdateUnavailable(
   console.error(getSelfUpdateUnavailableInstruction(PACKAGE_NAME, npmCommand, updatePackageTarget));
 
   const entrypoint = process.argv[1];
-  if (entrypoint) {
+  if (entrypoint !== undefined && entrypoint !== "") {
     console.error("");
     console.error(`Location of ${APP_NAME} executable: ${entrypoint}`);
   }
@@ -474,7 +485,7 @@ async function getSelfUpdatePlan(force: boolean): Promise<SelfUpdatePlan> {
       },
     );
   }
-  if (!latestRelease) {
+  if (latestRelease === undefined) {
     throw new Error(`Could not determine latest ${APP_NAME} version.`);
   }
 
@@ -500,10 +511,10 @@ async function runSelfUpdate(command: SelfUpdateCommand): Promise<void> {
       child.on("close", (code, signal) => {
         if (code === 0) {
           resolve();
-        } else if (signal) {
-          reject(new Error(`${step.display} terminated by signal ${signal}`));
-        } else {
+        } else if (signal === null) {
           reject(new Error(`${step.display} exited with code ${code ?? "unknown"}`));
+        } else {
+          reject(new Error(`${step.display} terminated by signal ${signal}`));
         }
       });
     });
@@ -551,7 +562,7 @@ async function createCommandSettingsManager(options: {
   });
   const projectTrustWarnings: string[] = [];
   const trustStore = new ProjectTrustStore(options.agentDir);
-  if (options.useSavedProjectTrustOnly) {
+  if (options.useSavedProjectTrustOnly === true) {
     const savedProjectTrusted = trustStore.get(options.cwd) === true;
     settingsManager.setProjectTrusted(options.projectTrustOverride ?? savedProjectTrusted);
     return { settingsManager, projectTrustWarnings };
@@ -678,7 +689,7 @@ export async function handlePackageCommand(
   runtimeOptions: PackageCommandRuntimeOptions = {},
 ): Promise<boolean> {
   const options = parsePackageCommand(args);
-  if (!options) {
+  if (options === undefined) {
     return false;
   }
 
@@ -687,7 +698,7 @@ export async function handlePackageCommand(
     return true;
   }
 
-  if (options.invalidOption) {
+  if (options.invalidOption !== undefined && options.invalidOption !== "") {
     console.error(chalk.red(`Unknown option ${options.invalidOption} for "${options.command}".`));
     console.error(
       chalk.dim(`Use "${APP_NAME} --help" or "${getPackageCommandUsage(options.command)}".`),
@@ -696,21 +707,21 @@ export async function handlePackageCommand(
     return true;
   }
 
-  if (options.missingOptionValue) {
+  if (options.missingOptionValue !== undefined && options.missingOptionValue !== "") {
     console.error(chalk.red(`Missing value for ${options.missingOptionValue}.`));
     console.error(chalk.dim(`Usage: ${getPackageCommandUsage(options.command)}`));
     process.exitCode = 1;
     return true;
   }
 
-  if (options.invalidArgument) {
+  if (options.invalidArgument !== undefined && options.invalidArgument !== "") {
     console.error(chalk.red(`Unexpected argument ${options.invalidArgument}.`));
     console.error(chalk.dim(`Usage: ${getPackageCommandUsage(options.command)}`));
     process.exitCode = 1;
     return true;
   }
 
-  if (options.conflictingOptions) {
+  if (options.conflictingOptions !== undefined && options.conflictingOptions !== "") {
     console.error(chalk.red(options.conflictingOptions));
     console.error(chalk.dim(`Usage: ${getPackageCommandUsage(options.command)}`));
     process.exitCode = 1;
@@ -718,7 +729,10 @@ export async function handlePackageCommand(
   }
 
   const source = options.source;
-  if ((options.command === "install" || options.command === "remove") && !source) {
+  if (
+    (options.command === "install" || options.command === "remove") &&
+    (source === undefined || source === "")
+  ) {
     console.error(chalk.red(`Missing ${options.command} source.`));
     console.error(chalk.dim(`Usage: ${getPackageCommandUsage(options.command)}`));
     process.exitCode = 1;
@@ -798,7 +812,7 @@ export async function handlePackageCommand(
         const formatPackage = (pkg: (typeof configuredPackages)[number]) => {
           const display = pkg.filtered ? `${pkg.source} (filtered)` : pkg.source;
           console.log(`  ${display}`);
-          if (pkg.installedPath) {
+          if (pkg.installedPath !== undefined && pkg.installedPath !== "") {
             console.log(chalk.dim(`    ${pkg.installedPath}`));
           }
         };
@@ -833,7 +847,7 @@ export async function handlePackageCommand(
         if (updateTargetIncludesExtensions(target)) {
           const updateSource = target.type === "extensions" ? target.source : undefined;
           await packageManager.update(updateSource);
-          if (updateSource) {
+          if (updateSource !== undefined && updateSource !== "") {
             console.log(chalk.green(`Updated ${updateSource}`));
           } else {
             console.log(chalk.green("Updated packages"));
@@ -867,7 +881,7 @@ export async function handlePackageCommand(
             selfUpdateNpmCommand,
             selfUpdateTarget,
           );
-          if (!selfUpdateCommand) {
+          if (selfUpdateCommand === undefined) {
             printSelfUpdateUnavailable(selfUpdateNpmCommand, selfUpdateTarget);
             process.exitCode = 1;
             return true;

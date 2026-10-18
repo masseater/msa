@@ -10,8 +10,8 @@ export interface ChangelogEntry {
 
 const GITHUB_REPO = "masseater/msa";
 const CHANGELOG_LINK_BASE_PATH = "apps/coding-agent";
-const URL_SCHEME_RE = /^[a-z][a-z0-9+.-]*:/i;
-const INLINE_MARKDOWN_LINK_RE = /(!?\[[^\]\n]+\]\()([^\s)]+)((?:\s+[^)]*)?\))/g;
+const URL_SCHEME_RE = /^[a-z][a-z0-9+.-]*:/iu;
+const INLINE_MARKDOWN_LINK_RE = /(!?\[[^\]\n]+\]\()([^\s)]+)((?:\s+[^)]*)?\))/gu;
 
 function entryVersion(entry: ChangelogEntry): string {
   return `${entry.major}.${entry.minor}.${entry.patch}`;
@@ -46,7 +46,7 @@ function normalizePathPart(value: string): string {
 function resolveRepositoryPath(targetPath: string): string | undefined {
   const normalizedTarget = normalizePathPart(targetPath);
   const joined = normalizedTarget.startsWith("/")
-    ? path.posix.normalize(normalizedTarget.replace(/^\/+/, ""))
+    ? path.posix.normalize(normalizedTarget.replace(/^\/+/u, ""))
     : path.posix.normalize(path.posix.join(CHANGELOG_LINK_BASE_PATH, normalizedTarget));
 
   if (joined === "." || joined.startsWith("../") || joined === "..") {
@@ -87,12 +87,12 @@ function normalizeChangelogLinkTarget(target: string, tag: string): string {
   }
 
   const { fragment, pathPart, query } = splitLocalTarget(canonicalTarget);
-  if (!pathPart) {
+  if (pathPart === "") {
     return canonicalTarget;
   }
 
   const repositoryPath = resolveRepositoryPath(pathPart);
-  if (!repositoryPath) {
+  if (repositoryPath === undefined || repositoryPath === "") {
     return canonicalTarget;
   }
 
@@ -125,14 +125,14 @@ export function parseChangelog(changelogPath: string): ChangelogEntry[] {
 
     for (const line of lines) {
       if (line.startsWith("## ")) {
-        if (currentVersion && currentLines.length > 0) {
+        if (currentVersion !== null && currentLines.length > 0) {
           entries.push({
             ...currentVersion,
             content: currentLines.join("\n").trim(),
           });
         }
 
-        const versionMatch = line.match(/##\s+\[?(\d+)\.(\d+)\.(\d+)\]?/);
+        const versionMatch = line.match(/##\s+\[?(\d+)\.(\d+)\.(\d+)\]?/u);
         const [, major, minor, patch] = versionMatch ?? [];
         if (major !== undefined && minor !== undefined && patch !== undefined) {
           currentVersion = {
@@ -145,12 +145,12 @@ export function parseChangelog(changelogPath: string): ChangelogEntry[] {
           currentVersion = null;
           currentLines = [];
         }
-      } else if (currentVersion) {
+      } else if (currentVersion !== null) {
         currentLines.push(line);
       }
     }
 
-    if (currentVersion && currentLines.length > 0) {
+    if (currentVersion !== null && currentLines.length > 0) {
       entries.push({
         ...currentVersion,
         content: currentLines.join("\n").trim(),
