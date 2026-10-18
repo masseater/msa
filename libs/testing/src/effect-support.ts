@@ -61,3 +61,20 @@ export const gate = (): Gate => {
     release: () => Deferred.doneUnsafe(deferred, Effect.void),
   });
 };
+
+export interface DeferredPromise<A> {
+  readonly promise: Promise<A>;
+  readonly resolve: (value: A) => void;
+  readonly reject: (error: unknown) => void;
+}
+
+export const deferredPromise = <A>(): DeferredPromise<A> => {
+  const deferred = Deferred.makeUnsafe<A, never>();
+  return {
+    promise: testRuntime.runPromise(Deferred.await(deferred)),
+    resolve: (value) => Deferred.doneUnsafe(deferred, Effect.succeed(value)),
+    reject: (error) => Deferred.doneUnsafe(deferred, Effect.die(error)),
+  };
+};
+
+export const neverPromise = <A>(): Promise<A> => testRuntime.runPromise(Effect.never);
