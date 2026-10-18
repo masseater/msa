@@ -1,8 +1,10 @@
 import type { Api, Model, ProviderHeaders } from "@msa/ai";
 
+import { APP_NAME } from "../config.ts";
 import type { SettingsManager } from "./settings-manager.ts";
 import { isInstallTelemetryEnabled } from "./telemetry.ts";
 
+const APP_URL = "https://github.com/masseater/msa";
 const OPENROUTER_HOST = "openrouter.ai";
 const OPENCODE_HOST = "opencode.ai";
 
@@ -28,8 +30,8 @@ function getDefaultAttributionHeaders(
 
   if (isOpenRouterModel(model)) {
     return {
-      "HTTP-Referer": "https://pi.dev",
-      "X-OpenRouter-Title": "pi",
+      "HTTP-Referer": APP_URL,
+      "X-OpenRouter-Title": APP_NAME,
       "X-OpenRouter-Categories": "cli-agent",
     };
   }
@@ -49,7 +51,7 @@ function getSessionHeaders(
   ) {
     return undefined;
   }
-  return { "x-opencode-session": sessionId, "x-opencode-client": "pi" };
+  return { "x-opencode-session": sessionId, "x-opencode-client": APP_NAME };
 }
 
 export function mergeProviderAttributionHeaders(
