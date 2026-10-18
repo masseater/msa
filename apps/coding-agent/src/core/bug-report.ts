@@ -3,10 +3,12 @@ import * as os from "node:os";
 import type { AgentMessage, StreamFn, ThinkingLevel } from "@msa/agent-core";
 import { contentText, normalizeContext, type RetryPolicy, uuidv7 } from "@msa/ai";
 import type { Api, Model, Provider, SimpleStreamOptions } from "@msa/ai/compat";
+import * as Effect from "effect/Effect";
 
 import { VERSION } from "../config.ts";
 import { getMsaUserAgent } from "../utils/user-agent.ts";
 import { writeZipArchive } from "../utils/zip.ts";
+import { awaited, awaiting } from "./awaiting.ts";
 import {
   completeSummarization,
   estimateTokens,
@@ -17,6 +19,7 @@ import type { CrashRecord } from "./crash-log.ts";
 import type { Extension } from "./extensions/types.ts";
 import { convertToLlm } from "./messages.ts";
 import type { ModelRuntime } from "./model-runtime.ts";
+import { nowIso, nowMs, readEnv } from "./platform.ts";
 import type { ReadonlySessionManager } from "./session-manager.ts";
 import type { Settings } from "./settings-manager.ts";
 
@@ -24,21 +27,20 @@ export const BUG_REPORT_CUSTOM_ENTRY_TYPE = "msa.bug-report";
 const BUG_REPORT_SCHEMA_VERSION = 1;
 const REDACTED = "<redacted>";
 const SENSITIVE_KEY =
-  /(?:^|[-_])(api[-_]?key|secret|token|password|passwd|credential|authorization|cookie)(?:$|[-_])/i;
+  /(?:^|[-_])(api[-_]?key|secret|token|password|passwd|credential|authorization|cookie)(?:$|[-_])/iu;
 
 function isSensitiveKey(key: string): boolean {
-  return SENSITIVE_KEY.test(key.replace(/([a-z0-9])([A-Z])/g, "$1_$2"));
+  return SENSITIVE_KEY.test(key.replace(/([a-z0-9])([A-Z])/gu, "$1_$2"));
 }
 
-/** Strip credentials and secret-looking query parameters from a URL. */
 export function redactUrl(value: string): string {
-  const nested = /^([a-z][a-z0-9+.-]*:)([a-z][a-z0-9+.-]*:\/\/.*)$/i.exec(value);
+  const nested = /^([a-z][a-z0-9+.-]*:)([a-z][a-z0-9+.-]*:\/\/.*)$/iu.exec(value);
   const [, scheme, inner] = nested ?? [];
   if (scheme !== undefined && inner !== undefined) return `${scheme}${redactUrl(inner)}`;
   try {
     const url = new URL(value);
     let changed = false;
-    if (url.username || url.password) {
+    if (url.username !== "" || url.password !== "") {
       url.username = "";
       url.password = "";
       changed = true;
@@ -55,7 +57,6 @@ export function redactUrl(value: string): string {
   }
 }
 
-/** Copy a JSON value while removing values that may contain credentials. */
 export function redactJsonValue(value: unknown): unknown {
   if (value === undefined) return undefined;
   return JSON.parse(
@@ -72,28 +73,28 @@ function redactSettings(settings: Settings): Settings {
 }
 
 function collectEnvironment() {
-  const env = (name: string): string | null => process.env[name] || null;
+  const env = (name: string): string | null => readEnv(name) || null;
   return {
     version: VERSION,
     userAgent: getMsaUserAgent(VERSION),
-    runtime: process.versions["bun"] ? `bun/${process.versions["bun"]}` : `node/${process.version}`,
+    runtime:
+      process.versions["bun"] !== undefined && process.versions["bun"] !== ""
+        ? `bun/${process.versions["bun"]}`
+        : `node/${process.version}`,
     platform: process.platform,
     arch: process.arch,
     osRelease: os.release(),
     osVersion: os.version(),
-    shell: process.env["SHELL"]?.split(/[\\/]/).pop() || null,
+    shell: readEnv("SHELL")?.split(/[\\/]/u).pop() || null,
     terminal: {
       term: env("TERM"),
       program: env("TERM_PROGRAM"),
       programVersion: env("TERM_PROGRAM_VERSION"),
       colorterm: env("COLORTERM"),
-      tmux: Boolean(process.env["TMUX"]),
-      ssh: Boolean(
-        process.env["SSH_CONNECTION"] || process.env["SSH_CLIENT"] || process.env["SSH_TTY"],
-      ),
-      ci: Boolean(process.env["CI"]),
+      tmux: Boolean(readEnv("TMUX")),
+      ssh: Boolean(readEnv("SSH_CONNECTION") || readEnv("SSH_CLIENT") || readEnv("SSH_TTY")),
+      ci: Boolean(readEnv("CI")),
     },
-    // Names help diagnose configuration; values never leave the machine.
     piEnvironmentVariables: Object.keys(process.env)
       .filter((name) => name.startsWith("MSA_"))
       .sort(),
@@ -111,8 +112,9 @@ function describeModel(model: Model<Api>) {
     input: model.input,
     contextWindow: model.contextWindow,
     maxTokens: model.maxTokens,
-    samplingParams: model.samplingParams ? redactJsonValue(model.samplingParams) : null,
-    compat: model.compat ? redactJsonValue(model.compat) : null,
+    samplingParams:
+      model.samplingParams === undefined ? null : redactJsonValue(model.samplingParams),
+    compat: model.compat === undefined ? null : redactJsonValue(model.compat),
     thinkingLevelMap: model.thinkingLevelMap ?? null,
     headerNames: Object.keys(model.headers ?? {}).sort(),
   };
@@ -120,12 +122,15 @@ function describeModel(model: Model<Api>) {
 
 function describeProvider(modelRuntime: ModelRuntime, provider: Provider) {
   const authTypes: Array<"api_key" | "oauth"> = [];
-  if (provider.auth.apiKey) authTypes.push("api_key");
-  if (provider.auth.oauth) authTypes.push("oauth");
+  if (provider.auth.apiKey !== undefined) authTypes.push("api_key");
+  if (provider.auth.oauth !== undefined) authTypes.push("oauth");
   return {
     id: provider.id,
     name: provider.name,
-    baseUrl: provider.baseUrl ? redactUrl(provider.baseUrl) : null,
+    baseUrl:
+      provider.baseUrl !== undefined && provider.baseUrl !== ""
+        ? redactUrl(provider.baseUrl)
+        : null,
     headerNames: Object.keys(provider.headers ?? {}).sort(),
     authTypes,
     authStatus: modelRuntime.getProviderAuthStatus(provider.id),
@@ -163,13 +168,14 @@ interface CollectBugReportMetadataOptions {
 
 export function collectBugReportMetadata(options: CollectBugReportMetadataOptions) {
   const hint = options.hint?.trim() || null;
-  const provider = options.model
-    ? options.modelRuntime.getProvider(options.model.provider)
-    : undefined;
+  const provider =
+    options.model === undefined
+      ? undefined
+      : options.modelRuntime.getProvider(options.model.provider);
   return {
     schemaVersion: BUG_REPORT_SCHEMA_VERSION,
     id: options.id ?? uuidv7(),
-    createdAt: new Date().toISOString(),
+    createdAt: nowIso(),
     hint,
     environment: collectEnvironment(),
     session: {
@@ -179,8 +185,8 @@ export function collectBugReportMetadata(options: CollectBugReportMetadataOption
       messageCount: options.messageCount,
       ...(options.includeSession ? { cwd: options.cwd } : {}),
     },
-    model: options.model ? describeModel(options.model) : null,
-    provider: provider ? describeProvider(options.modelRuntime, provider) : null,
+    model: options.model === undefined ? null : describeModel(options.model),
+    provider: provider === undefined ? null : describeProvider(options.modelRuntime, provider),
     thinkingLevel: options.thinkingLevel,
     extensions: options.extensions.map(describeExtension),
     extensionErrors: options.extensionErrors.map(({ path, error }) => ({ path, error })),
@@ -191,7 +197,6 @@ export function collectBugReportMetadata(options: CollectBugReportMetadataOption
   };
 }
 
-/** Collect failed assistant turns without collecting conversation content. */
 export function collectBugReportDiagnostics(
   sessionManager: ReadonlySessionManager,
   crashes: readonly CrashRecord[] = [],
@@ -208,7 +213,7 @@ export function collectBugReportDiagnostics(
       diagnostics.length === 0 &&
       message.stopReason !== "error" &&
       message.stopReason !== "aborted" &&
-      !message.errorMessage
+      (message.errorMessage === undefined || message.errorMessage === "")
     ) {
       continue;
     }
@@ -260,7 +265,6 @@ interface BugReportFile {
   data: string;
 }
 
-/** Files written to the zip export. */
 function bugReportFiles(bundle: BugReportBundle): BugReportFile[] {
   const files: BugReportFile[] = [
     {
@@ -347,54 +351,61 @@ interface GenerateBugReportSummaryOptions {
   sessionId?: string;
 }
 
-/** Ask the session model for a report when the user does not share the transcript. */
-export async function generateBugReportSummary(
+export function generateBugReportSummary(
   options: GenerateBugReportSummaryOptions,
 ): Promise<string> {
-  const { model } = options;
-  const contextWindow = model.contextWindow > 0 ? model.contextWindow : 128_000;
-  const messages = selectMessages(options.messages, Math.floor(contextWindow * 0.6));
-  const hint = options.hint?.trim();
-  const prompt = [
-    messages.length < options.messages.length
-      ? `Note: only the last ${messages.length} of ${options.messages.length} messages are shown.`
-      : undefined,
-    `<conversation>\n${serializeConversation(convertToLlm(messages))}\n</conversation>`,
-    hint ? `<user-report>\n${hint}\n</user-report>` : undefined,
-    BUG_SUMMARY_INSTRUCTIONS,
-  ]
-    .filter((part) => part !== undefined)
-    .join("\n\n");
-  const requestOptions: SimpleStreamOptions = {
-    maxTokens: Math.min(4096, model.maxTokens > 0 ? model.maxTokens : Number.POSITIVE_INFINITY),
-    signal: options.signal,
-    apiKey: options.apiKey,
-    headers: options.headers,
-    env: options.env,
-    sessionId: options.sessionId,
-    ...(model.reasoning && options.thinkingLevel && options.thinkingLevel !== "off"
-      ? { reasoning: options.thinkingLevel }
-      : {}),
-  };
-  const response = await completeSummarization(
-    model,
-    normalizeContext({
-      systemPrompt: BUG_SUMMARY_SYSTEM_PROMPT,
-      messages: [
-        { role: "user", content: [{ type: "text", text: prompt }], timestamp: Date.now() },
-      ],
+  return Effect.runPromise(
+    awaiting(function* () {
+      const { model } = options;
+      const contextWindow = model.contextWindow > 0 ? model.contextWindow : 128_000;
+      const messages = selectMessages(options.messages, Math.floor(contextWindow * 0.6));
+      const hint = options.hint?.trim();
+      const prompt = [
+        messages.length < options.messages.length
+          ? `Note: only the last ${messages.length} of ${options.messages.length} messages are shown.`
+          : undefined,
+        `<conversation>\n${serializeConversation(convertToLlm(messages))}\n</conversation>`,
+        hint !== undefined && hint !== "" ? `<user-report>\n${hint}\n</user-report>` : undefined,
+        BUG_SUMMARY_INSTRUCTIONS,
+      ]
+        .filter((part) => part !== undefined)
+        .join("\n\n");
+      const requestOptions: SimpleStreamOptions = {
+        maxTokens: Math.min(4096, model.maxTokens > 0 ? model.maxTokens : Number.POSITIVE_INFINITY),
+        signal: options.signal,
+        apiKey: options.apiKey,
+        headers: options.headers,
+        env: options.env,
+        sessionId: options.sessionId,
+        ...(model.reasoning &&
+        options.thinkingLevel !== undefined &&
+        options.thinkingLevel !== "off"
+          ? { reasoning: options.thinkingLevel }
+          : {}),
+      };
+      const response = yield* awaited(
+        completeSummarization(
+          model,
+          normalizeContext({
+            systemPrompt: BUG_SUMMARY_SYSTEM_PROMPT,
+            messages: [
+              { role: "user", content: [{ type: "text", text: prompt }], timestamp: nowMs() },
+            ],
+          }),
+          requestOptions,
+          options.streamFn,
+          options.retry,
+        ),
+      );
+      if (response.stopReason === "aborted") throw new Error("Bug report summary was cancelled");
+      const failure = getSummarizationFailure(response, "Bug report summary");
+      if (failure !== undefined && failure !== "") throw new Error(failure);
+      if (response.content.some((block) => block.type === "toolCall")) {
+        throw new Error("Bug report summary attempted to call a tool");
+      }
+      const text = contentText(response.content, "\n").trim();
+      if (text === "") throw new Error("Bug report summary was empty");
+      return text;
     }),
-    requestOptions,
-    options.streamFn,
-    options.retry,
   );
-  if (response.stopReason === "aborted") throw new Error("Bug report summary was cancelled");
-  const failure = getSummarizationFailure(response, "Bug report summary");
-  if (failure) throw new Error(failure);
-  if (response.content.some((block) => block.type === "toolCall")) {
-    throw new Error("Bug report summary attempted to call a tool");
-  }
-  const text = contentText(response.content, "\n").trim();
-  if (!text) throw new Error("Bug report summary was empty");
-  return text;
 }

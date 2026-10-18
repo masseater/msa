@@ -1,6 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, join } from "node:path";
 
 import lockfile from "proper-lockfile";
 
@@ -8,6 +7,8 @@ import { CONFIG_DIR_NAME } from "../config.ts";
 import { toErrorMessage } from "../utils/errors.ts";
 import { canonicalizePath, resolvePath } from "../utils/paths.ts";
 import { stripBom } from "../utils/text.ts";
+import { dirname, join } from "./platform-node.ts";
+import { nowMs, readEnv } from "./platform.ts";
 
 export type ProjectTrustDecision = boolean | null;
 
@@ -92,7 +93,7 @@ export function getProjectTrustOptions(
       savedPath: parentPath,
     });
   }
-  if (options?.includeSessionOnly) {
+  if (options?.includeSessionOnly === true) {
     trustOptions.push({ label: "Trust (this session only)", trusted: true, updates: [] });
   }
   trustOptions.push({
@@ -101,7 +102,7 @@ export function getProjectTrustOptions(
     updates: [{ path: trustPath, decision: false }],
     savedPath: trustPath,
   });
-  if (options?.includeSessionOnly) {
+  if (options?.includeSessionOnly === true) {
     trustOptions.push({ label: "Do not trust (this session only)", trusted: false, updates: [] });
   }
   return trustOptions;
@@ -167,10 +168,8 @@ function acquireTrustLockSync(path: string): () => void {
         throw error;
       }
       lastError = error;
-      const start = Date.now();
-      while (Date.now() - start < delayMs) {
-        // Sleep synchronously to avoid changing trust store callers to async.
-      }
+      const start = nowMs();
+      while (nowMs() - start < delayMs) {}
     }
   }
 
@@ -189,15 +188,8 @@ function withTrustFileLock<T>(path: string, fn: () => T): T {
   }
 }
 
-/**
- * Returns true when cwd has project-local resources that must be gated by
- * project trust: trust-requiring entries under cwd/.msa, or .agents/skills in
- * cwd or one of its ancestors. Returns false when no such project resources
- * exist. The user/global ~/.agents/skills directory is always treated as a
- * trusted user resource and is ignored here, even when cwd is $HOME.
- */
 export function hasTrustRequiringProjectResources(cwd: string): boolean {
-  const homeDir = canonicalizePath(resolvePath(process.env["HOME"] || homedir()));
+  const homeDir = canonicalizePath(resolvePath(readEnv("HOME") || homedir()));
   const userAgentsSkillsDir = join(homeDir, ".agents", "skills");
   let currentDir = canonicalizePath(resolvePath(cwd));
 

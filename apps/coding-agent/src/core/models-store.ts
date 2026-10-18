@@ -1,12 +1,13 @@
-import { join } from "node:path";
-
 import type { ModelsStore, ModelsStoreEntry, ModelsStoreOperationOptions } from "@msa/ai";
+import * as Effect from "effect/Effect";
 
 import { getAgentDir } from "../config.ts";
 import { raceWithAbortSignal } from "../utils/abort.ts";
 import { getFileRevision, normalizePath } from "../utils/paths.ts";
 import { stripBom } from "../utils/text.ts";
 import { type AuthStorageBackend, FileAuthStorageBackend } from "./auth-storage.ts";
+import { awaited, awaitingWith, performed } from "./awaiting.ts";
+import { join } from "./platform-node.ts";
 
 type StoredModels = Record<string, ModelsStoreEntry>;
 
@@ -22,37 +23,47 @@ type ModelsFileReadState = {
   reload?: ModelsFileReload | undefined;
 };
 
-// Optimize the common path without retaining an unbounded set of custom paths.
 let sharedModelsFileReadState: { path: string; readState: ModelsFileReadState } | undefined;
 
 export class InMemoryCodingAgentModelsStore implements ModelsStore {
   private readonly entries = new Map<string, ModelsStoreEntry>();
 
-  async read(
+  read(
     providerId: string,
     options?: ModelsStoreOperationOptions,
   ): Promise<ModelsStoreEntry | undefined> {
-    options?.signal?.throwIfAborted();
-    const entry = this.entries.get(providerId);
-    return entry ? structuredClone(entry) : undefined;
+    return Effect.runPromise(
+      Effect.sync(() => {
+        options?.signal?.throwIfAborted();
+        const entry = this.entries.get(providerId);
+        return entry === undefined ? undefined : structuredClone(entry);
+      }),
+    );
   }
 
-  async write(
+  write(
     providerId: string,
     entry: ModelsStoreEntry,
     options?: ModelsStoreOperationOptions,
   ): Promise<void> {
-    options?.signal?.throwIfAborted();
-    this.entries.set(providerId, structuredClone(entry));
+    return Effect.runPromise(
+      Effect.sync(() => {
+        options?.signal?.throwIfAborted();
+        this.entries.set(providerId, structuredClone(entry));
+      }),
+    );
   }
 
-  async delete(providerId: string, options?: ModelsStoreOperationOptions): Promise<void> {
-    options?.signal?.throwIfAborted();
-    this.entries.delete(providerId);
+  delete(providerId: string, options?: ModelsStoreOperationOptions): Promise<void> {
+    return Effect.runPromise(
+      Effect.sync(() => {
+        options?.signal?.throwIfAborted();
+        this.entries.delete(providerId);
+      }),
+    );
   }
 }
 
-/** Locked JSON-backed storage for dynamically refreshed provider catalogs. */
 export class FileModelsStore implements ModelsStore {
   private readonly storage: AuthStorageBackend;
   private readonly path: string;
@@ -65,13 +76,15 @@ export class FileModelsStore implements ModelsStore {
       sharedModelsFileReadState?.path === this.path
         ? sharedModelsFileReadState.readState
         : { data: {} };
-    if (!sharedModelsFileReadState) {
+    if (sharedModelsFileReadState === undefined) {
       sharedModelsFileReadState = { path: this.path, readState: this.readState };
     }
   }
 
   private parse(content: string | undefined): StoredModels {
-    return content ? (JSON.parse(stripBom(content)) as StoredModels) : {};
+    return content !== undefined && content !== ""
+      ? (JSON.parse(stripBom(content)) as StoredModels)
+      : {};
   }
 
   private updateReadState(
@@ -87,83 +100,125 @@ export class FileModelsStore implements ModelsStore {
     readState: ModelsFileReadState,
     options?: ModelsStoreOperationOptions,
   ): Promise<StoredModels> {
-    return this.storage.withLockAsync(async (content) => {
-      const data = this.parse(content);
-      this.updateReadState(readState, data, getFileRevision(this.path));
-      return { result: data };
-    }, options);
+    return this.storage.withLockAsync(
+      (content) =>
+        Effect.runPromise(
+          Effect.sync(() => {
+            const data = this.parse(content);
+            this.updateReadState(readState, data, getFileRevision(this.path));
+            return { result: data };
+          }),
+        ),
+      options,
+    );
   }
 
-  private async readLatest(
+  private readLatest(
     readState: ModelsFileReadState,
     options?: ModelsStoreOperationOptions,
-  ): Promise<StoredModels> {
-    options?.signal?.throwIfAborted();
-    const revision = getFileRevision(this.path);
-    if (revision !== undefined && revision === readState.revision) return readState.data;
-    if (!readState.reload) {
-      const controller = new AbortController();
-      const reload: ModelsFileReload = {
-        controller,
-        promise: this.reloadFromStorage(readState, { signal: controller.signal }),
-        readers: 0,
-      };
-      readState.reload = reload;
-      void reload.promise.then(
-        () => {
-          if (readState.reload === reload) readState.reload = undefined;
-        },
-        () => {
-          if (readState.reload === reload) readState.reload = undefined;
-        },
-      );
-    }
-
-    const reload = readState.reload;
-    reload.readers++;
-    try {
-      return await raceWithAbortSignal(reload.promise, options?.signal);
-    } finally {
-      reload.readers--;
-      if (reload.readers === 0 && readState.reload === reload) {
-        readState.reload = undefined;
-        reload.controller.abort();
+  ): Effect.Effect<StoredModels> {
+    return awaitingWith(function* () {
+      options?.signal?.throwIfAborted();
+      const revision = getFileRevision(this.path);
+      if (revision !== undefined && revision === readState.revision) return readState.data;
+      if (readState.reload === undefined) {
+        const controller = new AbortController();
+        const reload: ModelsFileReload = {
+          controller,
+          promise: this.reloadFromStorage(readState, { signal: controller.signal }),
+          readers: 0,
+        };
+        readState.reload = reload;
+        void reload.promise.then(
+          () => {
+            if (readState.reload === reload) readState.reload = undefined;
+            return undefined;
+          },
+          () => {
+            if (readState.reload === reload) readState.reload = undefined;
+            return undefined;
+          },
+        );
       }
-    }
+
+      const reload = readState.reload;
+      reload.readers++;
+      try {
+        return yield* awaited(raceWithAbortSignal(reload.promise, options?.signal));
+      } finally {
+        reload.readers--;
+        if (reload.readers === 0 && readState.reload === reload) {
+          readState.reload = undefined;
+          reload.controller.abort();
+        }
+      }
+    }, this);
   }
 
-  async read(
+  read(
     providerId: string,
     options?: ModelsStoreOperationOptions,
   ): Promise<ModelsStoreEntry | undefined> {
-    const entry = (await this.readLatest(this.readState, options))[providerId];
-    options?.signal?.throwIfAborted();
-    return entry ? structuredClone(entry) : undefined;
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        const entry = (yield* performed(this.readLatest(this.readState, options)))[providerId];
+        options?.signal?.throwIfAborted();
+        return entry === undefined ? undefined : structuredClone(entry);
+      }, this),
+    );
   }
 
-  async write(
+  write(
     providerId: string,
     entry: ModelsStoreEntry,
     options?: ModelsStoreOperationOptions,
   ): Promise<void> {
-    let latest: StoredModels | undefined;
-    await this.storage.withLockAsync(async (content) => {
-      const current = this.parse(content);
-      current[providerId] = structuredClone(entry);
-      latest = current;
-      return { result: undefined, next: JSON.stringify(current, null, 2) };
-    }, options);
-    if (latest) this.updateReadState(this.readState, latest);
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        let latest: StoredModels | undefined;
+        yield* awaited(
+          this.storage.withLockAsync(
+            (content) =>
+              Effect.runPromise(
+                Effect.sync(() => {
+                  const current = this.parse(content);
+                  current[providerId] = structuredClone(entry);
+                  latest = current;
+                  return { result: undefined, next: prettyJson(current) };
+                }),
+              ),
+            options,
+          ),
+        );
+        if (latest !== undefined) this.updateReadState(this.readState, latest);
+      }, this),
+    );
   }
 
-  async delete(providerId: string, options?: ModelsStoreOperationOptions): Promise<void> {
-    let latest: StoredModels | undefined;
-    await this.storage.withLockAsync(async (content) => {
-      const current = this.parse(content);
-      delete current[providerId];
-      latest = current;
-      return { result: undefined, next: JSON.stringify(current, null, 2) };
-    }, options);
-    if (latest) this.updateReadState(this.readState, latest);
+  delete(providerId: string, options?: ModelsStoreOperationOptions): Promise<void> {
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        let latest: StoredModels | undefined;
+        yield* awaited(
+          this.storage.withLockAsync(
+            (content) =>
+              Effect.runPromise(
+                Effect.sync(() => {
+                  const current = this.parse(content);
+                  delete current[providerId];
+                  latest = current;
+                  return { result: undefined, next: prettyJson(current) };
+                }),
+              ),
+            options,
+          ),
+        );
+        if (latest !== undefined) this.updateReadState(this.readState, latest);
+      }, this),
+    );
   }
+}
+
+function prettyJson(value: unknown): string {
+  return JSON.stringify(value, null, 2);
 }

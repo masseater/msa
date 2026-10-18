@@ -1,5 +1,4 @@
 import type { ChildProcess, ChildProcessByStdio } from "node:child_process";
-import { createHash } from "node:crypto";
 import {
   chmodSync,
   existsSync,
@@ -13,7 +12,10 @@ import {
 } from "node:fs";
 import { homedir } from "node:os";
 
+import * as Effect from "effect/Effect";
+
 import { toErrorMessage } from "../utils/errors.ts";
+import { awaited, awaiting, awaitingWith, performed } from "./awaiting.ts";
 
 function getEnv(): NodeJS.ProcessEnv {
   if (process.platform !== "linux" || Object.keys(process.env).length > 0) {
@@ -34,7 +36,6 @@ function getEnv(): NodeJS.ProcessEnv {
   }
 }
 
-import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import type { Readable } from "node:stream";
 
 import ignore from "ignore";
@@ -54,6 +55,8 @@ import {
 import { stripBom } from "../utils/text.ts";
 import { type MsaManifest, readMsaManifest } from "./manifest.ts";
 import { isStdoutTakenOver } from "./output-guard.ts";
+import { basename, dirname, join, relative, resolve, sep, sha256Hex } from "./platform-node.ts";
+import { readEnv, schedule } from "./platform.ts";
 import type { PackageSource, SettingsManager } from "./settings-manager.ts";
 import { BUILTIN_PATH_PREFIX } from "./source-info.ts";
 
@@ -62,8 +65,8 @@ const UPDATE_CHECK_CONCURRENCY = 4;
 const GIT_UPDATE_CONCURRENCY = 4;
 
 function isOfflineModeEnabled(): boolean {
-  const value = process.env["MSA_OFFLINE"];
-  if (!value) return false;
+  const value = readEnv("MSA_OFFLINE");
+  if (value === undefined || value === "") return false;
   return value === "1" || value.toLowerCase() === "true" || value.toLowerCase() === "yes";
 }
 
@@ -72,7 +75,7 @@ function isExactNpmVersion(version: string | undefined): boolean {
 }
 
 function getNpmVersionRange(version: string | undefined): string | undefined {
-  return version ? (validRange(version) ?? undefined) : undefined;
+  return version !== undefined && version !== "" ? (validRange(version) ?? undefined) : undefined;
 }
 
 export interface PathMetadata {
@@ -143,7 +146,6 @@ interface PackageManagerOptions {
   cwd: string;
   agentDir: string;
   settingsManager: SettingsManager;
-  /** Names of built-in extensions, resolved as `builtin:<name>` extension resources. */
   builtinExtensions?: string[];
 }
 
@@ -187,20 +189,7 @@ interface ResourceAccumulator {
   themes: Map<string, { metadata: PathMetadata; enabled: boolean }>;
 }
 
-/**
- * Compute a numeric precedence rank for a resource based on its metadata.
- * Lower rank = higher precedence. Used to sort resolved resources so that
- * name-collision resolution ("first wins") produces the correct outcome.
- *
- * Precedence (highest to lowest):
- *   0  project + settings entry (source: "local", scope: "project")
- *   1  project + auto-discovered (source: "auto", scope: "project")
- *   2  user + settings entry (source: "local", scope: "user")
- *   3  user + auto-discovered (source: "auto", scope: "user")
- *   4  package resource (origin: "package")
- */
 function resourcePrecedenceRank(m: PathMetadata): number {
-  // Built-in extensions load after file and package extensions, whichever scope enables them.
   if (m.source === "builtin") return 5;
   if (m.origin === "package") return 4;
   const scopeBase = m.scope === "project" ? 0 : 2;
@@ -220,10 +209,10 @@ type ResourceType = "extensions" | "skills" | "prompts" | "themes";
 const RESOURCE_TYPES: ResourceType[] = ["extensions", "skills", "prompts", "themes"];
 
 const FILE_PATTERNS: Record<ResourceType, RegExp> = {
-  extensions: /\.(ts|js)$/,
-  skills: /\.md$/,
-  prompts: /\.md$/,
-  themes: /\.json$/,
+  extensions: /\.(ts|js)$/u,
+  skills: /\.md$/u,
+  prompts: /\.md$/u,
+  themes: /\.json$/u,
 };
 
 const IGNORE_FILE_NAMES = [".gitignore", ".ignore", ".fdignore"];
@@ -235,7 +224,7 @@ function toPosixPath(p: string): string {
 }
 
 function getHomeDir(): string {
-  return process.env["HOME"] || homedir();
+  return readEnv("HOME") || homedir();
 }
 
 export function getExtensionTempFolder(agentDir: string): string {
@@ -247,7 +236,7 @@ export function getExtensionTempFolder(agentDir: string): string {
 
 function prefixIgnorePattern(line: string, prefix: string): string | null {
   const trimmed = line.trim();
-  if (!trimmed) return null;
+  if (trimmed === "") return null;
   if (trimmed.startsWith("#") && !trimmed.startsWith("\\#")) return null;
 
   let pattern = line;
@@ -264,13 +253,13 @@ function prefixIgnorePattern(line: string, prefix: string): string | null {
     pattern = pattern.slice(1);
   }
 
-  const prefixed = prefix ? `${prefix}${pattern}` : pattern;
+  const prefixed = prefix === "" ? pattern : `${prefix}${pattern}`;
   return negated ? `!${prefixed}` : prefixed;
 }
 
 function addIgnoreRules(ig: IgnoreMatcher, dir: string, rootDir: string): void {
   const relativeDir = relative(rootDir, dir);
-  const prefix = relativeDir ? `${toPosixPath(relativeDir)}/` : "";
+  const prefix = relativeDir === "" ? "" : `${toPosixPath(relativeDir)}/`;
 
   for (const filename of IGNORE_FILE_NAMES) {
     const ignorePath = join(dir, filename);
@@ -278,7 +267,7 @@ function addIgnoreRules(ig: IgnoreMatcher, dir: string, rootDir: string): void {
     try {
       const content = readFileSync(ignorePath, "utf-8");
       const patterns = content
-        .split(/\r?\n/)
+        .split(/\r?\n/u)
         .map((line) => prefixIgnorePattern(line, prefix))
         .filter((line): line is string => Boolean(line));
       if (patterns.length > 0) {
@@ -306,7 +295,6 @@ function hasGlobPattern(s: string): boolean {
   return s.includes("*") || s.includes("?");
 }
 
-/** Glob entries discover visible paths; exact entries can target dot paths or symlinked trees. */
 function expandPackageGlob(pattern: string, root: string): string[] {
   return globSync(pattern, { cwd: root })
     .map((match) => resolve(root, match))
@@ -375,9 +363,7 @@ function collectFiles(
         files.push(fullPath);
       }
     }
-  } catch {
-    // Ignore errors
-  }
+  } catch {}
 
   return files;
 }
@@ -456,9 +442,7 @@ function collectSkillEntries(
 
       entries.push(...collectSkillEntries(fullPath, mode, ig, root));
     }
-  } catch {
-    // Ignore errors
-  }
+  } catch {}
 
   return entries;
 }
@@ -489,7 +473,7 @@ function collectAncestorAgentsSkillDirs(startDir: string): string[] {
   let dir = resolvedStartDir;
   while (true) {
     skillDirs.push(join(dir, ".agents", "skills"));
-    if (gitRepoRoot && dir === gitRepoRoot) {
+    if (gitRepoRoot !== null && gitRepoRoot !== "" && dir === gitRepoRoot) {
       break;
     }
     const parent = dirname(dir);
@@ -532,9 +516,7 @@ function collectAutoPromptEntries(dir: string): string[] {
         entries.push(fullPath);
       }
     }
-  } catch {
-    // Ignore errors
-  }
+  } catch {}
 
   return entries;
 }
@@ -569,9 +551,7 @@ function collectAutoThemeEntries(dir: string): string[] {
         entries.push(fullPath);
       }
     }
-  } catch {
-    // Ignore errors
-  }
+  } catch {}
 
   return entries;
 }
@@ -580,7 +560,7 @@ function resolveExtensionEntries(dir: string): string[] | null {
   const packageJsonPath = join(dir, "package.json");
   if (existsSync(packageJsonPath)) {
     const manifest = readMsaManifest(packageJsonPath);
-    if (manifest?.extensions?.length) {
+    if (manifest?.extensions?.length !== undefined && manifest?.extensions?.length !== 0) {
       const entries: string[] = [];
       for (const extPath of manifest.extensions) {
         const resolvedExtPath = resolve(dir, extPath);
@@ -610,13 +590,11 @@ function collectAutoExtensionEntries(dir: string): string[] {
   const entries: string[] = [];
   if (!existsSync(dir)) return entries;
 
-  // First check if this directory itself has explicit extension entries (package.json or index)
   const rootEntries = resolveExtensionEntries(dir);
-  if (rootEntries) {
+  if (rootEntries !== null) {
     return rootEntries;
   }
 
-  // Otherwise, discover extensions from directory contents
   const ig = ignore();
   addIgnoreRules(ig, dir, dir);
 
@@ -648,22 +626,16 @@ function collectAutoExtensionEntries(dir: string): string[] {
         entries.push(fullPath);
       } else if (isDir) {
         const resolvedEntries = resolveExtensionEntries(fullPath);
-        if (resolvedEntries) {
+        if (resolvedEntries !== null) {
           entries.push(...resolvedEntries);
         }
       }
     }
-  } catch {
-    // Ignore errors
-  }
+  } catch {}
 
   return entries;
 }
 
-/**
- * Collect resource files from a directory based on resource type.
- * Extensions use smart discovery (index.ts in subdirs), others use recursive collection.
- */
 function collectResourceFiles(dir: string, resourceType: ResourceType): string[] {
   if (resourceType === "skills") {
     return collectSkillEntries(dir, "msa");
@@ -759,14 +731,6 @@ function isEnabledByOverrides(filePath: string, patterns: string[], baseDir: str
   return enabled;
 }
 
-/**
- * Apply patterns to paths and return a Set of enabled paths.
- * Pattern types:
- * - Plain patterns: include matching paths
- * - `!pattern`: exclude matching paths
- * - `+path`: force-include exact path (overrides exclusions)
- * - `-path`: force-exclude exact path (overrides force-includes)
- */
 function applyPatterns(allPaths: string[], patterns: string[], baseDir: string): Set<string> {
   const includes: string[] = [];
   const excludes: string[] = [];
@@ -785,7 +749,6 @@ function applyPatterns(allPaths: string[], patterns: string[], baseDir: string):
     }
   }
 
-  // Step 1: Apply includes (or all if no includes)
   let result: string[];
   if (includes.length === 0) {
     result = [...allPaths];
@@ -793,12 +756,10 @@ function applyPatterns(allPaths: string[], patterns: string[], baseDir: string):
     result = allPaths.filter((filePath) => matchesAnyPattern(filePath, includes, baseDir));
   }
 
-  // Step 2: Apply excludes
   if (excludes.length > 0) {
     result = result.filter((filePath) => !matchesAnyPattern(filePath, excludes, baseDir));
   }
 
-  // Step 3: Force-include (add back from allPaths, overriding exclusions)
   if (forceIncludes.length > 0) {
     for (const filePath of allPaths) {
       if (!result.includes(filePath) && matchesAnyExactPattern(filePath, forceIncludes, baseDir)) {
@@ -807,7 +768,6 @@ function applyPatterns(allPaths: string[], patterns: string[], baseDir: string):
     }
   }
 
-  // Step 4: Force-exclude (remove even if included or force-included)
   if (forceExcludes.length > 0) {
     result = result.filter((filePath) => !matchesAnyExactPattern(filePath, forceExcludes, baseDir));
   }
@@ -861,7 +821,7 @@ export class DefaultPackageManager implements PackageManager {
   }
 
   addSourceToSettings(source: string, options?: { local?: boolean }): boolean {
-    const scope: SourceScope = options?.local ? "project" : "user";
+    const scope: SourceScope = options?.local === true ? "project" : "user";
     const currentSettings =
       scope === "project"
         ? this.settingsManager.getProjectSettings()
@@ -896,7 +856,7 @@ export class DefaultPackageManager implements PackageManager {
   }
 
   removeSourceFromSettings(source: string, options?: { local?: boolean }): boolean {
-    const scope: SourceScope = options?.local ? "project" : "user";
+    const scope: SourceScope = options?.local === true ? "project" : "user";
     const currentSettings =
       scope === "project"
         ? this.settingsManager.getProjectSettings()
@@ -939,131 +899,133 @@ export class DefaultPackageManager implements PackageManager {
     this.progressCallback?.(event);
   }
 
-  private async withProgress(
+  private withProgress(
     action: ProgressEvent["action"],
     source: string,
     message: string,
     operation: () => Promise<void>,
-  ): Promise<void> {
-    this.emitProgress({ type: "start", action, source, message });
-    try {
-      await operation();
-      this.emitProgress({ type: "complete", action, source });
-    } catch (error) {
-      const errorMessage = toErrorMessage(error);
-      this.emitProgress({ type: "error", action, source, message: errorMessage });
-      throw error;
-    }
+  ): Effect.Effect<void> {
+    return awaitingWith(function* () {
+      this.emitProgress({ type: "start", action, source, message });
+      try {
+        yield* awaited(operation());
+        this.emitProgress({ type: "complete", action, source });
+      } catch (error) {
+        const errorMessage = toErrorMessage(error);
+        this.emitProgress({ type: "error", action, source, message: errorMessage });
+        throw error;
+      }
+    }, this);
   }
 
-  async resolve(
-    onMissing?: (source: string) => Promise<MissingSourceAction>,
-  ): Promise<ResolvedPaths> {
-    const accumulator = this.createAccumulator();
-    const globalSettings = this.settingsManager.getGlobalSettings();
-    const projectSettings = this.settingsManager.getProjectSettings();
+  resolve(onMissing?: (source: string) => Promise<MissingSourceAction>): Promise<ResolvedPaths> {
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        const accumulator = this.createAccumulator();
+        const globalSettings = this.settingsManager.getGlobalSettings();
+        const projectSettings = this.settingsManager.getProjectSettings();
 
-    // Collect all packages with scope (project first so cwd resources win collisions)
-    const allPackages: Array<{ pkg: PackageSource; scope: SourceScope }> = [];
-    for (const pkg of projectSettings.packages ?? []) {
-      allPackages.push({ pkg, scope: "project" });
-    }
-    for (const pkg of globalSettings.packages ?? []) {
-      allPackages.push({ pkg, scope: "user" });
-    }
+        const allPackages: Array<{ pkg: PackageSource; scope: SourceScope }> = [];
+        for (const pkg of projectSettings.packages ?? []) {
+          allPackages.push({ pkg, scope: "project" });
+        }
+        for (const pkg of globalSettings.packages ?? []) {
+          allPackages.push({ pkg, scope: "user" });
+        }
 
-    // Dedupe: project scope wins over global for same package identity
-    const packageSources = this.dedupePackages(allPackages);
-    await this.resolvePackageSources(packageSources, accumulator, onMissing);
+        const packageSources = this.dedupePackages(allPackages);
+        yield* performed(this.resolvePackageSources(packageSources, accumulator, onMissing));
 
-    const globalBaseDir = this.agentDir;
-    const projectBaseDir = join(this.cwd, CONFIG_DIR_NAME);
+        const globalBaseDir = this.agentDir;
+        const projectBaseDir = join(this.cwd, CONFIG_DIR_NAME);
 
-    for (const resourceType of RESOURCE_TYPES) {
-      const target = this.getTargetMap(accumulator, resourceType);
-      const globalEntries = (globalSettings[resourceType] ?? []) as string[];
-      const projectEntries = (projectSettings[resourceType] ?? []) as string[];
-      this.resolveLocalEntries(
-        projectEntries,
-        resourceType,
-        target,
-        {
-          source: "local",
-          scope: "project",
-          origin: "top-level",
-        },
-        projectBaseDir,
-      );
-      this.resolveLocalEntries(
-        globalEntries,
-        resourceType,
-        target,
-        {
-          source: "local",
-          scope: "user",
-          origin: "top-level",
-        },
-        globalBaseDir,
-      );
-    }
+        for (const resourceType of RESOURCE_TYPES) {
+          const target = this.getTargetMap(accumulator, resourceType);
+          const globalEntries = (globalSettings[resourceType] ?? []) as string[];
+          const projectEntries = (projectSettings[resourceType] ?? []) as string[];
+          this.resolveLocalEntries(
+            projectEntries,
+            resourceType,
+            target,
+            {
+              source: "local",
+              scope: "project",
+              origin: "top-level",
+            },
+            projectBaseDir,
+          );
+          this.resolveLocalEntries(
+            globalEntries,
+            resourceType,
+            target,
+            {
+              source: "local",
+              scope: "user",
+              origin: "top-level",
+            },
+            globalBaseDir,
+          );
+        }
 
-    this.addAutoDiscoveredResources(
-      accumulator,
-      globalSettings,
-      projectSettings,
-      globalBaseDir,
-      projectBaseDir,
+        this.addAutoDiscoveredResources(
+          accumulator,
+          globalSettings,
+          projectSettings,
+          globalBaseDir,
+          projectBaseDir,
+        );
+
+        for (const name of this.builtinExtensions) {
+          const path = `${BUILTIN_PATH_PREFIX}${name}`;
+          const projectEnabled = applyAutoloadDisabledPatterns(
+            [path],
+            getOverridePatterns(projectSettings.extensions ?? []),
+            projectBaseDir,
+          ).get(path);
+          this.addResource(
+            accumulator.extensions,
+            path,
+            {
+              source: "builtin",
+              scope: projectEnabled === undefined ? "user" : "project",
+              origin: "top-level",
+            },
+            projectEnabled ??
+              isEnabledByOverrides(path, globalSettings.extensions ?? [], globalBaseDir),
+          );
+        }
+
+        return this.toResolvedPaths(accumulator);
+      }, this),
     );
-
-    // Built-in extensions are enabled unless the user `extensions` setting excludes them, for example
-    // with `-builtin:mcp`. A matching `+`, `-`, or `!` entry in the project setting overrides that.
-    for (const name of this.builtinExtensions) {
-      const path = `${BUILTIN_PATH_PREFIX}${name}`;
-      const projectEnabled = applyAutoloadDisabledPatterns(
-        [path],
-        getOverridePatterns(projectSettings.extensions ?? []),
-        projectBaseDir,
-      ).get(path);
-      this.addResource(
-        accumulator.extensions,
-        path,
-        {
-          source: "builtin",
-          scope: projectEnabled === undefined ? "user" : "project",
-          origin: "top-level",
-        },
-        projectEnabled ??
-          isEnabledByOverrides(path, globalSettings.extensions ?? [], globalBaseDir),
-      );
-    }
-
-    return this.toResolvedPaths(accumulator);
   }
 
-  async resolveExtensionSources(
+  resolveExtensionSources(
     sources: string[],
     options?: { local?: boolean; temporary?: boolean },
   ): Promise<ResolvedPaths> {
-    const accumulator = this.createAccumulator();
-    const scope: SourceScope = options?.temporary
-      ? "temporary"
-      : options?.local
-        ? "project"
-        : "user";
-    // `-e builtin:<name>` loads a built-in extension; the resource loader reports unknown names.
-    for (const source of sources.filter((candidate) => candidate.startsWith(BUILTIN_PATH_PREFIX))) {
-      this.addResource(
-        accumulator.extensions,
-        source,
-        { source: "builtin", scope, origin: "top-level" },
-        true,
-      );
-    }
-    const packageSources = sources
-      .filter((source) => !source.startsWith(BUILTIN_PATH_PREFIX))
-      .map((source) => ({ pkg: source as PackageSource, scope }));
-    await this.resolvePackageSources(packageSources, accumulator);
-    return this.toResolvedPaths(accumulator);
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        const accumulator = this.createAccumulator();
+        const scope: SourceScope =
+          options?.temporary === true ? "temporary" : options?.local === true ? "project" : "user";
+        for (const source of sources.filter((candidate) =>
+          candidate.startsWith(BUILTIN_PATH_PREFIX),
+        )) {
+          this.addResource(
+            accumulator.extensions,
+            source,
+            { source: "builtin", scope, origin: "top-level" },
+            true,
+          );
+        }
+        const packageSources = sources
+          .filter((source) => !source.startsWith(BUILTIN_PATH_PREFIX))
+          .map((source) => ({ pkg: source as PackageSource, scope }));
+        yield* performed(this.resolvePackageSources(packageSources, accumulator));
+        return this.toResolvedPaths(accumulator);
+      }, this),
+    );
   }
 
   listConfiguredPackages(): ConfiguredPackage[] {
@@ -1094,330 +1056,431 @@ export class DefaultPackageManager implements PackageManager {
     return configuredPackages;
   }
 
-  async install(source: string, options?: { local?: boolean }): Promise<void> {
-    const parsed = this.parseSource(source);
-    const scope: SourceScope = options?.local ? "project" : "user";
-    this.assertProjectTrustedForScope(scope);
-    await this.withProgress("install", source, `Installing ${source}...`, async () => {
-      if (parsed.type === "npm") {
-        await this.installNpm(parsed, scope, false);
-        return;
-      }
-      if (parsed.type === "git") {
-        await this.installGit(parsed, scope);
-        return;
-      }
-      if (parsed.type === "local") {
-        const resolved = this.resolvePath(parsed.path);
-        if (!existsSync(resolved)) {
-          throw new Error(`Path does not exist: ${resolved}`);
+  install(source: string, options?: { local?: boolean }): Promise<void> {
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        const parsed = this.parseSource(source);
+        const scope: SourceScope = options?.local === true ? "project" : "user";
+        this.assertProjectTrustedForScope(scope);
+        yield* performed(
+          this.withProgress("install", source, `Installing ${source}...`, () =>
+            Effect.runPromise(
+              awaitingWith(function* () {
+                if (parsed.type === "npm") {
+                  yield* performed(this.installNpm(parsed, scope, false));
+                  return;
+                }
+                if (parsed.type === "git") {
+                  yield* performed(this.installGit(parsed, scope));
+                  return;
+                }
+                if (parsed.type === "local") {
+                  const resolved = this.resolvePath(parsed.path);
+                  if (!existsSync(resolved)) {
+                    throw new Error(`Path does not exist: ${resolved}`);
+                  }
+                  return;
+                }
+                throw new Error(`Unsupported install source: ${source}`);
+              }, this),
+            ),
+          ),
+        );
+      }, this),
+    );
+  }
+
+  installAndPersist(source: string, options?: { local?: boolean }): Promise<void> {
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        yield* awaited(this.install(source, options));
+        this.addSourceToSettings(source, options);
+      }, this),
+    );
+  }
+
+  remove(source: string, options?: { local?: boolean }): Promise<void> {
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        const parsed = this.parseSource(source);
+        const scope: SourceScope = options?.local === true ? "project" : "user";
+        this.assertProjectTrustedForScope(scope);
+        yield* performed(
+          this.withProgress("remove", source, `Removing ${source}...`, () =>
+            Effect.runPromise(
+              awaitingWith(function* () {
+                if (parsed.type === "npm") {
+                  yield* performed(this.uninstallNpm(parsed, scope));
+                  return;
+                }
+                if (parsed.type === "git") {
+                  yield* performed(this.removeGit(parsed, scope));
+                  return;
+                }
+                if (parsed.type === "local") {
+                  return;
+                }
+                throw new Error(`Unsupported remove source: ${source}`);
+              }, this),
+            ),
+          ),
+        );
+      }, this),
+    );
+  }
+
+  removeAndPersist(source: string, options?: { local?: boolean }): Promise<boolean> {
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        yield* awaited(this.remove(source, options));
+        return this.removeSourceFromSettings(source, options);
+      }, this),
+    );
+  }
+
+  update(source?: string): Promise<void> {
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        const globalSettings = this.settingsManager.getGlobalSettings();
+        const projectSettings = this.settingsManager.getProjectSettings();
+        const identity =
+          source !== undefined && source !== "" ? this.getPackageIdentity(source) : undefined;
+        let matched = false;
+        const updateSources: ConfiguredUpdateSource[] = [];
+
+        for (const pkg of globalSettings.packages ?? []) {
+          const sourceStr = typeof pkg === "string" ? pkg : pkg.source;
+          if (
+            identity !== undefined &&
+            identity !== "" &&
+            this.getPackageIdentity(sourceStr, "user") !== identity
+          )
+            continue;
+          matched = true;
+          updateSources.push({ source: sourceStr, scope: "user" });
         }
-        return;
-      }
-      throw new Error(`Unsupported install source: ${source}`);
-    });
-  }
-
-  async installAndPersist(source: string, options?: { local?: boolean }): Promise<void> {
-    await this.install(source, options);
-    this.addSourceToSettings(source, options);
-  }
-
-  async remove(source: string, options?: { local?: boolean }): Promise<void> {
-    const parsed = this.parseSource(source);
-    const scope: SourceScope = options?.local ? "project" : "user";
-    this.assertProjectTrustedForScope(scope);
-    await this.withProgress("remove", source, `Removing ${source}...`, async () => {
-      if (parsed.type === "npm") {
-        await this.uninstallNpm(parsed, scope);
-        return;
-      }
-      if (parsed.type === "git") {
-        await this.removeGit(parsed, scope);
-        return;
-      }
-      if (parsed.type === "local") {
-        return;
-      }
-      throw new Error(`Unsupported remove source: ${source}`);
-    });
-  }
-
-  async removeAndPersist(source: string, options?: { local?: boolean }): Promise<boolean> {
-    await this.remove(source, options);
-    return this.removeSourceFromSettings(source, options);
-  }
-
-  async update(source?: string): Promise<void> {
-    const globalSettings = this.settingsManager.getGlobalSettings();
-    const projectSettings = this.settingsManager.getProjectSettings();
-    const identity = source ? this.getPackageIdentity(source) : undefined;
-    let matched = false;
-    const updateSources: ConfiguredUpdateSource[] = [];
-
-    for (const pkg of globalSettings.packages ?? []) {
-      const sourceStr = typeof pkg === "string" ? pkg : pkg.source;
-      if (identity && this.getPackageIdentity(sourceStr, "user") !== identity) continue;
-      matched = true;
-      updateSources.push({ source: sourceStr, scope: "user" });
-    }
-    for (const pkg of projectSettings.packages ?? []) {
-      const sourceStr = typeof pkg === "string" ? pkg : pkg.source;
-      if (identity && this.getPackageIdentity(sourceStr, "project") !== identity) continue;
-      matched = true;
-      updateSources.push({ source: sourceStr, scope: "project" });
-    }
-
-    if (source && !matched) {
-      throw new Error(
-        this.buildNoMatchingPackageMessage(source, [
-          ...(globalSettings.packages ?? []),
-          ...(projectSettings.packages ?? []),
-        ]),
-      );
-    }
-
-    await this.updateConfiguredSources(updateSources);
-  }
-
-  private async updateConfiguredSources(sources: ConfiguredUpdateSource[]): Promise<void> {
-    if (isOfflineModeEnabled() || sources.length === 0) {
-      return;
-    }
-
-    const npmCandidates: NpmUpdateTarget[] = [];
-    const gitCandidates: GitUpdateTarget[] = [];
-
-    for (const entry of sources) {
-      const parsed = this.parseSource(entry.source);
-      // Pinned npm versions are fixed. Pinned git refs are configured checkout targets,
-      // so include them to reconcile an existing clone when the configured ref changes.
-      if (parsed.type === "npm") {
-        if (!parsed.pinned) {
-          npmCandidates.push({ ...entry, parsed });
+        for (const pkg of projectSettings.packages ?? []) {
+          const sourceStr = typeof pkg === "string" ? pkg : pkg.source;
+          if (
+            identity !== undefined &&
+            identity !== "" &&
+            this.getPackageIdentity(sourceStr, "project") !== identity
+          )
+            continue;
+          matched = true;
+          updateSources.push({ source: sourceStr, scope: "project" });
         }
-      } else if (parsed.type === "git") {
-        gitCandidates.push({ ...entry, parsed });
-      }
-    }
 
-    const npmCheckTasks = npmCandidates.map((entry) => async () => ({
-      entry,
-      shouldUpdate: await this.shouldUpdateNpmSource(entry.parsed, entry.scope),
-    }));
-    const npmCheckResults = await this.runWithConcurrency(npmCheckTasks, UPDATE_CHECK_CONCURRENCY);
-    const userNpmUpdates: NpmUpdateTarget[] = [];
-    const projectNpmUpdates: NpmUpdateTarget[] = [];
-    for (const result of npmCheckResults) {
-      if (!result.shouldUpdate) {
-        continue;
-      }
-      if (result.entry.scope === "user") {
-        userNpmUpdates.push(result.entry);
-      } else {
-        projectNpmUpdates.push(result.entry);
-      }
-    }
+        if (source !== undefined && source !== "" && !matched) {
+          throw new Error(
+            this.buildNoMatchingPackageMessage(source, [
+              ...(globalSettings.packages ?? []),
+              ...(projectSettings.packages ?? []),
+            ]),
+          );
+        }
 
-    const tasks: Promise<void>[] = [];
-    if (userNpmUpdates.length > 0) {
-      tasks.push(this.updateNpmBatch(userNpmUpdates, "user"));
-    }
-    if (projectNpmUpdates.length > 0) {
-      tasks.push(this.updateNpmBatch(projectNpmUpdates, "project"));
-    }
-    if (gitCandidates.length > 0) {
-      const gitTasks = gitCandidates.map(
-        (entry) => async () =>
-          this.withProgress("update", entry.source, `Updating ${entry.source}...`, async () => {
-            await this.updateGit(entry.parsed, entry.scope);
-          }),
-      );
-      tasks.push(this.runWithConcurrency(gitTasks, GIT_UPDATE_CONCURRENCY).then(() => {}));
-    }
-
-    await Promise.all(tasks);
+        yield* performed(this.updateConfiguredSources(updateSources));
+      }, this),
+    );
   }
 
-  private async shouldUpdateNpmSource(
+  private updateConfiguredSources(sources: ConfiguredUpdateSource[]): Effect.Effect<void> {
+    return awaitingWith(function* () {
+      if (isOfflineModeEnabled() || sources.length === 0) {
+        return;
+      }
+
+      const npmCandidates: NpmUpdateTarget[] = [];
+      const gitCandidates: GitUpdateTarget[] = [];
+
+      for (const entry of sources) {
+        const parsed = this.parseSource(entry.source);
+        if (parsed.type === "npm") {
+          if (!parsed.pinned) {
+            npmCandidates.push({ ...entry, parsed });
+          }
+        } else if (parsed.type === "git") {
+          gitCandidates.push({ ...entry, parsed });
+        }
+      }
+
+      const npmCheckTasks = npmCandidates.map(
+        (entry) => () =>
+          Effect.runPromise(
+            awaitingWith(function* () {
+              return {
+                entry,
+                shouldUpdate: yield* performed(
+                  this.shouldUpdateNpmSource(entry.parsed, entry.scope),
+                ),
+              };
+            }, this),
+          ),
+      );
+      const npmCheckResults = yield* performed(
+        this.runWithConcurrency(npmCheckTasks, UPDATE_CHECK_CONCURRENCY),
+      );
+      const userNpmUpdates: NpmUpdateTarget[] = [];
+      const projectNpmUpdates: NpmUpdateTarget[] = [];
+      for (const result of npmCheckResults) {
+        if (!result.shouldUpdate) {
+          continue;
+        }
+        if (result.entry.scope === "user") {
+          userNpmUpdates.push(result.entry);
+        } else {
+          projectNpmUpdates.push(result.entry);
+        }
+      }
+
+      const tasks: Promise<void>[] = [];
+      if (userNpmUpdates.length > 0) {
+        tasks.push(Effect.runPromise(this.updateNpmBatch(userNpmUpdates, "user")));
+      }
+      if (projectNpmUpdates.length > 0) {
+        tasks.push(Effect.runPromise(this.updateNpmBatch(projectNpmUpdates, "project")));
+      }
+      if (gitCandidates.length > 0) {
+        const gitTasks = gitCandidates.map(
+          (entry) => () =>
+            Effect.runPromise(
+              awaitingWith(function* () {
+                return yield* performed(
+                  this.withProgress("update", entry.source, `Updating ${entry.source}...`, () =>
+                    Effect.runPromise(
+                      awaitingWith(function* () {
+                        yield* awaited(this.updateGit(entry.parsed, entry.scope));
+                      }, this),
+                    ),
+                  ),
+                );
+              }, this),
+            ),
+        );
+        tasks.push(
+          Effect.runPromise(this.runWithConcurrency(gitTasks, GIT_UPDATE_CONCURRENCY)).then(
+            () => undefined,
+          ),
+        );
+      }
+
+      yield* awaited(Promise.all(tasks));
+    }, this);
+  }
+
+  private shouldUpdateNpmSource(
     source: NpmSource,
     scope: InstalledSourceScope,
-  ): Promise<boolean> {
-    const installedPath = this.getManagedNpmInstallPath(source, scope);
-    const installedVersion = existsSync(installedPath)
-      ? this.getInstalledNpmVersion(installedPath)
-      : undefined;
-    if (!installedVersion) {
-      return true;
-    }
+  ): Effect.Effect<boolean> {
+    return awaitingWith(function* () {
+      const installedPath = this.getManagedNpmInstallPath(source, scope);
+      const installedVersion = existsSync(installedPath)
+        ? this.getInstalledNpmVersion(installedPath)
+        : undefined;
+      if (installedVersion === undefined || installedVersion === "") {
+        return true;
+      }
 
-    try {
-      const targetVersion = await this.getLatestNpmVersion(
-        source.version ? source.spec : source.name,
-        source.range,
-      );
-      return gt(targetVersion, installedVersion);
-    } catch {
-      // Preserve existing update behavior when version lookup fails.
-      return true;
-    }
+      try {
+        const targetVersion = yield* awaited(
+          this.getLatestNpmVersion(
+            source.version !== undefined && source.version !== "" ? source.spec : source.name,
+            source.range,
+          ),
+        );
+        return gt(targetVersion, installedVersion);
+      } catch {
+        return true;
+      }
+    }, this);
   }
 
-  private async updateNpmBatch(
+  private updateNpmBatch(
     sources: NpmUpdateTarget[],
     scope: InstalledSourceScope,
-  ): Promise<void> {
-    if (sources.length === 0) {
-      return;
-    }
+  ): Effect.Effect<void> {
+    return awaitingWith(function* () {
+      if (sources.length === 0) {
+        return;
+      }
 
-    const singleSource = sources.length === 1 ? sources[0] : undefined;
-    const sourceLabel = singleSource ? singleSource.source : `${scope} npm packages`;
-    const message = singleSource
-      ? `Updating ${singleSource.source}...`
-      : `Updating ${scope} npm packages...`;
-    const specs = sources.map((entry) =>
-      entry.parsed.version ? entry.parsed.spec : `${entry.parsed.name}@latest`,
+      const singleSource = sources.length === 1 ? sources[0] : undefined;
+      const sourceLabel =
+        singleSource === undefined ? `${scope} npm packages` : singleSource.source;
+      const message =
+        singleSource === undefined
+          ? `Updating ${scope} npm packages...`
+          : `Updating ${singleSource.source}...`;
+      const specs = sources.map((entry) =>
+        entry.parsed.version !== undefined && entry.parsed.version !== ""
+          ? entry.parsed.spec
+          : `${entry.parsed.name}@latest`,
+      );
+
+      yield* performed(
+        this.withProgress("update", sourceLabel, message, () =>
+          Effect.runPromise(
+            awaitingWith(function* () {
+              yield* performed(this.installNpmBatch(specs, scope));
+            }, this),
+          ),
+        ),
+      );
+    }, this);
+  }
+
+  private installNpmBatch(specs: string[], scope: InstalledSourceScope): Effect.Effect<void> {
+    return awaitingWith(function* () {
+      const installRoot = this.getNpmInstallRoot(scope, false);
+      this.ensureNpmProject(installRoot);
+      yield* performed(this.runNpmCommand(this.getNpmInstallArgs(specs, installRoot)));
+    }, this);
+  }
+
+  checkForAvailableUpdates(): Promise<PackageUpdate[]> {
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        if (isOfflineModeEnabled()) {
+          return [];
+        }
+
+        const globalSettings = this.settingsManager.getGlobalSettings();
+        const projectSettings = this.settingsManager.getProjectSettings();
+        const allPackages: Array<{ pkg: PackageSource; scope: SourceScope }> = [];
+        for (const pkg of projectSettings.packages ?? []) {
+          allPackages.push({ pkg, scope: "project" });
+        }
+        for (const pkg of globalSettings.packages ?? []) {
+          allPackages.push({ pkg, scope: "user" });
+        }
+
+        const packageSources = this.dedupePackages(allPackages);
+        const checks = packageSources
+          .filter(
+            (entry): entry is { pkg: PackageSource; scope: Exclude<SourceScope, "temporary"> } =>
+              entry.scope !== "temporary",
+          )
+          .map(
+            (entry) => (): Promise<PackageUpdate | undefined> =>
+              Effect.runPromise(
+                awaitingWith(function* () {
+                  const source = typeof entry.pkg === "string" ? entry.pkg : entry.pkg.source;
+                  const parsed = this.parseSource(source);
+                  if (parsed.type === "local" || parsed.pinned) {
+                    return undefined;
+                  }
+
+                  if (parsed.type === "npm") {
+                    const installedPath = this.getNpmInstallPath(parsed, entry.scope);
+                    if (!existsSync(installedPath)) {
+                      return undefined;
+                    }
+                    const hasUpdate = yield* performed(
+                      this.npmHasAvailableUpdate(parsed, installedPath),
+                    );
+                    if (!hasUpdate) {
+                      return undefined;
+                    }
+                    return {
+                      source,
+                      displayName: parsed.name,
+                      type: "npm",
+                      scope: entry.scope,
+                    };
+                  }
+
+                  const installedPath = this.getGitInstallPath(parsed, entry.scope);
+                  if (!existsSync(installedPath)) {
+                    return undefined;
+                  }
+                  const hasUpdate = yield* awaited(this.gitHasAvailableUpdate(installedPath));
+                  if (!hasUpdate) {
+                    return undefined;
+                  }
+                  return {
+                    source,
+                    displayName: `${parsed.host}/${parsed.path}`,
+                    type: "git",
+                    scope: entry.scope,
+                  };
+                }, this),
+              ),
+          );
+
+        const results = yield* performed(this.runWithConcurrency(checks, UPDATE_CHECK_CONCURRENCY));
+        return results.filter((result): result is PackageUpdate => result !== undefined);
+      }, this),
     );
-
-    await this.withProgress("update", sourceLabel, message, async () => {
-      await this.installNpmBatch(specs, scope);
-    });
   }
 
-  private async installNpmBatch(specs: string[], scope: InstalledSourceScope): Promise<void> {
-    const installRoot = this.getNpmInstallRoot(scope, false);
-    this.ensureNpmProject(installRoot);
-    await this.runNpmCommand(this.getNpmInstallArgs(specs, installRoot));
-  }
-
-  async checkForAvailableUpdates(): Promise<PackageUpdate[]> {
-    if (isOfflineModeEnabled()) {
-      return [];
-    }
-
-    const globalSettings = this.settingsManager.getGlobalSettings();
-    const projectSettings = this.settingsManager.getProjectSettings();
-    const allPackages: Array<{ pkg: PackageSource; scope: SourceScope }> = [];
-    for (const pkg of projectSettings.packages ?? []) {
-      allPackages.push({ pkg, scope: "project" });
-    }
-    for (const pkg of globalSettings.packages ?? []) {
-      allPackages.push({ pkg, scope: "user" });
-    }
-
-    const packageSources = this.dedupePackages(allPackages);
-    const checks = packageSources
-      .filter(
-        (entry): entry is { pkg: PackageSource; scope: Exclude<SourceScope, "temporary"> } =>
-          entry.scope !== "temporary",
-      )
-      .map((entry) => async (): Promise<PackageUpdate | undefined> => {
-        const source = typeof entry.pkg === "string" ? entry.pkg : entry.pkg.source;
-        const parsed = this.parseSource(source);
-        if (parsed.type === "local" || parsed.pinned) {
-          return undefined;
-        }
-
-        if (parsed.type === "npm") {
-          const installedPath = this.getNpmInstallPath(parsed, entry.scope);
-          if (!existsSync(installedPath)) {
-            return undefined;
-          }
-          const hasUpdate = await this.npmHasAvailableUpdate(parsed, installedPath);
-          if (!hasUpdate) {
-            return undefined;
-          }
-          return {
-            source,
-            displayName: parsed.name,
-            type: "npm",
-            scope: entry.scope,
-          };
-        }
-
-        const installedPath = this.getGitInstallPath(parsed, entry.scope);
-        if (!existsSync(installedPath)) {
-          return undefined;
-        }
-        const hasUpdate = await this.gitHasAvailableUpdate(installedPath);
-        if (!hasUpdate) {
-          return undefined;
-        }
-        return {
-          source,
-          displayName: `${parsed.host}/${parsed.path}`,
-          type: "git",
-          scope: entry.scope,
-        };
-      });
-
-    const results = await this.runWithConcurrency(checks, UPDATE_CHECK_CONCURRENCY);
-    return results.filter((result): result is PackageUpdate => result !== undefined);
-  }
-
-  private async resolvePackageSources(
+  private resolvePackageSources(
     sources: Array<{ pkg: PackageSource; scope: SourceScope }>,
     accumulator: ResourceAccumulator,
     onMissing?: (source: string) => Promise<MissingSourceAction>,
-  ): Promise<void> {
-    for (const { pkg, scope } of sources) {
-      const sourceStr = typeof pkg === "string" ? pkg : pkg.source;
-      const filter = typeof pkg === "object" ? pkg : undefined;
-      const deltaBase = this.findAutoloadDeltaBase(pkg, scope, sources);
-      const resolvedSource = deltaBase?.source ?? sourceStr;
-      const resolvedScope = deltaBase?.scope ?? scope;
-      const parsed = this.parseSource(resolvedSource);
-      const metadata: PathMetadata = { source: sourceStr, scope, origin: "package" };
+  ): Effect.Effect<void> {
+    return awaitingWith(function* () {
+      for (const { pkg, scope } of sources) {
+        const sourceStr = typeof pkg === "string" ? pkg : pkg.source;
+        const filter = typeof pkg === "object" ? pkg : undefined;
+        const deltaBase = this.findAutoloadDeltaBase(pkg, scope, sources);
+        const resolvedSource = deltaBase?.source ?? sourceStr;
+        const resolvedScope = deltaBase?.scope ?? scope;
+        const parsed = this.parseSource(resolvedSource);
+        const metadata: PathMetadata = { source: sourceStr, scope, origin: "package" };
 
-      if (parsed.type === "local") {
-        const baseDir = this.getBaseDirForScope(resolvedScope);
-        this.resolveLocalExtensionSource(parsed, accumulator, filter, metadata, baseDir);
-        continue;
-      }
-
-      const installMissing = async (): Promise<boolean> => {
-        if (isOfflineModeEnabled()) return false;
-        if (!onMissing) {
-          await this.installParsedSource(parsed, resolvedScope);
-          return true;
+        if (parsed.type === "local") {
+          const baseDir = this.getBaseDirForScope(resolvedScope);
+          this.resolveLocalExtensionSource(parsed, accumulator, filter, metadata, baseDir);
+          continue;
         }
-        const action = await onMissing(resolvedSource);
-        if (action === "skip") return false;
-        if (action === "error") throw new Error(`Missing source: ${resolvedSource}`);
-        await this.installParsedSource(parsed, resolvedScope);
-        return true;
-      };
 
-      if (parsed.type === "npm") {
-        let installedPath = this.getNpmInstallPath(parsed, resolvedScope);
-        const needsInstall =
-          !existsSync(installedPath) ||
-          !(await this.installedNpmMatchesConfiguredVersion(parsed, installedPath));
-        if (needsInstall) {
-          const installed = await installMissing();
-          if (!installed) continue;
-          installedPath = this.getNpmInstallPath(parsed, resolvedScope);
-        }
-        metadata.baseDir = installedPath;
-        metadata.packageRoot = installedPath;
-        this.collectPackageResources(installedPath, accumulator, filter, metadata);
-        continue;
-      }
+        const installMissing = (): Promise<boolean> =>
+          Effect.runPromise(
+            awaitingWith(function* () {
+              if (isOfflineModeEnabled()) return false;
+              if (onMissing === undefined) {
+                yield* awaited(this.installParsedSource(parsed, resolvedScope));
+                return true;
+              }
+              const action = yield* awaited(onMissing(resolvedSource));
+              if (action === "skip") return false;
+              if (action === "error") throw new Error(`Missing source: ${resolvedSource}`);
+              yield* awaited(this.installParsedSource(parsed, resolvedScope));
+              return true;
+            }, this),
+          );
 
-      if (parsed.type === "git") {
-        const installedPath = this.getGitInstallPath(parsed, resolvedScope);
-        if (!existsSync(installedPath)) {
-          const installed = await installMissing();
-          if (!installed) continue;
-        } else if (resolvedScope === "temporary" && !parsed.pinned && !isOfflineModeEnabled()) {
-          await this.refreshTemporaryGitSource(parsed, resolvedSource);
+        if (parsed.type === "npm") {
+          let installedPath = this.getNpmInstallPath(parsed, resolvedScope);
+          const needsInstall =
+            !existsSync(installedPath) ||
+            !(yield* performed(this.installedNpmMatchesConfiguredVersion(parsed, installedPath)));
+          if (needsInstall) {
+            const installed = yield* awaited(installMissing());
+            if (!installed) continue;
+            installedPath = this.getNpmInstallPath(parsed, resolvedScope);
+          }
+          metadata.baseDir = installedPath;
+          metadata.packageRoot = installedPath;
+          this.collectPackageResources(installedPath, accumulator, filter, metadata);
+          continue;
         }
-        metadata.baseDir = installedPath;
-        metadata.packageRoot = installedPath;
-        this.collectPackageResources(installedPath, accumulator, filter, metadata);
+
+        if (parsed.type === "git") {
+          const installedPath = this.getGitInstallPath(parsed, resolvedScope);
+          if (!existsSync(installedPath)) {
+            const installed = yield* awaited(installMissing());
+            if (!installed) continue;
+          } else if (resolvedScope === "temporary" && !parsed.pinned && !isOfflineModeEnabled()) {
+            yield* awaited(this.refreshTemporaryGitSource(parsed, resolvedSource));
+          }
+          metadata.baseDir = installedPath;
+          metadata.packageRoot = installedPath;
+          this.collectPackageResources(installedPath, accumulator, filter, metadata);
+        }
       }
-    }
+    }, this);
   }
 
   private findAutoloadDeltaBase(
@@ -1432,9 +1495,9 @@ export class DefaultPackageManager implements PackageManager {
         entry.scope === "user" &&
         this.getPackageIdentity(this.getPackageSourceString(entry.pkg), "user") === identity,
     );
-    return userEntry
-      ? { source: this.getPackageSourceString(userEntry.pkg), scope: "user" }
-      : undefined;
+    return userEntry === undefined
+      ? undefined
+      : { source: this.getPackageSourceString(userEntry.pkg), scope: "user" };
   }
 
   private resolveLocalExtensionSource(
@@ -1465,19 +1528,20 @@ export class DefaultPackageManager implements PackageManager {
         }
       }
     } catch {
-      return;
+      return undefined;
     }
   }
 
-  private async installParsedSource(parsed: ParsedSource, scope: SourceScope): Promise<void> {
-    if (parsed.type === "npm") {
-      await this.installNpm(parsed, scope, scope === "temporary");
-      return;
-    }
-    if (parsed.type === "git") {
-      await this.installGit(parsed, scope);
-      return;
-    }
+  private installParsedSource(parsed: ParsedSource, scope: SourceScope): Promise<void> {
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        if (parsed.type === "npm") {
+          yield* performed(this.installNpm(parsed, scope, scope === "temporary"));
+        } else if (parsed.type === "git") {
+          yield* performed(this.installGit(parsed, scope));
+        }
+      }, this),
+    );
   }
 
   private getPackageSourceString(pkg: PackageSource): string {
@@ -1512,7 +1576,7 @@ export class DefaultPackageManager implements PackageManager {
     configuredPackages: PackageSource[],
   ): string {
     const suggestion = this.findSuggestedConfiguredSource(source, configuredPackages);
-    if (!suggestion) {
+    if (suggestion === undefined || suggestion === "") {
       return `No matching package found for ${source}`;
     }
     return `No matching package found for ${source}. Did you mean ${suggestion}?`;
@@ -1536,10 +1600,11 @@ export class DefaultPackageManager implements PackageManager {
       }
       if (parsed.type === "git") {
         const shorthand = `${parsed.host}/${parsed.path}`;
-        const shorthandWithRef = parsed.ref ? `${shorthand}@${parsed.ref}` : undefined;
+        const shorthandWithRef =
+          parsed.ref !== undefined && parsed.ref !== "" ? `${shorthand}@${parsed.ref}` : undefined;
         if (
           trimmedSource === shorthand ||
-          (shorthandWithRef && trimmedSource === shorthandWithRef)
+          (shorthandWithRef && trimmedSource === shorthandWithRef) === true
         ) {
           suggestions.add(sourceStr);
         }
@@ -1588,45 +1653,52 @@ export class DefaultPackageManager implements PackageManager {
       return { type: "local", path: source };
     }
 
-    // Try parsing as git URL
     const gitParsed = parseGitUrl(source);
-    if (gitParsed) {
+    if (gitParsed !== null) {
       return gitParsed;
     }
 
     return { type: "local", path: source };
   }
 
-  private async installedNpmMatchesConfiguredVersion(
+  private installedNpmMatchesConfiguredVersion(
     source: NpmSource,
     installedPath: string,
-  ): Promise<boolean> {
-    const installedVersion = this.getInstalledNpmVersion(installedPath);
-    if (!installedVersion) {
-      return false;
-    }
-    return source.range ? satisfies(installedVersion, source.range) : true;
+  ): Effect.Effect<boolean> {
+    return Effect.sync(() => {
+      const installedVersion = this.getInstalledNpmVersion(installedPath);
+      if (installedVersion === undefined || installedVersion === "") {
+        return false;
+      }
+      return source.range !== undefined && source.range !== ""
+        ? satisfies(installedVersion, source.range)
+        : true;
+    });
   }
 
-  private async npmHasAvailableUpdate(source: NpmSource, installedPath: string): Promise<boolean> {
-    if (isOfflineModeEnabled()) {
-      return false;
-    }
+  private npmHasAvailableUpdate(source: NpmSource, installedPath: string): Effect.Effect<boolean> {
+    return awaitingWith(function* () {
+      if (isOfflineModeEnabled()) {
+        return false;
+      }
 
-    const installedVersion = this.getInstalledNpmVersion(installedPath);
-    if (!installedVersion) {
-      return false;
-    }
+      const installedVersion = this.getInstalledNpmVersion(installedPath);
+      if (installedVersion === undefined || installedVersion === "") {
+        return false;
+      }
 
-    try {
-      const targetVersion = await this.getLatestNpmVersion(
-        source.version ? source.spec : source.name,
-        source.range,
-      );
-      return gt(targetVersion, installedVersion);
-    } catch {
-      return false;
-    }
+      try {
+        const targetVersion = yield* awaited(
+          this.getLatestNpmVersion(
+            source.version !== undefined && source.version !== "" ? source.spec : source.name,
+            source.range,
+          ),
+        );
+        return gt(targetVersion, installedVersion);
+      } catch {
+        return false;
+      }
+    }, this);
   }
 
   private getInstalledNpmVersion(installedPath: string): string | undefined {
@@ -1641,164 +1713,189 @@ export class DefaultPackageManager implements PackageManager {
     }
   }
 
-  private async getLatestNpmVersion(packageSpec: string, range?: string): Promise<string> {
-    const npmCommand = this.getNpmCommand();
-    const stdout = await this.runCommandCapture(
-      npmCommand.command,
-      [...npmCommand.args, "view", packageSpec, "version", "--json"],
-      { cwd: this.cwd, timeoutMs: NETWORK_TIMEOUT_MS },
+  private getLatestNpmVersion(packageSpec: string, range?: string): Promise<string> {
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        const npmCommand = this.getNpmCommand();
+        const stdout = yield* awaited(
+          this.runCommandCapture(
+            npmCommand.command,
+            [...npmCommand.args, "view", packageSpec, "version", "--json"],
+            { cwd: this.cwd, timeoutMs: NETWORK_TIMEOUT_MS },
+          ),
+        );
+        const raw = stdout.trim();
+        if (raw === "") throw new Error("Empty response from npm view");
+        const parsed = JSON.parse(raw) as unknown;
+        if (typeof parsed === "string") {
+          return parsed;
+        }
+        if (Array.isArray(parsed)) {
+          const versions = parsed.filter(
+            (value): value is string => typeof value === "string" && value.length > 0,
+          );
+          const latest =
+            range !== undefined && range !== ""
+              ? maxSatisfying(versions, range)
+              : [...versions].sort(rcompare)[0];
+          if (latest !== undefined && latest !== null && latest !== "") return latest;
+        }
+        throw new Error("Unexpected response from npm view");
+      }, this),
     );
-    const raw = stdout.trim();
-    if (!raw) throw new Error("Empty response from npm view");
-    const parsed = JSON.parse(raw) as unknown;
-    if (typeof parsed === "string") {
-      return parsed;
-    }
-    if (Array.isArray(parsed)) {
-      const versions = parsed.filter(
-        (value): value is string => typeof value === "string" && value.length > 0,
-      );
-      const latest = range ? maxSatisfying(versions, range) : [...versions].sort(rcompare)[0];
-      if (latest) return latest;
-    }
-    throw new Error("Unexpected response from npm view");
   }
 
-  private async gitHasAvailableUpdate(installedPath: string): Promise<boolean> {
-    if (isOfflineModeEnabled()) {
-      return false;
-    }
+  private gitHasAvailableUpdate(installedPath: string): Promise<boolean> {
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        if (isOfflineModeEnabled()) {
+          return false;
+        }
 
-    try {
-      const localHead = await this.runCommandCapture("git", ["rev-parse", "HEAD"], {
-        cwd: installedPath,
-        timeoutMs: NETWORK_TIMEOUT_MS,
-      });
-      const remoteHead = await this.getRemoteGitHead(installedPath);
-      return localHead.trim() !== remoteHead.trim();
-    } catch {
-      return false;
-    }
+        try {
+          const localHead = yield* awaited(
+            this.runCommandCapture("git", ["rev-parse", "HEAD"], {
+              cwd: installedPath,
+              timeoutMs: NETWORK_TIMEOUT_MS,
+            }),
+          );
+          const remoteHead = yield* performed(this.getRemoteGitHead(installedPath));
+          return localHead.trim() !== remoteHead.trim();
+        } catch {
+          return false;
+        }
+      }, this),
+    );
   }
 
-  private async getRemoteGitHead(installedPath: string): Promise<string> {
-    const upstreamRef = await this.getGitUpstreamRef(installedPath);
-    if (upstreamRef) {
-      const remoteHead = await this.runGitRemoteCommand(installedPath, [
-        "ls-remote",
-        "origin",
-        upstreamRef,
-      ]);
-      const match = remoteHead.match(/^([0-9a-f]{40})\s+/m);
-      if (match?.[1]) {
-        return match[1];
+  private getRemoteGitHead(installedPath: string): Effect.Effect<string> {
+    return awaitingWith(function* () {
+      const upstreamRef = yield* performed(this.getGitUpstreamRef(installedPath));
+      if (upstreamRef !== undefined && upstreamRef !== "") {
+        const remoteHead = yield* awaited(
+          this.runGitRemoteCommand(installedPath, ["ls-remote", "origin", upstreamRef]),
+        );
+        const match = remoteHead.match(/^([0-9a-f]{40})\s+/mu);
+        if (match?.[1] !== undefined && match?.[1] !== "") {
+          return match[1];
+        }
       }
-    }
 
-    const remoteHead = await this.runGitRemoteCommand(installedPath, [
-      "ls-remote",
-      "origin",
-      "HEAD",
-    ]);
-    const match = remoteHead.match(/^([0-9a-f]{40})\s+HEAD$/m);
-    if (!match?.[1]) {
-      throw new Error("Failed to determine remote HEAD");
-    }
-    return match[1];
+      const remoteHead = yield* awaited(
+        this.runGitRemoteCommand(installedPath, ["ls-remote", "origin", "HEAD"]),
+      );
+      const match = remoteHead.match(/^([0-9a-f]{40})\s+HEAD$/mu);
+      if (match?.[1] === undefined || match?.[1] === "") {
+        throw new Error("Failed to determine remote HEAD");
+      }
+      return match[1];
+    }, this);
   }
 
-  private async getLocalGitUpdateTarget(
+  private getLocalGitUpdateTarget(
     installedPath: string,
   ): Promise<{ ref: string; head: string; fetchArgs: string[] }> {
-    try {
-      const upstream = await this.runCommandCapture(
-        "git",
-        ["rev-parse", "--abbrev-ref", "@{upstream}"],
-        {
-          cwd: installedPath,
-          timeoutMs: NETWORK_TIMEOUT_MS,
-        },
-      );
-      const trimmedUpstream = upstream.trim();
-      if (!trimmedUpstream.startsWith("origin/")) {
-        throw new Error(`Unsupported upstream remote: ${trimmedUpstream}`);
-      }
-      const branch = trimmedUpstream.slice("origin/".length);
-      if (!branch) {
-        throw new Error("Missing upstream branch name");
-      }
-      const head = await this.runCommandCapture("git", ["rev-parse", "@{upstream}"], {
-        cwd: installedPath,
-        timeoutMs: NETWORK_TIMEOUT_MS,
-      });
-      return {
-        ref: "@{upstream}",
-        head,
-        fetchArgs: [
-          "fetch",
-          "--prune",
-          "--no-tags",
-          "origin",
-          `+refs/heads/${branch}:refs/remotes/origin/${branch}`,
-        ],
-      };
-    } catch {
-      await this.runCommand("git", ["remote", "set-head", "origin", "-a"], {
-        cwd: installedPath,
-      }).catch(() => {});
-      const head = await this.runCommandCapture("git", ["rev-parse", "origin/HEAD"], {
-        cwd: installedPath,
-        timeoutMs: NETWORK_TIMEOUT_MS,
-      });
-      const originHeadRef = await this.runCommandCapture(
-        "git",
-        ["symbolic-ref", "refs/remotes/origin/HEAD"],
-        {
-          cwd: installedPath,
-          timeoutMs: NETWORK_TIMEOUT_MS,
-        },
-      ).catch(() => "");
-      const branch = originHeadRef.trim().replace(/^refs\/remotes\/origin\//, "");
-      if (branch) {
-        return {
-          ref: "origin/HEAD",
-          head,
-          fetchArgs: [
-            "fetch",
-            "--prune",
-            "--no-tags",
-            "origin",
-            `+refs/heads/${branch}:refs/remotes/origin/${branch}`,
-          ],
-        };
-      }
-      return {
-        ref: "origin/HEAD",
-        head,
-        fetchArgs: ["fetch", "--prune", "--no-tags", "origin", "+HEAD:refs/remotes/origin/HEAD"],
-      };
-    }
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        try {
+          const upstream = yield* awaited(
+            this.runCommandCapture("git", ["rev-parse", "--abbrev-ref", "@{upstream}"], {
+              cwd: installedPath,
+              timeoutMs: NETWORK_TIMEOUT_MS,
+            }),
+          );
+          const trimmedUpstream = upstream.trim();
+          if (!trimmedUpstream.startsWith("origin/")) {
+            throw new Error(`Unsupported upstream remote: ${trimmedUpstream}`);
+          }
+          const branch = trimmedUpstream.slice("origin/".length);
+          if (branch === "") {
+            throw new Error("Missing upstream branch name");
+          }
+          const head = yield* awaited(
+            this.runCommandCapture("git", ["rev-parse", "@{upstream}"], {
+              cwd: installedPath,
+              timeoutMs: NETWORK_TIMEOUT_MS,
+            }),
+          );
+          return {
+            ref: "@{upstream}",
+            head,
+            fetchArgs: [
+              "fetch",
+              "--prune",
+              "--no-tags",
+              "origin",
+              `+refs/heads/${branch}:refs/remotes/origin/${branch}`,
+            ],
+          };
+        } catch {
+          yield* awaited(
+            this.runCommand("git", ["remote", "set-head", "origin", "-a"], {
+              cwd: installedPath,
+            }).catch(() => {}),
+          );
+          const head = yield* awaited(
+            this.runCommandCapture("git", ["rev-parse", "origin/HEAD"], {
+              cwd: installedPath,
+              timeoutMs: NETWORK_TIMEOUT_MS,
+            }),
+          );
+          const originHeadRef = yield* awaited(
+            this.runCommandCapture("git", ["symbolic-ref", "refs/remotes/origin/HEAD"], {
+              cwd: installedPath,
+              timeoutMs: NETWORK_TIMEOUT_MS,
+            }).catch(() => ""),
+          );
+          const branch = originHeadRef.trim().replace(/^refs\/remotes\/origin\//u, "");
+          if (branch !== "") {
+            return {
+              ref: "origin/HEAD",
+              head,
+              fetchArgs: [
+                "fetch",
+                "--prune",
+                "--no-tags",
+                "origin",
+                `+refs/heads/${branch}:refs/remotes/origin/${branch}`,
+              ],
+            };
+          }
+          return {
+            ref: "origin/HEAD",
+            head,
+            fetchArgs: [
+              "fetch",
+              "--prune",
+              "--no-tags",
+              "origin",
+              "+HEAD:refs/remotes/origin/HEAD",
+            ],
+          };
+        }
+      }, this),
+    );
   }
 
-  private async getGitUpstreamRef(installedPath: string): Promise<string | undefined> {
-    try {
-      const upstream = await this.runCommandCapture(
-        "git",
-        ["rev-parse", "--abbrev-ref", "@{upstream}"],
-        {
-          cwd: installedPath,
-          timeoutMs: NETWORK_TIMEOUT_MS,
-        },
-      );
-      const trimmed = upstream.trim();
-      if (!trimmed.startsWith("origin/")) {
+  private getGitUpstreamRef(installedPath: string): Effect.Effect<string | undefined> {
+    return awaitingWith(function* () {
+      try {
+        const upstream = yield* awaited(
+          this.runCommandCapture("git", ["rev-parse", "--abbrev-ref", "@{upstream}"], {
+            cwd: installedPath,
+            timeoutMs: NETWORK_TIMEOUT_MS,
+          }),
+        );
+        const trimmed = upstream.trim();
+        if (!trimmed.startsWith("origin/")) {
+          return undefined;
+        }
+        const branch = trimmed.slice("origin/".length);
+        return branch === "" ? undefined : `refs/heads/${branch}`;
+      } catch {
         return undefined;
       }
-      const branch = trimmed.slice("origin/".length);
-      return branch ? `refs/heads/${branch}` : undefined;
-    } catch {
-      return undefined;
-    }
+    }, this);
   }
 
   private runGitRemoteCommand(installedPath: string, args: string[]): Promise<string> {
@@ -1811,58 +1908,51 @@ export class DefaultPackageManager implements PackageManager {
     });
   }
 
-  private async runWithConcurrency<T>(tasks: Array<() => Promise<T>>, limit: number): Promise<T[]> {
-    if (tasks.length === 0) {
-      return [];
-    }
-
-    const results: T[] = new Array(tasks.length);
-    let nextIndex = 0;
-    const workerCount = Math.max(1, Math.min(limit, tasks.length));
-
-    const worker = async () => {
-      while (true) {
-        const index = nextIndex;
-        nextIndex += 1;
-        const task = tasks[index];
-        if (task === undefined) {
-          return;
-        }
-        results[index] = await task();
+  private runWithConcurrency<T>(tasks: Array<() => Promise<T>>, limit: number): Effect.Effect<T[]> {
+    return awaiting(function* () {
+      if (tasks.length === 0) {
+        return [];
       }
-    };
 
-    await Promise.all(Array.from({ length: workerCount }, () => worker()));
-    return results;
+      const results: T[] = new Array(tasks.length);
+      let nextIndex = 0;
+      const workerCount = Math.max(1, Math.min(limit, tasks.length));
+
+      const worker = () =>
+        Effect.runPromise(
+          awaiting(function* () {
+            while (true) {
+              const index = nextIndex;
+              nextIndex += 1;
+              const task = tasks[index];
+              if (task === undefined) {
+                return;
+              }
+              results[index] = yield* awaited(task());
+            }
+          }),
+        );
+
+      yield* awaited(Promise.all(Array.from({ length: workerCount }, () => worker())));
+      return results;
+    });
   }
 
-  /**
-   * Get a unique identity for a package, ignoring version/ref.
-   * Used to detect when the same package is in both global and project settings.
-   * For git packages, uses normalized host/path to ensure SSH and HTTPS URLs
-   * for the same repository are treated as identical.
-   */
   private getPackageIdentity(source: string, scope?: SourceScope): string {
     const parsed = this.parseSource(source);
     if (parsed.type === "npm") {
       return `npm:${parsed.name}`;
     }
     if (parsed.type === "git") {
-      // Use host/path for identity to normalize SSH and HTTPS
       return `git:${parsed.host}/${parsed.path}`;
     }
-    if (scope) {
+    if (scope !== undefined) {
       const baseDir = this.getBaseDirForScope(scope);
       return `local:${this.resolvePathFromBase(parsed.path, baseDir)}`;
     }
     return `local:${this.resolvePath(parsed.path)}`;
   }
 
-  /**
-   * Dedupe packages: if same package identity appears in both global and project,
-   * keep only the project one (project wins). A project entry with autoload=false
-   * is a delta over the global entry, so both are kept (delta first).
-   */
   private dedupePackages(
     packages: Array<{ pkg: PackageSource; scope: SourceScope }>,
   ): Array<{ pkg: PackageSource; scope: SourceScope }> {
@@ -1887,8 +1977,8 @@ export class DefaultPackageManager implements PackageManager {
   }
 
   private parseNpmSpec(spec: string): { name: string; version?: string } {
-    const match = spec.match(/^(@?[^@]+(?:\/[^@]+)?)(?:@(.+))?$/);
-    if (!match) {
+    const match = spec.match(/^(@?[^@]+(?:\/[^@]+)?)(?:@(.+))?$/u);
+    if (match === null) {
       return { name: spec };
     }
     const name = match[1] ?? spec;
@@ -1904,11 +1994,11 @@ export class DefaultPackageManager implements PackageManager {
 
   private getNpmCommand(): { command: string; args: string[] } {
     const configuredCommand = this.settingsManager.getNpmCommand();
-    if (!configuredCommand || configuredCommand.length === 0) {
+    if (configuredCommand === undefined || configuredCommand.length === 0) {
       return { command: "npm", args: [] };
     }
     const [command, ...args] = configuredCommand;
-    if (!command) {
+    if (command === undefined || command === "") {
       throw new Error("Invalid npmCommand: first array entry must be a non-empty command");
     }
     return { command, args };
@@ -1917,13 +2007,15 @@ export class DefaultPackageManager implements PackageManager {
   private getPackageManagerName(): string {
     const npmCommand = this.getNpmCommand();
     const normalizeCommandName = (command: string): string =>
-      basename(command).replace(/\.(cmd|exe)$/i, "");
+      basename(command).replace(/\.(cmd|exe)$/iu, "");
     const supportedPackageManagers = new Set(["npm", "pnpm", "bun"]);
     const directCommand = normalizeCommandName(npmCommand.command);
     const separatorIndex = npmCommand.args.lastIndexOf("--");
     if (separatorIndex >= 0) {
       const wrappedCommand = npmCommand.args[separatorIndex + 1];
-      return wrappedCommand ? normalizeCommandName(wrappedCommand) : directCommand;
+      return wrappedCommand !== undefined && wrappedCommand !== ""
+        ? normalizeCommandName(wrappedCommand)
+        : directCommand;
     }
     if (supportedPackageManagers.has(directCommand)) return directCommand;
 
@@ -1942,9 +2034,11 @@ export class DefaultPackageManager implements PackageManager {
     return wrappedPackageManagers[0] ?? directCommand;
   }
 
-  private async runNpmCommand(args: string[], options?: { cwd?: string }): Promise<void> {
-    const npmCommand = this.getNpmCommand();
-    await this.runCommand(npmCommand.command, [...npmCommand.args, ...args], options);
+  private runNpmCommand(args: string[], options?: { cwd?: string }): Effect.Effect<void> {
+    return awaitingWith(function* () {
+      const npmCommand = this.getNpmCommand();
+      yield* awaited(this.runCommand(npmCommand.command, [...npmCommand.args, ...args], options));
+    }, this);
   }
 
   private getGitDependencyInstallArgs(): string[] {
@@ -1973,10 +2067,6 @@ export class DefaultPackageManager implements PackageManager {
 
   private getNpmInstallArgs(specs: string[], installRoot: string): string[] {
     const packageManagerName = this.getPackageManagerName();
-    // Extension packages run inside msa and resolve msa APIs through loader aliases/virtual modules.
-    // Disable peer dependency resolution for managed installs (npm's --legacy-peer-deps, and
-    // equivalent bun/pnpm settings) so package managers do not install or solve host-provided
-    // @msa/* peers. Stale auto-installed msa peers can otherwise block updates.
     if (packageManagerName === "bun") {
       return ["install", ...specs, "--cwd", installRoot, "--omit=peer"];
     }
@@ -1994,81 +2084,97 @@ export class DefaultPackageManager implements PackageManager {
     return ["install", ...specs, "--prefix", installRoot, "--legacy-peer-deps"];
   }
 
-  private async installNpm(
+  private installNpm(
     source: NpmSource,
     scope: SourceScope,
     temporary: boolean,
-  ): Promise<void> {
-    const installRoot = this.getNpmInstallRoot(scope, temporary);
-    this.ensureNpmProject(installRoot);
-    await this.runNpmCommand(this.getNpmInstallArgs([source.spec], installRoot));
+  ): Effect.Effect<void> {
+    return awaitingWith(function* () {
+      const installRoot = this.getNpmInstallRoot(scope, temporary);
+      this.ensureNpmProject(installRoot);
+      yield* performed(this.runNpmCommand(this.getNpmInstallArgs([source.spec], installRoot)));
+    }, this);
   }
 
-  private async uninstallNpm(source: NpmSource, scope: SourceScope): Promise<void> {
-    const installRoot = this.getNpmInstallRoot(scope, false);
-    if (!existsSync(installRoot)) {
-      return;
-    }
-    const packageManagerName = this.getPackageManagerName();
-    if (packageManagerName === "bun") {
-      await this.runNpmCommand(["uninstall", source.name, "--cwd", installRoot]);
-      return;
-    }
-    const args = ["uninstall", source.name, "--prefix", installRoot];
-    if (packageManagerName !== "pnpm") {
-      args.push("--legacy-peer-deps");
-    }
-    await this.runNpmCommand(args);
-  }
-
-  private async installGit(source: GitSource, scope: SourceScope): Promise<void> {
-    const targetDir = this.getGitInstallPath(source, scope);
-    if (existsSync(targetDir)) {
-      if (source.ref) {
-        await this.ensureGitRef(targetDir, ["fetch", "origin", source.ref], "FETCH_HEAD");
+  private uninstallNpm(source: NpmSource, scope: SourceScope): Effect.Effect<void> {
+    return awaitingWith(function* () {
+      const installRoot = this.getNpmInstallRoot(scope, false);
+      if (!existsSync(installRoot)) {
         return;
       }
-      const target = await this.getLocalGitUpdateTarget(targetDir);
-      await this.ensureGitRef(targetDir, target.fetchArgs, target.ref);
-      return;
-    }
-    const gitRoot = this.getGitInstallRoot(scope);
-    if (gitRoot) {
-      this.ensureGitIgnore(gitRoot);
-    }
-    mkdirSync(dirname(targetDir), { recursive: true });
-    rmSync(this.getGitUpdateMarkerPath(targetDir), { force: true });
-
-    try {
-      await this.runCommand("git", ["clone", source.repo, targetDir]);
-      if (source.ref) {
-        await this.runCommand("git", ["checkout", source.ref], { cwd: targetDir });
+      const packageManagerName = this.getPackageManagerName();
+      if (packageManagerName === "bun") {
+        yield* performed(this.runNpmCommand(["uninstall", source.name, "--cwd", installRoot]));
+        return;
       }
-      const packageJsonPath = join(targetDir, "package.json");
-      if (existsSync(packageJsonPath)) {
-        await this.runNpmCommand(this.getGitDependencyInstallArgs(), { cwd: targetDir });
+      const args = ["uninstall", source.name, "--prefix", installRoot];
+      if (packageManagerName !== "pnpm") {
+        args.push("--legacy-peer-deps");
       }
-    } catch (error) {
-      rmSync(targetDir, { recursive: true, force: true });
-      this.pruneEmptyGitParents(targetDir, gitRoot);
-      throw error;
-    }
+      yield* performed(this.runNpmCommand(args));
+    }, this);
   }
 
-  private async updateGit(source: GitSource, scope: SourceScope): Promise<void> {
-    const targetDir = this.getGitInstallPath(source, scope);
-    if (!existsSync(targetDir)) {
-      await this.installGit(source, scope);
-      return;
-    }
+  private installGit(source: GitSource, scope: SourceScope): Effect.Effect<void> {
+    return awaitingWith(function* () {
+      const targetDir = this.getGitInstallPath(source, scope);
+      if (existsSync(targetDir)) {
+        if (source.ref !== undefined && source.ref !== "") {
+          yield* performed(
+            this.ensureGitRef(targetDir, ["fetch", "origin", source.ref], "FETCH_HEAD"),
+          );
+          return;
+        }
+        const target = yield* awaited(this.getLocalGitUpdateTarget(targetDir));
+        yield* performed(this.ensureGitRef(targetDir, target.fetchArgs, target.ref));
+        return;
+      }
+      const gitRoot = this.getGitInstallRoot(scope);
+      if (gitRoot !== undefined && gitRoot !== "") {
+        this.ensureGitIgnore(gitRoot);
+      }
+      mkdirSync(dirname(targetDir), { recursive: true });
+      rmSync(this.getGitUpdateMarkerPath(targetDir), { force: true });
 
-    if (source.ref) {
-      await this.ensureGitRef(targetDir, ["fetch", "origin", source.ref], "FETCH_HEAD");
-      return;
-    }
+      try {
+        yield* awaited(this.runCommand("git", ["clone", source.repo, targetDir]));
+        if (source.ref !== undefined && source.ref !== "") {
+          yield* awaited(this.runCommand("git", ["checkout", source.ref], { cwd: targetDir }));
+        }
+        const packageJsonPath = join(targetDir, "package.json");
+        if (existsSync(packageJsonPath)) {
+          yield* performed(
+            this.runNpmCommand(this.getGitDependencyInstallArgs(), { cwd: targetDir }),
+          );
+        }
+      } catch (error) {
+        rmSync(targetDir, { recursive: true, force: true });
+        this.pruneEmptyGitParents(targetDir, gitRoot);
+        throw error;
+      }
+    }, this);
+  }
 
-    const target = await this.getLocalGitUpdateTarget(targetDir);
-    await this.ensureGitRef(targetDir, target.fetchArgs, target.ref);
+  private updateGit(source: GitSource, scope: SourceScope): Promise<void> {
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        const targetDir = this.getGitInstallPath(source, scope);
+        if (!existsSync(targetDir)) {
+          yield* performed(this.installGit(source, scope));
+          return;
+        }
+
+        if (source.ref !== undefined && source.ref !== "") {
+          yield* performed(
+            this.ensureGitRef(targetDir, ["fetch", "origin", source.ref], "FETCH_HEAD"),
+          );
+          return;
+        }
+
+        const target = yield* awaited(this.getLocalGitUpdateTarget(targetDir));
+        yield* performed(this.ensureGitRef(targetDir, target.fetchArgs, target.ref));
+      }, this),
+    );
   }
 
   private hasMissingGitDependencies(targetDir: string): boolean {
@@ -2080,8 +2186,8 @@ export class DefaultPackageManager implements PackageManager {
         dependencies?: unknown;
       };
       if (
-        !manifest.dependencies ||
         typeof manifest.dependencies !== "object" ||
+        manifest.dependencies === null ||
         Array.isArray(manifest.dependencies)
       ) {
         return false;
@@ -2098,85 +2204,106 @@ export class DefaultPackageManager implements PackageManager {
     }
   }
 
-  private async repairMissingGitDependencies(targetDir: string): Promise<void> {
-    if (!this.hasMissingGitDependencies(targetDir)) return;
-    await this.runNpmCommand(this.getGitDependencyInstallArgs(), { cwd: targetDir });
+  private repairMissingGitDependencies(targetDir: string): Effect.Effect<void> {
+    return awaitingWith(function* () {
+      if (!this.hasMissingGitDependencies(targetDir)) return;
+      yield* performed(this.runNpmCommand(this.getGitDependencyInstallArgs(), { cwd: targetDir }));
+    }, this);
   }
 
   private getGitUpdateMarkerPath(targetDir: string): string {
     return join(dirname(targetDir), `.${basename(targetDir)}.msa-update-incomplete`);
   }
 
-  private async cleanAndInstallGitDependencies(
+  private cleanAndInstallGitDependencies(
     targetDir: string,
     markerPath: string,
-  ): Promise<void> {
-    // Clean untracked files (extensions should be pristine). If this fails after
-    // deleting dependencies, repair them so the existing extension still loads.
-    try {
-      await this.runCommand("git", ["clean", "-fdx"], { cwd: targetDir });
-    } catch (error) {
-      await this.repairMissingGitDependencies(targetDir).catch(() => {});
-      throw error;
-    }
-
-    const packageJsonPath = join(targetDir, "package.json");
-    if (existsSync(packageJsonPath)) {
-      await this.runNpmCommand(this.getGitDependencyInstallArgs(), { cwd: targetDir });
-    }
-    rmSync(markerPath, { force: true });
-  }
-
-  private async ensureGitRef(targetDir: string, fetchArgs: string[], ref: string): Promise<void> {
-    // Fetch only the ref we will reset to, avoiding unrelated branch/tag noise.
-    await this.runCommand("git", fetchArgs, { cwd: targetDir });
-
-    const localHead = await this.runCommandCapture("git", ["rev-parse", "HEAD"], {
-      cwd: targetDir,
-      timeoutMs: NETWORK_TIMEOUT_MS,
-    });
-    const commitRef = `${ref}^{commit}`;
-    const targetHead = await this.runCommandCapture("git", ["rev-parse", commitRef], {
-      cwd: targetDir,
-      timeoutMs: NETWORK_TIMEOUT_MS,
-    });
-    const markerPath = this.getGitUpdateMarkerPath(targetDir);
-    if (localHead.trim() === targetHead.trim()) {
-      if (existsSync(markerPath)) {
-        await this.cleanAndInstallGitDependencies(targetDir, markerPath);
-      } else {
-        await this.repairMissingGitDependencies(targetDir);
+  ): Effect.Effect<void> {
+    return awaitingWith(function* () {
+      try {
+        yield* awaited(this.runCommand("git", ["clean", "-fdx"], { cwd: targetDir }));
+      } catch (error) {
+        yield* awaited(
+          Effect.runPromise(this.repairMissingGitDependencies(targetDir)).catch(() => {}),
+        );
+        throw error;
       }
-      return;
-    }
 
-    writeFileSync(markerPath, "", "utf-8");
-    await this.runCommand("git", ["reset", "--hard", commitRef], { cwd: targetDir });
-    await this.cleanAndInstallGitDependencies(targetDir, markerPath);
+      const packageJsonPath = join(targetDir, "package.json");
+      if (existsSync(packageJsonPath)) {
+        yield* performed(
+          this.runNpmCommand(this.getGitDependencyInstallArgs(), { cwd: targetDir }),
+        );
+      }
+      rmSync(markerPath, { force: true });
+    }, this);
   }
 
-  private async refreshTemporaryGitSource(source: GitSource, sourceStr: string): Promise<void> {
-    if (isOfflineModeEnabled()) {
-      return;
-    }
-    try {
-      await this.withProgress("pull", sourceStr, `Refreshing ${sourceStr}...`, async () => {
-        await this.updateGit(source, "temporary");
-      });
-    } catch {
-      // Keep cached temporary checkout if refresh fails.
-    }
+  private ensureGitRef(targetDir: string, fetchArgs: string[], ref: string): Effect.Effect<void> {
+    return awaitingWith(function* () {
+      yield* awaited(this.runCommand("git", fetchArgs, { cwd: targetDir }));
+
+      const localHead = yield* awaited(
+        this.runCommandCapture("git", ["rev-parse", "HEAD"], {
+          cwd: targetDir,
+          timeoutMs: NETWORK_TIMEOUT_MS,
+        }),
+      );
+      const commitRef = `${ref}^{commit}`;
+      const targetHead = yield* awaited(
+        this.runCommandCapture("git", ["rev-parse", commitRef], {
+          cwd: targetDir,
+          timeoutMs: NETWORK_TIMEOUT_MS,
+        }),
+      );
+      const markerPath = this.getGitUpdateMarkerPath(targetDir);
+      if (localHead.trim() === targetHead.trim()) {
+        if (existsSync(markerPath)) {
+          yield* performed(this.cleanAndInstallGitDependencies(targetDir, markerPath));
+        } else {
+          yield* performed(this.repairMissingGitDependencies(targetDir));
+        }
+        return;
+      }
+
+      writeFileSync(markerPath, "", "utf-8");
+      yield* awaited(this.runCommand("git", ["reset", "--hard", commitRef], { cwd: targetDir }));
+      yield* performed(this.cleanAndInstallGitDependencies(targetDir, markerPath));
+    }, this);
   }
 
-  private async removeGit(source: GitSource, scope: SourceScope): Promise<void> {
-    const targetDir = this.getGitInstallPath(source, scope);
-    rmSync(targetDir, { recursive: true, force: true });
-    rmSync(this.getGitUpdateMarkerPath(targetDir), { force: true });
-    this.pruneEmptyGitParents(targetDir, this.getGitInstallRoot(scope));
+  private refreshTemporaryGitSource(source: GitSource, sourceStr: string): Promise<void> {
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        if (isOfflineModeEnabled()) {
+          return;
+        }
+        try {
+          yield* performed(
+            this.withProgress("pull", sourceStr, `Refreshing ${sourceStr}...`, () =>
+              Effect.runPromise(
+                awaitingWith(function* () {
+                  yield* awaited(this.updateGit(source, "temporary"));
+                }, this),
+              ),
+            ),
+          );
+        } catch {}
+      }, this),
+    );
+  }
+
+  private removeGit(source: GitSource, scope: SourceScope): Effect.Effect<void> {
+    return Effect.sync(() => {
+      const targetDir = this.getGitInstallPath(source, scope);
+      rmSync(targetDir, { recursive: true, force: true });
+      rmSync(this.getGitUpdateMarkerPath(targetDir), { force: true });
+      this.pruneEmptyGitParents(targetDir, this.getGitInstallRoot(scope));
+    });
   }
 
   private pruneEmptyGitParents(targetDir: string, installRoot: string | undefined): void {
-    if (!installRoot) return;
+    if (installRoot === undefined || installRoot === "") return;
     const resolvedRoot = resolve(installRoot);
     let current = dirname(targetDir);
     while (current.startsWith(resolvedRoot) && current !== resolvedRoot) {
@@ -2234,7 +2361,11 @@ export class DefaultPackageManager implements PackageManager {
   private getGlobalNpmRoot(): string {
     const npmCommand = this.getNpmCommand();
     const commandKey = [npmCommand.command, ...npmCommand.args].join("\0");
-    if (this.globalNpmRoot && this.globalNpmRootCommandKey === commandKey) {
+    if (
+      this.globalNpmRoot !== undefined &&
+      this.globalNpmRoot !== "" &&
+      this.globalNpmRootCommandKey === commandKey
+    ) {
       return this.globalNpmRoot;
     }
     if (this.getPackageManagerName() === "bun") {
@@ -2258,7 +2389,7 @@ export class DefaultPackageManager implements PackageManager {
     }>;
     for (const entry of entries) {
       const path = entry.dependencies?.[packageName]?.path;
-      if (path) return path;
+      if (path !== undefined && path !== "") return path;
     }
     return undefined;
   }
@@ -2290,16 +2421,17 @@ export class DefaultPackageManager implements PackageManager {
       return managedPath;
     }
     const legacyPath = this.getLegacyGlobalNpmInstallPath(source);
-    return legacyPath && existsSync(legacyPath) ? legacyPath : managedPath;
+    return legacyPath !== undefined && legacyPath !== "" && existsSync(legacyPath)
+      ? legacyPath
+      : managedPath;
   }
 
   private getGitInstallPath(source: GitSource, scope: SourceScope): string {
     if (scope === "temporary") {
-      // Include the ref in the hash so each pinned ref gets its own checkout.
       return this.getTemporaryDir(`git-${source.host}`, source.path, source.ref);
     }
     const installRoot = this.getGitInstallRoot(scope);
-    if (!installRoot) {
+    if (installRoot === undefined || installRoot === "") {
       throw new Error("Missing git install root");
     }
     return this.resolveManagedPath(installRoot, source.host, source.path);
@@ -2318,10 +2450,9 @@ export class DefaultPackageManager implements PackageManager {
 
   private getTemporaryDir(prefix: string, suffix?: string, ref?: string): string {
     const root = this.resolveManagedPath(getExtensionTempFolder(this.agentDir), prefix);
-    const hash = createHash("sha256")
-      .update(`${prefix}-${suffix ?? ""}${ref ? `@${ref}` : ""}`)
-      .digest("hex")
-      .slice(0, 8);
+    const hash = sha256Hex(
+      `${prefix}-${suffix ?? ""}${ref !== undefined && ref !== "" ? `@${ref}` : ""}`,
+    ).slice(0, 8);
     return this.resolveManagedPath(root, hash, suffix ?? "");
   }
 
@@ -2359,23 +2490,23 @@ export class DefaultPackageManager implements PackageManager {
     filter: PackageFilter | undefined,
     metadata: PathMetadata,
   ): boolean {
-    if (filter) {
+    if (filter !== undefined) {
       for (const resourceType of RESOURCE_TYPES) {
         const patterns = filter[resourceType];
         const target = this.getTargetMap(accumulator, resourceType);
         if (filter.autoload === false) {
           this.applyPackageDeltaFilter(packageRoot, patterns ?? [], resourceType, target, metadata);
-        } else if (patterns !== undefined) {
-          this.applyPackageFilter(packageRoot, patterns, resourceType, target, metadata);
-        } else {
+        } else if (patterns === undefined) {
           this.collectDefaultResources(packageRoot, resourceType, target, metadata);
+        } else {
+          this.applyPackageFilter(packageRoot, patterns, resourceType, target, metadata);
         }
       }
       return true;
     }
 
     const manifest = readMsaManifest(join(packageRoot, "package.json"));
-    if (manifest) {
+    if (manifest !== null) {
       for (const resourceType of RESOURCE_TYPES) {
         const entries = manifest[resourceType as keyof MsaManifest];
         this.addManifestEntries(
@@ -2393,7 +2524,6 @@ export class DefaultPackageManager implements PackageManager {
     for (const resourceType of RESOURCE_TYPES) {
       const dir = join(packageRoot, resourceType);
       if (existsSync(dir)) {
-        // Collect all files from the directory (all enabled by default)
         const files = collectResourceFiles(dir, resourceType);
         for (const f of files) {
           this.addResource(this.getTargetMap(accumulator, resourceType), f, metadata, true);
@@ -2412,13 +2542,12 @@ export class DefaultPackageManager implements PackageManager {
   ): void {
     const manifest = readMsaManifest(join(packageRoot, "package.json"));
     const entries = manifest?.[resourceType as keyof MsaManifest];
-    if (entries) {
+    if (entries !== undefined) {
       this.addManifestEntries(entries, packageRoot, resourceType, target, metadata);
       return;
     }
     const dir = join(packageRoot, resourceType);
     if (existsSync(dir)) {
-      // Collect all files from the directory (all enabled by default)
       const files = collectResourceFiles(dir, resourceType);
       for (const f of files) {
         this.addResource(target, f, metadata, true);
@@ -2436,14 +2565,12 @@ export class DefaultPackageManager implements PackageManager {
     const { allFiles } = this.collectManifestFiles(packageRoot, resourceType);
 
     if (userPatterns.length === 0) {
-      // Empty array explicitly disables all resources of this type
       for (const f of allFiles) {
         this.addResource(target, f, metadata, false);
       }
       return;
     }
 
-    // Apply user patterns
     const enabledByUser = applyPatterns(allFiles, userPatterns, packageRoot);
 
     for (const f of allFiles) {
@@ -2470,18 +2597,13 @@ export class DefaultPackageManager implements PackageManager {
     }
   }
 
-  /**
-   * Collect all files from a package for a resource type, applying manifest patterns.
-   * Returns { allFiles, enabledByManifest } where enabledByManifest is the set of files
-   * that pass the manifest's own patterns.
-   */
   private collectManifestFiles(
     packageRoot: string,
     resourceType: ResourceType,
   ): { allFiles: string[]; enabledByManifest: Set<string> } {
     const manifest = readMsaManifest(join(packageRoot, "package.json"));
     const entries = manifest?.[resourceType as keyof MsaManifest];
-    if (entries && entries.length > 0) {
+    if (entries !== undefined && entries.length > 0) {
       const allFiles = this.collectFilesFromManifestEntries(entries, packageRoot, resourceType);
       const manifestPatterns = entries.filter(isOverridePattern);
       const enabledByManifest =
@@ -2506,7 +2628,7 @@ export class DefaultPackageManager implements PackageManager {
     target: Map<string, { metadata: PathMetadata; enabled: boolean }>,
     metadata: PathMetadata,
   ): void {
-    if (!entries) return;
+    if (entries === undefined) return;
 
     const allFiles = this.collectFilesFromManifestEntries(entries, root, resourceType);
     const patterns = entries.filter(isOverridePattern);
@@ -2544,15 +2666,12 @@ export class DefaultPackageManager implements PackageManager {
   ): void {
     if (entries.length === 0) return;
 
-    // Collect all files from plain entries (non-pattern entries)
     const { plain, patterns } = splitPatterns(entries);
     const resolvedPlain = plain.map((p) => this.resolvePathFromBase(p, baseDir));
     const allFiles = this.collectFilesFromPaths(resolvedPlain, resourceType);
 
-    // Determine which files are enabled based on patterns
     const enabledPaths = applyPatterns(allFiles, patterns, baseDir);
 
-    // Add all files with their enabled state
     for (const f of allFiles) {
       this.addResource(target, f, metadata, enabledPaths.has(f));
     }
@@ -2626,7 +2745,6 @@ export class DefaultPackageManager implements PackageManager {
     };
 
     if (projectTrusted) {
-      // Project extensions from .msa/
       addResources(
         "extensions",
         collectAutoExtensionEntries(projectDirs.extensions),
@@ -2635,7 +2753,6 @@ export class DefaultPackageManager implements PackageManager {
         projectBaseDir,
       );
 
-      // Project skills from .msa/
       addResources(
         "skills",
         collectAutoSkillEntries(projectDirs.skills, "msa"),
@@ -2645,9 +2762,8 @@ export class DefaultPackageManager implements PackageManager {
       );
     }
 
-    // Project skills from .agents/ (each with its own baseDir)
     for (const agentsSkillsDir of projectAgentsSkillDirs) {
-      const agentsBaseDir = dirname(agentsSkillsDir); // the .agents directory
+      const agentsBaseDir = dirname(agentsSkillsDir);
       const agentsMetadata: PathMetadata = {
         ...projectMetadata,
         baseDir: agentsBaseDir,
@@ -2678,7 +2794,6 @@ export class DefaultPackageManager implements PackageManager {
       );
     }
 
-    // User extensions from ~/.msa/agent/
     addResources(
       "extensions",
       collectAutoExtensionEntries(userDirs.extensions),
@@ -2687,7 +2802,6 @@ export class DefaultPackageManager implements PackageManager {
       globalBaseDir,
     );
 
-    // User skills from ~/.msa/agent/
     addResources(
       "skills",
       collectAutoSkillEntries(userDirs.skills, "msa"),
@@ -2696,7 +2810,6 @@ export class DefaultPackageManager implements PackageManager {
       globalBaseDir,
     );
 
-    // User skills from ~/.agents/ (with its own baseDir)
     const userAgentsBaseDir = dirname(userAgentsSkillsDir);
     const userAgentsMetadata: PathMetadata = {
       ...userMetadata,
@@ -2738,9 +2851,7 @@ export class DefaultPackageManager implements PackageManager {
         } else if (stats.isDirectory()) {
           files.push(...collectResourceFiles(p, resourceType));
         }
-      } catch {
-        // Ignore errors
-      }
+      } catch {}
     }
     return files;
   }
@@ -2769,7 +2880,7 @@ export class DefaultPackageManager implements PackageManager {
     metadata: PathMetadata,
     enabled: boolean,
   ): void {
-    if (!path) return;
+    if (path === "") return;
     if (!map.has(path)) {
       map.set(path, { metadata, enabled });
     }
@@ -2829,7 +2940,7 @@ export class DefaultPackageManager implements PackageManager {
     options?: { cwd?: string; env?: Record<string, string> },
   ): ChildProcessByStdio<null, Readable, Readable> {
     const baseEnv = getEnv();
-    const env = options?.env ? { ...baseEnv, ...options.env } : baseEnv;
+    const env = options?.env === undefined ? baseEnv : { ...baseEnv, ...options.env };
     return spawnProcess(command, args, {
       cwd: options?.cwd,
       stdio: ["ignore", "pipe", "pipe"],
@@ -2842,59 +2953,73 @@ export class DefaultPackageManager implements PackageManager {
     args: string[],
     options?: { cwd?: string; timeoutMs?: number; env?: Record<string, string> },
   ): Promise<string> {
-    return new Promise((resolvePromise, reject) => {
-      const child = this.spawnCaptureCommand(command, args, options);
-      let stdout = "";
-      let stderr = "";
-      let timedOut = false;
-      const timeout =
-        typeof options?.timeoutMs === "number"
-          ? setTimeout(() => {
-              timedOut = true;
-              child.kill();
-            }, options.timeoutMs)
-          : undefined;
+    return Effect.runPromise(
+      Effect.callback<string>((resume) => {
+        const child = this.spawnCaptureCommand(command, args, options);
+        let stdout = "";
+        let stderr = "";
+        let timedOut = false;
+        const timeout =
+          typeof options?.timeoutMs === "number"
+            ? schedule(() => {
+                timedOut = true;
+                child.kill();
+              }, options.timeoutMs)
+            : undefined;
 
-      child.stdout?.on("data", (data) => {
-        stdout += data.toString();
-      });
-      child.stderr?.on("data", (data) => {
-        stderr += data.toString();
-      });
-      child.once("error", (error) => {
-        if (timeout) clearTimeout(timeout);
-        reject(error);
-      });
-      child.once("close", (code, signal) => {
-        if (timeout) clearTimeout(timeout);
-        if (timedOut) {
-          reject(new Error(`${command} ${args.join(" ")} timed out after ${options?.timeoutMs}ms`));
-          return;
-        }
-        if (code === 0) {
-          resolvePromise(stdout.trim());
-          return;
-        }
-        const exitStatus = code === null ? `signal ${signal ?? "unknown"}` : `code ${code}`;
-        reject(
-          new Error(`${command} ${args.join(" ")} failed with ${exitStatus}: ${stderr || stdout}`),
-        );
-      });
-    });
+        child.stdout?.on("data", (data) => {
+          stdout += data.toString();
+        });
+        child.stderr?.on("data", (data) => {
+          stderr += data.toString();
+        });
+        child.once("error", (error) => {
+          if (timeout !== undefined) timeout.cancel();
+          resume(Effect.die(error));
+        });
+        child.once("close", (code, signal) => {
+          if (timeout !== undefined) timeout.cancel();
+          if (timedOut) {
+            resume(
+              Effect.die(
+                new Error(`${command} ${args.join(" ")} timed out after ${options?.timeoutMs}ms`),
+              ),
+            );
+            return;
+          }
+          if (code === 0) {
+            resume(Effect.succeed(stdout.trim()));
+            return;
+          }
+          const exitStatus = code === null ? `signal ${signal ?? "unknown"}` : `code ${code}`;
+          resume(
+            Effect.die(
+              new Error(
+                `${command} ${args.join(" ")} failed with ${exitStatus}: ${stderr || stdout}`,
+              ),
+            ),
+          );
+        });
+      }),
+    );
   }
 
   private runCommand(command: string, args: string[], options?: { cwd?: string }): Promise<void> {
-    return new Promise((resolvePromise, reject) => {
-      const child = this.spawnCommand(command, args, options);
-      child.on("error", reject);
-      child.on("exit", (code) => {
-        if (code === 0) {
-          resolvePromise();
-        } else {
-          reject(new Error(`${command} ${args.join(" ")} failed with code ${code}`));
-        }
-      });
-    });
+    return Effect.runPromise(
+      Effect.callback<void>((resume) => {
+        const child = this.spawnCommand(command, args, options);
+        child.on("error", (error) => {
+          resume(Effect.die(error));
+        });
+        child.on("exit", (code) => {
+          if (code === 0) {
+            resume(Effect.void);
+          } else {
+            resume(Effect.die(new Error(`${command} ${args.join(" ")} failed with code ${code}`)));
+          }
+        });
+      }),
+    );
   }
 
   private runCommandSync(command: string, args: string[]): string {
@@ -2904,7 +3029,7 @@ export class DefaultPackageManager implements PackageManager {
       encoding: "utf-8",
       env,
     });
-    if (result.error || result.status !== 0) {
+    if (result.error !== undefined || result.status !== 0) {
       throw new Error(
         `Failed to run ${command} ${args.join(" ")}: ${result.error?.message || result.stderr || result.stdout}`,
       );

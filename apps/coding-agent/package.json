@@ -54,6 +54,7 @@
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "catalog:",
     "@anthropic-ai/sdk": "catalog:",
+    "@effect/platform-node": "catalog:",
     "@modelcontextprotocol/sdk": "catalog:",
     "@msa/agent-core": "workspace:*",
     "@msa/ai": "workspace:*",

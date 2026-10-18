@@ -11,13 +11,8 @@ export interface SourceInfo {
   baseDir?: string | undefined;
 }
 
-/** Prefix of built-in tool and extension paths, such as `builtin:read` or `builtin:mcp`. */
 export const BUILTIN_PATH_PREFIX = "builtin:";
 
-/**
- * Source of a path that names no file: `builtin` for `builtin:<name>`, or the prefix of an
- * angle-bracket path such as `inline` for `<inline:name>`. Undefined for file paths.
- */
 export function getSyntheticPathSource(path: string): string | undefined {
   if (path.startsWith(BUILTIN_PATH_PREFIX)) return "builtin";
   if (path.startsWith("<") && path.endsWith(">"))
