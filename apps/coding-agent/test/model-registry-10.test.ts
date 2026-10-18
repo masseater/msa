@@ -1,8 +1,4 @@
-import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-
-import { Api, Model } from "@msa/ai/compat";
+import type { Api } from "@msa/ai/compat";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
 
 import { AuthStorage } from "../src/core/auth-storage.ts";
@@ -12,6 +8,10 @@ import {
   type ProviderConfigInput,
 } from "../src/core/model-registry.ts";
 import { createModelRegistry } from "./model-runtime-test-utils.ts";
+import { Effect } from "effect";
+import { nodeFs } from "./model-registry-support.ts";
+import { awaited, joinPath, makeTempDir, randomSuffixSync, removePath, runTest} from "@msa/testing";
+import { readEnv, writeEnv, deleteEnv } from "../src/core/process-env.ts";
 
 describe("ModelRegistry", () => {
   let tempDir: string;
@@ -46,7 +46,7 @@ describe("ModelRegistry", () => {
   }
 
   function writeRawModelsJson(providers: Record<string, unknown>) {
-    writeFileSync(modelsJsonPath, JSON.stringify({ providers }));
+    nodeFs.writeFileSync(modelsJsonPath, JSON.stringify({ providers }));
   }
 
   function providerWithApiKey(apiKey: string) {
@@ -68,28 +68,27 @@ describe("ModelRegistry", () => {
     };
   }
 
-  beforeEach(() => {
-    tempDir = join(
-      tmpdir(),
-      `msa-test-model-registry-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-    );
-    mkdirSync(tempDir, { recursive: true });
-    modelsJsonPath = join(tempDir, "models.json");
-    authStorage = AuthStorage.inMemory();
-  });
+  beforeEach(() =>
+    runTest(makeTempDir(`msa-test-model-registry-${randomSuffixSync()}-`)).then((dir) => {
+      tempDir = dir;
+      modelsJsonPath = joinPath(tempDir, "models.json");
+      authStorage = AuthStorage.inMemory();
+      return dir;
+    }),
+  );
 
   afterEach(() => {
-    if (tempDir && existsSync(tempDir)) {
-      rmSync(tempDir, { recursive: true });
-    }
     clearApiKeyCache();
     vi.restoreAllMocks();
+    return runTest(removePath(tempDir));
   });
 
   describe("dynamic provider lifecycle", () => {
     describe("dynamic provider override persistence", () => {
-      test("models-only custom provider registration survives refresh", async () => {
-        const registry = await createModelRegistry(authStorage, modelsJsonPath);
+      test("models-only custom provider registration survives refresh", () => runTest(
+Effect.gen(function* () {
+
+        const registry = (yield* awaited(createModelRegistry(authStorage, modelsJsonPath)));
 
         registry.registerProvider(
           "custom-provider",
@@ -99,16 +98,20 @@ describe("ModelRegistry", () => {
             "openai-completions",
           ),
         );
-        await registry.refresh();
+        (yield* awaited(registry.refresh()));
 
         expect(getModelsForProvider(registry, "custom-provider").map((m) => m.id)).toEqual([
           "custom-a",
           "custom-b",
         ]);
-      });
+      
+}),
+));
 
-      test("baseUrl-only override keeps custom provider models after refresh", async () => {
-        const registry = await createModelRegistry(authStorage, modelsJsonPath);
+      test("baseUrl-only override keeps custom provider models after refresh", () => runTest(
+Effect.gen(function* () {
+
+        const registry = (yield* awaited(createModelRegistry(authStorage, modelsJsonPath)));
 
         registry.registerProvider(
           "custom-provider",
@@ -119,7 +122,7 @@ describe("ModelRegistry", () => {
           ),
         );
         registry.registerProvider("custom-provider", { baseUrl: "https://proxy.test/custom" });
-        await registry.refresh();
+        (yield* awaited(registry.refresh()));
 
         expect(getModelsForProvider(registry, "custom-provider").map((m) => m.id)).toEqual([
           "custom-a",
@@ -130,10 +133,14 @@ describe("ModelRegistry", () => {
             (m) => m.baseUrl === "https://proxy.test/custom",
           ),
         ).toBe(true);
-      });
+      
+}),
+));
 
-      test("headers-only override keeps custom provider models after refresh", async () => {
-        const registry = await createModelRegistry(authStorage, modelsJsonPath);
+      test("headers-only override keeps custom provider models after refresh", () => runTest(
+Effect.gen(function* () {
+
+        const registry = (yield* awaited(createModelRegistry(authStorage, modelsJsonPath)));
 
         registry.registerProvider(
           "custom-provider",
@@ -144,108 +151,138 @@ describe("ModelRegistry", () => {
           ),
         );
         registry.registerProvider("custom-provider", { headers: { "x-proxy": "enabled" } });
-        await registry.refresh();
+        (yield* awaited(registry.refresh()));
 
         const models = getModelsForProvider(registry, "custom-provider");
         expect(models.map((m) => m.id)).toEqual(["custom-a", "custom-b"]);
         expect(models.every((m) => m.baseUrl === "https://custom.test/v1")).toBe(true);
         const [first] = models;
         if (first === undefined) throw new Error("expected custom-provider models");
-        expect(await registry.getApiKeyAndHeaders(first)).toMatchObject({
+        expect((yield* awaited(registry.getApiKeyAndHeaders(first)))).toMatchObject({
           ok: true,
           headers: { "x-proxy": "enabled" },
         });
-      });
+      
+}),
+));
     });
   });
 
   describe("API key resolution", () => {
-    test("apiKey with ! prefix executes command and uses stdout", async () => {
+    test("apiKey with ! prefix executes command and uses stdout", () => runTest(
+Effect.gen(function* () {
+
       writeRawModelsJson({
         "custom-provider": providerWithApiKey("!echo test-api-key-from-command"),
       });
 
-      const registry = await createModelRegistry(authStorage, modelsJsonPath);
-      const apiKey = await registry.getApiKeyForProvider("custom-provider");
+      const registry = (yield* awaited(createModelRegistry(authStorage, modelsJsonPath)));
+      const apiKey = (yield* awaited(registry.getApiKeyForProvider("custom-provider")));
 
       expect(apiKey).toBe("test-api-key-from-command");
-    });
+    
+}),
+));
 
-    test("apiKey with ! prefix trims whitespace from command output", async () => {
+    test("apiKey with ! prefix trims whitespace from command output", () => runTest(
+Effect.gen(function* () {
+
       writeRawModelsJson({
         "custom-provider": providerWithApiKey("!echo '  spaced-key  '"),
       });
 
-      const registry = await createModelRegistry(authStorage, modelsJsonPath);
-      const apiKey = await registry.getApiKeyForProvider("custom-provider");
+      const registry = (yield* awaited(createModelRegistry(authStorage, modelsJsonPath)));
+      const apiKey = (yield* awaited(registry.getApiKeyForProvider("custom-provider")));
 
       expect(apiKey).toBe("spaced-key");
-    });
+    
+}),
+));
 
-    test("apiKey with ! prefix handles multiline output (uses trimmed result)", async () => {
+    test("apiKey with ! prefix handles multiline output (uses trimmed result)", () => runTest(
+Effect.gen(function* () {
+
       writeRawModelsJson({
         "custom-provider": providerWithApiKey("!printf 'line1\\nline2'"),
       });
 
-      const registry = await createModelRegistry(authStorage, modelsJsonPath);
-      const apiKey = await registry.getApiKeyForProvider("custom-provider");
+      const registry = (yield* awaited(createModelRegistry(authStorage, modelsJsonPath)));
+      const apiKey = (yield* awaited(registry.getApiKeyForProvider("custom-provider")));
 
       expect(apiKey).toBe("line1\nline2");
-    });
+    
+}),
+));
 
-    test("apiKey with ! prefix returns undefined on command failure", async () => {
+    test("apiKey with ! prefix returns undefined on command failure", () => runTest(
+Effect.gen(function* () {
+
       writeRawModelsJson({
         "custom-provider": providerWithApiKey("!exit 1"),
       });
 
-      const registry = await createModelRegistry(authStorage, modelsJsonPath);
-      const apiKey = await registry.getApiKeyForProvider("custom-provider");
+      const registry = (yield* awaited(createModelRegistry(authStorage, modelsJsonPath)));
+      const apiKey = (yield* awaited(registry.getApiKeyForProvider("custom-provider")));
 
       expect(apiKey).toBeUndefined();
-    });
+    
+}),
+));
 
-    test("apiKey with ! prefix returns undefined on nonexistent command", async () => {
+    test("apiKey with ! prefix returns undefined on nonexistent command", () => runTest(
+Effect.gen(function* () {
+
       writeRawModelsJson({
         "custom-provider": providerWithApiKey("!nonexistent-command-12345"),
       });
 
-      const registry = await createModelRegistry(authStorage, modelsJsonPath);
-      const apiKey = await registry.getApiKeyForProvider("custom-provider");
+      const registry = (yield* awaited(createModelRegistry(authStorage, modelsJsonPath)));
+      const apiKey = (yield* awaited(registry.getApiKeyForProvider("custom-provider")));
 
       expect(apiKey).toBeUndefined();
-    });
+    
+}),
+));
 
-    test("apiKey with ! prefix returns undefined on empty output", async () => {
+    test("apiKey with ! prefix returns undefined on empty output", () => runTest(
+Effect.gen(function* () {
+
       writeRawModelsJson({
         "custom-provider": providerWithApiKey("!printf ''"),
       });
 
-      const registry = await createModelRegistry(authStorage, modelsJsonPath);
-      const apiKey = await registry.getApiKeyForProvider("custom-provider");
+      const registry = (yield* awaited(createModelRegistry(authStorage, modelsJsonPath)));
+      const apiKey = (yield* awaited(registry.getApiKeyForProvider("custom-provider")));
 
       expect(apiKey).toBeUndefined();
-    });
+    
+}),
+));
 
-    test("apiKey with $ prefix resolves to env value", async () => {
-      const originalEnv = process.env["TEST_API_KEY_12345"];
-      process.env["TEST_API_KEY_12345"] = "env-api-key-value";
+    test("apiKey with $ prefix resolves to env value", () => runTest(
+Effect.gen(function* () {
+
+      const originalEnv = readEnv("TEST_API_KEY_12345");
+      writeEnv("TEST_API_KEY_12345", "env-api-key-value");
 
       try {
         writeRawModelsJson({
           "custom-provider": providerWithApiKey("$TEST_API_KEY_12345"),
         });
 
-        const registry = await createModelRegistry(authStorage, modelsJsonPath);
-        const apiKey = await registry.getApiKeyForProvider("custom-provider");
+        const registry = (yield* awaited(createModelRegistry(authStorage, modelsJsonPath)));
+        const apiKey = (yield* awaited(registry.getApiKeyForProvider("custom-provider")));
 
         expect(apiKey).toBe("env-api-key-value");
       } finally {
         if (originalEnv === undefined) {
-          delete process.env["TEST_API_KEY_12345"];
+          deleteEnv("TEST_API_KEY_12345");
         } else {
-          process.env["TEST_API_KEY_12345"] = originalEnv;
+          writeEnv("TEST_API_KEY_12345", originalEnv);
         }
       }
-    });
+    
+}),
+));
   });
 });

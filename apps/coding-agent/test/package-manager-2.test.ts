@@ -1,12 +1,11 @@
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { DefaultPackageManager } from "../src/core/package-manager.ts";
 import { SettingsManager } from "../src/core/settings-manager.ts";
-import { pathEndsWith } from "./package-manager-support.ts";
+import { packagePaths } from "./package-manager-support.ts";
+import { Effect } from "effect";
+import { awaited, joinPath, makeDirectory, makeTempDir, removePath, runTest, toJsonText, writeTextFile } from "@msa/testing";
+import { readEnv } from "../src/core/process-env.ts";
 
 describe("DefaultPackageManager", () => {
   let tempDir: string;
@@ -19,120 +18,134 @@ describe("DefaultPackageManager", () => {
 
   let previousOfflineEnv: string | undefined;
 
-  beforeEach(() => {
-    previousOfflineEnv = process.env["MSA_OFFLINE"];
-    delete process.env["MSA_OFFLINE"];
-    tempDir = join(tmpdir(), `pm-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
-    mkdirSync(tempDir, { recursive: true });
-    agentDir = join(tempDir, "agent");
-    mkdirSync(agentDir, { recursive: true });
+  beforeEach(() =>
+    runTest(
+      Effect.gen(function* () {
+        previousOfflineEnv = readEnv("MSA_OFFLINE");
+        vi.stubEnv("MSA_OFFLINE", undefined);
+        tempDir = yield* makeTempDir("pm-test-");
+        agentDir = joinPath(tempDir, "agent");
+        yield* makeDirectory(agentDir);
 
-    settingsManager = SettingsManager.inMemory();
-    packageManager = new DefaultPackageManager({
-      cwd: tempDir,
-      agentDir,
-      settingsManager,
-    });
-  });
+        settingsManager = SettingsManager.inMemory();
+        packageManager = new DefaultPackageManager({
+          cwd: tempDir,
+          agentDir,
+          settingsManager,
+        });
+      }),
+    ),
+  );
 
   afterEach(() => {
-    if (previousOfflineEnv === undefined) {
-      delete process.env["MSA_OFFLINE"];
-    } else {
-      process.env["MSA_OFFLINE"] = previousOfflineEnv;
-    }
+    vi.stubEnv("MSA_OFFLINE", previousOfflineEnv);
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
-    rmSync(tempDir, { recursive: true, force: true });
+    return runTest(removePath(tempDir));
   });
 
   describe("resolve", () => {
-    it("should auto-discover project prompts with overrides", async () => {
-      const promptsDir = join(tempDir, ".msa", "prompts");
-      mkdirSync(promptsDir, { recursive: true });
-      const promptPath = join(promptsDir, "is.md");
-      writeFileSync(promptPath, "Is prompt");
+    it("should auto-discover project prompts with overrides", () => runTest(
+Effect.gen(function* () {
+
+      const promptsDir = joinPath(tempDir, ".msa", "prompts");
+      (yield* makeDirectory(promptsDir));
+      const promptPath = joinPath(promptsDir, "is.md");
+      (yield* writeTextFile(promptPath, "Is prompt"));
 
       settingsManager.setProjectPromptTemplatePaths(["!prompts/is.md"]);
 
-      const result = await packageManager.resolve();
+      const result = (yield* awaited(packageManager.resolve()));
       expect(result.prompts.some((r) => r.path === promptPath && !r.enabled)).toBe(true);
-    });
+    
+}),
+));
 
-    it("should resolve directory with package.json msa.extensions in extensions setting", async () => {
-      const pkgDir = join(tempDir, "my-extensions-pkg");
-      mkdirSync(join(pkgDir, "extensions"), { recursive: true });
-      writeFileSync(
-        join(pkgDir, "package.json"),
-        JSON.stringify({
+    it("should resolve directory with package.json msa.extensions in extensions setting", () => runTest(
+Effect.gen(function* () {
+
+      const pkgDir = joinPath(tempDir, "my-extensions-pkg");
+      (yield* makeDirectory(joinPath(pkgDir, "extensions")));
+      (yield* writeTextFile(joinPath(pkgDir, "package.json"), (yield* toJsonText({
           name: "my-extensions-pkg",
           msa: {
             extensions: ["./extensions/clip.ts", "./extensions/cost.ts"],
           },
-        }),
-      );
-      writeFileSync(join(pkgDir, "extensions", "clip.ts"), "export default function() {}");
-      writeFileSync(join(pkgDir, "extensions", "cost.ts"), "export default function() {}");
-      writeFileSync(join(pkgDir, "extensions", "helper.ts"), "export const x = 1;");
+        }))));
+      (yield* writeTextFile(joinPath(pkgDir, "extensions", "clip.ts"), "export default function() {}"));
+      (yield* writeTextFile(joinPath(pkgDir, "extensions", "cost.ts"), "export default function() {}"));
+      (yield* writeTextFile(joinPath(pkgDir, "extensions", "helper.ts"), "export const x = 1;"));
 
       settingsManager.setExtensionPaths([pkgDir]);
 
-      const result = await packageManager.resolve();
+      const result = (yield* awaited(packageManager.resolve()));
 
       expect(
         result.extensions.some(
-          (r) => r.path === join(pkgDir, "extensions", "clip.ts") && r.enabled,
+          (r) => r.path === joinPath(pkgDir, "extensions", "clip.ts") && r.enabled,
         ),
       ).toBe(true);
       expect(
         result.extensions.some(
-          (r) => r.path === join(pkgDir, "extensions", "cost.ts") && r.enabled,
+          (r) => r.path === joinPath(pkgDir, "extensions", "cost.ts") && r.enabled,
         ),
       ).toBe(true);
 
-      expect(result.extensions.some((r) => pathEndsWith(r.path, "helper.ts"))).toBe(false);
-    });
+      expect(result.extensions.some((r) => packagePaths.pathEndsWith(r.path, "helper.ts"))).toBe(false);
+    
+}),
+));
   });
 
   describe("auto-discovered skill metadata", () => {
-    it("should use the agent dir as baseDir for user .msa/agent skills", async () => {
-      const skillPath = join(agentDir, "skills", "user-msa", "SKILL.md");
-      mkdirSync(join(agentDir, "skills", "user-msa"), { recursive: true });
-      writeFileSync(skillPath, "---\nname: user-msa\ndescription: user msa\n---\n");
+    it("should use the agent dir as baseDir for user .msa/agent skills", () => runTest(
+Effect.gen(function* () {
 
-      const result = await packageManager.resolve();
+      const skillPath = joinPath(agentDir, "skills", "user-msa", "SKILL.md");
+      (yield* makeDirectory(joinPath(agentDir, "skills", "user-msa")));
+      (yield* writeTextFile(skillPath, "---\nname: user-msa\ndescription: user msa\n---\n"));
+
+      const result = (yield* awaited(packageManager.resolve()));
       const skill = result.skills.find((r) => r.path === skillPath);
 
       expect(skill?.metadata.source).toBe("auto");
       expect(skill?.metadata.scope).toBe("user");
       expect(skill?.metadata.baseDir).toBe(agentDir);
-    });
+    
+}),
+));
 
-    it("should use the project .msa dir as baseDir for project .msa skills", async () => {
-      const projectBaseDir = join(tempDir, ".msa");
-      const skillPath = join(projectBaseDir, "skills", "project-msa", "SKILL.md");
-      mkdirSync(join(projectBaseDir, "skills", "project-msa"), { recursive: true });
-      writeFileSync(skillPath, "---\nname: project-msa\ndescription: project msa\n---\n");
+    it("should use the project .msa dir as baseDir for project .msa skills", () => runTest(
+Effect.gen(function* () {
 
-      const result = await packageManager.resolve();
+      const projectBaseDir = joinPath(tempDir, ".msa");
+      const skillPath = joinPath(projectBaseDir, "skills", "project-msa", "SKILL.md");
+      (yield* makeDirectory(joinPath(projectBaseDir, "skills", "project-msa")));
+      (yield* writeTextFile(skillPath, "---\nname: project-msa\ndescription: project msa\n---\n"));
+
+      const result = (yield* awaited(packageManager.resolve()));
       const skill = result.skills.find((r) => r.path === skillPath);
 
       expect(skill?.metadata.source).toBe("auto");
       expect(skill?.metadata.scope).toBe("project");
       expect(skill?.metadata.baseDir).toBe(projectBaseDir);
-    });
+    
+}),
+));
 
-    it("should use ~/.agents as baseDir for user .agents skills", async () => {
-      const previousHome = process.env["HOME"];
-      process.env["HOME"] = tempDir;
+    it("should use ~/.agents as baseDir for user .agents skills", () => runTest(
+Effect.gen(function* () {
+
+      const previousHome = readEnv("HOME");
+      vi.stubEnv("HOME", tempDir);
 
       try {
-        const agentsBaseDir = join(tempDir, ".agents");
-        const skillPath = join(agentsBaseDir, "skills", "user-agents", "SKILL.md");
-        mkdirSync(join(agentsBaseDir, "skills", "user-agents"), { recursive: true });
-        writeFileSync(skillPath, "---\nname: user-agents\ndescription: user agents\n---\n");
+        const agentsBaseDir = joinPath(tempDir, ".agents");
+        const skillPath = joinPath(agentsBaseDir, "skills", "user-agents", "SKILL.md");
+        (yield* makeDirectory(joinPath(agentsBaseDir, "skills", "user-agents")));
+        (yield* writeTextFile(skillPath, "---\nname: user-agents\ndescription: user agents\n---\n"));
 
-        const result = await packageManager.resolve();
+        const result = (yield* awaited(packageManager.resolve()));
         const skill = result.skills.find((r) => r.path === skillPath);
 
         expect(skill?.metadata.source).toBe("auto");
@@ -140,28 +153,32 @@ describe("DefaultPackageManager", () => {
         expect(skill?.metadata.baseDir).toBe(agentsBaseDir);
       } finally {
         if (previousHome === undefined) {
-          delete process.env["HOME"];
+          vi.stubEnv("HOME", undefined);
         } else {
-          process.env["HOME"] = previousHome;
+          vi.stubEnv("HOME", previousHome);
         }
       }
-    });
+    
+}),
+));
 
-    it("should use each project .agents dir as baseDir for project .agents skills", async () => {
-      const repoRoot = join(tempDir, "repo");
-      const nestedCwd = join(repoRoot, "packages", "feature");
-      mkdirSync(nestedCwd, { recursive: true });
-      mkdirSync(join(repoRoot, ".git"), { recursive: true });
+    it("should use each project .agents dir as baseDir for project .agents skills", () => runTest(
+Effect.gen(function* () {
 
-      const repoAgentsBaseDir = join(repoRoot, ".agents");
-      const repoSkill = join(repoAgentsBaseDir, "skills", "repo", "SKILL.md");
-      mkdirSync(join(repoAgentsBaseDir, "skills", "repo"), { recursive: true });
-      writeFileSync(repoSkill, "---\nname: repo\ndescription: repo\n---\n");
+      const repoRoot = joinPath(tempDir, "repo");
+      const nestedCwd = joinPath(repoRoot, "packages", "feature");
+      (yield* makeDirectory(nestedCwd));
+      (yield* makeDirectory(joinPath(repoRoot, ".git")));
 
-      const packageAgentsBaseDir = join(repoRoot, "packages", ".agents");
-      const packageSkill = join(packageAgentsBaseDir, "skills", "package", "SKILL.md");
-      mkdirSync(join(packageAgentsBaseDir, "skills", "package"), { recursive: true });
-      writeFileSync(packageSkill, "---\nname: package\ndescription: package\n---\n");
+      const repoAgentsBaseDir = joinPath(repoRoot, ".agents");
+      const repoSkill = joinPath(repoAgentsBaseDir, "skills", "repo", "SKILL.md");
+      (yield* makeDirectory(joinPath(repoAgentsBaseDir, "skills", "repo")));
+      (yield* writeTextFile(repoSkill, "---\nname: repo\ndescription: repo\n---\n"));
+
+      const packageAgentsBaseDir = joinPath(repoRoot, "packages", ".agents");
+      const packageSkill = joinPath(packageAgentsBaseDir, "skills", "package", "SKILL.md");
+      (yield* makeDirectory(joinPath(packageAgentsBaseDir, "skills", "package")));
+      (yield* writeTextFile(packageSkill, "---\nname: package\ndescription: package\n---\n"));
 
       const pm = new DefaultPackageManager({
         cwd: nestedCwd,
@@ -169,7 +186,7 @@ describe("DefaultPackageManager", () => {
         settingsManager,
       });
 
-      const result = await pm.resolve();
+      const result = (yield* awaited(pm.resolve()));
       const resolvedRepoSkill = result.skills.find((r) => r.path === repoSkill);
       const resolvedPackageSkill = result.skills.find((r) => r.path === packageSkill);
 
@@ -179,27 +196,31 @@ describe("DefaultPackageManager", () => {
       expect(resolvedPackageSkill?.metadata.source).toBe("auto");
       expect(resolvedPackageSkill?.metadata.scope).toBe("project");
       expect(resolvedPackageSkill?.metadata.baseDir).toBe(packageAgentsBaseDir);
-    });
+    
+}),
+));
   });
 
   describe(".agents/skills auto-discovery", () => {
-    it("should scan .agents/skills from cwd up to git repo root", async () => {
-      const repoRoot = join(tempDir, "repo");
-      const nestedCwd = join(repoRoot, "packages", "feature");
-      mkdirSync(nestedCwd, { recursive: true });
-      mkdirSync(join(repoRoot, ".git"), { recursive: true });
+    it("should scan .agents/skills from cwd up to git repo root", () => runTest(
+Effect.gen(function* () {
 
-      const aboveRepoSkill = join(tempDir, ".agents", "skills", "above-repo", "SKILL.md");
-      mkdirSync(join(tempDir, ".agents", "skills", "above-repo"), { recursive: true });
-      writeFileSync(aboveRepoSkill, "---\nname: above-repo\ndescription: above\n---\n");
+      const repoRoot = joinPath(tempDir, "repo");
+      const nestedCwd = joinPath(repoRoot, "packages", "feature");
+      (yield* makeDirectory(nestedCwd));
+      (yield* makeDirectory(joinPath(repoRoot, ".git")));
 
-      const repoRootSkill = join(repoRoot, ".agents", "skills", "repo-root", "SKILL.md");
-      mkdirSync(join(repoRoot, ".agents", "skills", "repo-root"), { recursive: true });
-      writeFileSync(repoRootSkill, "---\nname: repo-root\ndescription: repo\n---\n");
+      const aboveRepoSkill = joinPath(tempDir, ".agents", "skills", "above-repo", "SKILL.md");
+      (yield* makeDirectory(joinPath(tempDir, ".agents", "skills", "above-repo")));
+      (yield* writeTextFile(aboveRepoSkill, "---\nname: above-repo\ndescription: above\n---\n"));
 
-      const nestedSkill = join(repoRoot, "packages", ".agents", "skills", "nested", "SKILL.md");
-      mkdirSync(join(repoRoot, "packages", ".agents", "skills", "nested"), { recursive: true });
-      writeFileSync(nestedSkill, "---\nname: nested\ndescription: nested\n---\n");
+      const repoRootSkill = joinPath(repoRoot, ".agents", "skills", "repo-root", "SKILL.md");
+      (yield* makeDirectory(joinPath(repoRoot, ".agents", "skills", "repo-root")));
+      (yield* writeTextFile(repoRootSkill, "---\nname: repo-root\ndescription: repo\n---\n"));
+
+      const nestedSkill = joinPath(repoRoot, "packages", ".agents", "skills", "nested", "SKILL.md");
+      (yield* makeDirectory(joinPath(repoRoot, "packages", ".agents", "skills", "nested")));
+      (yield* writeTextFile(nestedSkill, "---\nname: nested\ndescription: nested\n---\n"));
 
       const pm = new DefaultPackageManager({
         cwd: nestedCwd,
@@ -207,24 +228,28 @@ describe("DefaultPackageManager", () => {
         settingsManager,
       });
 
-      const result = await pm.resolve();
+      const result = (yield* awaited(pm.resolve()));
       expect(result.skills.some((r) => r.path === repoRootSkill && r.enabled)).toBe(true);
       expect(result.skills.some((r) => r.path === nestedSkill && r.enabled)).toBe(true);
       expect(result.skills.some((r) => r.path === aboveRepoSkill)).toBe(false);
-    });
+    
+}),
+));
 
-    it("should scan .agents/skills up to filesystem root when not in a git repo", async () => {
-      const nonRepoRoot = join(tempDir, "non-repo");
-      const nestedCwd = join(nonRepoRoot, "a", "b");
-      mkdirSync(nestedCwd, { recursive: true });
+    it("should scan .agents/skills up to filesystem root when not in a git repo", () => runTest(
+Effect.gen(function* () {
 
-      const rootSkill = join(nonRepoRoot, ".agents", "skills", "root", "SKILL.md");
-      mkdirSync(join(nonRepoRoot, ".agents", "skills", "root"), { recursive: true });
-      writeFileSync(rootSkill, "---\nname: root\ndescription: root\n---\n");
+      const nonRepoRoot = joinPath(tempDir, "non-repo");
+      const nestedCwd = joinPath(nonRepoRoot, "a", "b");
+      (yield* makeDirectory(nestedCwd));
 
-      const middleSkill = join(nonRepoRoot, "a", ".agents", "skills", "middle", "SKILL.md");
-      mkdirSync(join(nonRepoRoot, "a", ".agents", "skills", "middle"), { recursive: true });
-      writeFileSync(middleSkill, "---\nname: middle\ndescription: middle\n---\n");
+      const rootSkill = joinPath(nonRepoRoot, ".agents", "skills", "root", "SKILL.md");
+      (yield* makeDirectory(joinPath(nonRepoRoot, ".agents", "skills", "root")));
+      (yield* writeTextFile(rootSkill, "---\nname: root\ndescription: root\n---\n"));
+
+      const middleSkill = joinPath(nonRepoRoot, "a", ".agents", "skills", "middle", "SKILL.md");
+      (yield* makeDirectory(joinPath(nonRepoRoot, "a", ".agents", "skills", "middle")));
+      (yield* writeTextFile(middleSkill, "---\nname: middle\ndescription: middle\n---\n"));
 
       const pm = new DefaultPackageManager({
         cwd: nestedCwd,
@@ -232,9 +257,11 @@ describe("DefaultPackageManager", () => {
         settingsManager,
       });
 
-      const result = await pm.resolve();
+      const result = (yield* awaited(pm.resolve()));
       expect(result.skills.some((r) => r.path === rootSkill && r.enabled)).toBe(true);
       expect(result.skills.some((r) => r.path === middleSkill && r.enabled)).toBe(true);
-    });
+    
+}),
+));
   });
 });

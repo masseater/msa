@@ -1,8 +1,4 @@
-import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-
-import { Api, OpenAICompletionsCompat } from "@msa/ai/compat";
+import type { Api, OpenAICompletionsCompat } from "@msa/ai/compat";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
 
 import { AuthStorage } from "../src/core/auth-storage.ts";
@@ -12,6 +8,9 @@ import {
   type ProviderConfigInput,
 } from "../src/core/model-registry.ts";
 import { createModelRegistry } from "./model-runtime-test-utils.ts";
+import { Effect } from "effect";
+import { nodeFs } from "./model-registry-support.ts";
+import { awaited, joinPath, makeTempDir, randomSuffixSync, removePath, runTest} from "@msa/testing";
 
 describe("ModelRegistry", () => {
   let tempDir: string;
@@ -42,7 +41,7 @@ describe("ModelRegistry", () => {
   }
 
   function writeModelsJson(providers: Record<string, ReturnType<typeof providerConfig>>) {
-    writeFileSync(modelsJsonPath, JSON.stringify({ providers }));
+    nodeFs.writeFileSync(modelsJsonPath, JSON.stringify({ providers }));
   }
 
   function getModelsForProvider(registry: ModelRegistry, provider: string) {
@@ -50,29 +49,28 @@ describe("ModelRegistry", () => {
   }
 
   function writeRawModelsJson(providers: Record<string, unknown>) {
-    writeFileSync(modelsJsonPath, JSON.stringify({ providers }));
+    nodeFs.writeFileSync(modelsJsonPath, JSON.stringify({ providers }));
   }
 
-  beforeEach(() => {
-    tempDir = join(
-      tmpdir(),
-      `msa-test-model-registry-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-    );
-    mkdirSync(tempDir, { recursive: true });
-    modelsJsonPath = join(tempDir, "models.json");
-    authStorage = AuthStorage.inMemory();
-  });
+  beforeEach(() =>
+    runTest(makeTempDir(`msa-test-model-registry-${randomSuffixSync()}-`)).then((dir) => {
+      tempDir = dir;
+      modelsJsonPath = joinPath(tempDir, "models.json");
+      authStorage = AuthStorage.inMemory();
+      return dir;
+    }),
+  );
 
   afterEach(() => {
-    if (tempDir && existsSync(tempDir)) {
-      rmSync(tempDir, { recursive: true });
-    }
     clearApiKeyCache();
     vi.restoreAllMocks();
+    return runTest(removePath(tempDir));
   });
 
   describe("custom models merge behavior", () => {
-    test("non-built-in provider custom models still require baseUrl", async () => {
+    test("non-built-in provider custom models still require baseUrl", () => runTest(
+Effect.gen(function* () {
+
       writeRawModelsJson({
         "my-custom-provider": {
           apiKey: "test-key",
@@ -87,37 +85,49 @@ describe("ModelRegistry", () => {
         },
       });
 
-      const registry = await createModelRegistry(authStorage, modelsJsonPath);
+      const registry = (yield* awaited(createModelRegistry(authStorage, modelsJsonPath)));
       expect(registry.getError()).toContain("baseUrl");
-    });
+    
+}),
+));
 
-    test("reports every provider composition error", async () => {
+    test("reports every provider composition error", () => runTest(
+Effect.gen(function* () {
+
       writeRawModelsJson({
         "broken-one": { api: "openai-completions", models: [{ id: "one" }] },
         "broken-two": { api: "openai-completions", models: [{ id: "two" }] },
       });
 
-      const registry = await createModelRegistry(authStorage, modelsJsonPath);
+      const registry = (yield* awaited(createModelRegistry(authStorage, modelsJsonPath)));
       const error = registry.getError();
 
       expect(error).toContain('Provider "broken-one"');
       expect(error).toContain('Provider "broken-two"');
-    });
+    
+}),
+));
 
-    test("custom provider with same name as built-in merges with built-in models", async () => {
+    test("custom provider with same name as built-in merges with built-in models", () => runTest(
+Effect.gen(function* () {
+
       writeModelsJson({
         anthropic: providerConfig("https://my-proxy.example.com/v1", [{ id: "claude-custom" }]),
       });
 
-      const registry = await createModelRegistry(authStorage, modelsJsonPath);
+      const registry = (yield* awaited(createModelRegistry(authStorage, modelsJsonPath)));
       const anthropicModels = getModelsForProvider(registry, "anthropic");
 
       expect(anthropicModels.length).toBeGreaterThan(1);
       expect(anthropicModels.some((m) => m.id === "claude-custom")).toBe(true);
       expect(anthropicModels.some((m) => m.id.includes("claude"))).toBe(true);
-    });
+    
+}),
+));
 
-    test("custom model with same id replaces built-in model by id", async () => {
+    test("custom model with same id replaces built-in model by id", () => runTest(
+Effect.gen(function* () {
+
       writeModelsJson({
         openrouter: providerConfig(
           "https://my-proxy.example.com/v1",
@@ -126,39 +136,51 @@ describe("ModelRegistry", () => {
         ),
       });
 
-      const registry = await createModelRegistry(authStorage, modelsJsonPath);
+      const registry = (yield* awaited(createModelRegistry(authStorage, modelsJsonPath)));
       const models = getModelsForProvider(registry, "openrouter");
       const sonnetModels = models.filter((m) => m.id === "anthropic/claude-sonnet-4.5");
 
       expect(sonnetModels).toHaveLength(1);
       expect(sonnetModels[0]?.baseUrl).toBe("https://my-proxy.example.com/v1");
-    });
+    
+}),
+));
 
-    test("custom provider with same name as built-in does not affect other built-in providers", async () => {
+    test("custom provider with same name as built-in does not affect other built-in providers", () => runTest(
+Effect.gen(function* () {
+
       writeModelsJson({
         anthropic: providerConfig("https://my-proxy.example.com/v1", [{ id: "claude-custom" }]),
       });
 
-      const registry = await createModelRegistry(authStorage, modelsJsonPath);
+      const registry = (yield* awaited(createModelRegistry(authStorage, modelsJsonPath)));
 
       expect(getModelsForProvider(registry, "opencode").length).toBeGreaterThan(0);
       expect(getModelsForProvider(registry, "openai").length).toBeGreaterThan(0);
-    });
+    
+}),
+));
 
-    test("provider-level baseUrl applies to both built-in and custom models", async () => {
+    test("provider-level baseUrl applies to both built-in and custom models", () => runTest(
+Effect.gen(function* () {
+
       writeModelsJson({
         anthropic: providerConfig("https://merged-proxy.example.com/v1", [{ id: "claude-custom" }]),
       });
 
-      const registry = await createModelRegistry(authStorage, modelsJsonPath);
+      const registry = (yield* awaited(createModelRegistry(authStorage, modelsJsonPath)));
       const anthropicModels = getModelsForProvider(registry, "anthropic");
 
       for (const model of anthropicModels) {
         expect(model.baseUrl).toBe("https://merged-proxy.example.com/v1");
       }
-    });
+    
+}),
+));
 
-    test("provider-level compat applies to custom models", async () => {
+    test("provider-level compat applies to custom models", () => runTest(
+Effect.gen(function* () {
+
       writeRawModelsJson({
         demo: {
           baseUrl: "https://example.com/v1",
@@ -181,16 +203,20 @@ describe("ModelRegistry", () => {
         },
       });
 
-      const registry = await createModelRegistry(authStorage, modelsJsonPath);
+      const registry = (yield* awaited(createModelRegistry(authStorage, modelsJsonPath)));
       const compat = registry.find("demo", "demo-model")?.compat as
         | OpenAICompletionsCompat
         | undefined;
 
       expect(compat?.supportsUsageInStreaming).toBe(false);
       expect(compat?.maxTokensField).toBe("max_tokens");
-    });
+    
+}),
+));
 
-    test("model-level compat overrides provider-level compat for custom models", async () => {
+    test("model-level compat overrides provider-level compat for custom models", () => runTest(
+Effect.gen(function* () {
+
       writeRawModelsJson({
         demo: {
           baseUrl: "https://example.com/v1",
@@ -217,13 +243,15 @@ describe("ModelRegistry", () => {
         },
       });
 
-      const registry = await createModelRegistry(authStorage, modelsJsonPath);
+      const registry = (yield* awaited(createModelRegistry(authStorage, modelsJsonPath)));
       const compat = registry.find("demo", "demo-model")?.compat as
         | OpenAICompletionsCompat
         | undefined;
 
       expect(compat?.supportsUsageInStreaming).toBe(true);
       expect(compat?.maxTokensField).toBe("max_completion_tokens");
-    });
+    
+}),
+));
   });
 });

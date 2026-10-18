@@ -1,13 +1,12 @@
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-
-import { Model } from "@msa/ai/compat";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
 
 import { AuthStorage } from "../src/core/auth-storage.ts";
 import { clearApiKeyCache } from "../src/core/model-registry.ts";
 import { createModelRegistry } from "./model-runtime-test-utils.ts";
+import { Effect } from "effect";
+import { nodeFs } from "./model-registry-support.ts";
+import { deleteEnv, readEnv, writeEnv } from "../src/core/process-env.ts";
+import { awaited, joinPath, makeTempDir, randomSuffixSync, readTextFile, removePath, runTest, writeTextFile} from "@msa/testing";
 
 describe("ModelRegistry", () => {
   let tempDir: string;
@@ -17,11 +16,11 @@ describe("ModelRegistry", () => {
   let authStorage: AuthStorage;
 
   function toShPath(value: string): string {
-    return value.replace(/\\/g, "/").replace(/"/g, '\\"');
+    return value.replace(/\\/ug, "/").replace(/"/ug, '\\"');
   }
 
   function writeRawModelsJson(providers: Record<string, unknown>) {
-    writeFileSync(modelsJsonPath, JSON.stringify({ providers }));
+    nodeFs.writeFileSync(modelsJsonPath, JSON.stringify({ providers }));
   }
 
   function providerWithApiKey(apiKey: string) {
@@ -43,29 +42,28 @@ describe("ModelRegistry", () => {
     };
   }
 
-  beforeEach(() => {
-    tempDir = join(
-      tmpdir(),
-      `msa-test-model-registry-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-    );
-    mkdirSync(tempDir, { recursive: true });
-    modelsJsonPath = join(tempDir, "models.json");
-    authStorage = AuthStorage.inMemory();
-  });
+  beforeEach(() =>
+    runTest(makeTempDir(`msa-test-model-registry-${randomSuffixSync()}-`)).then((dir) => {
+      tempDir = dir;
+      modelsJsonPath = joinPath(tempDir, "models.json");
+      authStorage = AuthStorage.inMemory();
+      return dir;
+    }),
+  );
 
   afterEach(() => {
-    if (tempDir && existsSync(tempDir)) {
-      rmSync(tempDir, { recursive: true });
-    }
     clearApiKeyCache();
     vi.restoreAllMocks();
+    return runTest(removePath(tempDir));
   });
 
   describe("API key resolution", () => {
     describe("request-time resolution", () => {
-      test("commands are re-executed across registry instances", async () => {
-        const counterFile = join(tempDir, "counter");
-        writeFileSync(counterFile, "0");
+      test("commands are re-executed across registry instances", () => runTest(
+Effect.gen(function* () {
+
+        const counterFile = joinPath(tempDir, "counter");
+        (yield* writeTextFile(counterFile, "0"));
 
         const counterPath = toShPath(counterFile);
         const command = `!sh -c 'count=$(cat "${counterPath}"); echo $((count + 1)) > "${counterPath}"; echo "key-value"'`;
@@ -73,34 +71,42 @@ describe("ModelRegistry", () => {
           "custom-provider": providerWithApiKey(command),
         });
 
-        const registry1 = await createModelRegistry(authStorage, modelsJsonPath);
-        await registry1.getApiKeyForProvider("custom-provider");
+        const registry1 = (yield* awaited(createModelRegistry(authStorage, modelsJsonPath)));
+        (yield* awaited(registry1.getApiKeyForProvider("custom-provider")));
 
-        const registry2 = await createModelRegistry(authStorage, modelsJsonPath);
-        await registry2.getApiKeyForProvider("custom-provider");
+        const registry2 = (yield* awaited(createModelRegistry(authStorage, modelsJsonPath)));
+        (yield* awaited(registry2.getApiKeyForProvider("custom-provider")));
 
-        const count = parseInt(readFileSync(counterFile, "utf-8").trim(), 10);
+        const count = parseInt((yield* readTextFile(counterFile)).trim(), 10);
         expect(count).toBe(2);
-      });
+      
+}),
+));
 
-      test("different commands resolve independently", async () => {
+      test("different commands resolve independently", () => runTest(
+Effect.gen(function* () {
+
         writeRawModelsJson({
           "provider-a": providerWithApiKey("!echo key-a"),
           "provider-b": providerWithApiKey("!echo key-b"),
         });
 
-        const registry = await createModelRegistry(authStorage, modelsJsonPath);
+        const registry = (yield* awaited(createModelRegistry(authStorage, modelsJsonPath)));
 
-        const keyA = await registry.getApiKeyForProvider("provider-a");
-        const keyB = await registry.getApiKeyForProvider("provider-b");
+        const keyA = (yield* awaited(registry.getApiKeyForProvider("provider-a")));
+        const keyB = (yield* awaited(registry.getApiKeyForProvider("provider-b")));
 
         expect(keyA).toBe("key-a");
         expect(keyB).toBe("key-b");
-      });
+      
+}),
+));
 
-      test("failed commands are retried", async () => {
-        const counterFile = join(tempDir, "counter");
-        writeFileSync(counterFile, "0");
+      test("failed commands are retried", () => runTest(
+Effect.gen(function* () {
+
+        const counterFile = joinPath(tempDir, "counter");
+        (yield* writeTextFile(counterFile, "0"));
 
         const counterPath = toShPath(counterFile);
         const command = `!sh -c 'count=$(cat "${counterPath}"); echo $((count + 1)) > "${counterPath}"; exit 1'`;
@@ -108,29 +114,33 @@ describe("ModelRegistry", () => {
           "custom-provider": providerWithApiKey(command),
         });
 
-        const registry = await createModelRegistry(authStorage, modelsJsonPath);
-        const key1 = await registry.getApiKeyForProvider("custom-provider");
-        const key2 = await registry.getApiKeyForProvider("custom-provider");
+        const registry = (yield* awaited(createModelRegistry(authStorage, modelsJsonPath)));
+        const key1 = (yield* awaited(registry.getApiKeyForProvider("custom-provider")));
+        const key2 = (yield* awaited(registry.getApiKeyForProvider("custom-provider")));
 
         expect(key1).toBeUndefined();
         expect(key2).toBeUndefined();
 
-        const count = parseInt(readFileSync(counterFile, "utf-8").trim(), 10);
+        const count = parseInt((yield* readTextFile(counterFile)).trim(), 10);
         expect(count).toBe(2);
-      });
+      
+}),
+));
 
-      test("provider auth status reports apiKey environment variables from models.json", async () => {
+      test("provider auth status reports apiKey environment variables from models.json", () => runTest(
+Effect.gen(function* () {
+
         const envVarName = "TEST_API_KEY_STATUS_TEST_98765";
-        const originalEnv = process.env[envVarName];
+        const originalEnv = readEnv(envVarName);
 
         try {
-          process.env[envVarName] = "status-test-key";
+          writeEnv(envVarName, "status-test-key");
 
           writeRawModelsJson({
             "custom-provider": providerWithApiKey(`$${envVarName}`),
           });
 
-          const registry = await createModelRegistry(authStorage, modelsJsonPath);
+          const registry = (yield* awaited(createModelRegistry(authStorage, modelsJsonPath)));
 
           expect(registry.getProviderAuthStatus("custom-provider")).toEqual({
             configured: true,
@@ -139,20 +149,24 @@ describe("ModelRegistry", () => {
           });
         } finally {
           if (originalEnv === undefined) {
-            delete process.env[envVarName];
+            deleteEnv(envVarName);
           } else {
-            process.env[envVarName] = originalEnv;
+            writeEnv(envVarName, originalEnv);
           }
         }
-      });
+      
+}),
+));
 
-      test("provider auth status reports interpolated apiKey environment variables", async () => {
+      test("provider auth status reports interpolated apiKey environment variables", () => runTest(
+Effect.gen(function* () {
+
         const envVarNameA = "TEST_API_KEY_STATUS_PART_A_98765";
         const envVarNameB = "TEST_API_KEY_STATUS_PART_B_98765";
-        const originalEnvA = process.env[envVarNameA];
-        const originalEnvB = process.env[envVarNameB];
-        process.env[envVarNameA] = "left";
-        process.env[envVarNameB] = "right";
+        const originalEnvA = readEnv(envVarNameA);
+        const originalEnvB = readEnv(envVarNameB);
+        writeEnv(envVarNameA, "left");
+        writeEnv(envVarNameB, "right");
         const interpolatedKey = ["$", "{", envVarNameA, "}_$", "{", envVarNameB, "}"].join("");
 
         try {
@@ -160,7 +174,7 @@ describe("ModelRegistry", () => {
             "custom-provider": providerWithApiKey(interpolatedKey),
           });
 
-          const registry = await createModelRegistry(authStorage, modelsJsonPath);
+          const registry = (yield* awaited(createModelRegistry(authStorage, modelsJsonPath)));
 
           expect(registry.getProviderAuthStatus("custom-provider")).toEqual({
             configured: true,
@@ -169,42 +183,50 @@ describe("ModelRegistry", () => {
           });
         } finally {
           if (originalEnvA === undefined) {
-            delete process.env[envVarNameA];
+            deleteEnv(envVarNameA);
           } else {
-            process.env[envVarNameA] = originalEnvA;
+            writeEnv(envVarNameA, originalEnvA);
           }
           if (originalEnvB === undefined) {
-            delete process.env[envVarNameB];
+            deleteEnv(envVarNameB);
           } else {
-            process.env[envVarNameB] = originalEnvB;
+            writeEnv(envVarNameB, originalEnvB);
           }
         }
-      });
+      
+}),
+));
 
-      test("provider auth status reports non-env apiKey values from models.json as a config key", async () => {
+      test("provider auth status reports non-env apiKey values from models.json as a config key", () => runTest(
+Effect.gen(function* () {
+
         writeRawModelsJson({
           "custom-provider": providerWithApiKey("literal_api_key_value"),
         });
 
-        const registry = await createModelRegistry(authStorage, modelsJsonPath);
+        const registry = (yield* awaited(createModelRegistry(authStorage, modelsJsonPath)));
 
         expect(registry.getProviderAuthStatus("custom-provider")).toEqual({
           configured: true,
           source: "models_json_key",
         });
-      });
+      
+}),
+));
 
-      test("missing explicit env apiKey keeps provider unavailable", async () => {
+      test("missing explicit env apiKey keeps provider unavailable", () => runTest(
+Effect.gen(function* () {
+
         const envVarName = "TEST_API_KEY_MISSING_TEST_98765";
-        const originalEnv = process.env[envVarName];
-        delete process.env[envVarName];
+        const originalEnv = readEnv(envVarName);
+        deleteEnv(envVarName);
 
         try {
           writeRawModelsJson({
             "custom-provider": providerWithApiKey(`$${envVarName}`),
           });
 
-          const registry = await createModelRegistry(authStorage, modelsJsonPath);
+          const registry = (yield* awaited(createModelRegistry(authStorage, modelsJsonPath)));
 
           expect(registry.getProviderAuthStatus("custom-provider")).toEqual({ configured: false });
           expect(
@@ -212,12 +234,14 @@ describe("ModelRegistry", () => {
           ).toBe(false);
         } finally {
           if (originalEnv === undefined) {
-            delete process.env[envVarName];
+            deleteEnv(envVarName);
           } else {
-            process.env[envVarName] = originalEnv;
+            writeEnv(envVarName, originalEnv);
           }
         }
-      });
+      
+}),
+));
     });
   });
 });

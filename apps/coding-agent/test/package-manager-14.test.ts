@@ -1,12 +1,11 @@
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { DefaultPackageManager } from "../src/core/package-manager.ts";
 import { SettingsManager } from "../src/core/settings-manager.ts";
-import { pathEndsWith } from "./package-manager-support.ts";
+import { packagePaths } from "./package-manager-support.ts";
+import { Effect } from "effect";
+import { awaited, joinPath, makeDirectory, makeTempDir, removePath, runTest, toJsonText, writeTextFile } from "@msa/testing";
+import { readEnv } from "../src/core/process-env.ts";
 
 describe("DefaultPackageManager", () => {
   let tempDir: string;
@@ -19,144 +18,143 @@ describe("DefaultPackageManager", () => {
 
   let previousOfflineEnv: string | undefined;
 
-  beforeEach(() => {
-    previousOfflineEnv = process.env["MSA_OFFLINE"];
-    delete process.env["MSA_OFFLINE"];
-    tempDir = join(tmpdir(), `pm-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
-    mkdirSync(tempDir, { recursive: true });
-    agentDir = join(tempDir, "agent");
-    mkdirSync(agentDir, { recursive: true });
+  beforeEach(() =>
+    runTest(
+      Effect.gen(function* () {
+        previousOfflineEnv = readEnv("MSA_OFFLINE");
+        vi.stubEnv("MSA_OFFLINE", undefined);
+        tempDir = yield* makeTempDir("pm-test-");
+        agentDir = joinPath(tempDir, "agent");
+        yield* makeDirectory(agentDir);
 
-    settingsManager = SettingsManager.inMemory();
-    packageManager = new DefaultPackageManager({
-      cwd: tempDir,
-      agentDir,
-      settingsManager,
-    });
-  });
+        settingsManager = SettingsManager.inMemory();
+        packageManager = new DefaultPackageManager({
+          cwd: tempDir,
+          agentDir,
+          settingsManager,
+        });
+      }),
+    ),
+  );
 
   afterEach(() => {
-    if (previousOfflineEnv === undefined) {
-      delete process.env["MSA_OFFLINE"];
-    } else {
-      process.env["MSA_OFFLINE"] = previousOfflineEnv;
-    }
+    vi.stubEnv("MSA_OFFLINE", previousOfflineEnv);
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
-    rmSync(tempDir, { recursive: true, force: true });
+    return runTest(removePath(tempDir));
   });
 
   describe("multi-file extension discovery (issue #1102)", () => {
-    it("should only load index.ts from subdirectories, not helper modules", async () => {
-      const pkgDir = join(tempDir, "multifile-pkg");
-      mkdirSync(join(pkgDir, "extensions", "subagent"), { recursive: true });
+    it("should only load index.ts from subdirectories, not helper modules", () => runTest(
+Effect.gen(function* () {
 
-      writeFileSync(
-        join(pkgDir, "extensions", "subagent", "index.ts"),
-        `import { helper } from "./agents.ts";
-export default function(api) { api.registerTool({ name: "test", description: "test", execute: async () => helper() }); }`,
-      );
+      const pkgDir = joinPath(tempDir, "multifile-pkg");
+      (yield* makeDirectory(joinPath(pkgDir, "extensions", "subagent")));
 
-      writeFileSync(
-        join(pkgDir, "extensions", "subagent", "agents.ts"),
-        `export function helper() { return "helper"; }`,
-      );
+      (yield* writeTextFile(joinPath(pkgDir, "extensions", "subagent", "index.ts"), `import { helper } from "./agents.ts";
+export default function(api) { api.registerTool({ name: "test", description: "test", execute: async () => helper() }); }`));
 
-      writeFileSync(join(pkgDir, "extensions", "standalone.ts"), "export default function(api) {}");
+      (yield* writeTextFile(joinPath(pkgDir, "extensions", "subagent", "agents.ts"), `export function helper() { return "helper"; }`));
 
-      const result = await packageManager.resolveExtensionSources([pkgDir]);
+      (yield* writeTextFile(joinPath(pkgDir, "extensions", "standalone.ts"), "export default function(api) {}"));
+
+      const result = (yield* awaited(packageManager.resolveExtensionSources([pkgDir])));
 
       expect(
-        result.extensions.some((r) => pathEndsWith(r.path, "subagent/index.ts") && r.enabled),
+        result.extensions.some((r) => packagePaths.pathEndsWith(r.path, "subagent/index.ts") && r.enabled),
       ).toBe(true);
       expect(
-        result.extensions.some((r) => pathEndsWith(r.path, "standalone.ts") && r.enabled),
+        result.extensions.some((r) => packagePaths.pathEndsWith(r.path, "standalone.ts") && r.enabled),
       ).toBe(true);
 
-      expect(result.extensions.some((r) => pathEndsWith(r.path, "agents.ts"))).toBe(false);
-    });
+      expect(result.extensions.some((r) => packagePaths.pathEndsWith(r.path, "agents.ts"))).toBe(false);
+    
+}),
+));
 
-    it("should respect package.json msa.extensions manifest in subdirectories", async () => {
-      const pkgDir = join(tempDir, "manifest-subdir-pkg");
-      mkdirSync(join(pkgDir, "extensions", "custom"), { recursive: true });
+    it("should respect package.json msa.extensions manifest in subdirectories", () => runTest(
+Effect.gen(function* () {
 
-      writeFileSync(
-        join(pkgDir, "extensions", "custom", "package.json"),
-        JSON.stringify({
+      const pkgDir = joinPath(tempDir, "manifest-subdir-pkg");
+      (yield* makeDirectory(joinPath(pkgDir, "extensions", "custom")));
+
+      (yield* writeTextFile(joinPath(pkgDir, "extensions", "custom", "package.json"), (yield* toJsonText({
           msa: {
             extensions: ["./main.ts"],
           },
-        }),
-      );
-      writeFileSync(
-        join(pkgDir, "extensions", "custom", "main.ts"),
-        "export default function(api) {}",
-      );
-      writeFileSync(join(pkgDir, "extensions", "custom", "utils.ts"), "export const util = 1;");
+        }))));
+      (yield* writeTextFile(joinPath(pkgDir, "extensions", "custom", "main.ts"), "export default function(api) {}"));
+      (yield* writeTextFile(joinPath(pkgDir, "extensions", "custom", "utils.ts"), "export const util = 1;"));
 
-      const result = await packageManager.resolveExtensionSources([pkgDir]);
+      const result = (yield* awaited(packageManager.resolveExtensionSources([pkgDir])));
 
       expect(
-        result.extensions.some((r) => pathEndsWith(r.path, "custom/main.ts") && r.enabled),
+        result.extensions.some((r) => packagePaths.pathEndsWith(r.path, "custom/main.ts") && r.enabled),
       ).toBe(true);
 
-      expect(result.extensions.some((r) => pathEndsWith(r.path, "utils.ts"))).toBe(false);
-    });
+      expect(result.extensions.some((r) => packagePaths.pathEndsWith(r.path, "utils.ts"))).toBe(false);
+    
+}),
+));
 
-    it("should handle mixed top-level files and subdirectories", async () => {
-      const pkgDir = join(tempDir, "mixed-pkg");
-      mkdirSync(join(pkgDir, "extensions", "complex"), { recursive: true });
+    it("should handle mixed top-level files and subdirectories", () => runTest(
+Effect.gen(function* () {
 
-      writeFileSync(join(pkgDir, "extensions", "simple.ts"), "export default function(api) {}");
+      const pkgDir = joinPath(tempDir, "mixed-pkg");
+      (yield* makeDirectory(joinPath(pkgDir, "extensions", "complex")));
 
-      writeFileSync(
-        join(pkgDir, "extensions", "complex", "index.ts"),
-        "import { a } from './a.ts'; export default function(api) {}",
-      );
-      writeFileSync(join(pkgDir, "extensions", "complex", "a.ts"), "export const a = 1;");
-      writeFileSync(join(pkgDir, "extensions", "complex", "b.ts"), "export const b = 2;");
+      (yield* writeTextFile(joinPath(pkgDir, "extensions", "simple.ts"), "export default function(api) {}"));
 
-      const result = await packageManager.resolveExtensionSources([pkgDir]);
+      (yield* writeTextFile(joinPath(pkgDir, "extensions", "complex", "index.ts"), "import { a } from './a.ts'; export default function(api) {}"));
+      (yield* writeTextFile(joinPath(pkgDir, "extensions", "complex", "a.ts"), "export const a = 1;"));
+      (yield* writeTextFile(joinPath(pkgDir, "extensions", "complex", "b.ts"), "export const b = 2;"));
 
-      expect(result.extensions.some((r) => pathEndsWith(r.path, "simple.ts") && r.enabled)).toBe(
+      const result = (yield* awaited(packageManager.resolveExtensionSources([pkgDir])));
+
+      expect(result.extensions.some((r) => packagePaths.pathEndsWith(r.path, "simple.ts") && r.enabled)).toBe(
         true,
       );
       expect(
-        result.extensions.some((r) => pathEndsWith(r.path, "complex/index.ts") && r.enabled),
+        result.extensions.some((r) => packagePaths.pathEndsWith(r.path, "complex/index.ts") && r.enabled),
       ).toBe(true);
 
-      expect(result.extensions.some((r) => pathEndsWith(r.path, "complex/a.ts"))).toBe(false);
-      expect(result.extensions.some((r) => pathEndsWith(r.path, "complex/b.ts"))).toBe(false);
+      expect(result.extensions.some((r) => packagePaths.pathEndsWith(r.path, "complex/a.ts"))).toBe(false);
+      expect(result.extensions.some((r) => packagePaths.pathEndsWith(r.path, "complex/b.ts"))).toBe(false);
 
       expect(result.extensions.filter((r) => r.enabled).length).toBe(2);
-    });
+    
+}),
+));
 
-    it("should skip subdirectories without index.ts or manifest", async () => {
-      const pkgDir = join(tempDir, "no-entry-pkg");
-      mkdirSync(join(pkgDir, "extensions", "broken"), { recursive: true });
+    it("should skip subdirectories without index.ts or manifest", () => runTest(
+Effect.gen(function* () {
 
-      writeFileSync(join(pkgDir, "extensions", "broken", "helper.ts"), "export const x = 1;");
-      writeFileSync(join(pkgDir, "extensions", "broken", "another.ts"), "export const y = 2;");
+      const pkgDir = joinPath(tempDir, "no-entry-pkg");
+      (yield* makeDirectory(joinPath(pkgDir, "extensions", "broken")));
 
-      writeFileSync(join(pkgDir, "extensions", "valid.ts"), "export default function(api) {}");
+      (yield* writeTextFile(joinPath(pkgDir, "extensions", "broken", "helper.ts"), "export const x = 1;"));
+      (yield* writeTextFile(joinPath(pkgDir, "extensions", "broken", "another.ts"), "export const y = 2;"));
 
-      const result = await packageManager.resolveExtensionSources([pkgDir]);
+      (yield* writeTextFile(joinPath(pkgDir, "extensions", "valid.ts"), "export default function(api) {}"));
 
-      expect(result.extensions.some((r) => pathEndsWith(r.path, "valid.ts") && r.enabled)).toBe(
+      const result = (yield* awaited(packageManager.resolveExtensionSources([pkgDir])));
+
+      expect(result.extensions.some((r) => packagePaths.pathEndsWith(r.path, "valid.ts") && r.enabled)).toBe(
         true,
       );
       expect(result.extensions.filter((r) => r.enabled).length).toBe(1);
-    });
+    
+}),
+));
   });
 
   describe("offline mode and network timeouts", () => {
-    it("should update npm range packages using the configured spec", async () => {
-      const installedPath = join(tempDir, ".msa", "npm", "node_modules", "example");
-      mkdirSync(installedPath, { recursive: true });
-      writeFileSync(
-        join(installedPath, "package.json"),
-        JSON.stringify({ name: "example", version: "1.0.0" }),
-      );
+    it("should update npm range packages using the configured spec", () => runTest(
+Effect.gen(function* () {
+
+      const installedPath = joinPath(tempDir, ".msa", "npm", "node_modules", "example");
+      (yield* makeDirectory(installedPath));
+      (yield* writeTextFile(joinPath(installedPath, "package.json"), (yield* toJsonText({ name: "example", version: "1.0.0" }))));
       settingsManager.setProjectPackages(["npm:example@^1.0.0"]);
 
       const runCommandCaptureSpy = vi
@@ -166,7 +164,7 @@ export default function(api) { api.registerTool({ name: "test", description: "te
         .spyOn(packageManager as any, "runCommand")
         .mockResolvedValue(undefined);
 
-      await packageManager.update("npm:example");
+      (yield* awaited(packageManager.update("npm:example")));
 
       expect(runCommandCaptureSpy).toHaveBeenCalledWith(
         "npm",
@@ -179,20 +177,21 @@ export default function(api) { api.registerTool({ name: "test", description: "te
           "install",
           "example@^1.0.0",
           "--prefix",
-          join(tempDir, ".msa", "npm"),
+          joinPath(tempDir, ".msa", "npm"),
           "--legacy-peer-deps",
         ],
         undefined,
       );
-    });
+    
+}),
+));
 
-    it("should skip project npm update when installed version matches latest", async () => {
-      const installedPath = join(tempDir, ".msa", "npm", "node_modules", "example");
-      mkdirSync(installedPath, { recursive: true });
-      writeFileSync(
-        join(installedPath, "package.json"),
-        JSON.stringify({ name: "example", version: "1.3.1" }),
-      );
+    it("should skip project npm update when installed version matches latest", () => runTest(
+Effect.gen(function* () {
+
+      const installedPath = joinPath(tempDir, ".msa", "npm", "node_modules", "example");
+      (yield* makeDirectory(installedPath));
+      (yield* writeTextFile(joinPath(installedPath, "package.json"), (yield* toJsonText({ name: "example", version: "1.3.1" }))));
       settingsManager.setProjectPackages(["npm:example@^1.0.0"]);
 
       const runCommandCaptureSpy = vi
@@ -202,7 +201,7 @@ export default function(api) { api.registerTool({ name: "test", description: "te
         .spyOn(packageManager as any, "runCommand")
         .mockResolvedValue(undefined);
 
-      await packageManager.update("npm:example");
+      (yield* awaited(packageManager.update("npm:example")));
 
       expect(runCommandCaptureSpy).toHaveBeenCalledWith(
         "npm",
@@ -210,15 +209,16 @@ export default function(api) { api.registerTool({ name: "test", description: "te
         expect.objectContaining({ cwd: tempDir, timeoutMs: expect.any(Number) }),
       );
       expect(runCommandSpy).not.toHaveBeenCalled();
-    });
+    
+}),
+));
 
-    it("should skip npm updates when the installed version is newer than the registry version", async () => {
-      const installedPath = join(tempDir, ".msa", "npm", "node_modules", "example");
-      mkdirSync(installedPath, { recursive: true });
-      writeFileSync(
-        join(installedPath, "package.json"),
-        JSON.stringify({ name: "example", version: "2.0.0" }),
-      );
+    it("should skip npm updates when the installed version is newer than the registry version", () => runTest(
+Effect.gen(function* () {
+
+      const installedPath = joinPath(tempDir, ".msa", "npm", "node_modules", "example");
+      (yield* makeDirectory(installedPath));
+      (yield* writeTextFile(joinPath(installedPath, "package.json"), (yield* toJsonText({ name: "example", version: "2.0.0" }))));
       settingsManager.setProjectPackages(["npm:example"]);
 
       const runCommandCaptureSpy = vi
@@ -228,7 +228,7 @@ export default function(api) { api.registerTool({ name: "test", description: "te
         .spyOn(packageManager as any, "runCommand")
         .mockResolvedValue(undefined);
 
-      await packageManager.update("npm:example");
+      (yield* awaited(packageManager.update("npm:example")));
 
       expect(runCommandCaptureSpy).toHaveBeenCalledWith(
         "npm",
@@ -236,6 +236,8 @@ export default function(api) { api.registerTool({ name: "test", description: "te
         expect.objectContaining({ cwd: tempDir, timeoutMs: expect.any(Number) }),
       );
       expect(runCommandSpy).not.toHaveBeenCalled();
-    });
+    
+}),
+));
   });
 });

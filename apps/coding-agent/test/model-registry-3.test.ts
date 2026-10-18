@@ -1,13 +1,12 @@
-import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-
-import { AnthropicMessagesCompat, OpenAICompletionsCompat } from "@msa/ai/compat";
+import type { AnthropicMessagesCompat, OpenAICompletionsCompat } from "@msa/ai/compat";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
 
 import { AuthStorage } from "../src/core/auth-storage.ts";
 import { clearApiKeyCache, type ModelRegistry } from "../src/core/model-registry.ts";
 import { createModelRegistry } from "./model-runtime-test-utils.ts";
+import { Effect } from "effect";
+import { nodeFs } from "./model-registry-support.ts";
+import { awaited, joinPath, makeTempDir, randomSuffixSync, removePath, runTest} from "@msa/testing";
 
 describe("ModelRegistry", () => {
   let tempDir: string;
@@ -21,29 +20,28 @@ describe("ModelRegistry", () => {
   }
 
   function writeRawModelsJson(providers: Record<string, unknown>) {
-    writeFileSync(modelsJsonPath, JSON.stringify({ providers }));
+    nodeFs.writeFileSync(modelsJsonPath, JSON.stringify({ providers }));
   }
 
-  beforeEach(() => {
-    tempDir = join(
-      tmpdir(),
-      `msa-test-model-registry-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-    );
-    mkdirSync(tempDir, { recursive: true });
-    modelsJsonPath = join(tempDir, "models.json");
-    authStorage = AuthStorage.inMemory();
-  });
+  beforeEach(() =>
+    runTest(makeTempDir(`msa-test-model-registry-${randomSuffixSync()}-`)).then((dir) => {
+      tempDir = dir;
+      modelsJsonPath = joinPath(tempDir, "models.json");
+      authStorage = AuthStorage.inMemory();
+      return dir;
+    }),
+  );
 
   afterEach(() => {
-    if (tempDir && existsSync(tempDir)) {
-      rmSync(tempDir, { recursive: true });
-    }
     clearApiKeyCache();
     vi.restoreAllMocks();
+    return runTest(removePath(tempDir));
   });
 
   describe("custom models merge behavior", () => {
-    test("provider-level compat applies to built-in models", async () => {
+    test("provider-level compat applies to built-in models", () => runTest(
+Effect.gen(function* () {
+
       writeRawModelsJson({
         openrouter: {
           compat: {
@@ -53,7 +51,7 @@ describe("ModelRegistry", () => {
         },
       });
 
-      const registry = await createModelRegistry(authStorage, modelsJsonPath);
+      const registry = (yield* awaited(createModelRegistry(authStorage, modelsJsonPath)));
       const models = getModelsForProvider(registry, "openrouter");
 
       expect(models.length).toBeGreaterThan(0);
@@ -62,9 +60,13 @@ describe("ModelRegistry", () => {
         expect(compat?.supportsUsageInStreaming).toBe(false);
         expect(compat?.supportsStrictMode).toBe(false);
       }
-    });
+    
+}),
+));
 
-    test("model schema accepts thinkingLevelMap and compat schema accepts supportsStrictMode and cacheControlFormat", async () => {
+    test("model schema accepts thinkingLevelMap and compat schema accepts supportsStrictMode and cacheControlFormat", () => runTest(
+Effect.gen(function* () {
+
       writeRawModelsJson({
         demo: {
           baseUrl: "https://example.com/v1",
@@ -91,7 +93,7 @@ describe("ModelRegistry", () => {
         },
       });
 
-      const registry = await createModelRegistry(authStorage, modelsJsonPath);
+      const registry = (yield* awaited(createModelRegistry(authStorage, modelsJsonPath)));
       const model = registry.find("demo", "demo-model");
       const compat = model?.compat as OpenAICompletionsCompat | undefined;
 
@@ -99,9 +101,13 @@ describe("ModelRegistry", () => {
       expect(model?.thinkingLevelMap).toEqual({ minimal: null, high: "max" });
       expect(compat?.supportsStrictMode).toBe(false);
       expect(compat?.cacheControlFormat).toBe("anthropic");
-    });
+    
+}),
+));
 
-    test("compat schema accepts chat template thinking configuration", async () => {
+    test("compat schema accepts chat template thinking configuration", () => runTest(
+Effect.gen(function* () {
+
       writeRawModelsJson({
         demo: {
           baseUrl: "https://example.com/v1",
@@ -127,7 +133,7 @@ describe("ModelRegistry", () => {
         },
       });
 
-      const registry = await createModelRegistry(authStorage, modelsJsonPath);
+      const registry = (yield* awaited(createModelRegistry(authStorage, modelsJsonPath)));
       const kwargsCompat = registry.find("demo", "kwargs-model")?.compat as
         | OpenAICompletionsCompat
         | undefined;
@@ -138,9 +144,13 @@ describe("ModelRegistry", () => {
         preserve_thinking: true,
         thinking: { $var: "thinking.enabled" },
       });
-    });
+    
+}),
+));
 
-    test("compat schema accepts Anthropic eager tool input streaming flag", async () => {
+    test("compat schema accepts Anthropic eager tool input streaming flag", () => runTest(
+Effect.gen(function* () {
+
       writeRawModelsJson({
         demo: {
           baseUrl: "https://example.com",
@@ -162,16 +172,20 @@ describe("ModelRegistry", () => {
         },
       });
 
-      const registry = await createModelRegistry(authStorage, modelsJsonPath);
+      const registry = (yield* awaited(createModelRegistry(authStorage, modelsJsonPath)));
       const compat = registry.find("demo", "demo-model")?.compat as
         | AnthropicMessagesCompat
         | undefined;
 
       expect(registry.getError()).toBeUndefined();
       expect(compat?.supportsEagerToolInputStreaming).toBe(false);
-    });
+    
+}),
+));
 
-    test("compat schema accepts long cache retention flag", async () => {
+    test("compat schema accepts long cache retention flag", () => runTest(
+Effect.gen(function* () {
+
       writeRawModelsJson({
         demo: {
           baseUrl: "https://example.com",
@@ -193,13 +207,15 @@ describe("ModelRegistry", () => {
         },
       });
 
-      const registry = await createModelRegistry(authStorage, modelsJsonPath);
+      const registry = (yield* awaited(createModelRegistry(authStorage, modelsJsonPath)));
       const compat = registry.find("demo", "demo-model")?.compat as
         | AnthropicMessagesCompat
         | undefined;
 
       expect(registry.getError()).toBeUndefined();
       expect(compat?.supportsLongCacheRetention).toBe(false);
-    });
+    
+}),
+));
   });
 });

@@ -1,11 +1,11 @@
-import { mkdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { DefaultPackageManager } from "../src/core/package-manager.ts";
 import { SettingsManager } from "../src/core/settings-manager.ts";
+import { Effect } from "effect";
+import { nodeFs } from "./package-manager-support.ts";
+import { awaited, joinPath, makeDirectory, makeTempDir, removePath, runTest, toJsonText, writeTextFile } from "@msa/testing";
+import { readEnv } from "../src/core/process-env.ts";
 
 describe("DefaultPackageManager", () => {
   let tempDir: string;
@@ -18,36 +18,37 @@ describe("DefaultPackageManager", () => {
 
   let previousOfflineEnv: string | undefined;
 
-  beforeEach(() => {
-    previousOfflineEnv = process.env["MSA_OFFLINE"];
-    delete process.env["MSA_OFFLINE"];
-    tempDir = join(tmpdir(), `pm-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
-    mkdirSync(tempDir, { recursive: true });
-    agentDir = join(tempDir, "agent");
-    mkdirSync(agentDir, { recursive: true });
+  beforeEach(() =>
+    runTest(
+      Effect.gen(function* () {
+        previousOfflineEnv = readEnv("MSA_OFFLINE");
+        vi.stubEnv("MSA_OFFLINE", undefined);
+        tempDir = yield* makeTempDir("pm-test-");
+        agentDir = joinPath(tempDir, "agent");
+        yield* makeDirectory(agentDir);
 
-    settingsManager = SettingsManager.inMemory();
-    packageManager = new DefaultPackageManager({
-      cwd: tempDir,
-      agentDir,
-      settingsManager,
-    });
-  });
+        settingsManager = SettingsManager.inMemory();
+        packageManager = new DefaultPackageManager({
+          cwd: tempDir,
+          agentDir,
+          settingsManager,
+        });
+      }),
+    ),
+  );
 
   afterEach(() => {
-    if (previousOfflineEnv === undefined) {
-      delete process.env["MSA_OFFLINE"];
-    } else {
-      process.env["MSA_OFFLINE"] = previousOfflineEnv;
-    }
+    vi.stubEnv("MSA_OFFLINE", previousOfflineEnv);
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
-    rmSync(tempDir, { recursive: true, force: true });
+    return runTest(removePath(tempDir));
   });
 
   describe("resolve", () => {
-    it("should return no package-sourced paths when no sources configured", async () => {
-      const result = await packageManager.resolve();
+    it("should return no package-sourced paths when no sources configured", () => runTest(
+Effect.gen(function* () {
+
+      const result = (yield* awaited(packageManager.resolve()));
       expect(result.extensions).toEqual([]);
       expect(result.prompts).toEqual([]);
       expect(result.themes).toEqual([]);
@@ -56,156 +57,177 @@ describe("DefaultPackageManager", () => {
           (r) => r.metadata.source === "auto" && r.metadata.origin === "top-level",
         ),
       ).toBe(true);
-    });
+    
+}),
+));
 
-    it("should resolve local extension paths from settings", async () => {
-      const extDir = join(agentDir, "extensions");
-      mkdirSync(extDir, { recursive: true });
-      const extPath = join(extDir, "my-extension.ts");
-      writeFileSync(extPath, "export default function() {}");
+    it("should resolve local extension paths from settings", () => runTest(
+Effect.gen(function* () {
+
+      const extDir = joinPath(agentDir, "extensions");
+      (yield* makeDirectory(extDir));
+      const extPath = joinPath(extDir, "my-extension.ts");
+      (yield* writeTextFile(extPath, "export default function() {}"));
       settingsManager.setExtensionPaths(["extensions/my-extension.ts"]);
 
-      const result = await packageManager.resolve();
+      const result = (yield* awaited(packageManager.resolve()));
       expect(result.extensions.some((r) => r.path === extPath && r.enabled)).toBe(true);
-    });
+    
+}),
+));
 
-    it("should resolve built-in extensions with user exclusions and project overrides", async () => {
+    it("should resolve built-in extensions with user exclusions and project overrides", () => runTest(
+Effect.gen(function* () {
+    const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
       const pm = new DefaultPackageManager({
         cwd: tempDir,
         agentDir,
         settingsManager,
         builtinExtensions: ["mcp", "llama.cpp"],
       });
-      const builtins = async () =>
-        (await pm.resolve()).extensions.map((r) => [
+      const builtins = () =>
+        effectRunPromise(
+Effect.gen(function* () {
+return ((yield* awaited(pm.resolve()))).extensions.map((r) => [
           r.path,
           r.enabled,
           r.metadata.source,
           r.metadata.scope,
         ]);
+}),
+);
 
-      expect(await builtins()).toEqual([
+      expect((yield* awaited(builtins()))).toEqual([
         ["builtin:mcp", true, "builtin", "user"],
         ["builtin:llama.cpp", true, "builtin", "user"],
       ]);
 
       settingsManager.setExtensionPaths(["-builtin:mcp"]);
       settingsManager.setProjectExtensionPaths(["+builtin:mcp", "-builtin:llama.cpp"]);
-      expect(await builtins()).toEqual([
+      expect((yield* awaited(builtins()))).toEqual([
         ["builtin:mcp", true, "builtin", "project"],
         ["builtin:llama.cpp", false, "builtin", "project"],
       ]);
 
       settingsManager.setProjectExtensionPaths([]);
-      expect(await builtins()).toEqual([
+      expect((yield* awaited(builtins()))).toEqual([
         ["builtin:mcp", false, "builtin", "user"],
         ["builtin:llama.cpp", true, "builtin", "user"],
       ]);
-    });
+    
+}),
+));
 
-    it("should resolve skill paths from settings", async () => {
-      const skillDir = join(agentDir, "skills", "my-skill");
-      mkdirSync(skillDir, { recursive: true });
-      const skillFile = join(skillDir, "SKILL.md");
-      writeFileSync(
-        skillFile,
-        `---
+    it("should resolve skill paths from settings", () => runTest(
+Effect.gen(function* () {
+
+      const skillDir = joinPath(agentDir, "skills", "my-skill");
+      (yield* makeDirectory(skillDir));
+      const skillFile = joinPath(skillDir, "SKILL.md");
+      (yield* writeTextFile(skillFile, `---
 name: test-skill
 description: A test skill
 ---
-Content`,
-      );
+Content`));
 
       settingsManager.setSkillPaths(["skills"]);
 
-      const result = await packageManager.resolve();
+      const result = (yield* awaited(packageManager.resolve()));
 
       expect(result.skills.some((r) => r.path === skillFile && r.enabled)).toBe(true);
-    });
+    
+}),
+));
 
-    it("should auto-discover root markdown skills from .msa skill dirs", async () => {
-      const skillFile = join(agentDir, "skills", "single-file.md");
-      mkdirSync(join(agentDir, "skills"), { recursive: true });
-      writeFileSync(
-        skillFile,
-        `---
+    it("should auto-discover root markdown skills from .msa skill dirs", () => runTest(
+Effect.gen(function* () {
+
+      const skillFile = joinPath(agentDir, "skills", "single-file.md");
+      (yield* makeDirectory(joinPath(agentDir, "skills")));
+      (yield* writeTextFile(skillFile, `---
 name: single-file
 description: A root markdown skill
 ---
-Content`,
-      );
+Content`));
 
-      const result = await packageManager.resolve();
+      const result = (yield* awaited(packageManager.resolve()));
       expect(result.skills.some((r) => r.path === skillFile && r.enabled)).toBe(true);
-    });
+    
+}),
+));
 
-    it("should resolve project paths relative to .msa", async () => {
-      const extDir = join(tempDir, ".msa", "extensions");
-      mkdirSync(extDir, { recursive: true });
-      const extPath = join(extDir, "project-ext.ts");
-      writeFileSync(extPath, "export default function() {}");
+    it("should resolve project paths relative to .msa", () => runTest(
+Effect.gen(function* () {
+
+      const extDir = joinPath(tempDir, ".msa", "extensions");
+      (yield* makeDirectory(extDir));
+      const extPath = joinPath(extDir, "project-ext.ts");
+      (yield* writeTextFile(extPath, "export default function() {}"));
 
       settingsManager.setProjectExtensionPaths(["extensions/project-ext.ts"]);
 
-      const result = await packageManager.resolve();
+      const result = (yield* awaited(packageManager.resolve()));
       expect(result.extensions.some((r) => r.path === extPath && r.enabled)).toBe(true);
-    });
+    
+}),
+));
 
-    it("should auto-discover user prompts with overrides", async () => {
-      const promptsDir = join(agentDir, "prompts");
-      mkdirSync(promptsDir, { recursive: true });
-      const promptPath = join(promptsDir, "auto.md");
-      writeFileSync(promptPath, "Auto prompt");
+    it("should auto-discover user prompts with overrides", () => runTest(
+Effect.gen(function* () {
+
+      const promptsDir = joinPath(agentDir, "prompts");
+      (yield* makeDirectory(promptsDir));
+      const promptPath = joinPath(promptsDir, "auto.md");
+      (yield* writeTextFile(promptPath, "Auto prompt"));
 
       settingsManager.setPromptTemplatePaths(["!prompts/auto.md"]);
 
-      const result = await packageManager.resolve();
+      const result = (yield* awaited(packageManager.resolve()));
       expect(result.prompts.some((r) => r.path === promptPath && !r.enabled)).toBe(true);
-    });
+    
+}),
+));
 
-    it("should resolve symlinked user and project resources once", async () => {
-      const previousHome = process.env["HOME"];
-      process.env["HOME"] = tempDir;
+    it("should resolve symlinked user and project resources once", () => runTest(
+Effect.gen(function* () {
+
+      const previousHome = readEnv("HOME");
+      vi.stubEnv("HOME", tempDir);
 
       try {
-        const sharedDir = join(tempDir, "shared-resources");
-        const sharedExtensionsDir = join(sharedDir, "extensions");
-        const sharedSkillsDir = join(sharedDir, "skills");
-        const sharedPromptsDir = join(sharedDir, "prompts");
-        const sharedThemesDir = join(sharedDir, "themes");
-        mkdirSync(sharedExtensionsDir, { recursive: true });
-        mkdirSync(sharedSkillsDir, { recursive: true });
-        mkdirSync(sharedPromptsDir, { recursive: true });
-        mkdirSync(sharedThemesDir, { recursive: true });
+        const sharedDir = joinPath(tempDir, "shared-resources");
+        const sharedExtensionsDir = joinPath(sharedDir, "extensions");
+        const sharedSkillsDir = joinPath(sharedDir, "skills");
+        const sharedPromptsDir = joinPath(sharedDir, "prompts");
+        const sharedThemesDir = joinPath(sharedDir, "themes");
+        (yield* makeDirectory(sharedExtensionsDir));
+        (yield* makeDirectory(sharedSkillsDir));
+        (yield* makeDirectory(sharedPromptsDir));
+        (yield* makeDirectory(sharedThemesDir));
 
-        writeFileSync(join(sharedExtensionsDir, "shared.ts"), "export default function() {}");
-        mkdirSync(join(sharedSkillsDir, "shared-skill"), { recursive: true });
-        writeFileSync(
-          join(sharedSkillsDir, "shared-skill", "SKILL.md"),
-          `---
+        (yield* writeTextFile(joinPath(sharedExtensionsDir, "shared.ts"), "export default function() {}"));
+        (yield* makeDirectory(joinPath(sharedSkillsDir, "shared-skill")));
+        (yield* writeTextFile(joinPath(sharedSkillsDir, "shared-skill", "SKILL.md"), `---
 name: shared-skill
 description: Shared skill
 ---
-Content`,
-        );
-        writeFileSync(join(sharedPromptsDir, "shared.md"), "Shared prompt");
-        writeFileSync(
-          join(sharedThemesDir, "shared.json"),
-          JSON.stringify({ name: "shared-theme" }),
-        );
+Content`));
+        (yield* writeTextFile(joinPath(sharedPromptsDir, "shared.md"), "Shared prompt"));
+        (yield* writeTextFile(joinPath(sharedThemesDir, "shared.json"), (yield* toJsonText({ name: "shared-theme" }))));
 
-        mkdirSync(join(agentDir), { recursive: true });
-        mkdirSync(join(tempDir, ".msa"), { recursive: true });
-        symlinkSync(sharedExtensionsDir, join(agentDir, "extensions"), "dir");
-        symlinkSync(sharedSkillsDir, join(agentDir, "skills"), "dir");
-        symlinkSync(sharedPromptsDir, join(agentDir, "prompts"), "dir");
-        symlinkSync(sharedThemesDir, join(agentDir, "themes"), "dir");
-        symlinkSync(sharedExtensionsDir, join(tempDir, ".msa", "extensions"), "dir");
-        symlinkSync(sharedSkillsDir, join(tempDir, ".msa", "skills"), "dir");
-        symlinkSync(sharedPromptsDir, join(tempDir, ".msa", "prompts"), "dir");
-        symlinkSync(sharedThemesDir, join(tempDir, ".msa", "themes"), "dir");
+        (yield* makeDirectory(joinPath(agentDir)));
+        (yield* makeDirectory(joinPath(tempDir, ".msa")));
+        nodeFs.symlinkSync(sharedExtensionsDir, joinPath(agentDir, "extensions"), "dir");
+        nodeFs.symlinkSync(sharedSkillsDir, joinPath(agentDir, "skills"), "dir");
+        nodeFs.symlinkSync(sharedPromptsDir, joinPath(agentDir, "prompts"), "dir");
+        nodeFs.symlinkSync(sharedThemesDir, joinPath(agentDir, "themes"), "dir");
+        nodeFs.symlinkSync(sharedExtensionsDir, joinPath(tempDir, ".msa", "extensions"), "dir");
+        nodeFs.symlinkSync(sharedSkillsDir, joinPath(tempDir, ".msa", "skills"), "dir");
+        nodeFs.symlinkSync(sharedPromptsDir, joinPath(tempDir, ".msa", "prompts"), "dir");
+        nodeFs.symlinkSync(sharedThemesDir, joinPath(tempDir, ".msa", "themes"), "dir");
 
-        const result = await packageManager.resolve();
+        const result = (yield* awaited(packageManager.resolve()));
 
         expect({
           extensions: result.extensions.length,
@@ -225,11 +247,13 @@ Content`,
         expect(result.themes[0]?.metadata.scope).toBe("project");
       } finally {
         if (previousHome === undefined) {
-          delete process.env["HOME"];
+          vi.stubEnv("HOME", undefined);
         } else {
-          process.env["HOME"] = previousHome;
+          vi.stubEnv("HOME", previousHome);
         }
       }
-    });
+    
+}),
+));
   });
 });

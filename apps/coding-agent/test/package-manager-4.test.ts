@@ -1,12 +1,11 @@
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { DefaultPackageManager, type ProgressEvent } from "../src/core/package-manager.ts";
 import { SettingsManager } from "../src/core/settings-manager.ts";
-import { pathEndsWith } from "./package-manager-support.ts";
+import { nodeFs, packagePaths, writeJsonFileSync } from "./package-manager-support.ts";
+import { Effect } from "effect";
+import { awaited, joinPath, makeDirectory, makeTempDir, removePath, runTest, toJsonText, writeTextFile } from "@msa/testing";
+import { readEnv } from "../src/core/process-env.ts";
 
 describe("DefaultPackageManager", () => {
   let tempDir: string;
@@ -19,108 +18,120 @@ describe("DefaultPackageManager", () => {
 
   let previousOfflineEnv: string | undefined;
 
-  beforeEach(() => {
-    previousOfflineEnv = process.env["MSA_OFFLINE"];
-    delete process.env["MSA_OFFLINE"];
-    tempDir = join(tmpdir(), `pm-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
-    mkdirSync(tempDir, { recursive: true });
-    agentDir = join(tempDir, "agent");
-    mkdirSync(agentDir, { recursive: true });
+  beforeEach(() =>
+    runTest(
+      Effect.gen(function* () {
+        previousOfflineEnv = readEnv("MSA_OFFLINE");
+        vi.stubEnv("MSA_OFFLINE", undefined);
+        tempDir = yield* makeTempDir("pm-test-");
+        agentDir = joinPath(tempDir, "agent");
+        yield* makeDirectory(agentDir);
 
-    settingsManager = SettingsManager.inMemory();
-    packageManager = new DefaultPackageManager({
-      cwd: tempDir,
-      agentDir,
-      settingsManager,
-    });
-  });
+        settingsManager = SettingsManager.inMemory();
+        packageManager = new DefaultPackageManager({
+          cwd: tempDir,
+          agentDir,
+          settingsManager,
+        });
+      }),
+    ),
+  );
 
   afterEach(() => {
-    if (previousOfflineEnv === undefined) {
-      delete process.env["MSA_OFFLINE"];
-    } else {
-      process.env["MSA_OFFLINE"] = previousOfflineEnv;
-    }
+    vi.stubEnv("MSA_OFFLINE", previousOfflineEnv);
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
-    rmSync(tempDir, { recursive: true, force: true });
+    return runTest(removePath(tempDir));
   });
 
   describe("resolveExtensionSources", () => {
-    it("should keep msa manifest entries with leading tilde package-relative", async () => {
-      const pkgDir = join(tempDir, "tilde-manifest-package");
-      const directExtensionPath = join(pkgDir, "~extensions", "main.ts");
-      const slashExtensionPath = join(pkgDir, "~", "extensions", "alt.ts");
-      const directSkillPath = join(pkgDir, "~skills", "direct-skill", "SKILL.md");
-      const slashSkillPath = join(pkgDir, "~", "skills", "slash-skill", "SKILL.md");
+    it("should keep msa manifest entries with leading tilde package-relative", () => runTest(
+Effect.gen(function* () {
 
-      mkdirSync(join(pkgDir, "~extensions"), { recursive: true });
-      mkdirSync(join(pkgDir, "~", "extensions"), { recursive: true });
-      mkdirSync(join(pkgDir, "~skills", "direct-skill"), { recursive: true });
-      mkdirSync(join(pkgDir, "~", "skills", "slash-skill"), { recursive: true });
-      writeFileSync(directExtensionPath, "export default function() {}");
-      writeFileSync(slashExtensionPath, "export default function() {}");
-      writeFileSync(directSkillPath, "---\nname: direct-skill\ndescription: Direct\n---\nContent");
-      writeFileSync(slashSkillPath, "---\nname: slash-skill\ndescription: Slash\n---\nContent");
-      writeFileSync(
-        join(pkgDir, "package.json"),
-        JSON.stringify({
+      const pkgDir = joinPath(tempDir, "tilde-manifest-package");
+      const directExtensionPath = joinPath(pkgDir, "~extensions", "main.ts");
+      const slashExtensionPath = joinPath(pkgDir, "~", "extensions", "alt.ts");
+      const directSkillPath = joinPath(pkgDir, "~skills", "direct-skill", "SKILL.md");
+      const slashSkillPath = joinPath(pkgDir, "~", "skills", "slash-skill", "SKILL.md");
+
+      (yield* makeDirectory(joinPath(pkgDir, "~extensions")));
+      (yield* makeDirectory(joinPath(pkgDir, "~", "extensions")));
+      (yield* makeDirectory(joinPath(pkgDir, "~skills", "direct-skill")));
+      (yield* makeDirectory(joinPath(pkgDir, "~", "skills", "slash-skill")));
+      (yield* writeTextFile(directExtensionPath, "export default function() {}"));
+      (yield* writeTextFile(slashExtensionPath, "export default function() {}"));
+      (yield* writeTextFile(directSkillPath, "---\nname: direct-skill\ndescription: Direct\n---\nContent"));
+      (yield* writeTextFile(slashSkillPath, "---\nname: slash-skill\ndescription: Slash\n---\nContent"));
+      (yield* writeTextFile(joinPath(pkgDir, "package.json"), (yield* toJsonText({
           name: "tilde-manifest-package",
           msa: {
             extensions: ["~extensions/main.ts", "~/extensions/alt.ts"],
             skills: ["~skills", "~/skills"],
           },
-        }),
-      );
+        }))));
 
-      const result = await packageManager.resolveExtensionSources([pkgDir]);
+      const result = (yield* awaited(packageManager.resolveExtensionSources([pkgDir])));
 
       expect(result.extensions.some((r) => r.path === directExtensionPath && r.enabled)).toBe(true);
       expect(result.extensions.some((r) => r.path === slashExtensionPath && r.enabled)).toBe(true);
       expect(result.skills.some((r) => r.path === directSkillPath && r.enabled)).toBe(true);
       expect(result.skills.some((r) => r.path === slashSkillPath && r.enabled)).toBe(true);
-    });
+    
+}),
+));
 
-    it("should handle directories with auto-discovery layout", async () => {
-      const pkgDir = join(tempDir, "auto-pkg");
-      mkdirSync(join(pkgDir, "extensions"), { recursive: true });
-      mkdirSync(join(pkgDir, "themes"), { recursive: true });
-      writeFileSync(join(pkgDir, "extensions", "main.ts"), "export default function() {}");
-      writeFileSync(join(pkgDir, "themes", "dark.json"), "{}");
+    it("should handle directories with auto-discovery layout", () => runTest(
+Effect.gen(function* () {
 
-      const result = await packageManager.resolveExtensionSources([pkgDir]);
-      expect(result.extensions.some((r) => pathEndsWith(r.path, "main.ts") && r.enabled)).toBe(
+      const pkgDir = joinPath(tempDir, "auto-pkg");
+      (yield* makeDirectory(joinPath(pkgDir, "extensions")));
+      (yield* makeDirectory(joinPath(pkgDir, "themes")));
+      (yield* writeTextFile(joinPath(pkgDir, "extensions", "main.ts"), "export default function() {}"));
+      (yield* writeTextFile(joinPath(pkgDir, "themes", "dark.json"), "{}"));
+
+      const result = (yield* awaited(packageManager.resolveExtensionSources([pkgDir])));
+      expect(result.extensions.some((r) => packagePaths.pathEndsWith(r.path, "main.ts") && r.enabled)).toBe(
         true,
       );
-      expect(result.themes.some((r) => pathEndsWith(r.path, "dark.json") && r.enabled)).toBe(true);
-    });
+      expect(result.themes.some((r) => packagePaths.pathEndsWith(r.path, "dark.json") && r.enabled)).toBe(true);
+    
+}),
+));
 
-    it("should stop recursing when a package skill directory contains SKILL.md", async () => {
-      const pkgDir = join(tempDir, "skill-root-pkg");
-      mkdirSync(join(pkgDir, "skills", "root-skill", "nested-skill"), { recursive: true });
-      const rootSkill = join(pkgDir, "skills", "root-skill", "SKILL.md");
-      const nestedSkill = join(pkgDir, "skills", "root-skill", "nested-skill", "SKILL.md");
-      writeFileSync(rootSkill, "---\nname: root-skill\ndescription: Root skill\n---\n");
-      writeFileSync(nestedSkill, "---\nname: nested-skill\ndescription: Nested skill\n---\n");
+    it("should stop recursing when a package skill directory contains SKILL.md", () => runTest(
+Effect.gen(function* () {
 
-      const result = await packageManager.resolveExtensionSources([pkgDir]);
+      const pkgDir = joinPath(tempDir, "skill-root-pkg");
+      (yield* makeDirectory(joinPath(pkgDir, "skills", "root-skill", "nested-skill")));
+      const rootSkill = joinPath(pkgDir, "skills", "root-skill", "SKILL.md");
+      const nestedSkill = joinPath(pkgDir, "skills", "root-skill", "nested-skill", "SKILL.md");
+      (yield* writeTextFile(rootSkill, "---\nname: root-skill\ndescription: Root skill\n---\n"));
+      (yield* writeTextFile(nestedSkill, "---\nname: nested-skill\ndescription: Nested skill\n---\n"));
+
+      const result = (yield* awaited(packageManager.resolveExtensionSources([pkgDir])));
       expect(result.skills.some((r) => r.path === rootSkill && r.enabled)).toBe(true);
       expect(result.skills.some((r) => r.path === nestedSkill)).toBe(false);
-    });
+    
+}),
+));
   });
 
   describe("progress callback", () => {
-    it("should emit progress events", async () => {
+    it("should emit progress events", () => runTest(
+Effect.gen(function* () {
+
       const events: ProgressEvent[] = [];
       packageManager.setProgressCallback((event) => events.push(event));
 
-      const extPath = join(tempDir, "ext.ts");
-      writeFileSync(extPath, "export default function() {}");
+      const extPath = joinPath(tempDir, "ext.ts");
+      (yield* writeTextFile(extPath, "export default function() {}"));
 
-      await packageManager.resolveExtensionSources([extPath]);
+      (yield* awaited(packageManager.resolveExtensionSources([extPath])));
 
       expect(events.length).toBe(0);
-    });
+    
+}),
+));
   });
 
   describe("command spawning", () => {
@@ -140,7 +151,9 @@ describe("DefaultPackageManager", () => {
   });
 
   describe("npmCommand", () => {
-    it("should use npmCommand argv for npm installs", async () => {
+    it("should use npmCommand argv for npm installs", () => runTest(
+Effect.gen(function* () {
+
       settingsManager = SettingsManager.inMemory({
         npmCommand: ["mise", "exec", "node@20", "--", "npm"],
       });
@@ -154,7 +167,7 @@ describe("DefaultPackageManager", () => {
         .spyOn(packageManager as any, "runCommand")
         .mockResolvedValue(undefined);
 
-      await packageManager.install("npm:@scope/pkg");
+      (yield* awaited(packageManager.install("npm:@scope/pkg")));
 
       expect(runCommandSpy).toHaveBeenCalledWith(
         "mise",
@@ -166,29 +179,37 @@ describe("DefaultPackageManager", () => {
           "install",
           "@scope/pkg",
           "--prefix",
-          join(agentDir, "npm"),
+          joinPath(agentDir, "npm"),
           "--legacy-peer-deps",
         ],
         undefined,
       );
-    });
+    
+}),
+));
 
-    it("should pass legacy peer deps when uninstalling npm packages", async () => {
-      mkdirSync(join(agentDir, "npm"), { recursive: true });
+    it("should pass legacy peer deps when uninstalling npm packages", () => runTest(
+Effect.gen(function* () {
+
+      (yield* makeDirectory(joinPath(agentDir, "npm")));
       const runCommandSpy = vi
         .spyOn(packageManager as any, "runCommand")
         .mockResolvedValue(undefined);
 
-      await packageManager.remove("npm:@scope/pkg");
+      (yield* awaited(packageManager.remove("npm:@scope/pkg")));
 
       expect(runCommandSpy).toHaveBeenCalledWith(
         "npm",
-        ["uninstall", "@scope/pkg", "--prefix", join(agentDir, "npm"), "--legacy-peer-deps"],
+        ["uninstall", "@scope/pkg", "--prefix", joinPath(agentDir, "npm"), "--legacy-peer-deps"],
         undefined,
       );
-    });
+    
+}),
+));
 
-    it("should use bun --cwd for npm package installs", async () => {
+    it("should use bun --cwd for npm package installs", () => runTest(
+Effect.gen(function* () {
+
       settingsManager = SettingsManager.inMemory({
         npmCommand: ["mise", "exec", "bun@1", "--", "bun"],
       });
@@ -202,7 +223,7 @@ describe("DefaultPackageManager", () => {
         .spyOn(packageManager as any, "runCommand")
         .mockResolvedValue(undefined);
 
-      await packageManager.install("npm:@scope/pkg");
+      (yield* awaited(packageManager.install("npm:@scope/pkg")));
 
       expect(runCommandSpy).toHaveBeenCalledWith(
         "mise",
@@ -214,30 +235,39 @@ describe("DefaultPackageManager", () => {
           "install",
           "@scope/pkg",
           "--cwd",
-          join(agentDir, "npm"),
+          joinPath(agentDir, "npm"),
           "--omit=peer",
         ],
         undefined,
       );
-    });
+    
+}),
+));
 
-    it("should install git package dependencies without auto-installing peers", async () => {
+    it("should install git package dependencies without auto-installing peers", () => runTest(
+Effect.gen(function* () {
+    const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
       const source = "git:github.com/user/repo";
-      const targetDir = join(agentDir, "git", "github.com", "user", "repo");
+      const targetDir = joinPath(agentDir, "git", "github.com", "user", "repo");
       const runCommandSpy = vi
         .spyOn(packageManager as any, "runCommand")
-        .mockImplementation(async (...callArgs: unknown[]) => {
+        .mockImplementation((...callArgs: unknown[]) => effectRunPromise(
+Effect.sync(() => {
+
           const [command, args] = callArgs as [string, string[]];
           if (command === "git" && args[0] === "clone") {
-            mkdirSync(targetDir, { recursive: true });
-            writeFileSync(
-              join(targetDir, "package.json"),
-              JSON.stringify({ name: "repo", version: "1.0.0" }),
-            );
+            nodeFs.mkdirSync(targetDir, { recursive: true });
+            writeJsonFileSync({
+              file: joinPath(targetDir, "package.json"),
+              value: { name: "repo", version: "1.0.0" },
+            });
           }
-        });
+        
+}),
+));
 
-      await packageManager.install(source);
+      (yield* awaited(packageManager.install(source)));
 
       expect(runCommandSpy).toHaveBeenCalledWith(
         "npm",
@@ -246,6 +276,8 @@ describe("DefaultPackageManager", () => {
           cwd: targetDir,
         },
       );
-    });
+    
+}),
+));
   });
 });

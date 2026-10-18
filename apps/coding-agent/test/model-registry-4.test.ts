@@ -1,8 +1,4 @@
-import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-
-import { AnthropicMessagesCompat, Api, Model } from "@msa/ai/compat";
+import type { AnthropicMessagesCompat, Api } from "@msa/ai/compat";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
 
 import { AuthStorage } from "../src/core/auth-storage.ts";
@@ -12,6 +8,9 @@ import {
   type ProviderConfigInput,
 } from "../src/core/model-registry.ts";
 import { createModelRegistry } from "./model-runtime-test-utils.ts";
+import { Effect } from "effect";
+import { nodeFs } from "./model-registry-support.ts";
+import { awaited, joinPath, makeTempDir, randomSuffixSync, removePath, runTest} from "@msa/testing";
 
 describe("ModelRegistry", () => {
   let tempDir: string;
@@ -42,7 +41,7 @@ describe("ModelRegistry", () => {
   }
 
   function writeModelsJson(providers: Record<string, ReturnType<typeof providerConfig>>) {
-    writeFileSync(modelsJsonPath, JSON.stringify({ providers }));
+    nodeFs.writeFileSync(modelsJsonPath, JSON.stringify({ providers }));
   }
 
   function getModelsForProvider(registry: ModelRegistry, provider: string) {
@@ -50,29 +49,28 @@ describe("ModelRegistry", () => {
   }
 
   function writeRawModelsJson(providers: Record<string, unknown>) {
-    writeFileSync(modelsJsonPath, JSON.stringify({ providers }));
+    nodeFs.writeFileSync(modelsJsonPath, JSON.stringify({ providers }));
   }
 
-  beforeEach(() => {
-    tempDir = join(
-      tmpdir(),
-      `msa-test-model-registry-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-    );
-    mkdirSync(tempDir, { recursive: true });
-    modelsJsonPath = join(tempDir, "models.json");
-    authStorage = AuthStorage.inMemory();
-  });
+  beforeEach(() =>
+    runTest(makeTempDir(`msa-test-model-registry-${randomSuffixSync()}-`)).then((dir) => {
+      tempDir = dir;
+      modelsJsonPath = joinPath(tempDir, "models.json");
+      authStorage = AuthStorage.inMemory();
+      return dir;
+    }),
+  );
 
   afterEach(() => {
-    if (tempDir && existsSync(tempDir)) {
-      rmSync(tempDir, { recursive: true });
-    }
     clearApiKeyCache();
     vi.restoreAllMocks();
+    return runTest(removePath(tempDir));
   });
 
   describe("custom models merge behavior", () => {
-    test("model-level baseUrl overrides provider-level baseUrl for custom models", async () => {
+    test("model-level baseUrl overrides provider-level baseUrl for custom models", () => runTest(
+Effect.gen(function* () {
+
       writeRawModelsJson({
         "opencode-go": {
           baseUrl: "https://opencode.ai/zen/go/v1",
@@ -101,15 +99,19 @@ describe("ModelRegistry", () => {
         },
       });
 
-      const registry = await createModelRegistry(authStorage, modelsJsonPath);
+      const registry = (yield* awaited(createModelRegistry(authStorage, modelsJsonPath)));
       const m25 = registry.find("opencode-go", "minimax-m2.5");
       const glm5 = registry.find("opencode-go", "glm-5");
 
       expect(m25?.baseUrl).toBe("https://opencode.ai/zen/go");
       expect(glm5?.baseUrl).toBe("https://opencode.ai/zen/go/v1");
-    });
+    
+}),
+));
 
-    test("modelOverrides still apply when provider also defines models", async () => {
+    test("modelOverrides still apply when provider also defines models", () => runTest(
+Effect.gen(function* () {
+
       writeRawModelsJson({
         openrouter: {
           baseUrl: "https://my-proxy.example.com/v1",
@@ -134,7 +136,7 @@ describe("ModelRegistry", () => {
         },
       });
 
-      const registry = await createModelRegistry(authStorage, modelsJsonPath);
+      const registry = (yield* awaited(createModelRegistry(authStorage, modelsJsonPath)));
       const models = getModelsForProvider(registry, "openrouter");
 
       expect(models.some((m) => m.id === "custom/openrouter-model")).toBe(true);
@@ -143,13 +145,17 @@ describe("ModelRegistry", () => {
           (m) => m.id === "anthropic/claude-sonnet-4.5" && m.name === "Overridden Built-in Sonnet",
         ),
       ).toBe(true);
-    });
+    
+}),
+));
 
-    test("refresh() reloads merged custom models from disk", async () => {
+    test("refresh() reloads merged custom models from disk", () => runTest(
+Effect.gen(function* () {
+
       writeModelsJson({
         anthropic: providerConfig("https://first-proxy.example.com/v1", [{ id: "claude-custom" }]),
       });
-      const registry = await createModelRegistry(authStorage, modelsJsonPath);
+      const registry = (yield* awaited(createModelRegistry(authStorage, modelsJsonPath)));
       expect(
         getModelsForProvider(registry, "anthropic").some((m) => m.id === "claude-custom"),
       ).toBe(true);
@@ -159,34 +165,42 @@ describe("ModelRegistry", () => {
           { id: "claude-custom-2" },
         ]),
       });
-      await registry.refresh();
+      (yield* awaited(registry.refresh()));
 
       const anthropicModels = getModelsForProvider(registry, "anthropic");
       expect(anthropicModels.some((m) => m.id === "claude-custom")).toBe(false);
       expect(anthropicModels.some((m) => m.id === "claude-custom-2")).toBe(true);
       expect(anthropicModels.some((m) => m.id.includes("claude"))).toBe(true);
-    });
+    
+}),
+));
 
-    test("removing custom models from models.json keeps built-in provider models", async () => {
+    test("removing custom models from models.json keeps built-in provider models", () => runTest(
+Effect.gen(function* () {
+
       writeModelsJson({
         anthropic: providerConfig("https://proxy.example.com/v1", [{ id: "claude-custom" }]),
       });
-      const registry = await createModelRegistry(authStorage, modelsJsonPath);
+      const registry = (yield* awaited(createModelRegistry(authStorage, modelsJsonPath)));
       expect(
         getModelsForProvider(registry, "anthropic").some((m) => m.id === "claude-custom"),
       ).toBe(true);
 
       writeModelsJson({});
-      await registry.refresh();
+      (yield* awaited(registry.refresh()));
 
       const anthropicModels = getModelsForProvider(registry, "anthropic");
       expect(anthropicModels.some((m) => m.id === "claude-custom")).toBe(false);
       expect(anthropicModels.some((m) => m.id.includes("claude"))).toBe(true);
-    });
+    
+}),
+));
   });
 
   describe("modelOverrides (per-model customization)", () => {
-    test("model override applies to a single built-in model", async () => {
+    test("model override applies to a single built-in model", () => runTest(
+Effect.gen(function* () {
+
       writeRawModelsJson({
         openrouter: {
           modelOverrides: {
@@ -197,7 +211,7 @@ describe("ModelRegistry", () => {
         },
       });
 
-      const registry = await createModelRegistry(authStorage, modelsJsonPath);
+      const registry = (yield* awaited(createModelRegistry(authStorage, modelsJsonPath)));
       const models = getModelsForProvider(registry, "openrouter");
 
       const sonnet = models.find((m) => m.id === "anthropic/claude-sonnet-4.5");
@@ -205,9 +219,13 @@ describe("ModelRegistry", () => {
 
       const opus = models.find((m) => m.id === "anthropic/claude-opus-4.1");
       expect(opus?.name).not.toBe("Custom Sonnet Name");
-    });
+    
+}),
+));
 
-    test("Anthropic model override replaces allowed fallback metadata", async () => {
+    test("Anthropic model override replaces allowed fallback metadata", () => runTest(
+Effect.gen(function* () {
+
       const allowedFallbackModels = [
         {
           provider: "anthropic",
@@ -230,13 +248,15 @@ describe("ModelRegistry", () => {
         },
       });
 
-      const registry = await createModelRegistry(authStorage, modelsJsonPath);
+      const registry = (yield* awaited(createModelRegistry(authStorage, modelsJsonPath)));
       const compat = registry.find("anthropic", "claude-fable-5")?.compat as
         | AnthropicMessagesCompat
         | undefined;
 
       expect(registry.getError()).toBeUndefined();
       expect(compat?.allowedFallbackModels).toEqual(allowedFallbackModels);
-    });
+    
+}),
+));
   });
 });

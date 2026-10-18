@@ -1,13 +1,12 @@
-import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-
-import { AnthropicMessagesCompat } from "@msa/ai/compat";
+import type { AnthropicMessagesCompat } from "@msa/ai/compat";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
 
 import { AuthStorage } from "../src/core/auth-storage.ts";
 import { clearApiKeyCache, type ModelRegistry } from "../src/core/model-registry.ts";
 import { createModelRegistry } from "./model-runtime-test-utils.ts";
+import { Effect } from "effect";
+import { nodeFs } from "./model-registry-support.ts";
+import { awaited, joinPath, makeTempDir, randomSuffixSync, removePath, runTest} from "@msa/testing";
 
 describe("ModelRegistry", () => {
   let tempDir: string;
@@ -21,29 +20,28 @@ describe("ModelRegistry", () => {
   }
 
   function writeRawModelsJson(providers: Record<string, unknown>) {
-    writeFileSync(modelsJsonPath, JSON.stringify({ providers }));
+    nodeFs.writeFileSync(modelsJsonPath, JSON.stringify({ providers }));
   }
 
-  beforeEach(() => {
-    tempDir = join(
-      tmpdir(),
-      `msa-test-model-registry-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-    );
-    mkdirSync(tempDir, { recursive: true });
-    modelsJsonPath = join(tempDir, "models.json");
-    authStorage = AuthStorage.inMemory();
-  });
+  beforeEach(() =>
+    runTest(makeTempDir(`msa-test-model-registry-${randomSuffixSync()}-`)).then((dir) => {
+      tempDir = dir;
+      modelsJsonPath = joinPath(tempDir, "models.json");
+      authStorage = AuthStorage.inMemory();
+      return dir;
+    }),
+  );
 
   afterEach(() => {
-    if (tempDir && existsSync(tempDir)) {
-      rmSync(tempDir, { recursive: true });
-    }
     clearApiKeyCache();
     vi.restoreAllMocks();
+    return runTest(removePath(tempDir));
   });
 
   describe("modelOverrides (per-model customization)", () => {
-    test("empty allowed fallback model override disables server-side fallback", async () => {
+    test("empty allowed fallback model override disables server-side fallback", () => runTest(
+Effect.gen(function* () {
+
       writeRawModelsJson({
         anthropic: {
           modelOverrides: {
@@ -52,16 +50,20 @@ describe("ModelRegistry", () => {
         },
       });
 
-      const registry = await createModelRegistry(authStorage, modelsJsonPath);
+      const registry = (yield* awaited(createModelRegistry(authStorage, modelsJsonPath)));
       const compat = registry.find("anthropic", "claude-fable-5")?.compat as
         | AnthropicMessagesCompat
         | undefined;
 
       expect(registry.getError()).toBeUndefined();
       expect(compat?.allowedFallbackModels).toEqual([]);
-    });
+    
+}),
+));
 
-    test("custom models and model overrides carry sampling params", async () => {
+    test("custom models and model overrides carry sampling params", () => runTest(
+Effect.gen(function* () {
+
       writeRawModelsJson({
         openrouter: {
           baseUrl: "https://my-proxy.example.com/v1",
@@ -91,7 +93,7 @@ describe("ModelRegistry", () => {
         },
       });
 
-      const registry = await createModelRegistry(authStorage, modelsJsonPath);
+      const registry = (yield* awaited(createModelRegistry(authStorage, modelsJsonPath)));
       const models = getModelsForProvider(registry, "openrouter");
 
       const custom = models.find((m) => m.id === "custom/sampling-model");
@@ -109,9 +111,13 @@ describe("ModelRegistry", () => {
       const opus = models.find((m) => m.id === "anthropic/claude-opus-4.1");
       expect(opus?.samplingParams).toBeUndefined();
       expect(opus?.samplingParamsByThinkingLevel).toBeUndefined();
-    });
+    
+}),
+));
 
-    test("custom model and model override carry prompt cache lifetimes", async () => {
+    test("custom model and model override carry prompt cache lifetimes", () => runTest(
+Effect.gen(function* () {
+
       writeRawModelsJson({
         openrouter: {
           baseUrl: "https://my-proxy.example.com/v1",
@@ -128,7 +134,7 @@ describe("ModelRegistry", () => {
         },
       });
 
-      const registry = await createModelRegistry(authStorage, modelsJsonPath);
+      const registry = (yield* awaited(createModelRegistry(authStorage, modelsJsonPath)));
       const openrouter = getModelsForProvider(registry, "openrouter");
 
       expect(registry.getError()).toBeUndefined();
@@ -146,9 +152,13 @@ describe("ModelRegistry", () => {
         short: 300,
         long: 1800,
       });
-    });
+    
+}),
+));
 
-    test("model override deep-merges image resize limits", async () => {
+    test("model override deep-merges image resize limits", () => runTest(
+Effect.gen(function* () {
+
       writeRawModelsJson({
         test: {
           baseUrl: "https://example.com",
@@ -182,7 +192,7 @@ describe("ModelRegistry", () => {
         },
       });
 
-      const registry = await createModelRegistry(authStorage, modelsJsonPath);
+      const registry = (yield* awaited(createModelRegistry(authStorage, modelsJsonPath)));
       const model = registry.find("test", "vision-model");
 
       expect(registry.getError()).toBeUndefined();
@@ -193,6 +203,8 @@ describe("ModelRegistry", () => {
           resize: { maxWidth: 1568, maxHeight: 2000, maxBytes: 524288, jpegQuality: 75 },
         },
       });
-    });
+    
+}),
+));
   });
 });

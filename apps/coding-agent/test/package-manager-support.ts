@@ -1,5 +1,4 @@
 import { EventEmitter } from "node:events";
-import { PassThrough } from "node:stream";
 
 import { type ResolvedResource } from "../src/core/package-manager.ts";
 
@@ -7,13 +6,16 @@ export function normalizeForMatch(value: string): string {
   return value.replace(/\\/gu, "/");
 }
 
-export function pathEndsWith(actualPath: string, suffix: string): boolean {
-  return normalizeForMatch(actualPath).endsWith(normalizeForMatch(suffix));
-}
+const pathEndsWith = (actualPath: string, suffix: string): boolean =>
+  normalizeForMatch(actualPath).endsWith(normalizeForMatch(suffix));
+
+export const nodeFs = process.getBuiltinModule("node:fs");
+
+const nodeStream = process.getBuiltinModule("node:stream");
 
 export class MockSpawnedProcess extends EventEmitter {
-  stdout = new PassThrough();
-  stderr = new PassThrough();
+  stdout = new nodeStream.PassThrough();
+  stderr = new nodeStream.PassThrough();
 
   kill(): boolean {
     this.emit("close", null, "SIGTERM");
@@ -56,7 +58,7 @@ export interface PackageManagerInternals {
   ): string;
 }
 
-export const isEnabled = (
+const isEnabled = (
   r: ResolvedResource,
   pathMatch: string,
   matchFn: "endsWith" | "includes" = "endsWith",
@@ -68,7 +70,7 @@ export const isEnabled = (
     : normalizedPath.includes(normalizedMatch) && r.enabled;
 };
 
-export const isDisabled = (
+const isDisabled = (
   r: ResolvedResource,
   pathMatch: string,
   matchFn: "endsWith" | "includes" = "endsWith",
@@ -78,4 +80,10 @@ export const isDisabled = (
   return matchFn === "endsWith"
     ? normalizedPath.endsWith(normalizedMatch) && !r.enabled
     : normalizedPath.includes(normalizedMatch) && !r.enabled;
+};
+
+export const packagePaths = { isDisabled, isEnabled, pathEndsWith };
+
+export const writeJsonFileSync = ({ file, value }: { file: string; value: unknown }): void => {
+  nodeFs.writeFileSync(file, JSON.stringify(value));
 };

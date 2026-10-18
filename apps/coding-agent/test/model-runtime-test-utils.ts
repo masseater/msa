@@ -1,4 +1,6 @@
 import type { CredentialStore } from "@msa/ai";
+import { awaited, runTest } from "@msa/testing";
+import { Effect } from "effect";
 
 import { ModelRegistry } from "../src/core/model-registry.ts";
 import { ModelRuntime } from "../src/core/model-runtime.ts";
@@ -12,31 +14,35 @@ function wrap(runtime: ModelRuntime): ModelRegistry {
   return registry;
 }
 
-/** Load optional models.json configuration without introducing file-backed catalog locks into unit tests. */
-export async function createModelRegistry(
-  credentials: CredentialStore,
-  modelsPath?: string,
-): Promise<ModelRegistry> {
-  return wrap(
-    await ModelRuntime.create({
-      credentials,
-      ...(modelsPath !== undefined ? { modelsPath } : {}),
-      modelsStore: new InMemoryCodingAgentModelsStore(),
-      allowModelNetwork: false,
+export const createModelRegistry = (
+  ...[credentials, modelsPath]: [credentials: CredentialStore, modelsPath?: string]
+): Promise<ModelRegistry> =>
+  runTest(
+    Effect.gen(function* () {
+      const runtime = yield* awaited(
+        ModelRuntime.create({
+          credentials,
+          ...(modelsPath === undefined ? {} : { modelsPath }),
+          modelsStore: new InMemoryCodingAgentModelsStore(),
+          allowModelNetwork: false,
+        }),
+      );
+      return wrap(runtime);
     }),
   );
-}
 
-export async function createInMemoryModelRegistry(
-  credentials: CredentialStore,
-): Promise<ModelRegistry> {
-  return wrap(
-    await ModelRuntime.create({ credentials, modelsPath: null, allowModelNetwork: false }),
+export const createInMemoryModelRegistry = (credentials: CredentialStore): Promise<ModelRegistry> =>
+  runTest(
+    Effect.gen(function* () {
+      const runtime = yield* awaited(
+        ModelRuntime.create({ credentials, modelsPath: null, allowModelNetwork: false }),
+      );
+      return wrap(runtime);
+    }),
   );
-}
 
 export function getModelRuntime(modelRegistry: ModelRegistry): ModelRuntime {
   const runtime = runtimes.get(modelRegistry);
-  if (!runtime) throw new Error("ModelRegistry was not created by the test helper");
+  if (runtime === undefined) throw new Error("ModelRegistry was not created by the test helper");
   return runtime;
 }

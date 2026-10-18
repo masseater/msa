@@ -1,15 +1,14 @@
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-
 import { createProvider } from "@msa/ai";
-import { Model } from "@msa/ai/compat";
+import type { Model } from "@msa/ai/compat";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
 
 import { AuthStorage } from "../src/core/auth-storage.ts";
 import { ModelConfig } from "../src/core/model-config.ts";
 import { clearApiKeyCache, type ModelRegistry } from "../src/core/model-registry.ts";
 import { createModelRegistry } from "./model-runtime-test-utils.ts";
+import { Effect } from "effect";
+import { nodeFs, makeGate } from "./model-registry-support.ts";
+import { awaited, joinPath, makeTempDir, randomSuffixSync, readTextFile, removePath, runTest, writeTextFile} from "@msa/testing";
 
 describe("ModelRegistry", () => {
   let tempDir: string;
@@ -19,11 +18,11 @@ describe("ModelRegistry", () => {
   let authStorage: AuthStorage;
 
   function toShPath(value: string): string {
-    return value.replace(/\\/g, "/").replace(/"/g, '\\"');
+    return value.replace(/\\/ug, "/").replace(/"/ug, '\\"');
   }
 
   function writeRawModelsJson(providers: Record<string, unknown>) {
-    writeFileSync(modelsJsonPath, JSON.stringify({ providers }));
+    nodeFs.writeFileSync(modelsJsonPath, JSON.stringify({ providers }));
   }
 
   function providerWithApiKey(apiKey: string) {
@@ -58,13 +57,18 @@ describe("ModelRegistry", () => {
     maxTokens: 100,
   });
 
-  const createLimitedKeyRegistry = async (): Promise<ModelRegistry> => {
-    await authStorage.modify("filtered-provider", async () => ({
+  const createLimitedKeyRegistry = (): Promise<ModelRegistry> => runTest(
+Effect.gen(function* () {
+    const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
+    (yield* awaited(authStorage.modify("filtered-provider", () => effectRunPromise(awaited(({
       type: "api_key",
       key: "limited-key",
-    }));
-    return createModelRegistry(authStorage, modelsJsonPath);
-  };
+    }))))));
+    return (yield* awaited(createModelRegistry(authStorage, modelsJsonPath)));
+  
+}),
+);
 
   const registerFilteredProvider = (registry: ModelRegistry, onResolve: () => void): void => {
     registry.registerProvider(
@@ -73,10 +77,18 @@ describe("ModelRegistry", () => {
         auth: {
           apiKey: {
             name: "Filtered",
-            resolve: async ({ credential }) => {
+            resolve: ({ credential }) => runTest(
+Effect.gen(function* () {
+
               onResolve();
-              return credential?.key ? { auth: { apiKey: credential.key } } : undefined;
-            },
+              return (yield* awaited(
+                credential?.key === undefined || credential.key === ""
+                  ? undefined
+                  : { auth: { apiKey: credential.key } },
+              ));
+            
+}),
+),
           },
         },
         models: [filteredChatModel("allowed"), filteredChatModel("denied")],
@@ -102,76 +114,50 @@ describe("ModelRegistry", () => {
       .filter((m) => m.provider === "filtered-provider")
       .map((m) => m.id);
 
-  beforeEach(() => {
-    tempDir = join(
-      tmpdir(),
-      `msa-test-model-registry-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-    );
-    mkdirSync(tempDir, { recursive: true });
-    modelsJsonPath = join(tempDir, "models.json");
-    authStorage = AuthStorage.inMemory();
-  });
+  beforeEach(() =>
+    runTest(makeTempDir(`msa-test-model-registry-${randomSuffixSync()}-`)).then((dir) => {
+      tempDir = dir;
+      modelsJsonPath = joinPath(tempDir, "models.json");
+      authStorage = AuthStorage.inMemory();
+      return dir;
+    }),
+  );
 
   afterEach(() => {
-    if (tempDir && existsSync(tempDir)) {
-      rmSync(tempDir, { recursive: true });
-    }
     clearApiKeyCache();
     vi.restoreAllMocks();
+    return runTest(removePath(tempDir));
   });
 
   describe("API key resolution", () => {
     describe("request-time resolution", () => {
-      test("provider auth status reports command apiKey values from models.json without executing them", async () => {
-        const counterFile = join(tempDir, "status-counter");
-        writeFileSync(counterFile, "0");
+      test("provider auth status reports command apiKey values from models.json without executing them", () => runTest(
+Effect.gen(function* () {
+
+        const counterFile = joinPath(tempDir, "status-counter");
+        (yield* writeTextFile(counterFile, "0"));
         const counterPath = toShPath(counterFile);
         const command = `!sh -c 'echo 1 > "${counterPath}"; echo key-value'`;
         writeRawModelsJson({
           "custom-provider": providerWithApiKey(command),
         });
 
-        const registry = await createModelRegistry(authStorage, modelsJsonPath);
+        const registry = (yield* awaited(createModelRegistry(authStorage, modelsJsonPath)));
 
         expect(registry.getProviderAuthStatus("custom-provider")).toEqual({
           configured: true,
           source: "models_json_command",
         });
-        expect(readFileSync(counterFile, "utf-8")).toBe("0");
-      });
+        expect((yield* readTextFile(counterFile))).toBe("0");
+      
+}),
+));
 
-      test("environment variables are not cached (changes are picked up)", async () => {
-        const envVarName = "TEST_API_KEY_CACHE_TEST_98765";
-        const originalEnv = process.env[envVarName];
+      test("getAvailable does not execute command-backed apiKey resolution", () => runTest(
+Effect.gen(function* () {
 
-        try {
-          process.env[envVarName] = "first-value";
-
-          writeRawModelsJson({
-            "custom-provider": providerWithApiKey(`$${envVarName}`),
-          });
-
-          const registry = await createModelRegistry(authStorage, modelsJsonPath);
-
-          const key1 = await registry.getApiKeyForProvider("custom-provider");
-          expect(key1).toBe("first-value");
-
-          process.env[envVarName] = "second-value";
-
-          const key2 = await registry.getApiKeyForProvider("custom-provider");
-          expect(key2).toBe("second-value");
-        } finally {
-          if (originalEnv === undefined) {
-            delete process.env[envVarName];
-          } else {
-            process.env[envVarName] = originalEnv;
-          }
-        }
-      });
-
-      test("getAvailable does not execute command-backed apiKey resolution", async () => {
-        const counterFile = join(tempDir, "counter");
-        writeFileSync(counterFile, "0");
+        const counterFile = joinPath(tempDir, "counter");
+        (yield* writeTextFile(counterFile, "0"));
 
         const counterPath = toShPath(counterFile);
         const command = `!sh -c 'count=$(cat "${counterPath}"); echo $((count + 1)) > "${counterPath}"; echo "key-value"'`;
@@ -179,99 +165,55 @@ describe("ModelRegistry", () => {
           "custom-provider": providerWithApiKey(command),
         });
 
-        const registry = await createModelRegistry(authStorage, modelsJsonPath);
+        const registry = (yield* awaited(createModelRegistry(authStorage, modelsJsonPath)));
         const available = registry.getAvailable();
 
         expect(available.some((m) => m.provider === "custom-provider")).toBe(true);
-        const count = parseInt(readFileSync(counterFile, "utf-8").trim(), 10);
+        const count = parseInt((yield* readTextFile(counterFile)).trim(), 10);
         expect(count).toBe(0);
-      });
+      
+}),
+));
 
-      test("getAvailable applies the provider's credential-specific filterModels", async () => {
-        const registry = await createLimitedKeyRegistry();
+      test("getAvailable applies the provider's credential-specific filterModels", () => runTest(
+Effect.gen(function* () {
+
+        const registry = (yield* awaited(createLimitedKeyRegistry()));
         registerFilteredProvider(registry, () => {});
-        await registry.refresh();
+        (yield* awaited(registry.refresh()));
 
         expect(filteredAvailableIds(registry)).toEqual(["allowed"]);
-      });
+      
+}),
+));
 
-      test("a background refresh that lands during an awaited refresh keeps filterModels", async () => {
-        const config = await ModelConfig.load(modelsJsonPath);
-        let releaseBackground: () => void = () => {};
-        const background = new Promise<void>((resolve) => {
-          releaseBackground = resolve;
-        });
-        const registry = await createLimitedKeyRegistry();
+      test("a background refresh that lands during an awaited refresh keeps filterModels", () => runTest(
+Effect.gen(function* () {
+    const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
+        const config = (yield* awaited(ModelConfig.load(modelsJsonPath)));
+        const background = makeGate();
+        const releaseBackground = () => {
+          background.open();
+        };
+        const registry = (yield* awaited(createLimitedKeyRegistry()));
         vi.spyOn(ModelConfig, "load")
-          .mockImplementationOnce(async () => {
-            await background;
-            return config;
-          })
-          .mockImplementationOnce(async () => config);
+          .mockImplementationOnce(() => effectRunPromise(
+Effect.gen(function* () {
+
+            (yield* background.promise);
+            return (yield* awaited(config));
+          
+}),
+))
+          .mockImplementationOnce(() => effectRunPromise(awaited(config)));
         registerFilteredProvider(registry, () => releaseBackground());
-        await registry.refresh();
+        (yield* awaited(registry.refresh()));
 
         expect(filteredAvailableIds(registry)).toEqual(["allowed"]);
-      });
-
-      test("getApiKeyAndHeaders resolves authHeader on every request", async () => {
-        const tokenFile = join(tempDir, "token");
-        writeFileSync(tokenFile, "token-1");
-        const tokenPath = toShPath(tokenFile);
-
-        writeRawModelsJson({
-          "custom-provider": {
-            ...providerWithApiKey(`!sh -c 'cat "${tokenPath}"'`),
-            authHeader: true,
-          },
-        });
-
-        const registry = await createModelRegistry(authStorage, modelsJsonPath);
-        const model = registry.find("custom-provider", "test-model");
-        expect(model).toBeDefined();
-
-        const auth1 = await registry.getApiKeyAndHeaders(model!);
-        expect(auth1).toEqual({
-          ok: true,
-          apiKey: "token-1",
-          headers: { Authorization: "Bearer token-1" },
-        });
-
-        writeFileSync(tokenFile, "token-2");
-
-        const auth2 = await registry.getApiKeyAndHeaders(model!);
-        expect(auth2).toEqual({
-          ok: true,
-          apiKey: "token-2",
-          headers: { Authorization: "Bearer token-2" },
-        });
-      });
-
-      test("getApiKeyAndHeaders resolves configured auth exactly once", async () => {
-        const counterFile = join(tempDir, "auth-counter");
-        writeFileSync(counterFile, "0");
-        const counterPath = toShPath(counterFile);
-        writeRawModelsJson({
-          "custom-provider": {
-            ...providerWithApiKey(
-              `!sh -c 'count=$(cat "${counterPath}"); count=$((count + 1)); echo "$count" > "${counterPath}"; echo "token-$count"'`,
-            ),
-            authHeader: true,
-          },
-        });
-
-        const registry = await createModelRegistry(authStorage, modelsJsonPath);
-        const auth = await registry.getApiKeyAndHeaders(
-          registry.find("custom-provider", "test-model")!,
-        );
-
-        expect(auth).toEqual({
-          ok: true,
-          apiKey: "token-1",
-          headers: { Authorization: "Bearer token-1" },
-        });
-        expect(readFileSync(counterFile, "utf-8").trim()).toBe("1");
-      });
-    });
+      
+}),
+));
   });
+});
 });

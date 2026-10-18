@@ -1,14 +1,13 @@
-import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-
-import { OpenAICompletionsCompat } from "@msa/ai/compat";
+import type { OpenAICompletionsCompat } from "@msa/ai/compat";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
 
 import { AuthStorage } from "../src/core/auth-storage.ts";
 import { type ModelsJsonProvider } from "../src/core/model-config.ts";
 import { clearApiKeyCache, type ModelRegistry } from "../src/core/model-registry.ts";
 import { createModelRegistry } from "./model-runtime-test-utils.ts";
+import { Effect } from "effect";
+import { nodeFs } from "./model-registry-support.ts";
+import { awaited, joinPath, makeTempDir, randomSuffixSync, removePath, runTest} from "@msa/testing";
 
 describe("ModelRegistry", () => {
   let tempDir: string;
@@ -22,29 +21,28 @@ describe("ModelRegistry", () => {
   }
 
   function writeRawModelsJson(providers: Record<string, unknown>) {
-    writeFileSync(modelsJsonPath, JSON.stringify({ providers }));
+    nodeFs.writeFileSync(modelsJsonPath, JSON.stringify({ providers }));
   }
 
-  beforeEach(() => {
-    tempDir = join(
-      tmpdir(),
-      `msa-test-model-registry-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-    );
-    mkdirSync(tempDir, { recursive: true });
-    modelsJsonPath = join(tempDir, "models.json");
-    authStorage = AuthStorage.inMemory();
-  });
+  beforeEach(() =>
+    runTest(makeTempDir(`msa-test-model-registry-${randomSuffixSync()}-`)).then((dir) => {
+      tempDir = dir;
+      modelsJsonPath = joinPath(tempDir, "models.json");
+      authStorage = AuthStorage.inMemory();
+      return dir;
+    }),
+  );
 
   afterEach(() => {
-    if (tempDir && existsSync(tempDir)) {
-      rmSync(tempDir, { recursive: true });
-    }
     clearApiKeyCache();
     vi.restoreAllMocks();
+    return runTest(removePath(tempDir));
   });
 
   describe("modelOverrides (per-model customization)", () => {
-    test("model override with compat.openRouterRouting", async () => {
+    test("model override with compat.openRouterRouting", () => runTest(
+Effect.gen(function* () {
+
       writeRawModelsJson({
         openrouter: {
           modelOverrides: {
@@ -57,15 +55,19 @@ describe("ModelRegistry", () => {
         },
       });
 
-      const registry = await createModelRegistry(authStorage, modelsJsonPath);
+      const registry = (yield* awaited(createModelRegistry(authStorage, modelsJsonPath)));
       const models = getModelsForProvider(registry, "openrouter");
 
       const sonnet = models.find((m) => m.id === "anthropic/claude-sonnet-4.5");
       const compat = sonnet?.compat as OpenAICompletionsCompat | undefined;
       expect(compat?.openRouterRouting).toEqual({ only: ["amazon-bedrock"] });
-    });
+    
+}),
+));
 
-    test("supportsFinishReason can be configured at provider and model levels", async () => {
+    test("supportsFinishReason can be configured at provider and model levels", () => runTest(
+Effect.gen(function* () {
+
       const provider: ModelsJsonProvider = {
         compat: { supportsFinishReason: true },
         modelOverrides: {
@@ -76,7 +78,7 @@ describe("ModelRegistry", () => {
       };
       writeRawModelsJson({ openrouter: provider });
 
-      const registry = await createModelRegistry(authStorage, modelsJsonPath);
+      const registry = (yield* awaited(createModelRegistry(authStorage, modelsJsonPath)));
       const models = getModelsForProvider(registry, "openrouter");
       const sonnet = models.find((model) => model.id === "anthropic/claude-sonnet-4.5");
       const opus = models.find((model) => model.id === "anthropic/claude-opus-4.1");
@@ -87,9 +89,13 @@ describe("ModelRegistry", () => {
       expect((opus?.compat as OpenAICompletionsCompat | undefined)?.supportsFinishReason).toBe(
         true,
       );
-    });
+    
+}),
+));
 
-    test("model override deep merges compat settings", async () => {
+    test("model override deep merges compat settings", () => runTest(
+Effect.gen(function* () {
+
       writeRawModelsJson({
         openrouter: {
           modelOverrides: {
@@ -102,15 +108,19 @@ describe("ModelRegistry", () => {
         },
       });
 
-      const registry = await createModelRegistry(authStorage, modelsJsonPath);
+      const registry = (yield* awaited(createModelRegistry(authStorage, modelsJsonPath)));
       const models = getModelsForProvider(registry, "openrouter");
       const sonnet = models.find((m) => m.id === "anthropic/claude-sonnet-4.5");
 
       const compat = sonnet?.compat as OpenAICompletionsCompat | undefined;
       expect(compat?.openRouterRouting).toEqual({ order: ["anthropic", "together"] });
-    });
+    
+}),
+));
 
-    test("multiple model overrides on same provider", async () => {
+    test("multiple model overrides on same provider", () => runTest(
+Effect.gen(function* () {
+
       writeRawModelsJson({
         openrouter: {
           modelOverrides: {
@@ -124,7 +134,7 @@ describe("ModelRegistry", () => {
         },
       });
 
-      const registry = await createModelRegistry(authStorage, modelsJsonPath);
+      const registry = (yield* awaited(createModelRegistry(authStorage, modelsJsonPath)));
       const models = getModelsForProvider(registry, "openrouter");
 
       const sonnet = models.find((m) => m.id === "anthropic/claude-sonnet-4.5");
@@ -134,9 +144,13 @@ describe("ModelRegistry", () => {
       const opusCompat = opus?.compat as OpenAICompletionsCompat | undefined;
       expect(sonnetCompat?.openRouterRouting).toEqual({ only: ["amazon-bedrock"] });
       expect(opusCompat?.openRouterRouting).toEqual({ only: ["anthropic"] });
-    });
+    
+}),
+));
 
-    test("model override combined with baseUrl override", async () => {
+    test("model override combined with baseUrl override", () => runTest(
+Effect.gen(function* () {
+
       writeRawModelsJson({
         openrouter: {
           baseUrl: "https://my-proxy.example.com/v1",
@@ -148,7 +162,7 @@ describe("ModelRegistry", () => {
         },
       });
 
-      const registry = await createModelRegistry(authStorage, modelsJsonPath);
+      const registry = (yield* awaited(createModelRegistry(authStorage, modelsJsonPath)));
       const models = getModelsForProvider(registry, "openrouter");
       const sonnet = models.find((m) => m.id === "anthropic/claude-sonnet-4.5");
 
@@ -158,9 +172,13 @@ describe("ModelRegistry", () => {
       const opus = models.find((m) => m.id === "anthropic/claude-opus-4.1");
       expect(opus?.baseUrl).toBe("https://my-proxy.example.com/v1");
       expect(opus?.name).not.toBe("Proxied Sonnet");
-    });
+    
+}),
+));
 
-    test("model override for non-existent model ID is ignored", async () => {
+    test("model override for non-existent model ID is ignored", () => runTest(
+Effect.gen(function* () {
+
       writeRawModelsJson({
         openrouter: {
           modelOverrides: {
@@ -171,15 +189,19 @@ describe("ModelRegistry", () => {
         },
       });
 
-      const registry = await createModelRegistry(authStorage, modelsJsonPath);
+      const registry = (yield* awaited(createModelRegistry(authStorage, modelsJsonPath)));
       const models = getModelsForProvider(registry, "openrouter");
 
       expect(models.find((m) => m.id === "nonexistent/model-id")).toBeUndefined();
 
       expect(registry.getError()).toBeUndefined();
-    });
+    
+}),
+));
 
-    test("model override can change cost fields partially", async () => {
+    test("model override can change cost fields partially", () => runTest(
+Effect.gen(function* () {
+
       writeRawModelsJson({
         openrouter: {
           modelOverrides: {
@@ -190,13 +212,15 @@ describe("ModelRegistry", () => {
         },
       });
 
-      const registry = await createModelRegistry(authStorage, modelsJsonPath);
+      const registry = (yield* awaited(createModelRegistry(authStorage, modelsJsonPath)));
       const models = getModelsForProvider(registry, "openrouter");
       const sonnet = models.find((m) => m.id === "anthropic/claude-sonnet-4.5");
 
       expect(sonnet?.cost.input).toBe(99);
 
       expect(sonnet?.cost.output).toBeGreaterThan(0);
-    });
+    
+}),
+));
   });
 });

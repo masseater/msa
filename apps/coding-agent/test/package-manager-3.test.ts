@@ -1,12 +1,11 @@
-import { mkdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { DefaultPackageManager } from "../src/core/package-manager.ts";
 import { SettingsManager } from "../src/core/settings-manager.ts";
-import { pathEndsWith } from "./package-manager-support.ts";
+import { nodeFs, packagePaths } from "./package-manager-support.ts";
+import { Effect } from "effect";
+import { awaited, joinPath, makeDirectory, makeTempDir, removePath, runTest, toJsonText, writeTextFile } from "@msa/testing";
+import { readEnv } from "../src/core/process-env.ts";
 
 describe("DefaultPackageManager", () => {
   let tempDir: string;
@@ -19,90 +18,89 @@ describe("DefaultPackageManager", () => {
 
   let previousOfflineEnv: string | undefined;
 
-  beforeEach(() => {
-    previousOfflineEnv = process.env["MSA_OFFLINE"];
-    delete process.env["MSA_OFFLINE"];
-    tempDir = join(tmpdir(), `pm-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
-    mkdirSync(tempDir, { recursive: true });
-    agentDir = join(tempDir, "agent");
-    mkdirSync(agentDir, { recursive: true });
+  beforeEach(() =>
+    runTest(
+      Effect.gen(function* () {
+        previousOfflineEnv = readEnv("MSA_OFFLINE");
+        vi.stubEnv("MSA_OFFLINE", undefined);
+        tempDir = yield* makeTempDir("pm-test-");
+        agentDir = joinPath(tempDir, "agent");
+        yield* makeDirectory(agentDir);
 
-    settingsManager = SettingsManager.inMemory();
-    packageManager = new DefaultPackageManager({
-      cwd: tempDir,
-      agentDir,
-      settingsManager,
-    });
-  });
+        settingsManager = SettingsManager.inMemory();
+        packageManager = new DefaultPackageManager({
+          cwd: tempDir,
+          agentDir,
+          settingsManager,
+        });
+      }),
+    ),
+  );
 
   afterEach(() => {
-    if (previousOfflineEnv === undefined) {
-      delete process.env["MSA_OFFLINE"];
-    } else {
-      process.env["MSA_OFFLINE"] = previousOfflineEnv;
-    }
+    vi.stubEnv("MSA_OFFLINE", previousOfflineEnv);
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
-    rmSync(tempDir, { recursive: true, force: true });
+    return runTest(removePath(tempDir));
   });
 
   describe(".agents/skills auto-discovery", () => {
-    it("should ignore root markdown files in .agents/skills but discover nested markdown skills", async () => {
-      const agentsSkillsDir = join(tempDir, ".agents", "skills");
-      mkdirSync(join(agentsSkillsDir, "nested-skill"), { recursive: true });
-      mkdirSync(join(agentsSkillsDir, "third-party"), { recursive: true });
-      mkdirSync(join(agentsSkillsDir, "third-party", "vendor", "pack"), { recursive: true });
-      const rootSkill = join(agentsSkillsDir, "root-file.md");
-      const nestedSkill = join(agentsSkillsDir, "nested-skill", "SKILL.md");
-      const nestedMarkdownSkill = join(agentsSkillsDir, "third-party", "child-skill.md");
-      const deeplyNestedMarkdownSkill = join(
+    it("should ignore root markdown files in .agents/skills but discover nested markdown skills", () => runTest(
+Effect.gen(function* () {
+
+      const agentsSkillsDir = joinPath(tempDir, ".agents", "skills");
+      (yield* makeDirectory(joinPath(agentsSkillsDir, "nested-skill")));
+      (yield* makeDirectory(joinPath(agentsSkillsDir, "third-party")));
+      (yield* makeDirectory(joinPath(agentsSkillsDir, "third-party", "vendor", "pack")));
+      const rootSkill = joinPath(agentsSkillsDir, "root-file.md");
+      const nestedSkill = joinPath(agentsSkillsDir, "nested-skill", "SKILL.md");
+      const nestedMarkdownSkill = joinPath(agentsSkillsDir, "third-party", "child-skill.md");
+      const deeplyNestedMarkdownSkill = joinPath(
         agentsSkillsDir,
         "third-party",
         "vendor",
         "pack",
         "deep-skill.md",
       );
-      writeFileSync(rootSkill, "---\nname: root-file\ndescription: Root markdown file\n---\n");
-      writeFileSync(nestedSkill, "---\nname: nested-skill\ndescription: Nested skill\n---\n");
-      writeFileSync(
-        nestedMarkdownSkill,
-        "---\nname: child-skill\ndescription: Nested markdown skill\n---\n",
-      );
-      writeFileSync(
-        deeplyNestedMarkdownSkill,
-        "---\nname: deep-skill\ndescription: Deep markdown skill\n---\n",
-      );
+      (yield* writeTextFile(rootSkill, "---\nname: root-file\ndescription: Root markdown file\n---\n"));
+      (yield* writeTextFile(nestedSkill, "---\nname: nested-skill\ndescription: Nested skill\n---\n"));
+      (yield* writeTextFile(nestedMarkdownSkill, "---\nname: child-skill\ndescription: Nested markdown skill\n---\n"));
+      (yield* writeTextFile(deeplyNestedMarkdownSkill, "---\nname: deep-skill\ndescription: Deep markdown skill\n---\n"));
 
       const pm = new DefaultPackageManager({
-        cwd: join(tempDir, "work"),
+        cwd: joinPath(tempDir, "work"),
         agentDir,
         settingsManager,
       });
-      mkdirSync(join(tempDir, "work"), { recursive: true });
+      (yield* makeDirectory(joinPath(tempDir, "work")));
 
-      const result = await pm.resolve();
+      const result = (yield* awaited(pm.resolve()));
       expect(result.skills.some((r) => r.path === rootSkill)).toBe(false);
       expect(result.skills.some((r) => r.path === nestedSkill && r.enabled)).toBe(true);
       expect(result.skills.some((r) => r.path === nestedMarkdownSkill && r.enabled)).toBe(true);
       expect(result.skills.some((r) => r.path === deeplyNestedMarkdownSkill && r.enabled)).toBe(
         true,
       );
-    });
+    
+}),
+));
 
-    it("should keep ~/.agents/skills user-scoped when cwd is under home in a non-git directory", async () => {
-      const previousHome = process.env["HOME"];
-      process.env["HOME"] = tempDir;
+    it("should keep ~/.agents/skills user-scoped when cwd is under home in a non-git directory", () => runTest(
+Effect.gen(function* () {
+
+      const previousHome = readEnv("HOME");
+      vi.stubEnv("HOME", tempDir);
 
       try {
-        const cwd = join(tempDir, "scratch", "nested");
-        const localAgentDir = join(tempDir, ".msa", "agent");
+        const cwd = joinPath(tempDir, "scratch", "nested");
+        const localAgentDir = joinPath(tempDir, ".msa", "agent");
         const localSettingsManager = SettingsManager.inMemory();
-        mkdirSync(cwd, { recursive: true });
-        mkdirSync(localAgentDir, { recursive: true });
+        (yield* makeDirectory(cwd));
+        (yield* makeDirectory(localAgentDir));
 
-        const homeSkill = join(tempDir, ".agents", "skills", "home-skill", "SKILL.md");
-        mkdirSync(join(tempDir, ".agents", "skills", "home-skill"), { recursive: true });
-        writeFileSync(homeSkill, "---\nname: home-skill\ndescription: home\n---\n");
+        const homeSkill = joinPath(tempDir, ".agents", "skills", "home-skill", "SKILL.md");
+        (yield* makeDirectory(joinPath(tempDir, ".agents", "skills", "home-skill")));
+        (yield* writeTextFile(homeSkill, "---\nname: home-skill\ndescription: home\n---\n"));
 
         const pm = new DefaultPackageManager({
           cwd,
@@ -110,7 +108,7 @@ describe("DefaultPackageManager", () => {
           settingsManager: localSettingsManager,
         });
 
-        const result = await pm.resolve();
+        const result = (yield* awaited(pm.resolve()));
         const matchingSkills = result.skills.filter((r) => r.path === homeSkill);
         expect(matchingSkills).toHaveLength(1);
         expect(matchingSkills[0]?.enabled).toBe(true);
@@ -118,123 +116,133 @@ describe("DefaultPackageManager", () => {
         expect(matchingSkills[0]?.metadata.source).toBe("auto");
       } finally {
         if (previousHome === undefined) {
-          delete process.env["HOME"];
+          vi.stubEnv("HOME", undefined);
         } else {
-          process.env["HOME"] = previousHome;
+          vi.stubEnv("HOME", previousHome);
         }
       }
-    });
+    
+}),
+));
 
-    it("should dedupe user skill entries when ~/.msa/agent/skills is a symlink to ~/.agents/skills", async () => {
-      const previousHome = process.env["HOME"];
-      process.env["HOME"] = tempDir;
+    it("should dedupe user skill entries when ~/.msa/agent/skills is a symlink to ~/.agents/skills", () => runTest(
+Effect.gen(function* () {
+
+      const previousHome = readEnv("HOME");
+      vi.stubEnv("HOME", tempDir);
 
       try {
-        const agentSkillsDir = join(agentDir, "skills");
-        const agentsSkillsDir = join(tempDir, ".agents", "skills");
-        mkdirSync(agentsSkillsDir, { recursive: true });
+        const agentSkillsDir = joinPath(agentDir, "skills");
+        const agentsSkillsDir = joinPath(tempDir, ".agents", "skills");
+        (yield* makeDirectory(agentsSkillsDir));
 
         const directoryLinkType = process.platform === "win32" ? "junction" : "dir";
-        symlinkSync(agentsSkillsDir, agentSkillsDir, directoryLinkType);
+        nodeFs.symlinkSync(agentsSkillsDir, agentSkillsDir, directoryLinkType);
 
-        const skillPath = join(agentsSkillsDir, "foo", "SKILL.md");
-        mkdirSync(join(agentsSkillsDir, "foo"), { recursive: true });
-        writeFileSync(skillPath, "---\nname: foo\ndescription: foo\n---\n");
+        const skillPath = joinPath(agentsSkillsDir, "foo", "SKILL.md");
+        (yield* makeDirectory(joinPath(agentsSkillsDir, "foo")));
+        (yield* writeTextFile(skillPath, "---\nname: foo\ndescription: foo\n---\n"));
 
-        const result = await packageManager.resolve();
-        const fooSkills = result.skills.filter((r) => pathEndsWith(r.path, "foo/SKILL.md"));
+        const result = (yield* awaited(packageManager.resolve()));
+        const fooSkills = result.skills.filter((r) => packagePaths.pathEndsWith(r.path, "foo/SKILL.md"));
 
         expect(fooSkills).toHaveLength(1);
       } finally {
         if (previousHome === undefined) {
-          delete process.env["HOME"];
+          vi.stubEnv("HOME", undefined);
         } else {
-          process.env["HOME"] = previousHome;
+          vi.stubEnv("HOME", previousHome);
         }
       }
-    });
+    
+}),
+));
   });
 
   describe("ignore files", () => {
-    it("should respect .gitignore in skill directories", async () => {
-      const skillsDir = join(agentDir, "skills");
-      mkdirSync(skillsDir, { recursive: true });
-      writeFileSync(join(skillsDir, ".gitignore"), "venv\n__pycache__\n");
+    it("should respect .gitignore in skill directories", () => runTest(
+Effect.gen(function* () {
 
-      const goodSkillDir = join(skillsDir, "good-skill");
-      mkdirSync(goodSkillDir, { recursive: true });
-      writeFileSync(
-        join(goodSkillDir, "SKILL.md"),
-        "---\nname: good-skill\ndescription: Good\n---\nContent",
-      );
+      const skillsDir = joinPath(agentDir, "skills");
+      (yield* makeDirectory(skillsDir));
+      (yield* writeTextFile(joinPath(skillsDir, ".gitignore"), "venv\n__pycache__\n"));
 
-      const ignoredSkillDir = join(skillsDir, "venv", "bad-skill");
-      mkdirSync(ignoredSkillDir, { recursive: true });
-      writeFileSync(
-        join(ignoredSkillDir, "SKILL.md"),
-        "---\nname: bad-skill\ndescription: Bad\n---\nContent",
-      );
+      const goodSkillDir = joinPath(skillsDir, "good-skill");
+      (yield* makeDirectory(goodSkillDir));
+      (yield* writeTextFile(joinPath(goodSkillDir, "SKILL.md"), "---\nname: good-skill\ndescription: Good\n---\nContent"));
+
+      const ignoredSkillDir = joinPath(skillsDir, "venv", "bad-skill");
+      (yield* makeDirectory(ignoredSkillDir));
+      (yield* writeTextFile(joinPath(ignoredSkillDir, "SKILL.md"), "---\nname: bad-skill\ndescription: Bad\n---\nContent"));
 
       settingsManager.setSkillPaths(["skills"]);
 
-      const result = await packageManager.resolve();
+      const result = (yield* awaited(packageManager.resolve()));
       expect(result.skills.some((r) => r.path.includes("good-skill") && r.enabled)).toBe(true);
       expect(result.skills.some((r) => r.path.includes("venv") && r.enabled)).toBe(false);
-    });
+    
+}),
+));
 
-    it("should not apply parent .gitignore to .msa auto-discovery", async () => {
-      writeFileSync(join(tempDir, ".gitignore"), ".msa\n");
+    it("should not apply parent .gitignore to .msa auto-discovery", () => runTest(
+Effect.gen(function* () {
 
-      const skillDir = join(tempDir, ".msa", "skills", "auto-skill");
-      mkdirSync(skillDir, { recursive: true });
-      const skillPath = join(skillDir, "SKILL.md");
-      writeFileSync(skillPath, "---\nname: auto-skill\ndescription: Auto\n---\nContent");
+      (yield* writeTextFile(joinPath(tempDir, ".gitignore"), ".msa\n"));
 
-      const result = await packageManager.resolve();
+      const skillDir = joinPath(tempDir, ".msa", "skills", "auto-skill");
+      (yield* makeDirectory(skillDir));
+      const skillPath = joinPath(skillDir, "SKILL.md");
+      (yield* writeTextFile(skillPath, "---\nname: auto-skill\ndescription: Auto\n---\nContent"));
+
+      const result = (yield* awaited(packageManager.resolve()));
       expect(result.skills.some((r) => r.path === skillPath && r.enabled)).toBe(true);
-    });
+    
+}),
+));
   });
 
   describe("resolveExtensionSources", () => {
-    it("should resolve local paths", async () => {
-      const extPath = join(tempDir, "ext.ts");
-      writeFileSync(extPath, "export default function() {}");
+    it("should resolve local paths", () => runTest(
+Effect.gen(function* () {
 
-      const result = await packageManager.resolveExtensionSources([extPath]);
+      const extPath = joinPath(tempDir, "ext.ts");
+      (yield* writeTextFile(extPath, "export default function() {}"));
+
+      const result = (yield* awaited(packageManager.resolveExtensionSources([extPath])));
       expect(result.extensions.some((r) => r.path === extPath && r.enabled)).toBe(true);
-    });
+    
+}),
+));
 
-    it("should handle directories with msa manifest", async () => {
-      const pkgDir = join(tempDir, "my-package");
-      mkdirSync(pkgDir, { recursive: true });
-      writeFileSync(
-        join(pkgDir, "package.json"),
-        JSON.stringify({
+    it("should handle directories with msa manifest", () => runTest(
+Effect.gen(function* () {
+
+      const pkgDir = joinPath(tempDir, "my-package");
+      (yield* makeDirectory(pkgDir));
+      (yield* writeTextFile(joinPath(pkgDir, "package.json"), (yield* toJsonText({
           name: "my-package",
           msa: {
             extensions: ["./src/index.ts"],
             skills: ["./skills"],
           },
-        }),
-      );
-      mkdirSync(join(pkgDir, "src"), { recursive: true });
-      writeFileSync(join(pkgDir, "src", "index.ts"), "export default function() {}");
-      mkdirSync(join(pkgDir, "skills", "my-skill"), { recursive: true });
-      writeFileSync(
-        join(pkgDir, "skills", "my-skill", "SKILL.md"),
-        "---\nname: my-skill\ndescription: Test\n---\nContent",
-      );
+        }))));
+      (yield* makeDirectory(joinPath(pkgDir, "src")));
+      (yield* writeTextFile(joinPath(pkgDir, "src", "index.ts"), "export default function() {}"));
+      (yield* makeDirectory(joinPath(pkgDir, "skills", "my-skill")));
+      (yield* writeTextFile(joinPath(pkgDir, "skills", "my-skill", "SKILL.md"), "---\nname: my-skill\ndescription: Test\n---\nContent"));
 
-      const result = await packageManager.resolveExtensionSources([pkgDir]);
+      const result = (yield* awaited(packageManager.resolveExtensionSources([pkgDir])));
       expect(
-        result.extensions.some((r) => r.path === join(pkgDir, "src", "index.ts") && r.enabled),
+        result.extensions.some((r) => r.path === joinPath(pkgDir, "src", "index.ts") && r.enabled),
       ).toBe(true);
 
       expect(
         result.skills.some(
-          (r) => r.path === join(pkgDir, "skills", "my-skill", "SKILL.md") && r.enabled,
+          (r) => r.path === joinPath(pkgDir, "skills", "my-skill", "SKILL.md") && r.enabled,
         ),
       ).toBe(true);
-    });
+    
+}),
+));
   });
 });

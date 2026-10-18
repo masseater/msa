@@ -1,8 +1,4 @@
-import { existsSync, mkdirSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-
-import { Api, Model } from "@msa/ai/compat";
+import type { Api } from "@msa/ai/compat";
 import { getApiProvider } from "@msa/ai/compat";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
 
@@ -12,8 +8,10 @@ import {
   type ModelRegistry,
   type ProviderConfigInput,
 } from "../src/core/model-registry.ts";
-import { openAiModel, emptyContext } from "./model-registry-support.ts";
+import { openAiModel, emptyContext, captureThrown } from "./model-registry-support.ts";
 import { createModelRegistry } from "./model-runtime-test-utils.ts";
+import { Effect } from "effect";
+import { awaited, currentTimeMillis, joinPath, makeTempDir, randomSuffixSync, removePath, runTest} from "@msa/testing";
 
 describe("ModelRegistry", () => {
   let tempDir: string;
@@ -47,27 +45,26 @@ describe("ModelRegistry", () => {
     return registry.getAll().filter((m) => m.provider === provider);
   }
 
-  beforeEach(() => {
-    tempDir = join(
-      tmpdir(),
-      `msa-test-model-registry-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-    );
-    mkdirSync(tempDir, { recursive: true });
-    modelsJsonPath = join(tempDir, "models.json");
-    authStorage = AuthStorage.inMemory();
-  });
+  beforeEach(() =>
+    runTest(makeTempDir(`msa-test-model-registry-${randomSuffixSync()}-`)).then((dir) => {
+      tempDir = dir;
+      modelsJsonPath = joinPath(tempDir, "models.json");
+      authStorage = AuthStorage.inMemory();
+      return dir;
+    }),
+  );
 
   afterEach(() => {
-    if (tempDir && existsSync(tempDir)) {
-      rmSync(tempDir, { recursive: true });
-    }
     clearApiKeyCache();
     vi.restoreAllMocks();
+    return runTest(removePath(tempDir));
   });
 
   describe("dynamic provider lifecycle", () => {
-    test("failed registerProvider does not remove existing provider models", async () => {
-      const registry = await createModelRegistry(authStorage, modelsJsonPath);
+    test("failed registerProvider does not remove existing provider models", () => runTest(
+Effect.gen(function* () {
+
+      const registry = (yield* awaited(createModelRegistry(authStorage, modelsJsonPath)));
 
       registry.registerProvider("demo-provider", {
         baseUrl: "https://provider.test/v1",
@@ -107,22 +104,27 @@ describe("ModelRegistry", () => {
       ).toThrow('Provider demo-provider, model broken-model: no "api" specified.');
 
       expect(registry.find("demo-provider", "demo-model")).toBeDefined();
-      await expect(registry.refresh()).resolves.toMatchObject({ aborted: false });
+      (yield* awaited(expect(registry.refresh()).resolves.toMatchObject({ aborted: false })));
       expect(registry.find("demo-provider", "demo-model")).toBeDefined();
-    });
+    
+}),
+));
 
-    test("unregisterProvider removes the runtime OAuth overlay without mutating global state", async () => {
-      const registry = await createModelRegistry(authStorage, modelsJsonPath);
+    test("unregisterProvider removes the runtime OAuth overlay without mutating global state", () => runTest(
+Effect.gen(function* () {
+    const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
+      const registry = (yield* awaited(createModelRegistry(authStorage, modelsJsonPath)));
 
       registry.registerProvider("anthropic", {
         oauth: {
           name: "Custom Anthropic OAuth",
-          login: async () => ({
+          login: () => effectRunPromise(awaited(({
             access: "custom-access-token",
             refresh: "custom-refresh-token",
-            expires: Date.now() + 60_000,
-          }),
-          refreshToken: async (credentials) => credentials,
+            expires: currentTimeMillis() + 60_000,
+          }))),
+          refreshToken: (credentials) => effectRunPromise(awaited(credentials)),
           getApiKey: (credentials) => credentials.access,
         },
       });
@@ -134,10 +136,14 @@ describe("ModelRegistry", () => {
       registry.unregisterProvider("anthropic");
 
       expect(registry.getRegisteredProviderConfig("anthropic")).toBeUndefined();
-    });
+    
+}),
+));
 
-    test("streamSimple overlays do not mutate the global compat API registry", async () => {
-      const registry = await createModelRegistry(authStorage, modelsJsonPath);
+    test("streamSimple overlays do not mutate the global compat API registry", () => runTest(
+Effect.gen(function* () {
+
+      const registry = (yield* awaited(createModelRegistry(authStorage, modelsJsonPath)));
 
       registry.registerProvider("stream-override-provider", {
         api: "openai-completions",
@@ -146,43 +152,45 @@ describe("ModelRegistry", () => {
         },
       });
 
-      let threwCustomOverride = false;
-      try {
-        getApiProvider("openai-completions")?.streamSimple(openAiModel, emptyContext);
-      } catch (error) {
-        threwCustomOverride =
-          error instanceof Error && error.message === "custom streamSimple override";
-      }
-      expect(threwCustomOverride).toBe(false);
+      expect(
+        captureThrown(() =>
+          getApiProvider("openai-completions")?.streamSimple(openAiModel, emptyContext),
+        ),
+      ).toBeUndefined();
 
       registry.unregisterProvider("stream-override-provider");
 
-      let threwCustomOverrideAfterUnregister = false;
-      try {
-        getApiProvider("openai-completions")?.streamSimple(openAiModel, emptyContext);
-      } catch (error) {
-        threwCustomOverrideAfterUnregister =
-          error instanceof Error && error.message === "custom streamSimple override";
-      }
-      expect(threwCustomOverrideAfterUnregister).toBe(false);
-    });
+      expect(
+        captureThrown(() =>
+          getApiProvider("openai-completions")?.streamSimple(openAiModel, emptyContext),
+        ),
+      ).toBeUndefined();
+    
+}),
+));
 
     describe("dynamic provider override persistence", () => {
-      test("baseUrl-only override keeps built-in provider models after refresh", async () => {
-        const registry = await createModelRegistry(authStorage, modelsJsonPath);
+      test("baseUrl-only override keeps built-in provider models after refresh", () => runTest(
+Effect.gen(function* () {
+
+        const registry = (yield* awaited(createModelRegistry(authStorage, modelsJsonPath)));
 
         registry.registerProvider("anthropic", { baseUrl: "https://proxy.test/anthropic" });
-        await registry.refresh();
+        (yield* awaited(registry.refresh()));
 
         const anthropicModels = getModelsForProvider(registry, "anthropic");
         expect(anthropicModels.length).toBeGreaterThan(1);
         expect(anthropicModels.every((m) => m.baseUrl === "https://proxy.test/anthropic")).toBe(
           true,
         );
-      });
+      
+}),
+));
 
-      test("models-only override replaces built-in provider models after refresh", async () => {
-        const registry = await createModelRegistry(authStorage, modelsJsonPath);
+      test("models-only override replaces built-in provider models after refresh", () => runTest(
+Effect.gen(function* () {
+
+        const registry = (yield* awaited(createModelRegistry(authStorage, modelsJsonPath)));
 
         registry.registerProvider("anthropic", {
           ...providerConfig(
@@ -192,7 +200,7 @@ describe("ModelRegistry", () => {
           ),
           baseUrl: "https://custom.test/anthropic",
         });
-        await registry.refresh();
+        (yield* awaited(registry.refresh()));
 
         expect(getModelsForProvider(registry, "anthropic").map((m) => m.id)).toEqual([
           "custom-claude",
@@ -200,10 +208,14 @@ describe("ModelRegistry", () => {
         expect(registry.find("anthropic", "custom-claude")?.baseUrl).toBe(
           "https://custom.test/anthropic",
         );
-      });
+      
+}),
+));
 
-      test("models plus baseUrl override replaces built-in provider models after refresh", async () => {
-        const registry = await createModelRegistry(authStorage, modelsJsonPath);
+      test("models plus baseUrl override replaces built-in provider models after refresh", () => runTest(
+Effect.gen(function* () {
+
+        const registry = (yield* awaited(createModelRegistry(authStorage, modelsJsonPath)));
 
         registry.registerProvider("anthropic", {
           ...providerConfig(
@@ -214,7 +226,7 @@ describe("ModelRegistry", () => {
           baseUrl: "https://custom.test/anthropic",
         });
         registry.registerProvider("anthropic", { baseUrl: "https://proxy.test/anthropic" });
-        await registry.refresh();
+        (yield* awaited(registry.refresh()));
 
         expect(getModelsForProvider(registry, "anthropic").map((m) => m.id)).toEqual([
           "custom-claude",
@@ -222,7 +234,9 @@ describe("ModelRegistry", () => {
         expect(registry.find("anthropic", "custom-claude")?.baseUrl).toBe(
           "https://proxy.test/anthropic",
         );
-      });
+      
+}),
+));
     });
   });
 });

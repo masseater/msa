@@ -1,11 +1,11 @@
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { DefaultPackageManager } from "../src/core/package-manager.ts";
 import { SettingsManager } from "../src/core/settings-manager.ts";
+import { Effect } from "effect";
+import { nodeFs, writeJsonFileSync } from "./package-manager-support.ts";
+import { awaited, joinPath, makeDirectory, makeTempDir, removePath, runTest, toJsonText, writeTextFile } from "@msa/testing";
+import { readEnv } from "../src/core/process-env.ts";
 
 describe("DefaultPackageManager", () => {
   let tempDir: string;
@@ -18,43 +18,42 @@ describe("DefaultPackageManager", () => {
 
   let previousOfflineEnv: string | undefined;
 
-  beforeEach(() => {
-    previousOfflineEnv = process.env["MSA_OFFLINE"];
-    delete process.env["MSA_OFFLINE"];
-    tempDir = join(tmpdir(), `pm-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
-    mkdirSync(tempDir, { recursive: true });
-    agentDir = join(tempDir, "agent");
-    mkdirSync(agentDir, { recursive: true });
+  beforeEach(() =>
+    runTest(
+      Effect.gen(function* () {
+        previousOfflineEnv = readEnv("MSA_OFFLINE");
+        vi.stubEnv("MSA_OFFLINE", undefined);
+        tempDir = yield* makeTempDir("pm-test-");
+        agentDir = joinPath(tempDir, "agent");
+        yield* makeDirectory(agentDir);
 
-    settingsManager = SettingsManager.inMemory();
-    packageManager = new DefaultPackageManager({
-      cwd: tempDir,
-      agentDir,
-      settingsManager,
-    });
-  });
+        settingsManager = SettingsManager.inMemory();
+        packageManager = new DefaultPackageManager({
+          cwd: tempDir,
+          agentDir,
+          settingsManager,
+        });
+      }),
+    ),
+  );
 
   afterEach(() => {
-    if (previousOfflineEnv === undefined) {
-      delete process.env["MSA_OFFLINE"];
-    } else {
-      process.env["MSA_OFFLINE"] = previousOfflineEnv;
-    }
+    vi.stubEnv("MSA_OFFLINE", previousOfflineEnv);
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
-    rmSync(tempDir, { recursive: true, force: true });
+    return runTest(removePath(tempDir));
   });
 
   describe("offline mode and network timeouts", () => {
-    it("should migrate legacy user npm installs into the managed npm root during update", async () => {
-      const legacyRoot = join(tempDir, "legacy-global", "node_modules");
-      const legacyPath = join(legacyRoot, "legacy-pkg");
-      const managedPath = join(agentDir, "npm", "node_modules", "legacy-pkg");
-      mkdirSync(legacyPath, { recursive: true });
-      writeFileSync(
-        join(legacyPath, "package.json"),
-        JSON.stringify({ name: "legacy-pkg", version: "1.0.0" }),
-      );
+    it("should migrate legacy user npm installs into the managed npm root during update", () => runTest(
+Effect.gen(function* () {
+    const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
+      const legacyRoot = joinPath(tempDir, "legacy-global", "node_modules");
+      const legacyPath = joinPath(legacyRoot, "legacy-pkg");
+      const managedPath = joinPath(agentDir, "npm", "node_modules", "legacy-pkg");
+      (yield* makeDirectory(legacyPath));
+      (yield* writeTextFile(joinPath(legacyPath, "package.json"), (yield* toJsonText({ name: "legacy-pkg", version: "1.0.0" }))));
       settingsManager.setPackages(["npm:legacy-pkg"]);
 
       vi.spyOn(packageManager as any, "getGlobalNpmRoot").mockReturnValue(legacyRoot);
@@ -63,38 +62,47 @@ describe("DefaultPackageManager", () => {
         .mockResolvedValue('"1.0.0"');
       const runCommandSpy = vi
         .spyOn(packageManager as any, "runCommand")
-        .mockImplementation(async (...callArgs: unknown[]) => {
+        .mockImplementation((...callArgs: unknown[]) => effectRunPromise(
+Effect.sync(() => {
+
           const [command, args] = callArgs as [string, string[]];
           expect(command).toBe("npm");
           expect(args).toEqual([
             "install",
             "legacy-pkg@latest",
             "--prefix",
-            join(agentDir, "npm"),
+            joinPath(agentDir, "npm"),
             "--legacy-peer-deps",
           ]);
-          mkdirSync(managedPath, { recursive: true });
-          writeFileSync(
-            join(managedPath, "package.json"),
-            JSON.stringify({ name: "legacy-pkg", version: "1.0.0" }),
-          );
-        });
+          nodeFs.mkdirSync(managedPath, { recursive: true });
+          writeJsonFileSync({
+            file: joinPath(managedPath, "package.json"),
+            value: { name: "legacy-pkg", version: "1.0.0" },
+          });
+        
+}),
+));
 
       expect(packageManager.getInstalledPath("npm:legacy-pkg", "user")).toBe(legacyPath);
 
-      await packageManager.update("npm:legacy-pkg");
+      (yield* awaited(packageManager.update("npm:legacy-pkg")));
 
       expect(runCommandCaptureSpy).not.toHaveBeenCalled();
       expect(runCommandSpy).toHaveBeenCalledTimes(1);
       expect(packageManager.getInstalledPath("npm:legacy-pkg", "user")).toBe(managedPath);
-    });
+    
+}),
+));
 
-    it("should batch npm updates per scope and run git updates in parallel while skipping pinned npm and current packages", async () => {
-      const userOldPath = join(agentDir, "npm", "node_modules", "user-old");
-      const userCurrentPath = join(agentDir, "npm", "node_modules", "user-current");
-      const userUnknownPath = join(agentDir, "npm", "node_modules", "user-unknown");
-      const projectOldPath = join(tempDir, ".msa", "npm", "node_modules", "project-old");
-      const projectCurrentPath = join(tempDir, ".msa", "npm", "node_modules", "project-current");
+    it("should batch npm updates per scope and run git updates in parallel while skipping pinned npm and current packages", () => runTest(
+Effect.gen(function* () {
+    const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
+      const userOldPath = joinPath(agentDir, "npm", "node_modules", "user-old");
+      const userCurrentPath = joinPath(agentDir, "npm", "node_modules", "user-current");
+      const userUnknownPath = joinPath(agentDir, "npm", "node_modules", "user-unknown");
+      const projectOldPath = joinPath(tempDir, ".msa", "npm", "node_modules", "project-old");
+      const projectCurrentPath = joinPath(tempDir, ".msa", "npm", "node_modules", "project-current");
       const installPaths = [
         userOldPath,
         userCurrentPath,
@@ -103,28 +111,13 @@ describe("DefaultPackageManager", () => {
         projectCurrentPath,
       ];
       for (const installPath of installPaths) {
-        mkdirSync(installPath, { recursive: true });
+        (yield* makeDirectory(installPath));
       }
-      writeFileSync(
-        join(userOldPath, "package.json"),
-        JSON.stringify({ name: "user-old", version: "1.0.0" }),
-      );
-      writeFileSync(
-        join(userCurrentPath, "package.json"),
-        JSON.stringify({ name: "user-current", version: "1.0.0" }),
-      );
-      writeFileSync(
-        join(userUnknownPath, "package.json"),
-        JSON.stringify({ name: "user-unknown", version: "1.0.0" }),
-      );
-      writeFileSync(
-        join(projectOldPath, "package.json"),
-        JSON.stringify({ name: "project-old", version: "1.0.0" }),
-      );
-      writeFileSync(
-        join(projectCurrentPath, "package.json"),
-        JSON.stringify({ name: "project-current", version: "1.0.0" }),
-      );
+      (yield* writeTextFile(joinPath(userOldPath, "package.json"), (yield* toJsonText({ name: "user-old", version: "1.0.0" }))));
+      (yield* writeTextFile(joinPath(userCurrentPath, "package.json"), (yield* toJsonText({ name: "user-current", version: "1.0.0" }))));
+      (yield* writeTextFile(joinPath(userUnknownPath, "package.json"), (yield* toJsonText({ name: "user-unknown", version: "1.0.0" }))));
+      (yield* writeTextFile(joinPath(projectOldPath, "package.json"), (yield* toJsonText({ name: "project-old", version: "1.0.0" }))));
+      (yield* writeTextFile(joinPath(projectCurrentPath, "package.json"), (yield* toJsonText({ name: "project-current", version: "1.0.0" }))));
 
       settingsManager.setPackages([
         "npm:user-old",
@@ -144,7 +137,9 @@ describe("DefaultPackageManager", () => {
 
       const runCommandCaptureSpy = vi
         .spyOn(packageManager as any, "runCommandCapture")
-        .mockImplementation(async (...callArgs: unknown[]) => {
+        .mockImplementation((...callArgs: unknown[]) => effectRunPromise(
+Effect.gen(function* () {
+
           const [_command, args] = callArgs as [string, string[]];
           if (args[0] !== "view") {
             throw new Error(`Unexpected runCommandCapture args: ${args.join(" ")}`);
@@ -152,44 +147,54 @@ describe("DefaultPackageManager", () => {
           switch (args[1]) {
             case "user-old":
             case "project-old":
-              return '"2.0.0"';
+              return (yield* awaited('"2.0.0"'));
             case "user-current":
             case "project-current":
-              return '"1.0.0"';
+              return (yield* awaited('"1.0.0"'));
             case "user-unknown":
               throw new Error("registry unavailable");
             default:
               throw new Error(`Unexpected package lookup: ${args[1]}`);
           }
-        });
+        
+}),
+));
 
       let activeNpmUpdates = 0;
       let maxConcurrentNpmUpdates = 0;
       const runCommandSpy = vi
         .spyOn(packageManager as any, "runCommand")
-        .mockImplementation(async (...callArgs: unknown[]) => {
+        .mockImplementation((...callArgs: unknown[]) => effectRunPromise(
+Effect.gen(function* () {
+
           const [command, args] = callArgs as [string, string[]];
           if (command !== "npm") {
             throw new Error(`Unexpected runCommand call: ${command} ${args.join(" ")}`);
           }
           activeNpmUpdates += 1;
           maxConcurrentNpmUpdates = Math.max(maxConcurrentNpmUpdates, activeNpmUpdates);
-          await new Promise((resolve) => setTimeout(resolve, 20));
+          (yield* Effect.sleep(20));
           activeNpmUpdates -= 1;
-        });
+        
+}),
+));
 
       let activeGitUpdates = 0;
       let maxConcurrentGitUpdates = 0;
       const updateGitSpy = vi
         .spyOn(packageManager as any, "updateGit")
-        .mockImplementation(async () => {
+        .mockImplementation(() => effectRunPromise(
+Effect.gen(function* () {
+
           activeGitUpdates += 1;
           maxConcurrentGitUpdates = Math.max(maxConcurrentGitUpdates, activeGitUpdates);
-          await new Promise((resolve) => setTimeout(resolve, 20));
+          (yield* Effect.sleep(20));
           activeGitUpdates -= 1;
-        });
+        
+}),
+));
 
-      await packageManager.update();
+      (yield* awaited(packageManager.update()));
 
       expect(runCommandCaptureSpy).toHaveBeenCalledTimes(5);
       expect(runCommandSpy).toHaveBeenCalledTimes(2);
@@ -201,7 +206,7 @@ describe("DefaultPackageManager", () => {
           "user-old@latest",
           "user-unknown@latest",
           "--prefix",
-          join(agentDir, "npm"),
+          joinPath(agentDir, "npm"),
           "--legacy-peer-deps",
         ],
         undefined,
@@ -214,7 +219,7 @@ describe("DefaultPackageManager", () => {
           "project-old@latest",
           "project-missing@latest",
           "--prefix",
-          join(tempDir, ".msa", "npm"),
+          joinPath(tempDir, ".msa", "npm"),
           "--legacy-peer-deps",
         ],
         undefined,
@@ -222,22 +227,32 @@ describe("DefaultPackageManager", () => {
       expect(updateGitSpy).toHaveBeenCalledTimes(4);
       expect(maxConcurrentNpmUpdates).toBeGreaterThan(1);
       expect(maxConcurrentGitUpdates).toBeGreaterThan(1);
-    });
+    
+}),
+));
 
-    it("should suggest npm source prefixes for update lookups", async () => {
+    it("should suggest npm source prefixes for update lookups", () => runTest(
+Effect.gen(function* () {
+
       settingsManager.setProjectPackages(["npm:example"]);
 
-      await expect(packageManager.update("example")).rejects.toThrow(
+      (yield* awaited(expect(packageManager.update("example")).rejects.toThrow(
         "No matching package found for example. Did you mean npm:example?",
-      );
-    });
+      )));
+    
+}),
+));
 
-    it("should suggest git source prefixes for update lookups", async () => {
+    it("should suggest git source prefixes for update lookups", () => runTest(
+Effect.gen(function* () {
+
       settingsManager.setProjectPackages(["git:github.com/example/repo"]);
 
-      await expect(packageManager.update("github.com/example/repo")).rejects.toThrow(
+      (yield* awaited(expect(packageManager.update("github.com/example/repo")).rejects.toThrow(
         "No matching package found for github.com/example/repo. Did you mean git:github.com/example/repo?",
-      );
-    });
+      )));
+    
+}),
+));
   });
 });

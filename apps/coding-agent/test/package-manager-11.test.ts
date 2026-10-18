@@ -1,12 +1,11 @@
-import { mkdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join, relative } from "node:path";
-
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { DefaultPackageManager } from "../src/core/package-manager.ts";
 import { SettingsManager } from "../src/core/settings-manager.ts";
-import { pathEndsWith, isEnabled, isDisabled } from "./package-manager-support.ts";
+import { nodeFs, packagePaths } from "./package-manager-support.ts";
+import { Effect } from "effect";
+import { awaited, joinPath, makeDirectory, makeTempDir, relativePath, removePath, runTest, toJsonText, writeTextFile } from "@msa/testing";
+import { readEnv } from "../src/core/process-env.ts";
 
 describe("DefaultPackageManager", () => {
   let tempDir: string;
@@ -19,100 +18,81 @@ describe("DefaultPackageManager", () => {
 
   let previousOfflineEnv: string | undefined;
 
-  beforeEach(() => {
-    previousOfflineEnv = process.env["MSA_OFFLINE"];
-    delete process.env["MSA_OFFLINE"];
-    tempDir = join(tmpdir(), `pm-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
-    mkdirSync(tempDir, { recursive: true });
-    agentDir = join(tempDir, "agent");
-    mkdirSync(agentDir, { recursive: true });
+  beforeEach(() =>
+    runTest(
+      Effect.gen(function* () {
+        previousOfflineEnv = readEnv("MSA_OFFLINE");
+        vi.stubEnv("MSA_OFFLINE", undefined);
+        tempDir = yield* makeTempDir("pm-test-");
+        agentDir = joinPath(tempDir, "agent");
+        yield* makeDirectory(agentDir);
 
-    settingsManager = SettingsManager.inMemory();
-    packageManager = new DefaultPackageManager({
-      cwd: tempDir,
-      agentDir,
-      settingsManager,
-    });
-  });
+        settingsManager = SettingsManager.inMemory();
+        packageManager = new DefaultPackageManager({
+          cwd: tempDir,
+          agentDir,
+          settingsManager,
+        });
+      }),
+    ),
+  );
 
   afterEach(() => {
-    if (previousOfflineEnv === undefined) {
-      delete process.env["MSA_OFFLINE"];
-    } else {
-      process.env["MSA_OFFLINE"] = previousOfflineEnv;
-    }
+    vi.stubEnv("MSA_OFFLINE", previousOfflineEnv);
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
-    rmSync(tempDir, { recursive: true, force: true });
+    return runTest(removePath(tempDir));
   });
 
   describe("pattern filtering in msa manifest", () => {
-    it("should expand positive glob manifest entries before collecting skills", async () => {
-      const pkgDir = join(tempDir, "skill-manifest-glob-pkg");
-      mkdirSync(join(pkgDir, "plugins/pdf-to-markdown/skills/pdf-to-markdown"), {
-        recursive: true,
-      });
-      mkdirSync(join(pkgDir, "plugins/nutrient-dws/skills/document-processor-api"), {
-        recursive: true,
-      });
-      writeFileSync(
-        join(pkgDir, "plugins/pdf-to-markdown/skills/pdf-to-markdown", "SKILL.md"),
-        "---\nname: pdf-to-markdown\ndescription: PDF to Markdown\n---\nContent",
-      );
-      writeFileSync(
-        join(pkgDir, "plugins/nutrient-dws/skills/document-processor-api", "SKILL.md"),
-        "---\nname: document-processor-api\ndescription: DWS\n---\nContent",
-      );
-      writeFileSync(
-        join(pkgDir, "package.json"),
-        JSON.stringify({
+    it("should expand positive glob manifest entries before collecting skills", () => runTest(
+Effect.gen(function* () {
+
+      const pkgDir = joinPath(tempDir, "skill-manifest-glob-pkg");
+      (yield* makeDirectory(joinPath(pkgDir, "plugins/pdf-to-markdown/skills/pdf-to-markdown")));
+      (yield* makeDirectory(joinPath(pkgDir, "plugins/nutrient-dws/skills/document-processor-api")));
+      (yield* writeTextFile(joinPath(pkgDir, "plugins/pdf-to-markdown/skills/pdf-to-markdown", "SKILL.md"), "---\nname: pdf-to-markdown\ndescription: PDF to Markdown\n---\nContent"));
+      (yield* writeTextFile(joinPath(pkgDir, "plugins/nutrient-dws/skills/document-processor-api", "SKILL.md"), "---\nname: document-processor-api\ndescription: DWS\n---\nContent"));
+      (yield* writeTextFile(joinPath(pkgDir, "package.json"), (yield* toJsonText({
           name: "skill-manifest-glob-pkg",
           msa: {
             skills: ["./plugins/*/skills"],
           },
-        }),
-      );
+        }))));
 
-      const result = await packageManager.resolveExtensionSources([pkgDir]);
-      expect(result.skills.some((r) => isEnabled(r, "pdf-to-markdown", "includes"))).toBe(true);
-      expect(result.skills.some((r) => isEnabled(r, "document-processor-api", "includes"))).toBe(
+      const result = (yield* awaited(packageManager.resolveExtensionSources([pkgDir])));
+      expect(result.skills.some((r) => packagePaths.isEnabled(r, "pdf-to-markdown", "includes"))).toBe(true);
+      expect(result.skills.some((r) => packagePaths.isEnabled(r, "document-processor-api", "includes"))).toBe(
         true,
       );
-    });
+    
+}),
+));
 
-    it("should sort manifest glob matches and use exact entries for dot paths and symlink traversal", async () => {
-      const pkgDir = join(tempDir, "manifest-glob-semantics-pkg");
-      const extensionFilesDir = join(pkgDir, "extension-files");
-      const extensionGroupDir = join(pkgDir, "extension-groups", "group");
-      const linkedPluginSource = join(pkgDir, "linked-plugin-source");
-      mkdirSync(join(extensionFilesDir, "nested"), { recursive: true });
-      mkdirSync(extensionGroupDir, { recursive: true });
-      mkdirSync(join(pkgDir, "plugins", "local", "skills", "local-skill"), { recursive: true });
-      mkdirSync(join(linkedPluginSource, "skills", "linked-skill"), { recursive: true });
-      writeFileSync(join(extensionFilesDir, "z.ts"), "export default function() {}");
-      writeFileSync(join(extensionFilesDir, "a.ts"), "export default function() {}");
-      writeFileSync(join(extensionFilesDir, ".ignored.ts"), "export default function() {}");
-      writeFileSync(
-        join(extensionFilesDir, "nested", ".hidden.ts"),
-        "export default function() {}",
-      );
-      writeFileSync(join(extensionGroupDir, "index.ts"), "export default function() {}");
-      writeFileSync(
-        join(pkgDir, "plugins", "local", "skills", "local-skill", "SKILL.md"),
-        "---\nname: local-skill\ndescription: Local\n---\n",
-      );
-      writeFileSync(
-        join(linkedPluginSource, "skills", "linked-skill", "SKILL.md"),
-        "---\nname: linked-skill\ndescription: Linked\n---\n",
-      );
-      symlinkSync(
+    it("should sort manifest glob matches and use exact entries for dot paths and symlink traversal", () => runTest(
+Effect.gen(function* () {
+
+      const pkgDir = joinPath(tempDir, "manifest-glob-semantics-pkg");
+      const extensionFilesDir = joinPath(pkgDir, "extension-files");
+      const extensionGroupDir = joinPath(pkgDir, "extension-groups", "group");
+      const linkedPluginSource = joinPath(pkgDir, "linked-plugin-source");
+      (yield* makeDirectory(joinPath(extensionFilesDir, "nested")));
+      (yield* makeDirectory(extensionGroupDir));
+      (yield* makeDirectory(joinPath(pkgDir, "plugins", "local", "skills", "local-skill")));
+      (yield* makeDirectory(joinPath(linkedPluginSource, "skills", "linked-skill")));
+      (yield* writeTextFile(joinPath(extensionFilesDir, "z.ts"), "export default function() {}"));
+      (yield* writeTextFile(joinPath(extensionFilesDir, "a.ts"), "export default function() {}"));
+      (yield* writeTextFile(joinPath(extensionFilesDir, ".ignored.ts"), "export default function() {}"));
+      (yield* writeTextFile(joinPath(extensionFilesDir, "nested", ".hidden.ts"), "export default function() {}"));
+      (yield* writeTextFile(joinPath(extensionGroupDir, "index.ts"), "export default function() {}"));
+      (yield* writeTextFile(joinPath(pkgDir, "plugins", "local", "skills", "local-skill", "SKILL.md"), "---\nname: local-skill\ndescription: Local\n---\n"));
+      (yield* writeTextFile(joinPath(linkedPluginSource, "skills", "linked-skill", "SKILL.md"), "---\nname: linked-skill\ndescription: Linked\n---\n"));
+      nodeFs.symlinkSync(
         linkedPluginSource,
-        join(pkgDir, "plugins", "linked"),
+        joinPath(pkgDir, "plugins", "linked"),
         process.platform === "win32" ? "junction" : "dir",
       );
-      writeFileSync(
-        join(pkgDir, "package.json"),
-        JSON.stringify({
+      (yield* writeTextFile(joinPath(pkgDir, "package.json"), (yield* toJsonText({
           name: "manifest-glob-semantics-pkg",
           msa: {
             extensions: [
@@ -123,41 +103,41 @@ describe("DefaultPackageManager", () => {
             ],
             skills: ["./plugins/*/skills", "./plugins/linked/skills"],
           },
-        }),
-      );
+        }))));
 
-      const result = await packageManager.resolveExtensionSources([pkgDir]);
-      expect(result.extensions.map((resource) => relative(pkgDir, resource.path))).toEqual([
-        join("extension-files", "a.ts"),
-        join("extension-files", "z.ts"),
-        join("extension-files", "nested", ".hidden.ts"),
-        join("extension-groups", "group", "index.ts"),
+      const result = (yield* awaited(packageManager.resolveExtensionSources([pkgDir])));
+      expect(result.extensions.map((resource) => relativePath(pkgDir, resource.path))).toEqual([
+        joinPath("extension-files", "a.ts"),
+        joinPath("extension-files", "z.ts"),
+        joinPath("extension-files", "nested", ".hidden.ts"),
+        joinPath("extension-groups", "group", "index.ts"),
       ]);
       expect(
-        result.skills.some((resource) => pathEndsWith(resource.path, "local-skill/SKILL.md")),
+        result.skills.some((resource) => packagePaths.pathEndsWith(resource.path, "local-skill/SKILL.md")),
       ).toBe(true);
       expect(
-        result.skills.some((resource) => pathEndsWith(resource.path, "linked-skill/SKILL.md")),
+        result.skills.some((resource) => packagePaths.pathEndsWith(resource.path, "linked-skill/SKILL.md")),
       ).toBe(true);
-    });
+    
+}),
+));
   });
 
   describe("pattern filtering in package filters", () => {
-    it("should apply user filters on top of manifest filters (not replace)", async () => {
-      const pkgDir = join(tempDir, "layered-pkg");
-      mkdirSync(join(pkgDir, "extensions"), { recursive: true });
-      writeFileSync(join(pkgDir, "extensions", "foo.ts"), "export default function() {}");
-      writeFileSync(join(pkgDir, "extensions", "bar.ts"), "export default function() {}");
-      writeFileSync(join(pkgDir, "extensions", "baz.ts"), "export default function() {}");
-      writeFileSync(
-        join(pkgDir, "package.json"),
-        JSON.stringify({
+    it("should apply user filters on top of manifest filters (not replace)", () => runTest(
+Effect.gen(function* () {
+
+      const pkgDir = joinPath(tempDir, "layered-pkg");
+      (yield* makeDirectory(joinPath(pkgDir, "extensions")));
+      (yield* writeTextFile(joinPath(pkgDir, "extensions", "foo.ts"), "export default function() {}"));
+      (yield* writeTextFile(joinPath(pkgDir, "extensions", "bar.ts"), "export default function() {}"));
+      (yield* writeTextFile(joinPath(pkgDir, "extensions", "baz.ts"), "export default function() {}"));
+      (yield* writeTextFile(joinPath(pkgDir, "package.json"), (yield* toJsonText({
           name: "layered-pkg",
           msa: {
             extensions: ["extensions", "!**/baz.ts"],
           },
-        }),
-      );
+        }))));
 
       settingsManager.setPackages([
         {
@@ -169,21 +149,25 @@ describe("DefaultPackageManager", () => {
         },
       ]);
 
-      const result = await packageManager.resolve();
+      const result = (yield* awaited(packageManager.resolve()));
 
-      expect(result.extensions.some((r) => isEnabled(r, "foo.ts"))).toBe(true);
+      expect(result.extensions.some((r) => packagePaths.isEnabled(r, "foo.ts"))).toBe(true);
 
-      expect(result.extensions.some((r) => isDisabled(r, "bar.ts"))).toBe(true);
+      expect(result.extensions.some((r) => packagePaths.isDisabled(r, "bar.ts"))).toBe(true);
 
-      expect(result.extensions.some((r) => pathEndsWith(r.path, "baz.ts"))).toBe(false);
-    });
+      expect(result.extensions.some((r) => packagePaths.pathEndsWith(r.path, "baz.ts"))).toBe(false);
+    
+}),
+));
 
-    it("should exclude extensions from package with ! pattern", async () => {
-      const pkgDir = join(tempDir, "pattern-pkg");
-      mkdirSync(join(pkgDir, "extensions"), { recursive: true });
-      writeFileSync(join(pkgDir, "extensions", "foo.ts"), "export default function() {}");
-      writeFileSync(join(pkgDir, "extensions", "bar.ts"), "export default function() {}");
-      writeFileSync(join(pkgDir, "extensions", "baz.ts"), "export default function() {}");
+    it("should exclude extensions from package with ! pattern", () => runTest(
+Effect.gen(function* () {
+
+      const pkgDir = joinPath(tempDir, "pattern-pkg");
+      (yield* makeDirectory(joinPath(pkgDir, "extensions")));
+      (yield* writeTextFile(joinPath(pkgDir, "extensions", "foo.ts"), "export default function() {}"));
+      (yield* writeTextFile(joinPath(pkgDir, "extensions", "bar.ts"), "export default function() {}"));
+      (yield* writeTextFile(joinPath(pkgDir, "extensions", "baz.ts"), "export default function() {}"));
 
       settingsManager.setPackages([
         {
@@ -195,17 +179,21 @@ describe("DefaultPackageManager", () => {
         },
       ]);
 
-      const result = await packageManager.resolve();
-      expect(result.extensions.some((r) => isEnabled(r, "foo.ts"))).toBe(true);
-      expect(result.extensions.some((r) => isEnabled(r, "bar.ts"))).toBe(true);
-      expect(result.extensions.some((r) => isDisabled(r, "baz.ts"))).toBe(true);
-    });
+      const result = (yield* awaited(packageManager.resolve()));
+      expect(result.extensions.some((r) => packagePaths.isEnabled(r, "foo.ts"))).toBe(true);
+      expect(result.extensions.some((r) => packagePaths.isEnabled(r, "bar.ts"))).toBe(true);
+      expect(result.extensions.some((r) => packagePaths.isDisabled(r, "baz.ts"))).toBe(true);
+    
+}),
+));
 
-    it("should filter themes from package", async () => {
-      const pkgDir = join(tempDir, "theme-pkg");
-      mkdirSync(join(pkgDir, "themes"), { recursive: true });
-      writeFileSync(join(pkgDir, "themes", "nice.json"), "{}");
-      writeFileSync(join(pkgDir, "themes", "ugly.json"), "{}");
+    it("should filter themes from package", () => runTest(
+Effect.gen(function* () {
+
+      const pkgDir = joinPath(tempDir, "theme-pkg");
+      (yield* makeDirectory(joinPath(pkgDir, "themes")));
+      (yield* writeTextFile(joinPath(pkgDir, "themes", "nice.json"), "{}"));
+      (yield* writeTextFile(joinPath(pkgDir, "themes", "ugly.json"), "{}"));
 
       settingsManager.setPackages([
         {
@@ -217,17 +205,21 @@ describe("DefaultPackageManager", () => {
         },
       ]);
 
-      const result = await packageManager.resolve();
-      expect(result.themes.some((r) => isEnabled(r, "nice.json"))).toBe(true);
-      expect(result.themes.some((r) => isDisabled(r, "ugly.json"))).toBe(true);
-    });
+      const result = (yield* awaited(packageManager.resolve()));
+      expect(result.themes.some((r) => packagePaths.isEnabled(r, "nice.json"))).toBe(true);
+      expect(result.themes.some((r) => packagePaths.isDisabled(r, "ugly.json"))).toBe(true);
+    
+}),
+));
 
-    it("should combine include and exclude patterns", async () => {
-      const pkgDir = join(tempDir, "combo-pkg");
-      mkdirSync(join(pkgDir, "extensions"), { recursive: true });
-      writeFileSync(join(pkgDir, "extensions", "alpha.ts"), "export default function() {}");
-      writeFileSync(join(pkgDir, "extensions", "beta.ts"), "export default function() {}");
-      writeFileSync(join(pkgDir, "extensions", "gamma.ts"), "export default function() {}");
+    it("should combine include and exclude patterns", () => runTest(
+Effect.gen(function* () {
+
+      const pkgDir = joinPath(tempDir, "combo-pkg");
+      (yield* makeDirectory(joinPath(pkgDir, "extensions")));
+      (yield* writeTextFile(joinPath(pkgDir, "extensions", "alpha.ts"), "export default function() {}"));
+      (yield* writeTextFile(joinPath(pkgDir, "extensions", "beta.ts"), "export default function() {}"));
+      (yield* writeTextFile(joinPath(pkgDir, "extensions", "gamma.ts"), "export default function() {}"));
 
       settingsManager.setPackages([
         {
@@ -239,10 +231,12 @@ describe("DefaultPackageManager", () => {
         },
       ]);
 
-      const result = await packageManager.resolve();
-      expect(result.extensions.some((r) => isEnabled(r, "alpha.ts"))).toBe(true);
-      expect(result.extensions.some((r) => isDisabled(r, "beta.ts"))).toBe(true);
-      expect(result.extensions.some((r) => isDisabled(r, "gamma.ts"))).toBe(true);
-    });
+      const result = (yield* awaited(packageManager.resolve()));
+      expect(result.extensions.some((r) => packagePaths.isEnabled(r, "alpha.ts"))).toBe(true);
+      expect(result.extensions.some((r) => packagePaths.isDisabled(r, "beta.ts"))).toBe(true);
+      expect(result.extensions.some((r) => packagePaths.isDisabled(r, "gamma.ts"))).toBe(true);
+    
+}),
+));
   });
 });
