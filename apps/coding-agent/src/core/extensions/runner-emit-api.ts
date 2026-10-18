@@ -1,0 +1,111 @@
+import type { AgentMessage } from "@msa/agent-core";
+import type { ImageContent, ProviderHeaders } from "@msa/ai";
+import { Effect } from "effect";
+
+import type { CacheWarmingAction } from "../cache-warmer.ts";
+import { platformRuntime, unwrapForeign } from "../platform/index.ts";
+import type { BuildSystemPromptOptions } from "../system-prompt.ts";
+import { createEmitters, type Emitters } from "./runner-emitters.ts";
+import { RunnerQueries } from "./runner-queries.ts";
+import type {
+  BeforeAgentStartTrigger,
+  BoundaryBaseEvent,
+  RunnerEmitEvent,
+} from "./runner-types.ts";
+import type {
+  BoundaryContextPreview,
+  CacheWarmingDecisionEvent,
+  ExtensionContext,
+  ExtensionError,
+  InputSource,
+  MessageEndEvent,
+  ResourcesDiscoverEvent,
+  SessionBoundaryDraft,
+  ToolCallEvent,
+  ToolResultEvent,
+  UserBashEvent,
+} from "./types.ts";
+
+export abstract class RunnerEmitApi extends RunnerQueries {
+  private cachedEmitters: Emitters | undefined;
+
+  abstract createContext(): ExtensionContext;
+  abstract emitError(error: ExtensionError): void;
+  protected abstract assertActive(): void;
+
+  emitBoundary(
+    baseEvent: BoundaryBaseEvent,
+    buildContext: (
+      entries: SessionBoundaryDraft[],
+    ) => BoundaryContextPreview | Promise<BoundaryContextPreview>,
+  ) {
+    return this.run(this.emitters().lifecycle.emitBoundary(baseEvent, buildContext));
+  }
+
+  emit<TEvent extends RunnerEmitEvent>(event: TEvent) {
+    return this.run(this.emitters().lifecycle.emit(event));
+  }
+
+  emitCacheWarmingDecision(event: CacheWarmingDecisionEvent): Promise<CacheWarmingAction> {
+    return this.run(this.emitters().lifecycle.emitCacheWarmingDecision(event));
+  }
+
+  emitMessageEnd(event: MessageEndEvent): Promise<AgentMessage | undefined> {
+    return this.run(this.emitters().lifecycle.emitMessageEnd(event));
+  }
+
+  emitToolResult(event: ToolResultEvent) {
+    return this.run(this.emitters().lifecycle.emitToolResult(event));
+  }
+
+  emitToolCall(event: ToolCallEvent) {
+    return this.run(this.emitters().lifecycle.emitToolCall(event));
+  }
+
+  emitUserBash(event: UserBashEvent) {
+    return this.run(this.emitters().lifecycle.emitUserBash(event));
+  }
+
+  emitContext(messages: AgentMessage[]): Promise<AgentMessage[]> {
+    return this.run(this.emitters().context.emitContext(messages));
+  }
+
+  emitBeforeProviderRequest(payload: unknown): Promise<unknown> {
+    return this.run(this.emitters().context.emitBeforeProviderRequest(payload));
+  }
+
+  emitBeforeProviderHeaders(headers: ProviderHeaders): Promise<ProviderHeaders> {
+    return this.run(this.emitters().context.emitBeforeProviderHeaders(headers));
+  }
+
+  emitBeforeAgentStart(trigger: BeforeAgentStartTrigger, options: BuildSystemPromptOptions) {
+    return this.run(this.emitters().context.emitBeforeAgentStart(trigger, options));
+  }
+
+  emitResourcesDiscover(cwd: string, reason: ResourcesDiscoverEvent["reason"]) {
+    return this.run(this.emitters().context.emitResourcesDiscover(cwd, reason));
+  }
+
+  emitInput(
+    text: string,
+    images: ImageContent[] | undefined,
+    source: InputSource,
+    streamingBehavior?: "steer" | "followUp",
+  ) {
+    return this.run(this.emitters().context.emitInput(text, images, source, streamingBehavior));
+  }
+
+  private emitters(): Emitters {
+    this.cachedEmitters ??= createEmitters({
+      extensions: this.extensions,
+      createContext: () => this.createContext(),
+      emitError: (error) => this.emitError(error),
+      assertActive: () => this.assertActive(),
+    });
+    return this.cachedEmitters;
+  }
+
+  private run<A, E>(effect: Effect.Effect<A, E>): Promise<A> {
+    return platformRuntime.runPromise(unwrapForeign(effect));
+  }
+}

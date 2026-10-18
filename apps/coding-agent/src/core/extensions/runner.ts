@@ -1,48 +1,18 @@
-import type { AgentMessage, AgentTool } from "@msa/agent-core";
-import {
-  getCurrentSystemMessage,
-  type ImageContent,
-  type Model,
-  type Provider,
-  type ProviderHeaders,
-} from "@msa/ai";
-import type { KeyId } from "@msa/tui";
-
-import { type Theme, theme } from "../../modes/interactive/theme/theme.ts";
-import { toErrorMessage } from "../../utils/errors.ts";
-import type { CacheWarmingAction } from "../cache-warmer.ts";
-import type { ResourceDiagnostic } from "../diagnostics.ts";
-import type { ExternalService } from "../external-services.ts";
-import type { KeybindingsConfig } from "../keybindings.ts";
 import type { ModelRegistry } from "../model-registry.ts";
-import type { ScopedModel } from "../model-resolver.ts";
 import type { SessionManager } from "../session-manager.ts";
 import {
-  type BuildSystemPromptOptions,
-  buildSystemPrompt,
-  type NormalizedBuildSystemPromptOptions,
-  normalizeBuildSystemPromptOptions,
-} from "../system-prompt.ts";
-import type { VirtualModelDefinition } from "../virtual-models.ts";
+  applyContextActions,
+  createBindings,
+  idleCommandBindings,
+  type RunnerBindings,
+} from "./runner-bindings.ts";
+import { ContextFactory } from "./runner-context.ts";
+import { RunnerEmitApi } from "./runner-emit-api.ts";
+import { type ProviderActions, ProviderBinder } from "./runner-providers.ts";
+import type { ExtensionErrorListener } from "./runner-types.ts";
+import { UIPromptTracker } from "./runner-ui-prompts.ts";
+import { noOpUIContext } from "./runner-ui.ts";
 import type {
-  AgentBeforeSettleEvent,
-  BeforeAgentStartCustomEvent,
-  BeforeAgentStartEvent,
-  BeforeAgentStartEventResult,
-  BeforeAgentStartUserEvent,
-  BeforeProviderHeadersEvent,
-  BeforeProviderRequestEvent,
-  BoundaryContextPreview,
-  BoundaryResult,
-  CacheWarmingDecisionEvent,
-  CacheWarmingDecisionEventResult,
-  CompactOptions,
-  ContextEvent,
-  ContextEventResult,
-  ContextUsage,
-  ContextWithSystemEvent,
-  EntryRenderer,
-  ExecuteToolOptions,
   Extension,
   ExtensionActions,
   ExtensionCommandContext,
@@ -50,350 +20,36 @@ import type {
   ExtensionContext,
   ExtensionContextActions,
   ExtensionError,
-  ExtensionEvent,
-  ExtensionFlag,
   ExtensionMode,
   ExtensionRuntime,
-  ExtensionShortcut,
   ExtensionToolContext,
   ExtensionUIContext,
-  InputEvent,
-  InputEventResult,
-  InputSource,
-  LoadExtensionsResult,
-  MarkdownTransformer,
-  MessageEndEvent,
-  MessageEndEventResult,
-  MessageRenderer,
-  ProjectTrustContext,
-  ProjectTrustEvent,
-  ProjectTrustEventResult,
-  ProviderConfig,
-  RegisteredCommand,
-  RegisteredTool,
-  ReplacedSessionContext,
-  ResolvedCommand,
-  ResourcesDiscoverEvent,
-  ResourcesDiscoverResult,
-  SessionBeforeCompactResult,
-  SessionBeforeForkResult,
-  SessionBeforeSwitchResult,
-  SessionBeforeTreeResult,
-  SessionBoundaryDraft,
-  SessionShutdownEvent,
-  ToolCallEvent,
-  ToolCallEventResult,
-  ToolRenderers,
-  ToolResultEvent,
-  ToolResultEventResult,
-  TurnEndEvent,
-  UIPromptKind,
-  UserBashEvent,
-  UserBashEventResult,
 } from "./types.ts";
 
-const RESERVED_KEYBINDINGS_FOR_EXTENSION_CONFLICTS = [
-  "app.interrupt",
-  "app.clear",
-  "app.exit",
-  "app.suspend",
-  "app.thinking.cycle",
-  "app.model.cycleForward",
-  "app.model.cycleBackward",
-  "app.model.select",
-  "app.tools.expand",
-  "app.thinking.toggle",
-  "app.editor.external",
-  "app.message.copy",
-  "app.message.followUp",
-  "tui.input.submit",
-  "tui.select.confirm",
-  "tui.select.cancel",
-  "tui.input.copy",
-  "tui.editor.deleteToLineEnd",
-] as const;
+export { emitProjectTrustEvent, emitSessionShutdownEvent } from "./runner-events.ts";
+export type {
+  BeforeAgentStartTrigger,
+  ExtensionErrorListener,
+  ForkHandler,
+  NavigateTreeHandler,
+  NewSessionHandler,
+  ReloadHandler,
+  ShutdownHandler,
+  SwitchSessionHandler,
+} from "./runner-types.ts";
 
-type BuiltInKeyBindings = Partial<Record<KeyId, { keybinding: string; restrictOverride: boolean }>>;
+const STALE_MESSAGE =
+  "This extension ctx is stale after session replacement or reload. Do not use a captured msa or command ctx after ctx.newSession(), ctx.fork(), ctx.switchSession(), or ctx.reload(). For newSession, fork, and switchSession, move post-replacement work into withSession and use the ctx passed to withSession. For reload, do not use the old ctx after await ctx.reload().";
 
-const buildBuiltinKeybindings = (resolvedKeybindings: KeybindingsConfig): BuiltInKeyBindings => {
-  const builtinKeybindings = {} as BuiltInKeyBindings;
-  for (const [keybinding, keys] of Object.entries(resolvedKeybindings)) {
-    if (keys === undefined) continue;
-    const keyList = Array.isArray(keys) ? keys : [keys];
-    const restrictOverride = (
-      RESERVED_KEYBINDINGS_FOR_EXTENSION_CONFLICTS as readonly string[]
-    ).includes(keybinding);
-    for (const key of keyList) {
-      const normalizedKey = key.toLowerCase() as KeyId;
-      const existing = builtinKeybindings[normalizedKey];
-      if (existing?.restrictOverride === true && !restrictOverride) continue;
-      builtinKeybindings[normalizedKey] = {
-        keybinding,
-        restrictOverride,
-      };
-    }
-  }
-  return builtinKeybindings;
-};
-
-function isUserBashEventResult(value: unknown): value is UserBashEventResult {
-  if (typeof value !== "object" || value === null) return false;
-  const candidate = value as Record<string, unknown>;
-  const hasOperations = candidate["operations"] !== undefined;
-  const hasResult = candidate["result"] !== undefined;
-  if (hasOperations === hasResult) return false;
-
-  if (hasOperations) {
-    const operations = candidate["operations"];
-    if (typeof operations !== "object" || operations === null) return false;
-    return typeof (operations as Record<string, unknown>)["exec"] === "function";
-  }
-
-  const result = candidate["result"];
-  if (typeof result !== "object" || result === null) return false;
-  const resultRecord = result as Record<string, unknown>;
-  return (
-    typeof resultRecord["output"] === "string" &&
-    "exitCode" in resultRecord &&
-    (resultRecord["exitCode"] === undefined || typeof resultRecord["exitCode"] === "number") &&
-    typeof resultRecord["cancelled"] === "boolean" &&
-    typeof resultRecord["truncated"] === "boolean" &&
-    (resultRecord["fullOutputPath"] === undefined ||
-      typeof resultRecord["fullOutputPath"] === "string")
-  );
-}
-
-export type BeforeAgentStartTrigger =
-  | Pick<BeforeAgentStartUserEvent, "messageType" | "prompt" | "images">
-  | Pick<BeforeAgentStartCustomEvent, "messageType" | "message">;
-
-interface BeforeAgentStartCombinedResult {
-  messages: NonNullable<BeforeAgentStartEventResult["message"]>[];
-  systemPromptOptions: NormalizedBuildSystemPromptOptions;
-}
-
-type RunnerEmitEvent = Exclude<
-  ExtensionEvent,
-  | ToolCallEvent
-  | ProjectTrustEvent
-  | ToolResultEvent
-  | UserBashEvent
-  | ContextEvent
-  | ContextWithSystemEvent
-  | CacheWarmingDecisionEvent
-  | BeforeProviderRequestEvent
-  | BeforeProviderHeadersEvent
-  | BeforeAgentStartEvent
-  | MessageEndEvent
-  | ResourcesDiscoverEvent
-  | InputEvent
-  | TurnEndEvent
-  | AgentBeforeSettleEvent
->;
-
-type SessionBeforeEvent = Extract<
-  RunnerEmitEvent,
-  {
-    type:
-      | "session_before_switch"
-      | "session_before_fork"
-      | "session_before_compact"
-      | "session_before_tree";
-  }
->;
-
-type SessionBeforeEventResult =
-  | SessionBeforeSwitchResult
-  | SessionBeforeForkResult
-  | SessionBeforeCompactResult
-  | SessionBeforeTreeResult;
-
-type RunnerEmitResult<TEvent extends RunnerEmitEvent> = TEvent extends {
-  type: "session_before_switch";
-}
-  ? SessionBeforeSwitchResult | undefined
-  : TEvent extends { type: "session_before_fork" }
-    ? SessionBeforeForkResult | undefined
-    : TEvent extends { type: "session_before_compact" }
-      ? SessionBeforeCompactResult | undefined
-      : TEvent extends { type: "session_before_tree" }
-        ? SessionBeforeTreeResult | undefined
-        : undefined;
-
-export type ExtensionErrorListener = (error: ExtensionError) => void;
-
-type BoundaryBaseEvent =
-  | Omit<TurnEndEvent, "entries" | "continue" | "context">
-  | Omit<AgentBeforeSettleEvent, "entries" | "continue" | "context">;
-
-interface BoundaryDispatchResult {
-  entries: SessionBoundaryDraft[];
-  continue: boolean;
-  context: BoundaryContextPreview;
-  valid: boolean;
-}
-
-export type NewSessionHandler = (options?: {
-  parentSession?: string;
-  setup?: (sessionManager: SessionManager) => Promise<void>;
-  withSession?: (ctx: ReplacedSessionContext) => Promise<void>;
-}) => Promise<{ cancelled: boolean }>;
-
-export type ForkHandler = (
-  entryId: string,
-  options?: {
-    position?: "before" | "at";
-    withSession?: (ctx: ReplacedSessionContext) => Promise<void>;
-  },
-) => Promise<{ cancelled: boolean }>;
-
-export type NavigateTreeHandler = (
-  targetId: string,
-  options?: {
-    summarize?: boolean;
-    customInstructions?: string;
-    replaceInstructions?: boolean;
-    label?: string;
-  },
-) => Promise<{ cancelled: boolean }>;
-
-export type SwitchSessionHandler = (
-  sessionPath: string,
-  options?: { withSession?: (ctx: ReplacedSessionContext) => Promise<void> },
-) => Promise<{ cancelled: boolean }>;
-
-export type ReloadHandler = () => Promise<void>;
-
-export type ShutdownHandler = () => void;
-
-export async function emitSessionShutdownEvent(
-  extensionRunner: ExtensionRunner,
-  event: SessionShutdownEvent,
-): Promise<boolean> {
-  if (extensionRunner.hasHandlers("session_shutdown")) {
-    await extensionRunner.emit(event);
-    return true;
-  }
-  return false;
-}
-
-function snapshotEventHandlers(extensions: Extension[], event: ExtensionEvent["type"]) {
-  return extensions.map((ext) => ({ ext, handlers: ext.handlers.get(event)?.slice() ?? [] }));
-}
-
-function sameMessages(left: AgentMessage[], right: AgentMessage[]): boolean {
-  return left.length === right.length && left.every((message, index) => message === right[index]);
-}
-
-function restoreSystemMessages(
-  current: AgentMessage[],
-  visible: AgentMessage[],
-  returned: AgentMessage[],
-): AgentMessage[] {
-  if (sameMessages(returned, visible)) return current;
-  const head = getCurrentSystemMessage(current);
-  return head === undefined ? returned : [head, ...returned];
-}
-
-export async function emitProjectTrustEvent(
-  extensionsResult: LoadExtensionsResult,
-  event: ProjectTrustEvent,
-  ctx: ProjectTrustContext,
-): Promise<{ result?: ProjectTrustEventResult; errors: ExtensionError[] }> {
-  const errors: ExtensionError[] = [];
-  for (const { ext, handlers } of snapshotEventHandlers(
-    extensionsResult.extensions,
-    "project_trust",
-  )) {
-    for (const handler of handlers) {
-      try {
-        const handlerResult = (await handler(event, ctx)) as ProjectTrustEventResult;
-        if (handlerResult.trusted === "undecided") {
-          continue;
-        }
-        return { result: handlerResult, errors };
-      } catch (error) {
-        errors.push({
-          extensionPath: ext.path,
-          event: event.type,
-          error: toErrorMessage(error),
-          stack: error instanceof Error ? error.stack : undefined,
-        });
-      }
-    }
-  }
-  return { errors };
-}
-
-const noOpUIContext: ExtensionUIContext = {
-  select: async () => undefined,
-  confirm: async () => false,
-  input: async () => undefined,
-  notify: () => {},
-  onTerminalInput: () => () => {},
-  setStatus: () => {},
-  setWorkingMessage: () => {},
-  setWorkingVisible: () => {},
-  setWorkingIndicator: () => {},
-  setHiddenThinkingLabel: () => {},
-  setWidget: () => {},
-  setFooter: () => {},
-  setHeader: () => {},
-  setTitle: () => {},
-  custom: async () => undefined as never,
-  pasteToEditor: () => {},
-  setEditorText: () => {},
-  getEditorText: () => "",
-  editor: async () => undefined,
-  addAutocompleteProvider: () => {},
-  setEditorComponent: () => {},
-  getEditorComponent: () => undefined,
-  get theme() {
-    return theme;
-  },
-  getAllThemes: () => [],
-  getTheme: () => undefined,
-  setTheme: (_theme: string | Theme) => ({ success: false, error: "UI not available" }),
-  getToolsExpanded: () => false,
-  setToolsExpanded: () => {},
-};
-
-export class ExtensionRunner {
-  private extensions: Extension[];
-  private runtime: ExtensionRuntime;
-  private uiContext: ExtensionUIContext;
+export class ExtensionRunner extends RunnerEmitApi {
+  private uiContext: ExtensionUIContext = noOpUIContext;
   private mode: ExtensionMode = "print";
-  private cwd: string;
-  private sessionManager: SessionManager;
-  private modelRegistry: ModelRegistry;
-  private errorListeners: Set<ExtensionErrorListener> = new Set();
-  private getModel: () => Model<any> | undefined = () => undefined;
-  private getScopedModels: () => readonly ScopedModel[] = () => [];
-  private isIdleFn: () => boolean = () => true;
-  private isProjectTrustedFn: () => boolean = () => true;
-  private getSignalFn: () => AbortSignal | undefined = () => undefined;
-  private waitForIdleFn: () => Promise<void> = async () => {};
-  private abortFn: () => void = () => {};
-  private hasPendingMessagesFn: () => boolean = () => false;
-  private getContextUsageFn: () => ContextUsage | undefined = () => undefined;
-  private compactFn: (options?: CompactOptions) => void = () => {};
-  private getSystemPromptFn: () => string = () => "";
-  private getSystemPromptOptionsFn: () => BuildSystemPromptOptions = () =>
-    normalizeBuildSystemPromptOptions({ cwd: this.cwd });
-  private executeToolFn: ExtensionContextActions["executeTool"];
-  private getCallableToolsFn: () => readonly AgentTool[] = () => [];
+  private readonly errorListeners = new Set<ExtensionErrorListener>();
   private readonly reportedMcpServers = new Set<string>();
-  private newSessionHandler: NewSessionHandler = async () => ({ cancelled: false });
-  private forkHandler: ForkHandler = async () => ({ cancelled: false });
-  private navigateTreeHandler: NavigateTreeHandler = async () => ({ cancelled: false });
-  private switchSessionHandler: SwitchSessionHandler = async () => ({ cancelled: false });
-  private reloadHandler: ReloadHandler = async () => {};
-  private shutdownHandler: ShutdownHandler = () => {};
-  private shortcutDiagnostics: ResourceDiagnostic[] = [];
-  private commandDiagnostics: ResourceDiagnostic[] = [];
   private staleMessage: string | undefined;
-  private uiPromptDepth = 0;
-  private activeUIPrompt: { kind: UIPromptKind; title?: string | undefined } | undefined;
+  private readonly bindings: RunnerBindings;
+  private readonly contextFactory: ContextFactory;
+  private readonly prompts: UIPromptTracker;
 
   constructor(
     extensions: Extension[],
@@ -402,230 +58,76 @@ export class ExtensionRunner {
     sessionManager: SessionManager,
     modelRegistry: ModelRegistry,
   ) {
-    this.extensions = extensions;
-    this.runtime = runtime;
-    this.uiContext = noOpUIContext;
-    this.cwd = cwd;
-    this.sessionManager = sessionManager;
-    this.modelRegistry = modelRegistry;
+    super(extensions, runtime, cwd, sessionManager, modelRegistry);
+    this.bindings = createBindings(cwd);
+    this.contextFactory = new ContextFactory({
+      assertActive: () => this.assertActive(),
+      ui: () => this.uiContext,
+      mode: () => this.mode,
+      hasUI: () => this.hasUI(),
+      cwd,
+      sessionManager,
+      modelRegistry,
+      runtime,
+      bindings: this.bindings,
+    });
+    this.prompts = new UIPromptTracker((event) => {
+      queueMicrotask(() => {
+        void this.emit(event);
+      });
+    });
   }
 
   bindCore(
     actions: ExtensionActions,
     contextActions: ExtensionContextActions,
-    providerActions?: {
-      registerProvider?: (name: string, config: ProviderConfig) => void;
-      registerNativeProvider?: (provider: Provider) => void;
-      unregisterProvider?: (name: string) => void;
-      registerVirtualModel?: (definition: VirtualModelDefinition) => void;
-      unregisterVirtualModel?: (provider: string, id: string) => void;
-    },
+    providerActions?: ProviderActions,
   ): void {
-    this.runtime.sendMessage = actions.sendMessage;
-    this.runtime.sendUserMessage = actions.sendUserMessage;
-    this.runtime.appendEntry = actions.appendEntry;
-    this.runtime.setSessionName = actions.setSessionName;
-    this.runtime.getSessionName = actions.getSessionName;
-    this.runtime.setLabel = actions.setLabel;
-    this.runtime.getActiveTools = actions.getActiveTools;
-    this.runtime.getAllTools = actions.getAllTools;
-    this.runtime.getSettings = actions.getSettings;
-    this.runtime.setActiveTools = actions.setActiveTools;
-    this.runtime.refreshTools = actions.refreshTools;
-    this.runtime.getCommands = actions.getCommands;
-    this.runtime.setModel = actions.setModel;
-    this.runtime.getThinkingLevel = actions.getThinkingLevel;
-    this.runtime.setThinkingLevel = actions.setThinkingLevel;
-    this.runtime.createContext = () => this.createContext();
-
-    this.getModel = contextActions.getModel;
-    this.getScopedModels = contextActions.getScopedModels;
-    this.isIdleFn = contextActions.isIdle;
-    this.isProjectTrustedFn = contextActions.isProjectTrusted;
-    this.getSignalFn = contextActions.getSignal;
-    this.abortFn = contextActions.abort;
-    this.hasPendingMessagesFn = contextActions.hasPendingMessages;
-    this.shutdownHandler = contextActions.shutdown;
-    this.getContextUsageFn = contextActions.getContextUsage;
-    this.compactFn = contextActions.compact;
-    this.getSystemPromptFn = contextActions.getSystemPrompt;
-    this.getSystemPromptOptionsFn =
-      contextActions.getSystemPromptOptions ??
-      (() => normalizeBuildSystemPromptOptions({ cwd: this.cwd }));
-    this.executeToolFn = contextActions.executeTool;
-    this.getCallableToolsFn = contextActions.getCallableTools ?? (() => []);
-
-    this.runtime.mcpServers.setChangeListener(() => {
-      void this.emit({ type: "mcp_servers_change", servers: this.runtime.mcpServers.list() });
+    const { runtime } = this;
+    runtime.sendMessage = actions.sendMessage;
+    runtime.sendUserMessage = actions.sendUserMessage;
+    runtime.appendEntry = actions.appendEntry;
+    runtime.setSessionName = actions.setSessionName;
+    runtime.getSessionName = actions.getSessionName;
+    runtime.setLabel = actions.setLabel;
+    runtime.getActiveTools = actions.getActiveTools;
+    runtime.getAllTools = actions.getAllTools;
+    runtime.getSettings = actions.getSettings;
+    runtime.setActiveTools = actions.setActiveTools;
+    runtime.refreshTools = actions.refreshTools;
+    runtime.getCommands = actions.getCommands;
+    runtime.setModel = actions.setModel;
+    runtime.getThinkingLevel = actions.getThinkingLevel;
+    runtime.setThinkingLevel = actions.setThinkingLevel;
+    runtime.createContext = () => this.createContext();
+    applyContextActions({ bindings: this.bindings, actions: contextActions, cwd: this.cwd });
+    runtime.mcpServers.setChangeListener(() => {
+      void this.emit({ type: "mcp_servers_change", servers: runtime.mcpServers.list() });
       this.reportUnhandledMcpServers();
     });
-
-    for (const { name, config, extensionPath } of this.runtime.pendingProviderRegistrations) {
-      try {
-        if (providerActions?.registerProvider !== undefined) {
-          providerActions.registerProvider(name, config);
-        } else {
-          this.modelRegistry.registerProvider(name, config);
-        }
-      } catch (err) {
-        this.emitError({
-          extensionPath,
-          event: "register_provider",
-          error: toErrorMessage(err),
-          stack: err instanceof Error ? err.stack : undefined,
-        });
-      }
-    }
-    this.runtime.pendingProviderRegistrations = [];
-    for (const { provider, extensionPath } of this.runtime.pendingNativeProviderRegistrations) {
-      try {
-        if (providerActions?.registerNativeProvider !== undefined) {
-          providerActions.registerNativeProvider(provider);
-        } else {
-          this.modelRegistry.registerProvider(provider);
-        }
-      } catch (err) {
-        this.emitError({
-          extensionPath,
-          event: "register_provider",
-          error: toErrorMessage(err),
-          stack: err instanceof Error ? err.stack : undefined,
-        });
-      }
-    }
-    this.runtime.pendingNativeProviderRegistrations = [];
-    const registerVirtualModel = (definition: VirtualModelDefinition) => {
-      if (providerActions?.registerVirtualModel !== undefined)
-        providerActions.registerVirtualModel(definition);
-      else this.modelRegistry.registerVirtualModel(definition);
-    };
-    for (const { definition, extensionPath } of this.runtime.pendingVirtualModelRegistrations) {
-      try {
-        registerVirtualModel(definition);
-      } catch (err) {
-        this.emitError({
-          extensionPath,
-          event: "register_virtual_model",
-          error: toErrorMessage(err),
-          stack: err instanceof Error ? err.stack : undefined,
-        });
-      }
-    }
-    this.runtime.pendingVirtualModelRegistrations = [];
-
-    this.runtime.registerProvider = (name, config) => {
-      if (providerActions?.registerProvider !== undefined) {
-        providerActions.registerProvider(name, config);
-        return;
-      }
-      this.modelRegistry.registerProvider(name, config);
-    };
-    this.runtime.registerNativeProvider = (provider) => {
-      if (providerActions?.registerNativeProvider !== undefined) {
-        providerActions.registerNativeProvider(provider);
-        return;
-      }
-      this.modelRegistry.registerProvider(provider);
-    };
-    this.runtime.unregisterProvider = (name) => {
-      if (providerActions?.unregisterProvider !== undefined) {
-        providerActions.unregisterProvider(name);
-        return;
-      }
-      this.modelRegistry.unregisterProvider(name);
-    };
-    this.runtime.registerVirtualModel = registerVirtualModel;
-    this.runtime.unregisterVirtualModel = (provider, id) => {
-      if (providerActions?.unregisterVirtualModel !== undefined)
-        providerActions.unregisterVirtualModel(provider, id);
-      else this.modelRegistry.unregisterVirtualModel(provider, id);
-    };
+    new ProviderBinder(runtime, this.modelRegistry, providerActions, (error) =>
+      this.emitError(error),
+    ).bind();
   }
 
   bindCommandContext(actions?: ExtensionCommandContextActions): void {
-    if (actions !== undefined) {
-      this.waitForIdleFn = actions.waitForIdle;
-      this.newSessionHandler = actions.newSession;
-      this.forkHandler = actions.fork;
-      this.navigateTreeHandler = actions.navigateTree;
-      this.switchSessionHandler = actions.switchSession;
-      this.reloadHandler = actions.reload;
-      return;
-    }
-
-    this.waitForIdleFn = async () => {};
-    this.newSessionHandler = async () => ({ cancelled: false });
-    this.forkHandler = async () => ({ cancelled: false });
-    this.navigateTreeHandler = async () => ({ cancelled: false });
-    this.switchSessionHandler = async () => ({ cancelled: false });
-    this.reloadHandler = async () => {};
+    const next =
+      actions === undefined
+        ? idleCommandBindings()
+        : {
+            waitForIdleFn: actions.waitForIdle,
+            newSessionHandler: actions.newSession,
+            forkHandler: actions.fork,
+            navigateTreeHandler: actions.navigateTree,
+            switchSessionHandler: actions.switchSession,
+            reloadHandler: actions.reload,
+          };
+    Object.assign(this.bindings, next);
   }
 
   setUIContext(uiContext?: ExtensionUIContext, mode: ExtensionMode = "print"): void {
-    this.uiContext = uiContext === undefined ? noOpUIContext : this.wrapUIPromptContext(uiContext);
+    this.uiContext = uiContext === undefined ? noOpUIContext : this.prompts.wrap(uiContext);
     this.mode = mode;
-  }
-
-  private wrapUIPromptContext(ui: ExtensionUIContext): ExtensionUIContext {
-    return {
-      ...ui,
-      select: (title, options, opts) =>
-        this.withUIPrompt("select", title, () => ui.select(title, options, opts)),
-      confirm: (title, message, opts) =>
-        this.withUIPrompt("confirm", title, () => ui.confirm(title, message, opts)),
-      input: (title, placeholder, opts) =>
-        this.withUIPrompt("input", title, () => ui.input(title, placeholder, opts)),
-      editor: (title, prefill) =>
-        this.withUIPrompt("editor", title, () => ui.editor(title, prefill)),
-      custom: (factory, options) =>
-        this.withUIPrompt("custom", undefined, () => ui.custom(factory, options)),
-    };
-  }
-
-  private withUIPrompt<T>(
-    kind: UIPromptKind,
-    title: string | undefined,
-    run: () => Promise<T>,
-  ): Promise<T> {
-    const outerPrompt = this.uiPromptDepth++ === 0;
-    if (outerPrompt) {
-      this.activeUIPrompt = { kind, title };
-      this.emitUIPromptEvent({
-        type: "ui_prompt_start",
-        reason: "ui_prompt",
-        kind,
-        ...(title !== undefined && title !== "" ? { title } : {}),
-      });
-    }
-
-    const finish = () => {
-      if (--this.uiPromptDepth > 0) return;
-      this.uiPromptDepth = 0;
-
-      const prompt = this.activeUIPrompt ?? { kind, title };
-      this.activeUIPrompt = undefined;
-      this.emitUIPromptEvent({
-        type: "ui_prompt_end",
-        reason: "ui_prompt",
-        kind: prompt.kind,
-        ...(prompt.title !== undefined && prompt.title !== "" ? { title: prompt.title } : {}),
-      });
-    };
-
-    try {
-      return run().finally(finish);
-    } catch (err) {
-      finish();
-      throw err;
-    }
-  }
-
-  private emitUIPromptEvent(
-    event: Extract<RunnerEmitEvent, { type: "ui_prompt_start" | "ui_prompt_end" }>,
-  ): void {
-    queueMicrotask(() => {
-      void this.emit(event);
-    });
   }
 
   getUIContext(): ExtensionUIContext {
@@ -636,113 +138,10 @@ export class ExtensionRunner {
     return this.uiContext !== noOpUIContext;
   }
 
-  getExtensionPaths(): string[] {
-    return this.extensions.map((e) => e.path);
-  }
-
-  getAllRegisteredTools(): RegisteredTool[] {
-    const toolsByName = new Map<string, RegisteredTool>();
-    for (const ext of this.extensions) {
-      for (const tool of ext.tools.values()) {
-        if (!toolsByName.has(tool.definition.name)) {
-          toolsByName.set(tool.definition.name, tool);
-        }
-      }
-    }
-    return Array.from(toolsByName.values());
-  }
-
-  getToolDefinition(toolName: string): RegisteredTool["definition"] | undefined {
-    for (const ext of this.extensions) {
-      const tool = ext.tools.get(toolName);
-      if (tool !== undefined) {
-        return tool.definition;
-      }
-    }
-    return undefined;
-  }
-
-  getFlags(): Map<string, ExtensionFlag> {
-    const allFlags = new Map<string, ExtensionFlag>();
-    for (const ext of this.extensions) {
-      for (const [name, flag] of ext.flags) {
-        if (!allFlags.has(name)) {
-          allFlags.set(name, flag);
-        }
-      }
-    }
-    return allFlags;
-  }
-
-  setFlagValue(name: string, value: boolean | string): void {
-    this.runtime.flagValues.set(name, value);
-  }
-
-  getFlagValues(): Map<string, boolean | string> {
-    return new Map(this.runtime.flagValues);
-  }
-
-  getShortcuts(resolvedKeybindings: KeybindingsConfig): Map<KeyId, ExtensionShortcut> {
-    this.shortcutDiagnostics = [];
-    const builtinKeybindings = buildBuiltinKeybindings(resolvedKeybindings);
-    const extensionShortcuts = new Map<KeyId, ExtensionShortcut>();
-
-    const addDiagnostic = (message: string, extensionPath: string) => {
-      this.shortcutDiagnostics.push({ type: "warning", message, path: extensionPath });
-      if (!this.hasUI()) {
-        console.warn(message);
-      }
-    };
-
-    for (const ext of this.extensions) {
-      for (const [key, shortcut] of ext.shortcuts) {
-        const normalizedKey = key.toLowerCase() as KeyId;
-
-        const builtInKeybinding = builtinKeybindings[normalizedKey];
-        if (builtInKeybinding?.restrictOverride === true) {
-          addDiagnostic(
-            `Extension shortcut '${key}' from ${shortcut.extensionPath} conflicts with built-in shortcut. Skipping.`,
-            shortcut.extensionPath,
-          );
-          continue;
-        }
-
-        if (builtInKeybinding?.restrictOverride === false) {
-          addDiagnostic(
-            `Extension shortcut conflict: '${key}' is built-in shortcut for ${builtInKeybinding.keybinding} and ${shortcut.extensionPath}. Using ${shortcut.extensionPath}.`,
-            shortcut.extensionPath,
-          );
-        }
-
-        const existingExtensionShortcut = extensionShortcuts.get(normalizedKey);
-        if (existingExtensionShortcut !== undefined) {
-          addDiagnostic(
-            `Extension shortcut conflict: '${key}' registered by both ${existingExtensionShortcut.extensionPath} and ${shortcut.extensionPath}. Using ${shortcut.extensionPath}.`,
-            shortcut.extensionPath,
-          );
-        }
-        extensionShortcuts.set(normalizedKey, shortcut);
-      }
-    }
-    return extensionShortcuts;
-  }
-
-  getShortcutDiagnostics(): ResourceDiagnostic[] {
-    return this.shortcutDiagnostics;
-  }
-
-  invalidate(
-    message = "This extension ctx is stale after session replacement or reload. Do not use a captured msa or command ctx after ctx.newSession(), ctx.fork(), ctx.switchSession(), or ctx.reload(). For newSession, fork, and switchSession, move post-replacement work into withSession and use the ctx passed to withSession. For reload, do not use the old ctx after await ctx.reload().",
-  ): void {
+  invalidate(message = STALE_MESSAGE): void {
     if (this.staleMessage === undefined || this.staleMessage === "") {
       this.staleMessage = message;
       this.runtime.invalidate(message);
-    }
-  }
-
-  private assertActive(): void {
-    if (this.staleMessage !== undefined && this.staleMessage !== "") {
-      throw new Error(this.staleMessage);
     }
   }
 
@@ -770,114 +169,8 @@ export class ExtensionRunner {
     }
   }
 
-  hasHandlers(eventType: string): boolean {
-    for (const ext of this.extensions) {
-      const handlers = ext.handlers.get(eventType);
-      if (handlers !== undefined && handlers.length > 0) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  getMessageRenderer(customType: string): MessageRenderer | undefined {
-    for (const ext of this.extensions) {
-      const renderer = ext.messageRenderers.get(customType);
-      if (renderer !== undefined) {
-        return renderer;
-      }
-    }
-    return undefined;
-  }
-
-  getExternalServices(): ExternalService[] {
-    return this.extensions.flatMap((ext) => ext.externalServices ?? []);
-  }
-
-  getMarkdownTransformers(): MarkdownTransformer[] {
-    return this.extensions.flatMap((ext) =>
-      ext.markdownTransformer === undefined ? [] : [ext.markdownTransformer],
-    );
-  }
-
-  resolveToolRenderers(
-    toolName: string,
-    base: () => ToolRenderers | undefined,
-  ): ToolRenderers | undefined {
-    const resolvers = this.extensions.flatMap((ext) => ext.toolRenderers ?? []);
-    const resolve = (index: number): ToolRenderers | undefined => {
-      const resolver = resolvers[index];
-      return resolver === undefined ? base() : resolver(toolName, () => resolve(index + 1));
-    };
-    return resolve(0);
-  }
-
-  getEntryRenderer(customType: string): EntryRenderer | undefined {
-    for (const ext of this.extensions) {
-      const renderer = ext.entryRenderers?.get(customType);
-      if (renderer !== undefined) {
-        return renderer;
-      }
-    }
-    return undefined;
-  }
-
-  private resolveRegisteredCommands(): ResolvedCommand[] {
-    const commands: RegisteredCommand[] = [];
-    const counts = new Map<string, number>();
-
-    for (const ext of this.extensions) {
-      for (const command of ext.commands.values()) {
-        commands.push(command);
-        counts.set(command.name, (counts.get(command.name) ?? 0) + 1);
-      }
-    }
-
-    const seen = new Map<string, number>();
-    const takenInvocationNames = new Set<string>();
-
-    return commands.map((command) => {
-      const occurrence = (seen.get(command.name) ?? 0) + 1;
-      seen.set(command.name, occurrence);
-
-      let invocationName =
-        (counts.get(command.name) ?? 0) > 1 ? `${command.name}:${occurrence}` : command.name;
-
-      if (takenInvocationNames.has(invocationName)) {
-        let suffix = occurrence;
-        do {
-          suffix++;
-          invocationName = `${command.name}:${suffix}`;
-        } while (takenInvocationNames.has(invocationName));
-      }
-
-      takenInvocationNames.add(invocationName);
-      return {
-        ...command,
-        invocationName,
-      };
-    });
-  }
-
-  getModelRegistry(): ModelRegistry {
-    return this.modelRegistry;
-  }
-
-  getRegisteredCommands(): ResolvedCommand[] {
-    this.commandDiagnostics = [];
-    return this.resolveRegisteredCommands();
-  }
-
-  getCommandDiagnostics(): ResourceDiagnostic[] {
-    return this.commandDiagnostics;
-  }
-
-  getCommand(name: string): ResolvedCommand | undefined {
-    return this.resolveRegisteredCommands().find((command) => command.invocationName === name);
-  }
-
   shutdown(): void {
-    this.shutdownHandler();
+    this.bindings.shutdownHandler();
   }
 
   getActiveTools(): string[] {
@@ -886,692 +179,20 @@ export class ExtensionRunner {
   }
 
   createContext(): ExtensionContext {
-    const runner = this;
-    const getModel = this.getModel;
-    const getScopedModels = this.getScopedModels;
-    return {
-      get ui() {
-        runner.assertActive();
-        return runner.uiContext;
-      },
-      get mode() {
-        runner.assertActive();
-        return runner.mode;
-      },
-      get hasUI() {
-        runner.assertActive();
-        return runner.hasUI();
-      },
-      get cwd() {
-        runner.assertActive();
-        return runner.cwd;
-      },
-      get sessionManager() {
-        runner.assertActive();
-        return runner.sessionManager;
-      },
-      get modelRegistry() {
-        runner.assertActive();
-        return runner.modelRegistry;
-      },
-      get model() {
-        runner.assertActive();
-        return getModel();
-      },
-      get scopedModels() {
-        runner.assertActive();
-        return getScopedModels();
-      },
-      get thinkingLevel() {
-        runner.assertActive();
-        return runner.runtime.getThinkingLevel();
-      },
-      isIdle: () => {
-        runner.assertActive();
-        return runner.isIdleFn();
-      },
-      isProjectTrusted: () => {
-        runner.assertActive();
-        return runner.isProjectTrustedFn();
-      },
-      get signal() {
-        runner.assertActive();
-        return runner.getSignalFn();
-      },
-      abort: () => {
-        runner.assertActive();
-        runner.abortFn();
-      },
-      hasPendingMessages: () => {
-        runner.assertActive();
-        return runner.hasPendingMessagesFn();
-      },
-      shutdown: () => {
-        runner.assertActive();
-        runner.shutdownHandler();
-      },
-      getContextUsage: () => {
-        runner.assertActive();
-        return runner.getContextUsageFn();
-      },
-      compact: (options) => {
-        runner.assertActive();
-        runner.compactFn(options);
-      },
-      getSystemPrompt: () => {
-        runner.assertActive();
-        return runner.getSystemPromptFn();
-      },
-    };
+    return this.contextFactory.createContext();
   }
 
   createToolContext(toolCallId: string, signal: AbortSignal | undefined): ExtensionToolContext {
-    const runner = this;
-    return Object.defineProperties(this.createContext() as ExtensionToolContext, {
-      tools: {
-        get() {
-          runner.assertActive();
-          return runner.getCallableToolsFn();
-        },
-      },
-      executeTool: {
-        value: async (name: string, args: unknown, options: ExecuteToolOptions = {}) => {
-          runner.assertActive();
-          if (runner.executeToolFn === undefined) {
-            return {
-              toolCall: { type: "toolCall", id: `${toolCallId}/0`, name, arguments: {} },
-              result: {
-                content: [
-                  { type: "text", text: "Nested tool calls are not available in this context" },
-                ],
-                details: {},
-              },
-              isError: true,
-            };
-          }
-          return runner.executeToolFn(toolCallId, name, args, {
-            ...options,
-            signal: options.signal ?? signal,
-          });
-        },
-      },
-    });
+    return this.contextFactory.createToolContext(toolCallId, signal);
   }
 
   createCommandContext(): ExtensionCommandContext {
-    const context = Object.defineProperties(
-      {},
-      Object.getOwnPropertyDescriptors(this.createContext()),
-    ) as ExtensionCommandContext;
-    context.getSystemPromptOptions = () => {
-      this.assertActive();
-      return this.getSystemPromptOptionsFn();
-    };
-    context.waitForIdle = () => {
-      this.assertActive();
-      return this.waitForIdleFn();
-    };
-    context.newSession = (options) => {
-      this.assertActive();
-      return this.newSessionHandler(options);
-    };
-    context.fork = (entryId, options) => {
-      this.assertActive();
-      return this.forkHandler(entryId, options);
-    };
-    context.navigateTree = (targetId, options) => {
-      this.assertActive();
-      return this.navigateTreeHandler(targetId, options);
-    };
-    context.switchSession = (sessionPath, options) => {
-      this.assertActive();
-      return this.switchSessionHandler(sessionPath, options);
-    };
-    context.reload = () => {
-      this.assertActive();
-      return this.reloadHandler();
-    };
-    return context;
+    return this.contextFactory.createCommandContext();
   }
 
-  async emitBoundary(
-    baseEvent: BoundaryBaseEvent,
-    buildContext: (
-      entries: SessionBoundaryDraft[],
-    ) => BoundaryContextPreview | Promise<BoundaryContextPreview>,
-  ): Promise<BoundaryDispatchResult> {
-    const ctx = this.createContext();
-    let entries: SessionBoundaryDraft[] = [];
-    let shouldContinue = false;
-    let context = await buildContext(entries);
-    let valid = true;
-
-    for (const { ext, handlers } of snapshotEventHandlers(this.extensions, baseEvent.type)) {
-      for (const handler of handlers) {
-        const event = {
-          ...baseEvent,
-          entries,
-          continue: shouldContinue,
-          context,
-        } as TurnEndEvent | AgentBeforeSettleEvent;
-        try {
-          const handlerResult = (await handler(event, ctx)) as BoundaryResult | undefined;
-          if (handlerResult?.entries !== undefined) entries = handlerResult.entries;
-          if (handlerResult?.continue !== undefined) shouldContinue = handlerResult.continue;
-        } catch (err) {
-          this.emitError({
-            extensionPath: ext.path,
-            event: baseEvent.type,
-            error: toErrorMessage(err),
-            stack: err instanceof Error ? err.stack : undefined,
-          });
-        }
-
-        try {
-          context = await buildContext(entries);
-          valid = true;
-        } catch (err) {
-          valid = false;
-          this.emitError({
-            extensionPath: ext.path,
-            event: baseEvent.type,
-            error: `Invalid boundary entries: ${toErrorMessage(err)}`,
-            stack: err instanceof Error ? err.stack : undefined,
-          });
-        }
-      }
+  protected assertActive(): void {
+    if (this.staleMessage !== undefined && this.staleMessage !== "") {
+      throw new Error(this.staleMessage);
     }
-
-    return valid
-      ? { entries, continue: shouldContinue, context, valid: true }
-      : { entries: [], continue: false, context, valid: false };
-  }
-
-  private isSessionBeforeEvent(event: RunnerEmitEvent): event is SessionBeforeEvent {
-    return (
-      event.type === "session_before_switch" ||
-      event.type === "session_before_fork" ||
-      event.type === "session_before_compact" ||
-      event.type === "session_before_tree"
-    );
-  }
-
-  async emit<TEvent extends RunnerEmitEvent>(event: TEvent): Promise<RunnerEmitResult<TEvent>> {
-    const ctx = this.createContext();
-    let result: SessionBeforeEventResult | undefined;
-
-    for (const { ext, handlers } of snapshotEventHandlers(this.extensions, event.type)) {
-      for (const handler of handlers) {
-        try {
-          const handlerResult = await handler(event, ctx);
-
-          if (this.isSessionBeforeEvent(event) && handlerResult) {
-            result = handlerResult as SessionBeforeEventResult;
-            if (result.cancel === true) {
-              return result as RunnerEmitResult<TEvent>;
-            }
-          }
-        } catch (err) {
-          const message = toErrorMessage(err);
-          const stack = err instanceof Error ? err.stack : undefined;
-          this.emitError({
-            extensionPath: ext.path,
-            event: event.type,
-            error: message,
-            stack,
-          });
-        }
-      }
-    }
-
-    return result as RunnerEmitResult<TEvent>;
-  }
-
-  async emitCacheWarmingDecision(event: CacheWarmingDecisionEvent): Promise<CacheWarmingAction> {
-    const ctx = this.createContext();
-    let action = event.action;
-
-    for (const { ext, handlers } of snapshotEventHandlers(this.extensions, event.type)) {
-      for (const handler of handlers) {
-        try {
-          const result = (await handler(event, ctx)) as CacheWarmingDecisionEventResult | undefined;
-          if (result?.action !== undefined) action = result.action;
-        } catch (err) {
-          this.emitError({
-            extensionPath: ext.path,
-            event: event.type,
-            error: toErrorMessage(err),
-            stack: err instanceof Error ? err.stack : undefined,
-          });
-        }
-      }
-    }
-
-    return action;
-  }
-
-  async emitMessageEnd(event: MessageEndEvent): Promise<AgentMessage | undefined> {
-    const ctx = this.createContext();
-    let currentMessage = event.message;
-    let modified = false;
-
-    for (const { ext, handlers } of snapshotEventHandlers(this.extensions, "message_end")) {
-      for (const handler of handlers) {
-        try {
-          const currentEvent: MessageEndEvent = { ...event, message: currentMessage };
-          const handlerResult = (await handler(currentEvent, ctx)) as
-            | MessageEndEventResult
-            | undefined;
-          if (handlerResult?.message === undefined) continue;
-
-          if (handlerResult.message.role !== currentMessage.role) {
-            this.emitError({
-              extensionPath: ext.path,
-              event: "message_end",
-              error: "message_end handlers must return a message with the same role",
-            });
-            continue;
-          }
-
-          currentMessage = handlerResult.message;
-          modified = true;
-        } catch (err) {
-          const message = toErrorMessage(err);
-          const stack = err instanceof Error ? err.stack : undefined;
-          this.emitError({
-            extensionPath: ext.path,
-            event: "message_end",
-            error: message,
-            stack,
-          });
-        }
-      }
-    }
-
-    return modified ? currentMessage : undefined;
-  }
-
-  async emitToolResult(event: ToolResultEvent): Promise<ToolResultEventResult | undefined> {
-    const ctx = this.createContext();
-    const currentEvent: ToolResultEvent = { ...event };
-    let modified = false;
-
-    for (const { ext, handlers } of snapshotEventHandlers(this.extensions, "tool_result")) {
-      for (const handler of handlers) {
-        try {
-          const handlerResult = (await handler(currentEvent, ctx)) as
-            | ToolResultEventResult
-            | undefined;
-          if (handlerResult === undefined) continue;
-
-          if (handlerResult.content !== undefined) {
-            currentEvent.content = handlerResult.content;
-            if (handlerResult.structuredContent === undefined)
-              delete currentEvent.structuredContent;
-            modified = true;
-          }
-          if (handlerResult.details !== undefined) {
-            currentEvent.details = handlerResult.details;
-            modified = true;
-          }
-          if (handlerResult.structuredContent !== undefined) {
-            currentEvent.structuredContent = handlerResult.structuredContent;
-            modified = true;
-          }
-          if (handlerResult.isError !== undefined) {
-            currentEvent.isError = handlerResult.isError;
-            modified = true;
-          }
-          if (handlerResult.usage !== undefined) {
-            currentEvent.usage = handlerResult.usage;
-            modified = true;
-          }
-        } catch (err) {
-          const message = toErrorMessage(err);
-          const stack = err instanceof Error ? err.stack : undefined;
-          this.emitError({
-            extensionPath: ext.path,
-            event: "tool_result",
-            error: message,
-            stack,
-          });
-        }
-      }
-    }
-
-    if (!modified) {
-      return undefined;
-    }
-
-    return {
-      content: currentEvent.content,
-      details: currentEvent.details,
-      structuredContent: currentEvent.structuredContent,
-      isError: currentEvent.isError,
-      usage: currentEvent.usage,
-    };
-  }
-
-  async emitToolCall(event: ToolCallEvent): Promise<ToolCallEventResult | undefined> {
-    const ctx = this.createContext();
-    let result: ToolCallEventResult | undefined;
-
-    for (const { handlers } of snapshotEventHandlers(this.extensions, "tool_call")) {
-      for (const handler of handlers) {
-        const handlerResult = await handler(event, ctx);
-
-        if (handlerResult) {
-          result = handlerResult as ToolCallEventResult;
-          if (result.block === true) {
-            return result;
-          }
-        }
-      }
-    }
-
-    return result;
-  }
-
-  async emitUserBash(event: UserBashEvent): Promise<UserBashEventResult | undefined> {
-    const ctx = this.createContext();
-
-    for (const { ext, handlers } of snapshotEventHandlers(this.extensions, "user_bash")) {
-      for (const handler of handlers) {
-        try {
-          const handlerResult = await handler(event, ctx);
-          if (handlerResult === undefined) continue;
-          if (!isUserBashEventResult(handlerResult)) {
-            throw new Error(
-              "Invalid user_bash handler result: return undefined for local execution or exactly one valid { operations } or { result } object",
-            );
-          }
-          return handlerResult;
-        } catch (err) {
-          const message = toErrorMessage(err);
-          const stack = err instanceof Error ? err.stack : undefined;
-          this.emitError({
-            extensionPath: ext.path,
-            event: "user_bash",
-            error: message,
-            stack,
-          });
-          throw err;
-        }
-      }
-    }
-
-    return undefined;
-  }
-
-  async emitContext(messages: AgentMessage[]): Promise<AgentMessage[]> {
-    const ctx = this.createContext();
-    let currentMessages = structuredClone(messages);
-
-    for (const { ext, handlers } of snapshotEventHandlers(this.extensions, "context")) {
-      for (const handler of handlers) {
-        try {
-          const visibleMessages = currentMessages.filter((message) => message.role !== "system");
-          const visibleSnapshot = visibleMessages.slice();
-          const event: ContextEvent = { type: "context", messages: visibleMessages };
-          const handlerResult = (await handler(event, ctx)) as ContextEventResult | undefined;
-
-          const returned =
-            handlerResult?.messages ??
-            (sameMessages(visibleMessages, visibleSnapshot) ? undefined : visibleMessages);
-          if (returned === undefined) continue;
-          currentMessages = restoreSystemMessages(currentMessages, visibleSnapshot, returned);
-        } catch (err) {
-          const message = toErrorMessage(err);
-          const stack = err instanceof Error ? err.stack : undefined;
-          this.emitError({
-            extensionPath: ext.path,
-            event: "context",
-            error: message,
-            stack,
-          });
-        }
-      }
-    }
-
-    for (const { ext, handlers } of snapshotEventHandlers(this.extensions, "context_with_system")) {
-      for (const handler of handlers) {
-        try {
-          const hadLeadingSystemMessage = currentMessages[0]?.role === "system";
-          const event: ContextWithSystemEvent = {
-            type: "context_with_system",
-            messages: currentMessages,
-          };
-          const handlerResult = (await handler(event, ctx)) as ContextEventResult | undefined;
-          currentMessages = handlerResult?.messages ?? currentMessages;
-          if (hadLeadingSystemMessage && currentMessages[0]?.role !== "system") {
-            this.emitError({
-              extensionPath: ext.path,
-              event: "context_with_system",
-              error:
-                "Handler removed the leading system message; the request has no prompt or initial tool declarations. Keep it at index 0 or replace a dropped prefix with getCurrentSystemMessage().",
-            });
-          }
-        } catch (err) {
-          const message = toErrorMessage(err);
-          const stack = err instanceof Error ? err.stack : undefined;
-          this.emitError({
-            extensionPath: ext.path,
-            event: "context_with_system",
-            error: message,
-            stack,
-          });
-        }
-      }
-    }
-
-    return currentMessages;
-  }
-
-  async emitBeforeProviderRequest(payload: unknown): Promise<unknown> {
-    const ctx = this.createContext();
-    let currentPayload = payload;
-
-    for (const { ext, handlers } of snapshotEventHandlers(
-      this.extensions,
-      "before_provider_request",
-    )) {
-      for (const handler of handlers) {
-        try {
-          const event: BeforeProviderRequestEvent = {
-            type: "before_provider_request",
-            payload: currentPayload,
-          };
-          const handlerResult = await handler(event, ctx);
-          if (handlerResult !== undefined) {
-            currentPayload = handlerResult;
-          }
-        } catch (err) {
-          const message = toErrorMessage(err);
-          const stack = err instanceof Error ? err.stack : undefined;
-          this.emitError({
-            extensionPath: ext.path,
-            event: "before_provider_request",
-            error: message,
-            stack,
-          });
-        }
-      }
-    }
-
-    return currentPayload;
-  }
-
-  async emitBeforeProviderHeaders(headers: ProviderHeaders): Promise<ProviderHeaders> {
-    const ctx = this.createContext();
-
-    for (const { ext, handlers } of snapshotEventHandlers(
-      this.extensions,
-      "before_provider_headers",
-    )) {
-      for (const handler of handlers) {
-        try {
-          const event: BeforeProviderHeadersEvent = {
-            type: "before_provider_headers",
-            headers,
-          };
-          await handler(event, ctx);
-        } catch (err) {
-          const message = toErrorMessage(err);
-          const stack = err instanceof Error ? err.stack : undefined;
-          this.emitError({
-            extensionPath: ext.path,
-            event: "before_provider_headers",
-            error: message,
-            stack,
-          });
-        }
-      }
-    }
-
-    return headers;
-  }
-
-  async emitBeforeAgentStart(
-    trigger: BeforeAgentStartTrigger,
-    systemPromptOptions: BuildSystemPromptOptions,
-  ): Promise<BeforeAgentStartCombinedResult> {
-    const currentOptions = normalizeBuildSystemPromptOptions(systemPromptOptions);
-    const renderCurrentSystemPrompt = (): string => buildSystemPrompt(currentOptions);
-    const ctx = Object.defineProperties(
-      {},
-      Object.getOwnPropertyDescriptors(this.createContext()),
-    ) as ExtensionContext;
-    ctx.getSystemPrompt = () => {
-      this.assertActive();
-      return renderCurrentSystemPrompt();
-    };
-    const messages: NonNullable<BeforeAgentStartEventResult["message"]>[] = [];
-
-    for (const { ext, handlers } of snapshotEventHandlers(this.extensions, "before_agent_start")) {
-      for (const handler of handlers) {
-        try {
-          const event: BeforeAgentStartEvent = {
-            ...trigger,
-            type: "before_agent_start",
-            get systemPrompt() {
-              return renderCurrentSystemPrompt();
-            },
-            systemPromptOptions: currentOptions,
-          };
-          const handlerResult = await handler(event, ctx);
-
-          if (handlerResult) {
-            const result = handlerResult as BeforeAgentStartEventResult;
-            if (result.message !== undefined) messages.push(result.message);
-            if (result.systemPrompt !== undefined) {
-              currentOptions.forceSystemPrompt = result.systemPrompt;
-            }
-          }
-        } catch (err) {
-          const message = toErrorMessage(err);
-          const stack = err instanceof Error ? err.stack : undefined;
-          this.emitError({
-            extensionPath: ext.path,
-            event: "before_agent_start",
-            error: message,
-            stack,
-          });
-        }
-      }
-    }
-
-    return { messages, systemPromptOptions: currentOptions };
-  }
-
-  async emitResourcesDiscover(
-    cwd: string,
-    reason: ResourcesDiscoverEvent["reason"],
-  ): Promise<{
-    skillPaths: Array<{ path: string; extensionPath: string }>;
-    promptPaths: Array<{ path: string; extensionPath: string }>;
-    themePaths: Array<{ path: string; extensionPath: string }>;
-  }> {
-    const ctx = this.createContext();
-    const skillPaths: Array<{ path: string; extensionPath: string }> = [];
-    const promptPaths: Array<{ path: string; extensionPath: string }> = [];
-    const themePaths: Array<{ path: string; extensionPath: string }> = [];
-
-    for (const { ext, handlers } of snapshotEventHandlers(this.extensions, "resources_discover")) {
-      for (const handler of handlers) {
-        try {
-          const event: ResourcesDiscoverEvent = { type: "resources_discover", cwd, reason };
-          const handlerResult = await handler(event, ctx);
-          const result = handlerResult as ResourcesDiscoverResult | undefined;
-
-          if (result?.skillPaths?.length !== undefined && result?.skillPaths?.length > 0) {
-            skillPaths.push(
-              ...result.skillPaths.map((path) => ({ path, extensionPath: ext.path })),
-            );
-          }
-          if (result?.promptPaths?.length !== undefined && result?.promptPaths?.length > 0) {
-            promptPaths.push(
-              ...result.promptPaths.map((path) => ({ path, extensionPath: ext.path })),
-            );
-          }
-          if (result?.themePaths?.length !== undefined && result?.themePaths?.length > 0) {
-            themePaths.push(
-              ...result.themePaths.map((path) => ({ path, extensionPath: ext.path })),
-            );
-          }
-        } catch (err) {
-          const message = toErrorMessage(err);
-          const stack = err instanceof Error ? err.stack : undefined;
-          this.emitError({
-            extensionPath: ext.path,
-            event: "resources_discover",
-            error: message,
-            stack,
-          });
-        }
-      }
-    }
-
-    return { skillPaths, promptPaths, themePaths };
-  }
-
-  async emitInput(
-    text: string,
-    images: ImageContent[] | undefined,
-    source: InputSource,
-    streamingBehavior?: "steer" | "followUp",
-  ): Promise<InputEventResult> {
-    const ctx = this.createContext();
-    let currentText = text;
-    let currentImages = images;
-
-    for (const { ext, handlers } of snapshotEventHandlers(this.extensions, "input")) {
-      for (const handler of handlers) {
-        try {
-          const event: InputEvent = {
-            type: "input",
-            text: currentText,
-            images: currentImages,
-            source,
-            streamingBehavior,
-          };
-          const result = (await handler(event, ctx)) as InputEventResult | undefined;
-          if (result?.action === "handled") return result;
-          if (result?.action === "transform") {
-            currentText = result.text;
-            currentImages = result.images ?? currentImages;
-          }
-        } catch (err) {
-          this.emitError({
-            extensionPath: ext.path,
-            event: "input",
-            error: toErrorMessage(err),
-            stack: err instanceof Error ? err.stack : undefined,
-          });
-        }
-      }
-    }
-    return currentText !== text || currentImages !== images
-      ? { action: "transform", text: currentText, images: currentImages }
-      : { action: "continue" };
   }
 }
