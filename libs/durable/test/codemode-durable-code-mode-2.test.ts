@@ -246,12 +246,15 @@ describe("durable code mode", () => {
     const chat = codemodeChat();
     const { harness, result } = await restart(
       chat,
-      `// @options: {"timeout_ms": 300}
+      `// @options: {"timeout_ms": 60000}
 			await tools.hold({}); await tools.echo({ text: "late" });`,
-      () =>
-        new Promise((resolve) => {
-          setTimeout(resolve, 400);
-        }),
+      async (opened, task) => {
+        await opened.commit(async (tx) => {
+          const run = await tx.doc(CodemodeRunDoc, task);
+          expect(run.start!.deadline).toBeGreaterThan(Date.now());
+          run.start!.deadline = Date.now() - 1;
+        }, context);
+      },
     );
     expect(result.isError).toBe(true);
     expect(result.text).toContain("deadline passed");
