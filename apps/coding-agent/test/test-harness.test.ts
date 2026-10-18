@@ -1,8 +1,3 @@
-/**
- * Tests for the test harness itself.
- * Validates that the faux provider and session factory work correctly.
- */
-
 import type { AgentTool } from "@msa/agent-core";
 import type { AssistantMessage } from "@msa/ai";
 import { Type } from "typebox";
@@ -151,7 +146,7 @@ describe("test harness", () => {
     expect(agentEnds).toHaveLength(1);
 
     const messageEnds = harness.eventsOfType("message_end");
-    expect(messageEnds.length).toBeGreaterThanOrEqual(2); // user + assistant
+    expect(messageEnds.length).toBeGreaterThanOrEqual(2);
   });
 
   it("context capture", async () => {
@@ -190,7 +185,6 @@ describe("test harness", () => {
     const textDeltas = updates.filter((e) => e.assistantMessageEvent.type === "text_delta");
     expect(textDeltas.length).toBeGreaterThan(0);
 
-    // Deltas should reconstruct the full text
     const reconstructed = textDeltas
       .map((e) => (e.assistantMessageEvent as { delta: string }).delta)
       .join("");
@@ -273,7 +267,6 @@ describe("test harness", () => {
     const updates = harness.eventsOfType("message_update");
     const streamTypes = updates.map((e) => e.assistantMessageEvent.type);
 
-    // Thinking events should come before text events, text before toolcall
     const firstThinking = streamTypes.indexOf("thinking_start");
     const firstText = streamTypes.indexOf("text_start");
     const firstToolcall = streamTypes.indexOf("toolcall_start");
@@ -351,6 +344,6 @@ describe("test harness", () => {
 
     const entries = harness.sessionManager.getEntries();
     const messageEntries = entries.filter((e) => e.type === "message");
-    expect(messageEntries.length).toBeGreaterThanOrEqual(2); // user + assistant
+    expect(messageEntries.length).toBeGreaterThanOrEqual(2);
   });
 });

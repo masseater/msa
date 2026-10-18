@@ -325,7 +325,6 @@ describe("personalized catalog provider", () => {
   };
 
   it("keeps the saved list and saves nothing when personalization fails", async () => {
-    // Saving the catalog without personalization would replace the key's list with every model.
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("not found", { status: 404 }));
     const store = new InMemoryModelsStore();
     const saved = { models: [model("allowed")], checkedAt: 1 };
@@ -347,13 +346,10 @@ describe("personalized catalog provider", () => {
     const store = new InMemoryModelsStore();
     const provider = withPersonalizedCatalog(builtinProvider(), personalize);
 
-    // pi versions before per-key lists stored the plain pi.dev catalog here, and saved an empty list
-    // after a missing pi.dev catalog or a failed first request. Only such an entry can be empty.
     await store.write(provider.id, { models: [], checkedAt: 1 });
     await refreshProvider(provider, store, { allowNetwork: false });
     expect(provider.getModels().map((entry) => entry.id)).toEqual(["static"]);
 
-    // A key that may use no chat models keeps its image models and shows no chat models.
     await store.write(provider.id, { models: [imageModel], checkedAt: 1 });
     await refreshProvider(provider, store, { allowNetwork: false });
     expect(provider.getModels()).toEqual([]);

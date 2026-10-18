@@ -49,7 +49,6 @@ describe("jev-router example", () => {
     for (const harness of harnesses.splice(0)) harness.cleanup();
   });
 
-  /** Runs the example against a faux OpenAI Codex provider and a scripted Jev complexity rating. */
   async function setup(complex: number, tools: AgentTool[]) {
     const codex = fauxProvider({
       provider: "openai-codex",
@@ -129,7 +128,6 @@ describe("jev-router example", () => {
     respond(fauxAssistantMessage("added"));
     await harness.session.prompt("Also add tests.");
 
-    // Sol reads and makes the first edit; the tool-result follow-up of the same turn goes to Luna.
     expect(dispatched()).toEqual(["sol", "sol", "luna", "luna"]);
     expect(phases()).toEqual(["planning", "implementation"]);
     expect(harness.session.model).toMatchObject({ provider: "jev", id: "auto" });

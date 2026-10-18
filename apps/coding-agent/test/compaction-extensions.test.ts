@@ -1,7 +1,4 @@
 import { existsSync, mkdirSync, rmSync } from "node:fs";
-/**
- * Tests for compaction extension events (before_compact / compact).
- */
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -154,7 +151,6 @@ describe.skipIf(!API_KEY)("Compaction extensions", () => {
     expect(beforeEvent.preparation.tokensBefore).toBeGreaterThanOrEqual(0);
     expect(typeof beforeEvent.preparation.isSplitTurn).toBe("boolean");
     expect(beforeEvent.branchEntries).toBeDefined();
-    // sessionManager, modelRegistry, and model are now on ctx, not event
 
     const afterEvent = compactEvents[0];
     if (afterEvent === undefined) throw new Error("expected a session_compact event");
@@ -230,7 +226,6 @@ describe.skipIf(!API_KEY)("Compaction extensions", () => {
     const afterEvent = compactEvents[0];
     if (afterEvent === undefined) throw new Error("expected a session_compact event");
     if (afterEvent.type === "session_compact") {
-      // sessionManager is now on ctx, use session.sessionManager directly
       const entries = session.sessionManager.getEntries();
       const hasCompactionEntry = entries.some((e: { type: string }) => e.type === "compaction");
       expect(hasCompactionEntry).toBe(true);
@@ -395,7 +390,6 @@ describe.skipIf(!API_KEY)("Compaction extensions", () => {
 
     expect(Array.isArray(event.branchEntries)).toBe(true);
 
-    // sessionManager and model runtime remain available on the session.
     expect(typeof session.sessionManager.getEntries).toBe("function");
     expect(typeof session.modelRuntime.getAuth).toBe("function");
 

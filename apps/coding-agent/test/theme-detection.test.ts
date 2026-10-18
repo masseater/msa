@@ -17,9 +17,9 @@ describe("detectColorFgBgTheme", () => {
   it("classifies the last field by palette index like Vim", () => {
     expect(detectColorFgBgTheme({ COLORFGBG: "15;0" })).toBe("dark");
     expect(detectColorFgBgTheme({ COLORFGBG: "0;7;15" })).toBe("light");
-    // Solarized Dark's background is bright black.
+
     expect(detectColorFgBgTheme({ COLORFGBG: "12;8" })).toBe("dark");
-    // rxvt writes "default" when the background is not a palette color.
+
     expect(detectColorFgBgTheme({ COLORFGBG: "15;default" })).toBeUndefined();
     expect(detectColorFgBgTheme({})).toBeUndefined();
   });
@@ -40,7 +40,7 @@ describe("detectTerminalTheme", () => {
     expect(detectTerminalTheme({ background, foreground: { r: 255, g: 255, b: 255 } })).toBe(
       "dark",
     );
-    // White text cannot reach 4.5:1 on mid-gray.
+
     const midGray = { r: 128, g: 128, b: 128 };
     expect(
       detectTerminalTheme({ background: midGray, foreground: { r: 255, g: 255, b: 255 } }),

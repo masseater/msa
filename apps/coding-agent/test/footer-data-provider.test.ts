@@ -178,7 +178,6 @@ describe("FooterDataProvider reftable branch detection", () => {
     }
   });
 
-  // Drive debounce behavior explicitly; native fs.watch delivery can race watcher startup.
   it("does not notify listeners when reftable updates keep the same branch", async () => {
     vi.useFakeTimers();
     const { worktreeDir } = createReftableWorktree(tempDir);
@@ -240,8 +239,6 @@ describe("FooterDataProvider reftable branch detection", () => {
       const onBranchChange = vi.fn();
       provider.onBranchChange(onBranchChange);
 
-      // FSEvents can drop a change made right after the watcher starts, so keep changing the
-      // directory until the watcher reacts.
       let generation = 0;
       await waitFor(() => {
         if (vi.mocked(execFile).mock.calls.length > 0) return true;

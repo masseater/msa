@@ -46,8 +46,6 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  // Restore in place: from Node 26 a child process ignores a replaced process.env object, so later
-  // tests that change PATH would still spawn with the original one.
   for (const key of Object.keys(process.env)) if (!(key in savedEnv)) delete process.env[key];
   Object.assign(process.env, savedEnv);
   rmSync(dir, { recursive: true, force: true });

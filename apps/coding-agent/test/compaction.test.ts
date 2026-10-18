@@ -29,15 +29,11 @@ import {
   type ThinkingLevelChangeEntry,
 } from "../src/core/session-manager.ts";
 
-// ============================================================================
-// Test fixtures
-// ============================================================================
-
 function loadLargeSessionEntries(): SessionEntry[] {
   const sessionPath = join(__dirname, "fixtures/large-session.jsonl");
   const content = readFileSync(sessionPath, "utf-8");
   const entries = parseSessionEntries(content);
-  migrateSessionEntries(entries); // Add id/parentId for v1 fixtures
+  migrateSessionEntries(entries);
   return entries.filter((e): e is SessionEntry => e.type !== "session");
 }
 
@@ -77,7 +73,6 @@ function resetEntryCounter() {
   lastId = null;
 }
 
-// Reset counter before each test to get predictable IDs
 beforeEach(() => {
   resetEntryCounter();
 });
@@ -188,10 +183,6 @@ function extractText(messages: AgentMessage[]): string {
     .join("\n");
 }
 
-// ============================================================================
-// Unit tests
-// ============================================================================
-
 describe("Token calculation", () => {
   it("should calculate total context tokens from usage", () => {
     const usage = createMockUsage(1000, 500, 200, 100);
@@ -298,7 +289,6 @@ describe("shouldCompact", () => {
 
 describe("findCutPoint", () => {
   it("should find cut point based on actual token differences", () => {
-    // Create entries with cumulative token counts
     const entries: SessionEntry[] = [];
     for (let i = 0; i < 10; i++) {
       entries.push(createMessageEntry(createUserMessage(`User ${i}`)));
@@ -309,11 +299,8 @@ describe("findCutPoint", () => {
       );
     }
 
-    // 20 entries, last assistant has 10000 tokens
-    // keepRecentTokens = 2500: keep entries where diff < 2500
     const result = findCutPoint(entries, 0, entries.length, 2500);
 
-    // Should cut at a valid cut point (user or assistant message)
     expect(entries[result.firstKeptEntryIndex]?.type).toBe("message");
     const role = (entries[result.firstKeptEntryIndex] as SessionMessageEntry).message.role;
     expect(role === "user" || role === "assistant").toBe(true);
@@ -338,24 +325,21 @@ describe("findCutPoint", () => {
   });
 
   it("should indicate split turn when cutting at assistant message", () => {
-    // Create a scenario where we cut at an assistant message mid-turn
     const entries: SessionEntry[] = [
       createMessageEntry(createUserMessage("Turn 1")),
       createMessageEntry(createAssistantMessage("A1", createMockUsage(0, 100, 1000, 0))),
-      createMessageEntry(createUserMessage("Turn 2")), // index 2
-      createMessageEntry(createAssistantMessage("A2-1", createMockUsage(0, 100, 5000, 0))), // index 3
-      createMessageEntry(createAssistantMessage("A2-2", createMockUsage(0, 100, 8000, 0))), // index 4
-      createMessageEntry(createAssistantMessage("A2-3", createMockUsage(0, 100, 10000, 0))), // index 5
+      createMessageEntry(createUserMessage("Turn 2")),
+      createMessageEntry(createAssistantMessage("A2-1", createMockUsage(0, 100, 5000, 0))),
+      createMessageEntry(createAssistantMessage("A2-2", createMockUsage(0, 100, 8000, 0))),
+      createMessageEntry(createAssistantMessage("A2-3", createMockUsage(0, 100, 10000, 0))),
     ];
 
-    // With keepRecentTokens = 3000, should cut somewhere in Turn 2
     const result = findCutPoint(entries, 0, entries.length, 3000);
 
-    // If cut at assistant message (not user), should indicate split turn
     const cutEntry = entries[result.firstKeptEntryIndex] as SessionMessageEntry;
     if (cutEntry.message.role === "assistant") {
       expect(result.isSplitTurn).toBe(true);
-      expect(result.turnStartIndex).toBe(2); // Turn 2 starts at index 2
+      expect(result.turnStartIndex).toBe(2);
     }
   });
 
@@ -378,7 +362,6 @@ describe("findCutPoint", () => {
     expect(customFitsBudget.turnStartIndex).toBe(-1);
   });
 
-  // Regression test for #9740.
   it("should fall back to the latest valid cut point before oversized trailing tool results", () => {
     const oldUser = createMessageEntry(createUserMessage("old history"));
     const oldAssistant = createMessageEntry(createAssistantMessage("old answer"));
@@ -431,43 +414,41 @@ describe("buildSessionContext", () => {
   });
 
   it("should handle single compaction", () => {
-    // IDs: u1=test-id-0, a1=test-id-1, u2=test-id-2, a2=test-id-3, compaction=test-id-4, u3=test-id-5, a3=test-id-6
     const u1 = createMessageEntry(createUserMessage("1"));
     const a1 = createMessageEntry(createAssistantMessage("a"));
     const u2 = createMessageEntry(createUserMessage("2"));
     const a2 = createMessageEntry(createAssistantMessage("b"));
-    const compaction = createCompactionEntry("Summary of 1,a,2,b", u2.id); // keep from u2 onwards
+    const compaction = createCompactionEntry("Summary of 1,a,2,b", u2.id);
     const u3 = createMessageEntry(createUserMessage("3"));
     const a3 = createMessageEntry(createAssistantMessage("c"));
 
     const entries: SessionEntry[] = [u1, a1, u2, a2, compaction, u3, a3];
 
     const loaded = buildSessionContext(entries);
-    // summary + kept (u2, a2) + after (u3, a3) = 5
+
     expect(loaded.messages.length).toBe(5);
     expect(loaded.messages[0]?.role).toBe("compactionSummary");
     expect((loaded.messages[0] as any).summary).toContain("Summary of 1,a,2,b");
   });
 
   it("should handle multiple compactions (only latest matters)", () => {
-    // First batch
     const u1 = createMessageEntry(createUserMessage("1"));
     const a1 = createMessageEntry(createAssistantMessage("a"));
     const compact1 = createCompactionEntry("First summary", u1.id);
-    // Second batch
+
     const u2 = createMessageEntry(createUserMessage("2"));
     const b = createMessageEntry(createAssistantMessage("b"));
     const u3 = createMessageEntry(createUserMessage("3"));
     const c = createMessageEntry(createAssistantMessage("c"));
-    const compact2 = createCompactionEntry("Second summary", u3.id); // keep from u3 onwards
-    // After second compaction
+    const compact2 = createCompactionEntry("Second summary", u3.id);
+
     const u4 = createMessageEntry(createUserMessage("4"));
     const d = createMessageEntry(createAssistantMessage("d"));
 
     const entries: SessionEntry[] = [u1, a1, compact1, u2, b, u3, c, compact2, u4, d];
 
     const loaded = buildSessionContext(entries);
-    // summary + kept from u3 (u3, c) + after (u4, d) = 5
+
     expect(loaded.messages.length).toBe(5);
     expect((loaded.messages[0] as any).summary).toContain("Second summary");
   });
@@ -475,14 +456,14 @@ describe("buildSessionContext", () => {
   it("should keep all messages when firstKeptEntryId is first entry", () => {
     const u1 = createMessageEntry(createUserMessage("1"));
     const a1 = createMessageEntry(createAssistantMessage("a"));
-    const compact1 = createCompactionEntry("First summary", u1.id); // keep from first entry
+    const compact1 = createCompactionEntry("First summary", u1.id);
     const u2 = createMessageEntry(createUserMessage("2"));
     const b = createMessageEntry(createAssistantMessage("b"));
 
     const entries: SessionEntry[] = [u1, a1, compact1, u2, b];
 
     const loaded = buildSessionContext(entries);
-    // summary + all messages (u1, a1, u2, b) = 5
+
     expect(loaded.messages.length).toBe(5);
   });
 
@@ -495,7 +476,7 @@ describe("buildSessionContext", () => {
     ];
 
     const loaded = buildSessionContext(entries);
-    // model_change is later overwritten by assistant message's model info
+
     expect(loaded.model).toEqual({ provider: "anthropic", modelId: "claude-sonnet-4-5" });
     expect(loaded.thinkingLevel).toBe("high");
   });
@@ -584,10 +565,6 @@ describe("prepareCompaction with previous compaction", () => {
   });
 });
 
-// ============================================================================
-// Integration tests with real session data
-// ============================================================================
-
 describe("Large session fixture", () => {
   it("should parse the large session", () => {
     const entries = loadLargeSessionEntries();
@@ -606,7 +583,6 @@ describe("Large session fixture", () => {
       DEFAULT_COMPACTION_SETTINGS.keepRecentTokens,
     );
 
-    // Cut point should be at a message entry (user or assistant)
     expect(entries[result.firstKeptEntryIndex]?.type).toBe("message");
     const role = (entries[result.firstKeptEntryIndex] as SessionMessageEntry).message.role;
     expect(role === "user" || role === "assistant").toBe(true);
@@ -620,10 +596,6 @@ describe("Large session fixture", () => {
     expect(loaded.model).not.toBeNull();
   });
 });
-
-// ============================================================================
-// LLM integration tests (skipped without API key)
-// ============================================================================
 
 describe.skipIf(!process.env["ANTHROPIC_OAUTH_TOKEN"])("LLM summarization", () => {
   it("should generate a compaction result for the large session", async () => {
@@ -664,7 +636,6 @@ describe.skipIf(!process.env["ANTHROPIC_OAUTH_TOKEN"])("LLM summarization", () =
       process.env["ANTHROPIC_OAUTH_TOKEN"]!,
     );
 
-    // Simulate appending compaction to entries by creating a proper entry
     const lastEntry = entries.at(-1);
     if (lastEntry === undefined) throw new Error("expected session entries");
     const parentId = lastEntry.id;
@@ -678,7 +649,6 @@ describe.skipIf(!process.env["ANTHROPIC_OAUTH_TOKEN"])("LLM summarization", () =
     const newEntries = [...entries, compactionEntry];
     const reloaded = buildSessionContext(newEntries);
 
-    // Should have summary + kept messages
     expect(reloaded.messages.length).toBeLessThan(loaded.messages.length);
     expect(reloaded.messages[0]?.role).toBe("compactionSummary");
     expect((reloaded.messages[0] as any).summary).toContain(compactionResult.summary);

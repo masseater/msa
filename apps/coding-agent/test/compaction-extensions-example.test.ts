@@ -1,7 +1,3 @@
-/**
- * Verify the documentation example from extensions.md compiles and works.
- */
-
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import type {
@@ -20,12 +16,10 @@ const { default: customCompactionExtension } =
 
 describe("Documentation example", () => {
   it("custom compaction example should type-check correctly", () => {
-    // This is the example from extensions.md - verify it compiles
     const exampleExtension = (msa: ExtensionAPI) => {
       msa.on("session_before_compact", async (event: SessionBeforeCompactEvent, ctx) => {
-        // All these should be accessible on the event
         const { preparation, branchEntries } = event;
-        // sessionManager, modelRegistry, and model come from ctx
+
         const { sessionManager, modelRegistry } = ctx;
         const {
           messagesToSummarize,
@@ -35,7 +29,6 @@ describe("Documentation example", () => {
           isSplitTurn,
         } = preparation;
 
-        // Verify types
         expect(Array.isArray(messagesToSummarize)).toBe(true);
         expect(Array.isArray(turnPrefixMessages)).toBe(true);
         expect(typeof isSplitTurn).toBe("boolean");
@@ -50,7 +43,6 @@ describe("Documentation example", () => {
           .map((m) => `- ${typeof m.content === "string" ? m.content.slice(0, 100) : "[complex]"}`)
           .join("\n");
 
-        // Extensions return compaction content - SessionManager adds id/parentId
         return {
           compaction: {
             summary: `User requests:\n${summary}`,
@@ -61,7 +53,6 @@ describe("Documentation example", () => {
       });
     };
 
-    // Just verify the function exists and is callable
     expect(typeof exampleExtension).toBe("function");
   });
 
@@ -151,7 +142,6 @@ describe("Documentation example", () => {
   it("compact event should have correct fields", () => {
     const checkCompactEvent = (msa: ExtensionAPI) => {
       msa.on("session_compact", async (event: SessionCompactEvent) => {
-        // These should all be accessible
         const entry = event.compactionEntry;
         const fromExtension = event.fromExtension;
 

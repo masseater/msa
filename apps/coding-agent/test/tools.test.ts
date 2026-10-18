@@ -38,7 +38,6 @@ const grepTool = createGrepTool(process.cwd());
 const findTool = createFindTool(process.cwd());
 const lsTool = createLsTool(process.cwd());
 
-// Helper to extract text from content blocks
 function getTextOutput(result: any): string {
   return (
     result.content
@@ -68,14 +67,13 @@ describe("Coding Agent Tools", () => {
   let testDir: string;
 
   beforeEach(() => {
-    // Create a unique temporary directory for each test
     testDir = join(tmpdir(), `coding-agent-test-${Date.now()}`);
     mkdirSync(testDir, { recursive: true });
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
-    // Clean up test directory
+
     rmSync(testDir, { recursive: true, force: true });
   });
 
@@ -88,7 +86,7 @@ describe("Coding Agent Tools", () => {
       const result = await readTool.execute("test-call-1", { path: testFile });
 
       expect(getTextOutput(result)).toBe(content);
-      // No truncation message since file fits within limits
+
       expect(getTextOutput(result)).not.toContain("Use offset=");
       expect(result.details).toBeUndefined();
       expect(result.structuredContent).toBe(content);
@@ -118,7 +116,7 @@ describe("Coding Agent Tools", () => {
 
     it("should truncate when byte limit exceeded", async () => {
       const testFile = join(testDir, "large-bytes.txt");
-      // Create file that exceeds 50KB byte limit but has fewer than 2000 lines
+
       const lines = Array.from({ length: 500 }, (_, i) => `Line ${i + 1}: ${"x".repeat(200)}`);
       writeFileSync(testFile, lines.join("\n"));
 
@@ -126,7 +124,7 @@ describe("Coding Agent Tools", () => {
       const output = getTextOutput(result);
 
       expect(output).toContain("Line 1:");
-      // Should show byte limit message
+
       expect(output).toMatch(
         /\[Showing lines 1-\d+ of 500 \(.* limit\)\. Use offset=\d+ to continue\.\]/,
       );
@@ -143,7 +141,7 @@ describe("Coding Agent Tools", () => {
       expect(output).not.toContain("Line 50");
       expect(output).toContain("Line 51");
       expect(output).toContain("Line 100");
-      // No truncation message since file fits within limits
+
       expect(output).not.toContain("Use offset=");
     });
 
@@ -224,7 +222,7 @@ describe("Coding Agent Tools", () => {
       expect(imageBlock?.mimeType).toBe("image/png");
       expect(typeof imageBlock?.data).toBe("string");
       expect((imageBlock?.data ?? "").length).toBeGreaterThan(0);
-      // Programmatic callers get the same image as a block. https://github.com/earendil-works/pi/issues/10251
+
       expect(result.structuredContent).toEqual({
         type: "image",
         data: imageBlock?.data,
@@ -535,7 +533,6 @@ describe("Coding Agent Tools", () => {
     });
 
     it("should return up to 1 MiB of output in structured content", async () => {
-      // 3000 lines exceed the model-facing 2000 line limit but not 1 MiB.
       const medium = await bashTool.execute("test-call-9d", { command: "seq 1 3000" });
       expect(getTextOutput(medium)).not.toContain("\n1\n2\n");
       expect(medium.details?.truncation?.truncated).toBe(true);
@@ -545,7 +542,6 @@ describe("Coding Agent Tools", () => {
         `${Array.from({ length: 3000 }, (_, i) => i + 1).join("\n")}\n`,
       );
 
-      // About 2 MB: keeps the first and last 512 KiB around an omission marker.
       const large = await bashTool.execute("test-call-9e", { command: "seq 1 300000" });
       const largeOutput = large.structuredContent as {
         output: string;
@@ -561,7 +557,6 @@ describe("Coding Agent Tools", () => {
       expect(readFileSync(largeOutput.full_output_path!, "utf-8").endsWith("300000\n")).toBe(true);
     });
 
-    // Regression tests for https://github.com/earendil-works/pi/issues/9577
     it.skipIf(process.platform === "win32")(
       "should map signal-killed commands to 128 plus the signal number",
       async () => {
@@ -944,7 +939,7 @@ describe("Coding Agent Tools", () => {
       expect(output).toContain(
         "[1 matches limit reached. Use limit=2 for more, or refine pattern]",
       );
-      // Ensure second match is not present
+
       expect(output).not.toContain("match two");
     });
 
@@ -1165,10 +1160,9 @@ describe("edit tool fuzzy matching", () => {
 
   it("should match text with trailing whitespace stripped", async () => {
     const testFile = join(testDir, "trailing-ws.txt");
-    // File has trailing spaces on lines
+
     writeFileSync(testFile, "line one   \nline two  \nline three\n");
 
-    // oldText without trailing whitespace should still match
     const result = await editTool.execute("test-fuzzy-1", {
       path: testFile,
       edits: [{ oldText: "line one\nline two\n", newText: "replaced\n" }],
@@ -1209,10 +1203,9 @@ describe("edit tool fuzzy matching", () => {
 
   it("should match smart single quotes to ASCII quotes", async () => {
     const testFile = join(testDir, "smart-quotes.txt");
-    // File has smart/curly single quotes (U+2018, U+2019)
+
     writeFileSync(testFile, "console.log(\u2018hello\u2019);\n");
 
-    // oldText with ASCII quotes should match
     const result = await editTool.execute("test-fuzzy-2", {
       path: testFile,
       edits: [{ oldText: "console.log('hello');", newText: "console.log('world');" }],
@@ -1225,10 +1218,9 @@ describe("edit tool fuzzy matching", () => {
 
   it("should match smart double quotes to ASCII quotes", async () => {
     const testFile = join(testDir, "smart-double-quotes.txt");
-    // File has smart/curly double quotes (U+201C, U+201D)
+
     writeFileSync(testFile, "const msg = \u201CHello World\u201D;\n");
 
-    // oldText with ASCII quotes should match
     const result = await editTool.execute("test-fuzzy-3", {
       path: testFile,
       edits: [{ oldText: 'const msg = "Hello World";', newText: 'const msg = "Goodbye";' }],
@@ -1241,10 +1233,9 @@ describe("edit tool fuzzy matching", () => {
 
   it("should match Unicode dashes to ASCII hyphen", async () => {
     const testFile = join(testDir, "unicode-dashes.txt");
-    // File has en-dash (U+2013) and em-dash (U+2014)
+
     writeFileSync(testFile, "range: 1\u20135\nbreak\u2014here\n");
 
-    // oldText with ASCII hyphens should match
     const result = await editTool.execute("test-fuzzy-4", {
       path: testFile,
       edits: [{ oldText: "range: 1-5\nbreak-here", newText: "range: 10-50\nbreak--here" }],
@@ -1257,10 +1248,9 @@ describe("edit tool fuzzy matching", () => {
 
   it("should match non-breaking space to regular space", async () => {
     const testFile = join(testDir, "nbsp.txt");
-    // File has non-breaking space (U+00A0)
+
     writeFileSync(testFile, "hello\u00A0world\n");
 
-    // oldText with regular space should match
     const result = await editTool.execute("test-fuzzy-5", {
       path: testFile,
       edits: [{ oldText: "hello world", newText: "hello universe" }],
@@ -1273,7 +1263,7 @@ describe("edit tool fuzzy matching", () => {
 
   it("should prefer exact match over fuzzy match", async () => {
     const testFile = join(testDir, "exact-preferred.txt");
-    // File has both exact and fuzzy-matchable content
+
     writeFileSync(testFile, "const x = 'exact';\nconst y = 'other';\n");
 
     const result = await editTool.execute("test-fuzzy-6", {
@@ -1300,7 +1290,7 @@ describe("edit tool fuzzy matching", () => {
 
   it("should detect duplicates after fuzzy normalization", async () => {
     const testFile = join(testDir, "fuzzy-dups.txt");
-    // Two lines that are identical after trailing whitespace is stripped
+
     writeFileSync(testFile, "hello world   \nhello world\n");
 
     await expect(

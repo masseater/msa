@@ -41,10 +41,10 @@ function makeSession(overrides: Partial<SessionInfo> & { id: string }): SessionI
     path: overrides.path ?? `/tmp/${overrides.id}.jsonl`,
     id: overrides.id,
     cwd: overrides.cwd ?? "",
-    ...(overrides.name !== undefined ? { name: overrides.name } : {}),
-    ...(overrides.parentSessionPath !== undefined
-      ? { parentSessionPath: overrides.parentSessionPath }
-      : {}),
+    ...(overrides.name === undefined ? {} : { name: overrides.name }),
+    ...(overrides.parentSessionPath === undefined
+      ? {}
+      : { parentSessionPath: overrides.parentSessionPath }),
     created: overrides.created ?? new Date(0),
     modified: overrides.modified ?? new Date(0),
     messageCount: overrides.messageCount ?? 1,
@@ -101,12 +101,10 @@ describe("session selector path/delete interactions", () => {
   });
 
   beforeEach(() => {
-    // Ensure test isolation: keybindings are a global singleton
     setKeybindings(new KeybindingsManager());
   });
 
   beforeAll(() => {
-    // session selector uses the global theme instance
     initTheme("dark");
   });
   it("does not treat Ctrl+Backspace as delete when search query is non-empty", async () => {
@@ -208,8 +206,8 @@ describe("session selector path/delete interactions", () => {
     await flushPromises();
 
     const list = selector.getSessionList();
-    list.handleInput("\t"); // current -> all (starts async load)
-    list.handleInput("\t"); // all -> current
+    list.handleInput("\t");
+    list.handleInput("\t");
 
     allDeferred.resolve([makeSession({ id: "all" })]);
     await flushPromises();
@@ -242,9 +240,9 @@ describe("session selector path/delete interactions", () => {
     await flushPromises();
 
     const list = selector.getSessionList();
-    list.handleInput("\t"); // current -> all (starts async load)
-    list.handleInput("\t"); // all -> current
-    list.handleInput("\t"); // current -> all again while load pending
+    list.handleInput("\t");
+    list.handleInput("\t");
+    list.handleInput("\t");
 
     expect(allLoadCalls).toBe(1);
     expect(selector.getSessionList().getSelectedSessionPath()).toBe(allSessions[0]!.path);

@@ -205,8 +205,6 @@ describe("cache warming", () => {
     const { warmer, calls } = fakeRuntime();
     warmer.start(request(), current);
 
-    // A five-minute cache is scheduled for 4m30s and retains 15 seconds of
-    // the 30-second expiry margin. Simulate a timer delayed by sleep.
     vi.setSystemTime(285_001);
     vi.clearAllTimers();
     const internal = warmer as unknown as {

@@ -1,7 +1,4 @@
 import * as fs from "node:fs";
-/**
- * Tests for ExtensionRunner - conflict detection, error handling, tool wrapping.
- */
 import * as os from "node:os";
 import * as path from "node:path";
 
@@ -123,11 +120,8 @@ describe("ExtensionRunner", () => {
         modelRegistry,
       );
 
-      // Before bindCore the default is an empty list (never undefined).
       expect(runner.createContext().scopedModels).toEqual([]);
 
-      // After bindCore wires a getScopedModels action, ctx.scopedModels
-      // returns it live (same reference, lazy getter).
       const scoped = [
         { model: { id: "scoped-test" }, thinkingLevel: "high" },
       ] as unknown as ScopedModel[];
@@ -397,7 +391,6 @@ describe("ExtensionRunner", () => {
     });
 
     it("warns when two extensions register same shortcut", async () => {
-      // Use a non-reserved shortcut
       const extCode1 = `
 				export default function(msa) {
 					msa.registerShortcut("ctrl+shift+x", {
@@ -430,7 +423,7 @@ describe("ExtensionRunner", () => {
       const shortcuts = runner.getShortcuts(defaultKeybindings);
 
       expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("shortcut conflict"));
-      // Last one wins
+
       expect(shortcuts.has("ctrl+shift+x")).toBe(true);
 
       warnSpy.mockRestore();
@@ -468,7 +461,6 @@ describe("ExtensionRunner", () => {
       expect(tools.map((t) => t.definition.name).sort()).toEqual(["tool_a", "tool_b"]);
     });
 
-    // Regression test for #9300.
     it("rejects extension tools without a parameter schema", async () => {
       const extensionPath = path.join(extensionsDir, "missing-parameters.js");
       fs.writeFileSync(
@@ -753,7 +745,6 @@ describe("ExtensionRunner", () => {
         errors.push(err);
       });
 
-      // Emit context event which will trigger the throwing handler
       await runner.emitContext([]);
 
       expect(errors.length).toBe(1);
@@ -761,7 +752,6 @@ describe("ExtensionRunner", () => {
       expect(errors[0]?.event).toBe("context");
     });
 
-    // Regression test for #9068.
     it("fails closed when a user_bash handler throws", async () => {
       const extCode = `
 				export default function(msa) {
@@ -794,7 +784,6 @@ describe("ExtensionRunner", () => {
       expect(errors).toMatchObject([{ event: "user_bash", error: "Routing failed" }]);
     });
 
-    // Regression test for #9068.
     it.each([
       ["an empty object", "{}"],
       ["null operations", "{ operations: null }"],
@@ -1037,10 +1026,8 @@ describe("ExtensionRunner", () => {
         modelRegistry,
       );
 
-      // Setting a flag value should not throw
       runner.setFlagValue("--test-flag", true);
 
-      // The flag values are stored in the shared runtime
       expect(result.runtime.flagValues.get("--test-flag")).toBe(true);
     });
   });
@@ -1096,7 +1083,6 @@ describe("ExtensionRunner", () => {
     });
   });
 
-  // Issue #10285: the MCP extension renders calls to tools that are not registered.
   it("resolves tool renderers in extension load order, each able to defer to the next", async () => {
     const runtime = createExtensionRuntime();
     const eventBus = createEventBus();
@@ -1498,7 +1484,6 @@ describe("ExtensionRunner", () => {
     });
   });
 
-  // #8967: event handler unsubscription must not disturb other registrations.
   describe("event subscriptions", () => {
     async function loadSubscriptionExtension(factory: ExtensionFactory) {
       const runtime = createExtensionRuntime();

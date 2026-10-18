@@ -24,7 +24,6 @@ import { SettingsManager } from "../src/core/settings-manager.ts";
 import { createModelRegistry, getModelRuntime } from "./model-runtime-test-utils.ts";
 import { createTestResourceLoader } from "./utilities.ts";
 
-// Mock models for testing
 const mockModels: Model<"anthropic-messages">[] = [
   {
     id: "claude-sonnet-4-5",
@@ -41,7 +40,7 @@ const mockModels: Model<"anthropic-messages">[] = [
   {
     id: "gpt-4o",
     name: "GPT-4o",
-    api: "anthropic-messages", // Using same type for simplicity
+    api: "anthropic-messages",
     provider: "openai",
     baseUrl: "https://api.openai.com",
     reasoning: false,
@@ -52,7 +51,6 @@ const mockModels: Model<"anthropic-messages">[] = [
   },
 ];
 
-// Mock OpenRouter models with colons in IDs
 const mockOpenRouterModels: Model<"anthropic-messages">[] = [
   {
     id: "qwen/qwen3-coder:exacto",
@@ -102,7 +100,7 @@ const referenceCatalog = [
   referenceModel("anthropic", "claude-sonnet-4-5-20250929"),
   referenceModel("anthropic", "claude-opus-4-8"),
   referenceModel("anthropic", "exact"),
-  // Fuzzy-matches "shared"; an ambiguous exact "shared" must not fall through to it.
+
   referenceModel("anthropic", "shared-pro"),
   referenceModel("openai", "gpt-4o"),
   referenceModel("openrouter", "qwen/qwen3-coder:exacto"),
@@ -135,7 +133,6 @@ interface ReferenceCase {
 }
 
 const referenceCases: ReferenceCase[] = [
-  // Reference syntax
   {
     name: "exact id",
     text: "claude-sonnet-4-5",
@@ -201,8 +198,6 @@ const referenceCases: ReferenceCase[] = [
   { name: "exact-only skips fuzzy matches", text: "sonnet", fuzzy: false, expected: "not-found" },
   { name: "empty text", text: "  ", expected: "not-found" },
 
-  // Exact matches across providers
-  // #7327
   {
     name: "sole usable provider wins",
     text: "shared",
@@ -233,21 +228,18 @@ const referenceCases: ReferenceCase[] = [
     expected: { ambiguous: ["gw-a/shared", "gw-b/shared"], usableCount: 2 },
   },
   {
-    // #10160
     name: "provider prefix without a direct model selects the usable raw id",
     text: "anthropic/future",
     usable: ["gw-b"],
     expected: { model: "gw-b/anthropic/future" },
   },
   {
-    // #5823
     name: "usable qualified match beats a usable raw id",
     text: "anthropic/exact",
     usable: ["anthropic", "gw-a"],
     expected: { model: "anthropic/exact" },
   },
   {
-    // #5643
     name: "usable raw id beats an unusable qualified match",
     text: "anthropic/exact",
     usable: ["gw-a"],
@@ -282,7 +274,6 @@ const referenceCases: ReferenceCase[] = [
     expected: { model: "gw-b/gw-b/free" },
   },
 
-  // Fuzzy matches across providers
   {
     name: "fuzzy prefers usable providers",
     text: "opus",
@@ -302,7 +293,6 @@ const referenceCases: ReferenceCase[] = [
     expected: { model: "anthropic/claude-opus-4-8" },
   },
 
-  // Explicit provider constraint
   {
     name: "explicit provider ignores usable providers elsewhere",
     text: "shared",
@@ -339,11 +329,11 @@ describe("resolveModelReference", () => {
     const usable = new Set(testCase.usable);
     const request: ModelReferenceRequest = {
       text: testCase.text,
-      ...(testCase.provider !== undefined ? { provider: testCase.provider } : {}),
+      ...(testCase.provider === undefined ? {} : { provider: testCase.provider }),
       thinkingSuffix: testCase.thinkingSuffix ?? "strict",
       fuzzy: testCase.fuzzy ?? true,
     };
-    // Catalog order must never decide the result.
+
     for (const models of [referenceCatalog, [...referenceCatalog].reverse()]) {
       const result = resolveModelReference(request, models, (provider) => usable.has(provider));
       const expected = testCase.expected;
@@ -619,8 +609,6 @@ describe("resolveCliModel", () => {
   });
 
   describe("custom model fallback with :thinking suffix (#5552)", () => {
-    // Models for a provider that has registered models but the specific model ID
-    // is not in the registry (triggers buildFallbackModel path).
     const neuralwattModel: Model<"anthropic-messages"> = {
       id: "some-base-model",
       name: "Some Base Model",
@@ -648,7 +636,7 @@ describe("resolveCliModel", () => {
 
       expect(result.error).toBeUndefined();
       expect(result.model?.provider).toBe("neuralwatt");
-      // The :high suffix must NOT leak into the model id sent to the API
+
       expect(result.model?.id).toBe("zai-org/GLM-5.1-FP8");
       expect(result.model?.reasoning).toBe(true);
       expect(result.thinkingLevel).toBe("high");
@@ -699,7 +687,7 @@ describe("resolveCliModel", () => {
 
       expect(result.error).toBeUndefined();
       expect(result.model?.provider).toBe("neuralwatt");
-      // Invalid suffix stays in the id (it's not a thinking level)
+
       expect(result.model?.id).toBe("zai-org/GLM-5.1-FP8:banana");
       expect(result.thinkingLevel).toBeUndefined();
     });
@@ -734,7 +722,7 @@ describe("resolveCliModel", () => {
 
       expect(result.error).toBeUndefined();
       expect(result.model?.provider).toBe("neuralwatt");
-      // :high is kept as part of the model id since --thinking was explicit
+
       expect(result.model?.id).toBe("zai-org/GLM-5.1-FP8:high");
       expect(result.thinkingLevel).toBeUndefined();
     });

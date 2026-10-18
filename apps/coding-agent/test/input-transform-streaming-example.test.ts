@@ -36,7 +36,7 @@ function setup(execResult: ExecResult) {
         type: "input",
         text,
         source: "interactive",
-        ...(streamingBehavior !== undefined ? { streamingBehavior } : {}),
+        ...(streamingBehavior === undefined ? {} : { streamingBehavior }),
       },
       ctx,
     );

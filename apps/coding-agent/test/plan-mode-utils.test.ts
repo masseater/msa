@@ -106,7 +106,7 @@ describe("cleanStepText", () => {
   });
 
   it("removes markdown code", () => {
-    expect(cleanStepText("run `npm install`")).toBe("Npm install"); // "run" is stripped as action word
+    expect(cleanStepText("run `npm install`")).toBe("Npm install");
     expect(cleanStepText("check the `config.json` file")).toBe("Config.json file");
   });
 
@@ -250,8 +250,8 @@ describe("markCompletedSteps", () => {
 
     const count = markCompletedSteps("[DONE:99]", items);
 
-    expect(count).toBe(1); // Still counts the marker found
-    expect(items[0]?.completed).toBe(false); // But doesn't mark anything
+    expect(count).toBe(1);
+    expect(items[0]?.completed).toBe(false);
   });
 
   it("doesn't double-complete already completed items", () => {

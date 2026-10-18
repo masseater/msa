@@ -80,7 +80,6 @@ describe("getBranchSelection", () => {
     return { selection, lookups };
   }
 
-  // #10198: the selection must not cost one catalog lookup per assistant message.
   it("looks up only the last model_change", async () => {
     const { runtime, virtual } = await createRuntime();
     const small = runtime.getModel("faux", "small")!;
@@ -122,7 +121,7 @@ describe("getBranchSelection", () => {
     const { selection, lookups } = select((sessionManager) => {
       sessionManager.appendMessage(assistantFrom(small, "ok"));
       sessionManager.appendMessage(assistantFrom(large, "ok"));
-      // Failed routing leaves the virtual model on its message.
+
       sessionManager.appendMessage({ ...assistantFrom(virtual, ""), stopReason: "error" });
     }, runtime);
     expect(selection).toEqual({ provider: "faux", modelId: "large" });
@@ -154,7 +153,7 @@ describe("ModelRuntime virtual models", () => {
       thinkingLevel: "low",
     });
     expect(low.model.id).toBe("small");
-    // The router asked for "high", but the small model does not reason.
+
     expect(low.thinkingLevel).toBe("off");
     expect(requests[0]?.previous).toEqual({ model: large, thinkingLevel: "medium" });
 
@@ -187,7 +186,7 @@ describe("ModelRuntime virtual models", () => {
       thinkingLevel: "low",
       failed,
     });
-    // A routing failure names the virtual model, so there is no failed physical request to report.
+
     const failedRoute = { ...assistantFrom(virtual, ""), stopReason: "error" as const };
     await runtime.resolveModel(virtual, messages, {
       reason: "retry",
@@ -225,7 +224,7 @@ describe("ModelRuntime virtual models", () => {
       "fast",
     ]);
     expect(runtime.getModels("router").map((model) => model.id)).toEqual(["auto", "second"]);
-    // Virtual models on a physical provider are available when the provider is.
+
     const available = await runtime.getAvailable();
     expect(available.filter((model) => model.provider === "faux").map((model) => model.id)).toEqual(
       ["small", "large", "auto", "fast"],
@@ -272,7 +271,6 @@ describe("ModelRuntime virtual models", () => {
       },
     ]);
 
-    // The caller sized the request without knowing the routed model.
     const message = await runtime.completeSimple(
       virtual,
       { messages: [{ role: "user", content: "hi", timestamp: 1 }] },
@@ -308,7 +306,6 @@ describe("ModelRuntime virtual models", () => {
     await runtime.completeSimple(virtual, context, options);
     await runtime.completeSimple(runtime.getModel("faux", "auto")!, context, options);
 
-    // The router provider's credentials stay with it; the faux provider's own virtual model keeps them.
     const [routed] = seen;
     if (routed === undefined) throw new Error("expected the routed request to be seen");
     expect(routed.apiKey).not.toBe("caller-key");
@@ -339,7 +336,6 @@ describe("createAgentSession with virtual models", () => {
     rmSync(tempDir, { recursive: true, force: true });
   });
 
-  /** Resume a transcript where the virtual model was selected and the large model answered. */
   async function resume(runtime: ModelRuntime, model?: Model<string>) {
     const sessionManager = SessionManager.inMemory(tempDir);
     sessionManager.appendModelChange("router", "auto");
@@ -352,7 +348,7 @@ describe("createAgentSession with virtual models", () => {
       modelRuntime: runtime,
       sessionManager,
       resourceLoader,
-      ...(model !== undefined ? { model } : {}),
+      ...(model === undefined ? {} : { model }),
     };
     const { session } = await createAgentSession(options);
     onTestFinished(() => session.dispose());
@@ -370,7 +366,7 @@ describe("createAgentSession with virtual models", () => {
 
   it("restores a virtual selection registered right before the session opens", async () => {
     const { runtime, definition } = await createRuntime();
-    // Extensions register while the session is created, without waiting for the availability refresh.
+
     runtime.registerVirtualModel({ ...definition, provider: "late" });
     const sessionManager = SessionManager.inMemory(tempDir);
     sessionManager.appendModelChange("late", "auto");
@@ -439,7 +435,7 @@ describe("createAgentSession with virtual models", () => {
         modelRuntime: runtime,
         sessionManager,
         resourceLoader,
-        ...(model !== undefined ? { model } : {}),
+        ...(model === undefined ? {} : { model }),
       };
       return (await createAgentSession(options)).session;
     };
@@ -454,7 +450,7 @@ describe("createAgentSession with virtual models", () => {
       const firstAnswer = sessionManager.getLeafId()!;
       await session.setModel(after);
       await session.prompt("two");
-      // Navigating back to before the switch keeps `after` selected, but its model_change is on the old branch.
+
       await session.navigateTree(firstAnswer);
       await session.prompt("three");
       session.dispose();
@@ -511,7 +507,7 @@ describe("createAgentSession with virtual models", () => {
         .at(-1);
 
     const { session, sessionManager } = await resume(runtime, runtime.getModel("faux", "small"));
-    // Opening the session does not write to it.
+
     expect(lastModelChange()).toMatchObject({ provider: "router", modelId: "auto" });
 
     await session.prompt("again");

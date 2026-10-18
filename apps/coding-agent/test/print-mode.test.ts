@@ -51,7 +51,7 @@ function createAssistantMessage(options?: {
       cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
     },
     stopReason: options?.stopReason ?? "stop",
-    ...(options?.errorMessage !== undefined ? { errorMessage: options.errorMessage } : {}),
+    ...(options?.errorMessage === undefined ? {} : { errorMessage: options.errorMessage }),
     timestamp: Date.now(),
   };
 }
@@ -159,7 +159,6 @@ describe("runPrintMode", () => {
     });
   });
 
-  // #10799
   it("warns on stderr and returns non-zero when the response was truncated", async () => {
     const runtimeHost = createRuntimeHost(createAssistantMessage({ stopReason: "length" }));
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});

@@ -35,7 +35,7 @@ class FakeWorker implements WorkerSession {
   steered: string[] = [];
   model: Model<any>;
   thinkingLevel: string;
-  /** When false, an aborted prompt keeps pending until `release()`, like one in a retry backoff. */
+
   abortReturns = true;
   private readonly pending: Array<{
     finish: (reply: string) => void;
@@ -93,7 +93,6 @@ class FakeWorker implements WorkerSession {
     this.pending.pop()?.finish(reply);
   }
 
-  /** Lets the oldest pending prompt return. */
   release(reply: string) {
     this.pending.shift()?.finish(reply);
   }

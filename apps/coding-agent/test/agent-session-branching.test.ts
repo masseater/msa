@@ -1,12 +1,3 @@
-/**
- * Tests for AgentSession forking behavior.
- *
- * These tests verify:
- * - Forking from a single message works
- * - Forking in --no-session mode (in-memory only)
- * - getUserMessagesForForking returns correct entries
- */
-
 import { existsSync, mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -75,7 +66,7 @@ describe.skipIf(!API_KEY)("AgentSession forking", () => {
         ...(await createAgentSessionFromServices({
           services,
           sessionManager,
-          ...(sessionStartEvent !== undefined ? { sessionStartEvent } : {}),
+          ...(sessionStartEvent === undefined ? {} : { sessionStartEvent }),
           model,
           tools: ["read", "bash", "edit", "write"],
         })),

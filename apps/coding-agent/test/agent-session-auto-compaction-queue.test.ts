@@ -274,8 +274,6 @@ describe("AgentSession auto-compaction queue resume", () => {
   it("should trigger threshold compaction for error messages using last successful usage", async () => {
     const model = session.model!;
 
-    // A successful assistant message with token usage just over the compaction threshold.
-    // Compute this from the selected model so generated catalog context-window changes do not break the test.
     const compactionSettings = settingsManager.getCompactionSettings();
     const thresholdTokens = (model.contextWindow ?? 200_000) - compactionSettings.reserveTokens + 1;
     const successfulAssistant: AssistantMessage = {
@@ -296,7 +294,6 @@ describe("AgentSession auto-compaction queue resume", () => {
       timestamp: Date.now(),
     };
 
-    // An error message (e.g. 529 overloaded) with no useful usage data
     const errorAssistant: AssistantMessage = {
       role: "assistant",
       content: [{ type: "text", text: "" }],
@@ -316,7 +313,6 @@ describe("AgentSession auto-compaction queue resume", () => {
       timestamp: Date.now() + 1000,
     };
 
-    // Put both messages into agent state so estimateContextTokens can find the successful one
     session.agent.state.messages = [
       { role: "user", content: [{ type: "text", text: "hello" }], timestamp: Date.now() - 1000 },
       successfulAssistant,
@@ -357,7 +353,6 @@ describe("AgentSession auto-compaction queue resume", () => {
   it("should not trigger threshold compaction for error messages when no prior usage exists", async () => {
     const model = session.model!;
 
-    // An error message with no prior successful assistant in context
     const errorAssistant: AssistantMessage = {
       role: "assistant",
       content: [{ type: "text", text: "" }],
@@ -412,7 +407,6 @@ describe("AgentSession auto-compaction queue resume", () => {
     const model = session.model!;
     const preCompactionTimestamp = Date.now() - 10_000;
 
-    // A "kept" assistant message from before compaction with high usage
     const keptAssistant: AssistantMessage = {
       role: "assistant",
       content: [{ type: "text", text: "kept response from before compaction" }],
@@ -431,7 +425,6 @@ describe("AgentSession auto-compaction queue resume", () => {
       timestamp: preCompactionTimestamp,
     };
 
-    // Record the kept assistant in the session and create a compaction after it
     sessionManager.appendMessage({
       role: "user",
       content: [{ type: "text", text: "before compaction" }],
@@ -447,7 +440,6 @@ describe("AgentSession auto-compaction queue resume", () => {
       false,
     );
 
-    // Post-compaction error message
     const errorAssistant: AssistantMessage = {
       role: "assistant",
       content: [{ type: "text", text: "" }],
@@ -467,7 +459,6 @@ describe("AgentSession auto-compaction queue resume", () => {
       timestamp: Date.now(),
     };
 
-    // Agent state has the kept assistant (pre-compaction) and the error (post-compaction)
     session.agent.state.messages = [
       {
         role: "user",
@@ -506,7 +497,6 @@ describe("AgentSession auto-compaction queue resume", () => {
 
     await checkCompaction(errorAssistant);
 
-    // Should NOT compact because the only usage data is from a kept pre-compaction message
     expect(runAutoCompactionSpy).not.toHaveBeenCalled();
   });
 });

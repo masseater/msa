@@ -9,7 +9,7 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 import { ENV_AGENT_DIR } from "../src/config.ts";
 
 const cliPath = resolve(__dirname, "../src/cli.ts");
-// --import takes a module specifier, not a filesystem path.
+
 const sourceResolverUrl = pathToFileURL(
   resolve(__dirname, "../src/experimental/source-resolver.ts"),
 ).href;

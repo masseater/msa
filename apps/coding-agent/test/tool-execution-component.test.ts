@@ -33,7 +33,6 @@ function createBaseToolDefinition(name = "custom_tool"): ToolDefinition {
   };
 }
 
-// Small 2x2 blue JPEG image
 const TINY_JPEG =
   "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAMCAgMCAgMDAwMEAwMEBQgFBQQEBQoHBwYIDAoMDAsKCwsNDhIQDQ4RDgsLEBYQERMUFRUVDA8XGBYUGBIUFRT/2wBDAQMEBAUEBQkFBQkUDQsNFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBT/wAARCAACAAIDAREAAhEBAxEB/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/xAAVAQEBAAAAAAAAAAAAAAAAAAAGCf/EABQRAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhEDEQA/AD3VTB3/2Q==";
 
@@ -52,8 +51,6 @@ describe("ToolExecutionComponent parity", () => {
     vi.useRealTimers();
   });
 
-  // Issue #10292: the component loads the PNG transcoder itself, so this works in any TUI host.
-  // Issue #8577: a replaced partial image must not resurface.
   test("converts non-PNG tool images once the transcoder loads", async () => {
     setCapabilities({ images: "kitty", trueColor: true, hyperlinks: true });
     const component = new ToolExecutionComponent(
@@ -81,7 +78,6 @@ describe("ToolExecutionComponent parity", () => {
     const rendered = component.render(120).join("\n");
     expect(rendered).not.toContain("cGFydGlhbA==");
 
-    // Invalidation reuses the converted Image, so the Kitty image ID stays the same.
     component.invalidate();
     expect(component.render(120).join("\n")).toBe(rendered);
   });
@@ -256,7 +252,6 @@ describe("ToolExecutionComponent parity", () => {
     expect(rendered).not.toContain("[Showing lines 2001-4000 of 4000. Full output:");
   });
 
-  // Issue #9628: keep short durations precise and make long shell durations readable.
   test.each([
     { ms: 0, formatted: "0.0s" },
     { ms: 4_200, formatted: "4.2s" },
@@ -300,7 +295,6 @@ describe("ToolExecutionComponent parity", () => {
     },
   );
 
-  // #10549
   test("bash renderer shows a result's recorded duration, also for a result restored without a live start", () => {
     const render = (live: boolean): string => {
       vi.useFakeTimers();
@@ -317,7 +311,7 @@ describe("ToolExecutionComponent parity", () => {
       if (live) {
         component.markExecutionStarted();
         component.updateResult({ content: [], isError: false }, true);
-        // The wall clock jumps; the recorded duration does not.
+
         vi.advanceTimersByTime(3_600_000);
       }
       component.updateResult({ content: [], isError: false, durationMs: 4_200 }, false);
@@ -379,7 +373,6 @@ describe("ToolExecutionComponent parity", () => {
     expect(rendered.match(/\bread\b/g)?.length ?? 0).toBe(1);
   });
 
-  // Issue #9996: strict tool schemas make models send null for omitted optional fields.
   test("renders read calls with null offset and limit as full-file reads", () => {
     const component = new ToolExecutionComponent(
       "read",

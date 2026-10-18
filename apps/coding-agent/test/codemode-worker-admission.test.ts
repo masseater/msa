@@ -31,7 +31,6 @@ const run = (code: string, signal?: AbortSignal) =>
   executeCodemode("worker-admission", { code }, signal, undefined, undefined);
 
 describe("codemode worker admission", () => {
-  // #10748: fresh sandboxes must share capacity and retain it until actual worker exit.
   it.each(["timeout", "abort", "success"] as const)(
     "bounds surviving workers after %s",
     async (how) => {
@@ -87,7 +86,6 @@ describe("codemode worker admission", () => {
       });
       expect(terminations.size).toBe(2);
 
-      // Releasing one actual worker, not its result, permits exactly one new execution.
       const [termination] = terminations;
       if (termination === undefined) throw new Error("expected a pending worker termination");
       const [worker, resolve] = termination;
@@ -98,7 +96,6 @@ describe("codemode worker admission", () => {
     },
   );
 
-  // #10748: timed-out launches resuming after WASM loading must obey the same limit.
   it("bounds workers that start after their results already timed out", async () => {
     const wasm = await codemode.loadQuickJSWasm();
     const loading = Promise.withResolvers<codemode.CodemodeWasmModule>();
@@ -122,7 +119,6 @@ describe("codemode worker admission", () => {
     }
   });
 
-  // #10748: concurrent callers must not race past the shared admission limit.
   it("admits only two workers from a concurrent burst", async () => {
     const results = await Promise.all(Array.from({ length: 6 }, () => run("return 1")));
     expect(results.filter((result) => !result.isError)).toHaveLength(2);

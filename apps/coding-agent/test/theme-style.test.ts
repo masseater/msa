@@ -16,7 +16,6 @@ type ThemeFile = {
   colors: Record<string, string | number>;
 };
 
-/** Load a copy of a built-in theme, modified by `edit`. */
 function loadTheme(base: "dark" | "light", edit: (theme: ThemeFile) => void = () => {}) {
   const themeJson = JSON.parse(
     readFileSync(new URL(`../src/modes/interactive/theme/${base}.json`, import.meta.url), "utf8"),
@@ -51,8 +50,7 @@ describe("theme styles", () => {
     expect(() => theme.style("x", { fg: "notAToken" as never })).toThrow(
       "Unknown theme color: notAToken",
     );
-    // @ts-expect-error background tokens are not foreground colors; use theme.colors.userMessageBg
-    expect(() => theme.style("x", { fg: "userMessageBg" })).toThrow(
+    expect(() => theme.style("x", { fg: "userMessageBg" as never })).toThrow(
       "Unknown theme color: userMessageBg",
     );
   });
@@ -77,7 +75,7 @@ describe("theme styles", () => {
   it("detects the appearance unless it is declared", () => {
     expect(loadTheme("dark").appearance).toBe("dark");
     expect(loadTheme("light").appearance).toBe("light");
-    // Without a declaration, the appearance is detected from the theme's own colors.
+
     for (const base of ["dark", "light"] as const) {
       expect(loadTheme(base, (json) => delete json.appearance).appearance).toBe(base);
     }
@@ -87,7 +85,6 @@ describe("theme styles", () => {
       }).appearance,
     ).toBe("light");
 
-    // Palette colors 0-15 follow the terminal palette, so such themes follow the terminal background.
     const paletteOnly = loadTheme("dark", (json) => {
       delete json.appearance;
       for (const key of Object.keys(json.colors)) json.colors[key] = key.endsWith("Bg") ? 0 : 7;

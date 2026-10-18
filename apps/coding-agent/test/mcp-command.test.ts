@@ -109,7 +109,6 @@ describe("msa mcp", () => {
       },
     });
 
-    // Without `--`, options after the command belong to the command too.
     const replaced = await run(
       ["add", "files", "node", "server.js", "--port", "1"],
       undefined,
@@ -146,7 +145,7 @@ describe("msa mcp", () => {
         fixture: servers.fixture,
         docs: {
           url: "https://example.com/mcp",
-          // biome-ignore lint/suspicious/noTemplateCurlyInString: literal config value reference
+
           headers: { "X-Team": "core", Authorization: "Bearer ${DOCS_TOKEN}" },
           exposure: "direct",
           description: "Product docs",

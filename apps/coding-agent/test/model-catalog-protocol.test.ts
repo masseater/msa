@@ -16,13 +16,10 @@ import { VERSION } from "../src/config.ts";
 import { ModelRuntime } from "../src/core/model-runtime.ts";
 import { allowNetwork } from "./test-network-env.ts";
 
-// Runs the current client against the catalog selection pi.dev performs, using
-// the shared protocol in scripts/model-catalog-protocol.ts. Regression test for #9099.
-
 const legacyRevision = `sha256-${"a".repeat(64)}`;
 const mixedApiRevision = `sha256-${"b".repeat(64)}`;
 const modelId = "anthropic/claude-sonnet-5";
-// Newer than the bundled catalog, so the client applies the remote overlay.
+
 const lastModified = new Date("2099-01-01T00:00:00Z").toUTCString();
 const commonModel = {
   id: modelId,
@@ -54,7 +51,6 @@ const index: ModelCatalogIndex = {
   ],
 };
 
-// The legacy revision predates typed shards, so typed requests fall back to the chat-only shard.
 const objects = new Map<string, unknown>([
   [MODEL_CATALOG_INDEX_KEY, index],
   [getModelCatalogProviderKey(legacyRevision, "openrouter", "legacy"), { [modelId]: legacyModel }],
@@ -68,7 +64,6 @@ const objects = new Map<string, unknown>([
   ],
 ]);
 
-/** Minimal stand-in for pi.dev's /api/models/providers/:provider route. */
 function startCatalogServer(requests: string[]): Promise<Server> {
   const server = createServer((request, response) => {
     const url = new URL(request.url ?? "/", `http://${request.headers.host}`);

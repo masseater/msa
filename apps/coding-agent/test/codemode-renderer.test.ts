@@ -131,7 +131,6 @@ describe("codemode renderer", () => {
     expect(text).not.toContain("second line");
   });
 
-  // #10708
   it("shows the elapsed time while the script runs and the total once it finished", () => {
     vi.useFakeTimers();
     vi.setSystemTime(0);

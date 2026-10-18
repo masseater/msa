@@ -14,7 +14,6 @@ function storedKeys(backend: InMemoryAuthStorageBackend): string[] {
 }
 
 describe("MCP OAuth credential store", () => {
-  // https://github.com/earendil-works/pi/issues/10252
   it("keeps separate credentials for servers sharing a SERVER_URL", async () => {
     const store = new McpOAuthCredentialStore(new InMemoryAuthStorageBackend());
     await store.forServer("work", SERVER_URL).save(state("work-token"));
@@ -40,14 +39,13 @@ describe("MCP OAuth credential store", () => {
     }));
     const store = new McpOAuthCredentialStore(backend);
 
-    // Reading tokens does not take the legacy state over.
     expect(store.tokens("work", SERVER_URL)?.access_token).toBe("legacy-token");
     expect(storedKeys(backend)).toEqual([SERVER_URL]);
 
     expect((await store.forServer("my_work", SERVER_URL).load())?.tokens?.access_token).toBe(
       "legacy-token",
     );
-    // Names differing only in `-` and `_` are the same server.
+
     expect(store.tokens("my-work", SERVER_URL)?.access_token).toBe("legacy-token");
     expect(await store.forServer("personal", SERVER_URL).load()).toBeUndefined();
     expect(storedKeys(backend)).toEqual([`mcp__my_work|${SERVER_URL}`]);

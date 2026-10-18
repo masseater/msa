@@ -28,7 +28,7 @@ describe("MCP OAuth refresh", () => {
     cleanups.push(server.close);
     const lockDir = mkdtempSync(join(tmpdir(), "msa-mcp-refresh-"));
     cleanups.push(() => rmSync(lockDir, { recursive: true, force: true }));
-    // Stores sharing the credential file and lock directory stand in for separate msa processes.
+
     const backend = new InMemoryAuthStorageBackend();
     const process = () => {
       const store = new McpOAuthCredentialStore(backend, lockDir).forServer("test", server.url);
@@ -60,7 +60,6 @@ describe("MCP OAuth refresh", () => {
     server.expireAccessTokens();
     const processes = [process(), process(), process()];
 
-    // The server rotates refresh tokens: a second refresh with refresh-1 would fail with invalid_grant.
     await Promise.all(
       processes.map(({ provider }) =>
         provider.onUnauthorized?.({
@@ -74,7 +73,7 @@ describe("MCP OAuth refresh", () => {
 
     expect(server.log.filter((entry) => entry === "token refresh")).toHaveLength(1);
     for (const { provider } of processes) expect(await provider.token()).toBe("access-2");
-    // The lock is released.
+
     expect(readdirSync(lockDir)).toEqual([]);
   });
 
@@ -155,10 +154,9 @@ describe("MCP OAuth sign-in", () => {
         });
 
       await signInWith({ scope: "issues:read" });
-      // The token response names no scope, so the grant has the requested one.
+
       expect((await store.load())?.tokens?.scope).toBe("issues:read");
-      // The step-up challenge lists only the missing scope. Requesting just that would lose
-      // issues:read, so the next request would ask for sign-in again.
+
       await signInWith({ error: "insufficient_scope", scope: "issues:write" });
       expect(opened.map((url) => url.searchParams.get("scope"))).toEqual([
         "issues:read",
@@ -170,7 +168,6 @@ describe("MCP OAuth sign-in", () => {
     }
   });
 
-  // #10172
   it("uses the configured authorization server metadata URL", async () => {
     const settings = (serverUrl: string) => ({
       authServerMetadataUrl: new URL("/missing", serverUrl),
@@ -181,7 +178,6 @@ describe("MCP OAuth sign-in", () => {
   });
 });
 
-// #10302
 describe("MCP OAuth client ID metadata documents", () => {
   const cleanups: (() => Promise<void>)[] = [];
   const cimd: McpOAuthSettings = { clientRegistration: "cimd" };
@@ -231,7 +227,7 @@ describe("MCP OAuth client ID metadata documents", () => {
     expect(server.registrations).toEqual([]);
     expect(server.tokenRequests[0]?.get("client_id")).toBe("https://pi.dev/oauth/client.json");
     expect(server.tokenRequests[0]?.get("redirect_uri")).toBe(redirect.href);
-    // The document is not stored, so signing in again refreshes the tokens instead of discarding them.
+
     expect((await store.load())?.clientInformation).toBeUndefined();
     await signIn(cimd);
     expect(server.authorizations).toHaveLength(1);
@@ -242,7 +238,7 @@ describe("MCP OAuth client ID metadata documents", () => {
   it("uses a document and callback path specific to the MCP server without the iss parameter", async () => {
     const { server, signIn } = await startServer({ cimd: true });
     await signIn(cimd);
-    // Computed like Codex: the first 9 bytes of the SHA-256 of the MCP server URL.
+
     const id = createHash("sha256")
       .update(server.url)
       .digest()
@@ -261,7 +257,7 @@ describe("MCP OAuth client ID metadata documents", () => {
     await signIn({});
     expect((await store.load())?.clientInformation?.client_id).toBe("client-1");
     await signIn(cimd);
-    // The registered client's tokens are not refreshed with another client.
+
     expect(server.authorizations.map((authorization) => authorization.get("client_id"))).toEqual([
       "client-1",
       "https://pi.dev/oauth/client.json",
@@ -270,11 +266,9 @@ describe("MCP OAuth client ID metadata documents", () => {
   });
 
   it("accepts the authorization response only on the server-specific redirect URI", async () => {
-    // A mixed-up authorization server redirects to the shared callback path.
     const { signIn } = await startServer({ cimd: true, redirectPath: "/callback" });
     await expect(signIn(cimd)).rejects.toThrow("arrived on another redirect URI");
 
-    // The same for a redirect URL pasted from the browser.
     const { signIn: signInByPaste } = await startServer({ cimd: true });
     let shown: URL | undefined;
     const paste: McpSignInPrompt = {

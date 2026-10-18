@@ -79,7 +79,6 @@ type ExtensionFixture = {
 
 describe("InteractiveMode.showStatus", () => {
   beforeAll(() => {
-    // showStatus uses the global theme instance
     initTheme("dark");
   });
 
@@ -96,7 +95,7 @@ describe("InteractiveMode.showStatus", () => {
     expect(renderLastLine(fakeThis.chatContainer)).toContain("STATUS_ONE");
 
     (InteractiveMode as any).prototype.showStatus.call(fakeThis, "STATUS_TWO");
-    // second status updates the previous line instead of appending
+
     expect(fakeThis.chatContainer.children).toHaveLength(2);
     expect(renderLastLine(fakeThis.chatContainer)).toContain("STATUS_TWO");
     expect(renderLastLine(fakeThis.chatContainer)).not.toContain("STATUS_ONE");
@@ -113,12 +112,11 @@ describe("InteractiveMode.showStatus", () => {
     (InteractiveMode as any).prototype.showStatus.call(fakeThis, "STATUS_ONE");
     expect(fakeThis.chatContainer.children).toHaveLength(2);
 
-    // Something else gets added to the chat in between status updates
     fakeThis.chatContainer.addChild({ render: () => ["OTHER"], invalidate: () => {} });
     expect(fakeThis.chatContainer.children).toHaveLength(3);
 
     (InteractiveMode as any).prototype.showStatus.call(fakeThis, "STATUS_TWO");
-    // adds spacer + text
+
     expect(fakeThis.chatContainer.children).toHaveLength(5);
     expect(renderLastLine(fakeThis.chatContainer)).toContain("STATUS_TWO");
   });
@@ -535,7 +533,6 @@ describe("InteractiveMode.createBaseAutocompleteProvider", () => {
       },
     ]);
 
-    // OAuth sign-in without a subscription, such as OpenRouter, is an account.
     const openRouterLine = "/login openrouter";
     const openRouterSuggestions = await provider.getSuggestions(
       [openRouterLine],
@@ -619,7 +616,7 @@ describe("InteractiveMode.showLoadedResources", () => {
       source: options.source,
       scope: options.scope,
       origin: options.origin,
-      ...(options.baseDir !== undefined ? { baseDir: options.baseDir } : {}),
+      ...(options.baseDir === undefined ? {} : { baseDir: options.baseDir }),
     };
   }
 

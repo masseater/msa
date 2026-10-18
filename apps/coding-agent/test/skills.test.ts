@@ -138,7 +138,6 @@ describe("skills", () => {
         source: "test",
       });
 
-      // no-frontmatter has no description, so it should be skipped
       expect(skills).toHaveLength(0);
       expect(
         diagnostics.some((d: ResourceDiagnostic) => d.message.includes("description is required")),
@@ -185,9 +184,6 @@ describe("skills", () => {
         source: "test",
       });
 
-      // Should load all skills that have descriptions (even with warnings)
-      // valid-skill, name-mismatch, invalid-name-chars, long-name, unknown-field, nested/child-skill, consecutive-hyphens
-      // NOT: missing-description, no-frontmatter (both missing descriptions)
       expect(skills.length).toBeGreaterThanOrEqual(6);
     });
 
@@ -202,9 +198,6 @@ describe("skills", () => {
     });
 
     it("should use parent directory name when name not in frontmatter", () => {
-      // The no-frontmatter fixture has no name in frontmatter, so it should use "no-frontmatter"
-      // But it also has no description, so it won't load
-      // Let's test with a valid skill that relies on directory name
       const { skills } = loadSkillsFromDir({
         dir: join(fixturesDir, "valid-skill"),
         source: "test",
@@ -223,7 +216,7 @@ describe("skills", () => {
       expect(skills).toHaveLength(1);
       expect(skills[0]?.name).toBe("disable-model-invocation");
       expect(skills[0]?.disableModelInvocation).toBe(true);
-      // Should not warn about unknown field
+
       expect(
         diagnostics.some((d: ResourceDiagnostic) =>
           d.message.includes("unknown frontmatter field"),
@@ -415,7 +408,6 @@ describe("skills", () => {
 
   describe("collision handling", () => {
     it("should detect name collisions and keep first skill", () => {
-      // Load from first directory
       const first = loadSkillsFromDir({
         dir: join(collisionFixturesDir, "first"),
         source: "first",
@@ -426,7 +418,6 @@ describe("skills", () => {
         source: "second",
       });
 
-      // Simulate the collision behavior from loadSkills()
       const skillMap = new Map<string, Skill>();
       const collisionWarnings: Array<{ skillPath: string; message: string }> = [];
 

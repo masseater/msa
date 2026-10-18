@@ -113,7 +113,7 @@ describe("createAgentSession provider attribution headers", () => {
 
     modelRegistry.registerProvider(model.provider, {
       api: model.api,
-      ...(options.providerHeaders !== undefined ? { headers: options.providerHeaders } : {}),
+      ...(options.providerHeaders === undefined ? {} : { headers: options.providerHeaders }),
       streamSimple: (_model, _context, providerOptions) => {
         capturedOptions = providerOptions;
         return createDoneStream();

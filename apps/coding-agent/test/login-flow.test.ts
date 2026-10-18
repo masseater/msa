@@ -33,7 +33,7 @@ describe("LoginFlow", () => {
         getProviders: () => [provider],
         getProviderAuthStatus: () => ({ configured: false }),
         isUsingOAuth: () => false,
-        // Like the real runtime, the login rejects with the signal's AbortError once the dialog aborts it.
+
         login: async (
           _id: string,
           _method: string,

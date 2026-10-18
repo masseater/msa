@@ -101,7 +101,6 @@ describe("llama.cpp extension", () => {
     ]);
   });
 
-  // Regression test for #9528.
   it("discovers chat-template thinking support for loaded models", async () => {
     let propsRequests = 0;
     const { url } = await listen((request, response) => {
@@ -402,7 +401,6 @@ describe("llama.cpp extension", () => {
       .find((model) => model.type === "classifier");
     if (classifier?.type !== "classifier") throw new Error("missing classifier model");
 
-    // Provider auth resolves the OpenAI-compatible /v1 URL, which replaces the model's base URL.
     const result = await controller.provider.classify!(
       { ...classifier, baseUrl: `${url}/v1` },
       {
@@ -453,7 +451,7 @@ describe("llama.cpp extension", () => {
                 status: { value: "sleeping" },
                 architecture: { input_modalities: ["text"], output_modalities: ["decisions"] },
               },
-              // Servers before llama.cpp 0.6.0 may omit architecture.
+
               { id: "legacy", status: { value: "loaded" } },
             ],
           });
@@ -498,7 +496,6 @@ describe("llama.cpp extension", () => {
       signal: new AbortController().signal,
     });
 
-    // The catalog identifies decision models, so a refresh neither probes them nor reads their chat template.
     expect(systemOneRequests).toEqual([]);
     expect(propsModels.sort()).toEqual(["legacy", "qwen"]);
     expect(controller.provider.getModels().map((model) => model.id)).toEqual(["qwen", "legacy"]);
@@ -545,7 +542,6 @@ describe("llama.cpp extension", () => {
       },
     ]);
 
-    // A cache-only startup restores decision models with their native API.
     const restored = createLlamaProvider();
     await restored.provider.refreshModels?.({
       credential,

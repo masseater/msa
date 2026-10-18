@@ -29,11 +29,11 @@ describe("CustomEditor prompt history keybindings", () => {
     editor.addToHistory("previous prompt");
     editor.setText("draft");
 
-    editor.handleInput("\x10"); // Ctrl+P
+    editor.handleInput("\x10");
     expect(editor.getText()).toBe("previous prompt");
     expect(modelCycles).toBe(0);
 
-    editor.handleInput("\x0e"); // Ctrl+N
+    editor.handleInput("\x0e");
     expect(editor.getText()).toBe("draft");
   });
 });

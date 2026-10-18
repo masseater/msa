@@ -26,7 +26,6 @@ interface HtmlViewer {
   renderEntry(entry: SessionMessageEntry): string;
 }
 
-// Runs the exported viewer's real data loading and renderers, stopping before DOM initialization.
 function loadHtmlViewer(html: string): HtmlViewer {
   const sessionData = html.match(
     /<script id="session-data" type="application\/json">([^<]+)<\/script>/,
@@ -48,7 +47,6 @@ function loadHtmlViewer(html: string): HtmlViewer {
   );
 }
 
-// #9887
 describe("read line range display", () => {
   let tempDir: string;
   const cases: [unknown, unknown, string][] = [
@@ -135,7 +133,7 @@ describe("read line range display", () => {
       args,
       {},
       createReadToolDefinition(tempDir),
-      // SAFETY: ToolExecutionComponent only calls ui.requestRender(), which this stub implements.
+
       { requestRender() {} } as TUI,
       tempDir,
     );

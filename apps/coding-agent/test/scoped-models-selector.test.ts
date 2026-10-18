@@ -117,11 +117,11 @@ describe("scoped models selector", () => {
     ];
     const selector = await createSelector(models);
 
-    selector.handleInput("\x01"); // enable all -> null
-    selector.handleInput("\r"); // disable model-a; enabled models re-sort first: [b, c, a]
+    selector.handleInput("\x01");
+    selector.handleInput("\r");
     selector.handleInput("\x1b[B");
-    selector.handleInput("\x1b[B"); // move selection back to model-a
-    selector.handleInput("\r"); // re-enable model-a
+    selector.handleInput("\x1b[B");
+    selector.handleInput("\r");
 
     expect(models.map((model) => model.enabled)).toEqual([true, true, true]);
     expect(getMarkerStates(selector, models)).toEqual([true, true, true]);

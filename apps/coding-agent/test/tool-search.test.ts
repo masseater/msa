@@ -58,7 +58,7 @@ describe("Bm25Ranker", () => {
       "mcp__github__create_pull_request",
     );
     expect(ranker.rank("search", documents, 1)).toHaveLength(1);
-    // Property names and descriptions are searchable.
+
     expect(ranker.rank("closed", documents, 8).map((match) => match.name)).toEqual([
       "mcp__github__list_issues",
     ]);
@@ -68,7 +68,7 @@ describe("Bm25Ranker", () => {
     const ranker = new Bm25Ranker();
     expect(ranker.rank("kubernetes", documents, 8)).toEqual([]);
     expect(ranker.rank("the", documents, 8)).toEqual([]);
-    // Known v1 limit: no synonyms, so "tickets" does not find "issues".
+
     expect(ranker.rank("tickets", documents, 8)).toEqual([]);
   });
 
@@ -105,16 +105,15 @@ describe("codemode description catalog", () => {
     expect(description).toContain("Nested tools:");
     expect(description).toContain("## mcp__github\nGitHub server");
     expect(description).toContain("## mcp__docs\n\n### `mcp__docs");
-    // The search guidance is always there, so tools that appear later do not change it.
+
     expect(description).toContain("find unlisted tools, such as MCP tools");
-    // #10555: the lookup helpers are async; without `await` scripts serialize the promise as {}.
+
     expect(description).toContain("`await searchTools(query, { limit?, namespace? })`");
     expect(description).toContain("`await describeTool(name)`");
     expect(description).toContain("`await describeNamespace(name)`");
   });
 
   it("fills the budget round-robin, cheapest first, and says what is missing", () => {
-    // Each small section costs about 42 tokens: one tool per group, then one more.
     const description = createCodemodeDescription(all, { namespaces, inlineBudget: 170 });
     expect(description).toContain("### `read_notes`");
     expect(description).toContain("## mcp__docs (some tools not listed)");
@@ -122,7 +121,7 @@ describe("codemode description catalog", () => {
     expect(description).not.toContain("### `mcp__docs__long`");
     expect(description).toContain("## mcp__github (some tools not listed)");
     expect(description).toContain("find unlisted tools, such as MCP tools");
-    // Deterministic: the same input gives the same description.
+
     expect(createCodemodeDescription(all, { namespaces, inlineBudget: 170 })).toBe(description);
   });
 
@@ -130,7 +129,7 @@ describe("codemode description catalog", () => {
     const deferred = new Set(github.map((entry) => entry.name));
     const description = createCodemodeDescription(all, { namespaces, deferred });
     expect(description).not.toContain("mcp__github");
-    // Deferred tools, such as those of a server that connects later, do not change the description.
+
     expect(description).toBe(createCodemodeDescription([plain, ...docs], { namespaces }));
   });
 

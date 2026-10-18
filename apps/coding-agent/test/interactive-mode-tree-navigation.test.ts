@@ -50,7 +50,7 @@ function createTreeUI() {
       },
     },
     extensionDialogs: { select: vi.fn(async () => "No summary") },
-    // Dispose newly created indicators so a failing regression cannot leak spinner timers.
+
     showStatusIndicator: vi.fn((indicator: StatusIndicator) => indicator.dispose()),
     clearStatusIndicator: vi.fn(),
     restoreQueuedMessagesToEditor: vi.fn(),
@@ -78,14 +78,12 @@ function createTreeUI() {
 describe("InteractiveMode tree navigation availability", () => {
   beforeEach(() => initTheme("dark"));
 
-  // Regression for #9178 / PR #9179: rejection must not replace the active operation's UI.
   it.each(["Summarize", "No summary"])(
     "preserves operation UI when choosing %s while busy",
     async (choice) => {
       const { ui, onEscape, select } = createTreeUI();
       const originalLeafId = ui.sessionManager.getLeafId();
       ui.extensionDialogs.select.mockImplementation(async () => {
-        // Compaction or another navigation can start while the dialog is open.
         ui.session.isCompacting = true;
         return choice;
       });

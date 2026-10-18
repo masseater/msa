@@ -59,7 +59,6 @@ describe("DefaultResourceLoader", () => {
     });
 
     it("should warn about host dependencies in an extension package manifest", async () => {
-      // Regression for #9863.
       const packageRoot = join(tempDir, "extension-package");
       const extensionsDir = join(packageRoot, "extensions");
       mkdirSync(extensionsDir, { recursive: true });
@@ -160,7 +159,6 @@ Prompt content.`,
       expect(prompts.some((p) => p.name === "test-prompt")).toBe(true);
     });
 
-    // Regression test for #9354.
     it("should report invalid prompt frontmatter while loading valid siblings", async () => {
       const promptsDir = join(agentDir, "prompts");
       const invalidPromptPath = join(promptsDir, "invalid.md");
@@ -271,8 +269,6 @@ Project skill`,
       expect(extensionsResult.extensions).toHaveLength(1);
       expect(extensionsResult.errors).toEqual([]);
 
-      // mergePaths processes project paths before user paths, so the project
-      // alias is the canonical survivor.
       expect(extensionsResult.extensions[0]?.path).toBe(
         join(cwd, ".msa", "extensions", "shared.ts"),
       );
@@ -769,8 +765,6 @@ Extra content`,
       expect(loadedSkill?.sourceInfo?.source).toBe("extension:file-url");
     });
 
-    // Regression: extension discovery used to drop package scope/source, collapsing every
-    // autocomplete source tag to [t]. See issue #6968.
     it("should keep package metadata for skills, prompts, and themes", async () => {
       const packageRoot = join(agentDir, "npm", "node_modules", "metadata-pkg");
       const packageSkillDir = join(packageRoot, "skills", "package-skill");
@@ -959,7 +953,6 @@ Content`,
 
   describe("extension conflict detection", () => {
     it("should detect tool conflicts between extensions", async () => {
-      // Create two extensions that register the same tool
       const ext1Dir = join(agentDir, "extensions", "ext1");
       const ext2Dir = join(agentDir, "extensions", "ext2");
       mkdirSync(ext1Dir, { recursive: true });
@@ -1074,7 +1067,6 @@ export default function(msa: ExtensionAPI) {
     });
 
     it("should leave out replaceable extensions whose names another extension registers", async () => {
-      // A third-party MCP extension registering /mcp replaces the built-in one instead of both running.
       const globalExtDir = join(agentDir, "extensions");
       mkdirSync(globalExtDir, { recursive: true });
       writeFileSync(
@@ -1185,7 +1177,7 @@ export default function(msa: ExtensionAPI) {
       mkdirSync(userExtDir, { recursive: true });
       writeFileSync(join(userExtDir, "user.ts"), "export default function() {}");
       mkdirSync(join(cwd, ".msa"), { recursive: true });
-      // A project override gives the built-in project scope, which must not move it ahead.
+
       writeFileSync(
         join(cwd, ".msa", "settings.json"),
         JSON.stringify({ extensions: ["+builtin:mcp"] }),
@@ -1252,7 +1244,6 @@ export default function(msa: ExtensionAPI) {
       });
       await loader.reload({
         resolveProjectTrust: async ({ extensionsResult }) => {
-          // Built-in extensions wait until project settings are known.
           expect(extensionsResult.extensions.map((extension) => extension.path)).toEqual([
             "<inline:plain>",
           ]);
@@ -1269,23 +1260,17 @@ export default function(msa: ExtensionAPI) {
   });
 
   describe("loadProjectContextFiles - nested worktree dedup", () => {
-    // Builds a linked-worktree skeleton (no git binary needed): the main repo's
-    // `.git/worktrees/<name>/` holds `HEAD` plus a `commondir` pointing back at the
-    // main `.git`, and the worktree's working tree carries a `.git` *file* whose
-    // `gitdir:` resolves to it.
     const linkWorktree = (mainDir: string, worktreeDir: string, name: string) => {
       const gitDir = join(mainDir, ".git", "worktrees", name);
       mkdirSync(gitDir, { recursive: true });
-      // The main repo's own `.git` is a real git dir with a HEAD, as git writes it.
+
       writeFileSync(join(mainDir, ".git", "HEAD"), "ref: refs/heads/main\n");
       writeFileSync(join(gitDir, "HEAD"), "ref: refs/heads/feat\n");
-      // commondir is relative to the worktree gitdir and points at the main .git.
+
       writeFileSync(join(gitDir, "commondir"), "../..");
       writeFileSync(join(worktreeDir, ".git"), `gitdir: ${gitDir}\n`);
     };
 
-    // Main repo at <tempDir>/outer/main with a linked worktree at main/worktrees/feat.
-    // Each case writes only the AGENTS.md files it needs.
     const setupNestedWorktree = () => {
       const outer = join(tempDir, "outer");
       const main = join(outer, "main");
@@ -1306,7 +1291,6 @@ export default function(msa: ExtensionAPI) {
       expect(files.map((f) => f.content)).toEqual(["worktree instructions"]);
     });
 
-    // https://github.com/earendil-works/pi/issues/10681
     it("should load the worktree's context once when it symlinks to the main repo's file", () => {
       const { main, worktree, worktreeSrc } = setupNestedWorktree();
       writeFileSync(join(main, "AGENTS.md"), "main repo instructions");
@@ -1339,9 +1323,6 @@ export default function(msa: ExtensionAPI) {
     });
 
     it("should only skip the same filename, not a differently named context file", () => {
-      // The repo tracks CLAUDE.md; the worktree adds an AGENTS.md, which
-      // loadContextFileFromDir prefers. The main repo's CLAUDE.md is nobody's
-      // duplicate, so dropping it would lose its content entirely.
       const { main, worktree, worktreeSrc } = setupNestedWorktree();
       writeFileSync(join(main, "CLAUDE.md"), "main repo instructions");
       writeFileSync(join(worktree, "AGENTS.md"), "worktree instructions");
@@ -1355,10 +1336,6 @@ export default function(msa: ExtensionAPI) {
     });
 
     it("should NOT skip the container's context in a bare layout (proj/.bare + proj/main)", () => {
-      // `git clone --bare proj/.bare` + `git worktree add ../main` makes commondir
-      // `../..`, so dirname(commonGitDir) is `proj` - a plain directory that tracks
-      // nothing. Its AGENTS.md is not a duplicate of the worktree's. Layout below
-      // matches what real git writes for this setup.
       const proj = join(tempDir, "proj");
       const bare = join(proj, ".bare");
       const worktree = join(proj, "main");
@@ -1388,13 +1365,10 @@ export default function(msa: ExtensionAPI) {
 
       const files = loadProjectContextFiles({ cwd: worktreeSrc, agentDir });
 
-      // Only the main repo root's duplicate is dropped; the unrelated dir above it stays.
       expect(files.map((f) => f.content)).toEqual(["outer instructions", "worktree instructions"]);
     });
 
     it("should NOT skip anything for a sibling worktree (main repo is not an ancestor)", () => {
-      // git worktree add ../feat puts the worktree beside the main repo, so no
-      // duplicate is ever encountered and ancestors above it are unrelated.
       const outer = join(tempDir, "outer");
       const main = join(outer, "main");
       const sib = join(outer, "sib-feat");
@@ -1414,8 +1388,6 @@ export default function(msa: ExtensionAPI) {
     });
 
     it("should NOT skip the superproject's context from inside a submodule", () => {
-      // A submodule's `.git` file is also `gitdir:`-style, but its gitdir has no
-      // commondir, so it resolves under `.git/modules` - never an ancestor of cwd.
       const sup = join(tempDir, "super");
       const sub = join(sup, "vendor", "lib");
       const subSrc = join(sub, "src");

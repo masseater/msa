@@ -1,11 +1,3 @@
-/**
- * Tests for git-based extension updates, specifically handling force-push scenarios.
- *
- * These tests verify that DefaultPackageManager.update() handles:
- * - Normal git updates (no force-push)
- * - Force-pushed remotes after a complete history rewrite
- */
-
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -17,7 +9,6 @@ import { DefaultPackageManager } from "../src/core/package-manager.ts";
 import { SettingsManager } from "../src/core/settings-manager.ts";
 import { allowNetwork } from "./test-network-env.ts";
 
-// Helper to run git commands in a directory
 function git(args: string[], cwd: string): string {
   const result = spawnSync("git", args, {
     cwd,
@@ -35,7 +26,6 @@ function initGitRepo(repoDir: string): void {
   git(["config", "--local", "user.name", "Test"], repoDir);
 }
 
-// Helper to create a commit with a file
 function createCommit(repoDir: string, filename: string, content: string, message: string): string {
   writeFileSync(join(repoDir, filename), content);
   git(["add", filename], repoDir);
@@ -43,12 +33,10 @@ function createCommit(repoDir: string, filename: string, content: string, messag
   return git(["rev-parse", "HEAD"], repoDir);
 }
 
-// Helper to get current commit hash
 function getCurrentCommit(repoDir: string): string {
   return git(["rev-parse", "HEAD"], repoDir);
 }
 
-// Helper to get file content
 function getFileContent(repoDir: string, filename: string): string {
   return readFileSync(join(repoDir, filename), "utf-8");
 }
@@ -69,15 +57,12 @@ interface PackageManagerPathInternals {
 
 describe("DefaultPackageManager git update", () => {
   let tempDir: string;
-  let remoteDir: string; // Simulates the "remote" repository
-  let agentDir: string; // The agent directory where extensions are installed
-  let installedDir: string; // The installed extension directory
+  let remoteDir: string;
+  let agentDir: string;
+  let installedDir: string;
   let settingsManager: SettingsManager;
   let packageManager: DefaultPackageManager;
 
-  // Git source that maps to our installed directory structure.
-  // Must use "git:" prefix so parseSource() treats it as a git source
-  // (bare "github.com/..." is not recognized as a git URL).
   const gitSource = "git:github.com/test/extension";
 
   beforeEach(() => {
@@ -90,7 +75,6 @@ describe("DefaultPackageManager git update", () => {
     remoteDir = join(tempDir, "remote");
     agentDir = join(tempDir, "agent");
 
-    // This matches the path structure: agentDir/git/<host>/<path>
     installedDir = join(agentDir, "git", "github.com", "test", "extension");
 
     mkdirSync(agentDir, { recursive: true });
@@ -109,20 +93,16 @@ describe("DefaultPackageManager git update", () => {
     }
   });
 
-  /** Sets up a "remote" repository and clones it to the installed directory. */
   function setupRemoteAndInstall(): void {
-    // Create "remote" repository
     mkdirSync(remoteDir, { recursive: true });
     initGitRepo(remoteDir);
     createCommit(remoteDir, "extension.ts", "// v1", "Initial commit");
 
-    // Clone to installed directory (simulating what install() does)
     mkdirSync(join(agentDir, "git", "github.com", "test"), { recursive: true });
     git(["clone", remoteDir, installedDir], tempDir);
     git(["config", "--local", "user.email", "test@test.com"], installedDir);
     git(["config", "--local", "user.name", "Test"], installedDir);
 
-    // Add to global packages so update() processes this source
     settingsManager.setPackages([gitSource]);
   }
 
@@ -174,13 +154,10 @@ describe("DefaultPackageManager git update", () => {
       setupRemoteAndInstall();
       expect(getFileContent(installedDir, "extension.ts")).toBe("// v1");
 
-      // Add a new commit to remote
       const newCommit = createCommit(remoteDir, "extension.ts", "// v2", "Second commit");
 
-      // Update via package manager (no args = uses settings)
       await packageManager.update();
 
-      // Verify update succeeded
       expect(getCurrentCommit(installedDir)).toBe(newCommit);
       expect(getFileContent(installedDir, "extension.ts")).toBe("// v2");
     });
@@ -190,19 +167,16 @@ describe("DefaultPackageManager git update", () => {
     it("should handle complete history rewrite", async () => {
       setupRemoteAndInstall();
 
-      // Remote gets several commits
       createCommit(remoteDir, "extension.ts", "// v2", "v2");
       createCommit(remoteDir, "extension.ts", "// v3", "v3");
 
       await packageManager.update();
       expect(getFileContent(installedDir, "extension.ts")).toBe("// v3");
 
-      // Maintainer force-pushes completely different history
       git(["reset", "--hard", "HEAD~2"], remoteDir);
       createCommit(remoteDir, "extension.ts", "// rewrite-a", "Rewrite A");
       const finalCommit = createCommit(remoteDir, "extension.ts", "// rewrite-b", "Rewrite B");
 
-      // Should handle this gracefully
       await packageManager.update();
 
       expect(getCurrentCommit(installedDir)).toBe(finalCommit);

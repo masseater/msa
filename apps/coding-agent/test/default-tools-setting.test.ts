@@ -268,7 +268,6 @@ describe("defaultTools setting", () => {
       ).session;
     }
 
-    // #10245
     it("activates only tools newly added to defaultTools", async () => {
       const session = await createFileSession();
       expect(session.getActiveToolNames()).toEqual(["read", "bash", "edit", "write", "memory"]);
@@ -276,7 +275,7 @@ describe("defaultTools setting", () => {
 
       writeSettings({ defaultTools: ["+inactive_tool", "+grep"] });
       await session.reload();
-      // bash was disabled during the session and is not newly added, so it stays off.
+
       expect(session.getActiveToolNames().sort()).toEqual([
         "edit",
         "grep",
@@ -285,7 +284,6 @@ describe("defaultTools setting", () => {
         "write",
       ]);
 
-      // Removing tools from the setting does not disable them.
       writeSettings({ defaultTools: ["-read"] });
       await session.reload();
       expect(session.getActiveToolNames().sort()).toEqual([
@@ -339,7 +337,6 @@ describe("defaultTools setting", () => {
     });
   });
 
-  // #10785
   describe("resume", () => {
     const extensionTools: InlineExtension = (msa) => {
       msa.registerTool({
@@ -359,7 +356,6 @@ describe("defaultTools setting", () => {
       });
     };
 
-    /** A session whose transcript records the loadout `toolNames`, as a run records it. */
     function createRecordedSession(toolNames: string[]): SessionManager {
       const sessionManager = SessionManager.inMemory(tempDir);
       sessionManager.appendMessage({
@@ -398,7 +394,6 @@ describe("defaultTools setting", () => {
     }
 
     it("restores the loadout the transcript records", async () => {
-      // active_tool was deactivated during the session, inactive_tool activated.
       const session = await resume(createRecordedSession(["read", "grep", "inactive_tool"]));
       expect(session.getActiveToolNames().sort()).toEqual(["grep", "inactive_tool", "read"]);
       session.dispose();

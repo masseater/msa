@@ -1,13 +1,3 @@
-/**
- * Tests for prompt template argument parsing and substitution.
- *
- * Tests verify:
- * - Argument parsing with quotes and special characters
- * - Placeholder substitution ($1, $2, $@, $ARGUMENTS)
- * - No recursive substitution of patterns in argument values
- * - Edge cases and integration between parsing and substitution
- */
-
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
@@ -21,10 +11,6 @@ import {
   parseCommandArgs,
   substituteArgs,
 } from "../src/core/prompt-templates.ts";
-
-// ============================================================================
-// substituteArgs
-// ============================================================================
 
 describe("substituteArgs", () => {
   test("should replace $ARGUMENTS with all args joined", () => {
@@ -40,7 +26,6 @@ describe("substituteArgs", () => {
     expect(substituteArgs("Test: $@", args)).toBe(substituteArgs("Test: $ARGUMENTS", args));
   });
 
-  // CRITICAL: argument values containing patterns should remain literal
   test("should NOT recursively substitute patterns in argument values", () => {
     expect(substituteArgs("$ARGUMENTS", ["$1", "$ARGUMENTS"])).toBe("$1 $ARGUMENTS");
     expect(substituteArgs("$@", ["$100", "$1"])).toBe("$100 $1");
@@ -80,14 +65,12 @@ describe("substituteArgs", () => {
   });
 
   test("should handle special characters in arguments", () => {
-    // Note: $100 in argument doesn't get partially matched - full strings are substituted
     expect(substituteArgs("$1 $2: $ARGUMENTS", ["arg100", "@user"])).toBe(
       "arg100 @user: arg100 @user",
     );
   });
 
   test("should handle out-of-range numbered placeholders", () => {
-    // Note: Out-of-range placeholders become empty strings (preserving spaces from template)
     expect(substituteArgs("$1 $2 $3 $4 $5", ["a", "b"])).toBe("a b   ");
   });
 
@@ -181,7 +164,6 @@ describe("substituteArgs", () => {
   });
 
   test("should handle escaped dollar signs (literal backslash preserved)", () => {
-    // Note: No escape mechanism exists - backslash is treated literally
     expect(substituteArgs("Price: \\$100", [])).toBe("Price: \\");
   });
 
@@ -199,10 +181,6 @@ describe("substituteArgs", () => {
     expect(substituteArgs("$1 $2 $@", ["a", "b", "c"])).toBe("a b a b c");
   });
 });
-
-// ============================================================================
-// substituteArgs - Positional Defaults
-// ============================================================================
 
 describe("substituteArgs - positional defaults", () => {
   test("should use default when positional arg is missing", () => {
@@ -258,10 +236,6 @@ describe("substituteArgs - positional defaults", () => {
     expect(substituteArgs(`$1 \${2:-x} $ARGUMENTS`, ["a"])).toBe("a x a");
   });
 });
-
-// ============================================================================
-// substituteArgs - Array Slicing (Bash-Style)
-// ============================================================================
 
 describe("substituteArgs - array slicing", () => {
   test(`should slice from index (\${@:N})`, () => {
@@ -367,10 +341,6 @@ describe("substituteArgs - array slicing", () => {
   });
 });
 
-// ============================================================================
-// parseCommandArgs
-// ============================================================================
-
 describe("parseCommandArgs", () => {
   test("should parse simple space-separated arguments", () => {
     expect(parseCommandArgs("a b c")).toEqual(["a", "b", "c"]);
@@ -405,7 +375,6 @@ describe("parseCommandArgs", () => {
   });
 
   test("should handle quoted empty string", () => {
-    // Empty quotes keep their position as an empty argument (#10867)
     expect(parseCommandArgs('"" " "')).toEqual(["", " "]);
     expect(parseCommandArgs("a '' c")).toEqual(["a", "", "c"]);
     expect(parseCommandArgs('a ""')).toEqual(["a", ""]);
@@ -439,7 +408,6 @@ describe("parseCommandArgs", () => {
   });
 
   test("should handle escaped quotes inside quoted strings", () => {
-    // Note: This implementation doesn't handle escaped quotes - backslash is literal
     expect(parseCommandArgs('"quoted \\"text\\""')).toEqual(["quoted \\text\\"]);
   });
 
@@ -452,12 +420,7 @@ describe("parseCommandArgs", () => {
   });
 });
 
-// ============================================================================
-// Integration
-// ============================================================================
-
 describe("expandPromptTemplate", () => {
-  // #10867
   test("should use positional default for empty quoted argument without shifting later args", () => {
     const template = {
       name: "review",
@@ -519,10 +482,6 @@ describe("expandPromptTemplate", () => {
   });
 });
 
-// ============================================================================
-// Integration
-// ============================================================================
-
 describe("parseCommandArgs + substituteArgs integration", () => {
   test("should parse and substitute together correctly", () => {
     const input = 'Button "onClick handler" "disabled support"';
@@ -551,10 +510,6 @@ describe("parseCommandArgs + substituteArgs integration", () => {
     expect(substituteArgs(template1, args)).toBe(substituteArgs(template2, args));
   });
 });
-
-// ============================================================================
-// loadPromptTemplates - argument-hint frontmatter
-// ============================================================================
 
 describe("loadPromptTemplates - argument-hint", () => {
   const testDir = join(tmpdir(), `msa-test-prompts-${Date.now()}`);
@@ -685,7 +640,6 @@ Analyze GitHub issue(s): $ARGUMENTS`,
 });
 
 describe("loadPromptTemplates - diagnostics", () => {
-  // Regression test for #9354.
   test("reports invalid YAML frontmatter and keeps valid siblings", () => {
     const testDir = mkdtempSync(join(tmpdir(), "msa-test-prompts-invalid-"));
     const invalidPromptPath = join(testDir, "invalid.md");

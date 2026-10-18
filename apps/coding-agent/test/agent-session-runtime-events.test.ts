@@ -103,7 +103,7 @@ describe("AgentSessionRuntime session lifecycle events", () => {
         ...(await createAgentSessionFromServices({
           services,
           sessionManager,
-          ...(sessionStartEvent !== undefined ? { sessionStartEvent } : {}),
+          ...(sessionStartEvent === undefined ? {} : { sessionStartEvent }),
           model: faux.getModel(),
         })),
         services,

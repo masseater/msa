@@ -23,7 +23,6 @@ const tool: ToolDefinition = {
 
 type OutputPaddedComponent = Component & { setOutputPad(outputPad: number): void };
 
-/** Text lines without ANSI codes or trailing fill. Blank lines and full-width borders are skipped. */
 function renderLines(component: Component): string[] {
   return component
     .render(60)

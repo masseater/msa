@@ -34,7 +34,6 @@ const DRACULA: SystemThemeInput = {
     .map(rgb),
 };
 
-/** Dark with a palette, light with an unreadable foreground, background only, and mid-gray. */
 const TERMINALS = {
   dracula: DRACULA,
   solarizedLight: { background: rgb("#fdf6e3"), foreground: rgb("#657b83") },
@@ -78,7 +77,7 @@ describe("generateSystemThemeColors", () => {
     for (const [name, input] of Object.entries(TERMINALS)) {
       const background = lightness(input.background!);
       const offset = (token: ThemeToken) => lightness(resolved(input, token)) - background;
-      // On mid-gray the levels collapse to the strongest reachable color.
+
       if (name !== "midGray") {
         expect(Math.abs(offset("text")), name).toBeGreaterThan(Math.abs(offset("muted")));
         expect(Math.abs(offset("muted")), name).toBeGreaterThan(Math.abs(offset("dim")));
@@ -96,7 +95,7 @@ describe("generateSystemThemeColors", () => {
 
   it("uses the terminal foreground and palette hues", () => {
     expect(generateSystemThemeColors(DRACULA).colors.text).toBe("");
-    // Solarized's foreground is below 4.5:1 on its own background, so text is darkened.
+
     expect(generateSystemThemeColors(TERMINALS["solarizedLight"]).colors.text).not.toBe("");
     const hue = ({ r, g, b }: RgbColor) => colorToOklch(rgbColor(r, g, b)).h;
     const red = DRACULA.palette?.[1];
@@ -104,7 +103,6 @@ describe("generateSystemThemeColors", () => {
     expect(Math.abs(hue(resolved(DRACULA, "error")) - hue(red))).toBeLessThan(8);
   });
 
-  // https://github.com/earendil-works/pi/issues/10255
   it("keeps pastel palette colors pastel at other lightnesses", () => {
     const frappe: SystemThemeInput = {
       background: rgb("#303446"),
@@ -135,7 +133,7 @@ describe("generateSystemThemeColors", () => {
     const pink = frappe.palette?.[5];
     if (pink === undefined) throw new Error("expected Frappé's pink palette entry");
     const accent = resolved(frappe, "accent");
-    // The accent is darker than the pink, but must not gain chroma (it was 2x before the cap).
+
     expect(lightness(accent)).toBeLessThan(lightness(pink) - 0.05);
     expect(chroma(accent)).toBeLessThanOrEqual(chroma(pink) * 1.03);
     for (const panel of ["userMessageBg", "customMessageBg"] as const) {

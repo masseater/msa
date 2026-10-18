@@ -13,7 +13,6 @@ describe("SettingsManager", () => {
   const projectDir = join(testDir, "project");
 
   beforeEach(() => {
-    // Clean up and create fresh directories
     if (existsSync(testDir)) {
       rmSync(testDir, { recursive: true });
     }
@@ -29,7 +28,6 @@ describe("SettingsManager", () => {
 
   describe("preserves externally added settings", () => {
     it("should preserve enabledModels when changing thinking level", async () => {
-      // Create initial settings file
       const settingsPath = join(agentDir, "settings.json");
       writeFileSync(
         settingsPath,
@@ -39,19 +37,15 @@ describe("SettingsManager", () => {
         }),
       );
 
-      // Create SettingsManager (simulates msa starting up)
       const manager = SettingsManager.create(projectDir, agentDir);
 
-      // Simulate user editing settings.json externally to add enabledModels
       const currentSettings = JSON.parse(readFileSync(settingsPath, "utf-8"));
       currentSettings.enabledModels = ["claude-opus-4-5", "gpt-5.2-codex"];
       writeFileSync(settingsPath, JSON.stringify(currentSettings, null, 2));
 
-      // User changes thinking level via Shift+Tab
       manager.setDefaultThinkingLevel("high");
       await manager.flush();
 
-      // Verify enabledModels is preserved
       const savedSettings = JSON.parse(readFileSync(settingsPath, "utf-8"));
       expect(savedSettings.enabledModels).toEqual(["claude-opus-4-5", "gpt-5.2-codex"]);
       expect(savedSettings.defaultThinkingLevel).toBe("high");
@@ -70,17 +64,14 @@ describe("SettingsManager", () => {
 
       const manager = SettingsManager.create(projectDir, agentDir);
 
-      // User adds custom settings externally
       const currentSettings = JSON.parse(readFileSync(settingsPath, "utf-8"));
       currentSettings.shellPath = "/bin/zsh";
       currentSettings.extensions = ["/path/to/extension.ts"];
       writeFileSync(settingsPath, JSON.stringify(currentSettings, null, 2));
 
-      // User changes theme
       manager.setTheme("light");
       await manager.flush();
 
-      // Verify all settings preserved
       const savedSettings = JSON.parse(readFileSync(settingsPath, "utf-8"));
       expect(savedSettings.shellPath).toBe("/bin/zsh");
       expect(savedSettings.extensions).toEqual(["/path/to/extension.ts"]);
@@ -98,16 +89,13 @@ describe("SettingsManager", () => {
 
       const manager = SettingsManager.create(projectDir, agentDir);
 
-      // User externally sets thinking level to "low"
       const currentSettings = JSON.parse(readFileSync(settingsPath, "utf-8"));
       currentSettings.defaultThinkingLevel = "low";
       writeFileSync(settingsPath, JSON.stringify(currentSettings, null, 2));
 
-      // But then changes it via UI to "high"
       manager.setDefaultThinkingLevel("high");
       await manager.flush();
 
-      // In-memory change should win
       const savedSettings = JSON.parse(readFileSync(settingsPath, "utf-8"));
       expect(savedSettings.defaultThinkingLevel).toBe("high");
     });
@@ -332,44 +320,33 @@ describe("SettingsManager", () => {
 
   describe("project settings directory creation", () => {
     it("should not create .msa folder when only reading project settings", () => {
-      // Create agent dir with global settings, but NO .msa folder in project
       const settingsPath = join(agentDir, "settings.json");
       writeFileSync(settingsPath, JSON.stringify({ theme: "dark" }));
 
-      // Delete the .msa folder that beforeEach created
       rmSync(join(projectDir, ".msa"), { recursive: true });
 
-      // Create SettingsManager (reads both global and project settings)
       const manager = SettingsManager.create(projectDir, agentDir);
 
-      // .msa folder should NOT have been created just from reading
       expect(existsSync(join(projectDir, ".msa"))).toBe(false);
 
-      // Settings should still be loaded from global
       expect(manager.getTheme()).toBe("dark");
     });
 
     it("should create .msa folder when writing project settings", async () => {
-      // Create agent dir with global settings, but NO .msa folder in project
       const settingsPath = join(agentDir, "settings.json");
       writeFileSync(settingsPath, JSON.stringify({ theme: "dark" }));
 
-      // Delete the .msa folder that beforeEach created
       rmSync(join(projectDir, ".msa"), { recursive: true });
 
       const manager = SettingsManager.create(projectDir, agentDir);
 
-      // .msa folder should NOT exist yet
       expect(existsSync(join(projectDir, ".msa"))).toBe(false);
 
-      // Write a project-specific setting
       manager.setProjectPackages([{ source: "npm:test-pkg" }]);
       await manager.flush();
 
-      // Now .msa folder should exist
       expect(existsSync(join(projectDir, ".msa"))).toBe(true);
 
-      // And settings file should be created
       expect(existsSync(join(projectDir, ".msa", "settings.json"))).toBe(true);
     });
   });
@@ -563,7 +540,6 @@ describe("SettingsManager", () => {
     expect(reloadedManager.getFullscreenCopyOnSelect()).toBe(true);
   });
 
-  // #9758: wheel scrolling defaults to auto, persists line counts, and ignores invalid values.
   it("persists fullscreen wheel scroll lines", async () => {
     const manager = SettingsManager.create(projectDir, agentDir);
     expect(manager.getFullscreenWheelScrollLines()).toBe("auto");

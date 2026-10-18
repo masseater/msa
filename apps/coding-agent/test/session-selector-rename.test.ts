@@ -17,7 +17,7 @@ function makeSession(overrides: Partial<SessionInfo> & { id: string }): SessionI
     path: overrides.path ?? `/tmp/${overrides.id}.jsonl`,
     id: overrides.id,
     cwd: overrides.cwd ?? "",
-    ...(overrides.name !== undefined ? { name: overrides.name } : {}),
+    ...(overrides.name === undefined ? {} : { name: overrides.name }),
     created: overrides.created ?? new Date(0),
     modified: overrides.modified ?? new Date(0),
     messageCount: overrides.messageCount ?? 1,
@@ -26,7 +26,6 @@ function makeSession(overrides: Partial<SessionInfo> & { id: string }): SessionI
   };
 }
 
-// Kitty keyboard protocol encoding for Ctrl+R
 const CTRL_R = "\x1b[114;5u";
 
 describe("session selector rename", () => {
@@ -35,7 +34,6 @@ describe("session selector rename", () => {
   });
 
   beforeEach(() => {
-    // Ensure test isolation: keybindings are a global singleton
     setKeybindings(new KeybindingsManager());
   });
 
@@ -96,12 +94,10 @@ describe("session selector rename", () => {
     selector.getSessionList().handleInput(CTRL_R);
     await flushPromises();
 
-    // Rename mode layout
     const output = selector.render(120).join("\n");
     expect(output).toContain("Rename Session");
     expect(output).not.toContain("Resume Session");
 
-    // Type and submit
     selector.handleInput("X");
     selector.handleInput("\r");
     await flushPromises();

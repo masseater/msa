@@ -58,7 +58,7 @@ function createController(
     getSettingsManager,
     showError: vi.fn(),
     onChanged: vi.fn(),
-    ...(initialThemeSetting !== undefined ? { initialThemeSetting } : {}),
+    ...(initialThemeSetting === undefined ? {} : { initialThemeSetting }),
   });
 }
 
@@ -100,7 +100,6 @@ describe("InteractiveThemeController", () => {
     const controller = createController(ui, () => SettingsManager.inMemory());
     controller.applyFromSettings();
 
-    // Grayscale until the terminal answers.
     expect(theme.name).toBe("system");
     expect(theme.getFgAnsi("error")).toBe("\x1b[39m");
 
@@ -140,7 +139,7 @@ describe("InteractiveThemeController", () => {
     expect(theme.name).toBe("light");
 
     queryTerminalColors.mockResolvedValue(DARK);
-    // The report says light, but the terminal renders dark.
+
     emitTerminalColorScheme("light");
     await flush();
     expect(theme.name).toBe("dark");
@@ -169,7 +168,7 @@ describe("InteractiveThemeController", () => {
     };
 
     await query(DARK);
-    // A timeout keeps the known colors; erasing them would count as a change and re-render.
+
     await query({});
     await query(structuredClone(DARK));
     expect(ui.requestRender).toHaveBeenCalledOnce();

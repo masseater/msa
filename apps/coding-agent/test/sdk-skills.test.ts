@@ -19,7 +19,6 @@ describe("createAgentSession skills option", () => {
     skillsDir = join(tempDir, "skills", "test-skill");
     mkdirSync(skillsDir, { recursive: true });
 
-    // Create a test skill in the msa skills directory
     writeFileSync(
       join(skillsDir, "SKILL.md"),
       `---
@@ -47,7 +46,6 @@ This is a test skill.
       sessionManager: SessionManager.inMemory(),
     });
 
-    // Skills should be discovered and exposed on the session
     expect(session.resourceLoader.getSkills().skills.length).toBeGreaterThan(0);
     expect(session.resourceLoader.getSkills().skills.some((s) => s.name === "test-skill")).toBe(
       true,

@@ -51,7 +51,6 @@ const fetchResult = {
   _treg: { served_by: "crawl4ai.web.scrape", tried: [] },
 };
 
-/** A `treg` whose `treg config` reports this login state. */
 function fakeTreg(bin: string, loggedIn: boolean): string {
   const path = join(bin, "treg");
   writeFileSync(
@@ -62,7 +61,6 @@ function fakeTreg(bin: string, loggedIn: boolean): string {
   return path;
 }
 
-/** What `treg --json call` prints for a response with this status and body. */
 function cli(result: unknown, status = 200, chargedMicro?: number) {
   return vi.fn<TregRunner>(async () => ({
     stdout: `${JSON.stringify({

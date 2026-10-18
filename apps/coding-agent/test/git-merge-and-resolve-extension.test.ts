@@ -12,7 +12,6 @@ type AgentEndHandler = (event: { type: "agent_end" }, ctx: ExtensionContext) => 
 const ok: ExecResult = { stdout: "", stderr: "", code: 0, killed: false };
 const fail: ExecResult = { stdout: "", stderr: "error", code: 1, killed: false };
 
-/** Standard exec results for a clean repo tracking origin/main, not in a merge. */
 function withUpstream(results: Map<string, ExecResult>): Map<string, ExecResult> {
   results.set("git rev-parse --git-dir", ok);
   results.set("git rev-parse MERGE_HEAD", fail);
@@ -108,7 +107,6 @@ describe("git-merge-and-resolve example", () => {
     const { trigger, exec, sendUserMessage } = setup(cwd, results);
     await trigger();
 
-    // Should not attempt a new fetch/merge
     expect(exec).not.toHaveBeenCalledWith("git", ["fetch", "origin"]);
     expect(sendUserMessage).toHaveBeenCalledTimes(1);
     const [call] = sendUserMessage.mock.calls;
