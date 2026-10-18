@@ -1,5 +1,7 @@
 import { ProcessTerminal, type TUI, TuiMainScreen } from "@msa/tui";
+import * as Effect from "effect/Effect";
 
+import { awaited, awaiting } from "../core/awaiting.ts";
 import type { SettingsManager } from "../core/settings-manager.ts";
 import {
   ConfigSelectorComponent,
@@ -16,44 +18,50 @@ export interface ConfigSelectorOptions {
   projectModeAvailable: boolean;
 }
 
-export async function selectConfig(options: ConfigSelectorOptions): Promise<void> {
-  initTheme(options.settingsManager.getTheme(), true);
+export function selectConfig(options: ConfigSelectorOptions): Promise<void> {
+  return Effect.runPromise(
+    awaiting(function* () {
+      initTheme(options.settingsManager.getTheme(), true);
 
-  return new Promise((resolve) => {
-    const ui: TUI = new TuiMainScreen(
-      new ProcessTerminal(),
-      options.settingsManager.getShowHardwareCursor(),
-      options.agentDir,
-    );
-    ui.setClearOnShrink(options.settingsManager.getClearOnShrink());
-    let resolved = false;
+      return yield* awaited(
+        new Promise((resolve) => {
+          const ui: TUI = new TuiMainScreen(
+            new ProcessTerminal(),
+            options.settingsManager.getShowHardwareCursor(),
+            options.agentDir,
+          );
+          ui.setClearOnShrink(options.settingsManager.getClearOnShrink());
+          let resolved = false;
 
-    const selector = new ConfigSelectorComponent(
-      options.resolvedPaths,
-      options.settingsManager,
-      options.cwd,
-      options.agentDir,
-      () => {
-        if (!resolved) {
-          resolved = true;
-          ui.stop();
-          stopThemeWatcher();
-          resolve();
-        }
-      },
-      () => {
-        ui.stop();
-        stopThemeWatcher();
-        process.exit(0);
-      },
-      () => ui.requestRender(),
-      ui.terminal.rows,
-      options.writeScope,
-      options.projectModeAvailable,
-    );
+          const selector = new ConfigSelectorComponent(
+            options.resolvedPaths,
+            options.settingsManager,
+            options.cwd,
+            options.agentDir,
+            () => {
+              if (!resolved) {
+                resolved = true;
+                ui.stop();
+                stopThemeWatcher();
+                resolve();
+              }
+            },
+            () => {
+              ui.stop();
+              stopThemeWatcher();
+              process.exit(0);
+            },
+            () => ui.requestRender(),
+            ui.terminal.rows,
+            options.writeScope,
+            options.projectModeAvailable,
+          );
 
-    ui.addChild(selector);
-    ui.setFocus(selector.getResourceList());
-    ui.start();
-  });
+          ui.addChild(selector);
+          ui.setFocus(selector.getResourceList());
+          ui.start();
+        }),
+      );
+    }),
+  );
 }

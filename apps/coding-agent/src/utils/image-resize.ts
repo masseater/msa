@@ -1,5 +1,8 @@
 import { Worker } from "node:worker_threads";
 
+import * as Effect from "effect/Effect";
+
+import { awaited, awaiting } from "../core/awaiting.ts";
 import {
   IMAGE_RESIZE_WORKER_RESPONSE_TYPE,
   type ImageResizeOptions,
@@ -27,80 +30,92 @@ function createResizeWorker(workerSpecifier: string | URL): Worker {
   return new Worker(workerSpecifier);
 }
 
-async function resizeImageInWorker(
+function resizeImageInWorker(
   workerSpecifier: string | URL,
   inputBytes: Uint8Array,
   mimeType: string,
   options?: ImageResizeOptions,
 ): Promise<ResizedImage | null> {
-  const worker = createResizeWorker(workerSpecifier);
-  try {
-    const inputBytesForWorker = toTransferableBytes(inputBytes);
-    return await new Promise<ResizedImage | null>((resolve, reject) => {
-      let settled = false;
-      const settle = (result: ResizedImage | null): void => {
-        if (settled) return;
-        settled = true;
-        resolve(result);
-      };
-      const fail = (error: Error): void => {
-        if (settled) return;
-        settled = true;
-        reject(error);
-      };
+  return Effect.runPromise(
+    awaiting(function* () {
+      const worker = createResizeWorker(workerSpecifier);
+      try {
+        const inputBytesForWorker = toTransferableBytes(inputBytes);
+        return yield* awaited(
+          new Promise<ResizedImage | null>((resolve, reject) => {
+            let settled = false;
+            const settle = (result: ResizedImage | null): void => {
+              if (settled) return;
+              settled = true;
+              resolve(result);
+            };
+            const fail = (error: Error): void => {
+              if (settled) return;
+              settled = true;
+              reject(error);
+            };
 
-      worker.on("message", (message: unknown) => {
-        if (!isResizeImageWorkerResponse(message)) return;
-        if ("error" in message) fail(new Error(message.error));
-        else settle(message.result);
-      });
-      worker.once("error", fail);
-      worker.once("exit", (code) => {
-        if (!settled) {
-          fail(new Error(`Image resize worker exited with code ${code}`));
-        }
-      });
-      worker.postMessage(
-        {
-          inputBytes: inputBytesForWorker,
-          mimeType,
-          options,
-        },
-        [inputBytesForWorker.buffer],
-      );
-    });
-  } finally {
-    void worker.terminate().catch(() => undefined);
-  }
+            worker.on("message", (message: unknown) => {
+              if (!isResizeImageWorkerResponse(message)) return;
+              if ("error" in message) fail(new Error(message.error));
+              else settle(message.result);
+            });
+            worker.once("error", fail);
+            worker.once("exit", (code) => {
+              if (!settled) {
+                fail(new Error(`Image resize worker exited with code ${code}`));
+              }
+            });
+            worker.postMessage(
+              {
+                inputBytes: inputBytesForWorker,
+                mimeType,
+                options,
+              },
+              [inputBytesForWorker.buffer],
+            );
+          }),
+        );
+      } finally {
+        void worker.terminate().catch(() => undefined);
+      }
+    }),
+  );
 }
 
-export async function resizeImage(
+export function resizeImage(
   inputBytes: Uint8Array,
   mimeType: string,
   options?: ImageResizeOptions,
 ): Promise<ResizedImage | null> {
-  const isTypeScriptRuntime = import.meta.url.endsWith(".ts");
-  const workerUrl = new URL(
-    isTypeScriptRuntime ? "./image-resize-worker.ts" : "./image-resize-worker.js",
-    import.meta.url,
-  );
-
-  if (typeof process.versions["bun"] === "string") {
-    try {
-      return await resizeImageInWorker(
-        "./src/utils/image-resize-worker.ts",
-        inputBytes,
-        mimeType,
-        options,
+  return Effect.runPromise(
+    awaiting(function* () {
+      const isTypeScriptRuntime = import.meta.url.endsWith(".ts");
+      const workerUrl = new URL(
+        isTypeScriptRuntime ? "./image-resize-worker.ts" : "./image-resize-worker.js",
+        import.meta.url,
       );
-    } catch {}
-  }
 
-  try {
-    return await resizeImageInWorker(workerUrl, inputBytes, mimeType, options);
-  } catch {
-    return resizeImageInProcess(inputBytes, mimeType, options);
-  }
+      if (typeof process.versions["bun"] === "string") {
+        try {
+          return yield* awaited(
+            resizeImageInWorker(
+              "./src/utils/image-resize-worker.ts",
+              inputBytes,
+              mimeType,
+              options,
+            ),
+          );
+        } catch {}
+      }
+
+      try {
+        return yield* awaited(resizeImageInWorker(workerUrl, inputBytes, mimeType, options));
+      } catch {
+        return yield* awaited(resizeImageInProcess(inputBytes, mimeType, options));
+      }
+    }),
+  );
 }
 
 export function formatDimensionNote(result: ResizedImage): string | undefined {

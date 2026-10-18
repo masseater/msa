@@ -8,9 +8,11 @@ import {
   toCodemodeIdentifier,
 } from "@msa/codemode/declarations";
 import { CODEMODE_SOURCE_GRAMMAR } from "@msa/codemode/source";
+import * as Effect from "effect/Effect";
 import { type Static, Type } from "typebox";
 
 import { getDocsPath } from "../../config.ts";
+import { awaited, awaiting } from "../../core/awaiting.ts";
 import type {
   ToolDefinition,
   ToolLoadout,
@@ -331,14 +333,20 @@ export function createCodemodeToolDefinition(
 
     constrainedSampling: { type: "grammar", variants: { openai_lark: CODEMODE_SOURCE_GRAMMAR } },
 
-    execute: async (toolCallId, params, signal, onUpdate, ctx) =>
-      (await loadCodemodeExecutor()).executeCodemode(
-        toolCallId,
-        params,
-        signal,
-        onUpdate,
-        ctx,
-        options,
+    execute: (toolCallId, params, signal, onUpdate, ctx) =>
+      Effect.runPromise(
+        awaiting(function* () {
+          return yield* awaited(
+            (yield* awaited(loadCodemodeExecutor())).executeCodemode(
+              toolCallId,
+              params,
+              signal,
+              onUpdate,
+              ctx,
+              options,
+            ),
+          );
+        }),
       ),
     ...codemodeRenderers,
   };

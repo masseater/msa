@@ -13,6 +13,7 @@ import {
 } from "@msa/tui";
 import { Effect } from "effect";
 
+import { awaited, awaiting } from "../../core/awaiting.ts";
 import type { ExtensionCommandContext } from "../../core/extensions/types.ts";
 import type { KeybindingsManager } from "../../core/keybindings.ts";
 import { AuthUrlComponent } from "../../modes/interactive/components/auth-url.ts";
@@ -263,20 +264,26 @@ export class McpManagerView implements McpUi, Component, Focusable {
   }
 }
 
-export async function showMcpManager(
+export function showMcpManager(
   ctx: ExtensionCommandContext,
   manage: (ui: McpUi) => Promise<void>,
 ): Promise<void> {
-  await ctx.ui.custom<void>((tui, theme, keybindings, done) => {
-    const view = new McpManagerView(tui, theme, keybindings);
-    Effect.runFork(
-      Effect.tryPromise(() => manage(view)).pipe(
-        Effect.catch((error) =>
-          Effect.sync(() => ctx.ui.notify(toErrorMessage(error.cause), "error")),
-        ),
-        Effect.ensuring(Effect.sync(() => done())),
-      ),
-    );
-    return view;
-  });
+  return Effect.runPromise(
+    awaiting(function* () {
+      yield* awaited(
+        ctx.ui.custom<void>((tui, theme, keybindings, done) => {
+          const view = new McpManagerView(tui, theme, keybindings);
+          Effect.runFork(
+            Effect.tryPromise(() => manage(view)).pipe(
+              Effect.catch((error) =>
+                Effect.sync(() => ctx.ui.notify(toErrorMessage(error.cause), "error")),
+              ),
+              Effect.ensuring(Effect.sync(() => done())),
+            ),
+          );
+          return view;
+        }),
+      );
+    }),
+  );
 }

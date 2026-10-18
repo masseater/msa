@@ -4,21 +4,29 @@ import { writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import * as Effect from "effect/Effect";
+
+import { awaited, awaiting } from "../core/awaiting.ts";
+
 const OUTPUT_FILE_MODE = 0o600;
 
 function createOutputFilePath(prefix: string, extension: string): string {
   return join(tmpdir(), `${prefix}-${randomBytes(8).toString("hex")}${extension}`);
 }
 
-export async function writeOutputFile(
+export function writeOutputFile(
   prefix: string,
   extension: string,
   data: string | Uint8Array,
 ): Promise<string> {
-  const path = createOutputFilePath(prefix, extension);
+  return Effect.runPromise(
+    awaiting(function* () {
+      const path = createOutputFilePath(prefix, extension);
 
-  await writeFile(path, data, { mode: OUTPUT_FILE_MODE, flag: "wx" });
-  return path;
+      yield* awaited(writeFile(path, data, { mode: OUTPUT_FILE_MODE, flag: "wx" }));
+      return path;
+    }),
+  );
 }
 
 export function createOutputFileStream(

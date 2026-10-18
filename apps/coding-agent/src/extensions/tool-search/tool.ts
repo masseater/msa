@@ -1,3 +1,4 @@
+import * as Effect from "effect/Effect";
 import { type Static, Type } from "typebox";
 
 import type {
@@ -202,21 +203,26 @@ export function createToolSearchToolDefinition(
     exposure: "model-only",
 
     reachesTools: () => "all",
-    async execute(_toolCallId, { query, limit }) {
-      if (query.trim() === "") throw new Error("query must not be empty");
-      const max = limit ?? DEFAULT_TOOL_SEARCH_LIMIT;
-      if (!Number.isInteger(max) || max <= 0) throw new Error("limit must be a positive integer");
-      const tools = options.tools === undefined ? [] : searchAndLoad(options.tools, query, max);
-      const text =
-        tools.length === 0
-          ? "No matching tools found."
-          : `Loaded ${tools.length} tool${tools.length === 1 ? "" : "s"}. They are available from your next call:\n${tools
-              .map((tool) => `- ${tool.name}: ${tool.description.trim().split(/\r?\n/u)[0]}`)
-              .join("\n")}`;
-      return {
-        content: [{ type: "text", text }],
-        details: { loaded: tools.map((tool) => tool.name) },
-      };
+    execute(_toolCallId, { query, limit }) {
+      return Effect.runPromise(
+        Effect.sync(() => {
+          if (query.trim() === "") throw new Error("query must not be empty");
+          const max = limit ?? DEFAULT_TOOL_SEARCH_LIMIT;
+          if (!Number.isInteger(max) || max <= 0)
+            throw new Error("limit must be a positive integer");
+          const tools = options.tools === undefined ? [] : searchAndLoad(options.tools, query, max);
+          const text =
+            tools.length === 0
+              ? "No matching tools found."
+              : `Loaded ${tools.length} tool${tools.length === 1 ? "" : "s"}. They are available from your next call:\n${tools
+                  .map((tool) => `- ${tool.name}: ${tool.description.trim().split(/\r?\n/u)[0]}`)
+                  .join("\n")}`;
+          return {
+            content: [{ type: "text", text }],
+            details: { loaded: tools.map((tool) => tool.name) },
+          };
+        }),
+      );
     },
   };
 }

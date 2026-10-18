@@ -19,8 +19,10 @@ import {
   renderToolSample,
   toCodemodeIdentifier,
 } from "@msa/codemode";
+import * as Effect from "effect/Effect";
 
 import { getCodemodeWorkerSpecifier, getQuickJSWasmPath } from "../../config.ts";
+import { awaited, awaiting } from "../../core/awaiting.ts";
 import type { ExtensionToolContext, ToolNamespace } from "../../core/extensions/types.ts";
 import type { SessionEntry } from "../../core/session-manager.ts";
 import { formatSize } from "../../core/tools/truncate.ts";
@@ -224,16 +226,19 @@ interface ModelCallResult {
 function createLimiter(limit: number): <T>(run: () => Promise<T>) => Promise<T> {
   let active = 0;
   const waiting: (() => void)[] = [];
-  return async (run) => {
-    if (active >= limit) await new Promise<void>((resolve) => waiting.push(resolve));
-    active++;
-    try {
-      return await run();
-    } finally {
-      active--;
-      waiting.shift()?.();
-    }
-  };
+  return (run) =>
+    Effect.runPromise(
+      awaiting(function* () {
+        if (active >= limit) yield* awaited(new Promise<void>((resolve) => waiting.push(resolve)));
+        active++;
+        try {
+          return yield* awaited(run());
+        } finally {
+          active--;
+          waiting.shift()?.();
+        }
+      }),
+    );
 }
 
 function isStoreEntryData(data: unknown): data is CodemodeStoreEntryData {
@@ -346,12 +351,16 @@ function formatError(
   return `${head}\n\n${formatCallSummary(calls)}`;
 }
 
-async function spillOutput(text: string): Promise<{ path: string } | { error: string }> {
-  try {
-    return { path: await writeOutputFile("msa-codemode", ".txt", text) };
-  } catch (error) {
-    return { error: toErrorMessage(error) };
-  }
+function spillOutput(text: string): Promise<{ path: string } | { error: string }> {
+  return Effect.runPromise(
+    awaiting(function* () {
+      try {
+        return { path: yield* awaited(writeOutputFile("msa-codemode", ".txt", text)) };
+      } catch (error) {
+        return { error: toErrorMessage(error) };
+      }
+    }),
+  );
 }
 
 const IMAGE_EXTENSIONS: Record<string, string> = {
@@ -361,63 +370,80 @@ const IMAGE_EXTENSIONS: Record<string, string> = {
   "image/webp": ".webp",
 };
 
-async function saveImages(
+function saveImages(
   items: (TextContent | ImageContent)[],
 ): Promise<(TextContent | ImageContent)[]> {
-  const labels = new Map<string, Promise<string>>();
-  const label = async ({ data, mimeType }: ImageContent): Promise<string> => {
-    const bytes = Buffer.from(data, "base64");
-    const kind = `${mimeType}, ${formatSize(bytes.length)}`;
-    const extension = IMAGE_EXTENSIONS[mimeType];
-    if (extension === undefined || extension === "")
-      throw new Error(`No file extension for image type ${mimeType}`);
+  return Effect.runPromise(
+    awaiting(function* () {
+      const labels = new Map<string, Promise<string>>();
+      const label = ({ data, mimeType }: ImageContent): Promise<string> =>
+        Effect.runPromise(
+          awaiting(function* () {
+            const bytes = Buffer.from(data, "base64");
+            const kind = `${mimeType}, ${formatSize(bytes.length)}`;
+            const extension = IMAGE_EXTENSIONS[mimeType];
+            if (extension === undefined || extension === "")
+              throw new Error(`No file extension for image type ${mimeType}`);
 
-    try {
-      const path = await writeOutputFile("msa-codemode", extension, bytes);
-      return `[Image saved to ${path} (${kind})]`;
-    } catch (error) {
-      return `[Image (${kind}) could not be saved: ${toErrorMessage(error)}]`;
-    }
-  };
-  const result = await Promise.all(
-    items.map(async (item): Promise<(TextContent | ImageContent)[]> => {
-      if (item.type !== "image") return [item];
-      let pending = labels.get(item.data);
-      if (pending === undefined) {
-        pending = label(item);
-        labels.set(item.data, pending);
-      }
-      return [{ type: "text", text: await pending }, item];
+            try {
+              const path = yield* awaited(writeOutputFile("msa-codemode", extension, bytes));
+              return `[Image saved to ${path} (${kind})]`;
+            } catch (error) {
+              return `[Image (${kind}) could not be saved: ${toErrorMessage(error)}]`;
+            }
+          }),
+        );
+      const result = yield* awaited(
+        Promise.all(
+          items.map((item): Promise<(TextContent | ImageContent)[]> =>
+            Effect.runPromise(
+              awaiting(function* () {
+                if (item.type !== "image") return [item];
+                let pending = labels.get(item.data);
+                if (pending === undefined) {
+                  pending = label(item);
+                  labels.set(item.data, pending);
+                }
+                return [{ type: "text", text: yield* awaited(pending) }, item];
+              }),
+            ),
+          ),
+        ),
+      );
+      return result.flat();
     }),
   );
-  return result.flat();
 }
 
-async function truncateOutput(
+function truncateOutput(
   items: (TextContent | ImageContent)[],
   maxTokens: number,
 ): Promise<{ items: (TextContent | ImageContent)[]; fullOutputPath?: string }> {
-  const texts = items
-    .filter((item): item is TextContent => item.type === "text")
-    .map((item) => item.text);
-  const combined = texts.join("\n");
-  const budget = maxTokens * CHARS_PER_TOKEN;
-  if (texts.length === 0 || combined.length <= budget) return { items };
-  const headChars = Math.floor(budget / 2);
-  const tailChars = budget - headChars;
-  const removed = combined.length - headChars - tailChars;
-  const head = combined.slice(0, headChars);
-  const tail = tailChars > 0 ? combined.slice(-tailChars) : "";
-  let text = `Warning: truncated output (original token count: ${Math.ceil(combined.length / CHARS_PER_TOKEN)})\nTotal output lines: ${combined.split("\n").length}\n\n${head}…${Math.ceil(removed / CHARS_PER_TOKEN)} tokens truncated…${tail}`;
-  const spilled = await spillOutput(combined);
-  text +=
-    "path" in spilled
-      ? `\n\n[Full output: ${spilled.path} (read with offset/limit)]`
-      : `\n\n[Could not save the full output: ${spilled.error}]`;
-  return {
-    items: [{ type: "text", text }, ...items.filter((item) => item.type === "image")],
-    ...("path" in spilled ? { fullOutputPath: spilled.path } : {}),
-  };
+  return Effect.runPromise(
+    awaiting(function* () {
+      const texts = items
+        .filter((item): item is TextContent => item.type === "text")
+        .map((item) => item.text);
+      const combined = texts.join("\n");
+      const budget = maxTokens * CHARS_PER_TOKEN;
+      if (texts.length === 0 || combined.length <= budget) return { items };
+      const headChars = Math.floor(budget / 2);
+      const tailChars = budget - headChars;
+      const removed = combined.length - headChars - tailChars;
+      const head = combined.slice(0, headChars);
+      const tail = tailChars > 0 ? combined.slice(-tailChars) : "";
+      let text = `Warning: truncated output (original token count: ${Math.ceil(combined.length / CHARS_PER_TOKEN)})\nTotal output lines: ${combined.split("\n").length}\n\n${head}…${Math.ceil(removed / CHARS_PER_TOKEN)} tokens truncated…${tail}`;
+      const spilled = yield* awaited(spillOutput(combined));
+      text +=
+        "path" in spilled
+          ? `\n\n[Full output: ${spilled.path} (read with offset/limit)]`
+          : `\n\n[Could not save the full output: ${spilled.error}]`;
+      return {
+        items: [{ type: "text", text }, ...items.filter((item) => item.type === "image")],
+        ...("path" in spilled ? { fullOutputPath: spilled.path } : {}),
+      };
+    }),
+  );
 }
 
 function toScriptValue(tool: AgentTool<any>, outcome: AgentToolCallOutcome): unknown {
@@ -429,7 +455,7 @@ function toScriptValue(tool: AgentTool<any>, outcome: AgentToolCallOutcome): unk
   return text;
 }
 
-export async function executeCodemode(
+export function executeCodemode(
   toolCallId: string,
   input: CodemodeToolInput,
   signal: AbortSignal | undefined,
@@ -437,151 +463,164 @@ export async function executeCodemode(
   ctx: ExtensionToolContext | undefined,
   options: CodemodeToolOptions = {},
 ): Promise<AgentToolResult<CodemodeToolDetails>> {
-  const startedAt = performance.now();
-  const { code, options: sourceOptions } = parseCodemodeSource(input.code);
-  const calls: CodemodeNestedCall[] = [];
+  return Effect.runPromise(
+    awaiting(function* () {
+      const startedAt = performance.now();
+      const { code, options: sourceOptions } = parseCodemodeSource(input.code);
+      const calls: CodemodeNestedCall[] = [];
 
-  let modelUsage: Usage | undefined;
+      let modelUsage: Usage | undefined;
 
-  let generatedImages = 0;
-  const addGeneratedImages = (count: number) => {
-    generatedImages += count;
-  };
-  const addModelUsage = (usage: Usage) => {
-    modelUsage = modelUsage === undefined ? usage : combineUsage(modelUsage, usage);
-  };
-
-  const snapshot = (): CodemodeToolDetails => ({ calls: calls.map((call) => ({ ...call })) });
-  const publish = () => onUpdate?.({ content: [], details: snapshot() });
-
-  publish();
-
-  const callable = ctx === undefined ? [] : getCodemodeCallableTools(ctx.tools);
-
-  const guidelines = options.getToolGuidelines?.();
-  const samples = new Map(
-    callable.map((tool) => [
-      tool.name,
-      renderToolSample(toCodemodeDeclaration(tool, guidelines?.get(tool.name))),
-    ]),
-  );
-  const sandboxTools: CodemodeTool[] = callable.map((tool) => {
-    const description = samples.get(tool.name);
-    return {
-      name: tool.name,
-      ...(description === undefined ? {} : { description }),
-      execute: async (args, { signal: callSignal }) => {
-        const record: CodemodeNestedCall = {
-          id: `${toolCallId}/?`,
-          name: tool.name,
-          args: previewArgs(args),
-          status: "running",
-        };
-        calls.push(record);
-        publish();
-        const callStartedAt = performance.now();
-
-        if (ctx === undefined) throw new Error("Tool calls need a session");
-        const outcome = await ctx.executeTool(tool.name, args, { signal: callSignal });
-        record.id = outcome.toolCall.id;
-        record.durationMs = performance.now() - callStartedAt;
-        if (outcome.isError) {
-          record.status = callSignal.aborted ? "cancelled" : "error";
-          record.error = truncateText(
-            textOf(outcome.result) || `Tool "${tool.name}" failed`,
-            ERROR_PREVIEW_CHARS,
-          );
-        } else {
-          record.status = "ok";
-        }
-        publish();
-        return toScriptValue(tool, outcome);
-      },
-    };
-  });
-
-  const workerUrl = getCodemodeWorkerSpecifier();
-  const sandbox = new CodemodeSandbox({
-    tools: sandboxTools,
-    globals: [
-      ...createDiscoveryGlobals(callable, samples, options),
-      ...(options.models === true && ctx !== undefined
-        ? createModelGlobals(
-            ctx.modelRegistry,
-            toolCallId,
-            calls,
-            publish,
-            addModelUsage,
-            addGeneratedImages,
-          )
-        : []),
-    ],
-    timeoutMs: sourceOptions.timeoutMs ?? Number.POSITIVE_INFINITY,
-    memoryLimitBytes: CODEMODE_MEMORY_LIMIT_BYTES,
-    wasm: loadQuickJSWasm(getQuickJSWasmPath()),
-    ...(workerUrl === undefined ? {} : { workerUrl }),
-    acquireWorker: () => {
-      if (activeCodemodeWorkers >= MAX_CONCURRENT_CODEMODE_WORKERS) {
-        throw new Error(
-          `Codemode worker limit reached (${MAX_CONCURRENT_CODEMODE_WORKERS} workers are still running or shutting down). Retry after they exit.`,
-        );
-      }
-      activeCodemodeWorkers++;
-      return () => {
-        activeCodemodeWorkers--;
+      let generatedImages = 0;
+      const addGeneratedImages = (count: number) => {
+        generatedImages += count;
       };
-    },
-  });
+      const addModelUsage = (usage: Usage) => {
+        modelUsage = modelUsage === undefined ? usage : combineUsage(modelUsage, usage);
+      };
 
-  let result: CodemodeResult;
-  try {
-    const store = ctx === undefined ? {} : readCodemodeStore(ctx.sessionManager.getBranch());
-    result = await sandbox.execute(code, { ...(signal === undefined ? {} : { signal }), store });
-  } finally {
-    await sandbox.close();
-  }
+      const snapshot = (): CodemodeToolDetails => ({ calls: calls.map((call) => ({ ...call })) });
+      const publish = () => onUpdate?.({ content: [], details: snapshot() });
 
-  for (const call of calls) {
-    if (call.status === "running") call.status = "cancelled";
-  }
+      publish();
 
-  const scriptOutput = [...result.output];
-  if (result.ok) {
-    const { set, delete: deleted } = result.storeWrites;
-    if (Object.keys(set).length > 0 || deleted.length > 0) {
-      options.appendEntry?.(CODEMODE_STORE_ENTRY_TYPE, { set, delete: deleted });
-    }
+      const callable = ctx === undefined ? [] : getCodemodeCallableTools(ctx.tools);
 
-    if (result.value !== undefined)
-      scriptOutput.push({ type: "text", text: valueText(result.value) });
-  }
-  const items = formatOutput(scriptOutput);
-  if (!result.ok)
-    items.push({ type: "text", text: `Script error:\n${formatError(result, calls)}` });
-  if (generatedImages > 0 && !items.some((item) => item.type === "image")) {
-    items.push({
-      type: "text",
-      text: `Note: models.generateImages() returned ${generatedImages} image${generatedImages === 1 ? "" : "s"} that the script did not show. Show each image block of result.output with image(block).`,
-    });
-  }
+      const guidelines = options.getToolGuidelines?.();
+      const samples = new Map(
+        callable.map((tool) => [
+          tool.name,
+          renderToolSample(toCodemodeDeclaration(tool, guidelines?.get(tool.name))),
+        ]),
+      );
+      const sandboxTools: CodemodeTool[] = callable.map((tool) => {
+        const description = samples.get(tool.name);
+        return {
+          name: tool.name,
+          ...(description === undefined ? {} : { description }),
+          execute: (args, { signal: callSignal }) =>
+            Effect.runPromise(
+              awaiting(function* () {
+                const record: CodemodeNestedCall = {
+                  id: `${toolCallId}/?`,
+                  name: tool.name,
+                  args: previewArgs(args),
+                  status: "running",
+                };
+                calls.push(record);
+                publish();
+                const callStartedAt = performance.now();
 
-  const truncated = await truncateOutput(
-    joinAdjacentText(items),
-    sourceOptions.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
+                if (ctx === undefined) throw new Error("Tool calls need a session");
+                const outcome = yield* awaited(
+                  ctx.executeTool(tool.name, args, { signal: callSignal }),
+                );
+                record.id = outcome.toolCall.id;
+                record.durationMs = performance.now() - callStartedAt;
+                if (outcome.isError) {
+                  record.status = callSignal.aborted ? "cancelled" : "error";
+                  record.error = truncateText(
+                    textOf(outcome.result) || `Tool "${tool.name}" failed`,
+                    ERROR_PREVIEW_CHARS,
+                  );
+                } else {
+                  record.status = "ok";
+                }
+                publish();
+                return toScriptValue(tool, outcome);
+              }),
+            ),
+        };
+      });
+
+      const workerUrl = getCodemodeWorkerSpecifier();
+      const sandbox = new CodemodeSandbox({
+        tools: sandboxTools,
+        globals: [
+          ...createDiscoveryGlobals(callable, samples, options),
+          ...(options.models === true && ctx !== undefined
+            ? createModelGlobals(
+                ctx.modelRegistry,
+                toolCallId,
+                calls,
+                publish,
+                addModelUsage,
+                addGeneratedImages,
+              )
+            : []),
+        ],
+        timeoutMs: sourceOptions.timeoutMs ?? Number.POSITIVE_INFINITY,
+        memoryLimitBytes: CODEMODE_MEMORY_LIMIT_BYTES,
+        wasm: loadQuickJSWasm(getQuickJSWasmPath()),
+        ...(workerUrl === undefined ? {} : { workerUrl }),
+        acquireWorker: () => {
+          if (activeCodemodeWorkers >= MAX_CONCURRENT_CODEMODE_WORKERS) {
+            throw new Error(
+              `Codemode worker limit reached (${MAX_CONCURRENT_CODEMODE_WORKERS} workers are still running or shutting down). Retry after they exit.`,
+            );
+          }
+          activeCodemodeWorkers++;
+          return () => {
+            activeCodemodeWorkers--;
+          };
+        },
+      });
+
+      let result: CodemodeResult;
+      try {
+        const store = ctx === undefined ? {} : readCodemodeStore(ctx.sessionManager.getBranch());
+        result = yield* awaited(
+          sandbox.execute(code, { ...(signal === undefined ? {} : { signal }), store }),
+        );
+      } finally {
+        yield* awaited(sandbox.close());
+      }
+
+      for (const call of calls) {
+        if (call.status === "running") call.status = "cancelled";
+      }
+
+      const scriptOutput = [...result.output];
+      if (result.ok) {
+        const { set, delete: deleted } = result.storeWrites;
+        if (Object.keys(set).length > 0 || deleted.length > 0) {
+          options.appendEntry?.(CODEMODE_STORE_ENTRY_TYPE, { set, delete: deleted });
+        }
+
+        if (result.value !== undefined)
+          scriptOutput.push({ type: "text", text: valueText(result.value) });
+      }
+      const items = formatOutput(scriptOutput);
+      if (!result.ok)
+        items.push({ type: "text", text: `Script error:\n${formatError(result, calls)}` });
+      if (generatedImages > 0 && !items.some((item) => item.type === "image")) {
+        items.push({
+          type: "text",
+          text: `Note: models.generateImages() returned ${generatedImages} image${generatedImages === 1 ? "" : "s"} that the script did not show. Show each image block of result.output with image(block).`,
+        });
+      }
+
+      const truncated = yield* awaited(
+        truncateOutput(
+          joinAdjacentText(items),
+          sourceOptions.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
+        ),
+      );
+
+      const output = joinAdjacentText(yield* awaited(saveImages(truncated.items)));
+      const wallTime = ((performance.now() - startedAt) / 1000).toFixed(1);
+      const header = `${result.ok ? "Script completed" : "Script failed"}\nWall time ${wallTime} seconds\nOutput:\n`;
+      const details = snapshot();
+      if (truncated.fullOutputPath !== undefined && truncated.fullOutputPath !== "")
+        details.fullOutputPath = truncated.fullOutputPath;
+      return {
+        content: [{ type: "text", text: header }, ...output],
+        details,
+        ...(modelUsage === undefined ? {} : { usage: modelUsage }),
+        ...(result.ok ? {} : { isError: true }),
+      };
+    }),
   );
-
-  const output = joinAdjacentText(await saveImages(truncated.items));
-  const wallTime = ((performance.now() - startedAt) / 1000).toFixed(1);
-  const header = `${result.ok ? "Script completed" : "Script failed"}\nWall time ${wallTime} seconds\nOutput:\n`;
-  const details = snapshot();
-  if (truncated.fullOutputPath !== undefined && truncated.fullOutputPath !== "")
-    details.fullOutputPath = truncated.fullOutputPath;
-  return {
-    content: [{ type: "text", text: header }, ...output],
-    details,
-    ...(modelUsage === undefined ? {} : { usage: modelUsage }),
-    ...(result.ok ? {} : { isError: true }),
-  };
 }
 
 function isNamespaceName(namespace: ToolNamespace, query: string): boolean {
@@ -687,7 +726,7 @@ function createModelGlobals(
   const limit = createLimiter(MAX_CONCURRENT_MODEL_CALLS);
   let callCount = 0;
 
-  const runModelCall = async <
+  const runModelCall = <
     TType extends "classifier" | "image",
     TContext,
     TResult extends ModelCallResult,
@@ -697,69 +736,82 @@ function createModelGlobals(
     [model, context]: unknown[],
     checkContext: (context: unknown) => TContext,
     run: (resolved: ModelTypeMap[TType], context: TContext) => Promise<TResult>,
-  ): Promise<TResult> => {
-    const listHint = `List the ${type} models you can use with models.getAvailableOfType("${type}").`;
-    const given = model as ScriptValue;
-    if (typeof given?.["provider"] !== "string" || typeof given["id"] !== "string") {
-      const undefinedHint =
-        model === undefined || model === null
-          ? " models.getModelOfType() returns undefined for an unknown provider or id."
-          : "";
-      throw new Error(
-        `${name}() expects ${withArticle(type)} model as its first argument, got ${describeValue(model)}.${undefinedHint} ${listHint}`,
-      );
-    }
-    const provider = given["provider"];
-    const id = given["id"];
-    const ref = `${provider}/${id}`;
-    const resolved = models.getModelOfType(type, provider, id);
-    if (resolved === undefined) {
-      const actualType = [...MODEL_TYPES].find(
-        (other) =>
-          other !== type && models.getModelOfType(other as ModelType, provider, id) !== undefined,
-      );
-      throw new Error(
-        actualType !== undefined && actualType !== ""
-          ? `"${ref}" is ${withArticle(actualType)} model, not ${withArticle(type)} model. ${listHint}`
-          : `Unknown ${type} model "${ref}". ${listHint}`,
-      );
-    }
-    const checked = checkContext(context);
+  ): Promise<TResult> =>
+    Effect.runPromise(
+      awaiting(function* () {
+        const listHint = `List the ${type} models you can use with models.getAvailableOfType("${type}").`;
+        const given = model as ScriptValue;
+        if (typeof given?.["provider"] !== "string" || typeof given["id"] !== "string") {
+          const undefinedHint =
+            model === undefined || model === null
+              ? " models.getModelOfType() returns undefined for an unknown provider or id."
+              : "";
+          throw new Error(
+            `${name}() expects ${withArticle(type)} model as its first argument, got ${describeValue(model)}.${undefinedHint} ${listHint}`,
+          );
+        }
+        const provider = given["provider"];
+        const id = given["id"];
+        const ref = `${provider}/${id}`;
+        const resolved = models.getModelOfType(type, provider, id);
+        if (resolved === undefined) {
+          const actualType = [...MODEL_TYPES].find(
+            (other) =>
+              other !== type &&
+              models.getModelOfType(other as ModelType, provider, id) !== undefined,
+          );
+          throw new Error(
+            actualType !== undefined && actualType !== ""
+              ? `"${ref}" is ${withArticle(actualType)} model, not ${withArticle(type)} model. ${listHint}`
+              : `Unknown ${type} model "${ref}". ${listHint}`,
+          );
+        }
+        const checked = checkContext(context);
 
-    const record: CodemodeNestedCall = {
-      id: `${toolCallId}/${name}/${++callCount}`,
-      name,
-      args: `${resolved.provider}/${resolved.id}`,
-      status: "running",
-    };
-    calls.push(record);
-    publish();
-    const startedAt = performance.now();
-    const result = await limit(() => run(resolved, checked));
-    record.durationMs = performance.now() - startedAt;
-    record.status =
-      result.stopReason === "stop" ? "ok" : result.stopReason === "aborted" ? "cancelled" : "error";
-    if (result.errorMessage !== undefined && result.errorMessage !== "")
-      record.error = truncateText(result.errorMessage, ERROR_PREVIEW_CHARS);
-    if (result.usage !== undefined) {
-      record.cost = result.usage.cost.total;
-      addUsage(result.usage);
-    }
-    publish();
-    return result;
-  };
+        const record: CodemodeNestedCall = {
+          id: `${toolCallId}/${name}/${++callCount}`,
+          name,
+          args: `${resolved.provider}/${resolved.id}`,
+          status: "running",
+        };
+        calls.push(record);
+        publish();
+        const startedAt = performance.now();
+        const result = yield* awaited(limit(() => run(resolved, checked)));
+        record.durationMs = performance.now() - startedAt;
+        record.status =
+          result.stopReason === "stop"
+            ? "ok"
+            : result.stopReason === "aborted"
+              ? "cancelled"
+              : "error";
+        if (result.errorMessage !== undefined && result.errorMessage !== "")
+          record.error = truncateText(result.errorMessage, ERROR_PREVIEW_CHARS);
+        if (result.usage !== undefined) {
+          record.cost = result.usage.cost.total;
+          addUsage(result.usage);
+        }
+        publish();
+        return result;
+      }),
+    );
   const implementations: Record<string, CodemodeTool["execute"]> = {
     "models.getModelsOfType": (args) => {
       const [type, provider] = args as unknown[];
       return models.getModelsOfType(toModelType(type), toProvider(provider)).map(toModelInfo);
     },
-    "models.getAvailableOfType": async (args, { signal }) => {
-      const [type, provider] = args as unknown[];
-      const available = await models.getAvailableOfType(toModelType(type), toProvider(provider), {
-        signal,
-      });
-      return available.map(toModelInfo);
-    },
+    "models.getAvailableOfType": (args, { signal }) =>
+      Effect.runPromise(
+        awaiting(function* () {
+          const [type, provider] = args as unknown[];
+          const available = yield* awaited(
+            models.getAvailableOfType(toModelType(type), toProvider(provider), {
+              signal,
+            }),
+          );
+          return available.map(toModelInfo);
+        }),
+      ),
     "models.getModelOfType": (args) => {
       const [type, provider, id] = args as unknown[];
       if (typeof provider !== "string" || typeof id !== "string") {
@@ -784,11 +836,14 @@ function createModelGlobals(
         "image",
         args as unknown[],
         checkImagesContext,
-        async (resolved, context) => {
-          const result = await models.generateImages(resolved, context, { signal });
-          addGeneratedImages(result.output.filter((block) => block.type === "image").length);
-          return result;
-        },
+        (resolved, context) =>
+          Effect.runPromise(
+            awaiting(function* () {
+              const result = yield* awaited(models.generateImages(resolved, context, { signal }));
+              addGeneratedImages(result.output.filter((block) => block.type === "image").length);
+              return result;
+            }),
+          ),
       ),
   };
   return Object.entries(implementations).map(([name, execute]) => ({

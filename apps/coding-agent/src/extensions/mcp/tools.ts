@@ -10,8 +10,10 @@ import {
   toLlmContent,
 } from "@msa/mcp";
 import { Container, Spacer, Text } from "@msa/tui";
+import * as Effect from "effect/Effect";
 import type { TSchema } from "typebox";
 
+import { awaited, awaiting } from "../../core/awaiting.ts";
 import type {
   ToolAnnotations,
   ToolDefinition,
@@ -151,27 +153,31 @@ export function createMcpResultSchema(
   } as unknown as TSchema;
 }
 
-export async function limitMcpContent(
+export function limitMcpContent(
   content: (TextContent | ImageContent)[],
   saveOutput: McpOutputSaver = saveToTempFile,
 ): Promise<{ content: (TextContent | ImageContent)[]; fullOutputPath?: string }> {
-  const combined = textOf(content);
-  const truncation = truncateMiddle(combined, MCP_OUTPUT_MAX_BYTES);
-  if (!truncation.truncated) return { content };
-  let fullOutputPath: string | undefined;
-  let where: string;
-  try {
-    fullOutputPath = await saveOutput(combined, ".txt");
-    where = `[Full output: ${fullOutputPath} (read it with offset/limit)]`;
-  } catch (error) {
-    where = `[Could not save the full output: ${toErrorMessage(error)}]`;
-  }
-  const tokens = Math.ceil(truncation.totalBytes / 4);
-  const text = `Warning: truncated output (original token count: ${tokens})\nTotal output lines: ${truncation.totalLines}\n\n${truncation.content}\n\n${where}`;
-  return {
-    content: [{ type: "text", text }, ...content.filter((block) => block.type === "image")],
-    ...(fullOutputPath !== undefined && fullOutputPath !== "" ? { fullOutputPath } : {}),
-  };
+  return Effect.runPromise(
+    awaiting(function* () {
+      const combined = textOf(content);
+      const truncation = truncateMiddle(combined, MCP_OUTPUT_MAX_BYTES);
+      if (!truncation.truncated) return { content };
+      let fullOutputPath: string | undefined;
+      let where: string;
+      try {
+        fullOutputPath = yield* awaited(saveOutput(combined, ".txt"));
+        where = `[Full output: ${fullOutputPath} (read it with offset/limit)]`;
+      } catch (error) {
+        where = `[Could not save the full output: ${toErrorMessage(error)}]`;
+      }
+      const tokens = Math.ceil(truncation.totalBytes / 4);
+      const text = `Warning: truncated output (original token count: ${tokens})\nTotal output lines: ${truncation.totalLines}\n\n${truncation.content}\n\n${where}`;
+      return {
+        content: [{ type: "text", text }, ...content.filter((block) => block.type === "image")],
+        ...(fullOutputPath !== undefined && fullOutputPath !== "" ? { fullOutputPath } : {}),
+      };
+    }),
+  );
 }
 
 export interface ConvertMcpResultOptions {
@@ -196,84 +202,107 @@ function isTextMimeType(mimeType: string | undefined): boolean {
   );
 }
 
-async function blockToContent(
+function blockToContent(
   server: string,
   block: ContentBlock,
   options: ConvertMcpResultOptions,
 ): Promise<(TextContent | ImageContent)[]> {
-  if (block.type === "resource_link") {
-    const details = [
-      block.mimeType,
-      block.size === undefined ? undefined : formatSize(block.size),
-    ].filter(Boolean);
-    const read =
-      options.readableResources === true
-        ? `. Read it with ${READ_MCP_RESOURCE_TOOL} (server "${server}")`
-        : "";
-    const description =
-      block.description !== undefined && block.description !== "" ? `: ${block.description}` : "";
-    return [
-      {
-        type: "text",
-        text: `[Resource ${block.uri} "${block.title ?? block.name}"${details.length > 0 ? ` (${details.join(", ")})` : ""}${description}${read}]`,
-      },
-    ];
-  }
-  if (
-    block.type === "resource" &&
-    "blob" in block.resource &&
-    block.resource.mimeType?.startsWith("image/") !== true
-  ) {
-    const { uri, mimeType, blob } = block.resource;
-    const data = Buffer.from(blob, "base64");
-    if (isTextMimeType(mimeType)) return [{ type: "text", text: data.toString("utf8") }];
-    const kind = `${mimeType ?? "unknown type"}, ${formatSize(data.length)}`;
-    try {
-      const path = await (options.saveOutput ?? saveToTempFile)(data, extensionOf(uri));
-      return [{ type: "text", text: `[Binary resource ${uri} (${kind}) saved to ${path}]` }];
-    } catch (error) {
-      const reason = toErrorMessage(error);
-      return [
-        { type: "text", text: `[Binary resource ${uri} (${kind}) could not be saved: ${reason}]` },
-      ];
-    }
-  }
-  return toLlmContent({ content: [block] });
+  return Effect.runPromise(
+    awaiting(function* () {
+      if (block.type === "resource_link") {
+        const details = [
+          block.mimeType,
+          block.size === undefined ? undefined : formatSize(block.size),
+        ].filter(Boolean);
+        const read =
+          options.readableResources === true
+            ? `. Read it with ${READ_MCP_RESOURCE_TOOL} (server "${server}")`
+            : "";
+        const description =
+          block.description !== undefined && block.description !== ""
+            ? `: ${block.description}`
+            : "";
+        return [
+          {
+            type: "text",
+            text: `[Resource ${block.uri} "${block.title ?? block.name}"${details.length > 0 ? ` (${details.join(", ")})` : ""}${description}${read}]`,
+          },
+        ];
+      }
+      if (
+        block.type === "resource" &&
+        "blob" in block.resource &&
+        block.resource.mimeType?.startsWith("image/") !== true
+      ) {
+        const { uri, mimeType, blob } = block.resource;
+        const data = Buffer.from(blob, "base64");
+        if (isTextMimeType(mimeType)) return [{ type: "text", text: data.toString("utf8") }];
+        const kind = `${mimeType ?? "unknown type"}, ${formatSize(data.length)}`;
+        try {
+          const path = yield* awaited(
+            (options.saveOutput ?? saveToTempFile)(data, extensionOf(uri)),
+          );
+          return [{ type: "text", text: `[Binary resource ${uri} (${kind}) saved to ${path}]` }];
+        } catch (error) {
+          const reason = toErrorMessage(error);
+          return [
+            {
+              type: "text",
+              text: `[Binary resource ${uri} (${kind}) could not be saved: ${reason}]`,
+            },
+          ];
+        }
+      }
+      return toLlmContent({ content: [block] });
+    }),
+  );
 }
 
-export async function toModelContent(
+export function toModelContent(
   server: string,
   blocks: readonly ContentBlock[],
   options: ConvertMcpResultOptions = {},
 ): Promise<(TextContent | ImageContent)[]> {
-  return (await Promise.all(blocks.map((block) => blockToContent(server, block, options)))).flat();
+  return Effect.runPromise(
+    awaiting(function* () {
+      return (yield* awaited(
+        Promise.all(blocks.map((block) => blockToContent(server, block, options))),
+      )).flat();
+    }),
+  );
 }
 
-export async function convertMcpResult(
+export function convertMcpResult(
   server: string,
   tool: string,
   result: CallToolResult,
   options: ConvertMcpResultOptions = {},
 ): Promise<AgentToolResult<McpToolDetails>> {
-  const converted: (TextContent | ImageContent)[] =
-    result.content.length > 0
-      ? await toModelContent(server, result.content, options)
-      : toLlmContent(result);
-  if (result.isError === true && textOf(converted) === "") {
-    converted.push({ type: "text", text: `MCP tool ${server}/${tool} returned an error` });
-  }
-  const { content, fullOutputPath } = await limitMcpContent(converted, options.saveOutput);
-  const { _meta: _ignored, ...scriptResult } = result;
-  return {
-    content,
-    details: {
-      server,
-      tool,
-      ...(fullOutputPath !== undefined && fullOutputPath !== "" ? { fullOutputPath } : {}),
-    },
-    structuredContent: scriptResult as unknown as JsonValue,
-    ...(result.isError === true ? { isError: true } : {}),
-  };
+  return Effect.runPromise(
+    awaiting(function* () {
+      const converted: (TextContent | ImageContent)[] =
+        result.content.length > 0
+          ? yield* awaited(toModelContent(server, result.content, options))
+          : toLlmContent(result);
+      if (result.isError === true && textOf(converted) === "") {
+        converted.push({ type: "text", text: `MCP tool ${server}/${tool} returned an error` });
+      }
+      const { content, fullOutputPath } = yield* awaited(
+        limitMcpContent(converted, options.saveOutput),
+      );
+      const { _meta: _ignored, ...scriptResult } = result;
+      return {
+        content,
+        details: {
+          server,
+          tool,
+          ...(fullOutputPath !== undefined && fullOutputPath !== "" ? { fullOutputPath } : {}),
+        },
+        structuredContent: scriptResult as unknown as JsonValue,
+        ...(result.isError === true ? { isError: true } : {}),
+      };
+    }),
+  );
 }
 
 function toParameters(schema: Record<string, unknown>): TSchema {
@@ -325,20 +354,31 @@ export function createMcpToolDefinition(options: {
     namespace: options.namespace,
     ...(annotations === undefined ? {} : { annotations }),
     ...createMcpToolRenderers(label),
-    async execute(_toolCallId, params, signal, onUpdate) {
-      const client = await options.getClient();
-      const result = await client.callTool(tool.name, (params ?? {}) as Record<string, unknown>, {
-        ...(signal === undefined ? {} : { signal }),
-        timeoutMs: options.timeoutMs,
-        onProgress: (progress) => {
-          const total = progress.total === undefined ? "" : `/${progress.total}`;
-          const text = progress.message ?? `Progress ${progress.progress}${total}`;
-          onUpdate?.({ content: [{ type: "text", text }], details: { server, tool: tool.name } });
-        },
-      });
-      return convertMcpResult(server, tool.name, result, {
-        readableResources: options.readableResources?.(),
-      });
+    execute(_toolCallId, params, signal, onUpdate) {
+      return Effect.runPromise(
+        awaiting(function* () {
+          const client = yield* awaited(options.getClient());
+          const result = yield* awaited(
+            client.callTool(tool.name, (params ?? {}) as Record<string, unknown>, {
+              ...(signal === undefined ? {} : { signal }),
+              timeoutMs: options.timeoutMs,
+              onProgress: (progress) => {
+                const total = progress.total === undefined ? "" : `/${progress.total}`;
+                const text = progress.message ?? `Progress ${progress.progress}${total}`;
+                onUpdate?.({
+                  content: [{ type: "text", text }],
+                  details: { server, tool: tool.name },
+                });
+              },
+            }),
+          );
+          return yield* awaited(
+            convertMcpResult(server, tool.name, result, {
+              readableResources: options.readableResources?.(),
+            }),
+          );
+        }),
+      );
     },
   };
 }

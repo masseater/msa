@@ -10,8 +10,10 @@ import {
 import { dirname, join } from "path";
 
 import chalk from "chalk";
+import * as Effect from "effect/Effect";
 
 import { CONFIG_DIR_NAME, getAgentDir, getBinDir } from "./config.ts";
+import { awaited, awaiting } from "./core/awaiting.ts";
 import { migrateKeybindingsConfig } from "./core/keybindings.ts";
 import { writeLog } from "./core/platform.ts";
 import { stripBom } from "./utils/text.ts";
@@ -230,27 +232,33 @@ function migrateExtensionSystem(cwd: string): string[] {
   return warnings;
 }
 
-export async function showDeprecationWarnings(warnings: string[]): Promise<void> {
-  if (warnings.length === 0) return;
+export function showDeprecationWarnings(warnings: string[]): Promise<void> {
+  return Effect.runPromise(
+    awaiting(function* () {
+      if (warnings.length === 0) return;
 
-  for (const warning of warnings) {
-    writeLog(chalk.yellow(`Warning: ${warning}`));
-  }
-  writeLog(chalk.yellow(`\nMove your extensions to the extensions/ directory.`));
-  writeLog(chalk.yellow(`Migration guide: ${MIGRATION_GUIDE_URL}`));
-  writeLog(chalk.yellow(`Documentation: ${EXTENSIONS_DOC_URL}`));
-  writeLog(chalk.dim(`\nPress any key to continue...`));
+      for (const warning of warnings) {
+        writeLog(chalk.yellow(`Warning: ${warning}`));
+      }
+      writeLog(chalk.yellow(`\nMove your extensions to the extensions/ directory.`));
+      writeLog(chalk.yellow(`Migration guide: ${MIGRATION_GUIDE_URL}`));
+      writeLog(chalk.yellow(`Documentation: ${EXTENSIONS_DOC_URL}`));
+      writeLog(chalk.dim(`\nPress any key to continue...`));
 
-  await new Promise<void>((resolve) => {
-    process.stdin.setRawMode?.(true);
-    process.stdin.resume();
-    process.stdin.once("data", () => {
-      process.stdin.setRawMode?.(false);
-      process.stdin.pause();
-      resolve();
-    });
-  });
-  writeLog();
+      yield* awaited(
+        new Promise<void>((resolve) => {
+          process.stdin.setRawMode?.(true);
+          process.stdin.resume();
+          process.stdin.once("data", () => {
+            process.stdin.setRawMode?.(false);
+            process.stdin.pause();
+            resolve();
+          });
+        }),
+      );
+      writeLog();
+    }),
+  );
 }
 
 export function runMigrations(cwd: string): {

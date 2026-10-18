@@ -52,6 +52,7 @@ import {
 } from "./core/agent-session-services.ts";
 import { formatNoModelsAvailableMessage } from "./core/auth-guidance.ts";
 import { AuthStorage, ReadOnlyAuthStorage } from "./core/auth-storage.ts";
+import { awaited, awaiting } from "./core/awaiting.ts";
 import { exportFromFile } from "./core/export-html/index.ts";
 import type { InlineExtension } from "./core/extensions/types.ts";
 import { applyHttpProxySettings, configureHttpDispatcher } from "./core/http-dispatcher.ts";
@@ -90,22 +91,28 @@ import { cleanupWindowsSelfUpdateQuarantine } from "./utils/windows-self-update.
 
 const EXTENSION_LOAD_FAILURE_HINT = `Hint: Start without extensions using "${APP_NAME} -ne".`;
 
-async function readPipedStdin(): Promise<string | undefined> {
-  if (process.stdin.isTTY) {
-    return undefined;
-  }
+function readPipedStdin(): Promise<string | undefined> {
+  return Effect.runPromise(
+    awaiting(function* () {
+      if (process.stdin.isTTY) {
+        return undefined;
+      }
 
-  return new Promise((resolve) => {
-    let data = "";
-    process.stdin.setEncoding("utf8");
-    process.stdin.on("data", (chunk) => {
-      data += chunk;
-    });
-    process.stdin.on("end", () => {
-      resolve(data.trim() || undefined);
-    });
-    process.stdin.resume();
-  });
+      return yield* awaited(
+        new Promise((resolve) => {
+          let data = "";
+          process.stdin.setEncoding("utf8");
+          process.stdin.on("data", (chunk) => {
+            data += chunk;
+          });
+          process.stdin.on("end", () => {
+            resolve(data.trim() || undefined);
+          });
+          process.stdin.resume();
+        }),
+      );
+    }),
+  );
 }
 
 function reportDiagnostics(diagnostics: readonly AgentSessionRuntimeDiagnostic[]): void {
@@ -152,113 +159,135 @@ function isPlainRuntimeMetadataCommand(parsed: Args): boolean {
   );
 }
 
-async function runAuthCommand(args: string[]): Promise<boolean> {
-  if (isAuthCommandHelp(args)) {
-    printAuthCommandHelp();
-    return true;
-  }
+function runAuthCommand(args: string[]): Promise<boolean> {
+  return Effect.runPromise(
+    awaiting(function* () {
+      if (isAuthCommandHelp(args)) {
+        printAuthCommandHelp();
+        return true;
+      }
 
-  let command: AuthCommand | undefined;
-  try {
-    command = parseAuthCommand(args);
-  } catch (error) {
-    const message =
-      error instanceof AuthCommandError ? error.message : "Failed to parse auth command";
-    writeError(chalk.red(`Error: ${message}`));
-    process.exitCode = 1;
-    return true;
-  }
-  if (command === undefined) return false;
+      let command: AuthCommand | undefined;
+      try {
+        command = parseAuthCommand(args);
+      } catch (error) {
+        const message =
+          error instanceof AuthCommandError ? error.message : "Failed to parse auth command";
+        writeError(chalk.red(`Error: ${message}`));
+        process.exitCode = 1;
+        return true;
+      }
+      if (command === undefined) return false;
 
-  const parsed = parseArgs(command.args);
-  if (parsed.unknownFlags.size > 0) {
-    const option = parsed.unknownFlags.keys().next().value;
-    writeError(chalk.red(`Unknown option --${option} for "${getAuthCommandName(command.kind)}".`));
-    writeError(chalk.dim(`Use "${APP_NAME} --help" or "${getAuthCommandUsage(command.kind)}".`));
-    process.exitCode = 1;
-    return true;
-  }
-  try {
-    if (parsed.diagnostics.length > 0) {
-      throw new AuthCommandError(
-        parsed.diagnostics.map((diagnostic) => diagnostic.message).join("\n"),
-      );
-    }
-    if (command.kind !== "check") {
-      const signal = AbortSignal.timeout(15_000);
-      const modelRuntime = await ModelRuntime.create({ allowModelNetwork: false, signal });
-      const credential = await resolveCredentialForPrint(
-        parsed,
-        modelRuntime,
-        command.kind,
-        command.minExpiryMs,
-        signal,
-      );
-      process.stdout.write(`${credential}\n`);
-      return true;
-    }
+      const parsed = parseArgs(command.args);
+      if (parsed.unknownFlags.size > 0) {
+        const option = parsed.unknownFlags.keys().next().value;
+        writeError(
+          chalk.red(`Unknown option --${option} for "${getAuthCommandName(command.kind)}".`),
+        );
+        writeError(
+          chalk.dim(`Use "${APP_NAME} --help" or "${getAuthCommandUsage(command.kind)}".`),
+        );
+        process.exitCode = 1;
+        return true;
+      }
+      try {
+        if (parsed.diagnostics.length > 0) {
+          throw new AuthCommandError(
+            parsed.diagnostics.map((diagnostic) => diagnostic.message).join("\n"),
+          );
+        }
+        if (command.kind !== "check") {
+          const signal = AbortSignal.timeout(15_000);
+          const modelRuntime = yield* awaited(
+            ModelRuntime.create({ allowModelNetwork: false, signal }),
+          );
+          const credential = yield* awaited(
+            resolveCredentialForPrint(
+              parsed,
+              modelRuntime,
+              command.kind,
+              command.minExpiryMs,
+              signal,
+            ),
+          );
+          process.stdout.write(`${credential}\n`);
+          return true;
+        }
 
-    const requestedAuth = validateAuthCommandArgs(parsed, command.kind);
-    let result: AuthCheckResult;
-    let credential: string | undefined;
-    try {
-      const credentials = command.noRefresh ? new ReadOnlyAuthStorage() : AuthStorage.create();
-      const modelRuntime = await createAuthCheckModelRuntime(credentials);
-      result = await checkProviderAuth(parsed, modelRuntime, { refresh: !command.noRefresh });
-      if (command.credentials && result.status === "ready") {
-        credential = await getProviderCredential(result.provider, modelRuntime, credentials, {
-          refresh: !command.noRefresh,
-        });
-        if (credential === undefined || credential === "") {
+        const requestedAuth = validateAuthCommandArgs(parsed, command.kind);
+        let result: AuthCheckResult;
+        let credential: string | undefined;
+        try {
+          const credentials = command.noRefresh ? new ReadOnlyAuthStorage() : AuthStorage.create();
+          const modelRuntime = yield* awaited(createAuthCheckModelRuntime(credentials));
+          result = yield* awaited(
+            checkProviderAuth(parsed, modelRuntime, { refresh: !command.noRefresh }),
+          );
+          if (command.credentials && result.status === "ready") {
+            credential = yield* awaited(
+              getProviderCredential(result.provider, modelRuntime, credentials, {
+                refresh: !command.noRefresh,
+              }),
+            );
+            if (credential === undefined || credential === "") {
+              result = {
+                status: "not_ready",
+                provider: result.provider,
+                reason: "credential_not_available",
+              };
+            }
+          }
+        } catch {
           result = {
-            status: "not_ready",
-            provider: result.provider,
-            reason: "credential_not_available",
+            status: "invalid",
+            provider: requestedAuth.provider ?? requestedAuth.model!,
+            reason: "invalid_state",
           };
         }
+        const output = command.json
+          ? JSON.stringify({
+              ...result,
+              ...(credential !== undefined && credential !== "" ? { credentials: credential } : {}),
+            })
+          : (credential ?? result.status);
+        process.stdout.write(`${output}\n`);
+        process.exitCode = result.status === "ready" ? 0 : result.status === "not_ready" ? 1 : 2;
+      } catch (error) {
+        const message =
+          error instanceof AuthCommandError ? error.message : "Failed to resolve credential";
+        writeError(chalk.red(`Error: ${message}`));
+        process.exitCode = command.kind === "check" ? 2 : 1;
       }
-    } catch {
-      result = {
-        status: "invalid",
-        provider: requestedAuth.provider ?? requestedAuth.model!,
-        reason: "invalid_state",
-      };
-    }
-    const output = command.json
-      ? JSON.stringify({
-          ...result,
-          ...(credential !== undefined && credential !== "" ? { credentials: credential } : {}),
-        })
-      : (credential ?? result.status);
-    process.stdout.write(`${output}\n`);
-    process.exitCode = result.status === "ready" ? 0 : result.status === "not_ready" ? 1 : 2;
-  } catch (error) {
-    const message =
-      error instanceof AuthCommandError ? error.message : "Failed to resolve credential";
-    writeError(chalk.red(`Error: ${message}`));
-    process.exitCode = command.kind === "check" ? 2 : 1;
-  }
-  return true;
+      return true;
+    }),
+  );
 }
 
-async function prepareInitialMessage(
+function prepareInitialMessage(
   parsed: Args,
   stdinContent?: string,
 ): Promise<{
   initialMessage?: string | undefined;
   initialImages?: ImageContent[] | undefined;
 }> {
-  if (parsed.fileArgs.length === 0) {
-    return buildInitialMessage({ parsed, stdinContent });
-  }
+  return Effect.runPromise(
+    awaiting(function* () {
+      if (parsed.fileArgs.length === 0) {
+        return buildInitialMessage({ parsed, stdinContent });
+      }
 
-  const { text, images } = await processFileArguments(parsed.fileArgs, { autoResizeImages: false });
-  return buildInitialMessage({
-    parsed,
-    fileText: text,
-    fileImages: images,
-    stdinContent,
-  });
+      const { text, images } = yield* awaited(
+        processFileArguments(parsed.fileArgs, { autoResizeImages: false }),
+      );
+      return buildInitialMessage({
+        parsed,
+        fileText: text,
+        fileImages: images,
+        stdinContent,
+      });
+    }),
+  );
 }
 
 type ResolvedSession =
@@ -276,50 +305,60 @@ function findLocalSessionByExactId(
   return path !== undefined && path !== "" ? { type: "local", path } : undefined;
 }
 
-async function resolveSessionPath(
+function resolveSessionPath(
   sessionArg: string,
   cwd: string,
   sessionDir?: string,
 ): Promise<ResolvedSession> {
-  if (sessionArg.includes("/") || sessionArg.includes("\\") || sessionArg.endsWith(".jsonl")) {
-    return { type: "path", path: resolvePath(sessionArg, cwd) };
-  }
+  return Effect.runPromise(
+    awaiting(function* () {
+      if (sessionArg.includes("/") || sessionArg.includes("\\") || sessionArg.endsWith(".jsonl")) {
+        return { type: "path", path: resolvePath(sessionArg, cwd) };
+      }
 
-  const exactLocalMatch = findLocalSessionByExactId(sessionArg, cwd, sessionDir);
-  if (exactLocalMatch !== undefined) {
-    return exactLocalMatch;
-  }
+      const exactLocalMatch = findLocalSessionByExactId(sessionArg, cwd, sessionDir);
+      if (exactLocalMatch !== undefined) {
+        return exactLocalMatch;
+      }
 
-  const localSessions = await SessionManager.list(cwd, sessionDir);
-  const localMatch = localSessions.find((s) => s.id.startsWith(sessionArg));
+      const localSessions = yield* awaited(SessionManager.list(cwd, sessionDir));
+      const localMatch = localSessions.find((s) => s.id.startsWith(sessionArg));
 
-  if (localMatch !== undefined) {
-    return { type: "local", path: localMatch.path };
-  }
+      if (localMatch !== undefined) {
+        return { type: "local", path: localMatch.path };
+      }
 
-  const allSessions = await SessionManager.listAll(sessionDir);
-  const globalMatch =
-    allSessions.find((s) => s.id === sessionArg) ??
-    allSessions.find((s) => s.id.startsWith(sessionArg));
+      const allSessions = yield* awaited(SessionManager.listAll(sessionDir));
+      const globalMatch =
+        allSessions.find((s) => s.id === sessionArg) ??
+        allSessions.find((s) => s.id.startsWith(sessionArg));
 
-  if (globalMatch !== undefined) {
-    return { type: "global", path: globalMatch.path, cwd: globalMatch.cwd };
-  }
+      if (globalMatch !== undefined) {
+        return { type: "global", path: globalMatch.path, cwd: globalMatch.cwd };
+      }
 
-  return { type: "not_found", arg: sessionArg };
+      return { type: "not_found", arg: sessionArg };
+    }),
+  );
 }
 
-async function promptConfirm(message: string): Promise<boolean> {
-  return new Promise((resolve) => {
-    const rl = createInterface({
-      input: process.stdin,
-      output: process.stdout,
-    });
-    rl.question(`${message} [y/N] `, (answer) => {
-      rl.close();
-      resolve(answer.toLowerCase() === "y" || answer.toLowerCase() === "yes");
-    });
-  });
+function promptConfirm(message: string): Promise<boolean> {
+  return Effect.runPromise(
+    awaiting(function* () {
+      return yield* awaited(
+        new Promise((resolve) => {
+          const rl = createInterface({
+            input: process.stdin,
+            output: process.stdout,
+          });
+          rl.question(`${message} [y/N] `, (answer) => {
+            rl.close();
+            resolve(answer.toLowerCase() === "y" || answer.toLowerCase() === "yes");
+          });
+        }),
+      );
+    }),
+  );
 }
 
 function validateForkFlags(parsed: Args): void {
@@ -388,100 +427,108 @@ function forkSessionOrExit(
   }
 }
 
-export async function createSessionManager(
+export function createSessionManager(
   parsed: Args,
   cwd: string,
   sessionDir: string | undefined,
   settingsManager: SettingsManager,
 ): Promise<SessionManager> {
-  if (parsed.noSession === true || parsed.help === true || parsed.listModels !== undefined) {
-    return SessionManager.inMemory(
-      cwd,
-      parsed.sessionId === undefined ? undefined : { id: parsed.sessionId },
-    );
-  }
-
-  if (parsed.fork !== undefined && parsed.fork !== "") {
-    if (parsed.sessionId !== undefined && parsed.sessionId !== "") {
-      const existingTarget = findLocalSessionByExactId(parsed.sessionId, cwd, sessionDir);
-      if (existingTarget !== undefined) {
-        writeError(chalk.red(`Session already exists with id '${parsed.sessionId}'`));
-        process.exit(1);
+  return Effect.runPromise(
+    awaiting(function* () {
+      if (parsed.noSession === true || parsed.help === true || parsed.listModels !== undefined) {
+        return SessionManager.inMemory(
+          cwd,
+          parsed.sessionId === undefined ? undefined : { id: parsed.sessionId },
+        );
       }
-    }
 
-    const resolved = await resolveSessionPath(parsed.fork, cwd, sessionDir);
-
-    switch (resolved.type) {
-      case "path":
-      case "local":
-      case "global":
-        return forkSessionOrExit(resolved.path, cwd, sessionDir, parsed.sessionId);
-
-      case "not_found":
-        writeError(chalk.red(`No session found matching '${resolved.arg}'`));
-        process.exit(1);
-    }
-  }
-
-  if (parsed.session !== undefined && parsed.session !== "") {
-    const resolved = await resolveSessionPath(parsed.session, cwd, sessionDir);
-
-    switch (resolved.type) {
-      case "path":
-      case "local":
-        return openSessionOrExit(resolved.path, sessionDir);
-
-      case "global": {
-        writeLog(chalk.yellow(`Session found in different project: ${resolved.cwd}`));
-        const shouldFork = await promptConfirm("Fork this session into current directory?");
-        if (!shouldFork) {
-          writeLog(chalk.dim("Aborted."));
-          process.exit(0);
+      if (parsed.fork !== undefined && parsed.fork !== "") {
+        if (parsed.sessionId !== undefined && parsed.sessionId !== "") {
+          const existingTarget = findLocalSessionByExactId(parsed.sessionId, cwd, sessionDir);
+          if (existingTarget !== undefined) {
+            writeError(chalk.red(`Session already exists with id '${parsed.sessionId}'`));
+            process.exit(1);
+          }
         }
-        return forkSessionOrExit(resolved.path, cwd, sessionDir);
+
+        const resolved = yield* awaited(resolveSessionPath(parsed.fork, cwd, sessionDir));
+
+        switch (resolved.type) {
+          case "path":
+          case "local":
+          case "global":
+            return forkSessionOrExit(resolved.path, cwd, sessionDir, parsed.sessionId);
+
+          case "not_found":
+            writeError(chalk.red(`No session found matching '${resolved.arg}'`));
+            process.exit(1);
+        }
       }
 
-      case "not_found":
-        writeError(chalk.red(`No session found matching '${resolved.arg}'`));
-        process.exit(1);
-    }
-  }
+      if (parsed.session !== undefined && parsed.session !== "") {
+        const resolved = yield* awaited(resolveSessionPath(parsed.session, cwd, sessionDir));
 
-  if (parsed.resume === true) {
-    try {
-      const selectedPath = await selectSession(
-        (onProgress, signal) => SessionManager.list(cwd, sessionDir, onProgress, signal),
-        (onProgress, signal) => SessionManager.listAll(sessionDir, onProgress, signal),
-        settingsManager,
-      );
-      if (selectedPath === null || selectedPath === "") {
-        writeLog(chalk.dim("No session selected"));
-        process.exit(0);
+        switch (resolved.type) {
+          case "path":
+          case "local":
+            return openSessionOrExit(resolved.path, sessionDir);
+
+          case "global": {
+            writeLog(chalk.yellow(`Session found in different project: ${resolved.cwd}`));
+            const shouldFork = yield* awaited(
+              promptConfirm("Fork this session into current directory?"),
+            );
+            if (!shouldFork) {
+              writeLog(chalk.dim("Aborted."));
+              process.exit(0);
+            }
+            return forkSessionOrExit(resolved.path, cwd, sessionDir);
+          }
+
+          case "not_found":
+            writeError(chalk.red(`No session found matching '${resolved.arg}'`));
+            process.exit(1);
+        }
       }
-      return SessionManager.open(selectedPath, sessionDir);
-    } finally {
-      stopThemeWatcher();
-    }
-  }
 
-  if (parsed.continue === true) {
-    return SessionManager.continueRecent(cwd, sessionDir);
-  }
+      if (parsed.resume === true) {
+        try {
+          const selectedPath = yield* awaited(
+            selectSession(
+              (onProgress, signal) => SessionManager.list(cwd, sessionDir, onProgress, signal),
+              (onProgress, signal) => SessionManager.listAll(sessionDir, onProgress, signal),
+              settingsManager,
+            ),
+          );
+          if (selectedPath === null || selectedPath === "") {
+            writeLog(chalk.dim("No session selected"));
+            process.exit(0);
+          }
+          return SessionManager.open(selectedPath, sessionDir);
+        } finally {
+          stopThemeWatcher();
+        }
+      }
 
-  if (parsed.sessionId !== undefined && parsed.sessionId !== "") {
-    const existingSession = findLocalSessionByExactId(parsed.sessionId, cwd, sessionDir);
-    if (existingSession !== undefined) {
-      return SessionManager.open(existingSession.path, sessionDir);
-    }
-    writeError(
-      chalk.yellow(
-        `Warning: No project session found with id '${parsed.sessionId}'; creating a new session with that id.`,
-      ),
-    );
-  }
+      if (parsed.continue === true) {
+        return SessionManager.continueRecent(cwd, sessionDir);
+      }
 
-  return SessionManager.create(cwd, sessionDir, { id: parsed.sessionId });
+      if (parsed.sessionId !== undefined && parsed.sessionId !== "") {
+        const existingSession = findLocalSessionByExactId(parsed.sessionId, cwd, sessionDir);
+        if (existingSession !== undefined) {
+          return SessionManager.open(existingSession.path, sessionDir);
+        }
+        writeError(
+          chalk.yellow(
+            `Warning: No project session found with id '${parsed.sessionId}'; creating a new session with that id.`,
+          ),
+        );
+      }
+
+      return SessionManager.create(cwd, sessionDir, { id: parsed.sessionId });
+    }),
+  );
 }
 
 function buildSessionOptions(
@@ -603,460 +650,499 @@ function resolveCliPaths(cwd: string, paths: string[] | undefined): string[] | u
   return paths?.map((value) => (isLocalPath(value) ? resolvePath(value, cwd) : value));
 }
 
-async function promptForMissingSessionCwd(
+function promptForMissingSessionCwd(
   issue: SessionCwdIssue,
   settingsManager: SettingsManager,
 ): Promise<string | undefined> {
-  return showStartupSelector(settingsManager, formatMissingSessionCwdPrompt(issue), [
-    { label: "Continue", value: issue.fallbackCwd },
-    { label: "Cancel", value: undefined },
-  ]);
+  return Effect.runPromise(
+    awaiting(function* () {
+      return yield* awaited(
+        showStartupSelector(settingsManager, formatMissingSessionCwdPrompt(issue), [
+          { label: "Continue", value: issue.fallbackCwd },
+          { label: "Cancel", value: undefined },
+        ]),
+      );
+    }),
+  );
 }
 
 export interface MainOptions {
   extensionFactories?: InlineExtension[];
 }
 
-export async function main(args: string[], options?: MainOptions) {
-  resetTimings();
+export function main(args: string[], options?: MainOptions) {
+  return Effect.runPromise(
+    awaiting(function* () {
+      resetTimings();
 
-  setThemeJsonValidator(validateThemeJson);
-  const extensionFactories = [...builtInExtensions, ...(options?.extensionFactories ?? [])];
-  const offlineMode = args.includes("--offline") || isTruthyEnvFlag(readEnv("MSA_OFFLINE"));
-  if (offlineMode) {
-    process.env["MSA_OFFLINE"] = "1";
-    process.env["MSA_SKIP_VERSION_CHECK"] = "1";
-  }
+      setThemeJsonValidator(validateThemeJson);
+      const extensionFactories = [...builtInExtensions, ...(options?.extensionFactories ?? [])];
+      const offlineMode = args.includes("--offline") || isTruthyEnvFlag(readEnv("MSA_OFFLINE"));
+      if (offlineMode) {
+        process.env["MSA_OFFLINE"] = "1";
+        process.env["MSA_SKIP_VERSION_CHECK"] = "1";
+      }
 
-  if (await runAuthCommand(args)) {
-    return;
-  }
+      if (yield* awaited(runAuthCommand(args))) {
+        return;
+      }
 
-  if (process.platform === "win32") {
-    cleanupWindowsSelfUpdateQuarantine(getPackageDir());
-  }
+      if (process.platform === "win32") {
+        cleanupWindowsSelfUpdateQuarantine(getPackageDir());
+      }
 
-  const cwd = process.cwd();
-  const agentDir = getAgentDir();
-  const bootstrapSettingsManager = SettingsManager.create(cwd, agentDir, { projectTrusted: false });
-  applyHttpProxySettings(bootstrapSettingsManager.getGlobalSettings().httpProxy);
-  configureHttpDispatcher();
+      const cwd = process.cwd();
+      const agentDir = getAgentDir();
+      const bootstrapSettingsManager = SettingsManager.create(cwd, agentDir, {
+        projectTrusted: false,
+      });
+      applyHttpProxySettings(bootstrapSettingsManager.getGlobalSettings().httpProxy);
+      configureHttpDispatcher();
 
-  if (await handlePackageCommand(args, { extensionFactories })) {
-    const exitCode = process.exitCode ?? 0;
-    if (process.platform === "win32" && exitCode === 0 && args[0] === "update") {
-      return;
-    }
-    return process.exit(exitCode);
-  }
+      if (yield* awaited(handlePackageCommand(args, { extensionFactories }))) {
+        const exitCode = process.exitCode ?? 0;
+        if (process.platform === "win32" && exitCode === 0 && args[0] === "update") {
+          return;
+        }
+        return process.exit(exitCode);
+      }
 
-  if (await handleConfigCommand(args, { extensionFactories })) {
-    return;
-  }
+      if (yield* awaited(handleConfigCommand(args, { extensionFactories }))) {
+        return;
+      }
 
-  if (args[0] === "mcp") {
-    const { runMcpCommand } = await loadMcpCommand();
-    process.exitCode = await runMcpCommand(args.slice(1), { cwd, agentDir });
-    return;
-  }
+      if (args[0] === "mcp") {
+        const { runMcpCommand } = yield* awaited(loadMcpCommand());
+        process.exitCode = yield* awaited(runMcpCommand(args.slice(1), { cwd, agentDir }));
+        return;
+      }
 
-  const parsed = parseArgs(args);
-  if (parsed.diagnostics.length > 0) {
-    for (const d of parsed.diagnostics) {
-      const color = d.type === "error" ? chalk.red : chalk.yellow;
-      writeError(color(`${d.type === "error" ? "Error" : "Warning"}: ${d.message}`));
-    }
-    if (parsed.diagnostics.some((d) => d.type === "error")) {
-      process.exit(1);
-    }
-  }
-  time("parseArgs");
+      const parsed = parseArgs(args);
+      if (parsed.diagnostics.length > 0) {
+        for (const d of parsed.diagnostics) {
+          const color = d.type === "error" ? chalk.red : chalk.yellow;
+          writeError(color(`${d.type === "error" ? "Error" : "Warning"}: ${d.message}`));
+        }
+        if (parsed.diagnostics.some((d) => d.type === "error")) {
+          process.exit(1);
+        }
+      }
+      time("parseArgs");
 
-  if (parsed.version === true) {
-    writeLog(VERSION);
-    process.exit(0);
-  }
-
-  if (parsed.export !== undefined && parsed.export !== "") {
-    let result: string;
-    try {
-      const outputPath = parsed.messages.length > 0 ? parsed.messages[0] : undefined;
-      result = await exportFromFile(parsed.export, outputPath);
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : "Failed to export session";
-      writeError(chalk.red(`Error: ${message}`));
-      process.exit(1);
-    }
-    writeLog(`Exported to: ${result}`);
-    process.exit(0);
-  }
-
-  let appMode = resolveAppMode(parsed, process.stdin.isTTY, process.stdout.isTTY);
-  const shouldTakeOverStdout = appMode !== "interactive" && !isPlainRuntimeMetadataCommand(parsed);
-  if (shouldTakeOverStdout) {
-    takeOverStdout();
-  }
-
-  if (parsed.mode === "rpc" && parsed.fileArgs.length > 0) {
-    writeError(chalk.red("Error: @file arguments are not supported in RPC mode"));
-    process.exit(1);
-  }
-
-  validateForkFlags(parsed);
-  validateSessionIdFlags(parsed);
-
-  const { migratedAuthProviders: migratedProviders, deprecationWarnings } = runMigrations(cwd);
-  time("runMigrations");
-
-  const startupSettingsManager = SettingsManager.create(cwd, agentDir);
-  const startupSettingsDiagnostics = collectSettingsDiagnostics(startupSettingsManager);
-
-  if (
-    appMode === "interactive" &&
-    parsed.help !== true &&
-    parsed.listModels === undefined &&
-    shouldRunFirstTimeSetup()
-  ) {
-    await showFirstTimeSetup(startupSettingsManager);
-    time("firstTimeSetup");
-  }
-
-  if (appMode === "interactive" && parsed.useTheme !== undefined) {
-    startupSettingsManager.applyOverrides({ theme: parsed.useTheme });
-  }
-
-  const envSessionDir = readEnv(ENV_SESSION_DIR);
-  const sessionDir =
-    (parsed.sessionDir !== undefined && parsed.sessionDir !== ""
-      ? normalizePath(parsed.sessionDir)
-      : undefined) ??
-    (envSessionDir !== undefined && envSessionDir !== ""
-      ? expandTildePath(envSessionDir)
-      : undefined) ??
-    startupSettingsManager.getSessionDir();
-  let sessionManager = await createSessionManager(parsed, cwd, sessionDir, startupSettingsManager);
-  const missingSessionCwdIssue = getMissingSessionCwdIssue(sessionManager, cwd);
-  if (missingSessionCwdIssue !== undefined) {
-    if (appMode === "interactive") {
-      const selectedCwd = await promptForMissingSessionCwd(
-        missingSessionCwdIssue,
-        startupSettingsManager,
-      );
-      if (selectedCwd === undefined || selectedCwd === "") {
+      if (parsed.version === true) {
+        writeLog(VERSION);
         process.exit(0);
       }
-      sessionManager = SessionManager.open(
-        missingSessionCwdIssue.sessionFile!,
-        sessionDir,
-        selectedCwd,
+
+      if (parsed.export !== undefined && parsed.export !== "") {
+        let result: string;
+        try {
+          const outputPath = parsed.messages.length > 0 ? parsed.messages[0] : undefined;
+          result = yield* awaited(exportFromFile(parsed.export, outputPath));
+        } catch (error: unknown) {
+          const message = error instanceof Error ? error.message : "Failed to export session";
+          writeError(chalk.red(`Error: ${message}`));
+          process.exit(1);
+        }
+        writeLog(`Exported to: ${result}`);
+        process.exit(0);
+      }
+
+      let appMode = resolveAppMode(parsed, process.stdin.isTTY, process.stdout.isTTY);
+      const shouldTakeOverStdout =
+        appMode !== "interactive" && !isPlainRuntimeMetadataCommand(parsed);
+      if (shouldTakeOverStdout) {
+        takeOverStdout();
+      }
+
+      if (parsed.mode === "rpc" && parsed.fileArgs.length > 0) {
+        writeError(chalk.red("Error: @file arguments are not supported in RPC mode"));
+        process.exit(1);
+      }
+
+      validateForkFlags(parsed);
+      validateSessionIdFlags(parsed);
+
+      const { migratedAuthProviders: migratedProviders, deprecationWarnings } = runMigrations(cwd);
+      time("runMigrations");
+
+      const startupSettingsManager = SettingsManager.create(cwd, agentDir);
+      const startupSettingsDiagnostics = collectSettingsDiagnostics(startupSettingsManager);
+
+      if (
+        appMode === "interactive" &&
+        parsed.help !== true &&
+        parsed.listModels === undefined &&
+        shouldRunFirstTimeSetup()
+      ) {
+        yield* awaited(showFirstTimeSetup(startupSettingsManager));
+        time("firstTimeSetup");
+      }
+
+      if (appMode === "interactive" && parsed.useTheme !== undefined) {
+        startupSettingsManager.applyOverrides({ theme: parsed.useTheme });
+      }
+
+      const envSessionDir = readEnv(ENV_SESSION_DIR);
+      const sessionDir =
+        (parsed.sessionDir !== undefined && parsed.sessionDir !== ""
+          ? normalizePath(parsed.sessionDir)
+          : undefined) ??
+        (envSessionDir !== undefined && envSessionDir !== ""
+          ? expandTildePath(envSessionDir)
+          : undefined) ??
+        startupSettingsManager.getSessionDir();
+      let sessionManager = yield* awaited(
+        createSessionManager(parsed, cwd, sessionDir, startupSettingsManager),
       );
-    } else {
-      writeError(chalk.red(new MissingSessionCwdError(missingSessionCwdIssue).message));
-      process.exit(1);
-    }
-  }
-  if (parsed.name !== undefined) {
-    const name = normalizeSessionName(parsed.name);
-    if (name === undefined) {
-      writeError(chalk.red("Error: --name requires a non-empty value"));
-      process.exit(1);
-    }
-    sessionManager.appendSessionInfo(name);
-  }
-  time("createSessionManager");
-
-  const trustStore = new ProjectTrustStore(agentDir);
-  const sessionCwd = sessionManager.getCwd();
-  const autoTrustOnReloadCwd =
-    parsed.projectTrustOverride === undefined && !hasTrustRequiringProjectResources(sessionCwd)
-      ? sessionCwd
-      : undefined;
-  const trustPromptMode: AppMode =
-    parsed.help === true || parsed.listModels !== undefined ? "print" : appMode;
-  const projectTrustByCwd = new Map<string, boolean>();
-
-  const resolvedExtensionPaths = resolveCliPaths(cwd, parsed.extensions);
-  const resolvedSkillPaths = resolveCliPaths(cwd, parsed.skills);
-  const resolvedPromptTemplatePaths = resolveCliPaths(cwd, parsed.promptTemplates);
-  const resolvedThemePaths = resolveCliPaths(cwd, parsed.themes);
-  const createRuntime: CreateAgentSessionRuntimeFactory = async ({
-    cwd: runtimeCwd,
-    agentDir: runtimeAgentDir,
-    sessionManager: runtimeSessionManager,
-    sessionStartEvent,
-    projectTrustContext,
-  }) => {
-    const isInitialRuntime = sessionStartEvent === undefined;
-    const projectTrustDiagnostics: AgentSessionRuntimeDiagnostic[] = [];
-    const cachedProjectTrust = projectTrustByCwd.get(runtimeCwd);
-    const hasTrustRequiringResources = hasTrustRequiringProjectResources(runtimeCwd);
-    const shouldResolveProjectTrust =
-      parsed.projectTrustOverride === undefined &&
-      cachedProjectTrust === undefined &&
-      hasTrustRequiringResources;
-    const projectTrusted = shouldResolveProjectTrust
-      ? false
-      : (cachedProjectTrust ??
-        parsed.projectTrustOverride ??
-        (!hasTrustRequiringResources || trustStore.get(runtimeCwd) === true));
-    const runtimeSettingsManager = SettingsManager.create(runtimeCwd, runtimeAgentDir, {
-      projectTrusted,
-    });
-    const services = await createAgentSessionServices({
-      cwd: runtimeCwd,
-      agentDir: runtimeAgentDir,
-      settingsManager: runtimeSettingsManager,
-      modelRuntimeSignal: AbortSignal.timeout(15_000),
-      extensionFlagValues: parsed.unknownFlags,
-      resourceLoaderReloadOptions: shouldResolveProjectTrust
-        ? {
-            resolveProjectTrust: async ({ extensionsResult }) => {
-              const trusted = await resolveProjectTrusted({
-                cwd: runtimeCwd,
-                trustStore,
-                trustOverride: parsed.projectTrustOverride,
-                defaultProjectTrust: startupSettingsManager.getDefaultProjectTrust(),
-                extensionsResult,
-                projectTrustContext:
-                  projectTrustContext ??
-                  createProjectTrustContext({
-                    cwd: runtimeCwd,
-                    mode: isInitialRuntime ? trustPromptMode : appMode,
-                    settingsManager: startupSettingsManager,
-                    hasUI: isInitialRuntime && trustPromptMode === "interactive",
-                  }),
-                onExtensionError: (message) =>
-                  projectTrustDiagnostics.push({ type: "warning", message }),
-              });
-              projectTrustByCwd.set(runtimeCwd, trusted);
-              return trusted;
-            },
+      const missingSessionCwdIssue = getMissingSessionCwdIssue(sessionManager, cwd);
+      if (missingSessionCwdIssue !== undefined) {
+        if (appMode === "interactive") {
+          const selectedCwd = yield* awaited(
+            promptForMissingSessionCwd(missingSessionCwdIssue, startupSettingsManager),
+          );
+          if (selectedCwd === undefined || selectedCwd === "") {
+            process.exit(0);
           }
-        : undefined,
-      resourceLoaderOptions: {
-        additionalExtensionPaths: resolvedExtensionPaths,
-        additionalSkillPaths: resolvedSkillPaths,
-        additionalPromptTemplatePaths: resolvedPromptTemplatePaths,
-        additionalThemePaths: resolvedThemePaths,
-        noExtensions: parsed.noExtensions,
-        disabledBuiltinExtensions: parsed.noMcp === true ? ["mcp"] : undefined,
-        noSkills: parsed.noSkills,
-        noPromptTemplates: parsed.noPromptTemplates,
-        noThemes: parsed.noThemes,
-        noContextFiles: parsed.noContextFiles,
-        systemPrompt: parsed.systemPrompt,
-        appendSystemPrompt: parsed.appendSystemPrompt,
-        extensionFactories,
-      },
-    });
-    const { settingsManager, modelRuntime, resourceLoader } = services;
-    const diagnostics: AgentSessionRuntimeDiagnostic[] = [
-      ...projectTrustDiagnostics,
-      ...services.diagnostics,
-      ...collectSettingsDiagnostics(settingsManager),
-      ...resourceLoader.getExtensions().errors.map(({ path, error }) => ({
-        type: "error" as const,
-        message: `Failed to load extension "${path}": ${error}`,
-      })),
-      ...(resourceLoader.getExtensions().warnings ?? []).map(({ path, warning }) => ({
-        type: "warning" as const,
-        message: `Extension package "${path}": ${warning}`,
-      })),
-    ];
+          sessionManager = SessionManager.open(
+            missingSessionCwdIssue.sessionFile!,
+            sessionDir,
+            selectedCwd,
+          );
+        } else {
+          writeError(chalk.red(new MissingSessionCwdError(missingSessionCwdIssue).message));
+          process.exit(1);
+        }
+      }
+      if (parsed.name !== undefined) {
+        const name = normalizeSessionName(parsed.name);
+        if (name === undefined) {
+          writeError(chalk.red("Error: --name requires a non-empty value"));
+          process.exit(1);
+        }
+        sessionManager.appendSessionInfo(name);
+      }
+      time("createSessionManager");
 
-    const modelPatterns = parsed.models ?? settingsManager.getEnabledModels();
-    const scopedModels =
-      modelPatterns !== undefined && modelPatterns.length > 0
-        ? await resolveModelScope(modelPatterns, modelRuntime, {
-            signal: AbortSignal.timeout(15_000),
-          })
-        : [];
-    const {
-      options: sessionOptions,
-      cliThinkingFromModel,
-      diagnostics: sessionOptionDiagnostics,
-    } = buildSessionOptions(
-      parsed,
-      scopedModels,
-      runtimeSessionManager.buildSessionContext().messages.length > 0,
-      modelRuntime,
-      settingsManager,
-    );
-    diagnostics.push(...sessionOptionDiagnostics);
+      const trustStore = new ProjectTrustStore(agentDir);
+      const sessionCwd = sessionManager.getCwd();
+      const autoTrustOnReloadCwd =
+        parsed.projectTrustOverride === undefined && !hasTrustRequiringProjectResources(sessionCwd)
+          ? sessionCwd
+          : undefined;
+      const trustPromptMode: AppMode =
+        parsed.help === true || parsed.listModels !== undefined ? "print" : appMode;
+      const projectTrustByCwd = new Map<string, boolean>();
 
-    if (parsed.apiKey !== undefined && parsed.apiKey !== "") {
-      if (sessionOptions.model === undefined) {
-        diagnostics.push({
-          type: "error",
-          message:
-            "--api-key requires a model to be specified via --model, --provider/--model, or --models",
+      const resolvedExtensionPaths = resolveCliPaths(cwd, parsed.extensions);
+      const resolvedSkillPaths = resolveCliPaths(cwd, parsed.skills);
+      const resolvedPromptTemplatePaths = resolveCliPaths(cwd, parsed.promptTemplates);
+      const resolvedThemePaths = resolveCliPaths(cwd, parsed.themes);
+      const createRuntime: CreateAgentSessionRuntimeFactory = ({
+        cwd: runtimeCwd,
+        agentDir: runtimeAgentDir,
+        sessionManager: runtimeSessionManager,
+        sessionStartEvent,
+        projectTrustContext,
+      }) =>
+        Effect.runPromise(
+          awaiting(function* () {
+            const isInitialRuntime = sessionStartEvent === undefined;
+            const projectTrustDiagnostics: AgentSessionRuntimeDiagnostic[] = [];
+            const cachedProjectTrust = projectTrustByCwd.get(runtimeCwd);
+            const hasTrustRequiringResources = hasTrustRequiringProjectResources(runtimeCwd);
+            const shouldResolveProjectTrust =
+              parsed.projectTrustOverride === undefined &&
+              cachedProjectTrust === undefined &&
+              hasTrustRequiringResources;
+            const projectTrusted = shouldResolveProjectTrust
+              ? false
+              : (cachedProjectTrust ??
+                parsed.projectTrustOverride ??
+                (!hasTrustRequiringResources || trustStore.get(runtimeCwd) === true));
+            const runtimeSettingsManager = SettingsManager.create(runtimeCwd, runtimeAgentDir, {
+              projectTrusted,
+            });
+            const services = yield* awaited(
+              createAgentSessionServices({
+                cwd: runtimeCwd,
+                agentDir: runtimeAgentDir,
+                settingsManager: runtimeSettingsManager,
+                modelRuntimeSignal: AbortSignal.timeout(15_000),
+                extensionFlagValues: parsed.unknownFlags,
+                resourceLoaderReloadOptions: shouldResolveProjectTrust
+                  ? {
+                      resolveProjectTrust: ({ extensionsResult }) =>
+                        Effect.runPromise(
+                          awaiting(function* () {
+                            const trusted = yield* awaited(
+                              resolveProjectTrusted({
+                                cwd: runtimeCwd,
+                                trustStore,
+                                trustOverride: parsed.projectTrustOverride,
+                                defaultProjectTrust:
+                                  startupSettingsManager.getDefaultProjectTrust(),
+                                extensionsResult,
+                                projectTrustContext:
+                                  projectTrustContext ??
+                                  createProjectTrustContext({
+                                    cwd: runtimeCwd,
+                                    mode: isInitialRuntime ? trustPromptMode : appMode,
+                                    settingsManager: startupSettingsManager,
+                                    hasUI: isInitialRuntime && trustPromptMode === "interactive",
+                                  }),
+                                onExtensionError: (message) =>
+                                  projectTrustDiagnostics.push({ type: "warning", message }),
+                              }),
+                            );
+                            projectTrustByCwd.set(runtimeCwd, trusted);
+                            return trusted;
+                          }),
+                        ),
+                    }
+                  : undefined,
+                resourceLoaderOptions: {
+                  additionalExtensionPaths: resolvedExtensionPaths,
+                  additionalSkillPaths: resolvedSkillPaths,
+                  additionalPromptTemplatePaths: resolvedPromptTemplatePaths,
+                  additionalThemePaths: resolvedThemePaths,
+                  noExtensions: parsed.noExtensions,
+                  disabledBuiltinExtensions: parsed.noMcp === true ? ["mcp"] : undefined,
+                  noSkills: parsed.noSkills,
+                  noPromptTemplates: parsed.noPromptTemplates,
+                  noThemes: parsed.noThemes,
+                  noContextFiles: parsed.noContextFiles,
+                  systemPrompt: parsed.systemPrompt,
+                  appendSystemPrompt: parsed.appendSystemPrompt,
+                  extensionFactories,
+                },
+              }),
+            );
+            const { settingsManager, modelRuntime, resourceLoader } = services;
+            const diagnostics: AgentSessionRuntimeDiagnostic[] = [
+              ...projectTrustDiagnostics,
+              ...services.diagnostics,
+              ...collectSettingsDiagnostics(settingsManager),
+              ...resourceLoader.getExtensions().errors.map(({ path, error }) => ({
+                type: "error" as const,
+                message: `Failed to load extension "${path}": ${error}`,
+              })),
+              ...(resourceLoader.getExtensions().warnings ?? []).map(({ path, warning }) => ({
+                type: "warning" as const,
+                message: `Extension package "${path}": ${warning}`,
+              })),
+            ];
+
+            const modelPatterns = parsed.models ?? settingsManager.getEnabledModels();
+            const scopedModels =
+              modelPatterns !== undefined && modelPatterns.length > 0
+                ? yield* awaited(
+                    resolveModelScope(modelPatterns, modelRuntime, {
+                      signal: AbortSignal.timeout(15_000),
+                    }),
+                  )
+                : [];
+            const {
+              options: sessionOptions,
+              cliThinkingFromModel,
+              diagnostics: sessionOptionDiagnostics,
+            } = buildSessionOptions(
+              parsed,
+              scopedModels,
+              runtimeSessionManager.buildSessionContext().messages.length > 0,
+              modelRuntime,
+              settingsManager,
+            );
+            diagnostics.push(...sessionOptionDiagnostics);
+
+            if (parsed.apiKey !== undefined && parsed.apiKey !== "") {
+              if (sessionOptions.model === undefined) {
+                diagnostics.push({
+                  type: "error",
+                  message:
+                    "--api-key requires a model to be specified via --model, --provider/--model, or --models",
+                });
+              } else {
+                yield* awaited(
+                  modelRuntime.setRuntimeApiKey(sessionOptions.model.provider, parsed.apiKey),
+                );
+              }
+            }
+
+            const created = yield* awaited(
+              createAgentSessionFromServices({
+                services,
+                sessionManager: runtimeSessionManager,
+                sessionStartEvent,
+                model: sessionOptions.model,
+                thinkingLevel: sessionOptions.thinkingLevel,
+                scopedModels: sessionOptions.scopedModels,
+                tools: sessionOptions.tools,
+                excludeTools: sessionOptions.excludeTools,
+                noTools: sessionOptions.noTools,
+                customTools: sessionOptions.customTools,
+                orchestrator: true,
+              }),
+            );
+            const cliThinkingOverride = parsed.thinking !== undefined || cliThinkingFromModel;
+            if (created.session.model !== undefined && cliThinkingOverride) {
+              created.session.setThinkingLevel(created.session.thinkingLevel);
+            }
+
+            return {
+              ...created,
+              services,
+              diagnostics,
+            };
+          }),
+        );
+      time("createRuntime");
+      const runtime = yield* awaited(
+        createAgentSessionRuntime(createRuntime, {
+          cwd: sessionManager.getCwd(),
+          agentDir,
+          sessionManager,
+        }),
+      );
+      time("createAgentSessionRuntime");
+      const { services, session, modelFallbackMessage } = runtime;
+      const { settingsManager, modelRuntime, resourceLoader } = services;
+      setCapabilityOverrides(settingsManager.getTerminalCapabilityOverrides());
+      if (appMode === "interactive") yield* awaited(Effect.runPromise(primeTerminalCapabilities));
+      applyHttpProxySettings(settingsManager.getGlobalSettings().httpProxy);
+      configureHttpDispatcher(settingsManager.getHttpIdleTimeoutMs());
+
+      if (parsed.help === true) {
+        reportDiagnostics(startupSettingsDiagnostics);
+        const extensionFlags = resourceLoader
+          .getExtensions()
+          .extensions.flatMap((extension) => Array.from(extension.flags.values()));
+        printHelp(extensionFlags);
+        process.exit(0);
+      }
+
+      if (parsed.listModels !== undefined) {
+        reportDiagnostics(startupSettingsDiagnostics);
+        const searchPattern = typeof parsed.listModels === "string" ? parsed.listModels : undefined;
+        yield* awaited(listModels(modelRuntime, searchPattern, AbortSignal.timeout(15_000)));
+        process.exit(0);
+      }
+
+      let stdinContent: string | undefined;
+      if (appMode !== "rpc") {
+        stdinContent = yield* awaited(readPipedStdin());
+        if (stdinContent !== undefined && appMode === "interactive") {
+          appMode = "print";
+        }
+      }
+      time("readPipedStdin");
+
+      const { initialMessage, initialImages } = yield* awaited(
+        prepareInitialMessage(parsed, stdinContent),
+      );
+      time("prepareInitialMessage");
+      initTheme(settingsManager.getTheme(), appMode === "interactive");
+      time("initTheme");
+
+      if (appMode === "interactive" && deprecationWarnings.length > 0) {
+        yield* awaited(showDeprecationWarnings(deprecationWarnings));
+      }
+
+      time("resolveModelScope");
+      const startupDiagnostics = deduplicateDiagnostics([
+        ...startupSettingsDiagnostics,
+        ...runtime.diagnostics,
+      ]);
+      const hasRuntimeErrors = runtime.diagnostics.some(
+        (diagnostic) => diagnostic.type === "error",
+      );
+      if (appMode !== "interactive" || hasRuntimeErrors) {
+        reportDiagnostics(startupDiagnostics);
+      }
+      if (hasRuntimeErrors) {
+        if (
+          runtime.diagnostics.some((diagnostic) =>
+            diagnostic.message.includes("Failed to load extension"),
+          )
+        ) {
+          writeError(chalk.yellow(EXTENSION_LOAD_FAILURE_HINT));
+        }
+        process.exit(1);
+      }
+      time("createAgentSession");
+
+      if (appMode !== "interactive" && session.model === undefined) {
+        writeError(chalk.red(formatNoModelsAvailableMessage()));
+        process.exit(1);
+      }
+
+      const startupBenchmark = isTruthyEnvFlag(readEnv("MSA_STARTUP_BENCHMARK"));
+      if (startupBenchmark && appMode !== "interactive") {
+        writeError(chalk.red("Error: MSA_STARTUP_BENCHMARK only supports interactive mode"));
+        process.exit(1);
+      }
+
+      if (!offlineMode && appMode === "rpc") {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 15_000);
+        void modelRuntime
+          .refresh({ signal: controller.signal })
+          .catch(() => {})
+          .finally(() => clearTimeout(timeout));
+      }
+
+      if (appMode === "rpc") {
+        printTimings();
+        yield* awaited(runRpcMode(runtime));
+      } else if (appMode === "interactive") {
+        const interactiveMode = new InteractiveMode(runtime, {
+          migratedProviders,
+          startupDiagnostics,
+          modelFallbackMessage,
+          autoTrustOnReloadCwd,
+          initialMessage,
+          initialImages,
+          initialMessages: parsed.messages,
+          verbose: parsed.verbose,
+          tuiMode: parsed.tuiMode,
+          initialThemeSetting: parsed.useTheme,
         });
+        if (startupBenchmark) {
+          yield* awaited(interactiveMode.init());
+          time("interactiveMode.init");
+
+          yield* awaited(new Promise((resolve) => setTimeout(resolve, 150)));
+          interactiveMode.stop();
+          stopThemeWatcher();
+          printTimings();
+          if (process.stdout.writableLength > 0) {
+            yield* awaited(new Promise<void>((resolve) => process.stdout.once("drain", resolve)));
+          }
+          if (process.stderr.writableLength > 0) {
+            yield* awaited(new Promise<void>((resolve) => process.stderr.once("drain", resolve)));
+          }
+          return;
+        }
+
+        printTimings();
+        yield* awaited(interactiveMode.run());
       } else {
-        await modelRuntime.setRuntimeApiKey(sessionOptions.model.provider, parsed.apiKey);
+        printTimings();
+        const exitCode = yield* awaited(
+          runPrintMode(runtime, {
+            mode: toPrintOutputMode(appMode),
+            messages: parsed.messages,
+            initialMessage,
+            initialImages,
+          }),
+        );
+        stopThemeWatcher();
+        restoreStdout();
+        if (exitCode !== 0) {
+          process.exitCode = exitCode;
+        }
+        return;
       }
-    }
-
-    const created = await createAgentSessionFromServices({
-      services,
-      sessionManager: runtimeSessionManager,
-      sessionStartEvent,
-      model: sessionOptions.model,
-      thinkingLevel: sessionOptions.thinkingLevel,
-      scopedModels: sessionOptions.scopedModels,
-      tools: sessionOptions.tools,
-      excludeTools: sessionOptions.excludeTools,
-      noTools: sessionOptions.noTools,
-      customTools: sessionOptions.customTools,
-      orchestrator: true,
-    });
-    const cliThinkingOverride = parsed.thinking !== undefined || cliThinkingFromModel;
-    if (created.session.model !== undefined && cliThinkingOverride) {
-      created.session.setThinkingLevel(created.session.thinkingLevel);
-    }
-
-    return {
-      ...created,
-      services,
-      diagnostics,
-    };
-  };
-  time("createRuntime");
-  const runtime = await createAgentSessionRuntime(createRuntime, {
-    cwd: sessionManager.getCwd(),
-    agentDir,
-    sessionManager,
-  });
-  time("createAgentSessionRuntime");
-  const { services, session, modelFallbackMessage } = runtime;
-  const { settingsManager, modelRuntime, resourceLoader } = services;
-  setCapabilityOverrides(settingsManager.getTerminalCapabilityOverrides());
-  if (appMode === "interactive") await Effect.runPromise(primeTerminalCapabilities);
-  applyHttpProxySettings(settingsManager.getGlobalSettings().httpProxy);
-  configureHttpDispatcher(settingsManager.getHttpIdleTimeoutMs());
-
-  if (parsed.help === true) {
-    reportDiagnostics(startupSettingsDiagnostics);
-    const extensionFlags = resourceLoader
-      .getExtensions()
-      .extensions.flatMap((extension) => Array.from(extension.flags.values()));
-    printHelp(extensionFlags);
-    process.exit(0);
-  }
-
-  if (parsed.listModels !== undefined) {
-    reportDiagnostics(startupSettingsDiagnostics);
-    const searchPattern = typeof parsed.listModels === "string" ? parsed.listModels : undefined;
-    await listModels(modelRuntime, searchPattern, AbortSignal.timeout(15_000));
-    process.exit(0);
-  }
-
-  let stdinContent: string | undefined;
-  if (appMode !== "rpc") {
-    stdinContent = await readPipedStdin();
-    if (stdinContent !== undefined && appMode === "interactive") {
-      appMode = "print";
-    }
-  }
-  time("readPipedStdin");
-
-  const { initialMessage, initialImages } = await prepareInitialMessage(parsed, stdinContent);
-  time("prepareInitialMessage");
-  initTheme(settingsManager.getTheme(), appMode === "interactive");
-  time("initTheme");
-
-  if (appMode === "interactive" && deprecationWarnings.length > 0) {
-    await showDeprecationWarnings(deprecationWarnings);
-  }
-
-  time("resolveModelScope");
-  const startupDiagnostics = deduplicateDiagnostics([
-    ...startupSettingsDiagnostics,
-    ...runtime.diagnostics,
-  ]);
-  const hasRuntimeErrors = runtime.diagnostics.some((diagnostic) => diagnostic.type === "error");
-  if (appMode !== "interactive" || hasRuntimeErrors) {
-    reportDiagnostics(startupDiagnostics);
-  }
-  if (hasRuntimeErrors) {
-    if (
-      runtime.diagnostics.some((diagnostic) =>
-        diagnostic.message.includes("Failed to load extension"),
-      )
-    ) {
-      writeError(chalk.yellow(EXTENSION_LOAD_FAILURE_HINT));
-    }
-    process.exit(1);
-  }
-  time("createAgentSession");
-
-  if (appMode !== "interactive" && session.model === undefined) {
-    writeError(chalk.red(formatNoModelsAvailableMessage()));
-    process.exit(1);
-  }
-
-  const startupBenchmark = isTruthyEnvFlag(readEnv("MSA_STARTUP_BENCHMARK"));
-  if (startupBenchmark && appMode !== "interactive") {
-    writeError(chalk.red("Error: MSA_STARTUP_BENCHMARK only supports interactive mode"));
-    process.exit(1);
-  }
-
-  if (!offlineMode && appMode === "rpc") {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15_000);
-    void modelRuntime
-      .refresh({ signal: controller.signal })
-      .catch(() => {})
-      .finally(() => clearTimeout(timeout));
-  }
-
-  if (appMode === "rpc") {
-    printTimings();
-    await runRpcMode(runtime);
-  } else if (appMode === "interactive") {
-    const interactiveMode = new InteractiveMode(runtime, {
-      migratedProviders,
-      startupDiagnostics,
-      modelFallbackMessage,
-      autoTrustOnReloadCwd,
-      initialMessage,
-      initialImages,
-      initialMessages: parsed.messages,
-      verbose: parsed.verbose,
-      tuiMode: parsed.tuiMode,
-      initialThemeSetting: parsed.useTheme,
-    });
-    if (startupBenchmark) {
-      await interactiveMode.init();
-      time("interactiveMode.init");
-
-      await new Promise((resolve) => setTimeout(resolve, 150));
-      interactiveMode.stop();
-      stopThemeWatcher();
-      printTimings();
-      if (process.stdout.writableLength > 0) {
-        await new Promise<void>((resolve) => process.stdout.once("drain", resolve));
-      }
-      if (process.stderr.writableLength > 0) {
-        await new Promise<void>((resolve) => process.stderr.once("drain", resolve));
-      }
-      return;
-    }
-
-    printTimings();
-    await interactiveMode.run();
-  } else {
-    printTimings();
-    const exitCode = await runPrintMode(runtime, {
-      mode: toPrintOutputMode(appMode),
-      messages: parsed.messages,
-      initialMessage,
-      initialImages,
-    });
-    stopThemeWatcher();
-    restoreStdout();
-    if (exitCode !== 0) {
-      process.exitCode = exitCode;
-    }
-    return;
-  }
+    }),
+  );
 }

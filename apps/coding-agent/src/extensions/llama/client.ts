@@ -1,3 +1,6 @@
+import * as Effect from "effect/Effect";
+
+import { awaited, awaitingWith } from "../../core/awaiting.ts";
 export type LlamaModelStatus = "unloaded" | "loading" | "loaded" | "downloading" | "sleeping";
 
 export interface LlamaModelInfo {
@@ -180,216 +183,278 @@ export class LlamaClient {
     this.apiKey = apiKey;
   }
 
-  private async request(path: string, init: RequestInit = {}): Promise<unknown> {
-    const headers = new Headers(init.headers);
-    if (init.body !== undefined) headers.set("Content-Type", "application/json");
-    if (this.apiKey !== undefined && this.apiKey !== "")
-      headers.set("Authorization", `Bearer ${this.apiKey}`);
-    const timeout = AbortSignal.timeout(15_000);
-    const signal =
-      init.signal !== undefined && init.signal !== null
-        ? AbortSignal.any([init.signal, timeout])
-        : timeout;
-    const response = await fetch(`${this.serverUrl}${path}`, { ...init, headers, signal });
-    let payload: unknown;
-    try {
-      payload = await response.json();
-    } catch {
-      payload = undefined;
-    }
-    if (!response.ok)
-      throw new Error(errorMessage(payload, `llama.cpp returned HTTP ${response.status}`));
-    return payload;
+  private request(path: string, init: RequestInit = {}): Promise<unknown> {
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        const headers = new Headers(init.headers);
+        if (init.body !== undefined) headers.set("Content-Type", "application/json");
+        if (this.apiKey !== undefined && this.apiKey !== "")
+          headers.set("Authorization", `Bearer ${this.apiKey}`);
+        const timeout = AbortSignal.timeout(15_000);
+        const signal =
+          init.signal !== undefined && init.signal !== null
+            ? AbortSignal.any([init.signal, timeout])
+            : timeout;
+        const response = yield* awaited(
+          fetch(`${this.serverUrl}${path}`, { ...init, headers, signal }),
+        );
+        let payload: unknown;
+        try {
+          payload = yield* awaited(response.json());
+        } catch {
+          payload = undefined;
+        }
+        if (!response.ok)
+          throw new Error(errorMessage(payload, `llama.cpp returned HTTP ${response.status}`));
+        return payload;
+      }, this),
+    );
   }
 
-  async list(
+  list(
     options: { reload?: boolean; signal?: AbortSignal | undefined } = {},
   ): Promise<LlamaModelInfo[]> {
-    const payload = await this.request(`/models${options.reload === true ? "?reload=1" : ""}`, {
-      signal: options.signal ?? null,
-    });
-    if (
-      typeof payload !== "object" ||
-      payload === null ||
-      !Array.isArray((payload as { data?: unknown }).data)
-    ) {
-      throw new Error("llama.cpp returned an invalid model catalog");
-    }
-    const data = (payload as { data: unknown[] }).data;
-    if (!data.every(isModelInfo)) throw new Error("Server is not running in llama.cpp router mode");
-    return data;
-  }
-
-  async props(options: { model?: string; signal?: AbortSignal } = {}): Promise<LlamaServerProps> {
-    const query =
-      options.model !== undefined && options.model !== ""
-        ? `?${new URLSearchParams({ model: options.model, autoload: "false" })}`
-        : "";
-    const payload = await this.request(`/props${query}`, { signal: options.signal ?? null });
-    if (typeof payload !== "object" || payload === null) return {};
-    const { models_autoload: modelsAutoload, chat_template: chatTemplate } = payload as Record<
-      string,
-      unknown
-    >;
-    return {
-      ...(typeof modelsAutoload === "boolean" ? { models_autoload: modelsAutoload } : {}),
-      ...(typeof chatTemplate === "string" ? { chat_template: chatTemplate } : {}),
-    };
-  }
-
-  async load(model: string, signal?: AbortSignal): Promise<void> {
-    await this.request("/models/load", {
-      method: "POST",
-      body: JSON.stringify({ model }),
-      signal: signal ?? null,
-    });
-  }
-
-  async unload(model: string, signal?: AbortSignal): Promise<void> {
-    await this.request("/models/unload", {
-      method: "POST",
-      body: JSON.stringify({ model }),
-      signal: signal ?? null,
-    });
-  }
-
-  async unloadAndWait(model: string, signal?: AbortSignal): Promise<void> {
-    await this.unload(model, signal);
-    while (true) {
-      const entry = (await this.list({ signal })).find((candidate) => candidate.id === model);
-      if (entry === undefined || entry.status.value === "unloaded") return;
-      await sleep(100, signal);
-    }
-  }
-
-  async download(model: string, signal?: AbortSignal): Promise<void> {
-    await this.request("/models", {
-      method: "POST",
-      body: JSON.stringify({ model }),
-      signal: signal ?? null,
-    });
-  }
-
-  async watch(onEvent: (event: LlamaModelEvent) => void, signal?: AbortSignal): Promise<void> {
-    const headers = new Headers();
-    if (this.apiKey !== undefined && this.apiKey !== "")
-      headers.set("Authorization", `Bearer ${this.apiKey}`);
-    const response = await fetch(`${this.serverUrl}/models/sse`, {
-      headers,
-      signal: signal ?? null,
-    });
-    if (!response.ok || response.body === null)
-      throw new Error(`llama.cpp SSE returned HTTP ${response.status}`);
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = "";
-    while (true) {
-      const chunk = await reader.read();
-      if (chunk.done) break;
-      buffer += decoder.decode(chunk.value, { stream: true }).replaceAll("\r\n", "\n");
-      let boundary = buffer.indexOf("\n\n");
-      while (boundary >= 0) {
-        const frame = buffer.slice(0, boundary);
-        buffer = buffer.slice(boundary + 2);
-        const data = frame
-          .split("\n")
-          .filter((line) => line.startsWith("data:"))
-          .map((line) => line.slice(5).trimStart())
-          .join("\n");
-        if (data !== "") {
-          try {
-            const event = JSON.parse(data) as LlamaModelEvent;
-            if (typeof event?.model === "string" && typeof event.event === "string") onEvent(event);
-          } catch {}
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        const payload = yield* awaited(
+          this.request(`/models${options.reload === true ? "?reload=1" : ""}`, {
+            signal: options.signal ?? null,
+          }),
+        );
+        if (
+          typeof payload !== "object" ||
+          payload === null ||
+          !Array.isArray((payload as { data?: unknown }).data)
+        ) {
+          throw new Error("llama.cpp returned an invalid model catalog");
         }
-        boundary = buffer.indexOf("\n\n");
-      }
-    }
+        const data = (payload as { data: unknown[] }).data;
+        if (!data.every(isModelInfo))
+          throw new Error("Server is not running in llama.cpp router mode");
+        return data;
+      }, this),
+    );
   }
 
-  async loadAndWait(
+  props(options: { model?: string; signal?: AbortSignal } = {}): Promise<LlamaServerProps> {
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        const query =
+          options.model !== undefined && options.model !== ""
+            ? `?${new URLSearchParams({ model: options.model, autoload: "false" })}`
+            : "";
+        const payload = yield* awaited(
+          this.request(`/props${query}`, { signal: options.signal ?? null }),
+        );
+        if (typeof payload !== "object" || payload === null) return {};
+        const { models_autoload: modelsAutoload, chat_template: chatTemplate } = payload as Record<
+          string,
+          unknown
+        >;
+        return {
+          ...(typeof modelsAutoload === "boolean" ? { models_autoload: modelsAutoload } : {}),
+          ...(typeof chatTemplate === "string" ? { chat_template: chatTemplate } : {}),
+        };
+      }, this),
+    );
+  }
+
+  load(model: string, signal?: AbortSignal): Promise<void> {
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        yield* awaited(
+          this.request("/models/load", {
+            method: "POST",
+            body: JSON.stringify({ model }),
+            signal: signal ?? null,
+          }),
+        );
+      }, this),
+    );
+  }
+
+  unload(model: string, signal?: AbortSignal): Promise<void> {
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        yield* awaited(
+          this.request("/models/unload", {
+            method: "POST",
+            body: JSON.stringify({ model }),
+            signal: signal ?? null,
+          }),
+        );
+      }, this),
+    );
+  }
+
+  unloadAndWait(model: string, signal?: AbortSignal): Promise<void> {
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        yield* awaited(this.unload(model, signal));
+        while (true) {
+          const entry = (yield* awaited(this.list({ signal }))).find(
+            (candidate) => candidate.id === model,
+          );
+          if (entry === undefined || entry.status.value === "unloaded") return;
+          yield* awaited(sleep(100, signal));
+        }
+      }, this),
+    );
+  }
+
+  download(model: string, signal?: AbortSignal): Promise<void> {
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        yield* awaited(
+          this.request("/models", {
+            method: "POST",
+            body: JSON.stringify({ model }),
+            signal: signal ?? null,
+          }),
+        );
+      }, this),
+    );
+  }
+
+  watch(onEvent: (event: LlamaModelEvent) => void, signal?: AbortSignal): Promise<void> {
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        const headers = new Headers();
+        if (this.apiKey !== undefined && this.apiKey !== "")
+          headers.set("Authorization", `Bearer ${this.apiKey}`);
+        const response = yield* awaited(
+          fetch(`${this.serverUrl}/models/sse`, {
+            headers,
+            signal: signal ?? null,
+          }),
+        );
+        if (!response.ok || response.body === null)
+          throw new Error(`llama.cpp SSE returned HTTP ${response.status}`);
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        while (true) {
+          const chunk = yield* awaited(reader.read());
+          if (chunk.done) break;
+          buffer += decoder.decode(chunk.value, { stream: true }).replaceAll("\r\n", "\n");
+          let boundary = buffer.indexOf("\n\n");
+          while (boundary >= 0) {
+            const frame = buffer.slice(0, boundary);
+            buffer = buffer.slice(boundary + 2);
+            const data = frame
+              .split("\n")
+              .filter((line) => line.startsWith("data:"))
+              .map((line) => line.slice(5).trimStart())
+              .join("\n");
+            if (data !== "") {
+              try {
+                const event = JSON.parse(data) as LlamaModelEvent;
+                if (typeof event?.model === "string" && typeof event.event === "string")
+                  onEvent(event);
+              } catch {}
+            }
+            boundary = buffer.indexOf("\n\n");
+          }
+        }
+      }, this),
+    );
+  }
+
+  loadAndWait(
     model: string,
     onProgress: (progress: LlamaProgress) => void,
     signal?: AbortSignal,
   ): Promise<LlamaModelInfo> {
-    const watcher = new AbortController();
-    const unlink = linkSignal(signal, watcher);
-    let eventLoaded = false;
-    let eventError: string | undefined;
-    void this.watch((event) => {
-      if (event.model !== model) return;
-      if (event.event !== "model_status" && event.event !== "status_change") return;
-      const data = event.data as { status?: unknown } | undefined;
-      if (data?.status === "loaded") eventLoaded = true;
-      if (data?.status === "unloaded") eventError = "Model failed to load";
-      const progress = parseLoadProgress(event.data);
-      if (progress !== undefined) onProgress(progress);
-    }, watcher.signal).catch(() => {});
-    try {
-      await this.load(model, signal);
-      onProgress({ message: "Loading model" });
-      while (true) {
-        if (signal?.aborted === true) throw signal.reason ?? new Error("Cancelled");
-        const entry = (await this.list({ signal })).find((candidate) => candidate.id === model);
-        if (entry?.status.value === "loaded") return entry;
-        if (eventLoaded && entry === undefined) return { id: model, status: { value: "loaded" } };
-        if (entry?.status.failed === true || (eventError !== undefined && eventError !== "")) {
-          throw new Error(
-            entry?.status.exit_code === undefined
-              ? (eventError ?? "Model failed to load")
-              : `Model exited with code ${entry.status.exit_code}`,
-          );
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        const watcher = new AbortController();
+        const unlink = linkSignal(signal, watcher);
+        let eventLoaded = false;
+        let eventError: string | undefined;
+        void this.watch((event) => {
+          if (event.model !== model) return;
+          if (event.event !== "model_status" && event.event !== "status_change") return;
+          const data = event.data as { status?: unknown } | undefined;
+          if (data?.status === "loaded") eventLoaded = true;
+          if (data?.status === "unloaded") eventError = "Model failed to load";
+          const progress = parseLoadProgress(event.data);
+          if (progress !== undefined) onProgress(progress);
+        }, watcher.signal).catch(() => {});
+        try {
+          yield* awaited(this.load(model, signal));
+          onProgress({ message: "Loading model" });
+          while (true) {
+            if (signal?.aborted === true) throw signal.reason ?? new Error("Cancelled");
+            const entry = (yield* awaited(this.list({ signal }))).find(
+              (candidate) => candidate.id === model,
+            );
+            if (entry?.status.value === "loaded") return entry;
+            if (eventLoaded && entry === undefined)
+              return { id: model, status: { value: "loaded" } };
+            if (entry?.status.failed === true || (eventError !== undefined && eventError !== "")) {
+              throw new Error(
+                entry?.status.exit_code === undefined
+                  ? (eventError ?? "Model failed to load")
+                  : `Model exited with code ${entry.status.exit_code}`,
+              );
+            }
+            yield* awaited(sleep(250, signal));
+          }
+        } finally {
+          unlink();
+          watcher.abort();
         }
-        await sleep(250, signal);
-      }
-    } finally {
-      unlink();
-      watcher.abort();
-    }
+      }, this),
+    );
   }
 
-  async downloadAndWait(
+  downloadAndWait(
     model: string,
     onProgress: (progress: LlamaProgress) => void,
     signal?: AbortSignal,
   ): Promise<LlamaModelInfo[]> {
-    const watcher = new AbortController();
-    const unlink = linkSignal(signal, watcher);
-    let finished = false;
-    let failure: string | undefined;
-    let sawDownloading = false;
-    let polls = 0;
-    void this.watch((event) => {
-      if (event.model !== model) return;
-      if (event.event === "download_finished") finished = true;
-      if (event.event === "download_failed") failure = errorMessage(event.data, "Download failed");
-      if (event.event === "download_progress") {
-        sawDownloading = true;
-        const progress = parseDownloadProgress(event.data);
-        if (progress !== undefined) onProgress(progress);
-      }
-    }, watcher.signal).catch(() => {});
-    try {
-      await this.download(model, signal);
-      onProgress({ message: "Downloading model" });
-      while (true) {
-        if (signal?.aborted === true) throw signal.reason ?? new Error("Cancelled");
-        if (failure !== undefined && failure !== "") throw new Error(failure);
-        const models = await this.list({ signal });
-        polls++;
-        const entry = models.find((candidate) => candidate.id === model);
-        if (entry?.status.value === "downloading") {
-          sawDownloading = true;
-          const progress = parseDownloadProgress(entry.status.progress);
-          if (progress !== undefined) onProgress(progress);
-        } else if (finished || (entry !== undefined && (sawDownloading || polls >= 2))) {
-          return this.list({ reload: true, signal });
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        const watcher = new AbortController();
+        const unlink = linkSignal(signal, watcher);
+        let finished = false;
+        let failure: string | undefined;
+        let sawDownloading = false;
+        let polls = 0;
+        void this.watch((event) => {
+          if (event.model !== model) return;
+          if (event.event === "download_finished") finished = true;
+          if (event.event === "download_failed")
+            failure = errorMessage(event.data, "Download failed");
+          if (event.event === "download_progress") {
+            sawDownloading = true;
+            const progress = parseDownloadProgress(event.data);
+            if (progress !== undefined) onProgress(progress);
+          }
+        }, watcher.signal).catch(() => {});
+        try {
+          yield* awaited(this.download(model, signal));
+          onProgress({ message: "Downloading model" });
+          while (true) {
+            if (signal?.aborted === true) throw signal.reason ?? new Error("Cancelled");
+            if (failure !== undefined && failure !== "") throw new Error(failure);
+            const models = yield* awaited(this.list({ signal }));
+            polls++;
+            const entry = models.find((candidate) => candidate.id === model);
+            if (entry?.status.value === "downloading") {
+              sawDownloading = true;
+              const progress = parseDownloadProgress(entry.status.progress);
+              if (progress !== undefined) onProgress(progress);
+            } else if (finished || (entry !== undefined && (sawDownloading || polls >= 2))) {
+              return yield* awaited(this.list({ reload: true, signal }));
+            }
+            yield* awaited(sleep(500, signal));
+          }
+        } finally {
+          unlink();
+          watcher.abort();
         }
-        await sleep(500, signal);
-      }
-    } finally {
-      unlink();
-      watcher.abort();
-    }
+      }, this),
+    );
   }
 }

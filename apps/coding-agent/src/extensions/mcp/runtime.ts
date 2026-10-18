@@ -24,8 +24,10 @@ import {
   StreamableHttpTransport,
 } from "@msa/mcp";
 import { McpOAuthAuthorizationRequiredError, type OAuthChallenge } from "@msa/mcp/oauth";
+import * as Effect from "effect/Effect";
 
 import { VERSION } from "../../config.ts";
+import { awaited, awaiting, awaitingWith } from "../../core/awaiting.ts";
 import {
   resolveConfigValueOrThrow,
   resolveHeadersOrThrow,
@@ -115,14 +117,18 @@ export function createDefaultTransport(
   });
 }
 
-async function withoutTemplates<T>(list: () => Promise<T>, empty: T): Promise<T> {
-  try {
-    return await list();
-  } catch (error) {
-    if (error instanceof McpError && error.code === JSON_RPC_ERROR_CODES.methodNotFound)
-      return empty;
-    throw error;
-  }
+function withoutTemplates<T>(list: () => Promise<T>, empty: T): Promise<T> {
+  return Effect.runPromise(
+    awaiting(function* () {
+      try {
+        return yield* awaited(list());
+      } catch (error) {
+        if (error instanceof McpError && error.code === JSON_RPC_ERROR_CODES.methodNotFound)
+          return empty;
+        throw error;
+      }
+    }),
+  );
 }
 
 function listTemplates(
@@ -188,7 +194,15 @@ export class McpServerConnection implements McpToolCaller, McpResourceServer {
             },
           })
         : provider !== undefined && provider !== ""
-          ? { token: async () => options.providerToken?.(provider), settled: async () => {} }
+          ? {
+              token: () =>
+                Effect.runPromise(
+                  awaiting(function* () {
+                    return yield* awaited(options.providerToken?.(provider));
+                  }),
+                ),
+              settled: () => Effect.runPromise(Effect.sync(() => {})),
+            }
           : undefined;
   }
 
@@ -282,41 +296,57 @@ export class McpServerConnection implements McpToolCaller, McpResourceServer {
     return this.withClient((client) => listTemplates(client, options), true);
   }
 
-  private async withClient<T>(
-    run: (client: McpClient) => Promise<T>,
-    readOnly = false,
-  ): Promise<T> {
-    for (let attempt = 1; ; attempt++) {
-      const client = await this.getClient();
-      try {
-        return await run(client);
-      } catch (error) {
-        if (readOnly && attempt === 1 && error instanceof McpHttpError && isTransientError(error)) {
-          await new Promise((proceed) => setTimeout(proceed, CONNECT_RETRY_DELAYS_MS[0]));
-          continue;
+  private withClient<T>(run: (client: McpClient) => Promise<T>, readOnly = false): Promise<T> {
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        for (let attempt = 1; ; attempt++) {
+          const client = yield* awaited(this.getClient());
+          try {
+            return yield* awaited(run(client));
+          } catch (error) {
+            if (
+              readOnly &&
+              attempt === 1 &&
+              error instanceof McpHttpError &&
+              isTransientError(error)
+            ) {
+              yield* awaited(
+                new Promise((proceed) => setTimeout(proceed, CONNECT_RETRY_DELAYS_MS[0])),
+              );
+              continue;
+            }
+            if (error instanceof McpSessionExpiredError && attempt === 1) {
+              if (this.client === client) this.client = undefined;
+              continue;
+            }
+            if (!this.needsSignIn(error)) throw error;
+            yield* awaited(this.dropClient(client));
+            this.markNeedsAuth();
+            throw new Error(signInRequiredMessage(this.entry), { cause: error });
+          }
         }
-        if (error instanceof McpSessionExpiredError && attempt === 1) {
-          if (this.client === client) this.client = undefined;
-          continue;
-        }
-        if (!this.needsSignIn(error)) throw error;
-        await this.dropClient(client);
-        this.markNeedsAuth();
-        throw new Error(signInRequiredMessage(this.entry), { cause: error });
-      }
-    }
+      }, this),
+    );
   }
 
-  async reconnect(): Promise<void> {
-    await this.opening?.catch(() => undefined);
-    if (this.client !== undefined) await this.dropClient(this.client);
-    await this.getClient();
+  reconnect(): Promise<void> {
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        yield* awaited(this.opening?.catch(() => undefined));
+        if (this.client !== undefined) yield* awaited(this.dropClient(this.client));
+        yield* awaited(this.getClient());
+      }, this),
+    );
   }
 
-  async signOut(): Promise<void> {
-    await this.opening?.catch(() => undefined);
-    if (this.client !== undefined) await this.dropClient(this.client);
-    if (!this.closed) this.markNeedsAuth();
+  signOut(): Promise<void> {
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        yield* awaited(this.opening?.catch(() => undefined));
+        if (this.client !== undefined) yield* awaited(this.dropClient(this.client));
+        if (!this.closed) this.markNeedsAuth();
+      }, this),
+    );
   }
 
   private needsSignIn(error: unknown): boolean {
@@ -336,80 +366,98 @@ export class McpServerConnection implements McpToolCaller, McpResourceServer {
     this.onChange?.(this);
   }
 
-  private async dropClient(client: McpClient): Promise<void> {
-    if (this.client === client) this.client = undefined;
-    await client.close().catch(() => undefined);
+  private dropClient(client: McpClient): Promise<void> {
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        if (this.client === client) this.client = undefined;
+        yield* awaited(client.close().catch(() => undefined));
+      }, this),
+    );
   }
 
-  private async open(): Promise<McpClient> {
-    this.state = "connecting";
-    this.changed();
-    const retries = "url" in this.entry.config ? CONNECT_RETRY_DELAYS_MS : [];
-    for (let attempt = 0; ; attempt++) {
-      this.stderrTail = undefined;
-      try {
-        return await this.connectOnce();
-      } catch (error) {
-        const delay = retries[attempt];
-        if (this.closed || delay === undefined || !isTransientError(error)) {
-          throw this.connectFailed(error);
+  private open(): Promise<McpClient> {
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        this.state = "connecting";
+        this.changed();
+        const retries = "url" in this.entry.config ? CONNECT_RETRY_DELAYS_MS : [];
+        for (let attempt = 0; ; attempt++) {
+          this.stderrTail = undefined;
+          try {
+            return yield* awaited(this.connectOnce());
+          } catch (error) {
+            const delay = retries[attempt];
+            if (this.closed || delay === undefined || !isTransientError(error)) {
+              throw this.connectFailed(error);
+            }
+            yield* awaited(
+              sleep(delay, undefined, { signal: this.shutdown.signal }).catch(() => undefined),
+            );
+            if (this.closed) throw this.connectFailed(error);
+          }
         }
-        await sleep(delay, undefined, { signal: this.shutdown.signal }).catch(() => undefined);
-        if (this.closed) throw this.connectFailed(error);
-      }
-    }
+      }, this),
+    );
   }
 
-  private async connectOnce(): Promise<McpClient> {
-    const client = new McpClient({
-      name: "msa",
-      version: VERSION,
-      requestTimeoutMs: this.timeoutMs,
-      roots: [{ uri: pathToFileURL(this.cwd).href, name: basename(this.cwd) }],
-    });
-    const log = this.log;
-    if (log !== undefined)
-      client.onNotification("notifications/message", (params) =>
-        log.write(this.entry.name, params),
-      );
+  private connectOnce(): Promise<McpClient> {
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        const client = new McpClient({
+          name: "msa",
+          version: VERSION,
+          requestTimeoutMs: this.timeoutMs,
+          roots: [{ uri: pathToFileURL(this.cwd).href, name: basename(this.cwd) }],
+        });
+        const log = this.log;
+        if (log !== undefined)
+          client.onNotification("notifications/message", (params) =>
+            log.write(this.entry.name, params),
+          );
 
-    let closing: Promise<void> | undefined;
-    const closeClient = () => {
-      closing ??= client.close().catch(() => undefined);
-      return closing;
-    };
-    this.shutdown.signal.addEventListener("abort", closeClient, { once: true });
-    let transport: McpTransport | undefined;
-    try {
-      transport = this.createTransport(this.entry, this.cwd, this.authProvider);
-      await client.connect(transport);
-      client.onNotification("notifications/tools/list_changed", () => {
-        void this.refreshTools(client);
-      });
-      const stdio = transport instanceof StdioTransport ? transport : undefined;
-      client.onClose(() => this.handleClientClose(client, stdio));
+        let closing: Promise<void> | undefined;
+        const closeClient = () => {
+          closing ??= client.close().catch(() => undefined);
+          return closing;
+        };
+        this.shutdown.signal.addEventListener("abort", closeClient, { once: true });
+        let transport: McpTransport | undefined;
+        try {
+          transport = this.createTransport(this.entry, this.cwd, this.authProvider);
+          yield* awaited(client.connect(transport));
+          client.onNotification("notifications/tools/list_changed", () => {
+            void this.refreshTools(client);
+          });
+          const stdio = transport instanceof StdioTransport ? transport : undefined;
+          client.onClose(() => this.handleClientClose(client, stdio));
 
-      const tools = client.serverCapabilities?.tools === undefined ? [] : await client.listTools();
-      if (this.closed) throw new Error("shut down while connecting");
-      if (client.connectionState !== "connected") throw new Error("connection closed during setup");
-      this.client = client;
-      this.tools = tools;
-      this.hasResources = client.serverCapabilities?.resources !== undefined;
-      this.instructions = client.instructions?.trim() || undefined;
-      this.state = "connected";
-      this.error = undefined;
-      this.onTools(this);
-      this.changed();
-      return client;
-    } catch (error) {
-      await closeClient();
-      if (transport instanceof StdioTransport) {
-        this.stderrTail = transport.stderr.trim().slice(-STDERR_TAIL_CHARS) || undefined;
-      }
-      throw error;
-    } finally {
-      this.shutdown.signal.removeEventListener("abort", closeClient);
-    }
+          const tools =
+            client.serverCapabilities?.tools === undefined
+              ? []
+              : yield* awaited(client.listTools());
+          if (this.closed) throw new Error("shut down while connecting");
+          if (client.connectionState !== "connected")
+            throw new Error("connection closed during setup");
+          this.client = client;
+          this.tools = tools;
+          this.hasResources = client.serverCapabilities?.resources !== undefined;
+          this.instructions = client.instructions?.trim() || undefined;
+          this.state = "connected";
+          this.error = undefined;
+          this.onTools(this);
+          this.changed();
+          return client;
+        } catch (error) {
+          yield* awaited(closeClient());
+          if (transport instanceof StdioTransport) {
+            this.stderrTail = transport.stderr.trim().slice(-STDERR_TAIL_CHARS) || undefined;
+          }
+          throw error;
+        } finally {
+          this.shutdown.signal.removeEventListener("abort", closeClient);
+        }
+      }, this),
+    );
   }
 
   private connectFailed(error: unknown): Error {
@@ -436,29 +484,39 @@ export class McpServerConnection implements McpToolCaller, McpResourceServer {
     this.changed();
   }
 
-  private async refreshTools(client: McpClient): Promise<void> {
-    try {
-      const tools = await client.listTools();
-      if (this.client !== client || this.closed) return;
-      this.tools = tools;
-      this.onTools(this);
-    } catch (error) {
-      this.error = `Failed to refresh tools: ${toErrorMessage(error)}`;
-    }
-    this.changed();
+  private refreshTools(client: McpClient): Promise<void> {
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        try {
+          const tools = yield* awaited(client.listTools());
+          if (this.client !== client || this.closed) return;
+          this.tools = tools;
+          this.onTools(this);
+        } catch (error) {
+          this.error = `Failed to refresh tools: ${toErrorMessage(error)}`;
+        }
+        this.changed();
+      }, this),
+    );
   }
 
-  async close(): Promise<void> {
-    this.shutdown.abort();
-    this.state = "closed";
-    this.changed();
-    const client = this.client;
-    this.client = undefined;
-    await Promise.all([
-      client?.close().catch(() => undefined),
-      this.opening?.catch(() => undefined),
-    ]);
+  close(): Promise<void> {
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        this.shutdown.abort();
+        this.state = "closed";
+        this.changed();
+        const client = this.client;
+        this.client = undefined;
+        yield* awaited(
+          Promise.all([
+            client?.close().catch(() => undefined),
+            this.opening?.catch(() => undefined),
+          ]),
+        );
 
-    await this.authProvider?.settled();
+        yield* awaited(this.authProvider?.settled());
+      }, this),
+    );
   }
 }

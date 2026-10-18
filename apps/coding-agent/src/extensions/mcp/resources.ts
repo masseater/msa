@@ -8,8 +8,10 @@ import type {
   Resource,
   ResourceTemplate,
 } from "@msa/mcp";
+import * as Effect from "effect/Effect";
 import type { TSchema } from "typebox";
 
+import { awaited, awaiting } from "../../core/awaiting.ts";
 import type { ToolAnnotations, ToolDefinition } from "../../core/extensions/types.ts";
 import {
   LIST_MCP_RESOURCE_TEMPLATES_TOOL,
@@ -176,7 +178,7 @@ function stringArgument(params: unknown, key: string): string | undefined {
   return value.trim() || undefined;
 }
 
-async function jsonResult(
+function jsonResult(
   tool: string,
   server: string | undefined,
   payload: Record<string, unknown>,
@@ -185,18 +187,22 @@ async function jsonResult(
   details: McpToolDetails;
   structuredContent: JsonValue;
 }> {
-  const { content, fullOutputPath } = await limitMcpContent([
-    { type: "text", text: JSON.stringify(payload) },
-  ]);
-  return {
-    content,
-    details: {
-      server: server ?? "",
-      tool,
-      ...(fullOutputPath !== undefined && fullOutputPath !== "" ? { fullOutputPath } : {}),
-    },
-    structuredContent: payload as unknown as JsonValue,
-  };
+  return Effect.runPromise(
+    awaiting(function* () {
+      const { content, fullOutputPath } = yield* awaited(
+        limitMcpContent([{ type: "text", text: JSON.stringify(payload) }]),
+      );
+      return {
+        content,
+        details: {
+          server: server ?? "",
+          tool,
+          ...(fullOutputPath !== undefined && fullOutputPath !== "" ? { fullOutputPath } : {}),
+        },
+        structuredContent: payload as unknown as JsonValue,
+      };
+    }),
+  );
 }
 
 export function createMcpResourceToolDefinitions(options: {
@@ -215,7 +221,7 @@ export function createMcpResourceToolDefinitions(options: {
     );
   };
 
-  const list = async <T extends { _meta?: unknown }>(
+  const list = <T extends { _meta?: unknown }>(
     params: unknown,
     signal: AbortSignal | undefined,
     key: "resources" | "resourceTemplates",
@@ -228,42 +234,52 @@ export function createMcpResourceToolDefinitions(options: {
       nextCursor?: string | undefined;
     }>,
     all: (server: McpResourceServer, options: McpRequestOptions) => Promise<T[]>,
-  ): Promise<Record<string, unknown>> => {
-    const serverName = stringArgument(params, "server");
-    const cursor = stringArgument(params, "cursor");
-    const visible = (item: T) =>
-      !isMcpAppResource(item as { uri?: string; uriTemplate?: string; mimeType?: string });
-    if (serverName !== undefined && serverName !== "") {
-      const server = findServer(serverName);
-      const result = await page(server, cursor, {
-        ...(signal === undefined ? {} : { signal }),
-        timeoutMs: server.timeoutMs,
-      });
-      return {
-        server: server.name,
-        [key]: result.items.filter(visible).map((item) => listed(server.name, item)),
-        ...(result.nextCursor === undefined ? {} : { nextCursor: result.nextCursor }),
-      };
-    }
-    if (cursor !== undefined && cursor !== "")
-      throw new Error("cursor can only be used when a server is specified");
-    const servers = [...options.servers()].sort((a, b) => a.name.localeCompare(b.name));
-    const results = await Promise.allSettled(
-      servers.map((server) =>
-        all(server, { ...(signal === undefined ? {} : { signal }), timeoutMs: server.timeoutMs }),
-      ),
+  ): Promise<Record<string, unknown>> =>
+    Effect.runPromise(
+      awaiting(function* () {
+        const serverName = stringArgument(params, "server");
+        const cursor = stringArgument(params, "cursor");
+        const visible = (item: T) =>
+          !isMcpAppResource(item as { uri?: string; uriTemplate?: string; mimeType?: string });
+        if (serverName !== undefined && serverName !== "") {
+          const server = findServer(serverName);
+          const result = yield* awaited(
+            page(server, cursor, {
+              ...(signal === undefined ? {} : { signal }),
+              timeoutMs: server.timeoutMs,
+            }),
+          );
+          return {
+            server: server.name,
+            [key]: result.items.filter(visible).map((item) => listed(server.name, item)),
+            ...(result.nextCursor === undefined ? {} : { nextCursor: result.nextCursor }),
+          };
+        }
+        if (cursor !== undefined && cursor !== "")
+          throw new Error("cursor can only be used when a server is specified");
+        const servers = [...options.servers()].sort((a, b) => a.name.localeCompare(b.name));
+        const results = yield* awaited(
+          Promise.allSettled(
+            servers.map((server) =>
+              all(server, {
+                ...(signal === undefined ? {} : { signal }),
+                timeoutMs: server.timeoutMs,
+              }),
+            ),
+          ),
+        );
+        const items: Record<string, unknown>[] = [];
+        const errors: { server: string; error: string }[] = [];
+        results.forEach((result, index) => {
+          const server = servers[index]?.name;
+          if (server === undefined) return;
+          if (result.status === "fulfilled")
+            items.push(...result.value.filter(visible).map((item) => listed(server, item)));
+          else errors.push({ server, error: toErrorMessage(result.reason) });
+        });
+        return { [key]: items, ...(errors.length > 0 ? { errors } : {}) };
+      }),
     );
-    const items: Record<string, unknown>[] = [];
-    const errors: { server: string; error: string }[] = [];
-    results.forEach((result, index) => {
-      const server = servers[index]?.name;
-      if (server === undefined) return;
-      if (result.status === "fulfilled")
-        items.push(...result.value.filter(visible).map((item) => listed(server, item)));
-      else errors.push({ server, error: toErrorMessage(result.reason) });
-    });
-    return { [key]: items, ...(errors.length > 0 ? { errors } : {}) };
-  };
 
   const listResources: ToolDefinition<TSchema, McpToolDetails> = {
     name: LIST_MCP_RESOURCES_TOOL,
@@ -274,18 +290,29 @@ export function createMcpResourceToolDefinitions(options: {
     outputSchema: LIST_OUTPUT_SCHEMA as unknown as TSchema,
     exposure: toToolExposure(options.exposure),
     annotations: readOnly,
-    async execute(_toolCallId, params, signal) {
-      const payload = await list(
-        params,
-        signal,
-        "resources",
-        async (server, cursor, requestOptions) => {
-          const result = await server.resourcesPage(cursor, requestOptions);
-          return { items: result.resources, nextCursor: result.nextCursor };
-        },
-        (server, requestOptions) => server.allResources(requestOptions),
+    execute(_toolCallId, params, signal) {
+      return Effect.runPromise(
+        awaiting(function* () {
+          const payload = yield* awaited(
+            list(
+              params,
+              signal,
+              "resources",
+              (server, cursor, requestOptions) =>
+                Effect.runPromise(
+                  awaiting(function* () {
+                    const result = yield* awaited(server.resourcesPage(cursor, requestOptions));
+                    return { items: result.resources, nextCursor: result.nextCursor };
+                  }),
+                ),
+              (server, requestOptions) => server.allResources(requestOptions),
+            ),
+          );
+          return yield* awaited(
+            jsonResult(LIST_MCP_RESOURCES_TOOL, stringArgument(params, "server"), payload),
+          );
+        }),
       );
-      return jsonResult(LIST_MCP_RESOURCES_TOOL, stringArgument(params, "server"), payload);
     },
   };
 
@@ -298,21 +325,30 @@ export function createMcpResourceToolDefinitions(options: {
     outputSchema: LIST_TEMPLATES_OUTPUT_SCHEMA as unknown as TSchema,
     exposure: toToolExposure(options.exposure),
     annotations: readOnly,
-    async execute(_toolCallId, params, signal) {
-      const payload = await list(
-        params,
-        signal,
-        "resourceTemplates",
-        async (server, cursor, requestOptions) => {
-          const result = await server.resourceTemplatesPage(cursor, requestOptions);
-          return { items: result.resourceTemplates, nextCursor: result.nextCursor };
-        },
-        (server, requestOptions) => server.allResourceTemplates(requestOptions),
-      );
-      return jsonResult(
-        LIST_MCP_RESOURCE_TEMPLATES_TOOL,
-        stringArgument(params, "server"),
-        payload,
+    execute(_toolCallId, params, signal) {
+      return Effect.runPromise(
+        awaiting(function* () {
+          const payload = yield* awaited(
+            list(
+              params,
+              signal,
+              "resourceTemplates",
+              (server, cursor, requestOptions) =>
+                Effect.runPromise(
+                  awaiting(function* () {
+                    const result = yield* awaited(
+                      server.resourceTemplatesPage(cursor, requestOptions),
+                    );
+                    return { items: result.resourceTemplates, nextCursor: result.nextCursor };
+                  }),
+                ),
+              (server, requestOptions) => server.allResourceTemplates(requestOptions),
+            ),
+          );
+          return yield* awaited(
+            jsonResult(LIST_MCP_RESOURCE_TEMPLATES_TOOL, stringArgument(params, "server"), payload),
+          );
+        }),
       );
     },
   };
@@ -326,37 +362,48 @@ export function createMcpResourceToolDefinitions(options: {
     outputSchema: READ_OUTPUT_SCHEMA as unknown as TSchema,
     exposure: toToolExposure(options.exposure),
     annotations: readOnly,
-    async execute(_toolCallId, params, signal) {
-      const serverName = stringArgument(params, "server");
-      const uri = stringArgument(params, "uri");
-      if (serverName === undefined || serverName === "") throw new Error("server must be provided");
-      if (uri === undefined || uri === "") throw new Error("uri must be provided");
-      const server = findServer(serverName);
-      const result = await server.readResource(uri, {
-        ...(signal === undefined ? {} : { signal }),
-        timeoutMs: server.timeoutMs,
-      });
+    execute(_toolCallId, params, signal) {
+      return Effect.runPromise(
+        awaiting(function* () {
+          const serverName = stringArgument(params, "server");
+          const uri = stringArgument(params, "uri");
+          if (serverName === undefined || serverName === "")
+            throw new Error("server must be provided");
+          if (uri === undefined || uri === "") throw new Error("uri must be provided");
+          const server = findServer(serverName);
+          const result = yield* awaited(
+            server.readResource(uri, {
+              ...(signal === undefined ? {} : { signal }),
+              timeoutMs: server.timeoutMs,
+            }),
+          );
 
-      const blocks: ContentBlock[] = result.contents.flatMap((contents) => [
-        ...(result.contents.length > 1
-          ? [{ type: "text" as const, text: `${contents.uri}:` }]
-          : []),
-        { type: "resource" as const, resource: contents },
-      ]);
-      const converted = await toModelContent(server.name, blocks);
-      const { content, fullOutputPath } = await limitMcpContent(
-        converted.length > 0 ? converted : [{ type: "text", text: `Resource ${uri} is empty.` }],
+          const blocks: ContentBlock[] = result.contents.flatMap((contents) => [
+            ...(result.contents.length > 1
+              ? [{ type: "text" as const, text: `${contents.uri}:` }]
+              : []),
+            { type: "resource" as const, resource: contents },
+          ]);
+          const converted = yield* awaited(toModelContent(server.name, blocks));
+          const { content, fullOutputPath } = yield* awaited(
+            limitMcpContent(
+              converted.length > 0
+                ? converted
+                : [{ type: "text", text: `Resource ${uri} is empty.` }],
+            ),
+          );
+          const contents = result.contents.map(({ _meta: _ignored, ...rest }) => rest);
+          return {
+            content,
+            details: {
+              server: server.name,
+              tool: READ_MCP_RESOURCE_TOOL,
+              ...(fullOutputPath !== undefined && fullOutputPath !== "" ? { fullOutputPath } : {}),
+            },
+            structuredContent: { server: server.name, uri, contents } as unknown as JsonValue,
+          };
+        }),
       );
-      const contents = result.contents.map(({ _meta: _ignored, ...rest }) => rest);
-      return {
-        content,
-        details: {
-          server: server.name,
-          tool: READ_MCP_RESOURCE_TOOL,
-          ...(fullOutputPath !== undefined && fullOutputPath !== "" ? { fullOutputPath } : {}),
-        },
-        structuredContent: { server: server.name, uri, contents } as unknown as JsonValue,
-      };
     },
   };
 

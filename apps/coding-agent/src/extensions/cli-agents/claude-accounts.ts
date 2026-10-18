@@ -4,8 +4,10 @@ import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 
 import type { SDKAssistantMessageError } from "@anthropic-ai/claude-agent-sdk";
+import * as Effect from "effect/Effect";
 
 import { expandTildePath, getAgentDir } from "../../config.ts";
+import { awaited, awaiting } from "../../core/awaiting.ts";
 import { nowMs, readEnv } from "../../core/platform.ts";
 import { spawnProcess, waitForChildProcess } from "../../utils/child-process.ts";
 import { findExecutableOnPath } from "../../utils/shell.ts";
@@ -122,42 +124,52 @@ export function claudeExecutable(): string | undefined {
 
 const tokens = new Map<string, Promise<string>>();
 
-async function runTokenCommand(command: string): Promise<string> {
-  let stdout: string;
-  try {
-    ({ stdout } = await promisify(execFile)(readEnv("SHELL") || "/bin/sh", ["-c", command]));
-  } catch (error) {
-    const stderr = String((error as { stderr?: unknown }).stderr ?? "").trim();
-    throw new Error(`tokenCommand ${command}: ${stderr.split("\n").at(-1) || "failed"}`, {
-      cause: error,
-    });
-  }
-  const token = stdout.trim();
-  if (token === "") throw new Error(`tokenCommand ${command}: printed nothing`);
-  return token;
+function runTokenCommand(command: string): Promise<string> {
+  return Effect.runPromise(
+    awaiting(function* () {
+      let stdout: string;
+      try {
+        ({ stdout } = yield* awaited(
+          promisify(execFile)(readEnv("SHELL") || "/bin/sh", ["-c", command]),
+        ));
+      } catch (error) {
+        const stderr = String((error as { stderr?: unknown }).stderr ?? "").trim();
+        throw new Error(`tokenCommand ${command}: ${stderr.split("\n").at(-1) || "failed"}`, {
+          cause: error,
+        });
+      }
+      const token = stdout.trim();
+      if (token === "") throw new Error(`tokenCommand ${command}: printed nothing`);
+      return token;
+    }),
+  );
 }
 
-export async function accountEnv(account: Account): Promise<Record<string, string>> {
-  const env = { ...process.env } as Record<string, string>;
-  delete env["CLAUDECODE"];
-  if (
-    (account.configDir !== undefined && account.configDir !== "") ||
-    (account.tokenCommand !== undefined && account.tokenCommand !== "")
-  )
-    delete env["CLAUDE_CODE_OAUTH_TOKEN"];
-  if (account.configDir !== undefined && account.configDir !== "")
-    env["CLAUDE_CONFIG_DIR"] = account.configDir;
-  const command = account.tokenCommand;
-  if (command !== undefined && command !== "") {
-    let token = tokens.get(command);
-    if (token === undefined) {
-      token = runTokenCommand(command);
-      tokens.set(command, token);
-      token.catch(() => tokens.delete(command));
-    }
-    env["CLAUDE_CODE_OAUTH_TOKEN"] = await token;
-  }
-  return env;
+export function accountEnv(account: Account): Promise<Record<string, string>> {
+  return Effect.runPromise(
+    awaiting(function* () {
+      const env = { ...process.env } as Record<string, string>;
+      delete env["CLAUDECODE"];
+      if (
+        (account.configDir !== undefined && account.configDir !== "") ||
+        (account.tokenCommand !== undefined && account.tokenCommand !== "")
+      )
+        delete env["CLAUDE_CODE_OAUTH_TOKEN"];
+      if (account.configDir !== undefined && account.configDir !== "")
+        env["CLAUDE_CONFIG_DIR"] = account.configDir;
+      const command = account.tokenCommand;
+      if (command !== undefined && command !== "") {
+        let token = tokens.get(command);
+        if (token === undefined) {
+          token = runTokenCommand(command);
+          tokens.set(command, token);
+          token.catch(() => tokens.delete(command));
+        }
+        env["CLAUDE_CODE_OAUTH_TOKEN"] = yield* awaited(token);
+      }
+      return env;
+    }),
+  );
 }
 
 export interface AuthStatus {
@@ -172,102 +184,121 @@ export function describeLogin(status: AuthStatus): string {
     : "";
 }
 
-export async function withAuthStatus(
+export function withAuthStatus(
   accounts: Account[],
 ): Promise<Array<{ account: Account; status: AuthStatus }>> {
-  const statuses = await Promise.all(accounts.map((account) => authStatus(account)));
-  return accounts.map((account, index) => ({ account, status: statuses[index]! }));
+  return Effect.runPromise(
+    awaiting(function* () {
+      const statuses = yield* awaited(Promise.all(accounts.map((account) => authStatus(account))));
+      return accounts.map((account, index) => ({ account, status: statuses[index]! }));
+    }),
+  );
 }
 
-export async function authStatus(account: Account): Promise<AuthStatus> {
-  try {
-    const { stdout } = await promisify(execFile)(
-      claudeExecutable() ?? "claude",
-      ["auth", "status"],
-      { env: await accountEnv(account), timeout: 15_000 },
-    );
-    const status = JSON.parse(stdout) as { loggedIn?: boolean; email?: string };
-    return {
-      loggedIn: status.loggedIn === true,
-      ...(status.email !== undefined && status.email !== "" ? { email: status.email } : {}),
-    };
-  } catch (error) {
-    const stdout = String((error as { stdout?: unknown }).stdout ?? "");
-    try {
-      if ((JSON.parse(stdout) as { loggedIn?: boolean }).loggedIn === false)
-        return { loggedIn: false };
-    } catch {}
-    return {
-      loggedIn: false,
-      detail: error instanceof Error ? (error.message.split("\n")[0] ?? "") : String(error),
-    };
-  }
+export function authStatus(account: Account): Promise<AuthStatus> {
+  return Effect.runPromise(
+    awaiting(function* () {
+      try {
+        const { stdout } = yield* awaited(
+          promisify(execFile)(claudeExecutable() ?? "claude", ["auth", "status"], {
+            env: yield* awaited(accountEnv(account)),
+            timeout: 15_000,
+          }),
+        );
+        const status = JSON.parse(stdout) as { loggedIn?: boolean; email?: string };
+        return {
+          loggedIn: status.loggedIn === true,
+          ...(status.email !== undefined && status.email !== "" ? { email: status.email } : {}),
+        };
+      } catch (error) {
+        const stdout = String((error as { stdout?: unknown }).stdout ?? "");
+        try {
+          if ((JSON.parse(stdout) as { loggedIn?: boolean }).loggedIn === false)
+            return { loggedIn: false };
+        } catch {}
+        return {
+          loggedIn: false,
+          detail: error instanceof Error ? (error.message.split("\n")[0] ?? "") : String(error),
+        };
+      }
+    }),
+  );
 }
 
 export interface LoginPrompts {
   askCode(url: string, signal: AbortSignal): Promise<string | undefined>;
 }
 
-export async function loginAccount(account: Account, prompts: LoginPrompts): Promise<void> {
-  if (
-    (account.configDir === undefined || account.configDir === "") &&
-    account.tokenCommand !== undefined &&
-    account.tokenCommand !== ""
-  ) {
-    throw new Error(`"${account.name}" signs in with its tokenCommand, not a Claude login`);
-  }
-  if (account.configDir !== undefined && account.configDir !== "")
-    mkdirSync(account.configDir, { recursive: true });
-  const child = spawnProcess(claudeExecutable() ?? "claude", ["auth", "login"], {
-    env: await accountEnv(account),
-    stdio: ["pipe", "pipe", "pipe"],
-  });
-  const exited = new AbortController();
-  let output = "";
-  let asked = false;
-  let cancelled = false;
-  const onOutput = (chunk: Buffer) => {
-    output = (output + String(chunk)).slice(-4_000);
-    const url = /https:\/\/\S+/u.exec(output)?.[0];
-    if (
-      asked ||
-      url === undefined ||
-      url === "" ||
-      !/\r?\n/u.test(output.slice(output.indexOf(url)))
-    )
-      return;
-    asked = true;
-    void prompts.askCode(url, exited.signal).then((code) => {
-      if (exited.signal.aborted) return;
-      if (code !== undefined && code.trim() !== "") child.stdin.write(`${code.trim()}\n`);
-      else {
-        cancelled = true;
-        child.kill();
+export function loginAccount(account: Account, prompts: LoginPrompts): Promise<void> {
+  return Effect.runPromise(
+    awaiting(function* () {
+      if (
+        (account.configDir === undefined || account.configDir === "") &&
+        account.tokenCommand !== undefined &&
+        account.tokenCommand !== ""
+      ) {
+        throw new Error(`"${account.name}" signs in with its tokenCommand, not a Claude login`);
       }
-    });
-  };
-  child.stdout.on("data", onOutput);
-  child.stderr.on("data", onOutput);
-  const code = await waitForChildProcess(child);
-  exited.abort();
-  if (cancelled) throw new Error(`Login for "${account.name}" cancelled`);
-  if (code !== 0) {
-    const lines = output
-      .trim()
-      .split("\n")
-      .filter((line) => !line.includes("https://"));
-    throw new Error(`claude auth login failed: ${lines.at(-1) || `exit ${code}`}`);
-  }
-  const blocks = loadBlocks();
-  delete blocks[account.name];
-  saveBlocks(blocks);
+      if (account.configDir !== undefined && account.configDir !== "")
+        mkdirSync(account.configDir, { recursive: true });
+      const child = spawnProcess(claudeExecutable() ?? "claude", ["auth", "login"], {
+        env: yield* awaited(accountEnv(account)),
+        stdio: ["pipe", "pipe", "pipe"],
+      });
+      const exited = new AbortController();
+      let output = "";
+      let asked = false;
+      let cancelled = false;
+      const onOutput = (chunk: Buffer) => {
+        output = (output + String(chunk)).slice(-4_000);
+        const url = /https:\/\/\S+/u.exec(output)?.[0];
+        if (
+          asked ||
+          url === undefined ||
+          url === "" ||
+          !/\r?\n/u.test(output.slice(output.indexOf(url)))
+        )
+          return;
+        asked = true;
+        void prompts.askCode(url, exited.signal).then((code) => {
+          if (exited.signal.aborted) return;
+          if (code !== undefined && code.trim() !== "") child.stdin.write(`${code.trim()}\n`);
+          else {
+            cancelled = true;
+            child.kill();
+          }
+        });
+      };
+      child.stdout.on("data", onOutput);
+      child.stderr.on("data", onOutput);
+      const code = yield* awaited(waitForChildProcess(child));
+      exited.abort();
+      if (cancelled) throw new Error(`Login for "${account.name}" cancelled`);
+      if (code !== 0) {
+        const lines = output
+          .trim()
+          .split("\n")
+          .filter((line) => !line.includes("https://"));
+        throw new Error(`claude auth login failed: ${lines.at(-1) || `exit ${code}`}`);
+      }
+      const blocks = loadBlocks();
+      delete blocks[account.name];
+      saveBlocks(blocks);
+    }),
+  );
 }
 
-export async function logoutAccount(account: Account): Promise<void> {
-  await promisify(execFile)(claudeExecutable() ?? "claude", ["auth", "logout"], {
-    env: await accountEnv(account),
-    timeout: 15_000,
-  });
+export function logoutAccount(account: Account): Promise<void> {
+  return Effect.runPromise(
+    awaiting(function* () {
+      yield* awaited(
+        promisify(execFile)(claudeExecutable() ?? "claude", ["auth", "logout"], {
+          env: yield* awaited(accountEnv(account)),
+          timeout: 15_000,
+        }),
+      );
+    }),
+  );
 }
 
 function loadBlocks(): Record<string, Block> {

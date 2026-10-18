@@ -14,6 +14,7 @@ import {
 } from "@msa/tui";
 import { Effect } from "effect";
 
+import { awaited, awaiting, awaitingWith } from "../../core/awaiting.ts";
 import type { ExtensionCommandContext } from "../../core/extensions/types.ts";
 import type { KeybindingsManager } from "../../core/keybindings.ts";
 import { DynamicBorder } from "../../modes/interactive/components/dynamic-border.ts";
@@ -228,25 +229,29 @@ class HuggingFaceSearch extends Container implements Focusable {
     this.debounce = setTimeout(() => void this.runSearch(this.query), 500);
   }
 
-  private async runSearch(query: string): Promise<void> {
-    const request = new AbortController();
-    this.request = request;
-    try {
-      const results = await this.search(query, request.signal);
-      this.cache.set(query.toLowerCase(), results);
-      if (this.closed || request.signal.aborted || this.query !== query) return;
-      this.results = results;
-      this.selectedIndex = 0;
-      this.status = results.length === 0 ? "No GGUF models found" : "";
-      this.filterResults();
-    } catch (error) {
-      if (this.closed || request.signal.aborted || this.query !== query) return;
-      this.results = [];
-      this.status = toErrorMessage(error);
-      this.filterResults();
-    } finally {
-      if (this.request === request) this.request = undefined;
-    }
+  private runSearch(query: string): Promise<void> {
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        const request = new AbortController();
+        this.request = request;
+        try {
+          const results = yield* awaited(this.search(query, request.signal));
+          this.cache.set(query.toLowerCase(), results);
+          if (this.closed || request.signal.aborted || this.query !== query) return;
+          this.results = results;
+          this.selectedIndex = 0;
+          this.status = results.length === 0 ? "No GGUF models found" : "";
+          this.filterResults();
+        } catch (error) {
+          if (this.closed || request.signal.aborted || this.query !== query) return;
+          this.results = [];
+          this.status = toErrorMessage(error);
+          this.filterResults();
+        } finally {
+          if (this.request === request) this.request = undefined;
+        }
+      }, this),
+    );
   }
 
   private close(model: string | undefined): void {
@@ -404,16 +409,23 @@ class LlamaView implements LlamaUi, Focusable {
     });
   }
 
-  async confirm(title: string, message: string): Promise<boolean> {
-    return (await this.select(`${title}\n${message}`, ["Yes", "No"])) === "Yes";
+  confirm(title: string, message: string): Promise<boolean> {
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        return (yield* awaited(this.select(`${title}\n${message}`, ["Yes", "No"]))) === "Yes";
+      }, this),
+    );
   }
 
-  async connectionError(serverUrl: string, message: string): Promise<"retry" | "close"> {
-    const choice = await this.select(`llama.cpp unavailable\n${serverUrl}\n\n${message}`, [
-      "Retry",
-      "Close",
-    ]);
-    return choice === "Retry" ? "retry" : "close";
+  connectionError(serverUrl: string, message: string): Promise<"retry" | "close"> {
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        const choice = yield* awaited(
+          this.select(`llama.cpp unavailable\n${serverUrl}\n\n${message}`, ["Retry", "Close"]),
+        );
+        return choice === "Retry" ? "retry" : "close";
+      }, this),
+    );
   }
 
   searchModels(
@@ -512,25 +524,31 @@ class LlamaView implements LlamaUi, Focusable {
   }
 }
 
-export async function showLlamaUi(
+export function showLlamaUi(
   ctx: ExtensionCommandContext,
   run: (ui: LlamaUi) => Promise<void>,
 ): Promise<void> {
-  await ctx.ui.custom<void>((tui, theme, keybindings, done) => {
-    const view = new LlamaView(tui, theme, keybindings);
-    Effect.runFork(
-      Effect.tryPromise(() => run(view)).pipe(
-        Effect.catch((error) =>
-          Effect.sync(() => ctx.ui.notify(toErrorMessage(error.cause), "error")),
-        ),
-        Effect.ensuring(Effect.sync(() => done())),
-      ),
-    );
-    return view;
-  });
+  return Effect.runPromise(
+    awaiting(function* () {
+      yield* awaited(
+        ctx.ui.custom<void>((tui, theme, keybindings, done) => {
+          const view = new LlamaView(tui, theme, keybindings);
+          Effect.runFork(
+            Effect.tryPromise(() => run(view)).pipe(
+              Effect.catch((error) =>
+                Effect.sync(() => ctx.ui.notify(toErrorMessage(error.cause), "error")),
+              ),
+              Effect.ensuring(Effect.sync(() => done())),
+            ),
+          );
+          return view;
+        }),
+      );
+    }),
+  );
 }
 
-export async function runWithProgress<T>(
+export function runWithProgress<T>(
   ui: LlamaUi,
   options: {
     title: string;
@@ -542,44 +560,50 @@ export async function runWithProgress<T>(
     cancel(): Promise<void>;
   },
 ): Promise<{ cancelled: true } | { cancelled: false; value: T }> {
-  const controller = new AbortController();
-  const state: ProgressState = {
-    title: options.title,
-    model: options.model,
-    message: options.initialMessage,
-  };
-  const settled = options
-    .run(controller.signal, (progress) => {
-      Object.assign(state, progress);
-      ui.updateProgress(state);
-    })
-    .then(
-      (value) => ({ ok: true as const, value }),
-      (error: unknown) => ({ ok: false as const, error }),
-    );
-  let completed = false;
-  settled.finally(() => {
-    completed = true;
-  });
+  return Effect.runPromise(
+    awaiting(function* () {
+      const controller = new AbortController();
+      const state: ProgressState = {
+        title: options.title,
+        model: options.model,
+        message: options.initialMessage,
+      };
+      const settled = options
+        .run(controller.signal, (progress) => {
+          Object.assign(state, progress);
+          ui.updateProgress(state);
+        })
+        .then(
+          (value) => ({ ok: true as const, value }),
+          (error: unknown) => ({ ok: false as const, error }),
+        );
+      let completed = false;
+      settled.finally(() => {
+        completed = true;
+      });
 
-  while (!completed) {
-    const outcome = await Promise.race([
-      settled.then(() => "settled" as const),
-      ui.progress(state).then(() => "stop" as const),
-    ]);
-    if (outcome === "settled") break;
-    const stop = await ui.confirm(options.cancelTitle, options.cancelMessage);
-    if (!stop || completed) continue;
-    try {
-      await options.cancel();
-    } finally {
-      controller.abort(new Error("Cancelled"));
-    }
-    await settled;
-    return { cancelled: true };
-  }
+      while (!completed) {
+        const outcome = yield* awaited(
+          Promise.race([
+            settled.then(() => "settled" as const),
+            ui.progress(state).then(() => "stop" as const),
+          ]),
+        );
+        if (outcome === "settled") break;
+        const stop = yield* awaited(ui.confirm(options.cancelTitle, options.cancelMessage));
+        if (!stop || completed) continue;
+        try {
+          yield* awaited(options.cancel());
+        } finally {
+          controller.abort(new Error("Cancelled"));
+        }
+        yield* awaited(settled);
+        return { cancelled: true };
+      }
 
-  const result = await settled;
-  if (!result.ok) throw result.error;
-  return { cancelled: false, value: result.value };
+      const result = yield* awaited(settled);
+      if (!result.ok) throw result.error;
+      return { cancelled: false, value: result.value };
+    }),
+  );
 }

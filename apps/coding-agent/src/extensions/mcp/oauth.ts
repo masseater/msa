@@ -20,10 +20,12 @@ import {
   parseWwwAuthenticate,
   stepUpScope,
 } from "@msa/mcp/oauth";
+import * as Effect from "effect/Effect";
 import lockfile from "proper-lockfile";
 
 import { APP_NAME, getAgentDir } from "../../config.ts";
 import { type AuthStorageBackend, FileAuthStorageBackend } from "../../core/auth-storage.ts";
+import { awaited, awaiting, awaitingWith } from "../../core/awaiting.ts";
 import { mcpNamespace } from "../../core/mcp-servers.ts";
 import { nowMs } from "../../core/platform.ts";
 
@@ -150,27 +152,33 @@ export class McpOAuthCredentialStore {
     };
   }
 
-  private async withRefreshLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
-    if (this.lockDir === undefined || this.lockDir === "") return fn();
-    mkdirSync(this.lockDir, { recursive: true, mode: 0o700 });
-    const hash = createHash("sha256").update(key).digest("hex").slice(0, 16);
-    const release = await lockfile.lock(join(this.lockDir, `mcp-auth-refresh-${hash}`), {
-      realpath: false,
-      stale: REFRESH_LOCK_STALE_MS,
-      retries: {
-        retries: REFRESH_LOCK_WAIT_MS / REFRESH_LOCK_RETRY_MS,
-        factor: 1,
-        minTimeout: REFRESH_LOCK_RETRY_MS,
-        maxTimeout: REFRESH_LOCK_RETRY_MS,
-      },
+  private withRefreshLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        if (this.lockDir === undefined || this.lockDir === "") return yield* awaited(fn());
+        mkdirSync(this.lockDir, { recursive: true, mode: 0o700 });
+        const hash = createHash("sha256").update(key).digest("hex").slice(0, 16);
+        const release = yield* awaited(
+          lockfile.lock(join(this.lockDir, `mcp-auth-refresh-${hash}`), {
+            realpath: false,
+            stale: REFRESH_LOCK_STALE_MS,
+            retries: {
+              retries: REFRESH_LOCK_WAIT_MS / REFRESH_LOCK_RETRY_MS,
+              factor: 1,
+              minTimeout: REFRESH_LOCK_RETRY_MS,
+              maxTimeout: REFRESH_LOCK_RETRY_MS,
+            },
 
-      onCompromised: () => {},
-    });
-    try {
-      return await fn();
-    } finally {
-      await release().catch(() => undefined);
-    }
+            onCompromised: () => {},
+          }),
+        );
+        try {
+          return yield* awaited(fn());
+        } finally {
+          yield* awaited(release().catch(() => undefined));
+        }
+      }, this),
+    );
   }
 
   tokens(name: string, serverUrl: string): McpOAuthState["tokens"] {
@@ -287,34 +295,38 @@ export function createMcpAuthProvider(options: {
     challenge?: OAuthChallenge,
   ) => {
     refreshing ??= store
-      .withRefreshLock(async () => {
-        const state = await store.load();
-        if (state?.tokens?.access_token !== staleToken) return;
-        if (state?.tokens?.refresh_token === undefined || state?.tokens?.refresh_token === "")
-          throw new McpOAuthAuthorizationRequiredError();
-        const settings = options.settings();
-        const redirectUrl =
-          callbackSettings(settings).fixedRedirectUrl ??
-          registeredRedirectUrls(state.clientInformation)[0] ??
-          FALLBACK_REDIRECT_URL;
-        const provider = createProvider(serverUrl, store, settings, redirectUrl, () => {});
+      .withRefreshLock(() =>
+        Effect.runPromise(
+          awaiting(function* () {
+            const state = yield* awaited(store.load());
+            if (state?.tokens?.access_token !== staleToken) return;
+            if (state?.tokens?.refresh_token === undefined || state?.tokens?.refresh_token === "")
+              throw new McpOAuthAuthorizationRequiredError();
+            const settings = options.settings();
+            const redirectUrl =
+              callbackSettings(settings).fixedRedirectUrl ??
+              registeredRedirectUrls(state.clientInformation)[0] ??
+              FALLBACK_REDIRECT_URL;
+            const provider = createProvider(serverUrl, store, settings, redirectUrl, () => {});
 
-        const resourceMetadataUrl = challenge?.resourceMetadataUrl;
-        const authorizationServerMetadataUrl = settings.authServerMetadataUrl;
-        const scope = challenge?.scope;
-        const result = await toPromise(
-          authorizeMcp(provider, {
-            serverUrl,
-            ...(resourceMetadataUrl === undefined ? {} : { resourceMetadataUrl }),
-            ...(authorizationServerMetadataUrl === undefined
-              ? {}
-              : { authorizationServerMetadataUrl }),
-            ...(scope === undefined ? {} : { scope }),
-            fetch: timedFetch(fetch),
+            const resourceMetadataUrl = challenge?.resourceMetadataUrl;
+            const authorizationServerMetadataUrl = settings.authServerMetadataUrl;
+            const scope = challenge?.scope;
+            const result = yield* awaited(
+              authorizeMcp(provider, {
+                serverUrl,
+                ...(resourceMetadataUrl === undefined ? {} : { resourceMetadataUrl }),
+                ...(authorizationServerMetadataUrl === undefined
+                  ? {}
+                  : { authorizationServerMetadataUrl }),
+                ...(scope === undefined ? {} : { scope }),
+                fetch: timedFetch(fetch),
+              }).pipe(toPromise),
+            );
+            if (result === "REDIRECT") throw new McpOAuthAuthorizationRequiredError();
           }),
-        );
-        if (result === "REDIRECT") throw new McpOAuthAuthorizationRequiredError();
-      })
+        ),
+      )
       .finally(() => {
         refreshing = undefined;
       });
@@ -322,32 +334,43 @@ export function createMcpAuthProvider(options: {
   };
 
   return {
-    token: async () => {
-      await refreshing?.catch(() => undefined);
-      const state = await store.load();
-      const token = state?.tokens?.access_token;
-      const expired =
-        state?.tokensExpireAt !== undefined && state.tokensExpireAt - REFRESH_SKEW_MS <= nowMs();
-      if (
-        !expired ||
-        state?.tokens?.refresh_token === undefined ||
-        state?.tokens?.refresh_token === ""
-      )
-        return token;
+    token: () =>
+      Effect.runPromise(
+        awaiting(function* () {
+          yield* awaited(refreshing?.catch(() => undefined));
+          const state = yield* awaited(store.load());
+          const token = state?.tokens?.access_token;
+          const expired =
+            state?.tokensExpireAt !== undefined &&
+            state.tokensExpireAt - REFRESH_SKEW_MS <= nowMs();
+          if (
+            !expired ||
+            state?.tokens?.refresh_token === undefined ||
+            state?.tokens?.refresh_token === ""
+          )
+            return token;
 
-      await refresh(token).catch(() => undefined);
-      return (await store.load())?.tokens?.access_token;
-    },
-    onUnauthorized: async (context) => {
-      const challenge = parseWwwAuthenticate(context.response.headers.get("www-authenticate"));
-      options.onChallenge(challenge);
+          yield* awaited(refresh(token).catch(() => undefined));
+          return (yield* awaited(store.load()))?.tokens?.access_token;
+        }),
+      ),
+    onUnauthorized: (context) =>
+      Effect.runPromise(
+        awaiting(function* () {
+          const challenge = parseWwwAuthenticate(context.response.headers.get("www-authenticate"));
+          options.onChallenge(challenge);
 
-      if (challenge.error === "insufficient_scope") throw new McpOAuthAuthorizationRequiredError();
-      await refresh(context.token, context.fetch, challenge);
-    },
-    settled: async () => {
-      await refreshing?.catch(() => undefined);
-    },
+          if (challenge.error === "insufficient_scope")
+            throw new McpOAuthAuthorizationRequiredError();
+          yield* awaited(refresh(context.token, context.fetch, challenge));
+        }),
+      ),
+    settled: () =>
+      Effect.runPromise(
+        awaiting(function* () {
+          yield* awaited(refreshing?.catch(() => undefined));
+        }),
+      ),
   };
 }
 
@@ -393,55 +416,63 @@ function responseFromRedirectUrl(
   return { code, ...(iss === null ? {} : { iss }) };
 }
 
-async function waitForAuthorizationResponse(
+function waitForAuthorizationResponse(
   callback: OAuthCallbackServer,
   state: string,
   redirectUrl: URL,
   prompt: McpSignInPrompt,
   signal: AbortSignal | undefined,
 ): Promise<AuthorizationResponse> {
-  const controller = new AbortController();
-  const promptSignal =
-    signal === undefined ? controller.signal : AbortSignal.any([controller.signal, signal]);
-  const fromBrowser = callback.waitForCallback(state, redirectUrl.pathname);
-  const fromUser = prompt.promptForRedirectUrl(promptSignal).then((input) => {
-    if (input === undefined || input.trim() === "") throw new McpSignInCancelledError();
-    return responseFromRedirectUrl(input, state, redirectUrl);
-  });
-  try {
-    return await Promise.race([fromBrowser, fromUser]);
-  } finally {
-    controller.abort();
-    fromBrowser.catch(() => undefined);
-    fromUser.catch(() => undefined);
-  }
+  return Effect.runPromise(
+    awaiting(function* () {
+      const controller = new AbortController();
+      const promptSignal =
+        signal === undefined ? controller.signal : AbortSignal.any([controller.signal, signal]);
+      const fromBrowser = callback.waitForCallback(state, redirectUrl.pathname);
+      const fromUser = prompt.promptForRedirectUrl(promptSignal).then((input) => {
+        if (input === undefined || input.trim() === "") throw new McpSignInCancelledError();
+        return responseFromRedirectUrl(input, state, redirectUrl);
+      });
+      try {
+        return yield* awaited(Promise.race([fromBrowser, fromUser]));
+      } finally {
+        controller.abort();
+        fromBrowser.catch(() => undefined);
+        fromUser.catch(() => undefined);
+      }
+    }),
+  );
 }
 
-async function listenForCallback(
+function listenForCallback(
   settings: CallbackSettings,
   extraPaths: string[],
   port: number | undefined,
   required: boolean,
 ): Promise<OAuthCallbackServer> {
-  const options = {
-    host: settings.host,
-    redirectHost: settings.redirectHost,
-    path: settings.path,
-    extraPaths,
-    renderPage: (page: OAuthCallbackPage) =>
-      page.ok
-        ? oauthSuccessHtml("Signed in to the MCP server. You may now close this page.")
-        : oauthErrorHtml(page.message, page.details),
-  };
-  try {
-    return await OAuthCallbackServer.listen({ ...options, port: port ?? 0 });
-  } catch (error) {
-    if (required || port === undefined) throw error;
-    return OAuthCallbackServer.listen(options);
-  }
+  return Effect.runPromise(
+    awaiting(function* () {
+      const options = {
+        host: settings.host,
+        redirectHost: settings.redirectHost,
+        path: settings.path,
+        extraPaths,
+        renderPage: (page: OAuthCallbackPage) =>
+          page.ok
+            ? oauthSuccessHtml("Signed in to the MCP server. You may now close this page.")
+            : oauthErrorHtml(page.message, page.details),
+      };
+      try {
+        return yield* awaited(OAuthCallbackServer.listen({ ...options, port: port ?? 0 }));
+      } catch (error) {
+        if (required || port === undefined) throw error;
+        return yield* awaited(OAuthCallbackServer.listen(options));
+      }
+    }),
+  );
 }
 
-export async function signInMcpServer(options: {
+export function signInMcpServer(options: {
   serverUrl: string;
   store: McpOAuthStateStore;
   settings: McpOAuthSettings;
@@ -449,96 +480,110 @@ export async function signInMcpServer(options: {
   prompt: McpSignInPrompt;
   signal?: AbortSignal | undefined;
 }): Promise<void> {
-  const { serverUrl, store, settings, signal } = options;
-  if (signal?.aborted === true) throw new McpSignInCancelledError();
-  const stored = await store.load();
-  const stepUp = options.challenge?.error === "insufficient_scope";
-  const callbackOptions = callbackSettings(settings);
+  return Effect.runPromise(
+    awaiting(function* () {
+      const { serverUrl, store, settings, signal } = options;
+      if (signal?.aborted === true) throw new McpSignInCancelledError();
+      const stored = yield* awaited(store.load());
+      const stepUp = options.challenge?.error === "insufficient_scope";
+      const callbackOptions = callbackSettings(settings);
 
-  const registered = registeredRedirectUrls(stored?.clientInformation)[0];
-  const registeredPort =
-    registered !== undefined && registered !== "" ? Number(new URL(registered).port) : 0;
-  const preferredPort = callbackOptions.port ?? (registeredPort > 0 ? registeredPort : undefined);
-  const cimd = settings.clientRegistration === "cimd";
-  const callback = await listenForCallback(
-    callbackOptions,
+      const registered = registeredRedirectUrls(stored?.clientInformation)[0];
+      const registeredPort =
+        registered !== undefined && registered !== "" ? Number(new URL(registered).port) : 0;
+      const preferredPort =
+        callbackOptions.port ?? (registeredPort > 0 ? registeredPort : undefined);
+      const cimd = settings.clientRegistration === "cimd";
+      const callback = yield* awaited(
+        listenForCallback(
+          callbackOptions,
 
-    cimd ? [`${CALLBACK_PATH}/${callbackId(serverUrl)}`] : [],
-    preferredPort,
-    callbackOptions.port !== undefined,
-  );
-  const redirectUrl = callbackOptions.fixedRedirectUrl ?? callback.redirectUrl;
-  try {
-    if (stored !== undefined) {
-      const next: McpOAuthState = { ...stored };
+          cimd ? [`${CALLBACK_PATH}/${callbackId(serverUrl)}`] : [],
+          preferredPort,
+          callbackOptions.port !== undefined,
+        ),
+      );
+      const redirectUrl = callbackOptions.fixedRedirectUrl ?? callback.redirectUrl;
+      try {
+        if (stored !== undefined) {
+          const next: McpOAuthState = { ...stored };
 
-      delete next.oauthState;
+          delete next.oauthState;
 
-      const keepClient =
-        settings.clientId ||
-        (cimd
-          ? stored.clientInformation === undefined
-          : registeredRedirectUrls(stored.clientInformation).includes(redirectUrl));
-      if (keepClient === false || keepClient === "") {
-        delete next.clientInformation;
-        delete next.tokens;
-        delete next.tokensExpireAt;
+          const keepClient =
+            settings.clientId ||
+            (cimd
+              ? stored.clientInformation === undefined
+              : registeredRedirectUrls(stored.clientInformation).includes(redirectUrl));
+          if (keepClient === false || keepClient === "") {
+            delete next.clientInformation;
+            delete next.tokens;
+            delete next.tokensExpireAt;
+          }
+          yield* awaited(store.save(next));
+        }
+
+        let authorizationUrl: URL | undefined;
+        const provider = createProvider(serverUrl, store, settings, redirectUrl, (url) => {
+          authorizationUrl = url;
+        });
+        const resourceMetadataUrl = options.challenge?.resourceMetadataUrl;
+        const authorizationServerMetadataUrl = settings.authServerMetadataUrl;
+
+        const scope = mergeScopes(
+          settings.scope,
+          stepUp
+            ? stepUpScope(stored?.tokens?.scope, options.challenge?.scope)
+            : options.challenge?.scope,
+        );
+        const flow = {
+          serverUrl,
+          fetch: timedFetch(),
+          ...(signal === undefined ? {} : { signal }),
+          ...(resourceMetadataUrl === undefined ? {} : { resourceMetadataUrl }),
+          ...(authorizationServerMetadataUrl === undefined
+            ? {}
+            : { authorizationServerMetadataUrl }),
+          ...(scope === undefined ? {} : { scope }),
+        };
+
+        const skipRefresh = stepUp;
+        if (
+          (yield* awaited(authorizeMcp(provider, { ...flow, skipRefresh }).pipe(toPromise))) ===
+          "AUTHORIZED"
+        )
+          return;
+        if (authorizationUrl === undefined)
+          throw new Error("OAuth flow did not produce an authorization URL");
+
+        const state = yield* awaited(provider.state());
+
+        const authorizationRedirectUrl = new URL(
+          authorizationUrl.searchParams.get("redirect_uri") ?? redirectUrl,
+        );
+        options.prompt.showAuthorizationUrl(authorizationUrl);
+        const { code, iss } = yield* awaited(
+          waitForAuthorizationResponse(
+            callback,
+            state,
+            authorizationRedirectUrl,
+            options.prompt,
+            signal,
+          ),
+        );
+        yield* awaited(
+          authorizeMcp(provider, {
+            ...flow,
+            authorizationCode: code,
+            ...(iss === undefined ? {} : { iss }),
+          }).pipe(toPromise),
+        );
+      } catch (error) {
+        if (signal?.aborted ?? false) throw new McpSignInCancelledError();
+        throw error;
+      } finally {
+        yield* awaited(callback.close());
       }
-      await store.save(next);
-    }
-
-    let authorizationUrl: URL | undefined;
-    const provider = createProvider(serverUrl, store, settings, redirectUrl, (url) => {
-      authorizationUrl = url;
-    });
-    const resourceMetadataUrl = options.challenge?.resourceMetadataUrl;
-    const authorizationServerMetadataUrl = settings.authServerMetadataUrl;
-
-    const scope = mergeScopes(
-      settings.scope,
-      stepUp
-        ? stepUpScope(stored?.tokens?.scope, options.challenge?.scope)
-        : options.challenge?.scope,
-    );
-    const flow = {
-      serverUrl,
-      fetch: timedFetch(),
-      ...(signal === undefined ? {} : { signal }),
-      ...(resourceMetadataUrl === undefined ? {} : { resourceMetadataUrl }),
-      ...(authorizationServerMetadataUrl === undefined ? {} : { authorizationServerMetadataUrl }),
-      ...(scope === undefined ? {} : { scope }),
-    };
-
-    const skipRefresh = stepUp;
-    if ((await toPromise(authorizeMcp(provider, { ...flow, skipRefresh }))) === "AUTHORIZED")
-      return;
-    if (authorizationUrl === undefined)
-      throw new Error("OAuth flow did not produce an authorization URL");
-
-    const state = await provider.state();
-
-    const authorizationRedirectUrl = new URL(
-      authorizationUrl.searchParams.get("redirect_uri") ?? redirectUrl,
-    );
-    options.prompt.showAuthorizationUrl(authorizationUrl);
-    const { code, iss } = await waitForAuthorizationResponse(
-      callback,
-      state,
-      authorizationRedirectUrl,
-      options.prompt,
-      signal,
-    );
-    await toPromise(
-      authorizeMcp(provider, {
-        ...flow,
-        authorizationCode: code,
-        ...(iss === undefined ? {} : { iss }),
-      }),
-    );
-  } catch (error) {
-    if (signal?.aborted ?? false) throw new McpSignInCancelledError();
-    throw error;
-  } finally {
-    await callback.close();
-  }
+    }),
+  );
 }

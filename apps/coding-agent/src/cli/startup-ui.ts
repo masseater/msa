@@ -7,6 +7,7 @@ import {
   type TUI,
   TuiMainScreen,
 } from "@msa/tui";
+import * as Effect from "effect/Effect";
 
 import {
   APP_NAME,
@@ -16,6 +17,7 @@ import {
   getSettingsPath,
   PACKAGE_NAME,
 } from "../config.ts";
+import { awaited, awaiting } from "../core/awaiting.ts";
 import { areExperimentalFeaturesEnabled } from "../core/experimental.ts";
 import { KeybindingsManager } from "../core/keybindings.ts";
 import { DefaultPackageManager, type ResolvedResource } from "../core/package-manager.ts";
@@ -80,35 +82,46 @@ function loadThemes(resources: ResolvedResource[]): Theme[] {
   return themes;
 }
 
-async function loadStartupThemes(settingsManager: SettingsManager): Promise<Theme[]> {
-  const globalSettingsManager = SettingsManager.inMemory(settingsManager.getGlobalSettings(), {
-    projectTrusted: false,
-  });
-  const packageManager = new DefaultPackageManager({
-    cwd: process.cwd(),
-    agentDir: getAgentDir(),
-    settingsManager: globalSettingsManager,
-  });
-  const resolvedPaths = await packageManager.resolve(async () => "skip");
-  return loadThemes(resolvedPaths.themes);
+function loadStartupThemes(settingsManager: SettingsManager): Promise<Theme[]> {
+  return Effect.runPromise(
+    awaiting(function* () {
+      const globalSettingsManager = SettingsManager.inMemory(settingsManager.getGlobalSettings(), {
+        projectTrusted: false,
+      });
+      const packageManager = new DefaultPackageManager({
+        cwd: process.cwd(),
+        agentDir: getAgentDir(),
+        settingsManager: globalSettingsManager,
+      });
+      const resolvedPaths = yield* awaited(
+        packageManager.resolve(() => Effect.runPromise(Effect.succeed("skip"))),
+      );
+      return loadThemes(resolvedPaths.themes);
+    }),
+  );
 }
 
-export async function createStartupTui(settingsManager: SettingsManager): Promise<TUI> {
-  setCapabilityOverrides(settingsManager.getTerminalCapabilityOverrides());
-  setRegisteredThemes(await loadStartupThemes(settingsManager));
+export function createStartupTui(settingsManager: SettingsManager): Promise<TUI> {
+  return Effect.runPromise(
+    awaiting(function* () {
+      setCapabilityOverrides(settingsManager.getTerminalCapabilityOverrides());
+      setRegisteredThemes(yield* awaited(loadStartupThemes(settingsManager)));
 
-  markTerminalColorsPending();
-  initTheme(
-    resolveThemeSetting(settingsManager.getThemeSetting(), getTerminalTheme()) ?? SYSTEM_THEME_NAME,
+      markTerminalColorsPending();
+      initTheme(
+        resolveThemeSetting(settingsManager.getThemeSetting(), getTerminalTheme()) ??
+          SYSTEM_THEME_NAME,
+      );
+      setKeybindings(KeybindingsManager.create());
+      const ui: TUI = new TuiMainScreen(
+        new ProcessTerminal(),
+        settingsManager.getShowHardwareCursor(),
+        getAgentDir(),
+      );
+      ui.setClearOnShrink(settingsManager.getClearOnShrink());
+      return ui;
+    }),
   );
-  setKeybindings(KeybindingsManager.create());
-  const ui: TUI = new TuiMainScreen(
-    new ProcessTerminal(),
-    settingsManager.getShowHardwareCursor(),
-    getAgentDir(),
-  );
-  ui.setClearOnShrink(settingsManager.getClearOnShrink());
-  return ui;
 }
 
 export function startStartupTui(ui: TUI, settingsManager: SettingsManager): void {
@@ -128,10 +141,14 @@ function queryStartupTerminalColors(ui: TUI, onColors: () => void): void {
   });
 }
 
-async function clearStartupTui(ui: TUI): Promise<void> {
-  ui.clear();
-  ui.requestRender();
-  await new Promise((resolve) => setTimeout(resolve, 25));
+function clearStartupTui(ui: TUI): Promise<void> {
+  return Effect.runPromise(
+    awaiting(function* () {
+      ui.clear();
+      ui.requestRender();
+      yield* awaited(new Promise((resolve) => setTimeout(resolve, 25)));
+    }),
+  );
 }
 
 export function shouldRunFirstTimeSetup(settingsPath: string = getSettingsPath()): boolean {
@@ -153,106 +170,133 @@ export function shouldRunFirstTimeSetup(settingsPath: string = getSettingsPath()
   return !existsSync(settingsPath);
 }
 
-export async function showStartupSelector<T>(
+export function showStartupSelector<T>(
   settingsManager: SettingsManager,
   title: string,
   options: Array<{ label: string; value: T }>,
 ): Promise<T | undefined> {
-  const ui = await createStartupTui(settingsManager);
-  return new Promise((resolve) => {
-    let settled = false;
-    const finish = async (result: T | undefined) => {
-      if (settled) {
-        return;
-      }
-      settled = true;
-      await clearStartupTui(ui);
-      ui.stop();
-      resolve(result);
-    };
+  return Effect.runPromise(
+    awaiting(function* () {
+      const ui = yield* awaited(createStartupTui(settingsManager));
+      return yield* awaited(
+        new Promise((resolve) => {
+          let settled = false;
+          const finish = (result: T | undefined) =>
+            Effect.runPromise(
+              awaiting(function* () {
+                if (settled) {
+                  return;
+                }
+                settled = true;
+                yield* awaited(clearStartupTui(ui));
+                ui.stop();
+                resolve(result);
+              }),
+            );
 
-    const selector = new ExtensionSelectorComponent(
-      title,
-      options.map((option) => option.label),
-      (option) => void finish(options.find((entry) => entry.label === option)?.value),
-      () => void finish(undefined),
-      { tui: ui },
-    );
-    ui.addChild(selector);
-    ui.setFocus(selector);
-    startStartupTui(ui, settingsManager);
-  });
+          const selector = new ExtensionSelectorComponent(
+            title,
+            options.map((option) => option.label),
+            (option) => void finish(options.find((entry) => entry.label === option)?.value),
+            () => void finish(undefined),
+            { tui: ui },
+          );
+          ui.addChild(selector);
+          ui.setFocus(selector);
+          startStartupTui(ui, settingsManager);
+        }),
+      );
+    }),
+  );
 }
 
-export async function showFirstTimeSetup(settingsManager: SettingsManager): Promise<void> {
-  const ui = await createStartupTui(settingsManager);
-  return new Promise((resolve) => {
-    let settled = false;
-    const finish = async (result: FirstTimeSetupResult | undefined) => {
-      if (settled) {
-        return;
-      }
-      settled = true;
-      if (result !== undefined) {
-        settingsManager.setTheme(result.theme);
-        settingsManager.setEnableAnalytics(result.shareAnalytics);
-        await settingsManager.flush();
-      }
-      await clearStartupTui(ui);
-      ui.stop();
-      resolve();
-    };
+export function showFirstTimeSetup(settingsManager: SettingsManager): Promise<void> {
+  return Effect.runPromise(
+    awaiting(function* () {
+      const ui = yield* awaited(createStartupTui(settingsManager));
+      return yield* awaited(
+        new Promise((resolve) => {
+          let settled = false;
+          const finish = (result: FirstTimeSetupResult | undefined) =>
+            Effect.runPromise(
+              awaiting(function* () {
+                if (settled) {
+                  return;
+                }
+                settled = true;
+                if (result !== undefined) {
+                  settingsManager.setTheme(result.theme);
+                  settingsManager.setEnableAnalytics(result.shareAnalytics);
+                  yield* awaited(settingsManager.flush());
+                }
+                yield* awaited(clearStartupTui(ui));
+                ui.stop();
+                resolve();
+              }),
+            );
 
-    ui.start();
-    let previewTheme = SYSTEM_THEME_NAME;
-    setTheme(previewTheme);
-    const component = new FirstTimeSetupComponent({
-      onThemePreview: (themeName) => {
-        previewTheme = themeName;
-        setTheme(themeName);
-        ui.requestRender();
-      },
-      onSubmit: (result) => void finish(result),
-      onCancel: () => void finish(undefined),
-    });
-    ui.addChild(component);
-    ui.setFocus(component);
-    ui.requestRender();
+          ui.start();
+          let previewTheme = SYSTEM_THEME_NAME;
+          setTheme(previewTheme);
+          const component = new FirstTimeSetupComponent({
+            onThemePreview: (themeName) => {
+              previewTheme = themeName;
+              setTheme(themeName);
+              ui.requestRender();
+            },
+            onSubmit: (result) => void finish(result),
+            onCancel: () => void finish(undefined),
+          });
+          ui.addChild(component);
+          ui.setFocus(component);
+          ui.requestRender();
 
-    queryStartupTerminalColors(ui, () => setTheme(previewTheme));
-  });
+          queryStartupTerminalColors(ui, () => setTheme(previewTheme));
+        }),
+      );
+    }),
+  );
 }
 
-export async function showStartupInput(
+export function showStartupInput(
   settingsManager: SettingsManager,
   title: string,
   placeholder?: string,
 ): Promise<string | undefined> {
-  const ui = await createStartupTui(settingsManager);
-  return new Promise((resolve) => {
-    let settled = false;
-    const finish = async (result: string | undefined) => {
-      if (settled) {
-        return;
-      }
-      settled = true;
-      input.dispose();
-      await clearStartupTui(ui);
-      ui.stop();
-      resolve(result);
-    };
+  return Effect.runPromise(
+    awaiting(function* () {
+      const ui = yield* awaited(createStartupTui(settingsManager));
+      return yield* awaited(
+        new Promise((resolve) => {
+          let settled = false;
+          const finish = (result: string | undefined) =>
+            Effect.runPromise(
+              awaiting(function* () {
+                if (settled) {
+                  return;
+                }
+                settled = true;
+                input.dispose();
+                yield* awaited(clearStartupTui(ui));
+                ui.stop();
+                resolve(result);
+              }),
+            );
 
-    const input = new ExtensionInputComponent(
-      title,
-      placeholder,
-      (value) => void finish(value),
-      () => void finish(undefined),
-      {
-        tui: ui,
-      },
-    );
-    ui.addChild(input);
-    ui.setFocus(input);
-    startStartupTui(ui, settingsManager);
-  });
+          const input = new ExtensionInputComponent(
+            title,
+            placeholder,
+            (value) => void finish(value),
+            () => void finish(undefined),
+            {
+              tui: ui,
+            },
+          );
+          ui.addChild(input);
+          ui.setFocus(input);
+          startStartupTui(ui, settingsManager);
+        }),
+      );
+    }),
+  );
 }

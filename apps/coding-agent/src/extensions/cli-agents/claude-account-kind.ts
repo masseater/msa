@@ -1,5 +1,7 @@
 import type { AutocompleteItem } from "@msa/tui";
+import * as Effect from "effect/Effect";
 
+import { awaited, awaiting } from "../../core/awaiting.ts";
 import type { ExtensionCommandContext } from "../../core/extensions/types.ts";
 import type { AccountKind } from "../accounts/kind.ts";
 import {
@@ -29,40 +31,50 @@ const ACTIONS: Record<string, string> = {
   clear: "clear: forget usage-limit blocks",
 };
 
-async function describeAccounts(): Promise<string> {
-  return (await withAuthStatus(loadAccounts()))
-    .map(({ account, status }, index) => {
-      const auth =
-        account.configDir !== undefined && account.configDir !== ""
-          ? `configDir ${account.configDir}`
-          : account.tokenCommand !== undefined && account.tokenCommand !== ""
-            ? "tokenCommand"
-            : "msa environment";
-      const loginText =
-        describeLogin(status) ||
-        `not logged in${status.detail !== undefined && status.detail !== "" ? ` (${status.detail})` : ""}`;
-      const block = blockOf(account);
-      const state =
-        block === undefined
-          ? "available"
-          : `blocked until ${new Date(block.until).toLocaleString()} (${block.reason})`;
-      return `${index + 1}. ${account.name}  ${auth}  ${loginText}  ${state}${account.auto === false ? "  (not in rotation)" : ""}`;
-    })
-    .join("\n");
+function describeAccounts(): Promise<string> {
+  return Effect.runPromise(
+    awaiting(function* () {
+      return (yield* awaited(withAuthStatus(loadAccounts())))
+        .map(({ account, status }, index) => {
+          const auth =
+            account.configDir !== undefined && account.configDir !== ""
+              ? `configDir ${account.configDir}`
+              : account.tokenCommand !== undefined && account.tokenCommand !== ""
+                ? "tokenCommand"
+                : "msa environment";
+          const loginText =
+            describeLogin(status) ||
+            `not logged in${status.detail !== undefined && status.detail !== "" ? ` (${status.detail})` : ""}`;
+          const block = blockOf(account);
+          const state =
+            block === undefined
+              ? "available"
+              : `blocked until ${new Date(block.until).toLocaleString()} (${block.reason})`;
+          return `${index + 1}. ${account.name}  ${auth}  ${loginText}  ${state}${account.auto === false ? "  (not in rotation)" : ""}`;
+        })
+        .join("\n");
+    }),
+  );
 }
 
-async function login(account: Account, ctx: ExtensionCommandContext): Promise<void> {
-  if (!ctx.hasUI) throw new Error("Signing in needs the interactive UI");
-  await loginAccount(account, {
-    askCode: (url, signal) => {
-      ctx.ui.notify(`Sign in to Claude for "${account.name}":\n${url}`, "info");
-      return ctx.ui.input(`Paste the code for "${account.name}"`, "code", { signal });
-    },
-  });
-  const status = await authStatus(account);
-  ctx.ui.notify(
-    `"${account.name}" ${status.loggedIn ? `logged in${status.email !== undefined && status.email !== "" ? ` as ${status.email}` : ""}` : "is still not logged in"}`,
-    status.loggedIn ? "info" : "warning",
+function login(account: Account, ctx: ExtensionCommandContext): Promise<void> {
+  return Effect.runPromise(
+    awaiting(function* () {
+      if (!ctx.hasUI) throw new Error("Signing in needs the interactive UI");
+      yield* awaited(
+        loginAccount(account, {
+          askCode: (url, signal) => {
+            ctx.ui.notify(`Sign in to Claude for "${account.name}":\n${url}`, "info");
+            return ctx.ui.input(`Paste the code for "${account.name}"`, "code", { signal });
+          },
+        }),
+      );
+      const status = yield* awaited(authStatus(account));
+      ctx.ui.notify(
+        `"${account.name}" ${status.loggedIn ? `logged in${status.email !== undefined && status.email !== "" ? ` as ${status.email}` : ""}` : "is still not logged in"}`,
+        status.loggedIn ? "info" : "warning",
+      );
+    }),
   );
 }
 
@@ -73,52 +85,60 @@ function named(name: string | undefined): Account {
   return account;
 }
 
-async function run(args: string, ctx: ExtensionCommandContext): Promise<void> {
-  const [action = "", name, ...rest] = args.trim().split(/\s+/u).filter(Boolean);
-  const before = loadAccounts().length;
-  switch (action) {
-    case "":
-      break;
-    case "add": {
-      if (name === undefined || name === "")
-        throw new Error(`Usage: /accounts claude ${ACTIONS["add"]}`);
-      const account = addAccount(name, rest.join(" ") || undefined);
+function run(args: string, ctx: ExtensionCommandContext): Promise<void> {
+  return Effect.runPromise(
+    awaiting(function* () {
+      const [action = "", name, ...rest] = args.trim().split(/\s+/u).filter(Boolean);
+      const before = loadAccounts().length;
+      switch (action) {
+        case "":
+          break;
+        case "add": {
+          if (name === undefined || name === "")
+            throw new Error(`Usage: /accounts claude ${ACTIONS["add"]}`);
+          const account = addAccount(name, rest.join(" ") || undefined);
 
-      if (account.tokenCommand === undefined || account.tokenCommand === "")
-        await login(account, ctx).catch((error: Error) => ctx.ui.notify(error.message, "warning"));
-      break;
-    }
-    case "login":
-      await login(named(name), ctx);
-      break;
-    case "logout":
-      await logoutAccount(named(name));
-      break;
-    case "remove":
-      named(name);
-      if (
-        ctx.hasUI &&
-        !(await ctx.ui.confirm("Remove Claude account", `Forget "${name}" and its login?`))
-      )
-        return;
-      removeAccount(name!);
-      break;
-    case "use":
-      preferAccount(named(name).name);
-      break;
-    case "enable":
-    case "disable":
-      setAutoRotation(named(name).name, action === "enable");
-      break;
-    case "clear":
-      clearBlocks();
-      break;
-    default:
-      throw new Error(`Unknown action "${action}".\n${Object.values(ACTIONS).join("\n")}`);
-  }
-  ctx.ui.notify(await describeAccounts(), "info");
+          if (account.tokenCommand === undefined || account.tokenCommand === "")
+            yield* awaited(
+              login(account, ctx).catch((error: Error) => ctx.ui.notify(error.message, "warning")),
+            );
+          break;
+        }
+        case "login":
+          yield* awaited(login(named(name), ctx));
+          break;
+        case "logout":
+          yield* awaited(logoutAccount(named(name)));
+          break;
+        case "remove":
+          named(name);
+          if (
+            ctx.hasUI &&
+            !(yield* awaited(
+              ctx.ui.confirm("Remove Claude account", `Forget "${name}" and its login?`),
+            ))
+          )
+            return;
+          removeAccount(name!);
+          break;
+        case "use":
+          preferAccount(named(name).name);
+          break;
+        case "enable":
+        case "disable":
+          setAutoRotation(named(name).name, action === "enable");
+          break;
+        case "clear":
+          clearBlocks();
+          break;
+        default:
+          throw new Error(`Unknown action "${action}".\n${Object.values(ACTIONS).join("\n")}`);
+      }
+      ctx.ui.notify(yield* awaited(describeAccounts()), "info");
 
-  if (loadAccounts().length !== before) await ctx.reload();
+      if (loadAccounts().length !== before) yield* awaited(ctx.reload());
+    }),
+  );
 }
 
 function completions(prefix: string): AutocompleteItem[] | null {

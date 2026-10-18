@@ -3,7 +3,9 @@ import { resolve } from "path";
 
 import type { ImageContent } from "@msa/ai";
 import chalk from "chalk";
+import * as Effect from "effect/Effect";
 
+import { awaited, awaiting } from "../core/awaiting.ts";
 import { writeError } from "../core/platform.ts";
 import { resolveReadPath } from "../core/tools/path-utils.ts";
 import { toErrorMessage } from "../utils/errors.ts";
@@ -20,63 +22,67 @@ export interface ProcessFileOptions {
   autoResizeImages?: boolean;
 }
 
-export async function processFileArguments(
+export function processFileArguments(
   fileArgs: string[],
   options?: ProcessFileOptions,
 ): Promise<ProcessedFiles> {
-  const autoResizeImages = options?.autoResizeImages ?? true;
-  let text = "";
-  const images: ImageContent[] = [];
+  return Effect.runPromise(
+    awaiting(function* () {
+      const autoResizeImages = options?.autoResizeImages ?? true;
+      let text = "";
+      const images: ImageContent[] = [];
 
-  for (const fileArg of fileArgs) {
-    const absolutePath = resolve(resolveReadPath(fileArg, process.cwd()));
+      for (const fileArg of fileArgs) {
+        const absolutePath = resolve(resolveReadPath(fileArg, process.cwd()));
 
-    try {
-      await access(absolutePath);
-    } catch {
-      writeError(chalk.red(`Error: File not found: ${absolutePath}`));
-      process.exit(1);
-    }
+        try {
+          yield* awaited(access(absolutePath));
+        } catch {
+          writeError(chalk.red(`Error: File not found: ${absolutePath}`));
+          process.exit(1);
+        }
 
-    const stats = await stat(absolutePath);
-    if (stats.size === 0) {
-      continue;
-    }
+        const stats = yield* awaited(stat(absolutePath));
+        if (stats.size === 0) {
+          continue;
+        }
 
-    const mimeType = await detectSupportedImageMimeTypeFromFile(absolutePath);
+        const mimeType = yield* awaited(detectSupportedImageMimeTypeFromFile(absolutePath));
 
-    if (mimeType !== null && mimeType !== "") {
-      const content = await readFile(absolutePath);
-      const processed = await processImage(content, mimeType, { autoResizeImages });
+        if (mimeType !== null && mimeType !== "") {
+          const content = yield* awaited(readFile(absolutePath));
+          const processed = yield* awaited(processImage(content, mimeType, { autoResizeImages }));
 
-      if (!processed.ok) {
-        text += `<file name="${absolutePath}">${processed.message}</file>\n`;
-        continue;
+          if (!processed.ok) {
+            text += `<file name="${absolutePath}">${processed.message}</file>\n`;
+            continue;
+          }
+
+          const attachment: ImageContent = {
+            type: "image",
+            mimeType: processed.mimeType,
+            data: processed.data,
+          };
+          images.push(attachment);
+
+          if (processed.hints.length > 0) {
+            text += `<file name="${absolutePath}">${processed.hints.join("\n")}</file>\n`;
+          } else {
+            text += `<file name="${absolutePath}"></file>\n`;
+          }
+        } else {
+          try {
+            const content = stripBom(yield* awaited(readFile(absolutePath, "utf-8")));
+            text += `<file name="${absolutePath}">\n${content}\n</file>\n`;
+          } catch (error: unknown) {
+            const message = toErrorMessage(error);
+            writeError(chalk.red(`Error: Could not read file ${absolutePath}: ${message}`));
+            process.exit(1);
+          }
+        }
       }
 
-      const attachment: ImageContent = {
-        type: "image",
-        mimeType: processed.mimeType,
-        data: processed.data,
-      };
-      images.push(attachment);
-
-      if (processed.hints.length > 0) {
-        text += `<file name="${absolutePath}">${processed.hints.join("\n")}</file>\n`;
-      } else {
-        text += `<file name="${absolutePath}"></file>\n`;
-      }
-    } else {
-      try {
-        const content = stripBom(await readFile(absolutePath, "utf-8"));
-        text += `<file name="${absolutePath}">\n${content}\n</file>\n`;
-      } catch (error: unknown) {
-        const message = toErrorMessage(error);
-        writeError(chalk.red(`Error: Could not read file ${absolutePath}: ${message}`));
-        process.exit(1);
-      }
-    }
-  }
-
-  return { text, images };
+      return { text, images };
+    }),
+  );
 }

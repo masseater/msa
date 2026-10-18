@@ -3,8 +3,10 @@ import { join } from "node:path";
 import { createInterface } from "node:readline/promises";
 
 import chalk from "chalk";
+import * as Effect from "effect/Effect";
 
 import { APP_NAME, CONFIG_DIR_NAME } from "../../config.ts";
+import { awaited, awaiting } from "../../core/awaiting.ts";
 import { validateMcpServerConfig } from "../../core/mcp-servers.ts";
 import { writeError, writeLog } from "../../core/platform.ts";
 import { ProjectTrustStore } from "../../core/trust-manager.ts";
@@ -174,101 +176,104 @@ function parseOptions(
   return { positional, values, lists };
 }
 
-export async function runMcpCommand(args: string[], options: McpCommandOptions): Promise<number> {
-  const log = options.log ?? ((line: string) => writeLog(line));
-  const error = options.error ?? ((line: string) => writeError(line));
-  const [command, ...rest] = args;
-  if (
-    command === undefined ||
-    command === "help" ||
-    args.includes("--help") ||
-    args.includes("-h")
-  ) {
-    log(HELP);
-    return 0;
-  }
-
-  const projectConfig = join(options.cwd, CONFIG_DIR_NAME, "mcp.json");
-  if (command === "add" || command === "remove") {
-    return command === "add"
-      ? add(rest, projectConfig, options, log, error)
-      : remove(rest, projectConfig, options, log, error);
-  }
-  const projectTrusted = new ProjectTrustStore(options.agentDir).get(options.cwd) === true;
-  const loaded = loadMcpConfig({ agentDir: options.agentDir, cwd: options.cwd, projectTrusted });
-  const untrustedNote =
-    !projectTrusted && existsSync(projectConfig)
-      ? `${projectConfig} is ignored because the project is not trusted. Start ${APP_NAME} in the project to trust it.`
-      : undefined;
-  const credentials = options.credentials ?? new McpOAuthCredentialStore();
-
-  switch (command) {
-    case "list": {
-      const parsed = parseOptions(rest, { json: "flag" }, error);
-      if (parsed === undefined) return 1;
-      if (parsed.positional.length > 0) {
-        error(`Usage: ${APP_NAME} mcp list [--json]\n${HELP_HINT}`);
-        return 1;
-      }
-      return list(loaded, parsed.values.has("json"), untrustedNote, options, credentials, log);
-    }
-    case "login":
-    case "logout": {
-      const parsed = parseOptions(rest, command === "login" ? { timeout: "value" } : {}, error);
-      if (parsed === undefined) return 1;
-      const [name, ...extra] = parsed.positional;
-      if (name === undefined || name === "" || extra.length > 0) {
-        error(`Usage: ${APP_NAME} mcp ${command} <server>\n${HELP_HINT}`);
-        return 1;
-      }
-      const entry = loaded.servers.find((server) => server.name === name);
-      if (entry === undefined) {
-        error(
-          `No MCP server named "${name}".${untrustedNote !== undefined && untrustedNote !== "" ? ` ${untrustedNote}` : ""} Configured: ${loaded.servers.map((server) => server.name).join(", ") || "none"}.`,
-        );
-        return 1;
-      }
-      const connection = createConnection(entry, options, credentials);
-      const url = connection.oauthUrl;
-      if (url === undefined || url === "") {
-        error(
-          `MCP server "${name}" does not use OAuth. Only HTTP servers without an Authorization header do.`,
-        );
-        return 1;
-      }
-      if (command === "logout") {
-        const removed = credentials.remove(name, url);
-        log(
-          removed
-            ? `Signed out of MCP server "${name}".`
-            : `No stored credentials for MCP server "${name}".`,
-        );
+export function runMcpCommand(args: string[], options: McpCommandOptions): Promise<number> {
+  return Effect.runPromise(
+    awaiting(function* () {
+      const log = options.log ?? ((line: string) => writeLog(line));
+      const error = options.error ?? ((line: string) => writeError(line));
+      const [command, ...rest] = args;
+      if (
+        command === undefined ||
+        command === "help" ||
+        args.includes("--help") ||
+        args.includes("-h")
+      ) {
+        log(HELP);
         return 0;
       }
-      const timeout = Number(parsed.values.get("timeout") ?? DEFAULT_LOGIN_TIMEOUT_SECONDS);
-      if (!Number.isFinite(timeout) || timeout <= 0) {
-        error("--timeout must be a positive number of seconds.");
-        return 1;
+
+      const projectConfig = join(options.cwd, CONFIG_DIR_NAME, "mcp.json");
+      if (command === "add" || command === "remove") {
+        return command === "add"
+          ? add(rest, projectConfig, options, log, error)
+          : remove(rest, projectConfig, options, log, error);
       }
-      try {
-        return await login(
-          entry,
-          connection,
-          url,
-          timeout * 1000,
-          options,
-          credentials,
-          log,
-          error,
-        );
-      } finally {
-        await connection.close();
+      const projectTrusted = new ProjectTrustStore(options.agentDir).get(options.cwd) === true;
+      const loaded = loadMcpConfig({
+        agentDir: options.agentDir,
+        cwd: options.cwd,
+        projectTrusted,
+      });
+      const untrustedNote =
+        !projectTrusted && existsSync(projectConfig)
+          ? `${projectConfig} is ignored because the project is not trusted. Start ${APP_NAME} in the project to trust it.`
+          : undefined;
+      const credentials = options.credentials ?? new McpOAuthCredentialStore();
+
+      switch (command) {
+        case "list": {
+          const parsed = parseOptions(rest, { json: "flag" }, error);
+          if (parsed === undefined) return 1;
+          if (parsed.positional.length > 0) {
+            error(`Usage: ${APP_NAME} mcp list [--json]\n${HELP_HINT}`);
+            return 1;
+          }
+          return yield* awaited(
+            list(loaded, parsed.values.has("json"), untrustedNote, options, credentials, log),
+          );
+        }
+        case "login":
+        case "logout": {
+          const parsed = parseOptions(rest, command === "login" ? { timeout: "value" } : {}, error);
+          if (parsed === undefined) return 1;
+          const [name, ...extra] = parsed.positional;
+          if (name === undefined || name === "" || extra.length > 0) {
+            error(`Usage: ${APP_NAME} mcp ${command} <server>\n${HELP_HINT}`);
+            return 1;
+          }
+          const entry = loaded.servers.find((server) => server.name === name);
+          if (entry === undefined) {
+            error(
+              `No MCP server named "${name}".${untrustedNote !== undefined && untrustedNote !== "" ? ` ${untrustedNote}` : ""} Configured: ${loaded.servers.map((server) => server.name).join(", ") || "none"}.`,
+            );
+            return 1;
+          }
+          const connection = createConnection(entry, options, credentials);
+          const url = connection.oauthUrl;
+          if (url === undefined || url === "") {
+            error(
+              `MCP server "${name}" does not use OAuth. Only HTTP servers without an Authorization header do.`,
+            );
+            return 1;
+          }
+          if (command === "logout") {
+            const removed = credentials.remove(name, url);
+            log(
+              removed
+                ? `Signed out of MCP server "${name}".`
+                : `No stored credentials for MCP server "${name}".`,
+            );
+            return 0;
+          }
+          const timeout = Number(parsed.values.get("timeout") ?? DEFAULT_LOGIN_TIMEOUT_SECONDS);
+          if (!Number.isFinite(timeout) || timeout <= 0) {
+            error("--timeout must be a positive number of seconds.");
+            return 1;
+          }
+          try {
+            return yield* awaited(
+              login(entry, connection, url, timeout * 1000, options, credentials, log, error),
+            );
+          } finally {
+            yield* awaited(connection.close());
+          }
+        }
+        default:
+          error(`Unknown mcp command "${command}".\n${HELP_HINT}`);
+          return 1;
       }
-    }
-    default:
-      error(`Unknown mcp command "${command}".\n${HELP_HINT}`);
-      return 1;
-  }
+    }),
+  );
 }
 
 function parsePairs(option: string, pairs: string[] | undefined, error: (line: string) => void) {
@@ -454,7 +459,7 @@ function remove(
   return 1;
 }
 
-async function list(
+function list(
   loaded: LoadedMcpConfig,
   json: boolean,
   untrustedNote: string | undefined,
@@ -462,96 +467,109 @@ async function list(
   credentials: McpOAuthCredentialStore,
   log: (line: string) => void,
 ): Promise<number> {
-  const reports = await Promise.all(
-    loaded.servers.map(async (entry): Promise<ServerReport> => {
-      const report: ServerReport = {
-        name: entry.name,
-        scope: entry.scope ?? "global",
-        source: entry.source,
-        ...(entry.override !== undefined && entry.override !== ""
-          ? { override: entry.override }
-          : {}),
-        enabled: entry.config.enabled !== false,
-        exposure: entry.config.exposure ?? "codemode",
-        transport: describeTransport(entry),
-        state: "disabled",
-        tools: [],
-      };
-      if (!report.enabled) return report;
-      const connection = createConnection(entry, options, credentials);
-      try {
-        await connection.getClient();
-      } catch {}
-      report.state = connection.state;
-      report.tools = connection.tools.map((tool) => tool.name);
-      const overrides = connection.tools.flatMap((tool) => {
-        const exposure = getMcpToolExposure(entry.config, tool.name);
-        return exposure === report.exposure ? [] : [[tool.name, exposure] as const];
-      });
-      if (overrides.length > 0) report.toolExposure = Object.fromEntries(overrides);
-      if (connection.hasResources) report.resources = true;
-      if (
-        connection.state !== "connected" &&
-        connection.error !== undefined &&
-        connection.error !== ""
-      )
-        report.error = connection.error;
-      await connection.close();
-      return report;
+  return Effect.runPromise(
+    awaiting(function* () {
+      const reports = yield* awaited(
+        Promise.all(
+          loaded.servers.map((entry): Promise<ServerReport> =>
+            Effect.runPromise(
+              awaiting(function* () {
+                const report: ServerReport = {
+                  name: entry.name,
+                  scope: entry.scope ?? "global",
+                  source: entry.source,
+                  ...(entry.override !== undefined && entry.override !== ""
+                    ? { override: entry.override }
+                    : {}),
+                  enabled: entry.config.enabled !== false,
+                  exposure: entry.config.exposure ?? "codemode",
+                  transport: describeTransport(entry),
+                  state: "disabled",
+                  tools: [],
+                };
+                if (!report.enabled) return report;
+                const connection = createConnection(entry, options, credentials);
+                try {
+                  yield* awaited(connection.getClient());
+                } catch {}
+                report.state = connection.state;
+                report.tools = connection.tools.map((tool) => tool.name);
+                const overrides = connection.tools.flatMap((tool) => {
+                  const exposure = getMcpToolExposure(entry.config, tool.name);
+                  return exposure === report.exposure ? [] : [[tool.name, exposure] as const];
+                });
+                if (overrides.length > 0) report.toolExposure = Object.fromEntries(overrides);
+                if (connection.hasResources) report.resources = true;
+                if (
+                  connection.state !== "connected" &&
+                  connection.error !== undefined &&
+                  connection.error !== ""
+                )
+                  report.error = connection.error;
+                yield* awaited(connection.close());
+                return report;
+              }),
+            ),
+          ),
+        ),
+      );
+      const failed =
+        loaded.errors.length > 0 ||
+        reports.some((report) => report.enabled && report.state !== "connected");
+
+      if (json) {
+        log(
+          JSON.stringify(
+            {
+              servers: reports,
+              errors: loaded.errors,
+              ...(untrustedNote !== undefined && untrustedNote !== ""
+                ? { note: untrustedNote }
+                : {}),
+            },
+            null,
+            2,
+          ),
+        );
+        return failed ? 1 : 0;
+      }
+      if (reports.length === 0 && loaded.errors.length === 0) {
+        log(
+          `No MCP servers configured. Add them to ${join(options.agentDir, "mcp.json")} or .msa/mcp.json.`,
+        );
+      }
+      for (const report of reports) {
+        const state =
+          report.state === "connected"
+            ? `connected, ${report.tools.length} tool${report.tools.length === 1 ? "" : "s"}`
+            : report.state === "needs-auth"
+              ? "needs sign-in"
+              : report.state;
+        log(`${report.name}: ${state} (${report.exposure}, ${report.scope})`);
+        log(`  ${report.transport}`);
+        if (report.override !== undefined && report.override !== "")
+          log(`  project override: ${report.override}`);
+        if (report.state === "needs-auth")
+          log(`  sign in with: ${APP_NAME} mcp login ${report.name}`);
+        if (report.tools.length > 0) {
+          const tools = report.tools.map((tool) => {
+            const exposure = report.toolExposure?.[tool];
+            return exposure !== undefined && exposure !== "" ? `${tool} [${exposure}]` : tool;
+          });
+          log(`  tools: ${tools.join(", ")}`);
+        }
+        if (report.resources !== undefined) log("  offers resources");
+        if (report.error !== undefined && report.error !== "")
+          log(`  ${report.error.split("\n").join("\n  ")}`);
+      }
+      for (const configError of loaded.errors) log(`config error: ${configError}`);
+      if (untrustedNote !== undefined && untrustedNote !== "") log(untrustedNote);
+      return failed ? 1 : 0;
     }),
   );
-  const failed =
-    loaded.errors.length > 0 ||
-    reports.some((report) => report.enabled && report.state !== "connected");
-
-  if (json) {
-    log(
-      JSON.stringify(
-        {
-          servers: reports,
-          errors: loaded.errors,
-          ...(untrustedNote !== undefined && untrustedNote !== "" ? { note: untrustedNote } : {}),
-        },
-        null,
-        2,
-      ),
-    );
-    return failed ? 1 : 0;
-  }
-  if (reports.length === 0 && loaded.errors.length === 0) {
-    log(
-      `No MCP servers configured. Add them to ${join(options.agentDir, "mcp.json")} or .msa/mcp.json.`,
-    );
-  }
-  for (const report of reports) {
-    const state =
-      report.state === "connected"
-        ? `connected, ${report.tools.length} tool${report.tools.length === 1 ? "" : "s"}`
-        : report.state === "needs-auth"
-          ? "needs sign-in"
-          : report.state;
-    log(`${report.name}: ${state} (${report.exposure}, ${report.scope})`);
-    log(`  ${report.transport}`);
-    if (report.override !== undefined && report.override !== "")
-      log(`  project override: ${report.override}`);
-    if (report.state === "needs-auth") log(`  sign in with: ${APP_NAME} mcp login ${report.name}`);
-    if (report.tools.length > 0) {
-      const tools = report.tools.map((tool) => {
-        const exposure = report.toolExposure?.[tool];
-        return exposure !== undefined && exposure !== "" ? `${tool} [${exposure}]` : tool;
-      });
-      log(`  tools: ${tools.join(", ")}`);
-    }
-    if (report.resources !== undefined) log("  offers resources");
-    if (report.error !== undefined && report.error !== "")
-      log(`  ${report.error.split("\n").join("\n  ")}`);
-  }
-  for (const configError of loaded.errors) log(`config error: ${configError}`);
-  if (untrustedNote !== undefined && untrustedNote !== "") log(untrustedNote);
-  return failed ? 1 : 0;
 }
 
-async function login(
+function login(
   entry: McpServerEntry,
   connection: McpServerConnection,
   url: string,
@@ -561,75 +579,89 @@ async function login(
   log: (line: string) => void,
   error: (line: string) => void,
 ): Promise<number> {
-  const { name } = entry;
+  return Effect.runPromise(
+    awaiting(function* () {
+      const { name } = entry;
 
-  try {
-    await connection.getClient();
-    log(`Already signed in to MCP server "${name}" (${connection.tools.length} tools).`);
-    return 0;
-  } catch {
-    if (connection.state !== "needs-auth") {
-      error(`MCP server "${name}" failed to connect: ${connection.error ?? "unknown error"}`);
-      return 1;
-    }
-  }
+      try {
+        yield* awaited(connection.getClient());
+        log(`Already signed in to MCP server "${name}" (${connection.tools.length} tools).`);
+        return 0;
+      } catch {
+        if (connection.state !== "needs-auth") {
+          error(`MCP server "${name}" failed to connect: ${connection.error ?? "unknown error"}`);
+          return 1;
+        }
+      }
 
-  const openUrl = options.openUrl ?? openBrowser;
-  const interactive = process.stdin.isTTY === true && options.openUrl === undefined;
-  try {
-    await signInMcpServer({
-      serverUrl: url,
-      store: credentials.forServer(name, url),
-      settings: connection.oauthSettings(),
-      challenge: connection.challenge,
-      prompt: {
-        showAuthorizationUrl: (authorizationUrl) => {
-          log(`Sign in to MCP server "${name}" in your browser:\n${authorizationUrl.href}`);
-          openUrl(authorizationUrl.href);
-        },
-        promptForRedirectUrl: (signal) => waitForRedirectUrl(signal, interactive),
-      },
-      signal: AbortSignal.timeout(timeoutMs),
-    });
-  } catch (signInError) {
-    error(
-      signInError instanceof McpSignInCancelledError
-        ? `Sign-in to MCP server "${name}" was cancelled or not completed within ${Math.round(timeoutMs / 1000)} seconds.`
-        : `Sign-in to MCP server "${name}" failed: ${toErrorMessage(signInError)}`,
-    );
-    return 1;
-  }
-  connection.challenge = undefined;
-  try {
-    await connection.reconnect();
-  } catch (connectError) {
-    error(`Signed in, but ${toErrorMessage(connectError)}`);
-    return 1;
-  }
-  log(`Signed in to MCP server "${name}" (${connection.tools.length} tools).`);
-  return 0;
+      const openUrl = options.openUrl ?? openBrowser;
+      const interactive = process.stdin.isTTY === true && options.openUrl === undefined;
+      try {
+        yield* awaited(
+          signInMcpServer({
+            serverUrl: url,
+            store: credentials.forServer(name, url),
+            settings: connection.oauthSettings(),
+            challenge: connection.challenge,
+            prompt: {
+              showAuthorizationUrl: (authorizationUrl) => {
+                log(`Sign in to MCP server "${name}" in your browser:\n${authorizationUrl.href}`);
+                openUrl(authorizationUrl.href);
+              },
+              promptForRedirectUrl: (signal) => waitForRedirectUrl(signal, interactive),
+            },
+            signal: AbortSignal.timeout(timeoutMs),
+          }),
+        );
+      } catch (signInError) {
+        error(
+          signInError instanceof McpSignInCancelledError
+            ? `Sign-in to MCP server "${name}" was cancelled or not completed within ${Math.round(timeoutMs / 1000)} seconds.`
+            : `Sign-in to MCP server "${name}" failed: ${toErrorMessage(signInError)}`,
+        );
+        return 1;
+      }
+      connection.challenge = undefined;
+      try {
+        yield* awaited(connection.reconnect());
+      } catch (connectError) {
+        error(`Signed in, but ${toErrorMessage(connectError)}`);
+        return 1;
+      }
+      log(`Signed in to MCP server "${name}" (${connection.tools.length} tools).`);
+      return 0;
+    }),
+  );
 }
 
-async function waitForRedirectUrl(
+function waitForRedirectUrl(
   signal: AbortSignal,
   interactive: boolean,
 ): Promise<string | undefined> {
-  if (!interactive) {
-    if (!signal.aborted)
-      await new Promise((resolve) => signal.addEventListener("abort", resolve, { once: true }));
-    return undefined;
-  }
-  const readline = createInterface({ input: process.stdin, output: process.stderr });
-  try {
-    return await readline.question(
-      "If the browser cannot reach this machine, paste the URL it was redirected to: ",
-      {
-        signal,
-      },
-    );
-  } catch {
-    return undefined;
-  } finally {
-    readline.close();
-  }
+  return Effect.runPromise(
+    awaiting(function* () {
+      if (!interactive) {
+        if (!signal.aborted)
+          yield* awaited(
+            new Promise((resolve) => signal.addEventListener("abort", resolve, { once: true })),
+          );
+        return undefined;
+      }
+      const readline = createInterface({ input: process.stdin, output: process.stderr });
+      try {
+        return yield* awaited(
+          readline.question(
+            "If the browser cannot reach this machine, paste the URL it was redirected to: ",
+            {
+              signal,
+            },
+          ),
+        );
+      } catch {
+        return undefined;
+      } finally {
+        readline.close();
+      }
+    }),
+  );
 }

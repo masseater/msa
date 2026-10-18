@@ -17,7 +17,9 @@ import type {
   TranscriptContext,
   UserMessage,
 } from "@msa/ai/compat";
+import * as Effect from "effect/Effect";
 
+import { awaited, awaiting, awaitingWith } from "../../core/awaiting.ts";
 import type { ExtensionAPI } from "../../core/extensions/types.ts";
 import { nowMs } from "../../core/platform.ts";
 import {
@@ -134,19 +136,25 @@ class Input implements AsyncIterable<SDKUserMessage> {
     this.wake?.();
   }
 
-  async *[Symbol.asyncIterator](): AsyncIterator<SDKUserMessage> {
-    while (true) {
-      const next = this.queue.shift();
-      if (next !== undefined) {
-        yield next;
-        continue;
-      }
-      if (this.closed) return;
-      await new Promise<void>((resolve) => {
-        this.wake = resolve;
-      });
-      this.wake = undefined;
-    }
+  [Symbol.asyncIterator](): AsyncIterator<SDKUserMessage> {
+    return {
+      next: () =>
+        Effect.runPromise(
+          awaitingWith(function* (this: Input) {
+            while (true) {
+              const next = this.queue.shift();
+              if (next !== undefined) return { done: false as const, value: next };
+              if (this.closed) return { done: true as const, value: undefined };
+              yield* awaited(
+                new Promise<void>((resolve) => {
+                  this.wake = resolve;
+                }),
+              );
+              this.wake = undefined;
+            }
+          }, this),
+        ),
+    };
   }
 }
 
@@ -192,29 +200,39 @@ class Session {
       { name: SERVER, version: "1.0.0" },
       { capabilities: { tools: { listChanged: true } } },
     );
-    this.server.server.setRequestHandler(sdk.ListToolsRequestSchema, async () => ({
-      tools: this.tools.map((tool) => ({
-        name: tool.name,
-        description: tool.description,
-        inputSchema: JSON.parse(JSON.stringify(tool.parameters)),
-        _meta: { "anthropic/alwaysLoad": true },
-      })),
-    }));
-    this.server.server.setRequestHandler(sdk.CallToolRequestSchema, async (request) => {
-      const id = request.params._meta?.["claudecode/toolUseId"];
-      if (typeof id !== "string") {
-        return {
-          content: [{ type: "text", text: "tool call without a tool use id" }],
-          isError: true,
-        };
-      }
-      const result = this.ready.get(id);
-      if (result !== undefined) {
-        this.ready.delete(id);
-        return result;
-      }
-      return new Promise<CallToolResult>((resolve) => this.waiting.set(id, resolve));
-    });
+    this.server.server.setRequestHandler(sdk.ListToolsRequestSchema, () =>
+      Effect.runPromise(
+        Effect.sync(() => ({
+          tools: this.tools.map((tool) => ({
+            name: tool.name,
+            description: tool.description,
+            inputSchema: JSON.parse(JSON.stringify(tool.parameters)),
+            _meta: { "anthropic/alwaysLoad": true },
+          })),
+        })),
+      ),
+    );
+    this.server.server.setRequestHandler(sdk.CallToolRequestSchema, (request) =>
+      Effect.runPromise(
+        awaitingWith(function* () {
+          const id = request.params._meta?.["claudecode/toolUseId"];
+          if (typeof id !== "string") {
+            return {
+              content: [{ type: "text", text: "tool call without a tool use id" }],
+              isError: true,
+            };
+          }
+          const result = this.ready.get(id);
+          if (result !== undefined) {
+            this.ready.delete(id);
+            return result;
+          }
+          return yield* awaited(
+            new Promise<CallToolResult>((resolve) => this.waiting.set(id, resolve)),
+          );
+        }, this),
+      ),
+    );
 
     const executable = claudeExecutable();
     this.query = sdk.query({
@@ -287,17 +305,21 @@ class Session {
     );
   }
 
-  async update(config: SessionConfig): Promise<void> {
-    if (config.model !== this.model) {
-      this.model = config.model;
-      await this.query.setModel(config.model);
-    }
-    const names = (tools: Tool[]) =>
-      JSON.stringify(tools.map((tool) => [tool.name, tool.description]));
-    if (names(config.tools) !== names(this.tools)) {
-      this.tools = config.tools;
-      await this.server.server.sendToolListChanged();
-    }
+  update(config: SessionConfig): Promise<void> {
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        if (config.model !== this.model) {
+          this.model = config.model;
+          yield* awaited(this.query.setModel(config.model));
+        }
+        const names = (tools: Tool[]) =>
+          JSON.stringify(tools.map((tool) => [tool.name, tool.description]));
+        if (names(config.tools) !== names(this.tools)) {
+          this.tools = config.tools;
+          yield* awaited(this.server.server.sendToolListChanged());
+        }
+      }, this),
+    );
   }
 
   send(content: ContentBlockParam[], priority?: SDKUserMessage["priority"]): void {
@@ -342,180 +364,200 @@ class Session {
   }
 }
 
-async function attach(messages: readonly Message[], config: SessionConfig): Promise<Session> {
-  let tail = messages.length;
-  while (tail > 0 && messages[tail - 1]?.role !== "assistant") tail -= 1;
-  const newTurns = messages.slice(tail);
-  const toolResults = newTurns.filter(
-    (message): message is ToolResultMessage => message.role === "toolResult",
+function attach(messages: readonly Message[], config: SessionConfig): Promise<Session> {
+  return Effect.runPromise(
+    awaiting(function* () {
+      let tail = messages.length;
+      while (tail > 0 && messages[tail - 1]?.role !== "assistant") tail -= 1;
+      const newTurns = messages.slice(tail);
+      const toolResults = newTurns.filter(
+        (message): message is ToolResultMessage => message.role === "toolResult",
+      );
+      const userTurns = newTurns.filter(
+        (message): message is UserMessage => message.role === "user",
+      );
+      const last = messages[tail - 1] as AssistantMessage | undefined;
+
+      for (const session of sessions) {
+        if (session.busy || !session.matches(config)) continue;
+        const answersPending =
+          toolResults.length > 0 &&
+          toolResults.every((result) => session.pending.has(result.toolCallId));
+        const continuesReply =
+          toolResults.length === 0 &&
+          userTurns.length > 0 &&
+          session.pending.size === 0 &&
+          last !== undefined &&
+          last.provider.startsWith(PROVIDER_ID) &&
+          session.lastReply === replyKey(last.content);
+        if (!answersPending && !continuesReply) continue;
+
+        session.busy = true;
+        yield* awaited(session.update(config));
+        const userContent = userTurns.flatMap((turn) => toAnthropicContent(turn.content));
+        if (answersPending) {
+          if (userContent.length > 0) session.send(userContent, "next");
+          for (const result of toolResults)
+            session.deliver(result.toolCallId, toCallToolResult(result));
+        } else {
+          session.send(userContent);
+        }
+        return session;
+      }
+
+      const answered = new Set(
+        messages.flatMap((message) => (message.role === "toolResult" ? [message.toolCallId] : [])),
+      );
+      for (const session of sessions) {
+        if (!session.busy && [...session.pending].some((id) => answered.has(id))) session.close();
+      }
+
+      const idle = [...sessions]
+        .filter((session) => !session.busy && session.pending.size === 0)
+        .sort((a, b) => b.lastUsed - a.lastUsed);
+      for (const session of idle.slice(MAX_IDLE_SESSIONS - 1)) session.close();
+
+      const account = config.accounts[0];
+      if (account === undefined) throw new Error("No Claude account available");
+      const session = new Session(
+        yield* awaited(loadSdk()),
+        config,
+        account,
+        yield* awaited(accountEnv(account)),
+      );
+      session.busy = true;
+      session.send([
+        {
+          type: "text",
+          text: [
+            "The transcript below is the conversation so far. Continue it as the assistant.",
+            "",
+            "----- conversation transcript -----",
+            "",
+            flattenTranscript(messages),
+            "",
+            "----- end of transcript -----",
+            "",
+            "Reply now as the assistant to the last message.",
+          ].join("\n"),
+        },
+      ]);
+      return session;
+    }),
   );
-  const userTurns = newTurns.filter((message): message is UserMessage => message.role === "user");
-  const last = messages[tail - 1] as AssistantMessage | undefined;
-
-  for (const session of sessions) {
-    if (session.busy || !session.matches(config)) continue;
-    const answersPending =
-      toolResults.length > 0 &&
-      toolResults.every((result) => session.pending.has(result.toolCallId));
-    const continuesReply =
-      toolResults.length === 0 &&
-      userTurns.length > 0 &&
-      session.pending.size === 0 &&
-      last !== undefined &&
-      last.provider.startsWith(PROVIDER_ID) &&
-      session.lastReply === replyKey(last.content);
-    if (!answersPending && !continuesReply) continue;
-
-    session.busy = true;
-    await session.update(config);
-    const userContent = userTurns.flatMap((turn) => toAnthropicContent(turn.content));
-    if (answersPending) {
-      if (userContent.length > 0) session.send(userContent, "next");
-      for (const result of toolResults)
-        session.deliver(result.toolCallId, toCallToolResult(result));
-    } else {
-      session.send(userContent);
-    }
-    return session;
-  }
-
-  const answered = new Set(
-    messages.flatMap((message) => (message.role === "toolResult" ? [message.toolCallId] : [])),
-  );
-  for (const session of sessions) {
-    if (!session.busy && [...session.pending].some((id) => answered.has(id))) session.close();
-  }
-
-  const idle = [...sessions]
-    .filter((session) => !session.busy && session.pending.size === 0)
-    .sort((a, b) => b.lastUsed - a.lastUsed);
-  for (const session of idle.slice(MAX_IDLE_SESSIONS - 1)) session.close();
-
-  const account = config.accounts[0];
-  if (account === undefined) throw new Error("No Claude account available");
-  const session = new Session(await loadSdk(), config, account, await accountEnv(account));
-  session.busy = true;
-  session.send([
-    {
-      type: "text",
-      text: [
-        "The transcript below is the conversation so far. Continue it as the assistant.",
-        "",
-        "----- conversation transcript -----",
-        "",
-        flattenTranscript(messages),
-        "",
-        "----- end of transcript -----",
-        "",
-        "Reply now as the assistant to the last message.",
-      ].join("\n"),
-    },
-  ]);
-  return session;
 }
 
-async function pump(
+function pump(
   session: Session,
   reply: ReplyBuilder,
   model: Model<string>,
   options?: SimpleStreamOptions,
 ): Promise<RunFailure | undefined> {
-  let messageId = "";
-  let apiError: RunFailure["cause"];
-  let rejectedResetsAt: number | undefined;
-  let stopReason = "";
-  let sawPartials = false;
-  let calledTools = 0;
-  let messageOutput = 0;
+  return Effect.runPromise(
+    awaiting(function* () {
+      let messageId = "";
+      let apiError: RunFailure["cause"];
+      let rejectedResetsAt: number | undefined;
+      let stopReason = "";
+      let sawPartials = false;
+      let calledTools = 0;
+      let messageOutput = 0;
 
-  while (true) {
-    const next = await session.next();
-    if (next.done === true) return { error: session.exitDetail || "Claude Code exited" };
-    const event = next.value;
-    try {
-      await options?.onProviderStreamEvent?.(event, model);
-    } catch {}
+      while (true) {
+        const next = yield* awaited(session.next());
+        if (next.done === true) return { error: session.exitDetail || "Claude Code exited" };
+        const event = next.value;
+        try {
+          yield* awaited(options?.onProviderStreamEvent?.(event, model));
+        } catch {}
 
-    if (
-      "parent_tool_use_id" in event &&
-      event.parent_tool_use_id !== null &&
-      event.parent_tool_use_id !== ""
-    )
-      continue;
+        if (
+          "parent_tool_use_id" in event &&
+          event.parent_tool_use_id !== null &&
+          event.parent_tool_use_id !== ""
+        )
+          continue;
 
-    if (event.type === "stream_event") {
-      sawPartials = true;
-      const inner = event.event;
-      if (inner.type === "message_start") {
-        const usage = inner.message.usage;
-        messageId = inner.message.id;
-        messageOutput = 0;
-        reply.addUsage({
-          input: usage.input_tokens,
-          cacheRead: usage.cache_read_input_tokens ?? 0,
-          cacheWrite: usage.cache_creation_input_tokens ?? 0,
-        });
-      } else if (inner.type === "content_block_delta") {
-        const key = `${messageId}:${inner.index}`;
-        if (inner.delta.type === "text_delta") reply.appendText(key, inner.delta.text);
-        else if (inner.delta.type === "thinking_delta")
-          reply.appendThinking(key, inner.delta.thinking);
-      } else if (inner.type === "message_delta") {
-        if (inner.delta.stop_reason !== null) stopReason = inner.delta.stop_reason;
-        reply.addUsage({ output: inner.usage.output_tokens - messageOutput });
-        messageOutput = inner.usage.output_tokens;
-      } else if (inner.type === "message_stop" && stopReason === "tool_use" && calledTools > 0) {
-        reply.done("toolUse");
-        return undefined;
-      }
-    } else if (event.type === "assistant") {
-      const message = event.message;
+        if (event.type === "stream_event") {
+          sawPartials = true;
+          const inner = event.event;
+          if (inner.type === "message_start") {
+            const usage = inner.message.usage;
+            messageId = inner.message.id;
+            messageOutput = 0;
+            reply.addUsage({
+              input: usage.input_tokens,
+              cacheRead: usage.cache_read_input_tokens ?? 0,
+              cacheWrite: usage.cache_creation_input_tokens ?? 0,
+            });
+          } else if (inner.type === "content_block_delta") {
+            const key = `${messageId}:${inner.index}`;
+            if (inner.delta.type === "text_delta") reply.appendText(key, inner.delta.text);
+            else if (inner.delta.type === "thinking_delta")
+              reply.appendThinking(key, inner.delta.thinking);
+          } else if (inner.type === "message_delta") {
+            if (inner.delta.stop_reason !== null) stopReason = inner.delta.stop_reason;
+            reply.addUsage({ output: inner.usage.output_tokens - messageOutput });
+            messageOutput = inner.usage.output_tokens;
+          } else if (
+            inner.type === "message_stop" &&
+            stopReason === "tool_use" &&
+            calledTools > 0
+          ) {
+            reply.done("toolUse");
+            return undefined;
+          }
+        } else if (event.type === "assistant") {
+          const message = event.message;
 
-      if (message.model === "<synthetic>") {
-        apiError = event.error;
-        continue;
-      }
-      message.content.forEach((block, index) => {
-        if (block.type === "tool_use" && block.name.startsWith(TOOL_PREFIX)) {
-          session.pending.add(block.id);
-          calledTools += 1;
-          reply.toolCall(
-            block.id,
-            block.name.slice(TOOL_PREFIX.length),
-            (block.input ?? {}) as JsonObject,
-          );
-        } else if (block.type === "text" && !sawPartials) {
-          reply.setText(`${message.id}:${index}`, block.text);
+          if (message.model === "<synthetic>") {
+            apiError = event.error;
+            continue;
+          }
+          message.content.forEach((block, index) => {
+            if (block.type === "tool_use" && block.name.startsWith(TOOL_PREFIX)) {
+              session.pending.add(block.id);
+              calledTools += 1;
+              reply.toolCall(
+                block.id,
+                block.name.slice(TOOL_PREFIX.length),
+                (block.input ?? {}) as JsonObject,
+              );
+            } else if (block.type === "text" && !sawPartials) {
+              reply.setText(`${message.id}:${index}`, block.text);
+            }
+          });
+        } else if (event.type === "rate_limit_event") {
+          const info = event.rate_limit_info;
+
+          if (info.status === "rejected")
+            rejectedResetsAt = (info.resetsAt ?? 0) * 1000 || undefined;
+        } else if (event.type === "result") {
+          if (event.is_error) {
+            const error = event.subtype === "success" ? event.result : event.errors.join("\n");
+            const { usageLimitPrefixes } = yield* awaited(loadSdk());
+            const limited =
+              rejectedResetsAt !== undefined ||
+              usageLimitPrefixes.some((prefix) => error.startsWith(prefix));
+            return {
+              error: error || "Claude Code run failed",
+              ...(limited
+                ? { cause: "usage_limit" }
+                : apiError === undefined
+                  ? {}
+                  : { cause: apiError }),
+              ...(rejectedResetsAt !== undefined && rejectedResetsAt !== 0
+                ? { resetsAt: rejectedResetsAt }
+                : {}),
+            };
+          }
+          reply.done("stop");
+          session.lastReply = replyKey(reply.message.content);
+          return undefined;
         }
-      });
-    } else if (event.type === "rate_limit_event") {
-      const info = event.rate_limit_info;
-
-      if (info.status === "rejected") rejectedResetsAt = (info.resetsAt ?? 0) * 1000 || undefined;
-    } else if (event.type === "result") {
-      if (event.is_error) {
-        const error = event.subtype === "success" ? event.result : event.errors.join("\n");
-        const { usageLimitPrefixes } = await loadSdk();
-        const limited =
-          rejectedResetsAt !== undefined ||
-          usageLimitPrefixes.some((prefix) => error.startsWith(prefix));
-        return {
-          error: error || "Claude Code run failed",
-          ...(limited
-            ? { cause: "usage_limit" }
-            : apiError === undefined
-              ? {}
-              : { cause: apiError }),
-          ...(rejectedResetsAt !== undefined && rejectedResetsAt !== 0
-            ? { resetsAt: rejectedResetsAt }
-            : {}),
-        };
       }
-      reply.done("stop");
-      session.lastReply = replyKey(reply.message.content);
-      return undefined;
-    }
-  }
+    }),
+  );
 }
 
 const streamFor =
@@ -536,72 +578,83 @@ const streamFor =
       tools: getCurrentTools(messages),
     };
 
-    void (async () => {
-      let session: Session | undefined;
-      const onAbort = () => {
-        session?.interrupt();
-        session?.close();
-        reply.fail("aborted", "aborted");
-      };
-      if (options?.signal?.aborted === true) return onAbort();
-      options?.signal?.addEventListener("abort", onAbort, { once: true });
-      try {
-        try {
-          await options?.onPayload?.(
-            { provider: PROVIDER_ID, ...config, tools: config.tools.map((tool) => tool.name) },
-            model,
-          );
-        } catch {}
-        const failures: string[] = [];
-        while (true) {
-          let account = config.accounts[0];
-          if (account === undefined) {
-            const failed = new Set(failures.map((line) => line.slice(0, line.indexOf(":"))));
-            const blocked = loadAccounts()
-              .filter((candidate) => candidate.auto !== false && !failed.has(candidate.name))
-              .map((candidate) => `${candidate.name}: ${blockOf(candidate)?.reason ?? "?"}`);
-            reply.fail(
-              "error",
-              `No Claude account available.\n${[...failures, ...blocked].join("\n")}`,
-            );
-            return undefined;
-          }
-          let failure: RunFailure | undefined;
+    void (() =>
+      Effect.runPromise(
+        awaiting(function* () {
+          let session: Session | undefined;
+          const onAbort = () => {
+            session?.interrupt();
+            session?.close();
+            reply.fail("aborted", "aborted");
+          };
+          if (options?.signal?.aborted === true) return onAbort();
+          options?.signal?.addEventListener("abort", onAbort, { once: true });
           try {
-            session = await attach(messages, config);
+            try {
+              yield* awaited(
+                options?.onPayload?.(
+                  {
+                    provider: PROVIDER_ID,
+                    ...config,
+                    tools: config.tools.map((tool) => tool.name),
+                  },
+                  model,
+                ),
+              );
+            } catch {}
+            const failures: string[] = [];
+            while (true) {
+              let account = config.accounts[0];
+              if (account === undefined) {
+                const failed = new Set(failures.map((line) => line.slice(0, line.indexOf(":"))));
+                const blocked = loadAccounts()
+                  .filter((candidate) => candidate.auto !== false && !failed.has(candidate.name))
+                  .map((candidate) => `${candidate.name}: ${blockOf(candidate)?.reason ?? "?"}`);
+                reply.fail(
+                  "error",
+                  `No Claude account available.\n${[...failures, ...blocked].join("\n")}`,
+                );
+                return undefined;
+              }
+              let failure: RunFailure | undefined;
+              try {
+                session = yield* awaited(attach(messages, config));
+              } catch (error) {
+                failure = { error: error instanceof Error ? error.message : String(error) };
+              }
+              if (session !== undefined) {
+                account = session.account;
+                failure = yield* awaited(pump(session, reply, model, options));
+                if (failure === undefined || (options?.signal?.aborted ?? false)) return undefined;
+                session.close();
+                session = undefined;
+              }
+              if (failure === undefined) return undefined;
+              const failed = account;
+              const blocked = blockIfUnusable(failed, failure);
+              const detail = `${failed.name}: ${failure.error}`;
+              failures.push(detail);
+              if (fixed !== undefined || !blocked || reply.hasContent) {
+                reply.fail("error", detail);
+                return undefined;
+              }
+              config.accounts = config.accounts.filter(
+                (candidate) => candidate.name !== failed.name,
+              );
+            }
           } catch (error) {
-            failure = { error: error instanceof Error ? error.message : String(error) };
-          }
-          if (session !== undefined) {
-            account = session.account;
-            failure = await pump(session, reply, model, options);
-            if (failure === undefined || (options?.signal?.aborted ?? false)) return undefined;
-            session.close();
-            session = undefined;
-          }
-          if (failure === undefined) return undefined;
-          const failed = account;
-          const blocked = blockIfUnusable(failed, failure);
-          const detail = `${failed.name}: ${failure.error}`;
-          failures.push(detail);
-          if (fixed !== undefined || !blocked || reply.hasContent) {
-            reply.fail("error", detail);
+            session?.close();
+            reply.fail("error", error instanceof Error ? error.message : String(error));
             return undefined;
+          } finally {
+            options?.signal?.removeEventListener("abort", onAbort);
+            if (session !== undefined) {
+              session.busy = false;
+              session.touch();
+            }
           }
-          config.accounts = config.accounts.filter((candidate) => candidate.name !== failed.name);
-        }
-      } catch (error) {
-        session?.close();
-        reply.fail("error", error instanceof Error ? error.message : String(error));
-        return undefined;
-      } finally {
-        options?.signal?.removeEventListener("abort", onAbort);
-        if (session !== undefined) {
-          session.busy = false;
-          session.touch();
-        }
-      }
-    })();
+        }),
+      ))();
 
     return reply.stream;
   };

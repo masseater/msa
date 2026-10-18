@@ -13,7 +13,10 @@ import { join } from "path";
 import { Readable } from "stream";
 import { pipeline } from "stream/promises";
 
+import * as Effect from "effect/Effect";
+
 import { APP_NAME, getBinDir } from "../config.ts";
+import { awaited, awaiting } from "../core/awaiting.ts";
 import { nowMs, readEnv } from "../core/platform.ts";
 import { fetchWithRetry } from "./management-http.ts";
 
@@ -107,48 +110,62 @@ export function getToolPath(tool: "fd" | "rg"): string | null {
   return null;
 }
 
-export async function getLatestVersion(repo: string): Promise<string> {
-  const response = await fetchWithRetry(
-    `https://github.com/${repo}/releases/latest`,
-    {
-      headers: { "User-Agent": `${APP_NAME}-coding-agent` },
-      redirect: "manual",
-    },
-    { timeoutMs: NETWORK_TIMEOUT_MS },
+export function getLatestVersion(repo: string): Promise<string> {
+  return Effect.runPromise(
+    awaiting(function* () {
+      const response = yield* awaited(
+        fetchWithRetry(
+          `https://github.com/${repo}/releases/latest`,
+          {
+            headers: { "User-Agent": `${APP_NAME}-coding-agent` },
+            redirect: "manual",
+          },
+          { timeoutMs: NETWORK_TIMEOUT_MS },
+        ),
+      );
+
+      try {
+        yield* awaited(response.body?.cancel());
+      } catch {}
+
+      const location =
+        response.status >= 300 && response.status < 400 ? response.headers.get("location") : null;
+      if (location === null || location === "") {
+        throw new Error(
+          `Failed to resolve latest ${repo} release: HTTP ${response.status} without redirect`,
+        );
+      }
+
+      const tag = new URL(location, "https://github.com").pathname.split("/").pop();
+      if (tag === undefined || tag === "" || !location.includes("/releases/tag/")) {
+        throw new Error(
+          `Failed to resolve latest ${repo} release: unexpected redirect to ${location}`,
+        );
+      }
+      return decodeURIComponent(tag).replace(/^v/u, "");
+    }),
   );
-
-  try {
-    await response.body?.cancel();
-  } catch {}
-
-  const location =
-    response.status >= 300 && response.status < 400 ? response.headers.get("location") : null;
-  if (location === null || location === "") {
-    throw new Error(
-      `Failed to resolve latest ${repo} release: HTTP ${response.status} without redirect`,
-    );
-  }
-
-  const tag = new URL(location, "https://github.com").pathname.split("/").pop();
-  if (tag === undefined || tag === "" || !location.includes("/releases/tag/")) {
-    throw new Error(`Failed to resolve latest ${repo} release: unexpected redirect to ${location}`);
-  }
-  return decodeURIComponent(tag).replace(/^v/u, "");
 }
 
-async function downloadFile(url: string, dest: string): Promise<void> {
-  const response = await fetchWithRetry(url, undefined, { timeoutMs: DOWNLOAD_TIMEOUT_MS });
+function downloadFile(url: string, dest: string): Promise<void> {
+  return Effect.runPromise(
+    awaiting(function* () {
+      const response = yield* awaited(
+        fetchWithRetry(url, undefined, { timeoutMs: DOWNLOAD_TIMEOUT_MS }),
+      );
 
-  if (!response.ok) {
-    throw new Error(`Download failed with HTTP ${response.status}: ${url}`);
-  }
+      if (!response.ok) {
+        throw new Error(`Download failed with HTTP ${response.status}: ${url}`);
+      }
 
-  if (response.body === null) {
-    throw new Error("No response body");
-  }
+      if (response.body === null) {
+        throw new Error("No response body");
+      }
 
-  const fileStream = createWriteStream(dest);
-  await pipeline(Readable.fromWeb(response.body as any), fileStream);
+      const fileStream = createWriteStream(dest);
+      yield* awaited(pipeline(Readable.fromWeb(response.body as any), fileStream));
+    }),
+  );
 }
 
 function findBinaryRecursively(rootDir: string, binaryFileName: string): string | null {
@@ -255,76 +272,80 @@ function extractZipArchive(archivePath: string, extractDir: string, assetName: s
   throw new Error(`Failed to extract ${assetName}: ${failures.join("; ")}`);
 }
 
-async function downloadTool(tool: "fd" | "rg"): Promise<string> {
-  const config = TOOLS[tool];
-  if (config === undefined) throw new Error(`Unknown tool: ${tool}`);
+function downloadTool(tool: "fd" | "rg"): Promise<string> {
+  return Effect.runPromise(
+    awaiting(function* () {
+      const config = TOOLS[tool];
+      if (config === undefined) throw new Error(`Unknown tool: ${tool}`);
 
-  const plat = platform();
-  const architecture = arch();
+      const plat = platform();
+      const architecture = arch();
 
-  const version =
-    tool === "fd" && plat === "darwin" && architecture === "x64"
-      ? "10.3.0"
-      : await getLatestVersion(config.repo);
+      const version =
+        tool === "fd" && plat === "darwin" && architecture === "x64"
+          ? "10.3.0"
+          : yield* awaited(getLatestVersion(config.repo));
 
-  const assetName = config.getAssetName(version, plat, architecture);
-  if (assetName === null || assetName === "") {
-    throw new Error(`Unsupported platform: ${plat}/${architecture}`);
-  }
+      const assetName = config.getAssetName(version, plat, architecture);
+      if (assetName === null || assetName === "") {
+        throw new Error(`Unsupported platform: ${plat}/${architecture}`);
+      }
 
-  mkdirSync(TOOLS_DIR, { recursive: true });
+      mkdirSync(TOOLS_DIR, { recursive: true });
 
-  const downloadUrl = `https://github.com/${config.repo}/releases/download/${config.tagPrefix}${version}/${assetName}`;
-  const archivePath = join(TOOLS_DIR, assetName);
-  const binaryExt = plat === "win32" ? ".exe" : "";
-  const binaryPath = join(TOOLS_DIR, config.binaryName + binaryExt);
+      const downloadUrl = `https://github.com/${config.repo}/releases/download/${config.tagPrefix}${version}/${assetName}`;
+      const archivePath = join(TOOLS_DIR, assetName);
+      const binaryExt = plat === "win32" ? ".exe" : "";
+      const binaryPath = join(TOOLS_DIR, config.binaryName + binaryExt);
 
-  await downloadFile(downloadUrl, archivePath);
+      yield* awaited(downloadFile(downloadUrl, archivePath));
 
-  const extractDir = join(
-    TOOLS_DIR,
-    `extract_tmp_${config.binaryName}_${process.pid}_${nowMs()}_${Math.random().toString(36).slice(2, 10)}`,
-  );
-  mkdirSync(extractDir, { recursive: true });
-
-  try {
-    if (assetName.endsWith(".tar.gz")) {
-      extractTarGzArchive(archivePath, extractDir, assetName);
-    } else if (assetName.endsWith(".zip")) {
-      extractZipArchive(archivePath, extractDir, assetName);
-    } else {
-      throw new Error(`Unsupported archive format: ${assetName}`);
-    }
-
-    const binaryFileName = config.binaryName + binaryExt;
-    const extractedDir = join(extractDir, assetName.replace(/\.(tar\.gz|zip)$/u, ""));
-    const extractedBinaryCandidates = [
-      join(extractedDir, binaryFileName),
-      join(extractDir, binaryFileName),
-    ];
-    let extractedBinary = extractedBinaryCandidates.find((candidate) => existsSync(candidate));
-
-    if (extractedBinary === undefined || extractedBinary === "") {
-      extractedBinary = findBinaryRecursively(extractDir, binaryFileName) ?? undefined;
-    }
-
-    if (extractedBinary !== undefined && extractedBinary !== "") {
-      renameSync(extractedBinary, binaryPath);
-    } else {
-      throw new Error(
-        `Binary not found in archive: expected ${binaryFileName} under ${extractDir}`,
+      const extractDir = join(
+        TOOLS_DIR,
+        `extract_tmp_${config.binaryName}_${process.pid}_${nowMs()}_${Math.random().toString(36).slice(2, 10)}`,
       );
-    }
+      mkdirSync(extractDir, { recursive: true });
 
-    if (plat !== "win32") {
-      chmodSync(binaryPath, 0o755);
-    }
-  } finally {
-    rmSync(archivePath, { force: true });
-    rmSync(extractDir, { recursive: true, force: true });
-  }
+      try {
+        if (assetName.endsWith(".tar.gz")) {
+          extractTarGzArchive(archivePath, extractDir, assetName);
+        } else if (assetName.endsWith(".zip")) {
+          extractZipArchive(archivePath, extractDir, assetName);
+        } else {
+          throw new Error(`Unsupported archive format: ${assetName}`);
+        }
 
-  return binaryPath;
+        const binaryFileName = config.binaryName + binaryExt;
+        const extractedDir = join(extractDir, assetName.replace(/\.(tar\.gz|zip)$/u, ""));
+        const extractedBinaryCandidates = [
+          join(extractedDir, binaryFileName),
+          join(extractDir, binaryFileName),
+        ];
+        let extractedBinary = extractedBinaryCandidates.find((candidate) => existsSync(candidate));
+
+        if (extractedBinary === undefined || extractedBinary === "") {
+          extractedBinary = findBinaryRecursively(extractDir, binaryFileName) ?? undefined;
+        }
+
+        if (extractedBinary !== undefined && extractedBinary !== "") {
+          renameSync(extractedBinary, binaryPath);
+        } else {
+          throw new Error(
+            `Binary not found in archive: expected ${binaryFileName} under ${extractDir}`,
+          );
+        }
+
+        if (plat !== "win32") {
+          chmodSync(binaryPath, 0o755);
+        }
+      } finally {
+        rmSync(archivePath, { force: true });
+        rmSync(extractDir, { recursive: true, force: true });
+      }
+
+      return binaryPath;
+    }),
+  );
 }
 
 const TERMUX_PACKAGES: Record<string, string> = {
@@ -337,54 +358,58 @@ export interface ToolStatus {
   message: string;
 }
 
-export async function ensureTool(
+export function ensureTool(
   tool: "fd" | "rg",
   onStatus?: (status: ToolStatus) => void,
 ): Promise<string | undefined> {
-  const existingPath = getToolPath(tool);
-  if (existingPath !== null && existingPath !== "") {
-    return existingPath;
-  }
+  return Effect.runPromise(
+    awaiting(function* () {
+      const existingPath = getToolPath(tool);
+      if (existingPath !== null && existingPath !== "") {
+        return existingPath;
+      }
 
-  const config = TOOLS[tool];
-  if (config === undefined) return undefined;
+      const config = TOOLS[tool];
+      if (config === undefined) return undefined;
 
-  if (isOfflineModeEnabled()) {
-    onStatus?.({
-      type: "warning",
-      message: `${config.name} not found. Offline mode enabled, skipping download.`,
-    });
-    return undefined;
-  }
+      if (isOfflineModeEnabled()) {
+        onStatus?.({
+          type: "warning",
+          message: `${config.name} not found. Offline mode enabled, skipping download.`,
+        });
+        return undefined;
+      }
 
-  if (platform() === "android") {
-    const pkgName = TERMUX_PACKAGES[tool] ?? tool;
-    onStatus?.({
-      type: "warning",
-      message: `${config.name} not found. Install with: pkg install ${pkgName}`,
-    });
-    return undefined;
-  }
+      if (platform() === "android") {
+        const pkgName = TERMUX_PACKAGES[tool] ?? tool;
+        onStatus?.({
+          type: "warning",
+          message: `${config.name} not found. Install with: pkg install ${pkgName}`,
+        });
+        return undefined;
+      }
 
-  onStatus?.({ type: "info", message: `${config.name} not found. Downloading...` });
+      onStatus?.({ type: "info", message: `${config.name} not found. Downloading...` });
 
-  try {
-    const path = await downloadTool(tool);
-    onStatus?.({ type: "info", message: `${config.name} installed to ${path}` });
-    return path;
-  } catch (e) {
-    const messages: string[] = [];
-    for (
-      let current: unknown = e, depth = 0;
-      current instanceof Error && depth < 5;
-      current = current.cause, depth++
-    ) {
-      if (!messages.includes(current.message)) messages.push(current.message);
-    }
-    onStatus?.({
-      type: "warning",
-      message: `Failed to download ${config.name}: ${messages.length > 0 ? messages.join(": ") : String(e)}`,
-    });
-    return undefined;
-  }
+      try {
+        const path = yield* awaited(downloadTool(tool));
+        onStatus?.({ type: "info", message: `${config.name} installed to ${path}` });
+        return path;
+      } catch (e) {
+        const messages: string[] = [];
+        for (
+          let current: unknown = e, depth = 0;
+          current instanceof Error && depth < 5;
+          current = current.cause, depth++
+        ) {
+          if (!messages.includes(current.message)) messages.push(current.message);
+        }
+        onStatus?.({
+          type: "warning",
+          message: `Failed to download ${config.name}: ${messages.length > 0 ? messages.join(": ") : String(e)}`,
+        });
+        return undefined;
+      }
+    }),
+  );
 }

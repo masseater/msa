@@ -1,5 +1,7 @@
 import { getCapabilities, type ImageTranscoder, setImageTranscoder } from "@msa/tui";
+import * as Effect from "effect/Effect";
 
+import { awaited, awaiting } from "../core/awaiting.ts";
 import { applyExifOrientation } from "./exif-orientation.ts";
 import { loadPhoton } from "./photon.ts";
 
@@ -20,41 +22,53 @@ function encodePng(photon: Photon, bytes: Uint8Array): Uint8Array | null {
   }
 }
 
-export async function convertImageBytesToPng(bytes: Uint8Array): Promise<Uint8Array | null> {
-  const photon = await loadPhoton();
-  if (photon === null) {
-    return null;
-  }
-  return encodePng(photon, bytes);
+export function convertImageBytesToPng(bytes: Uint8Array): Promise<Uint8Array | null> {
+  return Effect.runPromise(
+    awaiting(function* () {
+      const photon = yield* awaited(loadPhoton());
+      if (photon === null) {
+        return null;
+      }
+      return encodePng(photon, bytes);
+    }),
+  );
 }
 
-export async function convertToPng(
+export function convertToPng(
   base64Data: string,
   mimeType: string,
 ): Promise<{ data: string; mimeType: string } | null> {
-  if (mimeType === "image/png") {
-    return { data: base64Data, mimeType };
-  }
+  return Effect.runPromise(
+    awaiting(function* () {
+      if (mimeType === "image/png") {
+        return { data: base64Data, mimeType };
+      }
 
-  const bytes = new Uint8Array(Buffer.from(base64Data, "base64"));
-  const pngBytes = await convertImageBytesToPng(bytes);
-  if (pngBytes === null) {
-    return null;
-  }
+      const bytes = new Uint8Array(Buffer.from(base64Data, "base64"));
+      const pngBytes = yield* awaited(convertImageBytesToPng(bytes));
+      if (pngBytes === null) {
+        return null;
+      }
 
-  return {
-    data: Buffer.from(pngBytes).toString("base64"),
-    mimeType: "image/png",
-  };
+      return {
+        data: Buffer.from(pngBytes).toString("base64"),
+        mimeType: "image/png",
+      };
+    }),
+  );
 }
 
-export async function loadPngTranscoder(): Promise<ImageTranscoder | undefined> {
-  const photon = await loadPhoton();
-  if (photon === null) return undefined;
-  return (base64Data) => {
-    const pngBytes = encodePng(photon, new Uint8Array(Buffer.from(base64Data, "base64")));
-    return pngBytes === null ? null : Buffer.from(pngBytes).toString("base64");
-  };
+export function loadPngTranscoder(): Promise<ImageTranscoder | undefined> {
+  return Effect.runPromise(
+    awaiting(function* () {
+      const photon = yield* awaited(loadPhoton());
+      if (photon === null) return undefined;
+      return (base64Data) => {
+        const pngBytes = encodePng(photon, new Uint8Array(Buffer.from(base64Data, "base64")));
+        return pngBytes === null ? null : Buffer.from(pngBytes).toString("base64");
+      };
+    }),
+  );
 }
 
 let pngTranscoderLoad: Promise<boolean> | undefined;

@@ -1,3 +1,6 @@
+import * as Effect from "effect/Effect";
+
+import { awaited, awaiting } from "../../core/awaiting.ts";
 import type { ExtensionAPI } from "../../core/extensions/types.ts";
 import { claudeAccounts } from "../cli-agents/claude-account-kind.ts";
 import type { AccountKind } from "./kind.ts";
@@ -24,26 +27,37 @@ export default function accountsExtension(msa: ExtensionAPI): void {
           ?.map((item) => ({ ...item, value: `${kind.name} ${item.value}` })) ?? null
       );
     },
-    handler: async (args, ctx) => {
-      const [name, ...rest] = args.trim().split(/\s+/u).filter(Boolean);
-      try {
-        if (name === undefined || name === "") {
-          const sections = await Promise.all(
-            KINDS.map(async (kind) => `${kind.name}:\n${await kind.describe()}`),
-          );
-          ctx.ui.notify(sections.join("\n\n"), "info");
-          return;
-        }
-        const kind = KINDS.find((candidate) => candidate.name === name);
-        if (kind === undefined) {
-          throw new Error(
-            `Unknown account kind "${name}". Kinds: ${KINDS.map((k) => k.name).join(", ")}`,
-          );
-        }
-        await kind.run(rest.join(" "), ctx);
-      } catch (error) {
-        ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
-      }
-    },
+    handler: (args, ctx) =>
+      Effect.runPromise(
+        awaiting(function* () {
+          const [name, ...rest] = args.trim().split(/\s+/u).filter(Boolean);
+          try {
+            if (name === undefined || name === "") {
+              const sections = yield* awaited(
+                Promise.all(
+                  KINDS.map((kind) =>
+                    Effect.runPromise(
+                      awaiting(function* () {
+                        return `${kind.name}:\n${yield* awaited(kind.describe())}`;
+                      }),
+                    ),
+                  ),
+                ),
+              );
+              ctx.ui.notify(sections.join("\n\n"), "info");
+              return;
+            }
+            const kind = KINDS.find((candidate) => candidate.name === name);
+            if (kind === undefined) {
+              throw new Error(
+                `Unknown account kind "${name}". Kinds: ${KINDS.map((k) => k.name).join(", ")}`,
+              );
+            }
+            yield* awaited(kind.run(rest.join(" "), ctx));
+          } catch (error) {
+            ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
+          }
+        }),
+      ),
   });
 }

@@ -3,6 +3,10 @@ import { createRequire } from "module";
 import * as path from "path";
 import { fileURLToPath } from "url";
 
+import * as Effect from "effect/Effect";
+
+import { awaited, awaiting } from "../core/awaiting.ts";
+
 const require = createRequire(import.meta.url);
 const fs = require("fs") as typeof import("fs");
 
@@ -92,27 +96,34 @@ function patchPhotonWasmRead(): () => void {
   };
 }
 
-export async function loadPhoton(): Promise<typeof import("@silvia-odwyer/photon-node") | null> {
-  if (photonModule !== null) {
-    return photonModule;
-  }
+export function loadPhoton(): Promise<typeof import("@silvia-odwyer/photon-node") | null> {
+  return Effect.runPromise(
+    awaiting(function* () {
+      if (photonModule !== null) {
+        return photonModule;
+      }
 
-  if (loadPromise !== null) {
-    return loadPromise;
-  }
+      if (loadPromise !== null) {
+        return yield* awaited(loadPromise);
+      }
 
-  loadPromise = (async () => {
-    const restoreReadFileSync = patchPhotonWasmRead();
-    try {
-      photonModule = await import("@silvia-odwyer/photon-node");
-      return photonModule;
-    } catch {
-      photonModule = null;
-      return photonModule;
-    } finally {
-      restoreReadFileSync();
-    }
-  })();
+      loadPromise = (() =>
+        Effect.runPromise(
+          awaiting(function* () {
+            const restoreReadFileSync = patchPhotonWasmRead();
+            try {
+              photonModule = yield* awaited(import("@silvia-odwyer/photon-node"));
+              return photonModule;
+            } catch {
+              photonModule = null;
+              return photonModule;
+            } finally {
+              restoreReadFileSync();
+            }
+          }),
+        ))();
 
-  return loadPromise;
+      return yield* awaited(loadPromise);
+    }),
+  );
 }

@@ -1,9 +1,11 @@
 import { join, resolve } from "node:path";
 
 import type { SelectItem } from "@msa/tui";
+import * as Effect from "effect/Effect";
 import type { TSchema } from "typebox";
 
 import { getAgentDir } from "../../config.ts";
+import { awaited, awaiting } from "../../core/awaiting.ts";
 import type {
   ExtensionAPI,
   ExtensionCommandContext,
@@ -375,21 +377,25 @@ export function createMcpExtension(options: McpExtensionOptions = {}): Extension
           exposure: getMcpToolExposure(entry.config, tool.name),
           namespace,
           timeoutMs: connection.timeoutMs,
-          getClient: async () => {
-            const resolved = findServer(server);
-            if (resolved === undefined || !isEnabled(resolved))
-              throw new Error(`MCP server "${server}" is disabled.`);
-            const client = resolved.connection;
-            if (client === undefined) throw new Error(`MCP server "${server}" is still starting.`);
-            if (
-              getMcpToolExposure(resolved.entry.config, tool.name) === "hidden" ||
-              (client.state === "connected" &&
-                !client.tools.some((offered) => offered.name === tool.name))
-            ) {
-              throw new Error(`MCP tool "${server}/${tool.name}" is no longer available.`);
-            }
-            return client;
-          },
+          getClient: () =>
+            Effect.runPromise(
+              Effect.sync(() => {
+                const resolved = findServer(server);
+                if (resolved === undefined || !isEnabled(resolved))
+                  throw new Error(`MCP server "${server}" is disabled.`);
+                const client = resolved.connection;
+                if (client === undefined)
+                  throw new Error(`MCP server "${server}" is still starting.`);
+                if (
+                  getMcpToolExposure(resolved.entry.config, tool.name) === "hidden" ||
+                  (client.state === "connected" &&
+                    !client.tools.some((offered) => offered.name === tool.name))
+                ) {
+                  throw new Error(`MCP tool "${server}/${tool.name}" is no longer available.`);
+                }
+                return client;
+              }),
+            ),
           readableResources: () => resourceServers().some((candidate) => candidate.name === server),
         });
         definitions.set(definition.name, definition);
@@ -508,41 +514,54 @@ export function createMcpExtension(options: McpExtensionOptions = {}): Extension
       emitChange();
     };
 
-    const reconnectSignedIn = async (ctx: ExtensionContext) => {
-      const signedIn = [...tokensAtSignIn].filter(
-        ([connection, tokens]) => storedTokens(connection) !== tokens,
+    const reconnectSignedIn = (ctx: ExtensionContext) =>
+      Effect.runPromise(
+        awaiting(function* () {
+          const signedIn = [...tokensAtSignIn].filter(
+            ([connection, tokens]) => storedTokens(connection) !== tokens,
+          );
+          if (signedIn.length === 0) return;
+          for (const [connection] of signedIn) tokensAtSignIn.delete(connection);
+          yield* awaited(
+            Promise.allSettled(signedIn.map(([connection]) => connection.reconnect())),
+          );
+          ensureDiscoveryActive(ctx);
+        }),
       );
-      if (signedIn.length === 0) return;
-      for (const [connection] of signedIn) tokensAtSignIn.delete(connection);
-      await Promise.allSettled(signedIn.map(([connection]) => connection.reconnect()));
-      ensureDiscoveryActive(ctx);
-    };
 
-    const createConnection = async (
+    const createConnection = (
       server: McpServer,
       isCurrent: () => boolean,
-    ): Promise<McpServerConnection | undefined> => {
-      const runtime = await loadMcpRuntime();
-      if (!isCurrent()) return undefined;
-      const connection = new runtime.McpServerConnection({
-        entry: server.entry,
-        cwd: sessionCwd,
-        createTransport: options.createTransport ?? runtime.createDefaultTransport,
-        credentials: getCredentials(runtime),
-        providerToken: async (provider) => modelRegistry?.getApiKeyForProvider(provider),
-        log: getServerLog(runtime),
-        onTools: (serverConnection) => {
-          if (isCurrent()) registerTools(serverConnection);
-        },
-        onChange: (serverConnection) => {
-          if (isCurrent()) onConnectionChange(serverConnection);
-          else tokensAtSignIn.delete(serverConnection);
-        },
-      });
-      server.connection = connection;
-      emitChange();
-      return connection;
-    };
+    ): Promise<McpServerConnection | undefined> =>
+      Effect.runPromise(
+        awaiting(function* () {
+          const runtime = yield* awaited(loadMcpRuntime());
+          if (!isCurrent()) return undefined;
+          const connection = new runtime.McpServerConnection({
+            entry: server.entry,
+            cwd: sessionCwd,
+            createTransport: options.createTransport ?? runtime.createDefaultTransport,
+            credentials: getCredentials(runtime),
+            providerToken: (provider) =>
+              Effect.runPromise(
+                awaiting(function* () {
+                  return yield* awaited(modelRegistry?.getApiKeyForProvider(provider));
+                }),
+              ),
+            log: getServerLog(runtime),
+            onTools: (serverConnection) => {
+              if (isCurrent()) registerTools(serverConnection);
+            },
+            onChange: (serverConnection) => {
+              if (isCurrent()) onConnectionChange(serverConnection);
+              else tokensAtSignIn.delete(serverConnection);
+            },
+          });
+          server.connection = connection;
+          emitChange();
+          return connection;
+        }),
+      );
 
     const startConnection = (server: McpServer, after?: Promise<unknown>): Promise<void> => {
       const { signal } = session;
@@ -553,49 +572,54 @@ export function createMcpExtension(options: McpExtensionOptions = {}): Extension
         server.attempt === attempt &&
         isEnabled(server) &&
         servers.includes(server);
-      const ready = (async () => {
-        await after;
-        if (!isCurrent()) return;
-        const connection = await createConnection(server, isCurrent);
-        if (connection === undefined || !isCurrent()) return;
-        await connection.getClient().catch(() => undefined);
-      })();
+      const ready = (() =>
+        Effect.runPromise(
+          awaiting(function* () {
+            yield* awaited(after);
+            if (!isCurrent()) return;
+            const connection = yield* awaited(createConnection(server, isCurrent));
+            if (connection === undefined || !isCurrent()) return;
+            yield* awaited(connection.getClient().catch(() => undefined));
+          }),
+        ))();
       server.ready = ready.catch(() => undefined);
       return ready;
     };
 
-    const waitForServers = async (
-      waiting: readonly McpServer[],
-      signal: AbortSignal | undefined,
-    ) => {
-      for (;;) {
-        const ready = waiting.flatMap((server) =>
-          isEnabled(server) && servers.includes(server) && server.ready !== undefined
-            ? [{ server, ready: server.ready }]
-            : [],
-        );
-        if (ready.length === 0 || signal?.aborted === true) return;
-        let onAbort: (() => void) | undefined;
-        await Promise.race([
-          Promise.all(ready.map((attempt) => attempt.ready)),
-          new Promise<void>((done) => {
-            onAbort = () => done();
-            signal?.addEventListener("abort", onAbort, { once: true });
-          }),
-        ]);
-        if (onAbort !== undefined) signal?.removeEventListener("abort", onAbort);
-        if (
-          (signal?.aborted ?? false) ||
-          ready.every(
-            (attempt) =>
-              !isEnabled(attempt.server) ||
-              !servers.includes(attempt.server) ||
-              attempt.ready === attempt.server.ready,
-          )
-        )
-          return;
-      }
-    };
+    const waitForServers = (waiting: readonly McpServer[], signal: AbortSignal | undefined) =>
+      Effect.runPromise(
+        awaiting(function* () {
+          for (;;) {
+            const ready = waiting.flatMap((server) =>
+              isEnabled(server) && servers.includes(server) && server.ready !== undefined
+                ? [{ server, ready: server.ready }]
+                : [],
+            );
+            if (ready.length === 0 || signal?.aborted === true) return;
+            let onAbort: (() => void) | undefined;
+            yield* awaited(
+              Promise.race([
+                Promise.all(ready.map((attempt) => attempt.ready)),
+                new Promise<void>((done) => {
+                  onAbort = () => done();
+                  signal?.addEventListener("abort", onAbort, { once: true });
+                }),
+              ]),
+            );
+            if (onAbort !== undefined) signal?.removeEventListener("abort", onAbort);
+            if (
+              (signal?.aborted ?? false) ||
+              ready.every(
+                (attempt) =>
+                  !isEnabled(attempt.server) ||
+                  !servers.includes(attempt.server) ||
+                  attempt.ready === attempt.server.ready,
+              )
+            )
+              return;
+          }
+        }),
+      );
 
     const reportProblems = (ctx: ExtensionContext, only?: readonly McpServer[]) => {
       const lines = only === undefined ? configErrors.map((error) => `config: ${error}`) : [];
@@ -630,96 +654,118 @@ export function createMcpExtension(options: McpExtensionOptions = {}): Extension
       return undefined;
     };
 
-    const signIn = async (
+    const signIn = (
       server: McpServer,
       prompt: McpSignInPrompt,
       cancel?: AbortSignal,
-    ): Promise<string | undefined> => {
-      const connection = server.connection;
-      const url = connection?.oauthUrl;
-      if (connection === undefined || url === undefined || url === "")
-        return `MCP server "${server.entry.name}" does not use OAuth.`;
-      const runtime = await loadMcpRuntime();
-      const signal =
-        cancel === undefined ? session.signal : AbortSignal.any([session.signal, cancel]);
-      try {
-        await track(
-          runtime.signInMcpServer({
-            serverUrl: url,
-            store: getCredentials(runtime).forServer(server.entry.name, url),
-            settings: connection.oauthSettings(),
-            challenge: connection.challenge,
-            prompt,
-            signal,
-          }),
-        );
-      } catch (error) {
-        if (error instanceof runtime.McpSignInCancelledError) return "Sign-in cancelled.";
-        return `Sign-in failed: ${toErrorMessage(error)}`;
-      }
+    ): Promise<string | undefined> =>
+      Effect.runPromise(
+        awaiting(function* () {
+          const connection = server.connection;
+          const url = connection?.oauthUrl;
+          if (connection === undefined || url === undefined || url === "")
+            return `MCP server "${server.entry.name}" does not use OAuth.`;
+          const runtime = yield* awaited(loadMcpRuntime());
+          const signal =
+            cancel === undefined ? session.signal : AbortSignal.any([session.signal, cancel]);
+          try {
+            yield* awaited(
+              track(
+                runtime.signInMcpServer({
+                  serverUrl: url,
+                  store: getCredentials(runtime).forServer(server.entry.name, url),
+                  settings: connection.oauthSettings(),
+                  challenge: connection.challenge,
+                  prompt,
+                  signal,
+                }),
+              ),
+            );
+          } catch (error) {
+            if (error instanceof runtime.McpSignInCancelledError) return "Sign-in cancelled.";
+            return `Sign-in failed: ${toErrorMessage(error)}`;
+          }
 
-      connection.challenge = undefined;
-      try {
-        await connection.reconnect();
-      } catch (error) {
-        return `Signed in, but ${toErrorMessage(error)}`;
-      }
-      return undefined;
-    };
+          connection.challenge = undefined;
+          try {
+            yield* awaited(connection.reconnect());
+          } catch (error) {
+            return `Signed in, but ${toErrorMessage(error)}`;
+          }
+          return undefined;
+        }),
+      );
 
-    const signOut = async (server: McpServer): Promise<boolean> => {
-      const connection = server.connection;
-      const url = connection?.oauthUrl;
-      if (connection === undefined || url === undefined || url === "") return false;
-      const removed = getCredentials(await loadMcpRuntime()).remove(server.entry.name, url);
-      await connection.signOut();
-      return removed;
-    };
+    const signOut = (server: McpServer): Promise<boolean> =>
+      Effect.runPromise(
+        awaiting(function* () {
+          const connection = server.connection;
+          const url = connection?.oauthUrl;
+          if (connection === undefined || url === undefined || url === "") return false;
+          const removed = getCredentials(yield* awaited(loadMcpRuntime())).remove(
+            server.entry.name,
+            url,
+          );
+          yield* awaited(connection.signOut());
+          return removed;
+        }),
+      );
 
-    const reconnect = async (server: McpServer): Promise<string | undefined> => {
-      const connection = server.connection;
-      if (connection === undefined) return `MCP server "${server.entry.name}" is disabled.`;
-      const previous = server.ready;
-      const ready = (async () => {
-        await previous;
-        await connection.reconnect();
-      })();
-      server.ready = ready.catch(() => undefined);
-      try {
-        await ready;
-        return undefined;
-      } catch (error) {
-        return toErrorMessage(error);
-      }
-    };
+    const reconnect = (server: McpServer): Promise<string | undefined> =>
+      Effect.runPromise(
+        awaiting(function* () {
+          const connection = server.connection;
+          if (connection === undefined) return `MCP server "${server.entry.name}" is disabled.`;
+          const previous = server.ready;
+          const ready = (() =>
+            Effect.runPromise(
+              awaiting(function* () {
+                yield* awaited(previous);
+                yield* awaited(connection.reconnect());
+              }),
+            ))();
+          server.ready = ready.catch(() => undefined);
+          try {
+            yield* awaited(ready);
+            return undefined;
+          } catch (error) {
+            return toErrorMessage(error);
+          }
+        }),
+      );
 
-    const setEnabled = async (
+    const setEnabled = (
       server: McpServer,
       enabled: boolean,
       inProject = false,
-    ): Promise<string | undefined> => {
-      const failed = saveConfig(server, { enabled }, inProject);
-      if (failed !== undefined && failed !== "") return failed;
-      if (!enabled) {
-        const connection = server.connection;
-        server.attempt = undefined;
-        server.connection = undefined;
-        if (connection !== undefined) {
-          server.closing = Promise.all([connection.close(), server.ready]).then(() => undefined);
-        }
-        const closing = server.closing;
-        hideTools(server.entry.name);
-        emitChange();
-        try {
-          await closing;
-        } finally {
-          if (server.closing === closing) server.closing = undefined;
-        }
-        return undefined;
-      }
-      await startConnection(server, server.closing);
-      return undefined;
-    };
+    ): Promise<string | undefined> =>
+      Effect.runPromise(
+        awaiting(function* () {
+          const failed = saveConfig(server, { enabled }, inProject);
+          if (failed !== undefined && failed !== "") return failed;
+          if (!enabled) {
+            const connection = server.connection;
+            server.attempt = undefined;
+            server.connection = undefined;
+            if (connection !== undefined) {
+              server.closing = Promise.all([connection.close(), server.ready]).then(
+                () => undefined,
+              );
+            }
+            const closing = server.closing;
+            hideTools(server.entry.name);
+            emitChange();
+            try {
+              yield* awaited(closing);
+            } finally {
+              if (server.closing === closing) server.closing = undefined;
+            }
+            return undefined;
+          }
+          yield* awaited(startConnection(server, server.closing));
+          return undefined;
+        }),
+      );
 
     const setExposure = (server: McpServer, exposure: McpExposure): string | undefined => {
       const failed = saveConfig(server, { exposure });
@@ -864,51 +910,61 @@ export function createMcpExtension(options: McpExtensionOptions = {}): Extension
       };
     };
 
-    const showTools = async (ui: McpUi, server: McpServer) => {
-      const exposure = exposureOf(server.entry);
-      const hasToolExposureOverrides =
-        Object.keys(server.entry.config.toolExposure ?? {}).length > 0;
-      await ui.menu(() => ({
-        title: `Tools of ${server.entry.name}`,
-        details: `Exposure ${exposure}: ${exposure === "hidden" ? "unreachable" : EXPOSURE_DESCRIPTIONS[exposure]}${hasToolExposureOverrides ? "\nSome tools override it with toolExposure." : ""}`,
-        items: (server.connection?.tools ?? []).map((tool) => {
-          const toolExposure = getMcpToolExposure(server.entry.config, tool.name);
-          const description = firstLine(tool.description ?? "");
-          return {
-            value: tool.name,
-            label: tool.name,
-            description:
-              toolExposure === exposure ? description : `[${toolExposure}] ${description}`,
-          };
+    const showTools = (ui: McpUi, server: McpServer) =>
+      Effect.runPromise(
+        awaiting(function* () {
+          const exposure = exposureOf(server.entry);
+          const hasToolExposureOverrides =
+            Object.keys(server.entry.config.toolExposure ?? {}).length > 0;
+          yield* awaited(
+            ui.menu(() => ({
+              title: `Tools of ${server.entry.name}`,
+              details: `Exposure ${exposure}: ${exposure === "hidden" ? "unreachable" : EXPOSURE_DESCRIPTIONS[exposure]}${hasToolExposureOverrides ? "\nSome tools override it with toolExposure." : ""}`,
+              items: (server.connection?.tools ?? []).map((tool) => {
+                const toolExposure = getMcpToolExposure(server.entry.config, tool.name);
+                const description = firstLine(tool.description ?? "");
+                return {
+                  value: tool.name,
+                  label: tool.name,
+                  description:
+                    toolExposure === exposure ? description : `[${toolExposure}] ${description}`,
+                };
+              }),
+              empty: "The server offers no tools.",
+              confirmLabel: "back",
+              cancelLabel: "back",
+            })),
+          );
         }),
-        empty: "The server offers no tools.",
-        confirmLabel: "back",
-        cancelLabel: "back",
-      }));
-    };
+      );
 
-    const chooseExposure = async (ui: McpUi, server: McpServer): Promise<string | undefined> => {
-      const current = exposureOf(server.entry);
-      const choice = await ui.menu(() => ({
-        title: `Exposure of ${server.entry.name}`,
-        details:
-          server.entry.scope === "extension"
-            ? `Applies to this session; the server is registered by ${server.entry.source}.`
-            : `Saved to ${server.entry.override ?? server.entry.source}.`,
-        items: (Object.keys(EXPOSURE_DESCRIPTIONS) as (keyof typeof EXPOSURE_DESCRIPTIONS)[]).map(
-          (exposure) => ({
-            value: exposure,
-            label: `${exposure === current ? "✓ " : "  "}${exposure}`,
-            description: EXPOSURE_DESCRIPTIONS[exposure],
-          }),
-        ),
-        selected: current,
-        confirmLabel: "save",
-        cancelLabel: "back",
-      }));
-      if (choice === undefined || choice === "" || choice === current) return undefined;
-      return setExposure(server, choice as McpExposure);
-    };
+    const chooseExposure = (ui: McpUi, server: McpServer): Promise<string | undefined> =>
+      Effect.runPromise(
+        awaiting(function* () {
+          const current = exposureOf(server.entry);
+          const choice = yield* awaited(
+            ui.menu(() => ({
+              title: `Exposure of ${server.entry.name}`,
+              details:
+                server.entry.scope === "extension"
+                  ? `Applies to this session; the server is registered by ${server.entry.source}.`
+                  : `Saved to ${server.entry.override ?? server.entry.source}.`,
+              items: (
+                Object.keys(EXPOSURE_DESCRIPTIONS) as (keyof typeof EXPOSURE_DESCRIPTIONS)[]
+              ).map((exposure) => ({
+                value: exposure,
+                label: `${exposure === current ? "✓ " : "  "}${exposure}`,
+                description: EXPOSURE_DESCRIPTIONS[exposure],
+              })),
+              selected: current,
+              confirmLabel: "save",
+              cancelLabel: "back",
+            })),
+          );
+          if (choice === undefined || choice === "" || choice === current) return undefined;
+          return setExposure(server, choice as McpExposure);
+        }),
+      );
 
     const signInWithUi = (ui: McpUi, server: McpServer): Promise<string | undefined> => {
       const title = `Sign in to ${server.entry.name}`;
@@ -923,11 +979,14 @@ export function createMcpExtension(options: McpExtensionOptions = {}): Extension
             authorizationUrl = url.href;
             openUrl(url.href);
           },
-          promptForRedirectUrl: async (signal) => {
-            const value = await ui.redirectUrl(title, authorizationUrl, signal);
-            status("Connecting…");
-            return value;
-          },
+          promptForRedirectUrl: (signal) =>
+            Effect.runPromise(
+              awaiting(function* () {
+                const value = yield* awaited(ui.redirectUrl(title, authorizationUrl, signal));
+                status("Connecting…");
+                return value;
+              }),
+            ),
         },
         cancel.signal,
       );
@@ -950,62 +1009,67 @@ export function createMcpExtension(options: McpExtensionOptions = {}): Extension
       void track(ready.then(finish, (error: unknown) => finish(toErrorMessage(error))));
     };
 
-    const runAction = async (
-      ui: McpUi,
-      ctx: ExtensionContext,
-      server: McpServer,
-      action: string,
-    ) => {
-      const { signal } = session;
-      let message: string | undefined;
-      switch (action) {
-        case "signin":
-          message = await signInWithUi(ui, server);
-          break;
-        case "reconnect":
-          runInBackground(ctx, server, async () => {
-            await reconnect(server);
-            return undefined;
-          });
-          break;
-        case "signout":
-          await signOut(server);
-          break;
-        case "tools":
-          await showTools(ui, server);
-          break;
-        case "exposure":
-          message = await chooseExposure(ui, server);
-          break;
-        case "enable":
-        case "disable":
-        case "enable-project":
-        case "disable-project": {
-          const enable = action.startsWith("enable");
-          runInBackground(ctx, server, () =>
-            setEnabled(server, enable, action.endsWith("-project")),
-          );
-          break;
-        }
-      }
+    const runAction = (ui: McpUi, ctx: ExtensionContext, server: McpServer, action: string) =>
+      Effect.runPromise(
+        awaiting(function* () {
+          const { signal } = session;
+          let message: string | undefined;
+          switch (action) {
+            case "signin":
+              message = yield* awaited(signInWithUi(ui, server));
+              break;
+            case "reconnect":
+              runInBackground(ctx, server, () =>
+                Effect.runPromise(
+                  awaiting(function* () {
+                    yield* awaited(reconnect(server));
+                    return undefined;
+                  }),
+                ),
+              );
+              break;
+            case "signout":
+              yield* awaited(signOut(server));
+              break;
+            case "tools":
+              yield* awaited(showTools(ui, server));
+              break;
+            case "exposure":
+              message = yield* awaited(chooseExposure(ui, server));
+              break;
+            case "enable":
+            case "disable":
+            case "enable-project":
+            case "disable-project": {
+              const enable = action.startsWith("enable");
+              runInBackground(ctx, server, () =>
+                setEnabled(server, enable, action.endsWith("-project")),
+              );
+              break;
+            }
+          }
 
-      if (signal.aborted) return;
-      server.message = message;
-      ensureDiscoveryActive(ctx);
-      emitChange();
-    };
-    const manage = async (ui: McpUi, ctx: ExtensionContext) => {
-      for (;;) {
-        const name = await ui.menu(serversMenu, subscribe);
-        if (name === undefined || name === "") return;
-        for (;;) {
-          const action = await ui.menu(() => serverMenu(name), subscribe);
-          const server = findServer(name);
-          if (action === undefined || action === "" || server === undefined) break;
-          await runAction(ui, ctx, server, action);
-        }
-      }
-    };
+          if (signal.aborted) return;
+          server.message = message;
+          ensureDiscoveryActive(ctx);
+          emitChange();
+        }),
+      );
+    const manage = (ui: McpUi, ctx: ExtensionContext) =>
+      Effect.runPromise(
+        awaiting(function* () {
+          for (;;) {
+            const name = yield* awaited(ui.menu(serversMenu, subscribe));
+            if (name === undefined || name === "") return;
+            for (;;) {
+              const action = yield* awaited(ui.menu(() => serverMenu(name), subscribe));
+              const server = findServer(name);
+              if (action === undefined || action === "" || server === undefined) break;
+              yield* awaited(runAction(ui, ctx, server, action));
+            }
+          }
+        }),
+      );
 
     const formatStatus = (): string => {
       if (servers.length === 0 && configErrors.length === 0 && overridden.length === 0) {
@@ -1036,7 +1100,7 @@ export function createMcpExtension(options: McpExtensionOptions = {}): Extension
       return lines.join("\n");
     };
 
-    const pickServer = async (
+    const pickServer = (
       name: string | undefined,
       ctx: ExtensionCommandContext,
       criteria: {
@@ -1044,27 +1108,32 @@ export function createMcpExtension(options: McpExtensionOptions = {}): Extension
         preferred: (server: McpServer) => boolean;
         none: string;
       },
-    ): Promise<McpServer | undefined> => {
-      if (name !== undefined && name !== "") {
-        const server = findServer(name);
-        if (server === undefined) ctx.ui.notify(`No MCP server named "${name}".`, "error");
-        else if (!criteria.eligible(server)) ctx.ui.notify(criteria.none, "error");
-        return server !== undefined && criteria.eligible(server) ? server : undefined;
-      }
-      const candidates = servers.filter(criteria.eligible);
-      if (candidates.length === 0) {
-        ctx.ui.notify(criteria.none, "info");
-        return undefined;
-      }
-      const preferred = candidates.filter(criteria.preferred);
-      if (candidates.length === 1) return candidates[0];
-      if (preferred.length === 1) return preferred[0];
-      const choice = await ctx.ui.select(
-        "MCP server",
-        candidates.map((server) => server.entry.name),
+    ): Promise<McpServer | undefined> =>
+      Effect.runPromise(
+        awaiting(function* () {
+          if (name !== undefined && name !== "") {
+            const server = findServer(name);
+            if (server === undefined) ctx.ui.notify(`No MCP server named "${name}".`, "error");
+            else if (!criteria.eligible(server)) ctx.ui.notify(criteria.none, "error");
+            return server !== undefined && criteria.eligible(server) ? server : undefined;
+          }
+          const candidates = servers.filter(criteria.eligible);
+          if (candidates.length === 0) {
+            ctx.ui.notify(criteria.none, "info");
+            return undefined;
+          }
+          const preferred = candidates.filter(criteria.preferred);
+          if (candidates.length === 1) return candidates[0];
+          if (preferred.length === 1) return preferred[0];
+          const choice = yield* awaited(
+            ctx.ui.select(
+              "MCP server",
+              candidates.map((server) => server.entry.name),
+            ),
+          );
+          return candidates.find((server) => server.entry.name === choice);
+        }),
       );
-      return candidates.find((server) => server.entry.name === choice);
-    };
 
     const usesOAuth = (server: McpServer) => server.connection?.oauthUrl !== undefined;
     const oauthPick = {
@@ -1073,44 +1142,58 @@ export function createMcpExtension(options: McpExtensionOptions = {}): Extension
       none: "No enabled MCP server uses OAuth. Only HTTP servers without an Authorization header do.",
     };
 
-    const loginCommand = async (server: McpServer, ctx: ExtensionCommandContext) => {
-      const { name } = server.entry;
-      if (!ctx.hasUI) {
-        ctx.ui.notify(`Signing in to MCP server "${name}" requires interactive mode.`, "error");
-        return;
-      }
-      const { signal } = session;
-      let failure: string | undefined;
-      if (ctx.mode === "tui") {
-        await showMcpManager(ctx, async (ui) => {
-          failure = await signInWithUi(ui, server);
-        });
-      } else {
-        failure = await signIn(server, {
-          showAuthorizationUrl: (url) => {
-            ctx.ui.notify(`Sign in to MCP server "${name}" in your browser:\n${url.href}`, "info");
-            openUrl(url.href);
-          },
-          promptForRedirectUrl: (promptSignal) =>
-            ctx.ui.input(
-              `Waiting for sign-in to "${name}". If the browser cannot reach this machine, paste the URL it was redirected to.`,
-              "http://127.0.0.1:.../callback?code=...",
-              { signal: promptSignal },
-            ),
-        });
-      }
+    const loginCommand = (server: McpServer, ctx: ExtensionCommandContext) =>
+      Effect.runPromise(
+        awaiting(function* () {
+          const { name } = server.entry;
+          if (!ctx.hasUI) {
+            ctx.ui.notify(`Signing in to MCP server "${name}" requires interactive mode.`, "error");
+            return;
+          }
+          const { signal } = session;
+          let failure: string | undefined;
+          if (ctx.mode === "tui") {
+            yield* awaited(
+              showMcpManager(ctx, (ui) =>
+                Effect.runPromise(
+                  awaiting(function* () {
+                    failure = yield* awaited(signInWithUi(ui, server));
+                  }),
+                ),
+              ),
+            );
+          } else {
+            failure = yield* awaited(
+              signIn(server, {
+                showAuthorizationUrl: (url) => {
+                  ctx.ui.notify(
+                    `Sign in to MCP server "${name}" in your browser:\n${url.href}`,
+                    "info",
+                  );
+                  openUrl(url.href);
+                },
+                promptForRedirectUrl: (promptSignal) =>
+                  ctx.ui.input(
+                    `Waiting for sign-in to "${name}". If the browser cannot reach this machine, paste the URL it was redirected to.`,
+                    "http://127.0.0.1:.../callback?code=...",
+                    { signal: promptSignal },
+                  ),
+              }),
+            );
+          }
 
-      if (signal.aborted) return;
-      if (failure !== undefined && failure !== "") {
-        ctx.ui.notify(failure, failure === "Sign-in cancelled." ? "info" : "error");
-        return;
-      }
-      ensureDiscoveryActive(ctx);
-      ctx.ui.notify(
-        `Signed in to MCP server "${name}" (${server.connection?.tools.length ?? 0} tools).`,
-        "info",
+          if (signal.aborted) return;
+          if (failure !== undefined && failure !== "") {
+            ctx.ui.notify(failure, failure === "Sign-in cancelled." ? "info" : "error");
+            return;
+          }
+          ensureDiscoveryActive(ctx);
+          ctx.ui.notify(
+            `Signed in to MCP server "${name}" (${server.connection?.tools.length ?? 0} tools).`,
+            "info",
+          );
+        }),
       );
-    };
 
     msa.on("session_start", (_event, ctx) => {
       const loaded = (options.loadConfig ?? defaultLoadConfig)(ctx);
@@ -1148,106 +1231,133 @@ export function createMcpExtension(options: McpExtensionOptions = {}): Extension
         });
     });
 
-    const waitForDirectServers = async (ctx: ExtensionContext) => {
-      if (waitedForStartup) return;
-      waitedForStartup = true;
-      const ready = servers.flatMap((server) =>
-        isEnabled(server) && hasDirectTools(server.entry) && server.ready !== undefined
-          ? [server.ready]
-          : [],
-      );
-      if (ready.length === 0) return;
-      let timer: NodeJS.Timeout | undefined;
-      const finished = await Promise.race([
-        Promise.all(ready).then(() => true),
-        new Promise<boolean>((finish) => {
-          timer = setTimeout(() => finish(false), startupWaitMs);
+    const waitForDirectServers = (ctx: ExtensionContext) =>
+      Effect.runPromise(
+        awaiting(function* () {
+          if (waitedForStartup) return;
+          waitedForStartup = true;
+          const ready = servers.flatMap((server) =>
+            isEnabled(server) && hasDirectTools(server.entry) && server.ready !== undefined
+              ? [server.ready]
+              : [],
+          );
+          if (ready.length === 0) return;
+          let timer: NodeJS.Timeout | undefined;
+          const finished = yield* awaited(
+            Promise.race([
+              Promise.all(ready).then(() => true),
+              new Promise<boolean>((finish) => {
+                timer = setTimeout(() => finish(false), startupWaitMs);
+              }),
+            ]),
+          );
+          clearTimeout(timer);
+          if (!finished) {
+            ctx.ui.notify(
+              "MCP servers are still connecting; their tools become available once connected.",
+              "info",
+            );
+          }
         }),
-      ]);
-      clearTimeout(timer);
-      if (!finished) {
-        ctx.ui.notify(
-          "MCP servers are still connecting; their tools become available once connected.",
-          "info",
-        );
-      }
-    };
-
-    msa.on("before_agent_start", async (event, ctx) => {
-      await waitForDirectServers(ctx);
-      const { sections } = event.systemPromptOptions;
-      const section = renderServersSection(servers);
-      if (section !== undefined && section !== "") sections[MCP_SERVERS_SECTION] = section;
-      else delete sections[MCP_SERVERS_SECTION];
-    });
-
-    msa.on("tool_call", async (event, ctx) => {
-      const tool = msa.getAllTools().find((candidate) => candidate.name === event.toolName);
-      if (tool === undefined) return;
-
-      const readyServers = servers.filter((server) => isEnabled(server) && server.ready);
-      if (readyServers.length === 0) return;
-      let waiting: McpServer[] = [];
-      const reach = tool.reachesTools?.(event.input);
-      if (reach !== undefined) {
-        waiting = readyServers.filter((server) => reachesServer(reach, server.entry.name));
-      } else if (RESOURCE_TOOL_NAMES.has(tool.name)) {
-        waiting = readyServers;
-      } else {
-        const owner = toolOwners.get(event.toolName)?.split("\0", 1)[0];
-        waiting = readyServers.filter((server) => server.entry.name === owner);
-      }
-      await waitForServers(waiting, ctx.signal);
-    });
-
-    msa.on("turn_start", async (_event, ctx) => {
-      if (tokensAtSignIn.size > 0) await reconnectSignedIn(ctx);
-    });
-
-    msa.on("mcp_servers_change", async (_event, ctx) => {
-      const { signal } = session;
-      if (signal.aborted) return;
-      const registered = registeredServers();
-      overridden = registered.overridden;
-      const next = new Map(registered.servers.map((server) => [server.entry.name, server]));
-
-      const removed = servers.filter(
-        (server) =>
-          server.entry.scope === "extension" &&
-          next.get(server.entry.name)?.registeredConfig !== server.registeredConfig,
       );
-      servers = servers.filter((server) => !removed.includes(server));
-      for (const server of removed) hideTools(server.entry.name);
-      const added = registered.servers.filter(
-        (server) => findServer(server.entry.name) === undefined,
-      );
-      servers.push(...added);
-      emitChange();
-      ensureDiscoveryActive(ctx);
-      await Promise.all(removed.map((server) => server.connection?.close()));
-      const connecting = added.filter(isEnabled);
-      if (signal.aborted || connecting.length === 0) return;
-      try {
-        await Promise.all(connecting.map((server) => startConnection(server)));
-        if (signal.aborted) {
-          await Promise.all(connecting.map((server) => server.connection?.close()));
-          return;
-        }
-      } catch (error) {
-        ctx.ui.notify(`MCP failed to load: ${toErrorMessage(error)}`, "error");
-        return;
-      }
-      if (signal.aborted) return;
-      reportProblems(ctx, connecting);
-    });
 
-    msa.on("session_shutdown", async () => {
-      session.abort();
-      const closing = connections();
-      servers = [];
-      emitChange();
-      await Promise.all([...backgroundActions, ...closing.map((connection) => connection.close())]);
-    });
+    msa.on("before_agent_start", (event, ctx) =>
+      Effect.runPromise(
+        awaiting(function* () {
+          yield* awaited(waitForDirectServers(ctx));
+          const { sections } = event.systemPromptOptions;
+          const section = renderServersSection(servers);
+          if (section !== undefined && section !== "") sections[MCP_SERVERS_SECTION] = section;
+          else delete sections[MCP_SERVERS_SECTION];
+        }),
+      ),
+    );
+
+    msa.on("tool_call", (event, ctx) =>
+      Effect.runPromise(
+        awaiting(function* () {
+          const tool = msa.getAllTools().find((candidate) => candidate.name === event.toolName);
+          if (tool === undefined) return;
+
+          const readyServers = servers.filter((server) => isEnabled(server) && server.ready);
+          if (readyServers.length === 0) return;
+          let waiting: McpServer[] = [];
+          const reach = tool.reachesTools?.(event.input);
+          if (reach !== undefined) {
+            waiting = readyServers.filter((server) => reachesServer(reach, server.entry.name));
+          } else if (RESOURCE_TOOL_NAMES.has(tool.name)) {
+            waiting = readyServers;
+          } else {
+            const owner = toolOwners.get(event.toolName)?.split("\0", 1)[0];
+            waiting = readyServers.filter((server) => server.entry.name === owner);
+          }
+          yield* awaited(waitForServers(waiting, ctx.signal));
+        }),
+      ),
+    );
+
+    msa.on("turn_start", (_event, ctx) =>
+      Effect.runPromise(
+        awaiting(function* () {
+          if (tokensAtSignIn.size > 0) yield* awaited(reconnectSignedIn(ctx));
+        }),
+      ),
+    );
+
+    msa.on("mcp_servers_change", (_event, ctx) =>
+      Effect.runPromise(
+        awaiting(function* () {
+          const { signal } = session;
+          if (signal.aborted) return;
+          const registered = registeredServers();
+          overridden = registered.overridden;
+          const next = new Map(registered.servers.map((server) => [server.entry.name, server]));
+
+          const removed = servers.filter(
+            (server) =>
+              server.entry.scope === "extension" &&
+              next.get(server.entry.name)?.registeredConfig !== server.registeredConfig,
+          );
+          servers = servers.filter((server) => !removed.includes(server));
+          for (const server of removed) hideTools(server.entry.name);
+          const added = registered.servers.filter(
+            (server) => findServer(server.entry.name) === undefined,
+          );
+          servers.push(...added);
+          emitChange();
+          ensureDiscoveryActive(ctx);
+          yield* awaited(Promise.all(removed.map((server) => server.connection?.close())));
+          const connecting = added.filter(isEnabled);
+          if (signal.aborted || connecting.length === 0) return;
+          try {
+            yield* awaited(Promise.all(connecting.map((server) => startConnection(server))));
+            if (signal.aborted) {
+              yield* awaited(Promise.all(connecting.map((server) => server.connection?.close())));
+              return;
+            }
+          } catch (error) {
+            ctx.ui.notify(`MCP failed to load: ${toErrorMessage(error)}`, "error");
+            return;
+          }
+          if (signal.aborted) return;
+          reportProblems(ctx, connecting);
+        }),
+      ),
+    );
+
+    msa.on("session_shutdown", () =>
+      Effect.runPromise(
+        awaiting(function* () {
+          session.abort();
+          const closing = connections();
+          servers = [];
+          emitChange();
+          yield* awaited(
+            Promise.all([...backgroundActions, ...closing.map((connection) => connection.close())]),
+          );
+        }),
+      ),
+    );
 
     msa.registerCommand("mcp", {
       description: "Manage MCP servers: sign in, reconnect, enable or disable, and change exposure",
@@ -1272,63 +1382,68 @@ export function createMcpExtension(options: McpExtensionOptions = {}): Extension
           }));
         return items.length > 0 ? items : null;
       },
-      handler: async (args, ctx) => {
-        const [action, name, ...extra] = args.trim().split(/\s+/u).filter(Boolean);
-        if (action === undefined) {
-          if (ctx.mode === "tui") await showMcpManager(ctx, (ui) => manage(ui, ctx));
-          else {
-            await pending;
-            ctx.ui.notify(formatStatus(), "info");
-          }
-          return;
-        }
-        if (extra.length > 0) {
-          ctx.ui.notify(MCP_USAGE, "warning");
-          return;
-        }
-        await pending;
-        switch (action) {
-          case "login": {
-            const server = await pickServer(name, ctx, oauthPick);
-            if (server !== undefined) await loginCommand(server, ctx);
-            return;
-          }
-          case "logout": {
-            const server = await pickServer(name, ctx, oauthPick);
-            if (server === undefined) return;
-            const removed = await signOut(server);
-            ctx.ui.notify(
-              removed
-                ? `Signed out of MCP server "${server.entry.name}".`
-                : `No stored credentials for MCP server "${server.entry.name}".`,
-              "info",
-            );
-            return;
-          }
-          case "reconnect": {
-            const server = await pickServer(name, ctx, {
-              eligible: (candidate) => candidate.connection !== undefined,
-              preferred: (candidate) =>
-                candidate.connection?.state === "failed" ||
-                candidate.connection?.state === "disconnected",
-              none: "No enabled MCP server to reconnect.",
-            });
-            if (server === undefined) return;
-            const failure = await reconnect(server);
-            if (failure !== undefined && failure !== "") ctx.ui.notify(failure, "error");
-            else {
-              ensureDiscoveryActive(ctx);
-              ctx.ui.notify(
-                `Reconnected to MCP server "${server.entry.name}" (${describeState(server)}).`,
-                "info",
-              );
+      handler: (args, ctx) =>
+        Effect.runPromise(
+          awaiting(function* () {
+            const [action, name, ...extra] = args.trim().split(/\s+/u).filter(Boolean);
+            if (action === undefined) {
+              if (ctx.mode === "tui") yield* awaited(showMcpManager(ctx, (ui) => manage(ui, ctx)));
+              else {
+                yield* awaited(pending);
+                ctx.ui.notify(formatStatus(), "info");
+              }
+              return;
             }
-            return;
-          }
-          default:
-            ctx.ui.notify(MCP_USAGE, "warning");
-        }
-      },
+            if (extra.length > 0) {
+              ctx.ui.notify(MCP_USAGE, "warning");
+              return;
+            }
+            yield* awaited(pending);
+            switch (action) {
+              case "login": {
+                const server = yield* awaited(pickServer(name, ctx, oauthPick));
+                if (server !== undefined) yield* awaited(loginCommand(server, ctx));
+                return;
+              }
+              case "logout": {
+                const server = yield* awaited(pickServer(name, ctx, oauthPick));
+                if (server === undefined) return;
+                const removed = yield* awaited(signOut(server));
+                ctx.ui.notify(
+                  removed
+                    ? `Signed out of MCP server "${server.entry.name}".`
+                    : `No stored credentials for MCP server "${server.entry.name}".`,
+                  "info",
+                );
+                return;
+              }
+              case "reconnect": {
+                const server = yield* awaited(
+                  pickServer(name, ctx, {
+                    eligible: (candidate) => candidate.connection !== undefined,
+                    preferred: (candidate) =>
+                      candidate.connection?.state === "failed" ||
+                      candidate.connection?.state === "disconnected",
+                    none: "No enabled MCP server to reconnect.",
+                  }),
+                );
+                if (server === undefined) return;
+                const failure = yield* awaited(reconnect(server));
+                if (failure !== undefined && failure !== "") ctx.ui.notify(failure, "error");
+                else {
+                  ensureDiscoveryActive(ctx);
+                  ctx.ui.notify(
+                    `Reconnected to MCP server "${server.entry.name}" (${describeState(server)}).`,
+                    "info",
+                  );
+                }
+                return;
+              }
+              default:
+                ctx.ui.notify(MCP_USAGE, "warning");
+            }
+          }),
+        ),
     });
   };
 }

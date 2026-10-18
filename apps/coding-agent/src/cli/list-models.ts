@@ -1,8 +1,10 @@
 import type { Api, Model } from "@msa/ai";
 import { fuzzyFilter } from "@msa/tui";
 import chalk from "chalk";
+import * as Effect from "effect/Effect";
 
 import { formatNoModelsAvailableMessage } from "../core/auth-guidance.ts";
+import { awaited, awaiting } from "../core/awaiting.ts";
 import type { ModelRuntime } from "../core/model-runtime.ts";
 import { writeError, writeLog } from "../core/platform.ts";
 
@@ -18,87 +20,93 @@ function formatTokenCount(count: number): string {
   return count.toString();
 }
 
-export async function listModels(
+export function listModels(
   modelRuntime: ModelRuntime,
   searchPattern?: string,
   signal?: AbortSignal,
 ): Promise<void> {
-  const loadError = modelRuntime.getError();
-  if (loadError !== undefined && loadError !== "") {
-    writeError(chalk.yellow(`Warning: errors loading models.json:\n${loadError}`));
-  }
+  return Effect.runPromise(
+    awaiting(function* () {
+      const loadError = modelRuntime.getError();
+      if (loadError !== undefined && loadError !== "") {
+        writeError(chalk.yellow(`Warning: errors loading models.json:\n${loadError}`));
+      }
 
-  const models = [
-    ...(await modelRuntime.getAvailable(undefined, signal === undefined ? {} : { signal })),
-  ];
+      const models = [
+        ...(yield* awaited(
+          modelRuntime.getAvailable(undefined, signal === undefined ? {} : { signal }),
+        )),
+      ];
 
-  if (models.length === 0) {
-    writeLog(formatNoModelsAvailableMessage());
-    return;
-  }
+      if (models.length === 0) {
+        writeLog(formatNoModelsAvailableMessage());
+        return;
+      }
 
-  let filteredModels: Model<Api>[] = models;
-  if (searchPattern !== undefined && searchPattern !== "") {
-    filteredModels = fuzzyFilter(models, searchPattern, (m) => `${m.provider} ${m.id}`);
-  }
+      let filteredModels: Model<Api>[] = models;
+      if (searchPattern !== undefined && searchPattern !== "") {
+        filteredModels = fuzzyFilter(models, searchPattern, (m) => `${m.provider} ${m.id}`);
+      }
 
-  if (filteredModels.length === 0) {
-    writeLog(`No models matching "${searchPattern}"`);
-    return;
-  }
+      if (filteredModels.length === 0) {
+        writeLog(`No models matching "${searchPattern}"`);
+        return;
+      }
 
-  filteredModels.sort((a, b) => {
-    const providerCmp = a.provider.localeCompare(b.provider);
-    if (providerCmp !== 0) return providerCmp;
-    return a.id.localeCompare(b.id);
-  });
+      filteredModels.sort((a, b) => {
+        const providerCmp = a.provider.localeCompare(b.provider);
+        if (providerCmp !== 0) return providerCmp;
+        return a.id.localeCompare(b.id);
+      });
 
-  const rows = filteredModels.map((m) => ({
-    provider: m.provider,
-    model: m.id,
-    context: formatTokenCount(m.contextWindow),
-    maxOut: formatTokenCount(m.maxTokens),
-    thinking: m.reasoning ? "yes" : "no",
-    images: m.input.includes("image") ? "yes" : "no",
-  }));
+      const rows = filteredModels.map((m) => ({
+        provider: m.provider,
+        model: m.id,
+        context: formatTokenCount(m.contextWindow),
+        maxOut: formatTokenCount(m.maxTokens),
+        thinking: m.reasoning ? "yes" : "no",
+        images: m.input.includes("image") ? "yes" : "no",
+      }));
 
-  const headers = {
-    provider: "provider",
-    model: "model",
-    context: "context",
-    maxOut: "max-out",
-    thinking: "thinking",
-    images: "images",
-  };
+      const headers = {
+        provider: "provider",
+        model: "model",
+        context: "context",
+        maxOut: "max-out",
+        thinking: "thinking",
+        images: "images",
+      };
 
-  const widths = {
-    provider: Math.max(headers.provider.length, ...rows.map((r) => r.provider.length)),
-    model: Math.max(headers.model.length, ...rows.map((r) => r.model.length)),
-    context: Math.max(headers.context.length, ...rows.map((r) => r.context.length)),
-    maxOut: Math.max(headers.maxOut.length, ...rows.map((r) => r.maxOut.length)),
-    thinking: Math.max(headers.thinking.length, ...rows.map((r) => r.thinking.length)),
-    images: Math.max(headers.images.length, ...rows.map((r) => r.images.length)),
-  };
+      const widths = {
+        provider: Math.max(headers.provider.length, ...rows.map((r) => r.provider.length)),
+        model: Math.max(headers.model.length, ...rows.map((r) => r.model.length)),
+        context: Math.max(headers.context.length, ...rows.map((r) => r.context.length)),
+        maxOut: Math.max(headers.maxOut.length, ...rows.map((r) => r.maxOut.length)),
+        thinking: Math.max(headers.thinking.length, ...rows.map((r) => r.thinking.length)),
+        images: Math.max(headers.images.length, ...rows.map((r) => r.images.length)),
+      };
 
-  const headerLine = [
-    headers.provider.padEnd(widths.provider),
-    headers.model.padEnd(widths.model),
-    headers.context.padEnd(widths.context),
-    headers.maxOut.padEnd(widths.maxOut),
-    headers.thinking.padEnd(widths.thinking),
-    headers.images.padEnd(widths.images),
-  ].join("  ");
-  writeLog(headerLine);
+      const headerLine = [
+        headers.provider.padEnd(widths.provider),
+        headers.model.padEnd(widths.model),
+        headers.context.padEnd(widths.context),
+        headers.maxOut.padEnd(widths.maxOut),
+        headers.thinking.padEnd(widths.thinking),
+        headers.images.padEnd(widths.images),
+      ].join("  ");
+      writeLog(headerLine);
 
-  for (const row of rows) {
-    const line = [
-      row.provider.padEnd(widths.provider),
-      row.model.padEnd(widths.model),
-      row.context.padEnd(widths.context),
-      row.maxOut.padEnd(widths.maxOut),
-      row.thinking.padEnd(widths.thinking),
-      row.images.padEnd(widths.images),
-    ].join("  ");
-    writeLog(line);
-  }
+      for (const row of rows) {
+        const line = [
+          row.provider.padEnd(widths.provider),
+          row.model.padEnd(widths.model),
+          row.context.padEnd(widths.context),
+          row.maxOut.padEnd(widths.maxOut),
+          row.thinking.padEnd(widths.thinking),
+          row.images.padEnd(widths.images),
+        ].join("  ");
+        writeLog(line);
+      }
+    }),
+  );
 }

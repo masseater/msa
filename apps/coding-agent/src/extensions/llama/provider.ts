@@ -13,7 +13,9 @@ import {
 import { llamaCppClassifyApi } from "@msa/ai/api/llama-cpp-classify.lazy";
 import { typesafeSystemOneApi } from "@msa/ai/api/typesafe-system-one.lazy";
 import { stream, streamSimple } from "@msa/ai/compat";
+import * as Effect from "effect/Effect";
 
+import { awaited, awaiting } from "../../core/awaiting.ts";
 import { nowMs, readEnv } from "../../core/platform.ts";
 import {
   LlamaClient,
@@ -32,14 +34,19 @@ function credentialServerUrl(credential: ApiKeyCredential | undefined): string |
     : undefined;
 }
 
-async function resolveServerUrl(
+function resolveServerUrl(
   ctx: AuthContext,
   credential: ApiKeyCredential | undefined,
 ): Promise<string | undefined> {
-  const configured = credentialServerUrl(credential) ?? (await ctx.env("LLAMA_BASE_URL"))?.trim();
-  return configured !== undefined && configured !== ""
-    ? normalizeLlamaServerUrl(configured)
-    : undefined;
+  return Effect.runPromise(
+    awaiting(function* () {
+      const configured =
+        credentialServerUrl(credential) ?? (yield* awaited(ctx.env("LLAMA_BASE_URL")))?.trim();
+      return configured !== undefined && configured !== ""
+        ? normalizeLlamaServerUrl(configured)
+        : undefined;
+    }),
+  );
 }
 
 function modelIsSelectable(model: LlamaModelInfo, routerAutoload: boolean): boolean {
@@ -55,18 +62,22 @@ function modelIsSelectable(model: LlamaModelInfo, routerAutoload: boolean): bool
   );
 }
 
-async function routerAutoloadEnabled(
+function routerAutoloadEnabled(
   client: LlamaClient,
   catalog: readonly LlamaModelInfo[],
   signal: AbortSignal,
 ): Promise<boolean> {
-  if (!catalog.some((model) => model.status.value === "unloaded" && model.source === "preset"))
-    return false;
-  try {
-    return (await client.props({ signal })).models_autoload === true;
-  } catch {
-    return false;
-  }
+  return Effect.runPromise(
+    awaiting(function* () {
+      if (!catalog.some((model) => model.status.value === "unloaded" && model.source === "preset"))
+        return false;
+      try {
+        return (yield* awaited(client.props({ signal }))).models_autoload === true;
+      } catch {
+        return false;
+      }
+    }),
+  );
 }
 
 function configuredContextWindow(model: LlamaModelInfo): number | undefined {
@@ -212,111 +223,146 @@ export function createLlamaProvider(): LlamaProviderController {
     auth: {
       apiKey: {
         name: "llama.cpp server",
-        login: async (interaction): Promise<ApiKeyCredential> => {
-          const enteredUrl = await interaction.prompt({
-            type: "text",
-            message: "llama.cpp server URL",
-            placeholder: readEnv("LLAMA_BASE_URL") ?? DEFAULT_LLAMA_SERVER_URL,
-          });
-          const serverUrl = normalizeLlamaServerUrl(
-            enteredUrl.trim() || readEnv("LLAMA_BASE_URL") || DEFAULT_LLAMA_SERVER_URL,
-          );
-          const apiKey = (
-            await interaction.prompt({
-              type: "secret",
-              message: "API key (optional)",
-            })
-          ).trim();
-          await new LlamaClient(serverUrl, apiKey || undefined).list({
-            signal: interaction.signal,
-          });
-          return {
-            type: "api_key",
-            key: apiKey || undefined,
-            env: { LLAMA_BASE_URL: serverUrl },
-          };
-        },
-        check: async ({ ctx, credential }) => {
-          const serverUrl = await resolveServerUrl(ctx, credential);
-          return serverUrl !== undefined && serverUrl !== ""
-            ? {
+        login: (interaction): Promise<ApiKeyCredential> =>
+          Effect.runPromise(
+            awaiting(function* () {
+              const enteredUrl = yield* awaited(
+                interaction.prompt({
+                  type: "text",
+                  message: "llama.cpp server URL",
+                  placeholder: readEnv("LLAMA_BASE_URL") ?? DEFAULT_LLAMA_SERVER_URL,
+                }),
+              );
+              const serverUrl = normalizeLlamaServerUrl(
+                enteredUrl.trim() || readEnv("LLAMA_BASE_URL") || DEFAULT_LLAMA_SERVER_URL,
+              );
+              const apiKey = (yield* awaited(
+                interaction.prompt({
+                  type: "secret",
+                  message: "API key (optional)",
+                }),
+              )).trim();
+              yield* awaited(
+                new LlamaClient(serverUrl, apiKey || undefined).list({
+                  signal: interaction.signal,
+                }),
+              );
+              return {
                 type: "api_key",
+                key: apiKey || undefined,
+                env: { LLAMA_BASE_URL: serverUrl },
+              };
+            }),
+          ),
+        check: ({ ctx, credential }) =>
+          Effect.runPromise(
+            awaiting(function* () {
+              const serverUrl = yield* awaited(resolveServerUrl(ctx, credential));
+              return serverUrl !== undefined && serverUrl !== ""
+                ? {
+                    type: "api_key",
+                    source: credential === undefined ? "LLAMA_BASE_URL" : "stored credential",
+                  }
+                : undefined;
+            }),
+          ),
+        resolve: ({ ctx, credential }): Promise<AuthResult | undefined> =>
+          Effect.runPromise(
+            awaiting(function* () {
+              const serverUrl = yield* awaited(resolveServerUrl(ctx, credential));
+              if (serverUrl === undefined || serverUrl === "") return undefined;
+              const apiKey =
+                credential?.key ?? (yield* awaited(ctx.env("LLAMA_API_KEY"))) ?? "local";
+              return {
+                auth: { apiKey, baseUrl: llamaInferenceUrl(serverUrl) },
+                env: { ...credential?.env, LLAMA_BASE_URL: serverUrl },
                 source: credential === undefined ? "LLAMA_BASE_URL" : "stored credential",
-              }
-            : undefined;
-        },
-        resolve: async ({ ctx, credential }): Promise<AuthResult | undefined> => {
-          const serverUrl = await resolveServerUrl(ctx, credential);
-          if (serverUrl === undefined || serverUrl === "") return undefined;
-          const apiKey = credential?.key ?? (await ctx.env("LLAMA_API_KEY")) ?? "local";
-          return {
-            auth: { apiKey, baseUrl: llamaInferenceUrl(serverUrl) },
-            env: { ...credential?.env, LLAMA_BASE_URL: serverUrl },
-            source: credential === undefined ? "LLAMA_BASE_URL" : "stored credential",
-          };
-        },
+              };
+            }),
+          ),
       },
     },
     getModels: () => models,
     getAllModels: () => [...models, ...classifiers],
-    refreshModels: async (context: RefreshModelsContext): Promise<void> => {
-      const cachedContextWindows = new Map<string, number>();
-      if (context.stored !== undefined) {
-        const stored = context.stored.models.filter(
-          (model) => model.provider === LLAMA_PROVIDER_ID,
-        );
-        const restored = stored.filter(
-          (model): model is Model<"openai-completions"> =>
-            isModelType(model, "chat") && model.api === "openai-completions",
-        );
-        const restoredClassifiers = stored.filter(isLlamaClassifierModel);
-        for (const model of [...restored, ...restoredClassifiers]) {
-          cachedContextWindows.set(model.id, model.contextWindow);
-        }
-        if (
-          !(await context.publish({
-            update: () => {
-              models = restored;
-              classifiers = restoredClassifiers;
-            },
-          }))
-        ) {
-          return;
-        }
-      }
+    refreshModels: (context: RefreshModelsContext): Promise<void> =>
+      Effect.runPromise(
+        awaiting(function* () {
+          const cachedContextWindows = new Map<string, number>();
+          if (context.stored !== undefined) {
+            const stored = context.stored.models.filter(
+              (model) => model.provider === LLAMA_PROVIDER_ID,
+            );
+            const restored = stored.filter(
+              (model): model is Model<"openai-completions"> =>
+                isModelType(model, "chat") && model.api === "openai-completions",
+            );
+            const restoredClassifiers = stored.filter(isLlamaClassifierModel);
+            for (const model of [...restored, ...restoredClassifiers]) {
+              cachedContextWindows.set(model.id, model.contextWindow);
+            }
+            if (
+              !(yield* awaited(
+                context.publish({
+                  update: () => {
+                    models = restored;
+                    classifiers = restoredClassifiers;
+                  },
+                }),
+              ))
+            ) {
+              return;
+            }
+          }
 
-      if (!context.allowNetwork || context.signal.aborted || context.credential?.type !== "api_key")
-        return;
-      const serverUrl = credentialServerUrl(context.credential);
-      if (serverUrl === undefined || serverUrl === "") return;
-      const client = new LlamaClient(serverUrl, context.credential.key);
-      const catalog = await client.list({ signal: context.signal });
-      if (context.signal.aborted) return;
-      const routerAutoload = await routerAutoloadEnabled(client, catalog, context.signal);
-      if (context.signal.aborted) return;
-      const selectable = catalog.filter((model) => modelIsSelectable(model, routerAutoload));
+          if (
+            !context.allowNetwork ||
+            context.signal.aborted ||
+            context.credential?.type !== "api_key"
+          )
+            return;
+          const serverUrl = credentialServerUrl(context.credential);
+          if (serverUrl === undefined || serverUrl === "") return;
+          const client = new LlamaClient(serverUrl, context.credential.key);
+          const catalog = yield* awaited(client.list({ signal: context.signal }));
+          if (context.signal.aborted) return;
+          const routerAutoload = yield* awaited(
+            routerAutoloadEnabled(client, catalog, context.signal),
+          );
+          if (context.signal.aborted) return;
+          const selectable = catalog.filter((model) => modelIsSelectable(model, routerAutoload));
 
-      const refreshed = await Promise.all(
-        selectable.filter(isChatModel).map(async (model) => {
-          const cachedContextWindow = cachedContextWindows.get(model.id);
-          if (model.status.value !== "loaded")
-            return toMsaModel(model, serverUrl, undefined, cachedContextWindow);
-          const props = await client.props({ model: model.id, signal: context.signal });
-          return toMsaModel(model, serverUrl, props, cachedContextWindow);
+          const refreshed = yield* awaited(
+            Promise.all(
+              selectable.filter(isChatModel).map((model) =>
+                Effect.runPromise(
+                  awaiting(function* () {
+                    const cachedContextWindow = cachedContextWindows.get(model.id);
+                    if (model.status.value !== "loaded")
+                      return toMsaModel(model, serverUrl, undefined, cachedContextWindow);
+                    const props = yield* awaited(
+                      client.props({ model: model.id, signal: context.signal }),
+                    );
+                    return toMsaModel(model, serverUrl, props, cachedContextWindow);
+                  }),
+                ),
+              ),
+            ),
+          );
+          const refreshedClassifiers = selectable.map((model) =>
+            toMsaClassifierModel(model, serverUrl, cachedContextWindows.get(model.id)),
+          );
+          if (context.signal.aborted) return;
+          yield* awaited(
+            context.publish({
+              persist: { models: [...refreshed, ...refreshedClassifiers], checkedAt: nowMs() },
+              update: () => {
+                models = refreshed;
+                classifiers = refreshedClassifiers;
+              },
+            }),
+          );
         }),
-      );
-      const refreshedClassifiers = selectable.map((model) =>
-        toMsaClassifierModel(model, serverUrl, cachedContextWindows.get(model.id)),
-      );
-      if (context.signal.aborted) return;
-      await context.publish({
-        persist: { models: [...refreshed, ...refreshedClassifiers], checkedAt: nowMs() },
-        update: () => {
-          models = refreshed;
-          classifiers = refreshedClassifiers;
-        },
-      });
-    },
+      ),
     stream: (model, context, options) =>
       stream(model, context, options as ProviderStreamOptions | undefined),
     streamSimple: (model, context, options) => streamSimple(model, context, options),
