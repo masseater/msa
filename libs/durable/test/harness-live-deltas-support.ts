@@ -9,14 +9,15 @@ import {
   type ToolRegistration,
 } from "@msa/durable";
 import { MemoryStorage } from "@msa/durable/storage/memory";
+import { Effect } from "effect";
 
 import { chatSetup, openChat, waitFor } from "./chat-support.ts";
+import { awaited } from "./effect-support.ts";
 import { addTool } from "./harness-support.ts";
 import { context, documentChanges } from "./session-support.ts";
 
 export type Action = (api: ToolExecutionApi) => void | Promise<void>;
 
-// The tool `drive` runs: each queued action in turn, waiting for more until one returns false.
 export function drivenTool(
   outputLimits: NonNullable<ToolRegistration["outputLimits"]>,
   actions: ((api: ToolExecutionApi) => Promise<boolean>)[],
@@ -28,27 +29,34 @@ export function drivenTool(
     parameters: Type.Object({}),
     outputLimits,
     execute: (_args, api, callContext) => {
-      const next = async (): Promise<Record<string, never>> => {
-        const action = actions.shift();
-        if (action === undefined) {
-          await new Promise<void>((resolve, reject) => {
-            waker.wake = resolve;
-            const signal = callContext.abortSignal!;
-            signal.addEventListener("abort", () => reject(signal.reason), { once: true });
-          });
-        } else if (!(await action(api))) {
-          return {};
-        }
-        return next();
-      };
+      const next = (): Promise<Record<string, never>> =>
+        Effect.runPromise(
+          Effect.gen(function* () {
+            const action = actions.shift();
+            if (action === undefined) {
+              yield* awaited(
+                new Promise<void>((resolve, reject) => {
+                  waker.wake = resolve;
+                  const signal = callContext.abortSignal!;
+                  signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+                }),
+              );
+            } else if (!(yield* awaited(action(api)))) {
+              return {};
+            }
+            return yield* awaited(next());
+          }),
+        );
       return next();
     },
   });
 }
 
-// Drive one tool call step by step and capture the exact Chord operations of every `msa.live` commit. Each `step()`
-// runs one action inside the tool and returns the operations of the commit it caused.
-export async function drive(outputLimits: NonNullable<ToolRegistration["outputLimits"]> = {}) {
+export const drive = Effect.fn("drive")(function* (
+  outputLimits: NonNullable<ToolRegistration["outputLimits"]> = {},
+) {
+  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
   const setup = chatSetup();
   const actions: ((api: ToolExecutionApi) => Promise<boolean>)[] = [];
   const waker: { wake?: () => void } = {};
@@ -57,15 +65,21 @@ export async function drive(outputLimits: NonNullable<ToolRegistration["outputLi
     fauxAssistantMessage([fauxToolCall("drive", {}, { id: "c1" })], { stopReason: "toolUse" }),
     fauxAssistantMessage([fauxText("done")]),
   ]);
-  const { harness, root } = await openChat(new MemoryStorage(), setup);
+  const { harness, root } = yield* openChat(new MemoryStorage(), setup);
   const commits: Op[][] = [];
   harness.subscribeCommits((publication) => {
     for (const change of documentChanges(publication)) {
       if (change.record.kind === "msa.live" && change.ops.length > 0) commits.push([...change.ops]);
     }
   });
-  const submission = await root.submit({ type: "input", content: "go" }, context);
-  await waitFor(async () => (await live(harness))?.tools?.[0]?.status === "running");
+  const submission = yield* awaited(root.submit({ type: "input", content: "go" }, context));
+  yield* waitFor(() =>
+    runPromise(
+      Effect.gen(function* () {
+        return (yield* awaited(live(harness)))?.tools?.[0]?.status === "running";
+      }),
+    ),
+  );
   const push = (action: (api: ToolExecutionApi) => Promise<boolean>): void => {
     actions.push(action);
     waker.wake?.();
@@ -73,25 +87,37 @@ export async function drive(outputLimits: NonNullable<ToolRegistration["outputLi
   return {
     harness,
     commits,
-    // Operations of every `msa.live` commit so far.
-    async step(action: Action): Promise<readonly Op[]> {
-      const before = commits.length;
-      push(async (api) => {
-        await action(api);
-        return true;
-      });
-      await waitFor(() => commits.length > before);
-      return commits.at(-1)!;
+    step(action: Action): Promise<readonly Op[]> {
+      return runPromise(
+        Effect.gen(function* () {
+          const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
+          const before = commits.length;
+          push((api) =>
+            runPromise(
+              Effect.gen(function* () {
+                yield* awaited(action(api));
+                return true;
+              }),
+            ),
+          );
+          yield* waitFor(() => commits.length > before);
+          return commits.at(-1)!;
+        }),
+      );
     },
-    // Let the tool return and the run finish; returns the commits made meanwhile.
-    async finish(): Promise<readonly Op[][]> {
-      const before = commits.length;
-      push(() => Promise.resolve(false));
-      await submission.wait(context);
-      return commits.slice(before);
+    finish(): Promise<readonly Op[][]> {
+      return runPromise(
+        Effect.gen(function* () {
+          const before = commits.length;
+          push(() => Promise.resolve(false));
+          yield* awaited(submission.wait(context));
+          return commits.slice(before);
+        }),
+      );
     },
   };
-}
+});
 
 export function live(harness: Harness): Promise<Readonly<LiveState> | undefined> {
   return harness.snapshot(LiveDoc, 1 as never, context);

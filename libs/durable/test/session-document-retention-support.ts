@@ -1,6 +1,9 @@
 import { type ConversationId, defineDoc } from "@msa/durable";
+import { Effect } from "effect";
 
+import { environmentVariable } from "../src/env/node-process.ts";
 import { SessionImpl } from "../src/session/session.ts";
+import { awaited } from "./effect-support.ts";
 import { ControlledStorage, context } from "./session-support.ts";
 
 export type Counter = { count: number };
@@ -14,13 +17,10 @@ export const CounterDoc = defineDoc<Counter>({
   initial: () => ({ count: 0 }),
 });
 
-/** The default retention of this run, as the setup file set it. */
-export const defaultForRun =
-  process.env["MSA_DURABLE_DOCUMENT_RETENTION_MS"] === undefined
-    ? 600_000
-    : Number(process.env["MSA_DURABLE_DOCUMENT_RETENTION_MS"]);
+const forcedRetention = environmentVariable("MSA_DURABLE_DOCUMENT_RETENTION_MS", true);
 
-// A Session with a controllable clock and retention.
+export const defaultForRun = forcedRetention === undefined ? 600_000 : Number(forcedRetention);
+
 export function open(retentionMs: number) {
   const clock = { now: 1_000 };
   const storage = new ControlledStorage();
@@ -33,17 +33,26 @@ export function open(retentionMs: number) {
   return { storage, session, clock, sizes };
 }
 
-// Let the line run what is queued on it: an eviction job, then return.
-export async function settleLine(session: SessionImpl): Promise<void> {
-  await session.readOnLine(async () => {});
-}
+export const settleLine = Effect.fn("settleLine")(function* (session: SessionImpl) {
+  yield* awaited(session.readOnLine(() => Promise.resolve()));
+});
 
-export async function bump(
+export const bump = Effect.fn("bump")(function* (
   session: SessionImpl,
   conversationId: ConversationId,
   by = 1,
-): Promise<void> {
-  await session.commit(async (tx) => {
-    (await tx.doc(CounterDoc, conversationId)).count += by;
-  }, context);
-}
+) {
+  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
+  yield* awaited(
+    session.commit(
+      (tx) =>
+        runPromise(
+          Effect.gen(function* () {
+            (yield* awaited(tx.doc(CounterDoc, conversationId))).count += by;
+          }),
+        ),
+      context,
+    ),
+  );
+});

@@ -1,17 +1,21 @@
-import { rm } from "node:fs/promises";
-
 import { type AssistantMessage, fauxAssistantMessage, fauxToolCall, type Message } from "@msa/ai";
 import { type ContextView, type EntryRecord } from "@msa/durable";
+import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { selectCut, serializeConversation } from "../src/harness/compaction.ts";
 import { orderToolResults } from "../src/harness/context.ts";
 import { text, directories, user } from "./harness-compaction-support.ts";
+import { removeDir } from "./platform-support.ts";
 
-afterEach(async () => {
-  for await (const directory of directories) await rm(directory, { recursive: true, force: true });
-  directories.clear();
-});
+afterEach(() =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      for (const directory of directories) yield* removeDir(directory);
+      directories.clear();
+    }),
+  ),
+);
 
 let nextId = 1;
 
@@ -47,7 +51,6 @@ const toolResult = (callId: string, content: string): Message => ({
   timestamp: 0,
 });
 
-// A view over `entries` whose contributions are their models, with excluded assistants removed.
 function view(entries: EntryRecord[], head?: EntryRecord): ContextView {
   const all = head === undefined ? entries : [head, ...entries];
   const contributions = all.map((record) =>
@@ -90,7 +93,6 @@ describe("range selection", () => {
       entries.push(entry("msa.tool-result", [toolResult(`c${index}`, text(`r${index}`, 100))]));
     }
     const cut = selectCut(view(entries), 150)!;
-    // The budget is reached at the fourth result; the cut is the last call, whose result it keeps.
     expect(entries[cut]!.kind).toBe("msa.assistant");
     expect(cut).toBe(9);
   });
@@ -102,7 +104,6 @@ describe("range selection", () => {
       entry("chat.message", []),
       entry("msa.assistant", [assistant(text("a2", 100))]),
     ];
-    // The budget is reached at a1; the display-only entry after it is skipped for the assistant a2.
     expect(selectCut(view(entries), 150)).toBe(1);
     expect(selectCut(view(entries), 50)).toBe(3);
   });
@@ -129,7 +130,6 @@ describe("range selection", () => {
       entry("msa.assistant", [assistant(text("stopped", 100), [], "aborted")]),
       entry("msa.assistant", [assistant(text("a2", 100))]),
     ];
-    // The walk reaches 150 at the system entry; the excluded answers after it contribute nothing.
     expect(selectCut(view(entries), 150)).toBe(5);
   });
 
@@ -159,7 +159,6 @@ describe("range selection", () => {
       entry("msa.tool-result", [toolResult("c", text("r", 100))]),
       entry("msa.assistant", [assistant(text("a2", 100))]),
     ];
-    // The budget is reached at the steer; its result follows it, so the cut moves to the next assistant.
     expect(selectCut(view(entries), 250)).toBe(4);
   });
 
@@ -167,7 +166,6 @@ describe("range selection", () => {
     const small = [entry("msa.user", [user("hi")]), entry("msa.assistant", [assistant("hello")])];
     expect(selectCut(view(small), 150)).toBeUndefined();
     const marker = entry("msa.compaction", [user("summary")], 0);
-    // The budget is reached at the only entry after the marker, so the marker alone would be summarized.
     expect(
       selectCut(view([entry("msa.user", [user(text("u", 200))])], marker), 150),
     ).toBeUndefined();

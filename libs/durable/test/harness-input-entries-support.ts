@@ -15,8 +15,10 @@ import {
   InboxDoc,
   LiveDoc,
 } from "@msa/durable";
+import { Effect } from "effect";
 
 import { type ChatSetup, textOf, waitFor } from "./chat-support.ts";
+import { awaited } from "./effect-support.ts";
 import { addTool } from "./harness-support.ts";
 import { context } from "./session-support.ts";
 import { aborted, type Deferred, deferred } from "./task-support.ts";
@@ -25,7 +27,6 @@ export function answer(text: string): AssistantMessage {
   return fauxAssistantMessage([fauxText(text)]);
 }
 
-// A faux response held until `release` or cancellation; `reached` resolves when the request is sent.
 export function gated(message: AssistantMessage): {
   step: FauxResponseStep;
   reached: Promise<void>;
@@ -33,15 +34,17 @@ export function gated(message: AssistantMessage): {
 } {
   const reached = deferred();
   const gate = deferred();
-  const step: FauxResponseStep = async (_request, options) => {
-    reached.resolve();
-    await Promise.race([gate.promise, aborted(options!.signal!)]);
-    return message;
-  };
+  const step: FauxResponseStep = (_request, options) =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        reached.resolve();
+        yield* awaited(Promise.race([gate.promise, aborted(options!.signal!)]));
+        return message;
+      }),
+    );
   return { step, reached: reached.promise, release: () => gate.resolve() };
 }
 
-// Register a `hold` tool whose calls wait for `gate`.
 export function holdTool(setup: ChatSetup, gate: Deferred): void {
   addTool(
     setup.registry,
@@ -49,10 +52,13 @@ export function holdTool(setup: ChatSetup, gate: Deferred): void {
       name: "hold",
       description: "Waits for the test",
       parameters: Type.Object({}),
-      execute: async () => {
-        await gate.promise;
-        return { output: [{ type: "text", text: "held" }] };
-      },
+      execute: () =>
+        Effect.runPromise(
+          Effect.gen(function* () {
+            yield* awaited(gate.promise);
+            return { output: [{ type: "text", text: "held" }] };
+          }),
+        ),
     }),
   );
 }
@@ -61,7 +67,6 @@ export const HOLD = fauxAssistantMessage([fauxToolCall("hold", {}, { id: "c1" })
   stopReason: "toolUse",
 });
 
-// Role and text of each request message, as the provider receives them.
 export function requestLog(requests: string[][], reply: AssistantMessage): FauxResponseStep {
   return (request: ModelContext) => {
     requests.push(request.messages.map((message) => `${message.role}:${textOf(message) ?? ""}`));
@@ -69,7 +74,6 @@ export function requestLog(requests: string[][], reply: AssistantMessage): FauxR
   };
 }
 
-// Kind, application data, and model text of each entry, skipping system entries.
 export function transcript(entries: readonly EntryRecord[]): unknown[][] {
   return entries
     .filter((entry) => entry.kind !== "msa.system")
@@ -84,15 +88,26 @@ export function transcript(entries: readonly EntryRecord[]): unknown[][] {
     });
 }
 
-export async function inboxItems(harness: Harness, root: Conversation) {
-  return (await harness.snapshot(InboxDoc, root.id, context))!.items;
-}
+export const inboxItems = Effect.fn("inboxItems")(function* (harness: Harness, root: Conversation) {
+  return (yield* awaited(harness.snapshot(InboxDoc, root.id, context)))!.items;
+});
 
-export async function toolRunning(harness: Harness, root: Conversation): Promise<void> {
-  await waitFor(
-    async () =>
-      (await harness.snapshot(LiveDoc, root.id, context))?.tools?.[0]?.status === "running",
+export const toolRunning = Effect.fn("toolRunning")(function* (
+  harness: Harness,
+  root: Conversation,
+) {
+  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
+  yield* waitFor(() =>
+    runPromise(
+      Effect.gen(function* () {
+        return (
+          (yield* awaited(harness.snapshot(LiveDoc, root.id, context)))?.tools?.[0]?.status ===
+          "running"
+        );
+      }),
+    ),
   );
-}
+});
 
 export const mention = (text: string) => ({ kind: "chat.mention", data: { author: "ann", text } });

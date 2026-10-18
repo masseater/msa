@@ -1,17 +1,16 @@
+import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import { createModels } from "@msa/ai/models";
 import { fauxAssistantMessage, fauxProvider } from "@msa/ai/providers/faux";
-// A chat turn.
-// Run from libs/durable:
-//   node --conditions=source --experimental-strip-types test/examples/14-chat.ts
 import { BACKGROUND_CONTEXT } from "@msa/chord/context";
+import { Console, Effect } from "effect";
 
 import { createRegistry, Harness } from "../../src/harness/index.ts";
 import { AssistantEntry, defineExtension, section } from "../../src/index.ts";
 import { MemoryStorage } from "../../src/storage/memory.ts";
+import { awaited } from "../effect-support.ts";
 
 const context = BACKGROUND_CONTEXT;
 
-// The faux provider stands in for a real model (see 16-real-model.ts).
 const faux = fauxProvider();
 const models = createModels();
 models.setProvider(faux.provider);
@@ -24,27 +23,33 @@ registry.install(
     sections: [section("preamble", () => "You answer in one word.", { tag: false })],
   }),
 );
-const harness = await Harness.open(new MemoryStorage(), { models, registry }, context);
-const root = await harness.root(context, {
-  agent: { model: { provider: "faux", modelId: "faux-1" } },
+
+const main = Effect.gen(function* () {
+  const harness = yield* awaited(Harness.open(new MemoryStorage(), { models, registry }, context));
+  const root = yield* awaited(
+    harness.root(context, {
+      agent: { model: { provider: "faux", modelId: "faux-1" } },
+    }),
+  );
+
+  const capital = yield* awaited(
+    root.submit({ type: "input", content: "Capital of France?" }, context),
+  );
+  const answered = yield* awaited(capital.wait(context));
+  if (answered.status === "done" && answered.type === "input") {
+    const entry = yield* awaited(
+      root.commit((tx) => tx.entry(AssistantEntry, answered.answer), context),
+    );
+    const reply = entry?.model?.[0];
+    yield* Console.log("answer:", reply?.role === "assistant" ? reply.content : reply);
+  }
+
+  const transcript = yield* awaited(root.entries({}, 10, undefined, context));
+  yield* Console.log(
+    "transcript:",
+    [...transcript.items].reverse().map((entry) => entry.kind),
+  );
+  yield* awaited(harness.close(context));
 });
 
-// submit() durably admits user input and returns a Submission. The built-in
-// msa.generation task prepares the system prompt from the agent's sections,
-// calls the model, and appends the answer; wait() resolves once the input is
-// answered or has failed.
-const capital = await root.submit({ type: "input", content: "Capital of France?" }, context);
-const answered = await capital.wait(context);
-if (answered.status === "done" && answered.type === "input") {
-  const entry = await root.commit((tx) => tx.entry(AssistantEntry, answered.answer), context);
-  const reply = entry?.model?.[0];
-  console.log("answer:", reply?.role === "assistant" ? reply.content : reply);
-}
-
-// The transcript holds the user input, the positional system prompt, and the answer.
-const transcript = await root.entries({}, 10, undefined, context);
-console.log(
-  "transcript:",
-  [...transcript.items].reverse().map((entry) => entry.kind),
-);
-await harness.close(context);
+NodeRuntime.runMain(main);

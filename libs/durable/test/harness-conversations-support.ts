@@ -1,5 +1,7 @@
 import { type Conversation, defineDoc, type EntryRecord, type ScanOrder } from "@msa/durable";
+import { Effect } from "effect";
 
+import { awaited } from "./effect-support.ts";
 import { user } from "./harness-support.ts";
 import { context } from "./session-support.ts";
 
@@ -25,18 +27,22 @@ export function append(conversation: Conversation, text: string): Promise<EntryR
   );
 }
 
-export async function allEntries(
+export const allEntries = Effect.fn("allEntries")(function* (
   conversation: Conversation,
   order?: ScanOrder,
-  cursor?: Parameters<Conversation["entries"]>[2],
-): Promise<string[]> {
-  const page = await conversation.entries(order === undefined ? {} : { order }, 2, cursor, context);
+  start?: Parameters<Conversation["entries"]>[2],
+) {
   const texts: string[] = [];
-  for (const entry of page.items) {
-    const firstModel = entry.model?.[0] as { content: string } | undefined;
-    if (firstModel !== undefined) texts.push(firstModel.content);
-  }
-  return page.next === undefined
-    ? texts
-    : [...texts, ...(await allEntries(conversation, order, page.next))];
-}
+  let cursor = start;
+  do {
+    const page = yield* awaited(
+      conversation.entries(order === undefined ? {} : { order }, 2, cursor, context),
+    );
+    for (const entry of page.items) {
+      const firstModel = entry.model?.[0] as { content: string } | undefined;
+      if (firstModel !== undefined) texts.push(firstModel.content);
+    }
+    cursor = page.next;
+  } while (cursor !== undefined);
+  return texts;
+});

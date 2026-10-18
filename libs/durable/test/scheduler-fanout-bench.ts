@@ -1,18 +1,14 @@
+import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import { createModels } from "@msa/ai/models";
 import { fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall } from "@msa/ai/providers/faux";
-/**
- * Scheduler fan-out benchmark. One model-issued tool makes `calls` parallel nested calls of a tool that returns at
- * once, on in-memory storage, so the time is the Harness's and the scheduler's own. Quadratic work shows as four times
- * the time per doubling of `calls`.
- *
- *   node --conditions=source --experimental-strip-types test/scheduler-fanout-bench.ts [calls...]
- */
 import { BACKGROUND_CONTEXT as context } from "@msa/chord/context";
+import { Console, Effect } from "effect";
 import { Type } from "typebox";
 
 import { createRegistry, Harness } from "../src/harness/index.ts";
 import { defineExtension, defineTool, ToolResultEntry } from "../src/index.ts";
 import { MemoryStorage } from "../src/storage/memory.ts";
+import { awaited } from "./effect-support.ts";
 
 function fanModels() {
   const faux = fauxProvider();
@@ -29,21 +25,26 @@ function fanModels() {
     name: "fan",
     description: "Call leaf in parallel",
     parameters: Type.Object({ count: Type.Number() }),
-    execute: async (args, api, callContext) => {
-      const results = await Promise.all(
-        Array.from({ length: args.count }, (_, n) =>
-          api.executeTool("leaf", { n }, callContext, { progress: false }),
-        ),
-      );
-      const failed = results.filter((result) => result.isError).length;
-      return { output: [{ type: "text", text: `${failed} failed` }], isError: failed > 0 };
-    },
+    execute: (args, api, callContext) =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          const results = yield* awaited(
+            Promise.all(
+              Array.from({ length: args.count }, (_, n) =>
+                api.executeTool("leaf", { n }, callContext, { progress: false }),
+              ),
+            ),
+          );
+          const failed = results.filter((result) => result.isError).length;
+          return { output: [{ type: "text", text: `${failed} failed` }], isError: failed > 0 };
+        }),
+      ),
   });
   registry.install(defineExtension({ name: "bench", tools: [leaf, fan] }));
   return { faux, models, registry };
 }
 
-async function run(calls: number): Promise<{ ms: number; commits: number }> {
+const run = Effect.fn("run")(function* (calls: number) {
   const { faux, models, registry } = fanModels();
   const storage = new MemoryStorage();
   let commits = 0;
@@ -52,10 +53,12 @@ async function run(calls: number): Promise<{ ms: number; commits: number }> {
     commits++;
     return commit(writes, commitContext);
   };
-  const harness = await Harness.open(storage, { models, registry }, context);
-  const root = await harness.root(context, {
-    agent: { model: { provider: "faux", modelId: "faux-1" } },
-  });
+  const harness = yield* awaited(Harness.open(storage, { models, registry }, context));
+  const root = yield* awaited(
+    harness.root(context, {
+      agent: { model: { provider: "faux", modelId: "faux-1" } },
+    }),
+  );
   faux.setResponses([
     fauxAssistantMessage([fauxToolCall("fan", { count: calls }, { id: "fan" })], {
       stopReason: "toolUse",
@@ -63,25 +66,29 @@ async function run(calls: number): Promise<{ ms: number; commits: number }> {
     fauxAssistantMessage([fauxText("done")]),
   ]);
   const started = performance.now();
-  const settled = await (
-    await root.submit({ type: "input", content: "go" }, context)
-  ).wait(context);
+  const settled = yield* awaited(
+    (yield* awaited(root.submit({ type: "input", content: "go" }, context))).wait(context),
+  );
   if (settled.status !== "done") throw new Error(`run: ${settled.status}`);
-  await harness.waitForIdle(context);
+  yield* awaited(harness.waitForIdle(context));
   const ms = Math.round(performance.now() - started);
-  // A run whose nested calls failed measures nothing.
-  const page = await root.entries({}, 10, undefined, context);
+  const page = yield* awaited(root.entries({}, 10, undefined, context));
   const result = page.items.find((entry) => ToolResultEntry.is(entry))?.model?.[0];
   if (result?.role !== "toolResult" || result.isError) throw new Error(`run: nested calls failed`);
-  await harness.close(context);
+  yield* awaited(harness.close(context));
   return { ms, commits };
-}
+});
 
 const sizes = process.argv.slice(2).map(Number);
-console.log("calls | ms     | commits | ms per call");
-for await (const calls of sizes.length > 0 ? sizes : [250, 500, 1000, 2000, 4000]) {
-  const { ms, commits } = await run(calls);
-  console.log(
-    `${String(calls).padEnd(5)} | ${String(ms).padEnd(6)} | ${String(commits).padEnd(7)} | ${(ms / calls).toFixed(2)}`,
-  );
-}
+Effect.runSync(Console.log("calls | ms     | commits | ms per call"));
+
+const main = Effect.gen(function* () {
+  for (const calls of sizes.length > 0 ? sizes : [250, 500, 1000, 2000, 4000]) {
+    const { ms, commits } = yield* run(calls);
+    yield* Console.log(
+      `${String(calls).padEnd(5)} | ${String(ms).padEnd(6)} | ${String(commits).padEnd(7)} | ${(ms / calls).toFixed(2)}`,
+    );
+  }
+});
+
+NodeRuntime.runMain(main);

@@ -1,9 +1,8 @@
-import { mkdtemp } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-
 import { defineTask, type Harness, type TaskId, type TaskRuntime } from "@msa/durable";
+import { Effect } from "effect";
 
+import { awaited } from "./effect-support.ts";
+import { joinPath, makeTempDir } from "./platform-support.ts";
 import { context } from "./session-support.ts";
 import { aborted, type Deferred, deferred } from "./task-support.ts";
 
@@ -18,23 +17,26 @@ export function gate(name: string): Deferred<void> {
   return found;
 }
 
-/** Holds until its gate opens, then completes; its abort handler ends it `aborted`. */
 export const Hold = defineTask<{ name: string }, { phase: "hold" }, null>({
   name: "test.index.hold",
   version: 1,
   initial: () => ({ phase: "hold" }),
   phases: {
-    hold: async (task, runtime, ctx) => {
-      const opened = await Promise.race([
-        gate(task.input.name).promise.then(() => true),
-        aborted(runtime.signal),
-      ]);
-      if (opened !== true) return;
-      await runtime.commit(
-        () => ({ status: "terminal", outcome: { status: "completed", result: null } }),
-        ctx,
-      );
-    },
+    hold: (task, runtime, ctx) =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          const opened = yield* awaited(
+            Promise.race([gate(task.input.name).promise.then(() => true), aborted(runtime.signal)]),
+          );
+          if (opened !== true) return;
+          yield* awaited(
+            runtime.commit(
+              () => ({ status: "terminal", outcome: { status: "completed", result: null } }),
+              ctx,
+            ),
+          );
+        }),
+      ),
   },
   abort: (_task, runtime, ctx) =>
     Promise.resolve(
@@ -42,7 +44,6 @@ export const Hold = defineTask<{ name: string }, { phase: "hold" }, null>({
     ),
 });
 
-/** What `ownedTasks()` returned to each run of a `Probe`, by its name, and the runtime of its last run. */
 export const owned = new Map<string, TaskId[]>();
 
 export const runtimes = new Map<
@@ -52,12 +53,12 @@ export const runtimes = new Map<
 
 export const directories: string[] = [];
 
-export async function sqlitePath(): Promise<string> {
-  const directory = await mkdtemp(join(tmpdir(), "msa-durable-indexes-"));
+export const sqlitePath = Effect.fn("sqlitePath")(function* () {
+  const directory = yield* makeTempDir("msa-durable-indexes-");
   directories.push(directory);
-  return join(directory, "session.sqlite");
-}
+  return joinPath(directory, "session.sqlite");
+});
 
-export async function state(harness: Harness, id: TaskId) {
-  return (await harness.getTask(id, context))!;
-}
+export const state = Effect.fn("state")(function* (harness: Harness, id: TaskId) {
+  return (yield* awaited(harness.getTask(id, context)))!;
+});

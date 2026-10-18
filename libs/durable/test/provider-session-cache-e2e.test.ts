@@ -9,10 +9,12 @@ import {
 } from "@msa/durable";
 import { createRegistry, Harness } from "@msa/durable/harness";
 import { MemoryStorage } from "@msa/durable/storage/memory";
+import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { streamSimple as streamSimpleOpenAICodexResponses } from "../../ai/src/api/openai-codex-responses.ts";
 import { resolveApiKey } from "../../ai/test/oauth.ts";
+import { awaited } from "./effect-support.ts";
 import { context } from "./session-support.ts";
 
 const codexToken = await resolveApiKey("openai-codex");
@@ -40,18 +42,22 @@ function assistant(harness: Harness, conversationId: ConversationId, answer: Ent
     });
 }
 
-// Send the cache probe, then follow-ups until three in a row after the first prompt-cache hit, at most eight turns.
-async function promptUntilCached(harness: Harness, root: Conversation) {
+const promptUntilCached = Effect.fn("promptUntilCached")(function* (
+  harness: Harness,
+  root: Conversation,
+) {
   const usages: AssistantMessage["usage"][] = [];
   const hits: { firstHit?: number } = {};
-  for await (const turn of Array.from({ length: 8 }, (_, i) => i)) {
+  for (const turn of Array.from({ length: 8 }, (_, i) => i)) {
     const content =
       turn === 0 ? cacheProbe(uuidv7()) : `Reply exactly: CACHE PROBE FOLLOW-UP ${turn}`;
-    const settled = await (await root.submit({ type: "input", content }, context)).wait(context);
+    const settled = yield* awaited(
+      (yield* awaited(root.submit({ type: "input", content }, context))).wait(context),
+    );
     if (settled.status !== "done" || settled.type !== "input") {
       throw new Error(`Unexpected submission status: ${settled.status}`);
     }
-    const message = await assistant(harness, root.id, settled.answer);
+    const message = yield* awaited(assistant(harness, root.id, settled.answer));
     expect(message?.stopReason, message?.errorMessage).not.toBe("error");
     usages.push(message!.usage);
     if (hits.firstHit === undefined && message!.usage.cacheRead > 0)
@@ -59,7 +65,7 @@ async function promptUntilCached(harness: Harness, root: Conversation) {
     if (hits.firstHit !== undefined && usages.length - hits.firstHit >= 3) break;
   }
   return { usages, firstHit: hits.firstHit };
-}
+});
 
 function cacheHitRate(usage: AssistantMessage["usage"]): number {
   const promptTokens = usage.input + usage.cacheRead + usage.cacheWrite;
@@ -97,43 +103,50 @@ function forwardingCodexModels() {
 }
 
 describe("Durable provider session cache e2e", () => {
-  // Live regression coverage for #10424; skipped without ~/.msa/agent/auth.json credentials.
   it.skipIf(!codexToken)(
     "reuses the Codex prompt cache across Durable turns",
     { retry: 2, timeout: 120_000 },
-    async () => {
-      const { forwarded, models } = forwardingCodexModels();
-      const harness = await Harness.open(
-        new MemoryStorage(),
-        {
-          models,
-          registry: createRegistry(),
-          settings: {
-            stream: { transport: "sse" },
-            compaction: { enabled: false },
-          },
-        },
-        context,
-      );
-      try {
-        const root = await harness.root(context, {
-          agent: { model: { provider: "openai-codex", modelId: "gpt-5.5" } },
-        });
-        harness.resume();
-        const { usages, firstHit } = await promptUntilCached(harness, root);
-        const sessionId = (await harness.snapshot(ProviderDoc, root.id, context))!.sessionId;
-        expect(forwarded).toEqual(Array.from({ length: usages.length }, () => sessionId));
-        const firstPrompt = usages[0]!.input + usages[0]!.cacheRead + usages[0]!.cacheWrite;
-        expect(firstPrompt).toBeGreaterThanOrEqual(4_000);
-        expect(usages[0]!.cacheRead).toBe(0);
-        expect(firstHit).toBe(1);
-        if (firstHit === undefined) throw new Error("Codex reported no prompt-cache hit");
-        const cached = usages.slice(firstHit);
-        expect(cached).toHaveLength(3);
-        for (const usage of cached) expect(cacheHitRate(usage)).toBeGreaterThanOrEqual(0.9);
-      } finally {
-        await harness.close(context);
-      }
-    },
+    () =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          const { forwarded, models } = forwardingCodexModels();
+          const harness = yield* awaited(
+            Harness.open(
+              new MemoryStorage(),
+              {
+                models,
+                registry: createRegistry(),
+                settings: {
+                  stream: { transport: "sse" },
+                  compaction: { enabled: false },
+                },
+              },
+              context,
+            ),
+          );
+          yield* Effect.gen(function* () {
+            const root = yield* awaited(
+              harness.root(context, {
+                agent: { model: { provider: "openai-codex", modelId: "gpt-5.5" } },
+              }),
+            );
+            harness.resume();
+            const { usages, firstHit } = yield* promptUntilCached(harness, root);
+            const sessionId = (yield* awaited(harness.snapshot(ProviderDoc, root.id, context)))!
+              .sessionId;
+            expect(forwarded).toEqual(Array.from({ length: usages.length }, () => sessionId));
+            const firstPrompt = usages[0]!.input + usages[0]!.cacheRead + usages[0]!.cacheWrite;
+            expect(firstPrompt).toBeGreaterThanOrEqual(4_000);
+            expect(usages[0]!.cacheRead).toBe(0);
+            expect(firstHit).toBe(1);
+            if (firstHit === undefined) throw new Error("Codex reported no prompt-cache hit");
+            const cached = usages.slice(firstHit);
+            expect(cached).toHaveLength(3);
+            for (const usage of cached) expect(cacheHitRate(usage)).toBeGreaterThanOrEqual(0.9);
+          }).pipe(
+            Effect.ensuring(Effect.asVoid(Effect.suspend(() => awaited(harness.close(context))))),
+          );
+        }),
+      ),
   );
 });

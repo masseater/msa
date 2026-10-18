@@ -1,4 +1,4 @@
-import type { Draft } from "@msa/chord";
+import type { Context, Draft } from "@msa/chord";
 import {
   type ConversationId,
   type DocumentState,
@@ -13,13 +13,17 @@ import {
   type TaskId,
   type Tx,
   type TypedEntry,
+  type TypedEntryDraft,
 } from "@msa/durable";
 import { createSession } from "@msa/durable/session";
 import { MemoryStorage } from "@msa/durable/storage/memory";
+import { Effect } from "effect";
 import { describe, expect, expectTypeOf, it } from "vite-plus/test";
 
 import { idFromNumber } from "../src/ids.ts";
+import { awaited } from "./effect-support.ts";
 import { context } from "./session-support.ts";
+import type { CallableWith, LiteralFits } from "./type-support.ts";
 
 type State = { value: number };
 const initial = (): State => ({ value: 0 });
@@ -66,37 +70,47 @@ const TaskFamily = defineDocFamily<State, number>({
   initial: (seed) => ({ value: seed }),
 });
 
-async function checkTxOverloads(
-  tx: Tx,
-  conversationId: ConversationId,
-  taskId: TaskId,
-): Promise<void> {
-  expectTypeOf(await tx.doc(SessionDoc)).toEqualTypeOf<Draft<State>>();
-  expectTypeOf(await tx.doc(LatestDoc, conversationId)).toEqualTypeOf<Draft<State>>();
-  expectTypeOf(await tx.doc(RewindableDoc, conversationId)).toEqualTypeOf<Draft<State>>();
-  expectTypeOf(await tx.doc(TaskDoc, taskId)).toEqualTypeOf<Draft<State>>();
-  expectTypeOf(await tx.doc(SessionFamily, "k", 1)).toEqualTypeOf<Draft<State>>();
-  expectTypeOf(await tx.doc(ConversationFamily, conversationId, "k", 1)).toEqualTypeOf<
-    Draft<State>
-  >();
-  expectTypeOf(await tx.doc(TaskFamily, taskId, "k", 1)).toEqualTypeOf<Draft<State>>();
-  await tx.retireDoc(SessionDoc);
-  await tx.retireDoc(LatestDoc, conversationId);
-  await tx.retireDoc(TaskDoc, taskId);
-  await tx.retireDoc(SessionFamily, "k");
-  await tx.retireDoc(ConversationFamily, conversationId, "k");
-  await tx.retireDoc(TaskFamily, taskId, "k");
+function checkTxOverloads(tx: Tx, conversationId: ConversationId, taskId: TaskId): Promise<void> {
+  return Effect.runPromise(
+    Effect.gen(function* () {
+      expectTypeOf(yield* awaited(tx.doc(SessionDoc))).toEqualTypeOf<Draft<State>>();
+      expectTypeOf(yield* awaited(tx.doc(LatestDoc, conversationId))).toEqualTypeOf<Draft<State>>();
+      expectTypeOf(yield* awaited(tx.doc(RewindableDoc, conversationId))).toEqualTypeOf<
+        Draft<State>
+      >();
+      expectTypeOf(yield* awaited(tx.doc(TaskDoc, taskId))).toEqualTypeOf<Draft<State>>();
+      expectTypeOf(yield* awaited(tx.doc(SessionFamily, "k", 1))).toEqualTypeOf<Draft<State>>();
+      expectTypeOf(
+        yield* awaited(tx.doc(ConversationFamily, conversationId, "k", 1)),
+      ).toEqualTypeOf<Draft<State>>();
+      expectTypeOf(yield* awaited(tx.doc(TaskFamily, taskId, "k", 1))).toEqualTypeOf<
+        Draft<State>
+      >();
+      yield* awaited(tx.retireDoc(SessionDoc));
+      yield* awaited(tx.retireDoc(LatestDoc, conversationId));
+      yield* awaited(tx.retireDoc(TaskDoc, taskId));
+      yield* awaited(tx.retireDoc(SessionFamily, "k"));
+      yield* awaited(tx.retireDoc(ConversationFamily, conversationId, "k"));
+      yield* awaited(tx.retireDoc(TaskFamily, taskId, "k"));
 
-  // @ts-expect-error Session documents take no owner
-  await tx.doc(SessionDoc, conversationId);
-  // @ts-expect-error conversation documents require a conversation ID
-  await tx.doc(LatestDoc);
-  // @ts-expect-error family access requires a creation seed
-  await tx.doc(SessionFamily, "k");
-  // @ts-expect-error family seeds are typed
-  await tx.doc(SessionFamily, "k", "seed");
-  // @ts-expect-error family retirement takes no seed
-  await tx.retireDoc(TaskFamily, taskId, "k", 1);
+      expectTypeOf<
+        CallableWith<typeof tx.doc, [typeof SessionDoc, ConversationId]>
+      >().toEqualTypeOf<false>();
+      expectTypeOf<CallableWith<typeof tx.doc, [typeof LatestDoc]>>().toEqualTypeOf<false>();
+      expectTypeOf<
+        CallableWith<typeof tx.doc, [typeof SessionFamily, string]>
+      >().toEqualTypeOf<false>();
+      expectTypeOf<
+        CallableWith<typeof tx.doc<State, number>, [typeof SessionFamily, string, "seed"]>
+      >().toEqualTypeOf<false>();
+      expectTypeOf<
+        CallableWith<typeof tx.doc<State, number>, [typeof SessionFamily, string, number]>
+      >().toEqualTypeOf<true>();
+      expectTypeOf<
+        CallableWith<typeof tx.retireDoc, [typeof TaskFamily, TaskId, string, number]>
+      >().toEqualTypeOf<false>();
+    }),
+  );
 }
 
 const Note = defineEntry<{ text: string }>("t.note");
@@ -117,12 +131,20 @@ function checkHistoricalReads(
   expectTypeOf(
     session.snapshotAsOf(ConversationFamily, conversationId, "k", at, context),
   ).toEqualTypeOf<Rewound>();
-  // @ts-expect-error latest conversation documents keep no history
-  void session.snapshotAsOf(LatestDoc, conversationId, at, context);
-  // @ts-expect-error Session documents keep no history
-  void session.snapshotAsOf(SessionDoc, conversationId, at, context);
-  // @ts-expect-error task documents keep no history
-  void session.snapshotAsOf(TaskDoc, taskId, at, context);
+  type AsOf = typeof session.snapshotAsOf;
+  expectTypeOf<
+    CallableWith<AsOf, [typeof LatestDoc, ConversationId, EntryId, Context]>
+  >().toEqualTypeOf<false>();
+  expectTypeOf<
+    CallableWith<AsOf, [typeof SessionDoc, ConversationId, EntryId, Context]>
+  >().toEqualTypeOf<false>();
+  expectTypeOf<
+    CallableWith<AsOf, [typeof TaskDoc, TaskId, EntryId, Context]>
+  >().toEqualTypeOf<false>();
+  expectTypeOf<
+    CallableWith<AsOf, [typeof RewindableDoc, ConversationId, EntryId, Context]>
+  >().toEqualTypeOf<true>();
+  void [conversationId, taskId, at];
 }
 
 function checkStatesAndWatches(
@@ -146,33 +168,85 @@ function checkStatesAndWatches(
     session.watchDoc(ConversationFamily, conversationId, "k", context),
   ).toEqualTypeOf<WatchOf>();
   expectTypeOf(session.watchDoc(TaskFamily, taskId, "k", context)).toEqualTypeOf<WatchOf>();
-  // @ts-expect-error a watch of a Session document takes no owner
-  void session.watchDoc(SessionDoc, conversationId, context);
+  expectTypeOf<
+    CallableWith<typeof session.watchDoc, [typeof SessionDoc, ConversationId, Context]>
+  >().toEqualTypeOf<false>();
 }
 
-async function checkTypedEntries(
-  tx: Tx,
-  conversationId: ConversationId,
-  at: EntryId,
-): Promise<void> {
-  expectTypeOf(await tx.entry(at)).toEqualTypeOf<EntryRecord | undefined>();
-  expectTypeOf(await tx.entry(Note, at)).toEqualTypeOf<TypedEntry<{ text: string }> | undefined>();
-  expectTypeOf(
-    await tx.appendEntry(conversationId, { kind: "t.raw" }),
-  ).toEqualTypeOf<EntryRecord>();
-  const note = await tx.appendEntry(Note, conversationId, { data: { text: "x" } });
-  expectTypeOf(note).toEqualTypeOf<TypedEntry<{ text: string }>>();
-  expectTypeOf(note.data.text).toEqualTypeOf<string>();
-  expectTypeOf(await tx.appendEntry(Marker, conversationId, {})).toEqualTypeOf<TypedEntry<never>>();
-  // @ts-expect-error a data entry requires its data
-  await tx.appendEntry(Note, conversationId, {});
-  // @ts-expect-error data is typed by the token
-  await tx.appendEntry(Note, conversationId, { data: { text: 1 } });
-  // @ts-expect-error the token supplies the kind
-  await tx.appendEntry(Note, conversationId, { kind: "t.note", data: { text: "x" } });
-  // @ts-expect-error an entry kind without data takes none
-  await tx.appendEntry(Marker, conversationId, { data: 1 });
+function checkTypedEntries(tx: Tx, conversationId: ConversationId, at: EntryId): Promise<void> {
+  return Effect.runPromise(
+    Effect.gen(function* () {
+      expectTypeOf(yield* awaited(tx.entry(at))).toEqualTypeOf<EntryRecord | undefined>();
+      expectTypeOf(yield* awaited(tx.entry(Note, at))).toEqualTypeOf<
+        TypedEntry<{ text: string }> | undefined
+      >();
+      expectTypeOf(
+        yield* awaited(tx.appendEntry(conversationId, { kind: "t.raw" })),
+      ).toEqualTypeOf<EntryRecord>();
+      const note = yield* awaited(tx.appendEntry(Note, conversationId, { data: { text: "x" } }));
+      expectTypeOf(note).toEqualTypeOf<TypedEntry<{ text: string }>>();
+      expectTypeOf(note.data.text).toEqualTypeOf<string>();
+      expectTypeOf(yield* awaited(tx.appendEntry(Marker, conversationId, {}))).toEqualTypeOf<
+        TypedEntry<never>
+      >();
+      type AppendNote = typeof tx.appendEntry<{ text: string }>;
+      expectTypeOf<
+        CallableWith<AppendNote, [typeof Note, ConversationId, {}]>
+      >().toEqualTypeOf<false>();
+      expectTypeOf<
+        CallableWith<AppendNote, [typeof Note, ConversationId, { data: { text: 1 } }]>
+      >().toEqualTypeOf<false>();
+      expectTypeOf<
+        LiteralFits<{ kind: "t.note"; data: { text: "x" } }, TypedEntryDraft<{ text: string }>>
+      >().toEqualTypeOf<false>();
+      expectTypeOf<
+        LiteralFits<{ data: { text: "x" } }, TypedEntryDraft<{ text: string }>>
+      >().toEqualTypeOf<true>();
+      expectTypeOf<
+        CallableWith<typeof tx.appendEntry<never>, [typeof Marker, ConversationId, { data: 1 }]>
+      >().toEqualTypeOf<false>();
+    }),
+  );
 }
+
+const typesEveryOwner = Effect.gen(function* () {
+  const session: Session = createSession(new MemoryStorage());
+  expect(checkTxOverloads).toBeTypeOf("function");
+
+  expectTypeOf(yield* awaited(session.snapshot(SessionDoc, context))).toEqualTypeOf<
+    Readonly<State> | undefined
+  >();
+  const taskId = idFromNumber<TaskId>(1);
+  expectTypeOf(
+    yield* awaited(session.snapshot(LatestDoc, ROOT_CONVERSATION_ID, context)),
+  ).toEqualTypeOf<Readonly<State> | undefined>();
+  expectTypeOf(yield* awaited(session.snapshot(TaskDoc, taskId, context))).toEqualTypeOf<
+    Readonly<State> | undefined
+  >();
+  expectTypeOf(yield* awaited(session.snapshot(SessionFamily, "k", context))).toEqualTypeOf<
+    Readonly<State> | undefined
+  >();
+  expectTypeOf(
+    yield* awaited(session.snapshot(ConversationFamily, ROOT_CONVERSATION_ID, "k", context)),
+  ).toEqualTypeOf<Readonly<State> | undefined>();
+  expectTypeOf(yield* awaited(session.snapshot(TaskFamily, taskId, "k", context))).toEqualTypeOf<
+    Readonly<State> | undefined
+  >();
+  expectTypeOf<
+    CallableWith<typeof session.snapshot, [typeof SessionFamily, string, number, Context]>
+  >().toEqualTypeOf<false>();
+  yield* Effect.exit(
+    awaited(
+      Reflect.apply(session.snapshot, session, [
+        SessionFamily,
+        "k",
+        1,
+        context,
+      ]) as Promise<unknown>,
+    ),
+  );
+  yield* awaited(session.close(context));
+});
 
 describe("document definitions", () => {
   it("validates persisted version semantics", () => {
@@ -188,33 +262,7 @@ describe("document definitions", () => {
     expect(SessionDoc.definition.kind).toBe("t.session");
   });
 
-  it("types every owner, key, and seed overload", async () => {
-    const session: Session = createSession(new MemoryStorage());
-    expect(checkTxOverloads).toBeTypeOf("function");
-
-    expectTypeOf(await session.snapshot(SessionDoc, context)).toEqualTypeOf<
-      Readonly<State> | undefined
-    >();
-    const taskId = idFromNumber<TaskId>(1);
-    expectTypeOf(await session.snapshot(LatestDoc, ROOT_CONVERSATION_ID, context)).toEqualTypeOf<
-      Readonly<State> | undefined
-    >();
-    expectTypeOf(await session.snapshot(TaskDoc, taskId, context)).toEqualTypeOf<
-      Readonly<State> | undefined
-    >();
-    expectTypeOf(await session.snapshot(SessionFamily, "k", context)).toEqualTypeOf<
-      Readonly<State> | undefined
-    >();
-    expectTypeOf(
-      await session.snapshot(ConversationFamily, ROOT_CONVERSATION_ID, "k", context),
-    ).toEqualTypeOf<Readonly<State> | undefined>();
-    expectTypeOf(await session.snapshot(TaskFamily, taskId, "k", context)).toEqualTypeOf<
-      Readonly<State> | undefined
-    >();
-    // @ts-expect-error snapshots never take a creation seed
-    await session.snapshot(SessionFamily, "k", 1, context).catch(() => undefined);
-    await session.close(context);
-  });
+  it("types every owner, key, and seed overload", () => Effect.runPromise(typesEveryOwner));
 
   it("types historical reads, states, watches, and typed entries", () => {
     expect(checkHistoricalReads).toBeTypeOf("function");

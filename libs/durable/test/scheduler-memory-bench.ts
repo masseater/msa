@@ -1,17 +1,10 @@
-/**
- * Scheduler memory benchmark. Under one live parent task, N subagent cycles run and end: a tool task owned by the
- * parent, a conversation owned by the tool task, and a task in that conversation. Reports the scheduler's ownership
- * index sizes and the bytes live objects retain (from heap snapshots) once all cycles ended, then the storage reads a later message into an old subagent
- * conversation costs. On SQLite, so durable history stays out of the heap.
- *
- *   node --conditions=source --experimental-strip-types test/scheduler-memory-bench.ts [cycles...]
- */
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
 
+import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import { createModels } from "@msa/ai/models";
 import { BACKGROUND_CONTEXT as context } from "@msa/chord/context";
+import { Console, Effect } from "effect";
 
 import { SCHEDULER_INDEX_SIZES } from "../src/harness/harness.ts";
 import { createRegistry, Harness } from "../src/harness/index.ts";
@@ -23,24 +16,32 @@ import {
   type TaskId,
 } from "../src/index.ts";
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
+import { toJsonText, awaited } from "./effect-support.ts";
 import { retainedBytes } from "./heap-retained.ts";
+import { joinPath } from "./platform-support.ts";
 
 const waiting = new Map<string, () => void>();
-/** Holds until released by name, then completes. */
 const Hold = defineTask<{ name: string }, { phase: "hold" }, null>({
   name: "bench.hold",
   version: 1,
   initial: () => ({ phase: "hold" }),
   phases: {
-    hold: async (task, runtime, ctx) => {
-      await new Promise<void>((resolve) => {
-        waiting.set(task.input.name, resolve);
-      });
-      await runtime.commit(
-        () => ({ status: "terminal", outcome: { status: "completed", result: null } }),
-        ctx,
-      );
-    },
+    hold: (task, runtime, ctx) =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          yield* awaited(
+            new Promise<void>((resolve) => {
+              waiting.set(task.input.name, resolve);
+            }),
+          );
+          yield* awaited(
+            runtime.commit(
+              () => ({ status: "terminal", outcome: { status: "completed", result: null } }),
+              ctx,
+            ),
+          );
+        }),
+      ),
   },
   abort: (_task, runtime, ctx) =>
     Promise.resolve(
@@ -48,27 +49,23 @@ const Hold = defineTask<{ name: string }, { phase: "hold" }, null>({
     ),
 });
 
-async function release(name: string): Promise<void> {
-  const resume = waiting.get(name);
-  if (resume === undefined) {
-    await new Promise((resolve) => {
-      setTimeout(resolve, 0);
-    });
-    await release(name);
-    return;
+const release = Effect.fn("release")(function* (name: string) {
+  let resume = waiting.get(name);
+  while (resume === undefined) {
+    yield* Effect.sleep(1);
+    resume = waiting.get(name);
   }
   resume();
   waiting.delete(name);
-}
+});
 
 type Sizes = Record<
   "live" | "settled" | "edges" | "below" | "roots" | "unloaded" | "dropQueue",
   number
 >;
 
-// Storage that counts its task and conversation reads.
-async function countingStorage(directory: string) {
-  const storage = await openNodeSqliteStorage(join(directory, "session.sqlite"));
+const countingStorage = Effect.fn("countingStorage")(function* (directory: string) {
+  const storage = yield* awaited(openNodeSqliteStorage(joinPath(directory, "session.sqlite")));
   const reads = { count: 0 };
   const task = storage.task.bind(storage);
   const conversation = storage.conversation.bind(storage);
@@ -81,88 +78,118 @@ async function countingStorage(directory: string) {
     return conversation(id, readContext);
   };
   return { storage, reads };
-}
+});
 
-// A tool task of `parent` owns a child conversation running an inner task; both end. Returns the child.
-async function subagentCycle(
+const subagentCycle = Effect.fn("subagentCycle")(function* (
   harness: Harness,
   root: Conversation,
   parent: TaskId,
   n: number,
-): Promise<ConversationId> {
-  const { tool, inner, child } = await root.commit(async (tx) => {
-    const tool = await tx.createTask(
-      Hold,
-      { name: `tool${n}` },
-      { ownership: { kind: "task", taskId: parent } },
-    );
-    const child = await tx.createConversation({ ownership: { kind: "task", taskId: tool } });
-    const inner = await tx.createTask(
-      Hold,
-      { name: `inner${n}` },
-      { ownership: { kind: "conversation" }, conversationId: child.id },
-    );
-    return { tool, inner, child: child.id };
-  }, context);
-  await release(`inner${n}`);
-  await release(`tool${n}`);
-  await harness.waitForTask(inner as TaskId, context);
-  await harness.waitForTask(tool as TaskId, context);
-  return child;
-}
+) {
+  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-async function run(cycles: number) {
-  const directory = mkdtempSync(join(tmpdir(), "msa-durable-memory-bench-"));
-  try {
-    const { storage, reads } = await countingStorage(directory);
+  const { tool, inner, child } = yield* awaited(
+    root.commit(
+      (tx) =>
+        runPromise(
+          Effect.gen(function* () {
+            const tool = yield* awaited(
+              tx.createTask(
+                Hold,
+                { name: `tool${n}` },
+                { ownership: { kind: "task", taskId: parent } },
+              ),
+            );
+            const child = yield* awaited(
+              tx.createConversation({ ownership: { kind: "task", taskId: tool } }),
+            );
+            const inner = yield* awaited(
+              tx.createTask(
+                Hold,
+                { name: `inner${n}` },
+                { ownership: { kind: "conversation" }, conversationId: child.id },
+              ),
+            );
+            return { tool, inner, child: child.id };
+          }),
+        ),
+      context,
+    ),
+  );
+  yield* release(`inner${n}`);
+  yield* release(`tool${n}`);
+  yield* awaited(harness.waitForTask(inner as TaskId, context));
+  yield* awaited(harness.waitForTask(tool as TaskId, context));
+  return child;
+});
+
+const run = Effect.fn("run")(function* (cycles: number) {
+  const directory = mkdtempSync(joinPath(tmpdir(), "msa-durable-memory-bench-"));
+  return yield* Effect.gen(function* () {
+    const { storage, reads } = yield* countingStorage(directory);
     const registry = createRegistry();
     registry.install(defineExtension({ name: "bench", tasks: [Hold] }));
-    const harness = await Harness.open(storage, { models: createModels(), registry }, context);
-    const root = await harness.root(context);
-    harness.resume();
-    const parent = await root.commit(
-      (tx) => tx.createTask(Hold, { name: "parent" }, { ownership: { kind: "conversation" } }),
-      context,
+    const harness = yield* awaited(
+      Harness.open(storage, { models: createModels(), registry }, context),
     );
-    const heapBefore = await retainedBytes();
+    const root = yield* awaited(harness.root(context));
+    harness.resume();
+    const parent = yield* awaited(
+      root.commit(
+        (tx) => tx.createTask(Hold, { name: "parent" }, { ownership: { kind: "conversation" } }),
+        context,
+      ),
+    );
+    const heapBefore = yield* retainedBytes();
     let first: ConversationId | undefined;
     const started = performance.now();
-    for await (const n of Array.from({ length: cycles }, (_, i) => i)) {
-      const child = await subagentCycle(harness, root, parent, n);
+    for (const n of Array.from({ length: cycles }, (_, i) => i)) {
+      const child = yield* subagentCycle(harness, root, parent, n);
       first ??= child;
     }
     const ms = Math.round(performance.now() - started);
-    const heapAfter = await retainedBytes();
+    const heapAfter = yield* retainedBytes();
     const sizes = (harness as unknown as Record<symbol, Sizes>)[SCHEDULER_INDEX_SIZES]!;
-    // A later message into an old subagent conversation: a task created there, run, and ended.
     const readsBefore = reads.count;
-    const old = (await harness.conversation(first!, context))!;
-    const late = await old.commit(
-      (tx) => tx.createTask(Hold, { name: "late" }, { ownership: { kind: "conversation" } }),
-      context,
+    const old = (yield* awaited(harness.conversation(first!, context)))!;
+    const late = yield* awaited(
+      old.commit(
+        (tx) => tx.createTask(Hold, { name: "late" }, { ownership: { kind: "conversation" } }),
+        context,
+      ),
     );
-    await release("late");
-    await harness.waitForTask(late, context);
+    yield* release("late");
+    yield* awaited(harness.waitForTask(late, context));
     const lateReads = reads.count - readsBefore;
-    await release("parent");
-    await harness.waitForTask(parent, context);
-    await harness.close(context);
+    yield* release("parent");
+    yield* awaited(harness.waitForTask(parent, context));
+    yield* awaited(harness.close(context));
     return { ms, sizes, heap: heapAfter - heapBefore, lateReads };
-  } finally {
-    rmSync(directory, { recursive: true, force: true });
-  }
-}
+  }).pipe(
+    Effect.ensuring(
+      Effect.sync(() => {
+        rmSync(directory, { recursive: true, force: true });
+      }),
+    ),
+  );
+});
 
 const cycles = process.argv.slice(2).map(Number);
-console.log(
-  "cycles | ms     | settled | edges  | below | heap growth             | reads for a later message",
+Effect.runSync(
+  Console.log(
+    "cycles | ms     | settled | edges  | below | heap growth             | reads for a later message",
+  ),
 );
-for await (const n of cycles.length > 0 ? cycles : [1000, 10000]) {
-  const { ms, sizes, heap, lateReads } = await run(n);
-  console.log(
-    `${String(n).padEnd(6)} | ${String(ms).padEnd(6)} | ${String(sizes.settled).padEnd(7)} | ${String(sizes.edges).padEnd(6)} | ${String(sizes.below).padEnd(5)} | ${`${(heap / 1024 / 1024).toFixed(1)} MiB, ${Math.round(heap / n)} B/cycle`.padEnd(23)} | ${lateReads}`,
-  );
-  // The scheduler's ownership indexes must not grow with ended history; the heap still includes the Session's caches.
-  if (sizes.settled > 0 || sizes.edges > 1)
-    throw new Error(`ownership indexes grew with history: ${JSON.stringify(sizes)}`);
-}
+
+const main = Effect.gen(function* () {
+  for (const n of cycles.length > 0 ? cycles : [1000, 10000]) {
+    const { ms, sizes, heap, lateReads } = yield* run(n);
+    yield* Console.log(
+      `${String(n).padEnd(6)} | ${String(ms).padEnd(6)} | ${String(sizes.settled).padEnd(7)} | ${String(sizes.edges).padEnd(6)} | ${String(sizes.below).padEnd(5)} | ${`${(heap / 1024 / 1024).toFixed(1)} MiB, ${Math.round(heap / n)} B/cycle`.padEnd(23)} | ${lateReads}`,
+    );
+    if (sizes.settled > 0 || sizes.edges > 1)
+      throw new Error(`ownership indexes grew with history: ${yield* toJsonText(sizes)}`);
+  }
+});
+
+NodeRuntime.runMain(main);

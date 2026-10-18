@@ -1,12 +1,13 @@
 import { type AssistantMessage } from "@msa/ai";
 import type { AgentEvent, Conversation, Harness, MessageChange } from "@msa/durable";
 import { watchEvents } from "@msa/durable/harness";
+import { Effect } from "effect";
 
+import { awaited } from "./effect-support.ts";
 import { context } from "./session-support.ts";
 
-// Attach and start an event stream that records every delivered batch.
-export async function listen(harness: Harness, conversation: Conversation) {
-  const stream = await watchEvents(harness, conversation.id, context);
+export const listen = Effect.fn("listen")(function* (harness: Harness, conversation: Conversation) {
+  const stream = yield* awaited(watchEvents(harness, conversation.id, context));
   const batches: AgentEvent[][] = [];
   stream.start((events) => {
     batches.push([...events]);
@@ -14,17 +15,14 @@ export async function listen(harness: Harness, conversation: Conversation) {
     return Promise.resolve();
   });
   return { stream, batches, events: () => batches.flat() };
-}
+});
 
-export async function drained(): Promise<void> {
-  await new Promise((resolve) => {
-    setTimeout(resolve, 0);
-  });
-}
+export const drained = Effect.fn("drained")(function* () {
+  yield* Effect.sleep(1);
+});
 
 export type Mutable = { [key: string]: unknown };
 
-// Apply message changes to a copy of `message`, as an events-only consumer would.
 export function applyChanges(
   message: AssistantMessage,
   changes: readonly MessageChange[],

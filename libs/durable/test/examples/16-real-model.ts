@@ -1,68 +1,74 @@
+import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import { createModels } from "@msa/ai/models";
 import { openaiProvider } from "@msa/ai/providers/openai";
-// A real model: stream an answer from OpenAI.
-// Run from libs/durable (needs OPENAI_API_KEY):
-//   node --conditions=source --experimental-strip-types test/examples/16-real-model.ts
 import { BACKGROUND_CONTEXT } from "@msa/chord/context";
+import { Console, Effect } from "effect";
 
+import { environmentVariable } from "../../src/env/node-process.ts";
 import { createRegistry, Harness } from "../../src/harness/index.ts";
 import { AssistantEntry, defineExtension, LiveDoc, section } from "../../src/index.ts";
 import { MemoryStorage } from "../../src/storage/memory.ts";
+import { awaited } from "../effect-support.ts";
 
 const context = BACKGROUND_CONTEXT;
 
-// Production code passes a Models collection with real providers; the Harness
-// never talks to a provider any other way. openaiProvider() reads
-// OPENAI_API_KEY from the environment. While the answer streams, generation
-// commits throttled partials to the conversation's msa.live document. Watching
-// that document streams the answer; the watch sees only committed values.
-if (process.env["OPENAI_API_KEY"] === undefined) {
-  console.log("skipped: OPENAI_API_KEY is not set");
-} else {
-  const models = createModels();
-  models.setProvider(openaiProvider());
-  const registry = createRegistry();
-  registry.install(
-    defineExtension({
-      name: "concise",
-      sections: [section("preamble", () => "You are a concise assistant.", { tag: false })],
-    }),
-  );
-  const harness = await Harness.open(new MemoryStorage(), { models, registry }, context);
-  const root = await harness.root(context, {
-    agent: { model: { provider: "openai", modelId: "gpt-6-sol" }, thinkingLevel: "high" },
-  });
-  const liveWatch = (await harness.watchDoc(LiveDoc, root.id, context))!;
-  // Print only what each committed partial adds to the text printed so far.
-  let printed = "";
-  const printText = (text: string): void => {
-    if (text.length <= printed.length || !text.startsWith(printed)) return;
-    process.stdout.write(text.slice(printed.length));
-    printed = text;
-  };
-  liveWatch.start((value) => {
-    const block = value?.generation?.message?.content.find((content) => content.type === "text");
-    if (block?.type === "text") printText(block.text);
-
-    return Promise.resolve();
-  });
-  harness.resume();
-  process.stdout.write("answer: ");
-  const poem = await root.submit({ type: "input", content: "Write a long poem" }, context);
-  const settledPoem = await poem.wait(context);
-  await liveWatch.stop();
-  if (settledPoem.status === "done" && settledPoem.type === "input") {
-    // The last throttle window may not have been committed as a partial; the answer entry has the rest.
-    const entry = await root.commit((tx) => tx.entry(AssistantEntry, settledPoem.answer), context);
-    const message = entry?.model?.[0];
-    const block =
-      message?.role === "assistant"
-        ? message.content.find((content) => content.type === "text")
-        : undefined;
-    if (block?.type === "text") printText(block.text);
-    process.stdout.write("\n");
+const main = Effect.gen(function* () {
+  if (environmentVariable("OPENAI_API_KEY", true) === undefined) {
+    yield* Console.log("skipped: OPENAI_API_KEY is not set");
   } else {
-    console.log("unanswered:", settledPoem.reason, settledPoem.detail);
+    const models = createModels();
+    models.setProvider(openaiProvider());
+    const registry = createRegistry();
+    registry.install(
+      defineExtension({
+        name: "concise",
+        sections: [section("preamble", () => "You are a concise assistant.", { tag: false })],
+      }),
+    );
+    const harness = yield* awaited(
+      Harness.open(new MemoryStorage(), { models, registry }, context),
+    );
+    const root = yield* awaited(
+      harness.root(context, {
+        agent: { model: { provider: "openai", modelId: "gpt-6-sol" }, thinkingLevel: "high" },
+      }),
+    );
+    const liveWatch = (yield* awaited(harness.watchDoc(LiveDoc, root.id, context)))!;
+    let printed = "";
+    const printText = (text: string): void => {
+      if (text.length <= printed.length || !text.startsWith(printed)) return;
+      process.stdout.write(text.slice(printed.length));
+      printed = text;
+    };
+    liveWatch.start((value) => {
+      const block = value?.generation?.message?.content.find((content) => content.type === "text");
+      if (block?.type === "text") printText(block.text);
+
+      return Promise.resolve();
+    });
+    harness.resume();
+    process.stdout.write("answer: ");
+    const poem = yield* awaited(
+      root.submit({ type: "input", content: "Write a long poem" }, context),
+    );
+    const settledPoem = yield* awaited(poem.wait(context));
+    yield* awaited(liveWatch.stop());
+    if (settledPoem.status === "done" && settledPoem.type === "input") {
+      const entry = yield* awaited(
+        root.commit((tx) => tx.entry(AssistantEntry, settledPoem.answer), context),
+      );
+      const message = entry?.model?.[0];
+      const block =
+        message?.role === "assistant"
+          ? message.content.find((content) => content.type === "text")
+          : undefined;
+      if (block?.type === "text") printText(block.text);
+      process.stdout.write("\n");
+    } else {
+      yield* Console.log("unanswered:", settledPoem.reason, settledPoem.detail);
+    }
+    yield* awaited(harness.close(context));
   }
-  await harness.close(context);
-}
+});
+
+NodeRuntime.runMain(main);

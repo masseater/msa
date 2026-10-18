@@ -1,9 +1,9 @@
-import { rm } from "node:fs/promises";
-
 import { defineExtension, defineTask, type TaskId } from "@msa/durable";
+import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { allEntries, type ChatSetup, chatSetup } from "./chat-support.ts";
+import { toJsonText, awaited } from "./effect-support.ts";
 import {
   DONE,
   call,
@@ -15,16 +15,19 @@ import {
   restartDuring,
 } from "./harness-nested-tools-restart-support.ts";
 import { addTool } from "./harness-support.ts";
+import { removeDir } from "./platform-support.ts";
 import { context } from "./session-support.ts";
 import { aborted, deferred } from "./task-support.ts";
 
-afterEach(async () => {
-  for await (const directory of directories) await rm(directory, { recursive: true, force: true });
-  directories.clear();
-});
+afterEach(() =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      for (const directory of directories) yield* removeDir(directory);
+      directories.clear();
+    }),
+  ),
+);
 
-// `echo` records its runs; `batch` calls it once without and once with a key and blocks on its first attempt. Its
-// second attempt calls with other arguments first when `order` is "swapped". `last.seen` is what that attempt got.
 function reattachingBatch(setup: ChatSetup, order: "same" | "swapped") {
   const runs: string[] = [];
   const blocked = deferred();
@@ -41,20 +44,25 @@ function reattachingBatch(setup: ChatSetup, order: "same" | "swapped") {
     setup.registry,
     tool(
       "batch",
-      async (_args, api, callContext) => {
-        callerRuns++;
-        const first = callerRuns === 2 && order === "swapped" ? "b" : "a";
-        const one = await api.executeTool("echo", { text: first }, callContext);
-        const named = await api.executeTool("echo", { text: "named" }, callContext, {
-          key: "named",
-        });
-        if (callerRuns === 1) {
-          blocked.resolve();
-          await aborted(callContext.abortSignal!);
-        }
-        last.seen = [one, named].map((result) => result.structuredOutput as string);
-        return {};
-      },
+      (_args, api, callContext) =>
+        Effect.runPromise(
+          Effect.gen(function* () {
+            callerRuns++;
+            const first = callerRuns === 2 && order === "swapped" ? "b" : "a";
+            const one = yield* awaited(api.executeTool("echo", { text: first }, callContext));
+            const named = yield* awaited(
+              api.executeTool("echo", { text: "named" }, callContext, {
+                key: "named",
+              }),
+            );
+            if (callerRuns === 1) {
+              blocked.resolve();
+              return yield* awaited(aborted(callContext.abortSignal!));
+            }
+            last.seen = [one, named].map((result) => result.structuredOutput as string);
+            return {};
+          }),
+        ),
       { replay: "safe" },
     ),
   );
@@ -62,8 +70,10 @@ function reattachingBatch(setup: ChatSetup, order: "same" | "swapped") {
   return { runs, blocked, last };
 }
 
-async function backgroundWorkSetup() {
-  const path = await sqlitePath();
+const backgroundWorkSetup = Effect.fn("backgroundWorkSetup")(function* () {
+  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
+  const path = yield* sqlitePath();
   const setup = chatSetup();
   const started = deferred();
   const Background = defineTask<null, { phase: "work" }, null>({
@@ -71,141 +81,201 @@ async function backgroundWorkSetup() {
     version: 1,
     initial: () => ({ phase: "work" }),
     phases: {
-      work: async (_task, runtime) => {
-        started.resolve();
-        await aborted(runtime.signal);
-      },
+      work: (_task, runtime) =>
+        runPromise(
+          Effect.gen(function* () {
+            started.resolve();
+            return yield* awaited(aborted(runtime.signal));
+          }),
+        ),
     },
-    abort: async (_task, runtime, abortContext) => {
-      await runtime.commit(
-        () => ({ status: "terminal", outcome: { status: "aborted" } }),
-        abortContext,
-      );
-    },
+    abort: (_task, runtime, abortContext) =>
+      runPromise(
+        Effect.asVoid(
+          Effect.suspend(() =>
+            awaited(
+              runtime.commit(
+                () => ({ status: "terminal", outcome: { status: "aborted" } }),
+                abortContext,
+              ),
+            ),
+          ),
+        ),
+      ),
   });
   setup.registry.install(defineExtension({ name: "background", tasks: [Background] }));
   return { path, setup, started, Background };
-}
-
-describe("nested tool calls across a restart", () => {
-  it("reattaches a replay-safe caller by default and explicit keys, and rejects a rerun that calls differently", async () => {
-    for await (const order of ["same", "swapped"] as const) {
-      const path = await sqlitePath();
-      const setup = chatSetup();
-      const { runs, blocked, last } = reattachingBatch(setup, order);
-      const { opened, id } = await restartDuring(path, setup, blocked.promise);
-      opened.harness.resume();
-      expect((await (await opened.harness.submission(id, context))!.wait(context)).status).toBe(
-        "done",
-      );
-      const [result] = results(await allEntries(opened.root));
-      expect(runs).toEqual(["a", "named"]);
-      if (order === "same") {
-        expect(last.seen).toEqual(["echo a", "echo named"]);
-        expect(result!.isError).toBe(false);
-      } else {
-        // Key 1 was made with other arguments: the rerun throws instead of reusing a different call's result.
-        expect(result!.isError).toBe(true);
-        expect(JSON.stringify(result!.content)).toContain(
-          "Nested call c1/1 was already made with another tool",
-        );
-      }
-      await opened.harness.close(context);
-    }
-  });
 });
 
-describe("nested tool calls across a restart", () => {
-  it("abandons the child tasks a replay-unsafe tool created and awaited in memory", async () => {
-    const path = await sqlitePath();
+const reattachesReplaySafe = Effect.gen(function* () {
+  for (const order of ["same", "swapped"] as const) {
+    const path = yield* sqlitePath();
     const setup = chatSetup();
-    const phases: string[] = [];
-    const started = deferred();
-    const Worker = defineTask<null, { phase: "work" }, null>({
-      name: "test.direct-worker",
-      version: 1,
-      initial: () => ({ phase: "work" }),
-      phases: {
-        work: async (_task, runtime) => {
-          phases.push("work");
-          started.resolve();
-          await aborted(runtime.signal);
-        },
-      },
-      abort: async (task, runtime, abortContext) => {
-        phases.push(`abort ${task.abortReason}`);
-        await runtime.commit(
-          () => ({ status: "terminal", outcome: { status: "aborted" } }),
-          abortContext,
-        );
-      },
-    });
-    setup.registry.install(defineExtension({ name: "direct-worker", tasks: [Worker] }));
-    addTool(
-      setup.registry,
-      tool("work", async (_args, api, callContext) => {
-        const id = await api.createTask(
-          Worker,
-          null,
-          { ownership: { kind: "task", taskId: api.taskId } },
-          callContext,
-        );
-        await api.waitForTask(id, callContext);
-        return {};
-      }),
-    );
-    setup.faux.setResponses([call("work"), DONE]);
-    const { opened, id } = await restartDuring(path, setup, started.promise);
+    const { runs, blocked, last } = reattachingBatch(setup, order);
+    const { opened, id } = yield* restartDuring(path, setup, blocked.promise);
     opened.harness.resume();
-    expect((await (await opened.harness.submission(id, context))!.wait(context)).status).toBe(
-      "done",
-    );
-    expect(phases).toEqual(["work", "abort restart"]);
-    await opened.harness.close(context);
-  });
+    expect(
+      (yield* awaited((yield* awaited(opened.harness.submission(id, context)))!.wait(context)))
+        .status,
+    ).toBe("done");
+    const [result] = results(yield* allEntries(opened.root));
+    expect(runs).toEqual(["a", "named"]);
+    if (order === "same") {
+      expect(last.seen).toEqual(["echo a", "echo named"]);
+      expect(result!.isError).toBe(false);
+    } else {
+      expect(result!.isError).toBe(true);
+      expect(yield* toJsonText(result!.content)).toContain(
+        "Nested call c1/1 was already made with another tool",
+      );
+    }
+    yield* awaited(opened.harness.close(context));
+  }
 });
 
 describe("nested tool calls across a restart", () => {
-  it("leaves background work under an abandoned nested call running, and settles without it", async () => {
-    const { path, setup, started, Background } = await backgroundWorkSetup();
-    let background: TaskId | undefined;
-    addTool(
-      setup.registry,
-      tool("spawn", async (_args, api, callContext) => {
-        // A conversation the call owns, with background work in it, as a persistent subagent has.
-        background = await api.commit(async (tx) => {
-          const child = await tx.createConversation({
-            ownership: { kind: "task", taskId: api.taskId },
-          });
-          return tx.createTask(Background, null, {
-            conversationId: child.id,
-            ownership: { kind: "conversation" },
-            background: true,
-          });
-        }, callContext);
-        return aborted(callContext.abortSignal!);
-      }),
-    );
-    addTool(
-      setup.registry,
-      tool("batch", async (_args, api, callContext) => {
-        await api.executeTool("spawn", {}, callContext);
-        return {};
-      }),
-    );
-    setup.faux.setResponses([call("batch"), DONE]);
-    const { opened, id } = await restartDuring(path, setup, started.promise);
-    opened.harness.resume();
-    expect((await (await opened.harness.submission(id, context))!.wait(context)).status).toBe(
-      "done",
-    );
-    const [spawn] = await nestedTasks(opened.harness);
-    expect(spawn).toMatchObject({ abortReason: "restart", state: { status: "terminal" } });
-    expect(await opened.harness.getTask(background!, context)).toMatchObject({
-      abortRequested: false,
-      state: { status: "running" },
-    });
-    await opened.harness.abortTask(background!, context);
-    await opened.harness.close(context);
+  it("reattaches a replay-safe caller by default and explicit keys, and rejects a rerun that calls differently", () =>
+    Effect.runPromise(reattachesReplaySafe));
+});
+
+const abandonsChildTasks = Effect.gen(function* () {
+  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
+  const path = yield* sqlitePath();
+  const setup = chatSetup();
+  const phases: string[] = [];
+  const started = deferred();
+  const Worker = defineTask<null, { phase: "work" }, null>({
+    name: "test.direct-worker",
+    version: 1,
+    initial: () => ({ phase: "work" }),
+    phases: {
+      work: (_task, runtime) =>
+        runPromise(
+          Effect.gen(function* () {
+            phases.push("work");
+            started.resolve();
+            return yield* awaited(aborted(runtime.signal));
+          }),
+        ),
+    },
+    abort: (task, runtime, abortContext) =>
+      runPromise(
+        Effect.gen(function* () {
+          phases.push(`abort ${task.abortReason}`);
+          yield* awaited(
+            runtime.commit(
+              () => ({ status: "terminal", outcome: { status: "aborted" } }),
+              abortContext,
+            ),
+          );
+        }),
+      ),
   });
+  setup.registry.install(defineExtension({ name: "direct-worker", tasks: [Worker] }));
+  addTool(
+    setup.registry,
+    tool("work", (_args, api, callContext) =>
+      runPromise(
+        Effect.gen(function* () {
+          const id = yield* awaited(
+            api.createTask(
+              Worker,
+              null,
+              { ownership: { kind: "task", taskId: api.taskId } },
+              callContext,
+            ),
+          );
+          yield* awaited(api.waitForTask(id, callContext));
+          return {};
+        }),
+      ),
+    ),
+  );
+  setup.faux.setResponses([call("work"), DONE]);
+  const { opened, id } = yield* restartDuring(path, setup, started.promise);
+  opened.harness.resume();
+  expect(
+    (yield* awaited((yield* awaited(opened.harness.submission(id, context)))!.wait(context)))
+      .status,
+  ).toBe("done");
+  expect(phases).toEqual(["work", "abort restart"]);
+  yield* awaited(opened.harness.close(context));
+});
+
+describe("nested tool calls across a restart", () => {
+  it("abandons the child tasks a replay-unsafe tool created and awaited in memory", () =>
+    Effect.runPromise(abandonsChildTasks));
+});
+
+const leavesBackgroundWork = Effect.gen(function* () {
+  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
+  const { path, setup, started, Background } = yield* backgroundWorkSetup();
+  let background: TaskId | undefined;
+  addTool(
+    setup.registry,
+    tool("spawn", (_args, api, callContext) =>
+      runPromise(
+        Effect.gen(function* () {
+          const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
+          background = yield* awaited(
+            api.commit(
+              (tx) =>
+                runPromise(
+                  Effect.gen(function* () {
+                    const child = yield* awaited(
+                      tx.createConversation({
+                        ownership: { kind: "task", taskId: api.taskId },
+                      }),
+                    );
+                    return yield* awaited(
+                      tx.createTask(Background, null, {
+                        conversationId: child.id,
+                        ownership: { kind: "conversation" },
+                        background: true,
+                      }),
+                    );
+                  }),
+                ),
+              callContext,
+            ),
+          );
+          return yield* awaited(aborted(callContext.abortSignal!));
+        }),
+      ),
+    ),
+  );
+  addTool(
+    setup.registry,
+    tool("batch", (_args, api, callContext) =>
+      runPromise(
+        Effect.gen(function* () {
+          yield* awaited(api.executeTool("spawn", {}, callContext));
+          return {};
+        }),
+      ),
+    ),
+  );
+  setup.faux.setResponses([call("batch"), DONE]);
+  const { opened, id } = yield* restartDuring(path, setup, started.promise);
+  opened.harness.resume();
+  expect(
+    (yield* awaited((yield* awaited(opened.harness.submission(id, context)))!.wait(context)))
+      .status,
+  ).toBe("done");
+  const [spawn] = yield* nestedTasks(opened.harness);
+  expect(spawn).toMatchObject({ abortReason: "restart", state: { status: "terminal" } });
+  expect(yield* awaited(opened.harness.getTask(background!, context))).toMatchObject({
+    abortRequested: false,
+    state: { status: "running" },
+  });
+  yield* awaited(opened.harness.abortTask(background!, context));
+  yield* awaited(opened.harness.close(context));
+});
+
+describe("nested tool calls across a restart", () => {
+  it("leaves background work under an abandoned nested call running, and settles without it", () =>
+    Effect.runPromise(leavesBackgroundWork));
 });

@@ -15,36 +15,46 @@ import {
   type ToolRegistration,
   ToolResultEntry,
 } from "@msa/durable";
+import { Effect } from "effect";
 
 import type { ExecutionEnv } from "../src/env/index.ts";
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
 import { type ChatSetup, openChat, waitFor } from "./chat-support.ts";
+import { awaited } from "./effect-support.ts";
+import { makeTempFile, removeDir } from "./platform-support.ts";
 import { context } from "./session-support.ts";
 import { aborted, deferred } from "./task-support.ts";
-import { makeTempFile, removeDir } from "./temp-support.ts";
 
 export const directories = new Set<string>();
 
-export async function removeDirectories(): Promise<void> {
-  for await (const directory of directories) await removeDir(directory);
-  directories.clear();
+export function removeDirectories(): Promise<void> {
+  return Effect.runPromise(
+    Effect.gen(function* () {
+      for (const directory of directories) yield* removeDir(directory);
+      directories.clear();
+    }),
+  );
 }
 
-export async function sqlitePath(): Promise<string> {
-  const { directory, path } = await makeTempFile("msa-durable-tools-", "session.sqlite");
+export const sqlitePath = Effect.fn("sqlitePath")(function* () {
+  const { directory, path } = yield* makeTempFile("msa-durable-tools-", "session.sqlite");
   directories.add(directory);
   return path;
-}
+});
 
-export async function open(path: string, setup: ChatSetup, env?: ExecutionEnv) {
-  const opened = await openChat(
-    await openNodeSqliteStorage(path),
+export const open = Effect.fn("open")(function* (
+  path: string,
+  setup: ChatSetup,
+  env?: ExecutionEnv,
+) {
+  const opened = yield* openChat(
+    yield* awaited(openNodeSqliteStorage(path)),
     setup,
     env === undefined ? {} : { env },
   );
   opened.harness.resume();
   return opened;
-}
+});
 
 export function tool(
   name: string,
@@ -70,32 +80,39 @@ export function text(message: ToolResultMessage | undefined): string {
   return (message?.content ?? []).map((item) => (item.type === "text" ? item.text : "")).join("|");
 }
 
-export async function toolTaskId(harness: Harness): Promise<TaskId> {
-  let id: TaskId | undefined;
-  await waitFor(async () => {
-    id = (await harness.snapshot(LiveDoc, 1 as never, context))?.tools?.[0]?.taskId;
-    return id !== undefined;
-  });
-  return id!;
-}
+export const toolTaskId = Effect.fn("toolTaskId")(function* (harness: Harness) {
+  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-// A tool that writes output, then blocks until its invocation is cancelled the first `blocking` times it runs.
-// `started` resolves once the output is durable.
+  let id: TaskId | undefined;
+  yield* waitFor(() =>
+    runPromise(
+      Effect.gen(function* () {
+        id = (yield* awaited(harness.snapshot(LiveDoc, 1 as never, context)))?.tools?.[0]?.taskId;
+        return id !== undefined;
+      }),
+    ),
+  );
+  return id!;
+});
+
 export function blockingTool(name: string, extra: Partial<ToolRegistration> = {}) {
   const started = deferred();
   const state = { runs: 0, blocking: 1 };
   const registration = tool(
     name,
-    async (_args, api, callContext) => {
-      state.runs++;
-      api.output(`run ${state.runs}\n`);
-      await api.details({ run: state.runs }, callContext);
-      if (state.runs <= state.blocking) {
-        started.resolve();
-        await aborted(callContext.abortSignal!);
-      }
-      return {};
-    },
+    (_args, api, callContext) =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          state.runs++;
+          api.output(`run ${state.runs}\n`);
+          yield* awaited(api.details({ run: state.runs }, callContext));
+          if (state.runs <= state.blocking) {
+            started.resolve();
+            return yield* awaited(aborted(callContext.abortSignal!));
+          }
+          return {};
+        }),
+      ),
     extra,
   );
   return { registration, started, state };

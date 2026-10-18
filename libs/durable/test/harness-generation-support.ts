@@ -7,9 +7,25 @@ import {
   type TaskId,
 } from "@msa/durable";
 import { Harness } from "@msa/durable/harness";
+import { Effect, Stream } from "effect";
 
 import { waitFor } from "./chat-support.ts";
+import { awaited } from "./effect-support.ts";
 import { context } from "./session-support.ts";
+
+export const heldStream = (start: unknown, final: unknown): ReturnType<Models["streamSimple"]> => {
+  const events = Stream.concat(Stream.make(start), Stream.fromEffectDrain(Effect.sleep(300)));
+  return {
+    [Symbol.asyncIterator]: () => Stream.toAsyncIterable(events)[Symbol.asyncIterator](),
+    result: () => Promise.resolve(final),
+  } as unknown as ReturnType<Models["streamSimple"]>;
+};
+
+export const invalidFinalStream = (): ReturnType<Models["streamSimple"]> =>
+  heldStream(
+    { type: "start", partial: fauxAssistantMessage("partial", { stopReason: "pending" }) },
+    { ...fauxAssistantMessage("final"), invalid: () => {} },
+  );
 
 export const ERROR_503 = fauxAssistantMessage([], {
   stopReason: "error",
@@ -23,16 +39,24 @@ export function live(
   return Promise.resolve(harness.snapshot(LiveDoc, conversation.id, context));
 }
 
-export async function runTask(harness: Harness, conversation: Conversation): Promise<TaskId> {
-  let taskId: TaskId | undefined;
-  await waitFor(async () => {
-    taskId = (await live(harness, conversation))?.run?.taskId;
-    return taskId !== undefined;
-  });
-  return taskId!;
-}
+export const runTask = Effect.fn("runTask")(function* (
+  harness: Harness,
+  conversation: Conversation,
+) {
+  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-// `models` with `streamSimple` replaced.
+  let taskId: TaskId | undefined;
+  yield* waitFor(() =>
+    runPromise(
+      Effect.gen(function* () {
+        taskId = (yield* awaited(live(harness, conversation)))?.run?.taskId;
+        return taskId !== undefined;
+      }),
+    ),
+  );
+  return taskId!;
+});
+
 export function withStream(models: Models, streamSimple: Models["streamSimple"]): Models {
   return new Proxy(models, {
     get(target, property) {

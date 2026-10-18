@@ -6,7 +6,6 @@ import { initSync, PhotonImage } from "@silvia-odwyer/photon/photon_rs.js";
 
 import type { ImageProcessor } from "../src/tools/image.ts";
 
-// Fixtures are built with Photon here; the processor prepares them in its worker thread.
 export function setUpImages(): Promise<ImageProcessor> {
   initSync({
     module: readFileSync(
@@ -16,7 +15,6 @@ export function setUpImages(): Promise<ImageProcessor> {
   return createNodePhotonImages();
 }
 
-// RGBA pixels of a `width` by `height` image: red, with a green top-left pixel.
 export function pixels(width: number, height: number): Uint8Array {
   const rgba = new Uint8Array(width * height * 4);
   for (let index = 0; index < width * height; index++) rgba.set([255, 0, 0, 255], index * 4);
@@ -42,7 +40,6 @@ export function encode(width: number, height: number, format: "png" | "jpeg"): U
   return encodeRgba(pixels(width, height), width, height, format);
 }
 
-// Noise, which neither PNG nor JPEG compresses well, so the byte limit decides.
 export function noisyPng(width: number, height: number): Uint8Array {
   const rgba = new Uint8Array(width * height * 4);
   let seed = 1;
@@ -53,7 +50,6 @@ export function noisyPng(width: number, height: number): Uint8Array {
   return encodeRgba(rgba, width, height, "png");
 }
 
-// A 24-bit BMP, which providers do not take inline.
 export function bmp(width: number, height: number): Uint8Array {
   const row = Math.ceil((width * 3) / 4) * 4;
   const bytes = new Uint8Array(54 + row * height);
@@ -72,7 +68,6 @@ export function bmp(width: number, height: number): Uint8Array {
   return bytes;
 }
 
-// A 1x1 GIF with its logical screen size set to `width` by `height`.
 export function gif(width = 1, height = 1): Uint8Array {
   const bytes = Uint8Array.from(
     Buffer.from("R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7", "base64"),
@@ -82,7 +77,6 @@ export function gif(width = 1, height = 1): Uint8Array {
   return bytes;
 }
 
-// A TIFF header whose first directory holds only Orientation = `orientation`.
 export function tiff(orientation: number, littleEndian: boolean): number[] {
   const bytes = new Uint8Array(26);
   const view = new DataView(bytes.buffer);
@@ -99,7 +93,6 @@ export function tiff(orientation: number, littleEndian: boolean): number[] {
 
 export const EXIF_HEADER = [0x45, 0x78, 0x69, 0x66, 0, 0];
 
-// `jpeg` with an APP1 segment whose EXIF says `orientation`, after an APP0 segment when `app0`.
 export function withOrientation(
   jpeg: Uint8Array,
   orientation: number,

@@ -1,34 +1,23 @@
-// A background task that owns a child conversation.
-// Run from libs/durable:
-//   node --conditions=source --experimental-strip-types test/examples/03-owned-conversations.ts
+import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import { BACKGROUND_CONTEXT } from "@msa/chord/context";
+import { Console, Effect } from "effect";
 
 import { type ConversationId, defineDoc, defineTask } from "../../src/index.ts";
 import { createSession } from "../../src/session/index.ts";
 import { MemoryStorage } from "../../src/storage/memory.ts";
+import { awaited } from "../effect-support.ts";
 
 const context = BACKGROUND_CONTEXT;
 const session = createSession(new MemoryStorage());
 
-// A typical agent setup: a background task supervises a helper conversation,
-// and the main conversation keeps a registry that maps agent names to their
-// conversations. All three are created in one commit, so after a crash either
-// all of them exist or none do.
-
-// A task definition needs a name, a version, the task's starting state, a
-// handler for every phase, and an abort handler (12-tasks.ts runs a task).
-// This example only creates the task record; a plain Session never runs it.
 const Supervisor = defineTask<null, { phase: "ready" }, null>({
   name: "example.supervisor",
   version: 1,
   initial: () => ({ phase: "ready" }),
-  phases: { ready: async () => {} },
-  abort: async () => {},
+  phases: { ready: () => Promise.resolve() },
+  abort: () => Promise.resolve(),
 });
 
-// "latest" keeps only the current value. "initial" means forks of this
-// conversation start without a registry, so a child doesn't inherit its
-// parent's list of agents.
 const AgentRegistry = defineDoc<{
   agents: Record<string, { conversationId: ConversationId; requestId: string }>;
 }>({
@@ -40,36 +29,49 @@ const AgentRegistry = defineDoc<{
   initial: () => ({ agents: {} }),
 });
 
-const main = await session.commit(
-  (tx) => tx.createConversation({ ownership: { kind: "ownerless" } }),
-  context,
-);
+const main = Effect.gen(function* () {
+  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-const setup = await session.commit(async (tx) => {
-  // `background: true` means the task is side work: waiting for the main
-  // conversation to finish does not wait for it.
-  const supervisorId = await tx.createTask(Supervisor, null, {
-    ownership: { kind: "conversation" },
-    conversationId: main.id,
-    background: true,
-  });
+  const main = yield* awaited(
+    session.commit((tx) => tx.createConversation({ ownership: { kind: "ownerless" } }), context),
+  );
 
-  // The child records that it belongs to the supervisor task. The task was
-  // created a few lines above in this same commit, which is allowed.
-  const child = await tx.createConversation({ ownership: { kind: "task", taskId: supervisorId } });
+  const setup = yield* awaited(
+    session.commit(
+      (tx) =>
+        runPromise(
+          Effect.gen(function* () {
+            const supervisorId = yield* awaited(
+              tx.createTask(Supervisor, null, {
+                ownership: { kind: "conversation" },
+                conversationId: main.id,
+                background: true,
+              }),
+            );
 
-  // requestId is a fixed name for the child's first message. Later code sends
-  // that message using this requestId, so a retry after a crash cannot
-  // deliver it twice.
-  (await tx.doc(AgentRegistry, main.id)).agents["researcher"] = {
-    conversationId: child.id,
-    requestId: `researcher:first-message:${supervisorId}`,
-  };
-  return { supervisorId, child };
-}, context);
+            const child = yield* awaited(
+              tx.createConversation({ ownership: { kind: "task", taskId: supervisorId } }),
+            );
 
-console.log("supervisor task:", setup.supervisorId);
-console.log("child conversation:", setup.child);
-console.log("registry:", await session.snapshot(AgentRegistry, main.id, context));
+            (yield* awaited(tx.doc(AgentRegistry, main.id))).agents["researcher"] = {
+              conversationId: child.id,
+              requestId: `researcher:first-message:${supervisorId}`,
+            };
+            return { supervisorId, child };
+          }),
+        ),
+      context,
+    ),
+  );
 
-await session.close(context);
+  yield* Console.log("supervisor task:", setup.supervisorId);
+  yield* Console.log("child conversation:", setup.child);
+  yield* Console.log(
+    "registry:",
+    yield* awaited(session.snapshot(AgentRegistry, main.id, context)),
+  );
+
+  yield* awaited(session.close(context));
+});
+
+NodeRuntime.runMain(main);

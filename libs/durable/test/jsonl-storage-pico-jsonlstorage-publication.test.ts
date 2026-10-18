@@ -1,11 +1,12 @@
-import { readdir, rm } from "node:fs/promises";
-import { join } from "node:path";
+import { readdir } from "node:fs/promises";
 
 import type { JsonValue } from "@msa/chord";
+import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import type { DocumentId, EntryId, TaskId } from "../src/types.ts";
 import { ROOT_CONVERSATION_ID } from "../src/types.ts";
+import { awaited } from "./effect-support.ts";
 import {
   terminalTask,
   readLines,
@@ -20,38 +21,43 @@ import {
   InstrumentedEnv,
   type Failure,
 } from "./jsonl-storage-support.ts";
+import { joinPath, removeDir } from "./platform-support.ts";
 
-afterEach(async () => {
-  for await (const storage of openStorages) await storage.close(context);
-  openStorages.clear();
-  for await (const directory of tempDirectories)
-    await rm(directory, { recursive: true, force: true });
-  tempDirectories.clear();
-});
+afterEach(() =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      for (const storage of openStorages) yield* awaited(storage.close(context));
+      openStorages.clear();
+      for (const directory of tempDirectories) yield* removeDir(directory);
+      tempDirectories.clear();
+    }),
+  ),
+);
 
-// Create two documents in one commit and check the flush order of their sidecars and main.
-async function expectCreateFlushOrder(fsync: boolean) {
-  const directory = await tempDirectory();
+const expectCreateFlushOrder = Effect.fn("expectCreateFlushOrder")(function* (fsync: boolean) {
+  const directory = yield* tempDirectory();
   const env = new InstrumentedEnv({ cwd: directory });
-  const storage = await openStorage(directory, env, { fsync });
-  await createRoot(storage);
-  const firstId = await storage.mintId<DocumentId>();
-  const secondId = await storage.mintId<DocumentId>();
+  const storage = yield* openStorage(directory, env, { fsync });
+  yield* createRoot(storage);
+  const firstId = yield* awaited(storage.mintId<DocumentId>());
+  const secondId = yield* awaited(storage.mintId<DocumentId>());
   env.clear();
-  await storage.commit(
-    [
-      {
-        type: "document.create",
-        record: sessionDocument(secondId, "second"),
-        content: { kind: "base", version: 1, value: {} },
-      },
-      {
-        type: "document.create",
-        record: sessionDocument(firstId, "first"),
-        content: { kind: "base", version: 1, value: {} },
-      },
-    ],
-    context,
+  yield* awaited(
+    storage.commit(
+      [
+        {
+          type: "document.create",
+          record: sessionDocument(secondId, "second"),
+          content: { kind: "base", version: 1, value: {} },
+        },
+        {
+          type: "document.create",
+          record: sessionDocument(firstId, "first"),
+          content: { kind: "base", version: 1, value: {} },
+        },
+      ],
+      context,
+    ),
   );
   const expected = [
     `append:doc-${secondId}.jsonl`,
@@ -61,25 +67,26 @@ async function expectCreateFlushOrder(fsync: boolean) {
   ];
   expect(env.operations).toEqual(expected);
   return { env, storage, firstId };
-}
+});
 
-type FlushOrderStore = Awaited<ReturnType<typeof expectCreateFlushOrder>>;
+type FlushOrderStore = Effect.Success<ReturnType<typeof expectCreateFlushOrder>>;
 
-// A base change reclaims the sidecar only after main is flushed; an entry alone touches main only.
-async function expectReclaimFlushOrder(
+const expectReclaimFlushOrder = Effect.fn("expectReclaimFlushOrder")(function* (
   { env, storage, firstId }: FlushOrderStore,
   fsync: boolean,
-): Promise<void> {
+) {
   env.clear();
-  await storage.commit(
-    [
-      {
-        type: "document.change",
-        id: firstId,
-        content: { kind: "base", version: 1, value: { checkpoint: true } },
-      },
-    ],
-    context,
+  yield* awaited(
+    storage.commit(
+      [
+        {
+          type: "document.change",
+          id: firstId,
+          content: { kind: "base", version: 1, value: { checkpoint: true } },
+        },
+      ],
+      context,
+    ),
   );
   expect(env.operations).toEqual([
     `append:doc-${firstId}.jsonl`,
@@ -92,63 +99,71 @@ async function expectReclaimFlushOrder(
   ]);
 
   env.clear();
-  await storage.commit(
-    [
-      {
-        type: "entry",
-        value: {
-          id: await storage.mintId<EntryId>(),
-          conversationId: ROOT_CONVERSATION_ID,
-          kind: "main-only",
+  yield* awaited(
+    storage.commit(
+      [
+        {
+          type: "entry",
+          value: {
+            id: yield* awaited(storage.mintId<EntryId>()),
+            conversationId: ROOT_CONVERSATION_ID,
+            kind: "main-only",
+          },
         },
-      },
-    ],
-    context,
+      ],
+      context,
+    ),
   );
   expect(env.operations).toEqual(["append:main.jsonl"]);
-}
+});
 
-// A terminal task's sidecar is removed only after main is flushed.
-async function expectTaskSidecarRemoval({ env, storage }: FlushOrderStore, fsync: boolean) {
-  const taskId = await storage.mintId<TaskId<JsonValue>>();
-  await storage.commit([{ type: "task", value: pendingTask(taskId) }], context);
+const expectTaskSidecarRemoval = Effect.fn("expectTaskSidecarRemoval")(function* (
+  { env, storage }: FlushOrderStore,
+  fsync: boolean,
+) {
+  const taskId = yield* awaited(storage.mintId<TaskId<JsonValue>>());
+  yield* awaited(storage.commit([{ type: "task", value: pendingTask(taskId) }], context));
   env.clear();
-  await storage.commit([{ type: "task", value: terminalTask(taskId) }], context);
+  yield* awaited(storage.commit([{ type: "task", value: terminalTask(taskId) }], context));
   expect(env.operations).toEqual([
     "append:main.jsonl",
     ...(fsync ? ["flush:main.jsonl"] : []),
     `remove:task-${taskId}.jsonl`,
   ]);
-}
+});
 
-async function documentWithDelta() {
-  const directory = await tempDirectory();
+const documentWithDelta = Effect.fn("documentWithDelta")(function* () {
+  const directory = yield* tempDirectory();
   const env = new InstrumentedEnv({ cwd: directory });
-  const storage = await openStorage(directory, env);
-  await createRoot(storage);
-  const id = await storage.mintId<DocumentId>();
-  await storage.commit(
-    [
-      {
-        type: "document.create",
-        record: sessionDocument(id),
-        content: { kind: "base", version: 1, value: { count: 0 } },
-      },
-    ],
-    context,
+  const storage = yield* openStorage(directory, env);
+  yield* createRoot(storage);
+  const id = yield* awaited(storage.mintId<DocumentId>());
+  yield* awaited(
+    storage.commit(
+      [
+        {
+          type: "document.create",
+          record: sessionDocument(id),
+          content: { kind: "base", version: 1, value: { count: 0 } },
+        },
+      ],
+      context,
+    ),
   );
-  await storage.commit(
-    [
-      {
-        type: "document.change",
-        id,
-        content: { kind: "delta", version: 1, ops: [["s", ["count"], 1]] },
-      },
-    ],
-    context,
+  yield* awaited(
+    storage.commit(
+      [
+        {
+          type: "document.change",
+          id,
+          content: { kind: "delta", version: 1, ops: [["s", ["count"], 1]] },
+        },
+      ],
+      context,
+    ),
   );
   return { directory, env, storage, id };
-}
+});
 
 describe("Pico JsonlStorage publication and recovery", () => {
   for (const failure of [
@@ -161,42 +176,49 @@ describe("Pico JsonlStorage publication and recovery", () => {
     { operation: "append", call: 3, mode: "short" },
     { operation: "append", call: 3, mode: "after" },
   ] as const satisfies readonly Failure[]) {
-    it(`poisons after ${failure.mode} failure at append ${failure.call} and recovers only confirmed state`, async () => {
-      const directory = await tempDirectory();
-      const env = new InstrumentedEnv({ cwd: directory });
-      const storage = await openStorage(directory, env);
-      await createRoot(storage);
-      const firstId = await storage.mintId<DocumentId>();
-      const secondId = await storage.mintId<DocumentId>();
-      env.fail(failure);
-      await expect(
-        storage.commit(
-          [
-            {
-              type: "document.create",
-              record: sessionDocument(firstId, "first"),
-              content: { kind: "base", version: 1, value: { text: "α" } },
-            },
-            {
-              type: "document.create",
-              record: sessionDocument(secondId, "second"),
-              content: { kind: "base", version: 1, value: { text: "β" } },
-            },
-          ],
-          context,
-        ),
-      ).rejects.toThrow("poisoned");
-      await expect(storage.document(firstId, "current", context)).rejects.toThrow("poisoned");
+    it(`poisons after ${failure.mode} failure at append ${failure.call} and recovers only confirmed state`, () =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          const directory = yield* tempDirectory();
+          const env = new InstrumentedEnv({ cwd: directory });
+          const storage = yield* openStorage(directory, env);
+          yield* createRoot(storage);
+          const firstId = yield* awaited(storage.mintId<DocumentId>());
+          const secondId = yield* awaited(storage.mintId<DocumentId>());
+          env.fail(failure);
+          yield* awaited(
+            expect(
+              storage.commit(
+                [
+                  {
+                    type: "document.create",
+                    record: sessionDocument(firstId, "first"),
+                    content: { kind: "base", version: 1, value: { text: "α" } },
+                  },
+                  {
+                    type: "document.create",
+                    record: sessionDocument(secondId, "second"),
+                    content: { kind: "base", version: 1, value: { text: "β" } },
+                  },
+                ],
+                context,
+              ),
+            ).rejects.toThrow("poisoned"),
+          );
+          yield* awaited(
+            expect(storage.document(firstId, "current", context)).rejects.toThrow("poisoned"),
+          );
 
-      const reopened = await openStorage(directory);
-      const markerSurvived = failure.call === 3 && failure.mode === "after";
-      expect(await reopened.document(firstId, "current", context)).toEqual(
-        markerSurvived ? expect.objectContaining({ value: { text: "α" } }) : undefined,
-      );
-      expect(await reopened.document(secondId, "current", context)).toEqual(
-        markerSurvived ? expect.objectContaining({ value: { text: "β" } }) : undefined,
-      );
-    });
+          const reopened = yield* openStorage(directory);
+          const markerSurvived = failure.call === 3 && failure.mode === "after";
+          expect(yield* awaited(reopened.document(firstId, "current", context))).toEqual(
+            markerSurvived ? expect.objectContaining({ value: { text: "α" } }) : undefined,
+          );
+          expect(yield* awaited(reopened.document(secondId, "current", context))).toEqual(
+            markerSurvived ? expect.objectContaining({ value: { text: "β" } }) : undefined,
+          );
+        }),
+      ));
   }
 });
 
@@ -207,44 +229,52 @@ describe("Pico JsonlStorage publication and recovery", () => {
     { operation: "flush", call: 2, mode: "before" },
     { operation: "flush", call: 2, mode: "after" },
   ] as const satisfies readonly Failure[]) {
-    it(`poisons after ${failure.mode} failure at flush ${failure.call} and never writes a marker`, async () => {
-      const directory = await tempDirectory();
-      const env = new InstrumentedEnv({ cwd: directory });
-      const storage = await openStorage(directory, env, { fsync: true });
-      await createRoot(storage);
-      const firstId = await storage.mintId<DocumentId>();
-      const secondId = await storage.mintId<DocumentId>();
-      env.fail(failure);
-      await expect(
-        storage.commit(
-          [
-            {
-              type: "document.create",
-              record: sessionDocument(firstId, "flush.first"),
-              content: { kind: "base", version: 1, value: {} },
-            },
-            {
-              type: "document.create",
-              record: sessionDocument(secondId, "flush.second"),
-              content: { kind: "base", version: 1, value: {} },
-            },
-          ],
-          context,
-        ),
-      ).rejects.toThrow("poisoned");
-      const reopened = await openStorage(directory);
-      expect(await reopened.document(firstId, "current", context)).toBeUndefined();
-      expect(await reopened.document(secondId, "current", context)).toBeUndefined();
-    });
+    it(`poisons after ${failure.mode} failure at flush ${failure.call} and never writes a marker`, () =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          const directory = yield* tempDirectory();
+          const env = new InstrumentedEnv({ cwd: directory });
+          const storage = yield* openStorage(directory, env, { fsync: true });
+          yield* createRoot(storage);
+          const firstId = yield* awaited(storage.mintId<DocumentId>());
+          const secondId = yield* awaited(storage.mintId<DocumentId>());
+          env.fail(failure);
+          yield* awaited(
+            expect(
+              storage.commit(
+                [
+                  {
+                    type: "document.create",
+                    record: sessionDocument(firstId, "flush.first"),
+                    content: { kind: "base", version: 1, value: {} },
+                  },
+                  {
+                    type: "document.create",
+                    record: sessionDocument(secondId, "flush.second"),
+                    content: { kind: "base", version: 1, value: {} },
+                  },
+                ],
+                context,
+              ),
+            ).rejects.toThrow("poisoned"),
+          );
+          const reopened = yield* openStorage(directory);
+          expect(yield* awaited(reopened.document(firstId, "current", context))).toBeUndefined();
+          expect(yield* awaited(reopened.document(secondId, "current", context))).toBeUndefined();
+        }),
+      ));
   }
 
-  it("orders publication flushes exactly and flushes main only to authorize reclamation", async () => {
-    for await (const fsync of [false, true]) {
-      const store = await expectCreateFlushOrder(fsync);
-      await expectReclaimFlushOrder(store, fsync);
-      await expectTaskSidecarRemoval(store, fsync);
-    }
-  });
+  it("orders publication flushes exactly and flushes main only to authorize reclamation", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        for (const fsync of [false, true]) {
+          const store = yield* expectCreateFlushOrder(fsync);
+          yield* expectReclaimFlushOrder(store, fsync);
+          yield* expectTaskSidecarRemoval(store, fsync);
+        }
+      }),
+    ));
 });
 
 describe("Pico JsonlStorage publication and recovery", () => {
@@ -255,29 +285,40 @@ describe("Pico JsonlStorage publication and recovery", () => {
     { operation: "rename", call: 1, mode: "before" },
     { operation: "rename", call: 1, mode: "after" },
   ] as const satisfies readonly Failure[]) {
-    it(`recovers a committed base across reclaim ${failure.operation} ${failure.mode}`, async () => {
-      const { directory, env, storage, id } = await documentWithDelta();
+    it(`recovers a committed base across reclaim ${failure.operation} ${failure.mode}`, () =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          const { directory, env, storage, id } = yield* documentWithDelta();
 
-      env.fail(failure);
-      await expect(
-        storage.commit(
-          [
-            {
-              type: "document.change",
-              id,
-              content: { kind: "base", version: 1, value: { count: 2 } },
-            },
-          ],
-          context,
-        ),
-      ).resolves.toBe(4);
-      expect((await storage.document(id, "current", context))?.value).toEqual({ count: 2 });
-      await storage.close(context);
+          env.fail(failure);
+          yield* awaited(
+            expect(
+              storage.commit(
+                [
+                  {
+                    type: "document.change",
+                    id,
+                    content: { kind: "base", version: 1, value: { count: 2 } },
+                  },
+                ],
+                context,
+              ),
+            ).resolves.toBe(4),
+          );
+          expect((yield* awaited(storage.document(id, "current", context)))?.value).toEqual({
+            count: 2,
+          });
+          yield* awaited(storage.close(context));
 
-      const reopened = await openStorage(directory);
-      expect((await reopened.document(id, "current", context))?.value).toEqual({ count: 2 });
-      expect(await readLines(join(directory, `doc-${id}.jsonl`))).toHaveLength(1);
-      expect((await readdir(directory)).filter((name) => name.endsWith(".reclaim"))).toEqual([]);
-    });
+          const reopened = yield* openStorage(directory);
+          expect((yield* awaited(reopened.document(id, "current", context)))?.value).toEqual({
+            count: 2,
+          });
+          expect(yield* readLines(joinPath(directory, `doc-${id}.jsonl`))).toHaveLength(1);
+          expect(
+            (yield* awaited(readdir(directory))).filter((name) => name.endsWith(".reclaim")),
+          ).toEqual([]);
+        }),
+      ));
   }
 });

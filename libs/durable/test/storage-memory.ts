@@ -2,8 +2,11 @@ import { execFile } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
+import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import { STORAGE_MEMORY_SCALES } from "@msa/durable/testing";
+import { Console, Effect } from "effect";
 
+import { fromJsonText, awaited } from "./effect-support.ts";
 import {
   type MemorySnapshot,
   runWorker,
@@ -21,28 +24,30 @@ function mebibytes(bytes: number): string {
   return (bytes / 1024 / 1024).toFixed(2);
 }
 
-async function runWorkers(workerPath: string): Promise<StorageMemoryResult[]> {
+const runWorkers = Effect.fn("runWorkers")(function* (workerPath: string) {
   const results: StorageMemoryResult[] = [];
-  for await (const backend of STORAGE_BENCHMARK_BACKENDS) {
-    for await (const scale of STORAGE_MEMORY_SCALES) {
-      const { stdout } = await execFileAsync(
-        process.execPath,
-        [
-          "--conditions=source",
-          "--expose-gc",
-          "--experimental-strip-types",
-          workerPath,
-          "--worker",
-          backend,
-          scale.name,
-        ],
-        { cwd: fileURLToPath(new URL("..", import.meta.url)), maxBuffer: 1024 * 1024 },
+  for (const backend of STORAGE_BENCHMARK_BACKENDS) {
+    for (const scale of STORAGE_MEMORY_SCALES) {
+      const { stdout } = yield* awaited(
+        execFileAsync(
+          process.execPath,
+          [
+            "--conditions=source",
+            "--expose-gc",
+            "--experimental-strip-types",
+            workerPath,
+            "--worker",
+            backend,
+            scale.name,
+          ],
+          { cwd: fileURLToPath(new URL("..", import.meta.url)), maxBuffer: 1024 * 1024 },
+        ),
       );
-      results.push(JSON.parse(stdout) as StorageMemoryResult);
+      results.push((yield* fromJsonText(stdout)) as StorageMemoryResult);
     }
   }
   return results;
-}
+});
 
 function summaryRow(result: StorageMemoryResult) {
   return {
@@ -71,23 +76,28 @@ function summaryRow(result: StorageMemoryResult) {
   };
 }
 
-async function runDriver(): Promise<void> {
+const runDriver = Effect.fn("runDriver")(function* () {
   const workerPath = fileURLToPath(import.meta.url);
-  const results = await runWorkers(workerPath);
+  const results = yield* runWorkers(workerPath);
 
-  console.log(
+  yield* Console.log(
     "Storage footprint after deterministic synthetic workloads; values are process deltas, not limits.",
   );
-  console.table(results.map(summaryRow));
-}
+  yield* Console.table(results.map(summaryRow));
+});
 
 const [mode, backendName, scaleName] = process.argv.slice(2);
-if (mode === "--worker") {
-  const backend = STORAGE_BENCHMARK_BACKENDS.find((candidate) => candidate === backendName);
-  if (backend === undefined) throw new Error(`Unknown storage benchmark backend: ${backendName}`);
-  const scale = STORAGE_MEMORY_SCALES.find((candidate) => candidate.name === scaleName);
-  if (scale === undefined) throw new Error(`Unknown storage benchmark scale: ${scaleName}`);
-  await runWorker(backend, scale);
-} else {
-  await runDriver();
-}
+
+const main = Effect.gen(function* () {
+  if (mode === "--worker") {
+    const backend = STORAGE_BENCHMARK_BACKENDS.find((candidate) => candidate === backendName);
+    if (backend === undefined) throw new Error(`Unknown storage benchmark backend: ${backendName}`);
+    const scale = STORAGE_MEMORY_SCALES.find((candidate) => candidate.name === scaleName);
+    if (scale === undefined) throw new Error(`Unknown storage benchmark scale: ${scaleName}`);
+    yield* runWorker(backend, scale);
+  } else {
+    yield* runDriver();
+  }
+});
+
+NodeRuntime.runMain(main);

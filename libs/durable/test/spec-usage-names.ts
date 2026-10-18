@@ -20,7 +20,6 @@ export interface SettingsManager {
   set(key: "autoCompact", value: boolean): void;
 }
 
-// The names the spec leaves to the application.
 export type SpecNames = {
   readonly context: Context;
   readonly storage: Storage;

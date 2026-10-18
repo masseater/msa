@@ -2,45 +2,56 @@ import type { Context } from "@msa/chord";
 import { defineTask, type StorageWrite, type TaskId } from "@msa/durable";
 import { createSession } from "@msa/durable/session";
 import { MemoryStorage } from "@msa/durable/storage/memory";
+import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
+import { awaited } from "./effect-support.ts";
 import { context, flush } from "./session-support.ts";
 import { aborted, deferred, eventually, openTasks } from "./task-support.ts";
 
-/** Runs until aborted; its abort handler ends it `aborted`. */
 const Dormant = defineTask<null, { phase: "work" }, null>({
   name: "test.dormant",
   version: 1,
   initial: () => ({ phase: "work" }),
   phases: {
-    work: async (_task, runtime) => {
-      await aborted(runtime.signal);
-    },
+    work: (_task, runtime) =>
+      Effect.runPromise(Effect.suspend(() => awaited(aborted(runtime.signal)))),
   },
-  abort: async (_task, runtime, abortContext) => {
-    await runtime.commit(
-      () => ({ status: "terminal", outcome: { status: "aborted" } }),
-      abortContext,
-    );
-  },
+  abort: (_task, runtime, abortContext) =>
+    Effect.runPromise(
+      Effect.asVoid(
+        Effect.suspend(() =>
+          awaited(
+            runtime.commit(
+              () => ({ status: "terminal", outcome: { status: "aborted" } }),
+              abortContext,
+            ),
+          ),
+        ),
+      ),
+    ),
 });
 
-/** Holds every commit that abort-marks `target`, while set, until released. */
 class HoldMarks extends MemoryStorage {
   target: TaskId | undefined;
   readonly held = deferred();
   readonly release = deferred();
-  override async commit(writes: readonly StorageWrite[], commitContext: Context) {
-    if (
-      writes.some(
-        (write) =>
-          write.type === "task" && write.value.id === this.target && write.value.abortRequested,
-      )
-    ) {
-      this.held.resolve();
-      await this.release.promise;
-    }
-    return super.commit(writes, commitContext);
+  override commit(writes: readonly StorageWrite[], commitContext: Context) {
+    const superCommit = super.commit.bind(this);
+    return Effect.runPromise(
+      Effect.gen({ self: this }, function* () {
+        if (
+          writes.some(
+            (write) =>
+              write.type === "task" && write.value.id === this.target && write.value.abortRequested,
+          )
+        ) {
+          this.held.resolve();
+          yield* awaited(this.release.promise);
+        }
+        return yield* awaited(superCommit(writes, commitContext));
+      }),
+    );
   }
 }
 
@@ -54,55 +65,74 @@ function holdingChildSetup() {
     version: 1,
     initial: () => ({ phase: "first" }),
     phases: {
-      first: async (_task, runtime, phaseContext) => {
-        entered.resolve();
-        await advance.promise;
-        await runtime.commit(
-          () => ({ status: "running", checkpoint: { phase: "next" } }),
-          phaseContext,
-        );
-      },
-      next: async (_task, runtime) => {
-        progress.ranNext = true;
-        await aborted(runtime.signal);
-      },
+      first: (_task, runtime, phaseContext) =>
+        Effect.runPromise(
+          Effect.gen(function* () {
+            entered.resolve();
+            yield* awaited(advance.promise);
+            yield* awaited(
+              runtime.commit(
+                () => ({ status: "running", checkpoint: { phase: "next" } }),
+                phaseContext,
+              ),
+            );
+          }),
+        ),
+      next: (_task, runtime) =>
+        Effect.runPromise(
+          Effect.gen(function* () {
+            progress.ranNext = true;
+            return yield* awaited(aborted(runtime.signal));
+          }),
+        ),
     },
-    abort: async (_task, runtime, abortContext) => {
-      await runtime.commit(
-        () => ({ status: "terminal", outcome: { status: "aborted" } }),
-        abortContext,
-      );
-    },
+    abort: (_task, runtime, abortContext) =>
+      Effect.runPromise(
+        Effect.asVoid(
+          Effect.suspend(() =>
+            awaited(
+              runtime.commit(
+                () => ({ status: "terminal", outcome: { status: "aborted" } }),
+                abortContext,
+              ),
+            ),
+          ),
+        ),
+      ),
   });
   return { storage, entered, advance, progress, Child };
 }
 
-async function failFastOverRestartStore() {
+const failFastOverRestartStore = Effect.fn("failFastOverRestartStore")(function* () {
   const storage = new MemoryStorage();
   const session = createSession(storage);
-  const conversation = await session.commit(
-    (tx) => tx.createConversation({ ownership: { kind: "ownerless" } }),
-    context,
+  const conversation = yield* awaited(
+    session.commit((tx) => tx.createConversation({ ownership: { kind: "ownerless" } }), context),
   );
-  const parent = await session.commit(
-    (tx) =>
-      tx.createTask(Dormant, null, {
-        conversationId: conversation.id,
-        ownership: { kind: "conversation" },
-      }),
-    context,
+  const parent = yield* awaited(
+    session.commit(
+      (tx) =>
+        tx.createTask(Dormant, null, {
+          conversationId: conversation.id,
+          ownership: { kind: "conversation" },
+        }),
+      context,
+    ),
   );
-  const failed = await session.commit(
-    (tx) => tx.createTask(Dormant, null, { ownership: { kind: "task", taskId: parent } }),
-    context,
+  const failed = yield* awaited(
+    session.commit(
+      (tx) => tx.createTask(Dormant, null, { ownership: { kind: "task", taskId: parent } }),
+      context,
+    ),
   );
-  const child = await session.commit(
-    (tx) => tx.createTask(Dormant, null, { ownership: { kind: "task", taskId: parent } }),
-    context,
+  const child = yield* awaited(
+    session.commit(
+      (tx) => tx.createTask(Dormant, null, { ownership: { kind: "task", taskId: parent } }),
+      context,
+    ),
   );
-  // A restart-abandoned owner that waits failFast on a failed child and a live one.
-  const owner = (await storage.task(parent, context))!;
-  const failedRecord = (await storage.task(failed, context))!;
+  const owner = (yield* awaited(storage.task(parent, context)))!;
+  const failedRecord = (yield* awaited(storage.task(failed, context)))!;
   const waiting = {
     status: "waiting",
     checkpoint: { phase: "work" },
@@ -110,82 +140,101 @@ async function failFastOverRestartStore() {
     policy: "failFast",
   } as const;
   return { storage, child, owner, failedRecord, waiting };
-}
+});
 
-async function restartMarkedTree() {
+const restartMarkedTree = Effect.fn("restartMarkedTree")(function* () {
   const storage = new MemoryStorage();
   const session = createSession(storage);
-  const conversation = await session.commit(
-    (tx) => tx.createConversation({ ownership: { kind: "ownerless" } }),
-    context,
+  const conversation = yield* awaited(
+    session.commit((tx) => tx.createConversation({ ownership: { kind: "ownerless" } }), context),
   );
-  const top = await session.commit(
-    (tx) =>
-      tx.createTask(Dormant, null, {
-        conversationId: conversation.id,
-        ownership: { kind: "conversation" },
-      }),
-    context,
+  const top = yield* awaited(
+    session.commit(
+      (tx) =>
+        tx.createTask(Dormant, null, {
+          conversationId: conversation.id,
+          ownership: { kind: "conversation" },
+        }),
+      context,
+    ),
   );
-  const middle = await session.commit(
-    (tx) =>
-      tx.createTask(Dormant, null, {
-        ownership: { kind: "task", taskId: top },
-        abandonOnRestart: true,
-      }),
-    context,
+  const middle = yield* awaited(
+    session.commit(
+      (tx) =>
+        tx.createTask(Dormant, null, {
+          ownership: { kind: "task", taskId: top },
+          abandonOnRestart: true,
+        }),
+      context,
+    ),
   );
   const Missing = defineTask<null, { phase: "work" }, null>({
     ...Dormant.definition,
     name: "test.missing",
   });
-  const leaf = await session.commit(
-    (tx) => tx.createTask(Missing, null, { ownership: { kind: "task", taskId: middle } }),
-    context,
+  const leaf = yield* awaited(
+    session.commit(
+      (tx) => tx.createTask(Missing, null, { ownership: { kind: "task", taskId: middle } }),
+      context,
+    ),
   );
   return { storage, top, middle, leaf };
-}
+});
 
-describe("work below a cancelled owner", () => {
-  it("does not start its next phase while the cascade that marks it has not committed", async () => {
-    const { storage, entered, advance, progress, Child } = holdingChildSetup();
-    const { harness } = await openTasks(storage, [Dormant, Child]);
-    const root = await harness.root(context);
-    const parent = await root.commit(
+const doesNotStart = Effect.gen(function* () {
+  const { storage, entered, advance, progress, Child } = holdingChildSetup();
+  const { harness } = yield* openTasks(storage, [Dormant, Child]);
+  const root = yield* awaited(harness.root(context));
+  const parent = yield* awaited(
+    root.commit(
       (tx) => tx.createTask(Dormant, null, { ownership: { kind: "conversation" } }),
       context,
-    );
-    const child = await root.commit(
+    ),
+  );
+  const child = yield* awaited(
+    root.commit(
       (tx) => tx.createTask(Child, null, { ownership: { kind: "task", taskId: parent } }),
       context,
+    ),
+  );
+  storage.target = child;
+  yield* Effect.gen(function* () {
+    harness.resume();
+    yield* awaited(entered.promise);
+    const aborting = harness.abortTask(parent, context);
+    yield* awaited(storage.held.promise);
+    advance.resolve();
+    for (const _ of Array.from({ length: 5 })) yield* flush;
+    expect(progress.ranNext).toBe(false);
+    storage.release.resolve();
+    expect((yield* awaited(harness.waitForTask(child, context))).state.outcome.status).toBe(
+      "aborted",
     );
-    storage.target = child;
-    try {
-      harness.resume();
-      await entered.promise;
-      const aborting = harness.abortTask(parent, context);
-      await storage.held.promise;
-      // The parent's request is durable, the cascade's mark of the child is not: its phase must not advance.
-      advance.resolve();
-      for await (const _ of Array.from({ length: 5 })) await flush();
-      expect(progress.ranNext).toBe(false);
-      storage.release.resolve();
-      expect((await harness.waitForTask(child, context)).state.outcome.status).toBe("aborted");
-      await aborting;
-      expect(progress.ranNext).toBe(false);
-    } finally {
-      advance.resolve();
-      storage.release.resolve();
-      await harness.close(context);
-    }
-  });
+    yield* awaited(aborting);
+    expect(progress.ranNext).toBe(false);
+  }).pipe(
+    Effect.ensuring(
+      Effect.gen(function* () {
+        advance.resolve();
+        storage.release.resolve();
+        yield* awaited(harness.close(context));
+      }),
+    ),
+  );
 });
 
 describe("work below a cancelled owner", () => {
-  it("lets a failFast request in the same pass override a restart mark", async () => {
-    const { storage, child, owner, failedRecord, waiting } = await failFastOverRestartStore();
-    const failure = { status: "failed", error: { message: "failed" } } as const;
-    await storage.commit(
+  it("does not start its next phase while the cascade that marks it has not committed", () =>
+    Effect.runPromise(doesNotStart));
+});
+
+const letsFailFastRequest = Effect.gen(function* () {
+  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
+  const { storage, child, owner, failedRecord, waiting } = yield* failFastOverRestartStore();
+  const failure = { status: "failed", error: { message: "failed" } } as const;
+  yield* awaited(
+    storage.commit(
       [
         {
           type: "task",
@@ -200,64 +249,78 @@ describe("work below a cancelled owner", () => {
         },
       ],
       context,
+    ),
+  );
+  const { harness } = yield* openTasks(storage, []);
+  yield* Effect.gen(function* () {
+    harness.resume();
+    yield* eventually(() =>
+      runPromise(
+        Effect.gen(function* () {
+          return (yield* awaited(harness.getTask(child, context)))?.state.status === "terminal";
+        }),
+      ),
     );
-    // The child's definition is missing: a restart mark would keep it waiting, a request orphans it.
-    const { harness } = await openTasks(storage, []);
-    try {
-      harness.resume();
-      await eventually(
-        async () => (await harness.getTask(child, context))?.state.status === "terminal",
-      );
-      expect((await harness.getTask(child, context))?.state).toMatchObject({
-        outcome: { status: "orphaned", reason: "missing_task" },
-      });
-    } finally {
-      await harness.close(context);
-    }
-  });
+    expect((yield* awaited(harness.getTask(child, context)))?.state).toMatchObject({
+      outcome: { status: "orphaned", reason: "missing_task" },
+    });
+  }).pipe(Effect.ensuring(Effect.asVoid(Effect.suspend(() => awaited(harness.close(context))))));
 });
 
 describe("work below a cancelled owner", () => {
-  it("upgrades restart marks down the tree when an abort is requested above them", async () => {
-    const { storage, top, middle, leaf } = await restartMarkedTree();
-    // Only Dormant is registered: the leaf waits for its definition under the restart cascade.
-    const { harness } = await openTasks(storage, [Dormant]);
-    try {
-      harness.resume();
-      await eventually(
-        async () => (await harness.getTask(leaf, context))?.abortReason === "restart",
-      );
-      await eventually(async () => {
-        const inspected = (await harness.inspect(context)).tasks.find(
-          (task) => task.record.id === leaf,
-        );
-        return inspected?.state.kind === "blocked";
-      });
-      expect((await harness.getTask(leaf, context))?.state.status).not.toBe("terminal");
-      // A request on the top task reaches the leaf two levels down, which is then orphaned.
-      await harness.abortTask(top, context);
-      for await (const [id, status] of [
-        [leaf, "orphaned"],
-        [middle, "aborted"],
-        [top, "aborted"],
-      ] as const) {
-        expect((await harness.waitForTask(id, context)).state.outcome.status).toBe(status);
-      }
-    } finally {
-      await harness.close(context);
+  it("lets a failFast request in the same pass override a restart mark", () =>
+    Effect.runPromise(letsFailFastRequest));
+});
+
+const upgradesRestartMarks = Effect.gen(function* () {
+  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
+  const { storage, top, middle, leaf } = yield* restartMarkedTree();
+  const { harness } = yield* openTasks(storage, [Dormant]);
+  yield* Effect.gen(function* () {
+    harness.resume();
+    yield* eventually(() =>
+      runPromise(
+        Effect.gen(function* () {
+          return (yield* awaited(harness.getTask(leaf, context)))?.abortReason === "restart";
+        }),
+      ),
+    );
+    yield* eventually(() =>
+      runPromise(
+        Effect.gen(function* () {
+          const inspected = (yield* awaited(harness.inspect(context))).tasks.find(
+            (task) => task.record.id === leaf,
+          );
+          return inspected?.state.kind === "blocked";
+        }),
+      ),
+    );
+    expect((yield* awaited(harness.getTask(leaf, context)))?.state.status).not.toBe("terminal");
+    yield* awaited(harness.abortTask(top, context));
+    for (const [id, status] of [
+      [leaf, "orphaned"],
+      [middle, "aborted"],
+      [top, "aborted"],
+    ] as const) {
+      expect((yield* awaited(harness.waitForTask(id, context))).state.outcome.status).toBe(status);
     }
-  });
+  }).pipe(Effect.ensuring(Effect.asVoid(Effect.suspend(() => awaited(harness.close(context))))));
 });
 
 describe("work below a cancelled owner", () => {
-  it("marks a flagged task that holds its outcome, aborting its owned work, and keeps the outcome", async () => {
-    const storage = new MemoryStorage();
-    const session = createSession(storage);
-    const conversation = await session.commit(
-      (tx) => tx.createConversation({ ownership: { kind: "ownerless" } }),
-      context,
-    );
-    const holder = await session.commit(
+  it("upgrades restart marks down the tree when an abort is requested above them", () =>
+    Effect.runPromise(upgradesRestartMarks));
+});
+
+const marksFlaggedTask = Effect.gen(function* () {
+  const storage = new MemoryStorage();
+  const session = createSession(storage);
+  const conversation = yield* awaited(
+    session.commit((tx) => tx.createConversation({ ownership: { kind: "ownerless" } }), context),
+  );
+  const holder = yield* awaited(
+    session.commit(
       (tx) =>
         tx.createTask(Dormant, null, {
           conversationId: conversation.id,
@@ -265,31 +328,40 @@ describe("work below a cancelled owner", () => {
           abandonOnRestart: true,
         }),
       context,
-    );
-    const child = await session.commit(
+    ),
+  );
+  const child = yield* awaited(
+    session.commit(
       (tx) => tx.createTask(Dormant, null, { ownership: { kind: "task", taskId: holder } }),
       context,
-    );
-    const record = (await storage.task(holder, context))!;
-    const completing = {
-      status: "completing",
-      outcome: { status: "completed", result: null },
-    } as const;
-    await storage.commit(
+    ),
+  );
+  const record = (yield* awaited(storage.task(holder, context)))!;
+  const completing = {
+    status: "completing",
+    outcome: { status: "completed", result: null },
+  } as const;
+  yield* awaited(
+    storage.commit(
       [{ type: "task", value: { ...record, state: completing } as typeof record }],
       context,
+    ),
+  );
+  const { harness } = yield* openTasks(storage, [Dormant]);
+  yield* Effect.gen(function* () {
+    harness.resume();
+    expect((yield* awaited(harness.waitForTask(child, context))).state.outcome.status).toBe(
+      "aborted",
     );
-    const { harness } = await openTasks(storage, [Dormant]);
-    try {
-      harness.resume();
-      expect((await harness.waitForTask(child, context)).state.outcome.status).toBe("aborted");
-      const settled = await harness.waitForTask(holder, context);
-      expect(settled).toMatchObject({
-        abortReason: "restart",
-        state: { outcome: { status: "completed" } },
-      });
-    } finally {
-      await harness.close(context);
-    }
-  });
+    const settled = yield* awaited(harness.waitForTask(holder, context));
+    expect(settled).toMatchObject({
+      abortReason: "restart",
+      state: { outcome: { status: "completed" } },
+    });
+  }).pipe(Effect.ensuring(Effect.asVoid(Effect.suspend(() => awaited(harness.close(context))))));
+});
+
+describe("work below a cancelled owner", () => {
+  it("marks a flagged task that holds its outcome, aborting its owned work, and keeps the outcome", () =>
+    Effect.runPromise(marksFlaggedTask));
 });

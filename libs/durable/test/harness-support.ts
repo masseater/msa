@@ -22,7 +22,9 @@ import {
   type ToolRegistration,
 } from "@msa/durable";
 import { createRegistry, Harness } from "@msa/durable/harness";
+import { Effect } from "effect";
 
+import { awaited } from "./effect-support.ts";
 import { context } from "./session-support.ts";
 
 export function tool(name: string, description = `${name} tool`): ToolRegistration {
@@ -34,28 +36,29 @@ export function tool(name: string, description = `${name} tool`): ToolRegistrati
   });
 }
 
-// Open a Harness with a fresh registry holding the named tools.
-export async function openHarness(
+export const openHarness = Effect.fn("openHarness")(function* (
   storage: Storage,
   toolNames: readonly string[] = [],
   options: { readonly registry?: Registry; readonly onReport?: (error: unknown) => void } = {},
-): Promise<{ readonly harness: Harness; readonly registry: Registry }> {
+) {
   const registry = options.registry ?? createRegistry();
   if (toolNames.length > 0)
     registry.install(
       defineExtension({ name: "tools", tools: toolNames.map((name) => tool(name)) }),
     );
-  const harness = await Harness.open(
-    storage,
-    {
-      models: createModels(),
-      registry,
-      ...(options.onReport === undefined ? {} : { onReport: options.onReport }),
-    },
-    context,
+  const harness = yield* awaited(
+    Harness.open(
+      storage,
+      {
+        models: createModels(),
+        registry,
+        ...(options.onReport === undefined ? {} : { onReport: options.onReport }),
+      },
+      context,
+    ),
   );
   return { harness, registry };
-}
+});
 
 export function user(text: string): UserMessage {
   return { role: "user", content: text, timestamp: 1 };
@@ -105,7 +108,6 @@ export function system(sections: Record<string, string | null>): SystemMessage {
   return { role: "system", content: "", sections, timestamp: 4 };
 }
 
-// Compact message rendering for assertions.
 export function describeMessage(message: Message): string {
   switch (message.role) {
     case "user":
@@ -123,7 +125,6 @@ export function describeMessage(message: Message): string {
   }
 }
 
-/** Uninstalls what one of the helpers below installed. */
 export type Installed = { dispose(): void };
 
 function installOne<Tool extends ToolRegistration>(
@@ -134,7 +135,6 @@ function installOne<Tool extends ToolRegistration>(
   return { dispose: () => registry.uninstall(extension) };
 }
 
-// Install a one-tool extension named after the tool.
 export function addTool<Tool extends ToolRegistration>(
   registry: Registry<Tool>,
   tool: Tool,
@@ -143,7 +143,6 @@ export function addTool<Tool extends ToolRegistration>(
   return installOne(registry, defineExtension<Tool>({ name, tools: [tool] }));
 }
 
-// Install a one-task extension named after the task.
 export function addTask(
   registry: Registry,
   task: AnyTask,
@@ -154,7 +153,6 @@ export function addTask(
 
 let hookExtensions = 0;
 
-// Install an extension with one hook registration for `task`.
 export function addHooks<K extends AnyTask>(
   registry: Registry,
   task: K,
@@ -164,7 +162,6 @@ export function addHooks<K extends AnyTask>(
   return installOne(registry, defineExtension({ name, hooks: [hook(task, handlers)] }));
 }
 
-// Install a one-section extension named after the section.
 export function addSection<Tool extends ToolRegistration = ToolRegistration>(
   registry: Registry<Tool>,
   key: string,

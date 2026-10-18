@@ -1,10 +1,12 @@
 import { Type } from "@msa/ai";
 import { type CodemodeRun, CodemodeSandbox } from "@msa/codemode";
 import { defineTool, type ToolRegistration } from "@msa/durable";
+import { Effect } from "effect";
 
 import { type CodemodeGlobal, createCodemodeTool } from "../src/codemode/codemode.ts";
 import type { CodemodeNamespace } from "../src/codemode/describe.ts";
 import { chatSetup } from "./chat-support.ts";
+import { awaited } from "./effect-support.ts";
 import { addTool } from "./harness-support.ts";
 import { aborted, type Deferred, deferred } from "./task-support.ts";
 
@@ -21,7 +23,6 @@ export function tool(
   return defineTool({ name, description: name, parameters: Parameters, execute, replay });
 }
 
-// A sandbox that counts its runs in `vm.starts` and hands each new run to `vm.onStart`.
 export function countingSandbox() {
   const sandbox = new CodemodeSandbox({ memoryLimitBytes: 64 * 1024 * 1024 });
   const vm: { starts: number; onStart?: (run: CodemodeRun) => void } = { starts: 0 };
@@ -53,14 +54,17 @@ export function addHoldTool(registry: ReturnType<typeof chatSetup>["registry"]) 
     registry,
     tool(
       "hold",
-      async (args, _api, callContext) => {
-        holds.runs++;
-        if (holds.block) {
-          holds.reached.resolve();
-          await aborted(callContext.abortSignal!);
-        }
-        return { output: [{ type: "text", text: `held ${args.id ?? ""}` }] };
-      },
+      (args, _api, callContext) =>
+        Effect.runPromise(
+          Effect.gen(function* () {
+            holds.runs++;
+            if (holds.block) {
+              holds.reached.resolve();
+              return yield* awaited(aborted(callContext.abortSignal!));
+            }
+            return { output: [{ type: "text", text: `held ${args.id ?? ""}` }] };
+          }),
+        ),
       "safe",
     ),
   );
@@ -73,13 +77,16 @@ export function addPauseTool(registry: ReturnType<typeof chatSetup>["registry"])
     registry,
     tool(
       "pause",
-      async (_args, _api, callContext) => {
-        if (pauses.block) {
-          pauses.reached.resolve();
-          await aborted(callContext.abortSignal!);
-        }
-        return { output: [{ type: "text", text: "paused" }] };
-      },
+      (_args, _api, callContext) =>
+        Effect.runPromise(
+          Effect.gen(function* () {
+            if (pauses.block) {
+              pauses.reached.resolve();
+              return yield* awaited(aborted(callContext.abortSignal!));
+            }
+            return { output: [{ type: "text", text: "paused" }] };
+          }),
+        ),
       "safe",
     ),
   );
@@ -100,19 +107,19 @@ export function addSlowTool(registry: ReturnType<typeof chatSetup>["registry"]) 
   };
   addTool(
     registry,
-    tool("slow", async (args) => {
-      await slows.gate(args.id ?? 0).promise;
-      finished.push(args.id ?? 0);
-      return { output: [{ type: "text", text: `slow ${args.id}` }] };
-    }),
+    tool("slow", (args) =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          yield* awaited(slows.gate(args.id ?? 0).promise);
+          finished.push(args.id ?? 0);
+          return { output: [{ type: "text", text: `slow ${args.id}` }] };
+        }),
+      ),
+    ),
   );
   return slows;
 }
 
-// A chat with the code mode tool and test tools:
-// - `echo` returns `echo <text>` and counts its runs by text;
-// - `hold` (replay-safe) waits for `holds.gate` while `holds.block` is set, then returns `held <id>`;
-// - `slow` returns `slow <id>` once `slows.release(id)` was called.
 export function codemodeChat(globals: CodemodeGlobal[] = [], namespaces: CodemodeNamespace[] = []) {
   const setup = chatSetup();
   const { sandbox, vm } = countingSandbox();

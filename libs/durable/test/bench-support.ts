@@ -1,11 +1,10 @@
-import { readdir, stat } from "node:fs/promises";
-import { join } from "node:path";
-
 import { BACKGROUND_CONTEXT as context } from "@msa/chord/context";
+import { Effect } from "effect";
 
 import type { Storage, StorageWrite } from "../src/index.ts";
 import { openNodeJsonlStorage } from "../src/storage/jsonl/node.ts";
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
+import { fileSize, isDirectory, joinPath, listTree } from "./platform-support.ts";
 
 export type Backend = "sqlite" | "jsonl";
 export type Written = Record<StorageWrite["type"], number>;
@@ -21,19 +20,19 @@ export function heapAfterGc(): number {
   return process.memoryUsage().heapUsed;
 }
 
-export async function directorySize(path: string): Promise<number> {
+export const directorySize = Effect.fn("directorySize")(function* (path: string) {
   let total = 0;
-  for await (const entry of await readdir(path, { withFileTypes: true })) {
-    const full = join(path, entry.name);
-    total += entry.isDirectory() ? await directorySize(full) : (await stat(full)).size;
+  for (const entry of yield* listTree(path)) {
+    const full = joinPath(path, entry);
+    if (!(yield* isDirectory(full))) total += yield* fileSize(full);
   }
   return total;
-}
+});
 
 export function openBenchStorage(backend: Backend, directory: string): Promise<Storage> {
   return Promise.resolve(
     backend === "sqlite"
-      ? openNodeSqliteStorage(join(directory, "session.sqlite"))
+      ? openNodeSqliteStorage(joinPath(directory, "session.sqlite"))
       : openNodeJsonlStorage(directory, context),
   );
 }
@@ -51,7 +50,6 @@ export function noWrites(): Written {
   };
 }
 
-// Counts each commit of `storage` in `meter`, calls `onCommit`, and adds the JSON characters of its writes per type.
 export function meterCommits(
   storage: Storage,
   meter: { commits: number; readonly written: Written },

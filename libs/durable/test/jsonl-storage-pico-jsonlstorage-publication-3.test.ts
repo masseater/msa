@@ -1,13 +1,14 @@
-import { rm, stat, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { stat, writeFile } from "node:fs/promises";
 
 import type { JsonValue } from "@msa/chord";
+import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { NodeExecutionEnv } from "../src/env/node.ts";
 import { JsonlStorage } from "../src/storage/jsonl/index.ts";
 import type { DocumentId, TaskId } from "../src/types.ts";
 import { ROOT_CONVERSATION_ID } from "../src/types.ts";
+import { toJsonText, awaited } from "./effect-support.ts";
 import {
   fileExists,
   terminalTask,
@@ -21,20 +22,24 @@ import {
   tempDirectories,
   tempDirectory,
 } from "./jsonl-storage-support.ts";
+import { joinPath, removeDir } from "./platform-support.ts";
 
-afterEach(async () => {
-  for await (const storage of openStorages) await storage.close(context);
-  openStorages.clear();
-  for await (const directory of tempDirectories)
-    await rm(directory, { recursive: true, force: true });
-  tempDirectories.clear();
-});
+afterEach(() =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      for (const storage of openStorages) yield* awaited(storage.close(context));
+      openStorages.clear();
+      for (const directory of tempDirectories) yield* removeDir(directory);
+      tempDirectories.clear();
+    }),
+  ),
+);
 
-async function rewindableHistory() {
-  const directory = await tempDirectory();
-  const storage = await openStorage(directory);
-  await createRoot(storage);
-  const id = await storage.mintId<DocumentId>();
+const rewindableHistory = Effect.fn("rewindableHistory")(function* () {
+  const directory = yield* tempDirectory();
+  const storage = yield* openStorage(directory);
+  yield* createRoot(storage);
+  const id = yield* awaited(storage.mintId<DocumentId>());
   const record = {
     id,
     kind: "rewindable",
@@ -42,140 +47,156 @@ async function rewindableHistory() {
     history: "rewindable" as const,
     fork: "asOf" as const,
   };
-  const createdAt = await storage.commit(
-    [
-      {
-        type: "document.create",
-        record,
-        content: { kind: "base", version: 1, value: { count: 0 } },
-      },
-    ],
-    context,
+  const createdAt = yield* awaited(
+    storage.commit(
+      [
+        {
+          type: "document.create",
+          record,
+          content: { kind: "base", version: 1, value: { count: 0 } },
+        },
+      ],
+      context,
+    ),
   );
-  const changedAt = await storage.commit(
-    [
-      {
-        type: "document.change",
-        id,
-        content: { kind: "delta", version: 1, ops: [["s", ["count"], 1]] },
-      },
-    ],
-    context,
+  const changedAt = yield* awaited(
+    storage.commit(
+      [
+        {
+          type: "document.change",
+          id,
+          content: { kind: "delta", version: 1, ops: [["s", ["count"], 1]] },
+        },
+      ],
+      context,
+    ),
   );
-  await storage.commit(
-    [
-      {
-        type: "document.change",
-        id,
-        content: { kind: "base", version: 1, value: { count: 2 } },
-      },
-    ],
-    context,
+  yield* awaited(
+    storage.commit(
+      [
+        {
+          type: "document.change",
+          id,
+          content: { kind: "base", version: 1, value: { count: 2 } },
+        },
+      ],
+      context,
+    ),
   );
   return { directory, storage, id, createdAt, changedAt };
-}
+});
 
-async function retiredSidecars() {
-  const directory = await tempDirectory();
-  const storage = await openStorage(directory);
-  await createRoot(storage);
-  const taskId = await storage.mintId<TaskId<JsonValue>>();
-  const sessionId = await storage.mintId<DocumentId>();
-  const latestId = await storage.mintId<DocumentId>();
-  const taskDocumentId = await storage.mintId<DocumentId>();
-  const createdAt = await storage.commit(
-    [
-      { type: "task", value: pendingTask(taskId) },
-      {
-        type: "document.create",
-        record: sessionDocument(sessionId, "session"),
-        content: { kind: "base", version: 1, value: {} },
-      },
-      {
-        type: "document.create",
-        record: {
-          id: latestId,
-          kind: "latest",
-          scope: { kind: "conversation", conversationId: ROOT_CONVERSATION_ID },
-          history: "latest",
-          fork: "current",
+const retiredSidecars = Effect.fn("retiredSidecars")(function* () {
+  const directory = yield* tempDirectory();
+  const storage = yield* openStorage(directory);
+  yield* createRoot(storage);
+  const taskId = yield* awaited(storage.mintId<TaskId<JsonValue>>());
+  const sessionId = yield* awaited(storage.mintId<DocumentId>());
+  const latestId = yield* awaited(storage.mintId<DocumentId>());
+  const taskDocumentId = yield* awaited(storage.mintId<DocumentId>());
+  const createdAt = yield* awaited(
+    storage.commit(
+      [
+        { type: "task", value: pendingTask(taskId) },
+        {
+          type: "document.create",
+          record: sessionDocument(sessionId, "session"),
+          content: { kind: "base", version: 1, value: {} },
         },
-        content: { kind: "base", version: 1, value: {} },
-      },
-      {
-        type: "document.create",
-        record: { id: taskDocumentId, kind: "task", scope: { kind: "task", taskId } },
-        content: { kind: "base", version: 1, value: {} },
-      },
-    ],
-    context,
+        {
+          type: "document.create",
+          record: {
+            id: latestId,
+            kind: "latest",
+            scope: { kind: "conversation", conversationId: ROOT_CONVERSATION_ID },
+            history: "latest",
+            fork: "current",
+          },
+          content: { kind: "base", version: 1, value: {} },
+        },
+        {
+          type: "document.create",
+          record: { id: taskDocumentId, kind: "task", scope: { kind: "task", taskId } },
+          content: { kind: "base", version: 1, value: {} },
+        },
+      ],
+      context,
+    ),
   );
-  const retiredAt = await storage.commit(
-    [
-      { type: "document.retire", id: sessionId },
-      { type: "document.retire", id: latestId },
-      { type: "document.retire", id: taskDocumentId },
-      { type: "task", value: terminalTask(taskId) },
-    ],
-    context,
+  const retiredAt = yield* awaited(
+    storage.commit(
+      [
+        { type: "document.retire", id: sessionId },
+        { type: "document.retire", id: latestId },
+        { type: "document.retire", id: taskDocumentId },
+        { type: "task", value: terminalTask(taskId) },
+      ],
+      context,
+    ),
   );
   return { directory, taskId, sessionId, latestId, taskDocumentId, createdAt, retiredAt };
-}
+});
 
-describe("Pico JsonlStorage publication and recovery", () => {
-  it("never reclaims rewindable document history, including after a base and retirement", async () => {
-    const { directory, storage, id, createdAt, changedAt } = await rewindableHistory();
-    await storage.commit([{ type: "document.retire", id }], context);
+const neverReclaimsRewindable = Effect.gen(function* () {
+  const { directory, storage, id, createdAt, changedAt } = yield* rewindableHistory();
+  yield* awaited(storage.commit([{ type: "document.retire", id }], context));
 
-    expect(await readLines(join(directory, `doc-${id}.jsonl`))).toHaveLength(3);
-    const reopened = await openStorage(directory);
-    expect((await reopened.document(id, createdAt, context))?.value).toEqual({ count: 0 });
-    expect((await reopened.document(id, changedAt, context))?.value).toEqual({ count: 1 });
-    expect(await reopened.document(id, "current", context)).toBeUndefined();
-    expect(await readLines(join(directory, `doc-${id}.jsonl`))).toHaveLength(3);
+  expect(yield* readLines(joinPath(directory, `doc-${id}.jsonl`))).toHaveLength(3);
+  const reopened = yield* openStorage(directory);
+  expect((yield* awaited(reopened.document(id, createdAt, context)))?.value).toEqual({
+    count: 0,
   });
-
-  it("reclaims retired task-, session-, and latest-conversation document sidecars", async () => {
-    const { directory, taskId, sessionId, latestId, taskDocumentId, createdAt, retiredAt } =
-      await retiredSidecars();
-    for await (const file of [
-      `doc-${sessionId}.jsonl`,
-      `doc-${latestId}.jsonl`,
-      `doc-${taskDocumentId}.jsonl`,
-      `task-${taskId}.jsonl`,
-    ]) {
-      expect(await fileExists(join(directory, file))).toBe(false);
-    }
-
-    const reopened = await openStorage(directory);
-    expect(await reopened.task(taskId, context)).toEqual(terminalTask(taskId));
-    expect(await reopened.document(sessionId, "current", context)).toBeUndefined();
-    expect(await reopened.document(latestId, "current", context)).toBeUndefined();
-    expect(await reopened.document(taskDocumentId, "current", context)).toBeUndefined();
-    expect(
-      await reopened.findDocument(
-        { kind: "session", scope: { kind: "session" } },
-        createdAt,
-        context,
-      ),
-    ).toMatchObject({ id: sessionId, createdAt, retiredAt });
-    expect(
-      await reopened.findDocument(
-        { kind: "session", scope: { kind: "session" } },
-        retiredAt,
-        context,
-      ),
-    ).toBeUndefined();
+  expect((yield* awaited(reopened.document(id, changedAt, context)))?.value).toEqual({
+    count: 1,
   });
+  expect(yield* awaited(reopened.document(id, "current", context))).toBeUndefined();
+  expect(yield* readLines(joinPath(directory, `doc-${id}.jsonl`))).toHaveLength(3);
+});
+
+const reclaimsRetiredTask = Effect.gen(function* () {
+  const { directory, taskId, sessionId, latestId, taskDocumentId, createdAt, retiredAt } =
+    yield* retiredSidecars();
+  for (const file of [
+    `doc-${sessionId}.jsonl`,
+    `doc-${latestId}.jsonl`,
+    `doc-${taskDocumentId}.jsonl`,
+    `task-${taskId}.jsonl`,
+  ]) {
+    expect(yield* fileExists(joinPath(directory, file))).toBe(false);
+  }
+
+  const reopened = yield* openStorage(directory);
+  expect(yield* awaited(reopened.task(taskId, context))).toEqual(terminalTask(taskId));
+  expect(yield* awaited(reopened.document(sessionId, "current", context))).toBeUndefined();
+  expect(yield* awaited(reopened.document(latestId, "current", context))).toBeUndefined();
+  expect(yield* awaited(reopened.document(taskDocumentId, "current", context))).toBeUndefined();
+  expect(
+    yield* awaited(
+      reopened.findDocument({ kind: "session", scope: { kind: "session" } }, createdAt, context),
+    ),
+  ).toMatchObject({ id: sessionId, createdAt, retiredAt });
+  expect(
+    yield* awaited(
+      reopened.findDocument({ kind: "session", scope: { kind: "session" } }, retiredAt, context),
+    ),
+  ).toBeUndefined();
 });
 
 describe("Pico JsonlStorage publication and recovery", () => {
-  it("truncates torn UTF-8 tails at exact byte offsets and reuses the unconfirmed sequence", async () => {
-    const directory = await tempDirectory();
-    const storage = await openStorage(directory);
-    await createRoot(storage);
-    const documentId = await storage.mintId<DocumentId>();
-    await storage.commit(
+  it("never reclaims rewindable document history, including after a base and retirement", () =>
+    Effect.runPromise(neverReclaimsRewindable));
+
+  it("reclaims retired task-, session-, and latest-conversation document sidecars", () =>
+    Effect.runPromise(reclaimsRetiredTask));
+});
+
+const truncatesTornUtf = Effect.gen(function* () {
+  const directory = yield* tempDirectory();
+  const storage = yield* openStorage(directory);
+  yield* createRoot(storage);
+  const documentId = yield* awaited(storage.mintId<DocumentId>());
+  yield* awaited(
+    storage.commit(
       [
         {
           type: "document.create",
@@ -184,20 +205,22 @@ describe("Pico JsonlStorage publication and recovery", () => {
         },
       ],
       context,
-    );
-    const sidecarPath = join(directory, `doc-${documentId}.jsonl`);
-    const mainPath = join(directory, "main.jsonl");
-    const sidecarSize = (await stat(sidecarPath)).size;
-    const mainSize = (await stat(mainPath)).size;
-    const torn = new TextEncoder().encode('{"text":"€');
-    await writeFile(sidecarPath, torn.subarray(0, torn.length - 1), { flag: "a" });
-    await writeFile(mainPath, torn.subarray(0, torn.length - 1), { flag: "a" });
+    ),
+  );
+  const sidecarPath = joinPath(directory, `doc-${documentId}.jsonl`);
+  const mainPath = joinPath(directory, "main.jsonl");
+  const sidecarSize = (yield* awaited(stat(sidecarPath))).size;
+  const mainSize = (yield* awaited(stat(mainPath))).size;
+  const torn = new TextEncoder().encode('{"text":"€');
+  yield* awaited(writeFile(sidecarPath, torn.subarray(0, torn.length - 1), { flag: "a" }));
+  yield* awaited(writeFile(mainPath, torn.subarray(0, torn.length - 1), { flag: "a" }));
 
-    const reopened = await openStorage(directory);
-    expect((await stat(sidecarPath)).size).toBe(sidecarSize);
-    expect((await stat(mainPath)).size).toBe(mainSize);
-    expect(
-      await reopened.commit(
+  const reopened = yield* openStorage(directory);
+  expect((yield* awaited(stat(sidecarPath))).size).toBe(sidecarSize);
+  expect((yield* awaited(stat(mainPath))).size).toBe(mainSize);
+  expect(
+    yield* awaited(
+      reopened.commit(
         [
           {
             type: "document.change",
@@ -207,23 +230,28 @@ describe("Pico JsonlStorage publication and recovery", () => {
         ],
         context,
       ),
-    ).toBe(3);
-  });
+    ),
+  ).toBe(3);
 });
 
 describe("Pico JsonlStorage publication and recovery", () => {
-  it("removes complete unconfirmed sidecar tails without resurrecting terminal tasks", async () => {
-    const directory = await tempDirectory();
-    const storage = await openStorage(directory);
-    await createRoot(storage);
-    const taskId = await storage.mintId<TaskId<JsonValue>>();
-    await storage.commit([{ type: "task", value: pendingTask(taskId) }], context);
-    await storage.commit([{ type: "task", value: terminalTask(taskId) }], context);
-    const sidecarPath = join(directory, `task-${taskId}.jsonl`);
-    expect(await fileExists(sidecarPath)).toBe(false);
-    await writeFile(
+  it("truncates torn UTF-8 tails at exact byte offsets and reuses the unconfirmed sequence", () =>
+    Effect.runPromise(truncatesTornUtf));
+});
+
+const removesCompleteUnconfirmed = Effect.gen(function* () {
+  const directory = yield* tempDirectory();
+  const storage = yield* openStorage(directory);
+  yield* createRoot(storage);
+  const taskId = yield* awaited(storage.mintId<TaskId<JsonValue>>());
+  yield* awaited(storage.commit([{ type: "task", value: pendingTask(taskId) }], context));
+  yield* awaited(storage.commit([{ type: "task", value: terminalTask(taskId) }], context));
+  const sidecarPath = joinPath(directory, `task-${taskId}.jsonl`);
+  expect(yield* fileExists(sidecarPath)).toBe(false);
+  yield* awaited(
+    writeFile(
       sidecarPath,
-      `${JSON.stringify({
+      `${yield* toJsonText({
         format: 1,
         type: "record",
         seq: 4,
@@ -231,20 +259,22 @@ describe("Pico JsonlStorage publication and recovery", () => {
         payload: { type: "task", value: pendingTask(taskId, "stale") },
       })}\n`,
       { flag: "a" },
-    );
+    ),
+  );
 
-    const reopened = await openStorage(directory);
-    expect(await fileExists(sidecarPath)).toBe(false);
-    expect(await reopened.task(taskId, context)).toEqual(terminalTask(taskId));
-    expect(await reopened.commit([], context)).toBe(4);
-  });
+  const reopened = yield* openStorage(directory);
+  expect(yield* fileExists(sidecarPath)).toBe(false);
+  expect(yield* awaited(reopened.task(taskId, context))).toEqual(terminalTask(taskId));
+  expect(yield* awaited(reopened.commit([], context))).toBe(4);
+});
 
-  it("fails open when confirmed sidecar data is missing", async () => {
-    const directory = await tempDirectory();
-    const storage = await openStorage(directory);
-    await createRoot(storage);
-    const documentId = await storage.mintId<DocumentId>();
-    await storage.commit(
+const failsOpenConfirmed = Effect.gen(function* () {
+  const directory = yield* tempDirectory();
+  const storage = yield* openStorage(directory);
+  yield* createRoot(storage);
+  const documentId = yield* awaited(storage.mintId<DocumentId>());
+  yield* awaited(
+    storage.commit(
       [
         {
           type: "document.create",
@@ -253,10 +283,20 @@ describe("Pico JsonlStorage publication and recovery", () => {
         },
       ],
       context,
-    );
-    await writeFile(join(directory, `doc-${documentId}.jsonl`), "");
-    await expect(
+    ),
+  );
+  yield* awaited(writeFile(joinPath(directory, `doc-${documentId}.jsonl`), ""));
+  yield* awaited(
+    expect(
       JsonlStorage.open(directory, new NodeExecutionEnv({ cwd: directory }), context),
-    ).rejects.toThrow("Missing confirmed sidecar record");
-  });
+    ).rejects.toThrow("Missing confirmed sidecar record"),
+  );
+});
+
+describe("Pico JsonlStorage publication and recovery", () => {
+  it("removes complete unconfirmed sidecar tails without resurrecting terminal tasks", () =>
+    Effect.runPromise(removesCompleteUnconfirmed));
+
+  it("fails open when confirmed sidecar data is missing", () =>
+    Effect.runPromise(failsOpenConfirmed));
 });

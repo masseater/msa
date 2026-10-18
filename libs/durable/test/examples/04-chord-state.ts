@@ -1,11 +1,11 @@
-// Expose a document through Chord.
-// Run from libs/durable:
-//   node --conditions=source --experimental-strip-types test/examples/04-chord-state.ts
+import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import { BACKGROUND_CONTEXT } from "@msa/chord/context";
+import { Console, Effect } from "effect";
 
 import { defineDoc } from "../../src/index.ts";
 import { createSession } from "../../src/session/index.ts";
 import { MemoryStorage } from "../../src/storage/memory.ts";
+import { awaited } from "../effect-support.ts";
 
 const context = BACKGROUND_CONTEXT;
 const session = createSession(new MemoryStorage());
@@ -18,23 +18,48 @@ const Notes = defineDoc<{ text: string }>({
   fork: "asOf",
   initial: () => ({ text: "" }),
 });
-const chat = await session.commit(async (tx) => {
-  const conversation = await tx.createConversation({ ownership: { kind: "ownerless" } });
-  (await tx.doc(Notes, conversation.id)).text = "first";
-  return conversation;
-}, context);
 
-// documentState() never creates a document. It returns a hydrated read-only
-// Chord state bound to the current concrete incarnation.
-const notesState = await session.documentState(Notes, chat.id, context);
-if (notesState === undefined) throw new Error("notes are absent");
-const stopNotes = notesState.subscribe((value, _deliveryContext, delivery) => {
-  console.log("Chord notes:", delivery.kind, delivery.sequence, value);
+const main = Effect.gen(function* () {
+  const runSync = Effect.runSyncWith(yield* Effect.context<never>());
+
+  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
+  const chat = yield* awaited(
+    session.commit(
+      (tx) =>
+        runPromise(
+          Effect.gen(function* () {
+            const conversation = yield* awaited(
+              tx.createConversation({ ownership: { kind: "ownerless" } }),
+            );
+            (yield* awaited(tx.doc(Notes, conversation.id))).text = "first";
+            return conversation;
+          }),
+        ),
+      context,
+    ),
+  );
+
+  const notesState = yield* awaited(session.documentState(Notes, chat.id, context));
+  if (notesState === undefined) throw new Error("notes are absent");
+  const stopNotes = notesState.subscribe((value, _deliveryContext, delivery) => {
+    runSync(Console.log("Chord notes:", delivery.kind, delivery.sequence, value));
+  });
+  yield* awaited(
+    session.commit(
+      (tx) =>
+        runPromise(
+          Effect.gen(function* () {
+            (yield* awaited(tx.doc(Notes, chat.id))).text = "published through Chord";
+          }),
+        ),
+      context,
+    ),
+  );
+  stopNotes();
+  notesState.dispose();
+
+  yield* awaited(session.close(context));
 });
-await session.commit(async (tx) => {
-  (await tx.doc(Notes, chat.id)).text = "published through Chord";
-}, context);
-stopNotes();
-notesState.dispose();
 
-await session.close(context);
+NodeRuntime.runMain(main);

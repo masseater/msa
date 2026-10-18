@@ -22,7 +22,6 @@ export function tool(name: string, extra: Partial<AppTool> = {}): AppTool {
   };
 }
 
-// Resolve `state` against `snapshot` and `settings`, collecting reports.
 export function resolve(
   state: AgentState | undefined,
   snapshot: RegistrySnapshot<AppTool>,

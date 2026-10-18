@@ -6,16 +6,18 @@ import {
   defineTask,
   defineTool,
   type EntryId,
+  type Extension,
   hook,
   section,
   wrapTool,
 } from "@msa/durable";
 import { GenerationTask, ToolTask } from "@msa/durable/harness";
+import { Effect } from "effect";
 
+import { currentTimeMillis } from "../src/clock.ts";
 import { createBashTool } from "../src/tools/index.ts";
+import { awaited } from "./effect-support.ts";
 import type { SpecNames } from "./spec-usage-names.ts";
-
-// ─── Section 7.1: extensions and host setup ──────────────────────────────────
 
 export function promptExtensions({
   renderAgentsMd,
@@ -33,7 +35,6 @@ export function promptExtensions({
     name: "coding",
     sections: [
       section("preamble", () => "You are an expert coding assistant.", { tag: false }),
-      // The environment the host built for this conversation, in the conversation's directory.
       section("cwd", (input) => input.env && `Working directory: ${input.env.cwd}`),
     ],
   });
@@ -46,7 +47,6 @@ export function promptExtensions({
       }),
     ],
   });
-  // A role and a review loop, for conversations that select it.
   const Reviewer = defineExtension({
     name: "reviewer",
     sections: [
@@ -66,27 +66,28 @@ export function bashExtensions(
     wraps: [
       wrapTool(bashTool, (tool) => ({
         ...tool,
-        execute: async (args, api, context) => {
-          const start = Date.now();
-          try {
-            return await tool.execute(args, api, context);
-          } finally {
-            metrics.record("bash", Date.now() - start);
-          }
-        },
+        execute: (args, api, context) =>
+          Effect.runPromise(
+            Effect.gen(function* () {
+              const start = currentTimeMillis();
+              return yield* Effect.suspend(() => awaited(tool.execute(args, api, context))).pipe(
+                Effect.ensuring(
+                  Effect.sync(() => {
+                    metrics.record("bash", currentTimeMillis() - start);
+                  }),
+                ),
+              );
+            }),
+          ),
       })),
     ],
   });
-  // A bash inside a Python virtualenv for one conversation: it replaces CodingTools' bash in place,
-  // and Timing, if selected, wraps it.
   const Venv = defineExtension({
     name: "venv",
     tools: [createBashTool({ commandPrefix: "source .venv/bin/activate" })],
   });
   return { Timing, Venv };
 }
-
-// ─── Section 7.2: hooks reading extension state ──────────────────────────────
 
 export function planMode({ writes }: SpecNames) {
   const PlanModeDoc = defineDoc<{ enabled: boolean }>({
@@ -101,21 +102,23 @@ export function planMode({ writes }: SpecNames) {
     name: "plan-mode",
     hooks: [
       hook(ToolTask, {
-        // An absent document means plan mode is off.
-        beforeTool: async (call, api, context) =>
-          (await api.snapshot(PlanModeDoc, api.conversationId, context))?.enabled && writes(call)
-            ? { block: "Plan mode: read-only" }
-            : undefined,
+        beforeTool: (call, api, context) =>
+          Effect.runPromise(
+            Effect.gen(function* () {
+              return (yield* awaited(api.snapshot(PlanModeDoc, api.conversationId, context)))
+                ?.enabled && writes(call)
+                ? { block: "Plan mode: read-only" }
+                : undefined;
+            }),
+          ),
       }),
     ],
   });
   return { PlanModeDoc, PlanMode };
 }
 
-// ─── Section 7.3: subagents ──────────────────────────────────────────────────
-
 export function subagentExtension({ answerText }: SpecNames) {
-  const Subagent = defineExtension({
+  const Subagent: Extension = defineExtension({
     name: "subagent",
     tools: [
       defineTool({
@@ -123,33 +126,54 @@ export function subagentExtension({ answerText }: SpecNames) {
         description: "Delegate a self-contained task to a subagent and get its answer back.",
         parameters: Type.Object({ task: Type.String() }),
         replay: "safe",
-        execute: async (args, api, context) => {
-          const { task } = args;
-          const child = await api.commit(async (tx) => {
-            const existing = (await tx.scanConversations({ ownerTaskId: api.taskId }, 1)).items[0];
-            if (existing !== undefined) return existing.id;
-            // Starts as a copy of this conversation's agent: model, thinking level, cwd, extensions, tools.
-            const created = await tx.createConversation({
-              ownership: { kind: "task", taskId: api.taskId },
-            });
-            // Without this extension, the child is not offered this tool.
-            await configure(tx, created.id, { extensions: { remove: [Subagent] } });
-            return created.id;
-          }, context);
-          await api.details({ conversationId: child }, context);
-          const handle = (await api.conversation(child, context))!;
-          const request = {
-            type: "input",
-            content: task,
-            requestId: `subagent:${api.taskId}`,
-          } as const;
-          const settled = await (await handle.submit(request, context)).wait(context);
-          if (settled.status !== "done" || settled.type !== "input")
-            throw new Error(`Subagent failed: ${settled.status}`);
-          return {
-            output: [{ type: "text", text: await answerText(api, settled.answer, context) }],
-          };
-        },
+        execute: (args, api, context) =>
+          Effect.runPromise(
+            Effect.gen(function* () {
+              const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
+              const { task } = args;
+              const child = yield* awaited(
+                api.commit(
+                  (tx) =>
+                    runPromise(
+                      Effect.gen(function* () {
+                        const existing = (yield* awaited(
+                          tx.scanConversations({ ownerTaskId: api.taskId }, 1),
+                        )).items[0];
+                        if (existing !== undefined) return existing.id;
+                        const created = yield* awaited(
+                          tx.createConversation({
+                            ownership: { kind: "task", taskId: api.taskId },
+                          }),
+                        );
+                        yield* awaited(
+                          configure(tx, created.id, { extensions: { remove: [Subagent] } }),
+                        );
+                        return created.id;
+                      }),
+                    ),
+                  context,
+                ),
+              );
+              yield* awaited(api.details({ conversationId: child }, context));
+              const handle = (yield* awaited(api.conversation(child, context)))!;
+              const request = {
+                type: "input",
+                content: task,
+                requestId: `subagent:${api.taskId}`,
+              } as const;
+              const settled = yield* awaited(
+                (yield* awaited(handle.submit(request, context))).wait(context),
+              );
+              if (settled.status !== "done" || settled.type !== "input")
+                throw new Error(`Subagent failed: ${settled.status}`);
+              return {
+                output: [
+                  { type: "text", text: yield* awaited(answerText(api, settled.answer, context)) },
+                ],
+              };
+            }),
+          ),
       }),
     ],
   });
@@ -164,16 +188,12 @@ export function subagentTools({ Anchor, Reporter, subagentTool }: SpecNames) {
   });
 }
 
-// ─── Section 7.4 ─────────────────────────────────────────────────────────────
-
 export function chatExtension() {
   return defineExtension({
     name: "chat",
     sections: [section("preamble", () => "You are a helpful assistant.", { tag: false })],
   });
 }
-
-// ─── Section 5.1: a task with intent, effect, outcome ────────────────────────
 
 type Charge = { phase: "prepare" } | { phase: "charge"; key: string };
 
@@ -183,33 +203,57 @@ export function paymentTask({ newKey, payments, receiptEntry }: SpecNames) {
     version: 1,
     initial: () => ({ phase: "prepare" }),
     phases: {
-      // Intent, effect, outcome.
-      prepare: async (_task, runtime, context) => {
-        await runtime.commit(
-          () => ({ status: "running", checkpoint: { phase: "charge", key: newKey() } }),
-          context,
-        );
-      },
-      charge: async (task, runtime, context) => {
-        // idempotent by key
-        const receipt = await payments.charge(task.state.checkpoint.key);
-        await runtime.commit(async (tx, current) => {
-          const entry = await tx.appendEntry(current.conversationId, receiptEntry(receipt));
-          return {
-            status: "terminal",
-            outcome: { status: "completed", result: { entryId: entry.id } },
-          };
-        }, context);
-      },
+      prepare: (_task, runtime, context) =>
+        Effect.runPromise(
+          Effect.asVoid(
+            Effect.suspend(() =>
+              awaited(
+                runtime.commit(
+                  () => ({ status: "running", checkpoint: { phase: "charge", key: newKey() } }),
+                  context,
+                ),
+              ),
+            ),
+          ),
+        ),
+      charge: (task, runtime, context) =>
+        Effect.runPromise(
+          Effect.gen(function* () {
+            const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
+            const receipt = yield* awaited(payments.charge(task.state.checkpoint.key));
+            yield* awaited(
+              runtime.commit(
+                (tx, current) =>
+                  runPromise(
+                    Effect.gen(function* () {
+                      const entry = yield* awaited(
+                        tx.appendEntry(current.conversationId, receiptEntry(receipt)),
+                      );
+                      return {
+                        status: "terminal",
+                        outcome: { status: "completed", result: { entryId: entry.id } },
+                      };
+                    }),
+                  ),
+                context,
+              ),
+            );
+          }),
+        ),
     },
-    // The abort handler decides the outcome; returning without one faults the task.
-    abort: async (task, runtime, context) => {
-      await payments.cancel(task.state.checkpoint);
-      await runtime.commit(
-        () => ({ status: "terminal", outcome: { status: "aborted", reason: "user" } }),
-        context,
-      );
-    },
+    abort: (task, runtime, context) =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          yield* awaited(payments.cancel(task.state.checkpoint));
+          yield* awaited(
+            runtime.commit(
+              () => ({ status: "terminal", outcome: { status: "aborted", reason: "user" } }),
+              context,
+            ),
+          );
+        }),
+      ),
   });
 }
 
@@ -218,7 +262,7 @@ export function followTask() {
     name: "app.follow",
     version: 1,
     initial: () => ({ phase: "follow" }),
-    phases: { follow: async () => {} },
-    abort: async () => {},
+    phases: { follow: () => Promise.resolve() },
+    abort: () => Promise.resolve(),
   });
 }

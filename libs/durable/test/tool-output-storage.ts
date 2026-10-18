@@ -1,12 +1,14 @@
 import { readdir, stat } from "node:fs/promises";
-import { join } from "node:path";
 
 import { BACKGROUND_CONTEXT as context } from "@msa/chord/context";
+import { Effect } from "effect";
 
 import type { Storage } from "../src/index.ts";
 import { openNodeJsonlStorage } from "../src/storage/jsonl/node.ts";
 import { MemoryStorage } from "../src/storage/memory.ts";
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
+import { awaited } from "./effect-support.ts";
+import { joinPath } from "./platform-support.ts";
 
 export type Backend = "memory" | "sqlite" | "jsonl";
 
@@ -16,7 +18,6 @@ export function openStorage(backend: Backend, path: string): Promise<Storage> {
   return Promise.resolve(openNodeJsonlStorage(path, context));
 }
 
-// Measure every Storage commit.
 export function timed(storage: Storage, latencies: number[]): Storage {
   return new Proxy(storage, {
     get(target, property) {
@@ -24,26 +25,32 @@ export function timed(storage: Storage, latencies: number[]): Storage {
       if (property !== "commit" || typeof value !== "function") {
         return typeof value === "function" ? value.bind(target) : value;
       }
-      return async (...args: unknown[]) => {
-        const start = performance.now();
-        try {
-          return await value.apply(target, args);
-        } finally {
-          latencies.push(performance.now() - start);
-        }
-      };
+      return (...args: unknown[]) =>
+        Effect.runPromise(
+          Effect.gen(function* () {
+            const start = performance.now();
+            return yield* Effect.suspend(() => awaited(value.apply(target, args))).pipe(
+              Effect.ensuring(
+                Effect.sync(() => {
+                  latencies.push(performance.now() - start);
+                }),
+              ),
+            );
+          }),
+        );
     },
   });
 }
 
-export async function footprint(backend: Backend, path: string): Promise<number> {
+export const footprint = Effect.fn("footprint")(function* (backend: Backend, path: string) {
   if (backend === "sqlite") {
     let bytes = 0;
-    for await (const suffix of ["", "-wal", "-shm"])
-      bytes += (await stat(path + suffix).catch(() => undefined))?.size ?? 0;
+    for (const suffix of ["", "-wal", "-shm"])
+      bytes += (yield* awaited(stat(path + suffix).catch(() => undefined)))?.size ?? 0;
     return Math.round(bytes / 1024);
   }
   let bytes = 0;
-  for await (const file of await readdir(path)) bytes += (await stat(join(path, file))).size;
+  for (const file of yield* awaited(readdir(path)))
+    bytes += (yield* awaited(stat(joinPath(path, file)))).size;
   return Math.round(bytes / 1024);
-}
+});

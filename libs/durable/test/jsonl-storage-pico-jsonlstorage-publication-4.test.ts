@@ -1,11 +1,12 @@
-import { readFile, rm, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { readFile, writeFile } from "node:fs/promises";
 
+import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { NodeExecutionEnv } from "../src/env/node.ts";
 import { JsonlStorage } from "../src/storage/jsonl/index.ts";
 import type { DocumentId } from "../src/types.ts";
+import { toJsonText, fromJsonText, awaited } from "./effect-support.ts";
 import {
   readLines,
   sessionDocument,
@@ -16,22 +17,26 @@ import {
   tempDirectories,
   tempDirectory,
 } from "./jsonl-storage-support.ts";
+import { joinPath, removeDir } from "./platform-support.ts";
 
-afterEach(async () => {
-  for await (const storage of openStorages) await storage.close(context);
-  openStorages.clear();
-  for await (const directory of tempDirectories)
-    await rm(directory, { recursive: true, force: true });
-  tempDirectories.clear();
-});
+afterEach(() =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      for (const storage of openStorages) yield* awaited(storage.close(context));
+      openStorages.clear();
+      for (const directory of tempDirectories) yield* removeDir(directory);
+      tempDirectories.clear();
+    }),
+  ),
+);
 
-describe("Pico JsonlStorage publication and recovery", () => {
-  it("rejects a confirmed record after an unconfirmed sidecar record", async () => {
-    const directory = await tempDirectory();
-    const storage = await openStorage(directory);
-    await createRoot(storage);
-    const documentId = await storage.mintId<DocumentId>();
-    await storage.commit(
+const rejectsConfirmedRecord = Effect.gen(function* () {
+  const directory = yield* tempDirectory();
+  const storage = yield* openStorage(directory);
+  yield* createRoot(storage);
+  const documentId = yield* awaited(storage.mintId<DocumentId>());
+  yield* awaited(
+    storage.commit(
       [
         {
           type: "document.create",
@@ -40,8 +45,10 @@ describe("Pico JsonlStorage publication and recovery", () => {
         },
       ],
       context,
-    );
-    await storage.commit(
+    ),
+  );
+  yield* awaited(
+    storage.commit(
       [
         {
           type: "document.change",
@@ -50,46 +57,55 @@ describe("Pico JsonlStorage publication and recovery", () => {
         },
       ],
       context,
-    );
-    const path = join(directory, `doc-${documentId}.jsonl`);
-    const [first, second] = await readLines(path);
-    const unconfirmed = JSON.stringify({
-      format: 1,
-      type: "record",
-      seq: 2,
-      ordinal: 999,
-      payload: {
-        type: "document",
-        id: documentId,
-        content: { kind: "delta", version: 1, ops: [] },
-      },
-    });
-    await writeFile(path, `${first}\n${unconfirmed}\n${second}\n`);
-    await expect(
-      JsonlStorage.open(directory, new NodeExecutionEnv({ cwd: directory }), context),
-    ).rejects.toThrow("Confirmed record follows an unconfirmed tail");
+    ),
+  );
+  const path = joinPath(directory, `doc-${documentId}.jsonl`);
+  const [first, second] = yield* readLines(path);
+  const unconfirmed = yield* toJsonText({
+    format: 1,
+    type: "record",
+    seq: 2,
+    ordinal: 999,
+    payload: {
+      type: "document",
+      id: documentId,
+      content: { kind: "delta", version: 1, ops: [] },
+    },
   });
+  yield* awaited(writeFile(path, `${first}\n${unconfirmed}\n${second}\n`));
+  yield* awaited(
+    expect(
+      JsonlStorage.open(directory, new NodeExecutionEnv({ cwd: directory }), context),
+    ).rejects.toThrow("Confirmed record follows an unconfirmed tail"),
+  );
 });
 
 describe("Pico JsonlStorage publication and recovery", () => {
-  it("rejects non-increasing main commit sequences", async () => {
-    const directory = await tempDirectory();
-    const storage = await openStorage(directory);
-    await createRoot(storage);
-    const path = join(directory, "main.jsonl");
-    await writeFile(path, await readFile(path), { flag: "a" });
+  it("rejects a confirmed record after an unconfirmed sidecar record", () =>
+    Effect.runPromise(rejectsConfirmedRecord));
+});
 
-    await expect(
+const rejectsNonIncreasing = Effect.gen(function* () {
+  const directory = yield* tempDirectory();
+  const storage = yield* openStorage(directory);
+  yield* createRoot(storage);
+  const path = joinPath(directory, "main.jsonl");
+  yield* awaited(writeFile(path, yield* awaited(readFile(path)), { flag: "a" }));
+
+  yield* awaited(
+    expect(
       JsonlStorage.open(directory, new NodeExecutionEnv({ cwd: directory }), context),
-    ).rejects.toThrow("Commit sequence does not strictly increase");
-  });
+    ).rejects.toThrow("Commit sequence does not strictly increase"),
+  );
+});
 
-  it("rejects structurally invalid confirmed document content", async () => {
-    const directory = await tempDirectory();
-    const storage = await openStorage(directory);
-    await createRoot(storage);
-    const documentId = await storage.mintId<DocumentId>();
-    await storage.commit(
+const rejectsStructurallyInvalid = Effect.gen(function* () {
+  const directory = yield* tempDirectory();
+  const storage = yield* openStorage(directory);
+  yield* createRoot(storage);
+  const documentId = yield* awaited(storage.mintId<DocumentId>());
+  yield* awaited(
+    storage.commit(
       [
         {
           type: "document.create",
@@ -98,36 +114,52 @@ describe("Pico JsonlStorage publication and recovery", () => {
         },
       ],
       context,
-    );
-    const path = join(directory, `doc-${documentId}.jsonl`);
-    const record = JSON.parse((await readFile(path, "utf8")).trim()) as {
-      payload: { content: Record<string, unknown> };
-    };
-    delete record.payload.content["value"];
-    await writeFile(path, `${JSON.stringify(record)}\n`);
+    ),
+  );
+  const path = joinPath(directory, `doc-${documentId}.jsonl`);
+  const record = (yield* fromJsonText((yield* awaited(readFile(path, "utf8"))).trim())) as {
+    payload: { content: Record<string, unknown> };
+  };
+  delete record.payload.content["value"];
+  yield* awaited(writeFile(path, `${yield* toJsonText(record)}\n`));
 
-    await expect(
+  yield* awaited(
+    expect(
       JsonlStorage.open(directory, new NodeExecutionEnv({ cwd: directory }), context),
-    ).rejects.toThrow("Invalid document content");
-  });
+    ).rejects.toThrow("Invalid document content"),
+  );
 });
 
 describe("Pico JsonlStorage publication and recovery", () => {
-  it("rejects malformed complete main and sidecar lines", async () => {
-    const mainDirectory = await tempDirectory();
-    const mainStorage = await openStorage(mainDirectory);
-    await createRoot(mainStorage);
-    await writeFile(join(mainDirectory, "main.jsonl"), "{bad}\n", { flag: "a" });
-    await expect(
-      JsonlStorage.open(mainDirectory, new NodeExecutionEnv({ cwd: mainDirectory }), context),
-    ).rejects.toThrow("Malformed complete main.jsonl");
+  it("rejects non-increasing main commit sequences", () => Effect.runPromise(rejectsNonIncreasing));
 
-    const sidecarDirectory = await tempDirectory();
-    const sidecarStorage = await openStorage(sidecarDirectory);
-    await createRoot(sidecarStorage);
-    await writeFile(join(sidecarDirectory, "doc-99.jsonl"), "{bad}\n");
-    await expect(
+  it("rejects structurally invalid confirmed document content", () =>
+    Effect.runPromise(rejectsStructurallyInvalid));
+});
+
+const rejectsMalformedComplete = Effect.gen(function* () {
+  const mainDirectory = yield* tempDirectory();
+  const mainStorage = yield* openStorage(mainDirectory);
+  yield* createRoot(mainStorage);
+  yield* awaited(writeFile(joinPath(mainDirectory, "main.jsonl"), "{bad}\n", { flag: "a" }));
+  yield* awaited(
+    expect(
+      JsonlStorage.open(mainDirectory, new NodeExecutionEnv({ cwd: mainDirectory }), context),
+    ).rejects.toThrow("Malformed complete main.jsonl"),
+  );
+
+  const sidecarDirectory = yield* tempDirectory();
+  const sidecarStorage = yield* openStorage(sidecarDirectory);
+  yield* createRoot(sidecarStorage);
+  yield* awaited(writeFile(joinPath(sidecarDirectory, "doc-99.jsonl"), "{bad}\n"));
+  yield* awaited(
+    expect(
       JsonlStorage.open(sidecarDirectory, new NodeExecutionEnv({ cwd: sidecarDirectory }), context),
-    ).rejects.toThrow("Malformed complete doc-99.jsonl");
-  });
+    ).rejects.toThrow("Malformed complete doc-99.jsonl"),
+  );
+});
+
+describe("Pico JsonlStorage publication and recovery", () => {
+  it("rejects malformed complete main and sidecar lines", () =>
+    Effect.runPromise(rejectsMalformedComplete));
 });

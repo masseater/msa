@@ -1,7 +1,9 @@
 import type { Context } from "@msa/chord";
 import { type Conversation, defineTask, type TaskId, type TaskRuntime } from "@msa/durable";
 import { MemoryStorage } from "@msa/durable/storage/memory";
+import { Effect } from "effect";
 
+import { awaited } from "./effect-support.ts";
 import { context } from "./session-support.ts";
 import { abortMarked, abortedWith, completed, openTasks } from "./task-support.ts";
 
@@ -9,7 +11,6 @@ export type Step = { phase: "run" };
 
 export type StepRuntime<R> = TaskRuntime<null, Step, R, object>;
 
-// A one-phase task; the default abort handler settles `aborted` with reason "test".
 export function oneStep<R = null>(
   name: string,
   run: (
@@ -29,12 +30,15 @@ export function oneStep<R = null>(
   });
 }
 
-// A one-phase task that waits for `gate` and completes with null.
 export function gated(name: string, gate: Promise<void>) {
-  return oneStep(name, async (_task, runtime, ctx) => {
-    await gate;
-    await runtime.commit(() => completed(null), ctx);
-  });
+  return oneStep(name, (_task, runtime, ctx) =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        yield* awaited(gate);
+        yield* awaited(runtime.commit(() => completed(null), ctx));
+      }),
+    ),
+  );
 }
 
 export function start<R>(
@@ -50,24 +54,23 @@ export function start<R>(
   );
 }
 
-export async function openRoot(
+export const openRoot = Effect.fn("openRoot")(function* (
   tasks: Parameters<typeof openTasks>[1],
   options: Parameters<typeof openTasks>[2] & { readonly storage?: MemoryStorage } = {},
 ) {
-  const opened = await openTasks(options.storage ?? new MemoryStorage(), tasks, options);
-  const root = await opened.harness.root(context);
+  const opened = yield* openTasks(options.storage ?? new MemoryStorage(), tasks, options);
+  const root = yield* awaited(opened.harness.root(context));
   return { ...opened, root };
-}
+});
 
-// Start `abortTask()` and resolve once its mark is durable, before it has joined the run.
-export async function markDurably(
-  harness: Awaited<ReturnType<typeof openRoot>>["harness"],
+export const markDurably = Effect.fn("markDurably")(function* (
+  harness: Effect.Success<ReturnType<typeof openRoot>>["harness"],
   id: TaskId,
-): Promise<{ readonly aborting: Promise<unknown> }> {
+) {
   const aborting = harness.abortTask(id, context);
-  await abortMarked(harness, id);
+  yield* abortMarked(harness, id);
   return { aborting };
-}
+});
 
 export function withSignal(signal: AbortSignal): Context {
   return { ...context, abortSignal: signal };

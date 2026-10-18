@@ -1,21 +1,20 @@
 import type { Model } from "@msa/ai";
 import { BACKGROUND_CONTEXT as context } from "@msa/chord/context";
 import type { ToolDiagnostic, ToolExecutionApi, ToolExecutionResult } from "@msa/durable";
+import { Effect } from "effect";
 import { expect } from "vite-plus/test";
 
 import { NodeExecutionEnv } from "../src/env/node.ts";
 import type { ImageProcessor } from "../src/tools/image.ts";
 import { createReadTool } from "../src/tools/read.ts";
-import { makeTempDirSync, removeDirSync, writeTempFile } from "./temp-support.ts";
+import { awaited } from "./effect-support.ts";
+import { makeTempDir, removeDir, writeTempFile } from "./platform-support.ts";
 
-export const directory = makeTempDirSync("msa-durable-images-");
+export const directory = await Effect.runPromise(makeTempDir("msa-durable-images-"));
 
-export function removeImageDirectory(): void {
-  removeDirSync(directory);
-}
+export const removeImageDirectory = (): Promise<void> => Effect.runPromise(removeDir(directory));
 
-// Run `read` on `bytes` written to `name`, for a conversation whose model takes `input`.
-export function read(
+export const read = Effect.fn("read")(function* (
   name: string,
   bytes: Uint8Array,
   options: {
@@ -29,8 +28,8 @@ export function read(
     readonly env?: NodeExecutionEnv;
     readonly tool?: ReturnType<typeof createReadTool>;
   } = {},
-): Promise<ToolExecutionResult> {
-  writeTempFile(directory, name, bytes);
+) {
+  yield* writeTempFile(directory, name, bytes);
   const model = {
     input: options.input ?? ["text", "image"],
     ...(options.resize === undefined
@@ -41,13 +40,13 @@ export function read(
     env: options.env ?? new NodeExecutionEnv({ cwd: directory }),
     output: () => {},
     diagnostic: () => {},
-    details: async () => {},
+    details: () => Promise.resolve(),
     agent: () => Promise.resolve({ model: { provider: "test", modelId: "test" } }),
     models: { getModel: () => model },
   } as unknown as ToolExecutionApi;
   const tool = options.tool ?? createReadTool(options);
-  return Promise.resolve(tool.execute({ path: name }, api, context));
-}
+  return yield* awaited(tool.execute({ path: name }, api, context));
+});
 
 export function messages(result: ToolExecutionResult): string[] {
   return (result.diagnostics ?? []).map((diagnostic: ToolDiagnostic) => diagnostic.message);

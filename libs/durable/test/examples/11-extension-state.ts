@@ -1,19 +1,17 @@
+import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import { Type } from "@msa/ai";
 import { createModels } from "@msa/ai/models";
 import { fauxAssistantMessage, fauxProvider, fauxToolCall } from "@msa/ai/providers/faux";
-// An extension that keeps its own per-conversation document.
-// Run from libs/durable:
-//   node --conditions=source --experimental-strip-types test/examples/11-extension-state.ts
 import { BACKGROUND_CONTEXT } from "@msa/chord/context";
+import { Console, Effect } from "effect";
 
 import { createRegistry, Harness } from "../../src/harness/index.ts";
 import { defineDoc, defineExtension, defineTool, section } from "../../src/index.ts";
 import { MemoryStorage } from "../../src/storage/memory.ts";
+import { awaited } from "../effect-support.ts";
 
 const context = BACKGROUND_CONTEXT;
 
-// A todo list per conversation. Rewindable with `asOf`, so a fork starts with
-// the todos its parent had at the fork entry.
 const Todos = defineDoc<{ items: string[] }>({
   kind: "example.todos",
   version: 1,
@@ -23,9 +21,6 @@ const Todos = defineDoc<{ items: string[] }>({
   initial: () => ({ items: [] }),
 });
 
-// The tool writes the document; the section shows it to the model before every
-// request. Nothing needs to create it up front: tx.doc() creates it on first
-// write, and the section treats a missing document as an empty list.
 const Todo = defineExtension({
   name: "todo",
   tools: [
@@ -33,19 +28,40 @@ const Todo = defineExtension({
       name: "todo",
       description: "Add an item to your todo list",
       parameters: Type.Object({ item: Type.String() }),
-      execute: async (args, api, callContext) => {
-        await api.commit(async (tx) => {
-          (await tx.doc(Todos, api.conversationId)).items.push(args.item);
-        }, callContext);
-        return { output: [{ type: "text", text: `added ${args.item}` }] };
-      },
+      execute: (args, api, callContext) =>
+        Effect.runPromise(
+          Effect.gen(function* () {
+            const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
+            yield* awaited(
+              api.commit(
+                (tx) =>
+                  runPromise(
+                    Effect.gen(function* () {
+                      (yield* awaited(tx.doc(Todos, api.conversationId))).items.push(args.item);
+                    }),
+                  ),
+                callContext,
+              ),
+            );
+            return { output: [{ type: "text", text: `added ${args.item}` }] };
+          }),
+        ),
     }),
   ],
   sections: [
-    section("todos", async (input, renderContext) => {
-      const todos = await input.read.snapshot(Todos, input.conversationId, renderContext);
-      return todos === undefined || todos.items.length === 0 ? undefined : todos.items.join("\n");
-    }),
+    section("todos", (input, renderContext) =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          const todos = yield* awaited(
+            input.read.snapshot(Todos, input.conversationId, renderContext),
+          );
+          return todos === undefined || todos.items.length === 0
+            ? undefined
+            : todos.items.join("\n");
+        }),
+      ),
+    ),
   ],
 });
 
@@ -54,32 +70,50 @@ const models = createModels();
 models.setProvider(faux.provider);
 const registry = createRegistry();
 registry.install(Todo);
-const harness = await Harness.open(new MemoryStorage(), { models, registry }, context);
-const root = await harness.root(context, {
-  agent: { model: { provider: "faux", modelId: "faux-1" } },
+
+const main = Effect.gen(function* () {
+  const harness = yield* awaited(Harness.open(new MemoryStorage(), { models, registry }, context));
+  const root = yield* awaited(
+    harness.root(context, {
+      agent: { model: { provider: "faux", modelId: "faux-1" } },
+    }),
+  );
+
+  faux.setResponses([
+    fauxAssistantMessage(fauxToolCall("todo", { item: "fix the build" }), {
+      stopReason: "toolUse",
+    }),
+    fauxAssistantMessage("Noted."),
+    fauxAssistantMessage("Working on it."),
+  ]);
+  yield* awaited(
+    (yield* awaited(
+      root.submit({ type: "input", content: "Remember to fix the build." }, context),
+    )).wait(context),
+  );
+  yield* Console.log("todos:", yield* awaited(harness.snapshot(Todos, root.id, context)));
+
+  yield* awaited(
+    (yield* awaited(root.submit({ type: "input", content: "What is next?" }, context))).wait(
+      context,
+    ),
+  );
+  const { messages } = yield* awaited(root.context(context));
+  yield* Console.log(
+    "system messages:",
+    messages.flatMap((message) =>
+      message.role === "system"
+        ? [
+            {
+              sections: message.sections,
+              toolsAdded: message.toolsAdded?.map((tool) => tool.name),
+            },
+          ]
+        : [],
+    ),
+  );
+
+  yield* awaited(harness.close(context));
 });
 
-faux.setResponses([
-  fauxAssistantMessage(fauxToolCall("todo", { item: "fix the build" }), { stopReason: "toolUse" }),
-  fauxAssistantMessage("Noted."),
-  fauxAssistantMessage("Working on it."),
-]);
-await (
-  await root.submit({ type: "input", content: "Remember to fix the build." }, context)
-).wait(context);
-console.log("todos:", await harness.snapshot(Todos, root.id, context));
-
-// The next request's system prompt carries the list. The first system message
-// only announced the todo tool; no section had text yet.
-await (await root.submit({ type: "input", content: "What is next?" }, context)).wait(context);
-const { messages } = await root.context(context);
-console.log(
-  "system messages:",
-  messages.flatMap((message) =>
-    message.role === "system"
-      ? [{ sections: message.sections, toolsAdded: message.toolsAdded?.map((tool) => tool.name) }]
-      : [],
-  ),
-);
-
-await harness.close(context);
+NodeRuntime.runMain(main);
