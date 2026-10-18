@@ -1,6 +1,5 @@
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
-
+import { readTextFile, resolvePath, runTest } from "@msa/testing";
+import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { KEYBINDINGS, useWindowsKeybindings } from "../src/core/keybindings.ts";
@@ -56,12 +55,16 @@ describe("Windows keybinding defaults", () => {
 });
 
 describe("documented keybindings", () => {
-  it("lists every keybinding id in docs/keybindings.md", () => {
-    const documentation = readFileSync(
-      resolve(import.meta.dirname, "../docs/keybindings.md"),
-      "utf8",
-    );
-    const missing = Object.keys(KEYBINDINGS).filter((id) => !documentation.includes(`\`${id}\``));
-    expect(missing).toEqual([]);
-  });
+  it("lists every keybinding id in docs/keybindings.md", () =>
+    runTest(
+      Effect.gen(function* () {
+        const documentation = yield* readTextFile(
+          resolvePath(import.meta.dirname, "../docs/keybindings.md"),
+        );
+        const missing = Object.keys(KEYBINDINGS).filter(
+          (id) => !documentation.includes(`\`${id}\``),
+        );
+        expect(missing).toEqual([]);
+      }),
+    ));
 });
