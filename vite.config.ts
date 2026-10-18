@@ -173,9 +173,10 @@ export default defineConfig({
     },
     overrides: [
       {
-        files: ["**/test/**", "**/*.test.ts", "**/*.bench.ts"],
+        files: ["**/test/**", "**/*.test.ts", "**/*.spec.ts", "**/*.bench.ts"],
         rules: {
           "eslint/no-shadow": "off",
+          "eslint/max-lines-per-function": "off",
         },
       },
       {
