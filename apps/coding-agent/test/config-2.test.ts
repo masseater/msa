@@ -2,13 +2,16 @@ import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { delimiter, join } from "path";
 
-import { afterEach, describe, expect, test } from "vite-plus/test";
+import { readEnv } from "../src/core/process-env.ts";
+afterEach(() => vi.unstubAllEnvs());
+
+import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 
 import { detectInstallMethod, getSelfUpdateCommand, getUpdateInstruction } from "../src/config.ts";
 
 const execPathDescriptor = Object.getOwnPropertyDescriptor(process, "execPath");
-const originalPath = process.env["PATH"];
-const originalMsaPackageDir = process.env["MSA_PACKAGE_DIR"];
+const originalPath = readEnv("PATH");
+const originalMsaPackageDir = readEnv("MSA_PACKAGE_DIR");
 const originalArgv1 = process.argv[1];
 let tempDir: string | undefined;
 
@@ -24,14 +27,14 @@ afterEach(() => {
     Object.defineProperty(process, "execPath", execPathDescriptor);
   }
   if (originalPath === undefined) {
-    delete process.env["PATH"];
+    vi.stubEnv("PATH", undefined);
   } else {
-    process.env["PATH"] = originalPath;
+    vi.stubEnv("PATH", originalPath);
   }
   if (originalMsaPackageDir === undefined) {
-    delete process.env["MSA_PACKAGE_DIR"];
+    vi.stubEnv("MSA_PACKAGE_DIR", undefined);
   } else {
-    process.env["MSA_PACKAGE_DIR"] = originalMsaPackageDir;
+    vi.stubEnv("MSA_PACKAGE_DIR", originalMsaPackageDir);
   }
   if (originalArgv1 === undefined) {
     process.argv.splice(1, 1);
@@ -52,7 +55,7 @@ function createNpmPrefixInstall(template = "msa-prefix-"): { prefix: string; pac
   const packageDir = join(scopeDir, "coding-agent");
   mkdirSync(packageDir, { recursive: true });
   tempDir = prefix;
-  process.env["MSA_PACKAGE_DIR"] = packageDir;
+  vi.stubEnv("MSA_PACKAGE_DIR", packageDir);
   setExecPath(join(packageDir, "dist", "cli.js"));
   return { prefix, packageDir };
 }
@@ -72,8 +75,8 @@ function createBunGlobalInstall(): { packageDir: string } {
   );
   chmodSync(join(bunBin, process.platform === "win32" ? "bun.cmd" : "bun"), 0o755);
   tempDir = temp;
-  process.env["PATH"] = `${bunBin}${delimiter}${originalPath ?? ""}`;
-  process.env["MSA_PACKAGE_DIR"] = packageDir;
+  vi.stubEnv("PATH", `${bunBin}${delimiter}${originalPath ?? ""}`);
+  vi.stubEnv("MSA_PACKAGE_DIR", packageDir);
   setExecPath(join(packageDir, "dist", "cli.js"));
   return { packageDir };
 }
@@ -236,7 +239,7 @@ describe("detectInstallMethod", () => {
   });
   test("does not infer Windows npm custom prefixes from package paths", () => {
     const packageDir = "C:\\Users\\Admin\\npm prefix\\node_modules\\@msa\\coding-agent";
-    process.env["MSA_PACKAGE_DIR"] = packageDir;
+    vi.stubEnv("MSA_PACKAGE_DIR", packageDir);
     setExecPath(`${packageDir}\\dist\\cli.js`);
 
     expect(detectInstallMethod()).toBe("npm");
