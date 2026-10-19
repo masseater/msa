@@ -1,16 +1,14 @@
-import { mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
-
 import {
   awaited,
+  fromJsonText,
+  joinPath,
+  makeDirectory,
+  makeTempDir,
+  readTextFile,
+  removePath,
   runTest,
   toJsonText,
   writeTextFile,
-  joinPath,
-  fromJsonText,
-  readTextFile,
-  makeDirectory,
-  removePath,
 } from "@msa/testing";
 import { resetCapabilitiesCache, setCapabilityOverrides } from "@msa/tui";
 import { Effect } from "effect";
@@ -40,7 +38,7 @@ describe("DefaultResourceLoader theme color mode", () => {
   beforeEach(() =>
     runTest(
       Effect.gen(function* () {
-        tempDir = mkdtempSync(joinPath(tmpdir(), "resource-loader-theme-"));
+        tempDir = yield* makeTempDir("resource-loader-theme-");
         agentDir = joinPath(tempDir, "agent");
         cwd = joinPath(tempDir, "project");
         yield* makeDirectory(agentDir);

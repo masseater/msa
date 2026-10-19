@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import { deleteEnv, envNames, envSnapshot } from "../src/core/process-env.ts";
+import { envNames, envSnapshot, readEnv } from "../src/core/process-env.ts";
 
 const readFileSync = vi.fn();
 
@@ -10,68 +10,63 @@ vi.mock("node:fs", () => ({
 
 const { restoreSandboxEnv } = await import("../src/bun/restore-sandbox-env.ts");
 
+const stubVersions = (versions: Record<string, string>): (() => void) => {
+  const originalVersions = Object.getOwnPropertyDescriptor(process, "versions");
+  Object.defineProperty(process, "versions", {
+    value: versions,
+  });
+  return () => {
+    if (originalVersions !== undefined) {
+      Object.defineProperty(process, "versions", originalVersions);
+    }
+  };
+};
+
+const emptyEnv = (): void => {
+  for (const key of envNames()) vi.stubEnv(key, undefined);
+  vi.stubEnv("FOO", undefined);
+  vi.stubEnv("BAZ", undefined);
+};
+
 describe("restoreSandboxEnv", () => {
   it("does nothing when not running under bun", () => {
-    const originalVersions = Object.getOwnPropertyDescriptor(process, "versions");
-    Object.defineProperty(process, "versions", {
-      value: { node: "20.0.0" },
-    });
+    const restoreVersions = stubVersions({ node: "20.0.0" });
     const envBefore = { ...envSnapshot() };
 
     restoreSandboxEnv();
 
-    expect(process.env).toEqual(envBefore);
+    expect(envSnapshot()).toEqual(envBefore);
 
-    if (originalVersions !== undefined) {
-      Object.defineProperty(process, "versions", originalVersions);
-    }
+    restoreVersions();
   });
 
   it("does nothing when process.env already has entries", () => {
-    const originalVersions = Object.getOwnPropertyDescriptor(process, "versions");
-    Object.defineProperty(process, "versions", {
-      value: { bun: "1.2.0", node: "20.0.0" },
-    });
-    process.env["RESTORE_SANDBOX_ENV_TEST"] = "1";
+    const restoreVersions = stubVersions({ bun: "1.2.0", node: "20.0.0" });
+    vi.stubEnv("RESTORE_SANDBOX_ENV_TEST", "1");
     const envBefore = { ...envSnapshot() };
 
     restoreSandboxEnv();
 
-    expect(process.env).toEqual(envBefore);
-    deleteEnv("RESTORE_SANDBOX_ENV_TEST");
+    expect(envSnapshot()).toEqual(envBefore);
+    vi.unstubAllEnvs();
 
-    if (originalVersions !== undefined) {
-      Object.defineProperty(process, "versions", originalVersions);
-    }
+    restoreVersions();
   });
 
   it("restores environment from /proc/self/environ when bun env is empty", () => {
-    const originalVersions = Object.getOwnPropertyDescriptor(process, "versions");
-    Object.defineProperty(process, "versions", {
-      value: { bun: "1.2.0", node: "20.0.0" },
-    });
-
-    const envBackup = { ...envSnapshot() };
-    for (const key of envNames()) {
-      delete process.env[key];
-    }
+    const restoreVersions = stubVersions({ bun: "1.2.0", node: "20.0.0" });
+    emptyEnv();
 
     readFileSync.mockReturnValue("FOO=bar\0BAZ=qux\0");
 
     restoreSandboxEnv();
 
     expect(readFileSync).toHaveBeenCalledWith("/proc/self/environ", "utf-8");
-    expect(process.env["FOO"]).toBe("bar");
-    expect(process.env["BAZ"]).toBe("qux");
+    expect(readEnv("FOO")).toBe("bar");
+    expect(readEnv("BAZ")).toBe("qux");
 
-    for (const key of envNames()) {
-      delete process.env[key];
-    }
-    Object.assign(process.env, envBackup);
-
-    if (originalVersions !== undefined) {
-      Object.defineProperty(process, "versions", originalVersions);
-    }
+    vi.unstubAllEnvs();
+    restoreVersions();
     readFileSync.mockReset();
   });
 });

@@ -1,4 +1,3 @@
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 
 import {
@@ -8,11 +7,12 @@ import {
   runTest,
   makeDirectory,
   removePath,
+  writeTextFile,
 } from "@msa/testing";
 import { Effect } from "effect";
-import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { deleteEnv, readEnv, writeEnv } from "../src/core/process-env.ts";
+import { readEnv } from "../src/core/process-env.ts";
 import { hasTrustRequiringProjectResources, ProjectTrustStore } from "../src/core/trust-manager.ts";
 
 describe("ProjectTrustStore", () => {
@@ -34,47 +34,53 @@ describe("ProjectTrustStore", () => {
 
   afterEach(() => runTest(removePath(tempDir)));
 
-  it("stores decisions and inherits from parent directories", () => {
-    const store = new ProjectTrustStore(agentDir);
-    const parentDir = joinPath(tempDir, "trusted-parent");
-    const childDir = joinPath(parentDir, "project");
-    mkdirSync(childDir, { recursive: true });
+  it("stores decisions and inherits from parent directories", () =>
+    runTest(
+      Effect.gen(function* () {
+        const store = new ProjectTrustStore(agentDir);
+        const parentDir = joinPath(tempDir, "trusted-parent");
+        const childDir = joinPath(parentDir, "project");
+        yield* makeDirectory(childDir);
 
-    expect(store.get(childDir)).toBeNull();
-    store.set(parentDir, true);
-    expect(store.get(childDir)).toBe(true);
-    store.set(childDir, false);
-    expect(store.get(childDir)).toBe(false);
-    store.set(childDir, null);
-    expect(store.get(childDir)).toBe(true);
-  });
+        expect(store.get(childDir)).toBeNull();
+        store.set(parentDir, true);
+        expect(store.get(childDir)).toBe(true);
+        store.set(childDir, false);
+        expect(store.get(childDir)).toBe(false);
+        store.set(childDir, null);
+        expect(store.get(childDir)).toBe(true);
+      }),
+    ));
 
-  it("detects trust-requiring project resources", () => {
-    const originalHome = readEnv("HOME");
-    writeEnv("HOME", tempDir);
-    try {
-      mkdirSync(joinPath(tempDir, ".msa", "agent"), { recursive: true });
-      mkdirSync(joinPath(tempDir, ".agents", "skills"), { recursive: true });
-      expect(hasTrustRequiringProjectResources(tempDir)).toBe(false);
-      expect(hasTrustRequiringProjectResources(cwd)).toBe(false);
+  it("detects trust-requiring project resources", () =>
+    runTest(
+      Effect.gen(function* () {
+        const originalHome = readEnv("HOME");
+        vi.stubEnv("HOME", tempDir);
+        try {
+          yield* makeDirectory(joinPath(tempDir, ".msa", "agent"));
+          yield* makeDirectory(joinPath(tempDir, ".agents", "skills"));
+          expect(hasTrustRequiringProjectResources(tempDir)).toBe(false);
+          expect(hasTrustRequiringProjectResources(cwd)).toBe(false);
 
-      writeFileSync(joinPath(tempDir, ".msa", "settings.json"), "{}");
-      expect(hasTrustRequiringProjectResources(tempDir)).toBe(true);
-      rmSync(joinPath(tempDir, ".msa", "settings.json"), { force: true });
+          yield* writeTextFile(joinPath(tempDir, ".msa", "settings.json"), "{}");
+          expect(hasTrustRequiringProjectResources(tempDir)).toBe(true);
+          yield* removePath(joinPath(tempDir, ".msa", "settings.json"));
 
-      mkdirSync(joinPath(cwd, ".msa"), { recursive: true });
-      writeFileSync(joinPath(cwd, ".msa", "settings.json"), "{}");
-      expect(hasTrustRequiringProjectResources(cwd)).toBe(true);
+          yield* makeDirectory(joinPath(cwd, ".msa"));
+          yield* writeTextFile(joinPath(cwd, ".msa", "settings.json"), "{}");
+          expect(hasTrustRequiringProjectResources(cwd)).toBe(true);
 
-      rmSync(joinPath(cwd, ".msa"), { recursive: true, force: true });
-      mkdirSync(joinPath(cwd, ".agents", "skills"), { recursive: true });
-      expect(hasTrustRequiringProjectResources(cwd)).toBe(true);
-    } finally {
-      if (originalHome === undefined) {
-        deleteEnv("HOME");
-      } else {
-        writeEnv("HOME", originalHome);
-      }
-    }
-  });
+          yield* removePath(joinPath(cwd, ".msa"));
+          yield* makeDirectory(joinPath(cwd, ".agents", "skills"));
+          expect(hasTrustRequiringProjectResources(cwd)).toBe(true);
+        } finally {
+          if (originalHome === undefined) {
+            vi.stubEnv("HOME", undefined);
+          } else {
+            vi.stubEnv("HOME", originalHome);
+          }
+        }
+      }),
+    ));
 });

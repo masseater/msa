@@ -275,11 +275,11 @@ Project skill`,
           const projectThemePath = joinPath(cwd, ".msa", "themes", "collision.json");
           yield* makeDirectory(joinPath(agentDir, "themes"));
           yield* makeDirectory(joinPath(cwd, ".msa", "themes"));
-          yield* writeTextFile(userThemePath, JSON.stringify(baseTheme, null, 2));
+          yield* writeTextFile(userThemePath, yield* toJsonText(baseTheme));
           if (baseTheme.vars !== undefined) {
             baseTheme.vars["accent"] = "#ff00ff";
           }
-          yield* writeTextFile(projectThemePath, JSON.stringify(baseTheme, null, 2));
+          yield* writeTextFile(projectThemePath, yield* toJsonText(baseTheme));
 
           const loader = new DefaultResourceLoader({ cwd, agentDir });
           yield* awaited(loader.reload());
@@ -633,10 +633,7 @@ Project skill content`,
             name: string;
           };
           themeData.name = "project-theme";
-          yield* writeTextFile(
-            joinPath(themesDir, "project.json"),
-            JSON.stringify(themeData, null, 2),
-          );
+          yield* writeTextFile(joinPath(themesDir, "project.json"), yield* toJsonText(themeData));
           const settingsManager = SettingsManager.create(cwd, agentDir, { projectTrusted: false });
 
           const loader = new DefaultResourceLoader({ cwd, agentDir, settingsManager });

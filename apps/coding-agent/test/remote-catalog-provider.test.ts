@@ -8,7 +8,14 @@ import {
   type Provider,
   type RefreshModelsContext,
 } from "@msa/ai";
-import { awaited, runTest, abortController, toJsonText, dateFromMillis } from "@msa/testing";
+import {
+  abortController,
+  awaited,
+  dateFromMillis,
+  deferredPromise,
+  runTest,
+  toJsonText,
+} from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
@@ -324,21 +331,16 @@ describe("remote catalog provider", () => {
         const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
         let calls = 0;
-        let markFirstStarted: (() => void) | undefined;
-        let finishFirst: ((response: Response) => void) | undefined;
-        const firstStarted = new Promise<void>((resolve) => {
-          markFirstStarted = resolve;
-        });
-        const firstResponse = new Promise<Response>((resolve) => {
-          finishFirst = resolve;
-        });
+        const firstStarted = deferredPromise<void>();
+        const firstResponse = deferredPromise<Response>();
+        const markFirstStarted = firstStarted.resolve;
         vi.spyOn(globalThis, "fetch").mockImplementation(() =>
           effectRunPromise(
             Effect.gen(function* () {
               calls++;
               if (calls === 1) {
                 markFirstStarted?.();
-                return yield* awaited(firstResponse);
+                return yield* awaited(firstResponse.promise);
               }
               return yield* awaited(
                 new Response(yield* toJsonText({ newer: model("newer") }), {
@@ -354,13 +356,13 @@ describe("remote catalog provider", () => {
         models.setProvider(provider);
 
         const first = models.refresh({ providers: [provider.id], force: true });
-        yield* awaited(firstStarted);
+        yield* awaited(firstStarted.promise);
         const second = models.refresh({ providers: [provider.id], force: true });
         yield* awaited(second);
         yield* awaited(first);
         expect(provider.getModels().map((entry) => entry.id)).toEqual(["static", "newer"]);
 
-        finishFirst?.(
+        firstResponse.resolve(
           new Response(yield* toJsonText({ older: model("older") }), {
             headers: { "content-type": "application/json" },
           }),

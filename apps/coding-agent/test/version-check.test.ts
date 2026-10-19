@@ -2,7 +2,7 @@ import { awaited, runTest } from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { deleteEnv, readEnv, writeEnv } from "../src/core/process-env.ts";
+import { readEnv } from "../src/core/process-env.ts";
 import {
   checkForNewMsaVersion,
   comparePackageVersions,
@@ -21,9 +21,9 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllGlobals();
   if (originalSkipVersionCheck === undefined) {
-    deleteEnv("MSA_SKIP_VERSION_CHECK");
+    vi.stubEnv("MSA_SKIP_VERSION_CHECK", undefined);
   } else {
-    writeEnv("MSA_SKIP_VERSION_CHECK", originalSkipVersionCheck);
+    vi.stubEnv("MSA_SKIP_VERSION_CHECK", originalSkipVersionCheck);
   }
 });
 
@@ -116,7 +116,7 @@ describe("version checks", () => {
   it("skips automatic api calls when version checks are disabled", () =>
     runTest(
       Effect.gen(function* () {
-        writeEnv("MSA_SKIP_VERSION_CHECK", "1");
+        vi.stubEnv("MSA_SKIP_VERSION_CHECK", "1");
         const fetchMock = vi.fn();
         vi.stubGlobal("fetch", fetchMock);
 
@@ -130,7 +130,7 @@ describe("version checks", () => {
       Effect.gen(function* () {
         const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-        writeEnv("MSA_SKIP_VERSION_CHECK", "1");
+        vi.stubEnv("MSA_SKIP_VERSION_CHECK", "1");
         const fetchMock = vi.fn(() =>
           effectRunPromise(awaited(Response.json({ tag_name: "v1.2.4" }))),
         );

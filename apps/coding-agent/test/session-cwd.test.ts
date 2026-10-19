@@ -1,4 +1,3 @@
-import { mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 
 import {
@@ -8,7 +7,10 @@ import {
   currentDate,
   randomSuffixSync,
   joinPath,
+  makeDirectory,
   removePath,
+  toJsonText,
+  writeTextFile,
 } from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
@@ -20,24 +22,24 @@ import {
 import { getMissingSessionCwdIssue, MissingSessionCwdError } from "../src/core/session-cwd.ts";
 import { SessionManager } from "../src/core/session-manager.ts";
 
-function createTempDir(name: string): string {
-  const dir = joinPath(tmpdir(), `${name}-${currentTimeMillis()}-${randomSuffixSync()}`);
-  mkdirSync(dir, { recursive: true });
-  return dir;
-}
+const createTempDir = (name: string): Effect.Effect<string> =>
+  Effect.gen(function* () {
+    const dir = joinPath(tmpdir(), `${name}-${currentTimeMillis()}-${randomSuffixSync()}`);
+    yield* makeDirectory(dir);
+    return dir;
+  });
 
-function writeSessionFile(path: string, cwd: string): void {
-  writeFileSync(
-    path,
-    `${JSON.stringify({
+const writeSessionFile = (path: string, cwd: string): Effect.Effect<void> =>
+  Effect.gen(function* () {
+    const text = yield* toJsonText({
       type: "session" as const,
       version: 3,
       id: "session-id",
       timestamp: currentDate().toISOString(),
       cwd,
-    })}\n`,
-  );
-}
+    });
+    yield* writeTextFile(path, `${text}\n`);
+  });
 
 describe("session cwd handling", () => {
   const cleanupPaths: string[] = [];
@@ -52,47 +54,53 @@ describe("session cwd handling", () => {
     ),
   );
 
-  it("detects missing session cwd from persisted sessions", () => {
-    const fallbackCwd = createTempDir("msa-session-cwd-fallback");
-    const missingCwd = joinPath(fallbackCwd, "does-not-exist");
-    const sessionDir = createTempDir("msa-session-cwd-session-dir");
-    const sessionFile = joinPath(sessionDir, "session.jsonl");
-    cleanupPaths.push(fallbackCwd, sessionDir);
-    writeSessionFile(sessionFile, missingCwd);
+  it("detects missing session cwd from persisted sessions", () =>
+    runTest(
+      Effect.gen(function* () {
+        const fallbackCwd = yield* createTempDir("msa-session-cwd-fallback");
+        const missingCwd = joinPath(fallbackCwd, "does-not-exist");
+        const sessionDir = yield* createTempDir("msa-session-cwd-session-dir");
+        const sessionFile = joinPath(sessionDir, "session.jsonl");
+        cleanupPaths.push(fallbackCwd, sessionDir);
+        yield* writeSessionFile(sessionFile, missingCwd);
 
-    const sessionManager = SessionManager.open(sessionFile);
-    const issue = getMissingSessionCwdIssue(sessionManager, fallbackCwd);
-    expect(issue).toEqual({
-      sessionFile: sessionManager.getSessionFile(),
-      sessionCwd: missingCwd,
-      fallbackCwd,
-    });
-  });
+        const sessionManager = SessionManager.open(sessionFile);
+        const issue = getMissingSessionCwdIssue(sessionManager, fallbackCwd);
+        expect(issue).toEqual({
+          sessionFile: sessionManager.getSessionFile(),
+          sessionCwd: missingCwd,
+          fallbackCwd,
+        });
+      }),
+    ));
 
-  it("supports overriding the effective cwd when opening a session", () => {
-    const fallbackCwd = createTempDir("msa-session-cwd-override");
-    const missingCwd = joinPath(fallbackCwd, "does-not-exist");
-    const sessionDir = createTempDir("msa-session-cwd-override-session-dir");
-    const sessionFile = joinPath(sessionDir, "session.jsonl");
-    cleanupPaths.push(fallbackCwd, sessionDir);
-    writeSessionFile(sessionFile, missingCwd);
+  it("supports overriding the effective cwd when opening a session", () =>
+    runTest(
+      Effect.gen(function* () {
+        const fallbackCwd = yield* createTempDir("msa-session-cwd-override");
+        const missingCwd = joinPath(fallbackCwd, "does-not-exist");
+        const sessionDir = yield* createTempDir("msa-session-cwd-override-session-dir");
+        const sessionFile = joinPath(sessionDir, "session.jsonl");
+        cleanupPaths.push(fallbackCwd, sessionDir);
+        yield* writeSessionFile(sessionFile, missingCwd);
 
-    const sessionManager = SessionManager.open(sessionFile, undefined, fallbackCwd);
-    expect(sessionManager.getCwd()).toBe(fallbackCwd);
-    expect(getMissingSessionCwdIssue(sessionManager, fallbackCwd)).toBeUndefined();
-  });
+        const sessionManager = SessionManager.open(sessionFile, undefined, fallbackCwd);
+        expect(sessionManager.getCwd()).toBe(fallbackCwd);
+        expect(getMissingSessionCwdIssue(sessionManager, fallbackCwd)).toBeUndefined();
+      }),
+    ));
 
   it("throws a controlled error before runtime creation when the stored cwd is missing", () =>
     runTest(
       Effect.gen(function* () {
         const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-        const fallbackCwd = createTempDir("msa-session-cwd-runtime");
+        const fallbackCwd = yield* createTempDir("msa-session-cwd-runtime");
         const missingCwd = joinPath(fallbackCwd, "does-not-exist");
-        const sessionDir = createTempDir("msa-session-cwd-runtime-session-dir");
+        const sessionDir = yield* createTempDir("msa-session-cwd-runtime-session-dir");
         const sessionFile = joinPath(sessionDir, "session.jsonl");
         cleanupPaths.push(fallbackCwd, sessionDir);
-        writeSessionFile(sessionFile, missingCwd);
+        yield* writeSessionFile(sessionFile, missingCwd);
 
         const sessionManager = SessionManager.open(sessionFile);
         let createRuntimeCalled = false;

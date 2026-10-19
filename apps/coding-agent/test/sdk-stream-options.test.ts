@@ -1,6 +1,3 @@
-import { mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
-
 import {
   type Api,
   type AssistantMessage,
@@ -11,11 +8,12 @@ import {
 } from "@msa/ai";
 import {
   awaited,
-  runTest,
   currentTimeMillis,
   joinPath,
   makeDirectory,
+  makeTempDir,
   removePath,
+  runTest,
 } from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
@@ -36,7 +34,7 @@ describe("createAgentSession stream options", () => {
   beforeEach(() =>
     runTest(
       Effect.gen(function* () {
-        tempDir = mkdtempSync(joinPath(tmpdir(), "msa-sdk-stream-options-"));
+        tempDir = yield* makeTempDir("msa-sdk-stream-options-");
         cwd = joinPath(tempDir, "project");
         agentDir = joinPath(tempDir, "agent");
         yield* makeDirectory(cwd);

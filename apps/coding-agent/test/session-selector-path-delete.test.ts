@@ -1,45 +1,32 @@
-import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-
-import { awaited, runTest, joinPath, dateFromMillis, removePath } from "@msa/testing";
+import {
+  awaited,
+  runTest,
+  deferredPromise,
+  joinPath,
+  dateFromMillis,
+  makeDirectory,
+  makeTempDir,
+  removePath,
+  sleep,
+  testRuntime,
+  writeTextFile,
+} from "@msa/testing";
 import { setKeybindings } from "@msa/tui";
-import { Effect } from "effect";
+import { Effect, FileSystem } from "effect";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vite-plus/test";
 
 import { KeybindingsManager } from "../src/core/keybindings.ts";
 import type { SessionInfo } from "../src/core/session-manager.ts";
 import { SessionSelectorComponent } from "../src/modes/interactive/components/session-selector.ts";
 import { initTheme } from "../src/modes/interactive/theme/theme.ts";
+import { stripAnsi } from "../src/utils/ansi.ts";
 
-type Deferred<T> = {
-  promise: Promise<T>;
-  resolve: (value: T) => void;
-  reject: (err: unknown) => void;
-};
+const flushPromises = sleep("1 millis");
 
-function createDeferred<T>(): Deferred<T> {
-  let resolve: (value: T) => void = () => {};
-  let reject: (err: unknown) => void = () => {};
-  const promise = new Promise<T>((res, rej) => {
-    resolve = res;
-    reject = rej;
-  });
-  return { promise, resolve, reject };
-}
+const fileSystem = testRuntime.runSync(FileSystem.FileSystem);
 
-function flushPromises(): Promise<void> {
-  return runTest(
-    awaited(
-      new Promise<void>((resolve) => {
-        setImmediate(resolve);
-      }),
-    ),
-  );
-}
-
-function stripAnsi(text: string): string {
-  return text.replace(/\x1B\[[0-?]*[ -/]*[@-~]/gu, "");
-}
+const symlink = (from: string, to: string): Effect.Effect<void> =>
+  Effect.orDie(fileSystem.symlink(from, to));
 
 function makeSession(overrides: Partial<SessionInfo> & { id: string }): SessionInfo {
   return {
@@ -58,31 +45,31 @@ function makeSession(overrides: Partial<SessionInfo> & { id: string }): SessionI
   };
 }
 
-function createSymlinkedSessionPaths(): {
+const createSymlinkedSessionPaths: Effect.Effect<{
   baseDir: string;
   parentAliasA: string;
   parentAliasB: string;
   childAliasB: string;
-} {
-  const baseDir = mkdtempSync(joinPath(tmpdir(), "msa-session-selector-"));
+}> = Effect.gen(function* () {
+  const baseDir = yield* makeTempDir("msa-session-selector-");
   const realDir = joinPath(baseDir, "real");
   const aliasADir = joinPath(baseDir, "alias-a");
   const aliasBDir = joinPath(baseDir, "alias-b");
-  mkdirSync(realDir, { recursive: true });
-  mkdirSync(aliasADir, { recursive: true });
-  mkdirSync(aliasBDir, { recursive: true });
+  yield* makeDirectory(realDir);
+  yield* makeDirectory(aliasADir);
+  yield* makeDirectory(aliasBDir);
 
   const sharedDir = joinPath(realDir, "sessions");
-  mkdirSync(sharedDir, { recursive: true });
+  yield* makeDirectory(sharedDir);
   const aliasASessions = joinPath(aliasADir, "sessions");
   const aliasBSessions = joinPath(aliasBDir, "sessions");
-  symlinkSync(sharedDir, aliasASessions);
-  symlinkSync(sharedDir, aliasBSessions);
+  yield* symlink(sharedDir, aliasASessions);
+  yield* symlink(sharedDir, aliasBSessions);
 
   const parentRealPath = joinPath(sharedDir, "parent.jsonl");
   const childRealPath = joinPath(sharedDir, "child.jsonl");
-  writeFileSync(parentRealPath, "parent\n");
-  writeFileSync(childRealPath, "child\n");
+  yield* writeTextFile(parentRealPath, "parent\n");
+  yield* writeTextFile(childRealPath, "child\n");
 
   return {
     baseDir,
@@ -90,7 +77,7 @@ function createSymlinkedSessionPaths(): {
     parentAliasB: joinPath(aliasBSessions, "parent.jsonl"),
     childAliasB: joinPath(aliasBSessions, "child.jsonl"),
   };
-}
+});
 
 const CTRL_D = "\x04";
 const CTRL_BACKSPACE = "\x1b[127;5u";
@@ -132,7 +119,7 @@ describe("session selector path/delete interactions", () => {
           () => {},
           { keybindings },
         );
-        yield* awaited(flushPromises());
+        yield* flushPromises;
 
         const list = selector.getSessionList();
         const confirmationChanges: Array<string | null> = [];
@@ -161,7 +148,7 @@ describe("session selector path/delete interactions", () => {
           () => {},
           { keybindings },
         );
-        yield* awaited(flushPromises());
+        yield* flushPromises;
 
         const list = selector.getSessionList();
         const confirmationChanges: Array<string | null> = [];
@@ -190,7 +177,7 @@ describe("session selector path/delete interactions", () => {
           () => {},
           { keybindings },
         );
-        yield* awaited(flushPromises());
+        yield* flushPromises;
 
         const list = selector.getSessionList();
         const confirmationChanges: Array<string | null> = [];
@@ -219,7 +206,7 @@ describe("session selector path/delete interactions", () => {
         const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
         const currentSessions = [makeSession({ id: "current" })];
-        const allDeferred = createDeferred<SessionInfo[]>();
+        const allDeferred = deferredPromise<SessionInfo[]>();
         let allLoadCalls = 0;
 
         const selector = new SessionSelectorComponent(
@@ -237,14 +224,14 @@ describe("session selector path/delete interactions", () => {
           () => {},
           { keybindings },
         );
-        yield* awaited(flushPromises());
+        yield* flushPromises;
 
         const list = selector.getSessionList();
         list.handleInput("\t");
         list.handleInput("\t");
 
         allDeferred.resolve([makeSession({ id: "all" })]);
-        yield* awaited(flushPromises());
+        yield* flushPromises;
 
         expect(allLoadCalls).toBe(1);
         const output = selector.render(120).join("\n");
@@ -260,7 +247,7 @@ describe("session selector path/delete interactions", () => {
 
         const currentSessions = [makeSession({ id: "current" })];
         const allSessions = [makeSession({ id: "all" })];
-        const allDeferred = createDeferred<SessionInfo[]>();
+        const allDeferred = deferredPromise<SessionInfo[]>();
         let allLoadCalls = 0;
 
         const selector = new SessionSelectorComponent(
@@ -279,7 +266,7 @@ describe("session selector path/delete interactions", () => {
           () => {},
           { keybindings },
         );
-        yield* awaited(flushPromises());
+        yield* flushPromises;
 
         const list = selector.getSessionList();
         list.handleInput("\t");
@@ -291,7 +278,7 @@ describe("session selector path/delete interactions", () => {
         expect(selector.render(120).join("\n")).toContain("Loading");
 
         allDeferred.resolve(allSessions);
-        yield* awaited(flushPromises());
+        yield* flushPromises;
       }),
     ));
 
@@ -300,7 +287,7 @@ describe("session selector path/delete interactions", () => {
       Effect.gen(function* () {
         const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-        const paths = createSymlinkedSessionPaths();
+        const paths = yield* createSymlinkedSessionPaths;
         tempDirs.push(paths.baseDir);
 
         const sessions = [
@@ -328,7 +315,7 @@ describe("session selector path/delete interactions", () => {
           () => {},
           { keybindings },
         );
-        yield* awaited(flushPromises());
+        yield* flushPromises;
 
         const output = stripAnsi(selector.render(120).join("\n"));
         expect(output).toContain("Parent");
@@ -367,7 +354,7 @@ describe("session selector path/delete interactions", () => {
           () => {},
           { keybindings },
         );
-        yield* awaited(flushPromises());
+        yield* flushPromises;
 
         const output = stripAnsi(selector.render(120).join("\n"));
         const parentTwoIndex = output.indexOf("Parent two");
@@ -385,7 +372,7 @@ describe("session selector path/delete interactions", () => {
       Effect.gen(function* () {
         const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-        const paths = createSymlinkedSessionPaths();
+        const paths = yield* createSymlinkedSessionPaths;
         tempDirs.push(paths.baseDir);
 
         const sessions = [makeSession({ id: "parent", path: paths.parentAliasB, name: "Parent" })];
@@ -399,7 +386,7 @@ describe("session selector path/delete interactions", () => {
           { keybindings },
           paths.parentAliasA,
         );
-        yield* awaited(flushPromises());
+        yield* flushPromises;
 
         const list = selector.getSessionList();
         const confirmationChanges: Array<string | null> = [];
