@@ -198,9 +198,9 @@ function setModel(
     if (task === undefined) throw new Error(`Unknown task: ${taskId}`);
     const patch = { model, ...(thinkingLevel === undefined ? {} : { thinkingLevel }) };
     yield* Effect.sync(() => store.updateTask(runtime.database, taskId, patch, now));
-    const session = actionHelpers.runningSessionOf(runtime, taskId);
-    if (session !== undefined) {
-      const worker = runtime.workers.get(session.id);
+    const thread = actionHelpers.runningThreadOf(runtime, taskId);
+    if (thread !== undefined) {
+      const worker = runtime.workers.get(thread.id);
       if (worker !== undefined) {
         yield* Effect.tryPromise({
           try: () => worker.setModel(resolved),
@@ -208,7 +208,7 @@ function setModel(
         });
         if (thinkingLevel !== undefined) worker.setThinkingLevel(thinkingLevel);
       }
-      yield* Effect.sync(() => store.updateSession(runtime.database, session.id, patch, now));
+      yield* Effect.sync(() => store.updateThread(runtime.database, thread.id, patch, now));
     }
     yield* Effect.sync(() => runtime.publish());
     return actionHelpers.taskView(runtime, taskId);

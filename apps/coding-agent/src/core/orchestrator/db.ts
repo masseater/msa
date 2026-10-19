@@ -33,7 +33,7 @@ CREATE TABLE IF NOT EXISTS rounds (
   created_at INTEGER NOT NULL,
   PRIMARY KEY (project, id)
 );
-CREATE TABLE IF NOT EXISTS sessions (
+CREATE TABLE IF NOT EXISTS threads (
   id TEXT PRIMARY KEY,
   project TEXT NOT NULL,
   model TEXT NOT NULL,
@@ -44,19 +44,19 @@ CREATE TABLE IF NOT EXISTS sessions (
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL
 );
-CREATE INDEX IF NOT EXISTS sessions_project_status ON sessions(project, status);
+CREATE INDEX IF NOT EXISTS threads_project_status ON threads(project, status);
 CREATE TABLE IF NOT EXISTS assignments (
   task_id TEXT NOT NULL,
-  session_id TEXT NOT NULL,
+  thread_id TEXT NOT NULL,
   role TEXT NOT NULL,
   created_at INTEGER NOT NULL,
-  PRIMARY KEY (task_id, session_id, role)
+  PRIMARY KEY (task_id, thread_id, role)
 );
-CREATE INDEX IF NOT EXISTS assignments_session ON assignments(session_id);
+CREATE INDEX IF NOT EXISTS assignments_thread ON assignments(thread_id);
 CREATE TABLE IF NOT EXISTS reports (
   id TEXT PRIMARY KEY,
   task_id TEXT NOT NULL,
-  session_id TEXT NOT NULL,
+  thread_id TEXT NOT NULL,
   role TEXT NOT NULL,
   status TEXT NOT NULL,
   content TEXT NOT NULL,
@@ -79,13 +79,13 @@ CREATE TABLE IF NOT EXISTS note_targets (
 );
 CREATE TABLE IF NOT EXISTS note_reads (
   note_id TEXT NOT NULL,
-  session_id TEXT NOT NULL,
+  thread_id TEXT NOT NULL,
   read_at INTEGER NOT NULL,
-  PRIMARY KEY (note_id, session_id)
+  PRIMARY KEY (note_id, thread_id)
 );
 CREATE TABLE IF NOT EXISTS orchestrator_state (
   project TEXT PRIMARY KEY,
-  max_concurrent_sessions INTEGER
+  max_concurrent_threads INTEGER
 );
 CREATE TABLE IF NOT EXISTS replans (
   id TEXT PRIMARY KEY,
@@ -144,12 +144,37 @@ function migrateTasks(database: DatabaseSync): void {
   });
 }
 
+const THREAD_ID_TABLES = ["assignments", "reports", "note_reads"] as const;
+
+function renameSessionsToThreads(database: DatabaseSync): void {
+  const sessions = database
+    .prepare("SELECT 1 AS found FROM sqlite_master WHERE type = 'table' AND name = 'sessions'")
+    .get();
+  if (sessions === undefined) return;
+  transaction(database, () => {
+    database.exec("DROP INDEX IF EXISTS sessions_project_status");
+    database.exec("DROP INDEX IF EXISTS assignments_session");
+    database.exec("ALTER TABLE sessions RENAME TO threads");
+    for (const table of THREAD_ID_TABLES) {
+      if (columnNames(database, table).includes("session_id")) {
+        database.exec(`ALTER TABLE ${table} RENAME COLUMN session_id TO thread_id`);
+      }
+    }
+    if (columnNames(database, "orchestrator_state").includes("max_concurrent_sessions")) {
+      database.exec(
+        "ALTER TABLE orchestrator_state RENAME COLUMN max_concurrent_sessions TO max_concurrent_threads",
+      );
+    }
+  });
+}
+
 function openDatabase(path: string): DatabaseSync {
   mkdirSync(dirname(path), { recursive: true });
   const database = new DatabaseSync(path, { timeout: 5_000 });
   database.exec("PRAGMA journal_mode = WAL");
   database.exec("PRAGMA synchronous = NORMAL");
   database.exec("PRAGMA foreign_keys = OFF");
+  renameSessionsToThreads(database);
   database.exec(SCHEMA);
   dropReplanUndoColumns(database);
   migrateTasks(database);

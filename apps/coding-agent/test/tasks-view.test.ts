@@ -21,7 +21,7 @@ beforeAll(() => {
   setKeybindings(new KeybindingsManager());
 });
 
-it("shows the round DAG, statuses, waiting reasons, and worker/reviewer sessions", () => {
+it("shows the round DAG, statuses, waiting reasons, and worker/reviewer threads", () => {
   const { screen } = setup();
   const text = screen().join("\n");
   expect(text).toContain("main");
@@ -31,7 +31,7 @@ it("shows the round DAG, statuses, waiting reasons, and worker/reviewer sessions
   expect(screen().some((line) => line.includes("  ○ b"))).toBe(true);
 });
 
-it("opens a task and shows its states, reports, and sessions", () => {
+it("opens a task and shows its states, reports, and threads", () => {
   const { view, screen } = setup({ initialId: "c", state: { showFinished: true } });
   view.handleInput(ENTER);
   const text = screen().join("\n");
@@ -40,8 +40,8 @@ it("opens a task and shows its states, reports, and sessions", () => {
   expect(text).toContain("Goal state");
   expect(text).toContain("c works");
   expect(text).toContain("c is done");
-  expect(text).toContain("worker s-worker (flash/low) running");
-  expect(text).toContain("reviewer s-review (fable/high) completed");
+  expect(text).toContain("worker th-worker (flash/low) running");
+  expect(text).toContain("reviewer th-review (fable/high) completed");
   view.handleInput(ESC);
   expect(screen().join("\n")).toContain("Tasks");
 });
@@ -169,7 +169,7 @@ function failedTasks(count: number): TaskSnapshot[] {
         {
           id: `r${index + 1}`,
           taskId: `t${index + 1}`,
-          sessionId: "s-worker",
+          threadId: "th-worker",
           role: "worker",
           status: "failed",
           content: `error ${index + 1}`,
@@ -239,7 +239,7 @@ describe("TasksView scrolling", () => {
             {
               id: "r1",
               taskId: "long",
-              sessionId: "s-worker",
+              threadId: "th-worker",
               role: "worker",
               status: "completed",
               content: report,
@@ -280,7 +280,7 @@ describe("TasksView scrolling", () => {
         {
           id: "r1",
           taskId: "long",
-          sessionId: "s-worker",
+          threadId: "th-worker",
           role: "worker",
           status: "completed",
           content: report,
@@ -313,7 +313,7 @@ describe("TasksView scrolling", () => {
         {
           id: "r1",
           taskId: "long",
-          sessionId: "s-worker",
+          threadId: "th-worker",
           role: "worker",
           status: "completed",
           content: Array.from({ length: 40 }, (_, index) => `step ${index + 1}`).join("\n"),

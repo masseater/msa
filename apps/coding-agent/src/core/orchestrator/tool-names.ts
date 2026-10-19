@@ -10,7 +10,7 @@ export const ORCHESTRATOR_TOOL_NAMES = [
   "search_reports",
   "stop_task",
   "rerun_task",
-  "set_max_concurrent_sessions",
+  "set_max_concurrent_threads",
   "replan",
   "handoff",
 ] as const;

@@ -11,8 +11,8 @@ function scheduleEffect(runtime: Runtime): Effect.Effect<string[], OrchestratorE
     if (runtime.replanning) return [];
     const database = runtime.database;
     const project = runtime.options.project;
-    const running = store.runningSessions(database, project);
-    let free = runtime.maxConcurrentSessions - running.length;
+    const running = store.runningThreads(database, project);
+    let free = runtime.maxConcurrentThreads - running.length;
     const started: string[] = [];
     for (const task of store.readyTasks(database, project, "work")) {
       if (free <= 0) break;

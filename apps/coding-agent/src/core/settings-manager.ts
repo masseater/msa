@@ -998,10 +998,10 @@ export class SettingsManager {
     return this.settings.orchestrator?.reviewThinkingLevel;
   }
 
-  getOrchestratorMaxConcurrentSessions(): number {
+  getOrchestratorMaxConcurrentThreads(): number {
     return (
-      this.settings.orchestrator?.maxConcurrentSessions ??
-      SETTINGS_DEFAULTS.orchestrator.maxConcurrentSessions
+      this.settings.orchestrator?.maxConcurrentThreads ??
+      SETTINGS_DEFAULTS.orchestrator.maxConcurrentThreads
     );
   }
 

@@ -48,10 +48,10 @@ export const ORCHESTRATOR_REPORT_MESSAGE_TYPE = "msa.orchestrator.report";
 
 const EMPTY: OrchestratorSnapshot = {
   tasks: [],
-  sessions: [],
+  threads: [],
   rounds: [],
   replans: [],
-  maxConcurrentSessions: 4,
+  maxConcurrentThreads: 4,
 };
 
 export class Orchestrator implements Runtime {
@@ -65,7 +65,7 @@ export class Orchestrator implements Runtime {
   readonly listeners = new Set<() => void>();
   replanning = false;
   snapshot: OrchestratorSnapshot = EMPTY;
-  maxConcurrentSessions: number;
+  maxConcurrentThreads: number;
   private readonly transcripts = new TranscriptCache();
   private queue: Promise<void> = Promise.resolve();
   private runCount = 0;
@@ -82,9 +82,9 @@ export class Orchestrator implements Runtime {
     };
     this.database = store.openDatabase(options.databasePath);
     store.recoverRunning(this.database, options.project, Effect.runSync(nowMillis));
-    this.maxConcurrentSessions =
+    this.maxConcurrentThreads =
       store.storedMaxConcurrent(this.database, options.project) ??
-      options.defaults().maxConcurrentSessions;
+      options.defaults().maxConcurrentThreads;
     this.publish();
     if (options.pollIntervalMs !== null) {
       this.poller = scheduling.startPolling(this, options.pollIntervalMs ?? 5000);
@@ -109,18 +109,18 @@ export class Orchestrator implements Runtime {
     this.snapshot = snapshots.buildSnapshot(
       this.database,
       this.options.project,
-      this.maxConcurrentSessions,
+      this.maxConcurrentThreads,
     );
     this.telemetry.published(this.snapshot, this.runs.size);
     for (const listener of this.listeners) listener();
   }
 
-  settle(sessionId: string, run: number, worker: WorkerSession, error: unknown): Promise<void> {
-    return settling.settle(this, sessionId, run, worker, error);
+  settle(threadId: string, run: number, worker: WorkerSession, error: unknown): Promise<void> {
+    return settling.settle(this, threadId, run, worker, error);
   }
 
-  afterTurn(sessionId: string, run: number, worker: WorkerSession): void {
-    settling.afterTurn(this, sessionId, run, worker);
+  afterTurn(threadId: string, run: number, worker: WorkerSession): void {
+    settling.afterTurn(this, threadId, run, worker);
   }
 
   get tasks(): readonly TaskView[] {
@@ -135,7 +135,7 @@ export class Orchestrator implements Runtime {
   }
 
   messages(id: string): readonly AgentMessage[] {
-    const sessionFile = this.snapshot.sessions.find((session) => session.id === id)?.sessionFile;
+    const sessionFile = this.snapshot.threads.find((thread) => thread.id === id)?.sessionFile;
     return this.transcripts.messages(id, this.workers, sessionFile ?? null);
   }
 
@@ -198,7 +198,7 @@ export class Orchestrator implements Runtime {
     return this.exclusive(actions.rerun(this, taskId, extra));
   }
 
-  setMaxConcurrentSessions(value: number): Promise<number> {
+  setMaxConcurrentThreads(value: number): Promise<number> {
     return this.exclusive(actions.setMaxConcurrent(this, value));
   }
 

@@ -35,19 +35,19 @@ function sendNote(
     };
     yield* Effect.sync(() => store.insertNote(database, note));
     const steered: string[] = [];
-    for (const session of store.runningSessions(database, project)) {
+    for (const thread of store.runningThreads(database, project)) {
       const tasks = store
-        .assignmentsOfSession(database, session.id)
+        .assignmentsOfThread(database, thread.id)
         .flatMap((assignment) => store.getTask(database, assignment.taskId) ?? []);
       if (!tasks.some((task) => actionHelpers.appliesTo(note, task))) continue;
-      const worker = runtime.workers.get(session.id);
+      const worker = runtime.workers.get(thread.id);
       if (worker === undefined) continue;
       yield* Effect.tryPromise({
         try: () => worker.steer(input.content),
         catch: orchestratorError,
       });
-      yield* Effect.sync(() => store.markNoteRead(database, note.id, session.id, now));
-      steered.push(session.id);
+      yield* Effect.sync(() => store.markNoteRead(database, note.id, thread.id, now));
+      steered.push(thread.id);
     }
     const waiting = snapshots
       .taskViews(database, project)
@@ -55,7 +55,7 @@ function sendNote(
     yield* Effect.sync(() => runtime.publish());
     return {
       noteId: note.id,
-      steeredSessions: steered,
+      steeredThreads: steered,
       waitingTasks: waiting.map((task) => task.id),
     };
   });
@@ -85,16 +85,14 @@ function stop(runtime: Runtime, taskId: string): Effect.Effect<TaskView, Orchest
     const database = runtime.database;
     const task = store.getTask(database, taskId);
     if (task === undefined) throw new Error(`Unknown task: ${taskId}`);
-    const session = actionHelpers.runningSessionOf(runtime, taskId);
-    if (session !== undefined) {
-      runtime.runs.delete(session.id);
+    const thread = actionHelpers.runningThreadOf(runtime, taskId);
+    if (thread !== undefined) {
+      runtime.runs.delete(thread.id);
       void runtime.workers
-        .get(session.id)
+        .get(thread.id)
         ?.abort()
         .catch(() => undefined);
-      yield* Effect.sync(() =>
-        store.updateSession(database, session.id, { status: "stopped" }, now),
-      );
+      yield* Effect.sync(() => store.updateThread(database, thread.id, { status: "stopped" }, now));
     }
     yield* Effect.sync(() => {
       store.setTaskStatus(database, taskId, "stopped", now);
@@ -128,12 +126,12 @@ function setMaxConcurrent(
 ): Effect.Effect<number, OrchestratorError> {
   return Effect.gen(function* () {
     if (!Number.isInteger(value) || value < 1) {
-      throw new Error("max concurrent sessions must be an integer of at least 1");
+      throw new Error("max concurrent threads must be an integer of at least 1");
     }
     yield* Effect.sync(() =>
       store.storeMaxConcurrent(runtime.database, runtime.options.project, value),
     );
-    runtime.maxConcurrentSessions = value;
+    runtime.maxConcurrentThreads = value;
     yield* scheduling.scheduleEffect(runtime);
     yield* Effect.sync(() => runtime.publish());
     return value;

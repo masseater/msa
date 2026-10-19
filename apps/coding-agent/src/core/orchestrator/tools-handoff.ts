@@ -31,7 +31,7 @@ export function handoffTools(orchestrator: Orchestrator): Record<string, ToolDef
       name: "handoff",
       label: "handoff",
       description:
-        "Write the orchestrator's state to one Markdown file so a new msa process can resume it. The tool fills in the tasks, shared notes, replans, running and waiting sessions, and open PRs and issues; you write only premise, goals, and donts. Returns the line a person pastes into the next session.",
+        "Write the orchestrator's state to one Markdown file so a new msa process can resume it. The tool fills in the tasks, shared notes, replans, running and waiting threads, and open PRs and issues; you write only premise, goals, and donts. Returns the line a person pastes into the next session.",
       promptSnippet: "Write the orchestrator's state to a file for the next session",
       promptGuidelines: [
         "Use handoff only when the user runs /handoff. Reply with the tool result exactly as returned, and nothing else.",

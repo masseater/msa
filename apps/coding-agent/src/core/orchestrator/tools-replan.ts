@@ -70,13 +70,13 @@ const replanSchema = Type.Object({
       { description: "Replaces the dependencies of a kept task." },
     ),
   ),
-  maxConcurrentSessions: Type.Optional(
-    Type.Integer({ minimum: 1, description: "Sessions that may run at the same time." }),
+  maxConcurrentThreads: Type.Optional(
+    Type.Integer({ minimum: 1, description: "Threads that may run at the same time." }),
   ),
   stop: Type.Optional(
     Type.Boolean({
       description:
-        "Default true: every running session commits and pushes, writes a handoff memo, then stops before the plan changes. false only rewires waiting work.",
+        "Default true: every running thread commits and pushes, writes a handoff memo, then stops before the plan changes. false only rewires waiting work.",
     }),
   ),
   resume: Type.Optional(
@@ -92,7 +92,7 @@ export function replanTools(orchestrator: Orchestrator): Record<string, ToolDefi
       name: "replan",
       label: "replan",
       description:
-        "Stop the work at a turn boundary, collect each task's state, rewrite the task DAG, and start the new plan in one call. Running sessions commit and push, then write a handoff memo; the memo reaches whatever continues the work as reference, not as steps. Replacing a task with several splits it, replacing several with one merges them, dropping closes it with a reason. Cycles are rejected and nothing changes when a wrap-up fails.",
+        "Stop the work at a turn boundary, collect each task's state, rewrite the task DAG, and start the new plan in one call. Running threads commit and push, then write a handoff memo; the memo reaches whatever continues the work as reference, not as steps. Replacing a task with several splits it, replacing several with one merges them, dropping closes it with a reason. Cycles are rejected and nothing changes when a wrap-up fails.",
       promptSnippet: "Stop the work, rewrite the task DAG, and resume it",
       promptGuidelines: [
         "Use replan when the plan itself is wrong, not to nudge one task: send_message and send_note steer work that stays as it is.",

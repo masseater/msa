@@ -143,7 +143,7 @@ function setup(options: HarnessOptions = {}) {
       workerThinkingLevel: "low",
       reviewModel: "sub/fable",
       reviewThinkingLevel: "high",
-      maxConcurrentSessions: options.maxConcurrent ?? 4,
+      maxConcurrentThreads: options.maxConcurrent ?? 4,
     }),
     report: (text, details) => reports.push({ text, details }),
   });

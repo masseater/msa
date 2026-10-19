@@ -18,7 +18,7 @@ export interface HandoffResult {
   running: number;
   /** The line a person pastes into the next session. */
   line: string;
-  /** Said after `line` while sessions still run. */
+  /** Said after `line` while threads still run. */
   notice: string | undefined;
 }
 
@@ -43,7 +43,7 @@ function write(
     const snapshot = snapshots.buildSnapshot(
       runtime.database,
       project,
-      runtime.maxConcurrentSessions,
+      runtime.maxConcurrentThreads,
     );
     const path = yield* Effect.tryPromise({
       try: async () => {

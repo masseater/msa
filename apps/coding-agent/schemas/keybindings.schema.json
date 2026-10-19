@@ -329,7 +329,7 @@
     },
     "app.orchestrator.rerun": {
       "$ref": "#/$defs/KeybindingValue",
-      "description": "Rerun the selected task in a new session"
+      "description": "Rerun the selected task in a new thread"
     },
     "app.orchestrator.stop": {
       "$ref": "#/$defs/KeybindingValue",
@@ -351,21 +351,21 @@
       "$ref": "#/$defs/KeybindingValue",
       "description": "Rewrite the goal state of the selected task"
     },
-    "app.orchestrator.sessions": {
+    "app.orchestrator.threads": {
       "$ref": "#/$defs/KeybindingValue",
-      "description": "Open the sessions view"
+      "description": "Open the threads view"
     },
     "app.orchestrator.back": {
       "$ref": "#/$defs/KeybindingValue",
-      "description": "Leave the sessions view"
+      "description": "Leave the threads view"
     },
     "app.orchestrator.paneWiden": {
       "$ref": "#/$defs/KeybindingValue",
-      "description": "Widen the sessions pane"
+      "description": "Widen the threads pane"
     },
     "app.orchestrator.paneNarrow": {
       "$ref": "#/$defs/KeybindingValue",
-      "description": "Narrow the sessions pane"
+      "description": "Narrow the threads pane"
     },
     "app.models.save": {
       "$ref": "#/$defs/KeybindingValue",

@@ -19,46 +19,46 @@ const TIMEOUT = Duration.minutes(15);
 
 const PROMPT = [
   "<wrap-up>",
-  "This session stops at the end of this turn, and other sessions continue the work from your memo.",
+  "This thread stops at the end of this turn, and other threads continue the work from your memo.",
   "1. Commit and push every change you made. Leave nothing uncommitted or unpushed.",
   "2. Reply with only a handoff memo: the branch, the last commit, what is finished, what is left with the failing check or the remaining items, and the next steps in order. Say at the top when you could not commit or push.",
   "</wrap-up>",
 ].join("\n");
 
-function pending(runtime: Runtime, sessionId: string): WrapUp | undefined {
-  return runtime.wrapUps.get(sessionId);
+function pending(runtime: Runtime, threadId: string): WrapUp | undefined {
+  return runtime.wrapUps.get(threadId);
 }
 
 function begin(
   runtime: Runtime,
-  sessionId: string,
+  threadId: string,
 ): Effect.Effect<Deferred.Deferred<string, string>> {
   return Effect.sync(() => {
     const memo = Deferred.makeUnsafe<string, string>();
-    runtime.wrapUps.set(sessionId, { sent: false, memo });
+    runtime.wrapUps.set(threadId, { sent: false, memo });
     return memo;
   });
 }
 
-function fail(runtime: Runtime, sessionId: string, message: string): void {
-  const wrapUp = pending(runtime, sessionId);
+function fail(runtime: Runtime, threadId: string, message: string): void {
+  const wrapUp = pending(runtime, threadId);
   if (wrapUp === undefined) return;
-  runtime.wrapUps.delete(sessionId);
+  runtime.wrapUps.delete(threadId);
   Deferred.doneUnsafe(wrapUp.memo, Effect.fail(message));
 }
 
-function cancel(runtime: Runtime, sessionId: string): void {
-  runtime.wrapUps.delete(sessionId);
+function cancel(runtime: Runtime, threadId: string): void {
+  runtime.wrapUps.delete(threadId);
 }
 
-function stopped(runtime: Runtime, sessionId: string, memo: string, now: number): void {
+function stopped(runtime: Runtime, threadId: string, memo: string, now: number): void {
   const database = runtime.database;
-  store.updateSession(database, sessionId, { status: "stopped" }, now);
-  for (const assignment of store.assignmentsOfSession(database, sessionId)) {
+  store.updateThread(database, threadId, { status: "stopped" }, now);
+  for (const assignment of store.assignmentsOfThread(database, threadId)) {
     store.insertReport(database, {
-      id: `rep-${assignment.sessionId}-${assignment.taskId}-wrap-up`,
+      id: `rep-${assignment.threadId}-${assignment.taskId}-wrap-up`,
       taskId: assignment.taskId,
-      sessionId,
+      threadId,
       role: assignment.role,
       status: "stopped",
       content: memo,
@@ -66,18 +66,18 @@ function stopped(runtime: Runtime, sessionId: string, memo: string, now: number)
     });
     store.setTaskStatus(database, assignment.taskId, "stopped", now);
   }
-  runtime.runs.delete(sessionId);
-  runtime.runStartedAt.delete(sessionId);
+  runtime.runs.delete(threadId);
+  runtime.runStartedAt.delete(threadId);
   runtime.publish();
 }
 
-function finish(runtime: Runtime, sessionId: string, worker: WorkerSession, now: number): void {
-  const wrapUp = pending(runtime, sessionId);
+function finish(runtime: Runtime, threadId: string, worker: WorkerSession, now: number): void {
+  const wrapUp = pending(runtime, threadId);
   if (wrapUp === undefined) return;
-  runtime.wrapUps.delete(sessionId);
+  runtime.wrapUps.delete(threadId);
   const outcome = outcomes.outcomeOf(worker, undefined);
   const memo = outcome.content.trim();
-  stopped(runtime, sessionId, memo, now);
+  stopped(runtime, threadId, memo, now);
   if (outcome.status !== "completed") {
     Deferred.doneUnsafe(wrapUp.memo, Effect.fail(`wrap-up failed: ${memo}`));
     return;
@@ -91,19 +91,19 @@ function finish(runtime: Runtime, sessionId: string, worker: WorkerSession, now:
 
 function takeOver(
   runtime: Runtime,
-  sessionId: string,
+  threadId: string,
   worker: WorkerSession,
   resume: WrapUpResume,
 ): boolean {
-  const wrapUp = pending(runtime, sessionId);
+  const wrapUp = pending(runtime, threadId);
   if (wrapUp === undefined) return false;
   if (wrapUp.sent) {
-    finish(runtime, sessionId, worker, Effect.runSync(nowMillis));
+    finish(runtime, threadId, worker, Effect.runSync(nowMillis));
     return true;
   }
   wrapUp.sent = true;
   void worker.prompt(PROMPT).then(resume.turn, (error: unknown) => {
-    fail(runtime, sessionId, `wrap-up failed: ${outcomes.errorText(error)}`);
+    fail(runtime, threadId, `wrap-up failed: ${outcomes.errorText(error)}`);
     resume.settle(error);
   });
   return true;
@@ -111,14 +111,14 @@ function takeOver(
 
 function awaitMemo(
   runtime: Runtime,
-  sessionId: string,
+  threadId: string,
   memo: Deferred.Deferred<string, string>,
 ): Effect.Effect<string, string> {
   return Effect.gen(function* () {
     const awaited = yield* Effect.result(Deferred.await(memo).pipe(Effect.timeoutOption(TIMEOUT)));
     if (Result.isFailure(awaited)) return yield* Effect.fail(awaited.failure);
     if (Option.isNone(awaited.success)) {
-      cancel(runtime, sessionId);
+      cancel(runtime, threadId);
       return yield* Effect.fail("wrap-up timed out");
     }
     return awaited.success.value;

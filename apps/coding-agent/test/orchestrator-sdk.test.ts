@@ -165,8 +165,8 @@ it("keeps worker transcripts out of the sessions --continue and /resume pick fro
       );
       const worker = yield* Effect.promise(() => orchestrator.read(task.id));
       const assignment = worker.assignments.find((item) => item.role === "worker");
-      const sessionFile = orchestrator.snapshot.sessions.find(
-        (candidate) => candidate.id === assignment?.sessionId,
+      const sessionFile = orchestrator.snapshot.threads.find(
+        (candidate) => candidate.id === assignment?.threadId,
       )?.sessionFile;
       if (sessionFile === null || sessionFile === undefined) {
         throw new Error("worker session file missing");

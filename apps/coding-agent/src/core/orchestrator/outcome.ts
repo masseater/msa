@@ -3,13 +3,13 @@ import { contentText } from "@msa/ai/utils/text";
 
 import type { Runtime } from "./runtime.ts";
 import { store } from "./store.ts";
-import type { Assignment, SessionStatus, Task } from "./types.ts";
+import type { Assignment, ThreadStatus, Task } from "./types.ts";
 import type { WorkerSession } from "./worker.ts";
 
 const REPORT_LIMIT = 4000;
 
 export interface Outcome {
-  status: SessionStatus;
+  status: ThreadStatus;
   content: string;
 }
 
@@ -42,9 +42,9 @@ function applyOutcome(
   const review: Task[] = [];
   for (const assignment of assignments) {
     store.insertReport(database, {
-      id: `rep-${assignment.sessionId}-${assignment.role}`,
+      id: `rep-${assignment.threadId}-${assignment.role}`,
       taskId: assignment.taskId,
-      sessionId: assignment.sessionId,
+      threadId: assignment.threadId,
       role: assignment.role,
       status: outcome.status,
       content: outcome.content,

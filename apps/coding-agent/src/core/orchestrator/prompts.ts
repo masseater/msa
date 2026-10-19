@@ -62,7 +62,7 @@ function taskReviewerPrompt(task: TaskView, workerReport: string, notes: readonl
     `<worker-report>\n${truncateReport(workerReport)}\n</worker-report>`,
   ].join("\n");
   return [
-    "You are reviewing work another session just did. You did not write it.",
+    "You are reviewing work another thread just did. You did not write it.",
     "Read the report, inspect the changed files and the surrounding code, and check the work against the task. Do not redo it and do not edit files.",
     "Report what is wrong, what is missing, and what you checked. Say clearly whether the work is acceptable.",
     "",
@@ -110,10 +110,8 @@ function formatTaskList(tasks: readonly TaskView[]): string {
 }
 
 function assignmentText(task: TaskView): string {
-  const sessions = task.assignments.map(
-    (assignment) => `${assignment.role} ${assignment.sessionId}`,
-  );
-  return sessions.length > 0 ? sessions.join(", ") : "unassigned";
+  const threads = task.assignments.map((assignment) => `${assignment.role} ${assignment.threadId}`);
+  return threads.length > 0 ? threads.join(", ") : "unassigned";
 }
 
 function describeTask(task: TaskView): string {
@@ -122,7 +120,7 @@ function describeTask(task: TaskView): string {
   return `${taskHeading(task)} — depends on ${dependencies}; ${assignmentText(task)}${condition}`;
 }
 
-function formatTaskDetail(task: TaskView, sessions: readonly string[]): string {
+function formatTaskDetail(task: TaskView, threads: readonly string[]): string {
   const reports = task.reports.map(
     (report) =>
       `<report role="${report.role}" status="${report.status}">\n${report.content}\n</report>`,
@@ -130,7 +128,7 @@ function formatTaskDetail(task: TaskView, sessions: readonly string[]): string {
   return [
     describeTask(task),
     `Dependents: ${task.dependents.join(", ") || "-"}`,
-    sessions.length > 0 ? `Sessions: ${sessions.join(", ")}` : "Sessions: -",
+    threads.length > 0 ? `Threads: ${threads.join(", ")}` : "Threads: -",
     stateBlock("current-state", task.currentState),
     stateBlock("goal-state", task.goalState),
     ...reports,

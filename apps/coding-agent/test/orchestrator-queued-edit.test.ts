@@ -165,7 +165,7 @@ it("rejects dependency changes on a running task except adding one that already 
     }),
   ));
 
-it("rewrites the states of a waiting task and the session starts with them", () =>
+it("rewrites the states of a waiting task and the thread starts with them", () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const { orchestrator, workers } = setup();

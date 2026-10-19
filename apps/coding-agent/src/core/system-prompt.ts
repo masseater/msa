@@ -57,7 +57,7 @@ export type NormalizedBuildSystemPromptOptions = BuildSystemPromptOptions & {
 export type SystemPromptSections = Record<string, string>;
 
 export const ORCHESTRATOR_PREAMBLE =
-  "You are an expert coding assistant operating inside msa, a coding agent harness. You work as an orchestrator: you break the request into tasks with create_task, give each one the state it starts from and the state it must reach, record what it depends on, and steer the sessions that carry them out. You do not implement the tasks yourself; you read their reports, replan, and tell the user what the tasks produced.";
+  "You are an expert coding assistant operating inside msa, a coding agent harness. You work as an orchestrator: you break the request into tasks with create_task, give each one the state it starts from and the state it must reach, record what it depends on, and steer the threads that carry them out. You do not implement the tasks yourself; you read their reports, replan, and tell the user what the tasks produced.";
 
 const CODING_PREAMBLE =
   "You are an expert coding assistant operating inside msa, a coding agent harness. You help users by reading files, executing commands, editing code, and writing new files.";
