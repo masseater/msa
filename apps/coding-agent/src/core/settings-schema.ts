@@ -299,6 +299,27 @@ const PackageSourceSchema = Type.Union(
   },
 );
 
+const ModelPolicySettingsSchema = Type.Object(
+  {
+    allow: Type.Optional(
+      Type.Array(Type.String(), {
+        description:
+          "Models that may be used, in the same format as the --models CLI flag. When set, models outside the list are unusable.",
+      }),
+    ),
+    deny: Type.Optional(
+      Type.Array(Type.String(), {
+        description:
+          "Models that may not be used, in the same format as the --models CLI flag. A deny pattern wins over any allow pattern.",
+      }),
+    ),
+  },
+  {
+    description:
+      "Models a session may use. Deny wins, and a non-empty allow list restricts use to the models it names. Separate from enabledModels, which only narrows startup selection and Ctrl+P cycling.",
+  },
+);
+
 const StringArraySchema = Type.Array(Type.String());
 const SkillsInputSchema = Type.Union(
   [
@@ -503,6 +524,7 @@ export const SettingsSchema = Type.Object(
         description: "Model patterns for cycling, in the same format as the --models CLI flag.",
       }),
     ),
+    modelPolicy: Type.Optional(ModelPolicySettingsSchema),
     defaultTools: Type.Optional(
       Type.Array(Type.String(), {
         description:
@@ -648,6 +670,7 @@ export type MermaidRenderingMode = NonNullable<Static<typeof MarkdownSettingsSch
 export interface MarkdownSettings extends Static<typeof MarkdownSettingsSchema> {}
 export type CodemodeMode = Static<typeof CodemodeModeSchema>;
 export interface CodemodeSettings extends Static<typeof CodemodeSettingsSchema> {}
+export interface ModelPolicySettings extends Static<typeof ModelPolicySettingsSchema> {}
 export type DefaultProjectTrust = NonNullable<SettingsInput["defaultProjectTrust"]>;
 export type QuietStartup = NonNullable<SettingsInput["quietStartup"]>;
 export type TransportSetting = NonNullable<SettingsInput["transport"]>;

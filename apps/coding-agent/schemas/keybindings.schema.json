@@ -359,6 +359,10 @@
       "$ref": "#/$defs/KeybindingValue",
       "description": "Toggle all models for provider"
     },
+    "app.models.policy": {
+      "$ref": "#/$defs/KeybindingValue",
+      "description": "Deny or allow the selected model"
+    },
     "app.models.reorderUp": {
       "$ref": "#/$defs/KeybindingValue",
       "description": "Move model up in order"

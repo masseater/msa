@@ -34,6 +34,16 @@ Run `/effort` to select the thinking level for the current model. Press `Ctrl+S`
 
 A session records model and thinking-level changes. Resuming the session restores them without changing defaults for new sessions.
 
+### Restrict models
+
+[`modelPolicy`](settings.md#restrict-models) removes models from the session entirely. The picker keeps the hidden ones under the `hidden` scope with the pattern that hides each one, so you can allow one again without editing `settings.json`. `Ctrl+E` denies the selected model or allows it, and `Ctrl+P` does the same for its whole provider.
+
+## Upgrade models
+
+Upgrading finds catalog models that a newer model clearly replaces. It reads a version from the model id and upgrades only when the family and the variant match: `claude-sonnet-4-5` becomes `claude-sonnet-5-5`, and an undated id becomes its dated variant, as `deepseek-v4.1-flash` becomes `deepseek-v4.1-flash-1017`. A different variant, such as `gpt-5.5` next to `gpt-6.1-sol`, is listed as a candidate and never applied.
+
+`/model upgrade` lists the upgrades and applies the selected one, and the `model_upgrade` tool does the same from the model's side. Both report what would change and write nothing until asked; applying rewrites `defaultModel`, `enabledModels`, `modelThinkingLevels`, `modelPolicy`, `goal`, `orchestrator`, and `compaction` references in agent-directory and project settings. Session transcripts keep the model id they recorded.
+
 ## Connect local models
 
 msa integrates directly with the llama.cpp router. The router discovers GGUF files and loads models on demand. msa's `/llama` command manages the router, while `/model` selects one of its loaded models.

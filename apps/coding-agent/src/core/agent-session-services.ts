@@ -158,6 +158,7 @@ export async function createAgentSessionServices(
       signal: options.modelRuntimeSignal,
     }));
   const settingsManager = options.settingsManager ?? SettingsManager.create(cwd, agentDir);
+  modelRuntime.setModelPolicy(settingsManager.getModelPolicy());
   const resourceLoader = new DefaultResourceLoader({
     ...(options.resourceLoaderOptions ?? {}),
     cwd,

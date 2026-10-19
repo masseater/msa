@@ -7,6 +7,7 @@ import { fuzzyFilter } from "@msa/tui";
 import chalk from "chalk";
 
 import { formatNoModelsAvailableMessage } from "../core/auth-guidance.ts";
+import { hiddenModelsByPolicy } from "../core/model-policy.ts";
 import type { ModelRuntime } from "../core/model-runtime.ts";
 
 /**
@@ -113,4 +114,14 @@ export async function listModels(
     ].join("  ");
     console.log(line);
   }
+
+  const policy = modelRuntime.getModelPolicy();
+  const hidden = hiddenModelsByPolicy(policy, modelRuntime.getCatalogModels());
+  if (hidden.length === 0) return;
+  const patterns = [...new Set(hidden.map((entry) => entry.pattern || "allow list"))];
+  console.log(
+    chalk.dim(
+      `\n${hidden.length} model${hidden.length === 1 ? "" : "s"} hidden by model policy (${patterns.join(", ")}). See /model.`,
+    ),
+  );
 }
