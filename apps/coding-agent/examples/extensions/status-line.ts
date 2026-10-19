@@ -1,21 +1,14 @@
-/**
- * Status Line Extension
- *
- * Demonstrates ctx.ui.setStatus() for displaying persistent status text in the footer.
- * Shows turn progress with themed colors.
- */
-
 import type { ExtensionAPI } from "@msa/coding-agent";
 
 export default function (msa: ExtensionAPI) {
   let turnCount = 0;
 
-  msa.on("session_start", async (_event, ctx) => {
+  msa.on("session_start", (_event, ctx) => {
     const theme = ctx.ui.theme;
     ctx.ui.setStatus("status-demo", theme.fg("dim", "Ready"));
   });
 
-  msa.on("turn_start", async (_event, ctx) => {
+  msa.on("turn_start", (_event, ctx) => {
     turnCount++;
     const theme = ctx.ui.theme;
     const spinner = theme.fg("accent", "●");
@@ -23,7 +16,7 @@ export default function (msa: ExtensionAPI) {
     ctx.ui.setStatus("status-demo", spinner + text);
   });
 
-  msa.on("turn_end", async (_event, ctx) => {
+  msa.on("turn_end", (_event, ctx) => {
     const theme = ctx.ui.theme;
     const check = theme.fg("success", "✓");
     const text = theme.fg("dim", ` Turn ${turnCount} complete`);

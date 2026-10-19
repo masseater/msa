@@ -1,11 +1,13 @@
-/**
- * Agent discovery and configuration
- */
-
-import * as fs from "node:fs";
-import * as path from "node:path";
-
+import { NodeServices } from "@effect/platform-node";
 import { CONFIG_DIR_NAME, getAgentDir, parseFrontmatter } from "@msa/coding-agent";
+import { Effect, FileSystem, ManagedRuntime, Option, Path } from "effect";
+import { dual } from "effect/Function";
+
+const runtime = ManagedRuntime.make(NodeServices.layer);
+const pathService = runtime.runSync(Path.Path);
+
+export const joinPath = (...segments: string[]): string => pathService.join(...segments);
+const fsService = runtime.runSync(FileSystem.FileSystem);
 
 export type AgentScope = "user" | "project" | "both";
 
@@ -24,14 +26,6 @@ export interface AgentDiscoveryResult {
   projectAgentsDir: string | null;
 }
 
-/**
- * Raw agent frontmatter. Values are `unknown` because `parseFrontmatter` runs a
- * real YAML parser, so any scalar or collection can appear here.
- *
- * A type alias rather than an interface: `parseFrontmatter` constrains its
- * parameter to `Record<string, unknown>`, and only an alias picks up the
- * implicit index signature that satisfies it.
- */
 type AgentFrontmatter = {
   name?: unknown;
   description?: unknown;
@@ -39,18 +33,6 @@ type AgentFrontmatter = {
   model?: unknown;
 };
 
-/**
- * Normalize a frontmatter `tools` value to a list of tool names.
- *
- * Both spellings are valid YAML and both are in use:
- *
- *     tools: read, bash        # string
- *     tools: [read, bash]      # array
- *
- * so accept either. Anything else (a number, a map, a nested list) yields no
- * tools rather than throwing: this runs inside agent discovery, where a single
- * bad file must not take down every other agent in the same directory.
- */
 function parseToolList(value: unknown): string[] | undefined {
   const raw = Array.isArray(value) ? value : typeof value === "string" ? value.split(",") : [];
   const tools = raw
@@ -63,25 +45,24 @@ function parseToolList(value: unknown): string[] | undefined {
 function loadAgentsFromDir(dir: string, source: "user" | "project"): AgentConfig[] {
   const agents: AgentConfig[] = [];
 
-  if (!fs.existsSync(dir)) {
+  if (!runtime.runSync(fsService.exists(dir))) {
     return agents;
   }
 
-  let entries: fs.Dirent[];
+  let names: string[];
   try {
-    entries = fs.readdirSync(dir, { withFileTypes: true });
+    names = runtime.runSync(fsService.readDirectory(dir));
   } catch {
     return agents;
   }
 
-  for (const entry of entries) {
-    if (!entry.name.endsWith(".md")) continue;
-    if (!entry.isFile() && !entry.isSymbolicLink()) continue;
+  for (const name of names) {
+    if (!name.endsWith(".md")) continue;
 
-    const filePath = path.join(dir, entry.name);
+    const filePath = pathService.join(dir, name);
     let content: string;
     try {
-      content = fs.readFileSync(filePath, "utf-8");
+      content = runtime.runSync(fsService.readFileString(filePath));
     } catch {
       continue;
     }
@@ -107,32 +88,31 @@ function loadAgentsFromDir(dir: string, source: "user" | "project"): AgentConfig
 }
 
 function isDirectory(p: string): boolean {
-  try {
-    return fs.statSync(p).isDirectory();
-  } catch {
-    return false;
-  }
+  const info = runtime.runSync(fsService.stat(p).pipe(Effect.option));
+  return Option.isSome(info) && info.value.type === "Directory";
 }
 
 function findNearestProjectAgentsDir(cwd: string): string | null {
   let currentDir = cwd;
   while (true) {
-    const candidate = path.join(currentDir, CONFIG_DIR_NAME, "agents");
+    const candidate = pathService.join(currentDir, CONFIG_DIR_NAME, "agents");
     if (isDirectory(candidate)) return candidate;
 
-    const parentDir = path.dirname(currentDir);
+    const parentDir = pathService.dirname(currentDir);
     if (parentDir === currentDir) return null;
     currentDir = parentDir;
   }
 }
 
-export function discoverAgents(cwd: string, scope: AgentScope): AgentDiscoveryResult {
-  const userDir = path.join(getAgentDir(), "agents");
+function discoverAgentsImpl(cwd: string, scope: AgentScope): AgentDiscoveryResult {
+  const userDir = pathService.join(getAgentDir(), "agents");
   const projectAgentsDir = findNearestProjectAgentsDir(cwd);
 
   const userAgents = scope === "project" ? [] : loadAgentsFromDir(userDir, "user");
   const projectAgents =
-    scope === "user" || !projectAgentsDir ? [] : loadAgentsFromDir(projectAgentsDir, "project");
+    scope === "user" || projectAgentsDir === null || projectAgentsDir.length === 0
+      ? []
+      : loadAgentsFromDir(projectAgentsDir, "project");
 
   const agentMap = new Map<string, AgentConfig>();
 
@@ -148,7 +128,12 @@ export function discoverAgents(cwd: string, scope: AgentScope): AgentDiscoveryRe
   return { agents: Array.from(agentMap.values()), projectAgentsDir };
 }
 
-export function formatAgentList(
+export const discoverAgents: {
+  (cwd: string, scope: AgentScope): AgentDiscoveryResult;
+  (scope: AgentScope): (cwd: string) => AgentDiscoveryResult;
+} = dual(2, discoverAgentsImpl);
+
+function formatAgentListImpl(
   agents: AgentConfig[],
   maxItems: number,
 ): { text: string; remaining: number } {
@@ -160,3 +145,8 @@ export function formatAgentList(
     remaining,
   };
 }
+
+export const formatAgentList: {
+  (agents: AgentConfig[], maxItems: number): { text: string; remaining: number };
+  (maxItems: number): (agents: AgentConfig[]) => { text: string; remaining: number };
+} = dual(2, formatAgentListImpl);

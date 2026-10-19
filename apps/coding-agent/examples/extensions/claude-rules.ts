@@ -1,68 +1,32 @@
-/**
- * Claude Rules Extension
- *
- * Scans the project's .claude/rules/ folder for rule files and lists them
- * in the system prompt. The agent can then use the read tool to load
- * specific rules when needed.
- *
- * Best practices for .claude/rules/:
- * - Keep rules focused: Each file should cover one topic (e.g., testing.md, api-design.md)
- * - Use descriptive filenames: The filename should indicate what the rules cover
- * - Use conditional rules sparingly: Only add paths frontmatter when rules truly apply to specific file types
- * - Organize with subdirectories: Group related rules (e.g., frontend/, backend/)
- *
- * Usage:
- * 1. Copy this file to ~/.msa/agent/extensions/ or your project's .msa/extensions/
- * 2. Create .claude/rules/ folder in your project root
- * 3. Add .md files with your rules
- */
-
-import * as fs from "node:fs";
-import * as path from "node:path";
-
+import { NodeServices } from "@effect/platform-node";
 import type { ExtensionAPI } from "@msa/coding-agent";
+import { FileSystem, ManagedRuntime, Path } from "effect";
 
-/**
- * Recursively find all .md files in a directory
- */
-function findMarkdownFiles(dir: string, basePath: string = ""): string[] {
-  const results: string[] = [];
+const runtime = ManagedRuntime.make(NodeServices.layer);
 
-  if (!fs.existsSync(dir)) {
-    return results;
-  }
-
-  const entries = fs.readdirSync(dir, { withFileTypes: true });
-
-  for (const entry of entries) {
-    const relativePath = basePath ? `${basePath}/${entry.name}` : entry.name;
-
-    if (entry.isDirectory()) {
-      results.push(...findMarkdownFiles(path.join(dir, entry.name), relativePath));
-    } else if (entry.isFile() && entry.name.endsWith(".md")) {
-      results.push(relativePath);
-    }
-  }
-
-  return results;
-}
+const findMarkdownFiles = (dir: string): string[] => {
+  const fs = runtime.runSync(FileSystem.FileSystem);
+  const path = runtime.runSync(Path.Path);
+  if (!runtime.runSync(fs.exists(dir))) return [];
+  return runtime
+    .runSync(fs.readDirectory(dir, { recursive: true }))
+    .filter((entry) => entry.endsWith(".md"))
+    .map((entry) => entry.replaceAll(path.sep, "/"));
+};
 
 export default function claudeRulesExtension(msa: ExtensionAPI) {
   let ruleFiles: string[] = [];
-  let rulesDir: string = "";
 
-  // Scan for rules on session start
-  msa.on("session_start", async (_event, ctx) => {
-    rulesDir = path.join(ctx.cwd, ".claude", "rules");
-    ruleFiles = findMarkdownFiles(rulesDir);
+  msa.on("session_start", (_event, ctx) => {
+    const path = runtime.runSync(Path.Path);
+    ruleFiles = findMarkdownFiles(path.join(ctx.cwd, ".claude", "rules"));
 
     if (ruleFiles.length > 0) {
       ctx.ui.notify(`Found ${ruleFiles.length} rule(s) in .claude/rules/`, "info");
     }
   });
 
-  // Append available rules to system prompt
-  msa.on("before_agent_start", async (event) => {
+  msa.on("before_agent_start", (event) => {
     if (ruleFiles.length === 0) {
       return;
     }

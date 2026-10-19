@@ -1,20 +1,13 @@
-/**
- * Run one prompt through a msa RPC child process.
- *
- * Build the coding-agent package first, then run:
- * node examples/rpc-client.ts "Explain this repository"
- */
-
-import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { RpcClient } from "@msa/coding-agent";
 
-const exampleDirectory = dirname(fileURLToPath(import.meta.url));
+const cliPath = fileURLToPath(new URL("../dist/cli.js", import.meta.url));
+
 const prompt = process.argv.slice(2).join(" ") || "Explain this repository in one paragraph.";
 
 const client = new RpcClient({
-  cliPath: join(exampleDirectory, "../dist/cli.js"),
+  cliPath,
   args: ["--no-session"],
 });
 

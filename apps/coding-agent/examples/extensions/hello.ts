@@ -1,9 +1,6 @@
-/**
- * Hello Tool - Minimal custom tool example
- */
-
 import { Type } from "@msa/ai";
 import { defineTool, type ExtensionAPI } from "@msa/coding-agent";
+import { Effect } from "effect";
 
 const helloTool = defineTool({
   name: "hello",
@@ -13,12 +10,13 @@ const helloTool = defineTool({
     name: Type.String({ description: "Name to greet" }),
   }),
 
-  async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
-    return {
-      content: [{ type: "text", text: `Hello, ${params.name}!` }],
-      details: { greeted: params.name },
-    };
-  },
+  execute: (_toolCallId, params) =>
+    Effect.runPromise(
+      Effect.succeed({
+        content: [{ type: "text", text: `Hello, ${params.name}!` }],
+        details: { greeted: params.name },
+      }),
+    ),
 });
 
 export default function (msa: ExtensionAPI) {

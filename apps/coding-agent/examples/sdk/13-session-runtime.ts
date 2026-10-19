@@ -1,14 +1,5 @@
-/**
- * Session runtime
- *
- * Use AgentSessionRuntime when you need to replace the active AgentSession,
- * for example for new-session, resume, fork, or import flows.
- *
- * The important pattern is: after the runtime replaces the active session,
- * rebind any session-local subscriptions and extension bindings to `runtime.session`.
- */
-
 import {
+  type AgentSession,
   type CreateAgentSessionRuntimeFactory,
   createAgentSessionFromServices,
   createAgentSessionRuntime,
@@ -16,23 +7,27 @@ import {
   getAgentDir,
   SessionManager,
 } from "@msa/coding-agent";
+import { Console, Effect } from "effect";
 
-const createRuntime: CreateAgentSessionRuntimeFactory = async ({
+const createRuntime: CreateAgentSessionRuntimeFactory = ({
   cwd,
   sessionManager,
   sessionStartEvent,
-}) => {
-  const services = await createAgentSessionServices({ cwd });
-  return {
-    ...(await createAgentSessionFromServices({
-      services,
-      sessionManager,
-      ...(sessionStartEvent !== undefined ? { sessionStartEvent } : {}),
-    })),
-    services,
-    diagnostics: services.diagnostics,
-  };
-};
+}) =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const services = yield* Effect.promise(() => createAgentSessionServices({ cwd }));
+      const session = yield* Effect.promise(() =>
+        createAgentSessionFromServices({
+          services,
+          sessionManager,
+          ...(sessionStartEvent === undefined ? {} : { sessionStartEvent }),
+        }),
+      );
+      return { ...session, services, diagnostics: services.diagnostics };
+    }),
+  );
+
 const runtime = await createAgentSessionRuntime(createRuntime, {
   cwd: process.cwd(),
   agentDir: getAgentDir(),
@@ -41,30 +36,31 @@ const runtime = await createAgentSessionRuntime(createRuntime, {
 
 let unsubscribe: (() => void) | undefined;
 
-async function bindSession() {
+const bindSession = (): Promise<AgentSession> => {
   unsubscribe?.();
   const session = runtime.session;
-  await session.bindExtensions({});
-  unsubscribe = session.subscribe((event) => {
-    if (event.type === "queue_update") {
-      console.log("Queued:", event.steering.length + event.followUp.length);
-    }
+  return session.bindExtensions({}).then(() => {
+    unsubscribe = session.subscribe((event) => {
+      if (event.type === "queue_update") {
+        Effect.runSync(Console.log("Queued:", event.steering.length + event.followUp.length));
+      }
+    });
+    return session;
   });
-  return session;
-}
+};
 
 let session = await bindSession();
 const originalSessionFile = session.sessionFile;
-console.log("Initial session:", originalSessionFile);
+Effect.runSync(Console.log("Initial session:", originalSessionFile));
 
 await runtime.newSession();
 session = await bindSession();
-console.log("After newSession():", session.sessionFile);
+Effect.runSync(Console.log("After newSession():", session.sessionFile));
 
-if (originalSessionFile) {
+if (originalSessionFile !== undefined) {
   await runtime.switchSession(originalSessionFile);
   session = await bindSession();
-  console.log("After switchSession():", session.sessionFile);
+  Effect.runSync(Console.log("After switchSession():", session.sessionFile));
 }
 
 unsubscribe?.();

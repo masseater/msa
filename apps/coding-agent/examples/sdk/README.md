@@ -48,7 +48,7 @@ const modelRuntime = await ModelRuntime.create();
 const { session } = await createAgentSession({ modelRuntime });
 
 // Custom model
-const model = getModel("anthropic", "claude-opus-4-5");
+const model = getModel("anthropic-api", "claude-opus-4-5");
 const { session } = await createAgentSession({ model, thinkingLevel: "high", modelRuntime });
 
 // Modify prompt
@@ -75,7 +75,7 @@ const customRuntime = await ModelRuntime.create({
   authPath: "/my/app/auth.json",
   modelsPath: "/my/app/models.json",
 });
-await customRuntime.setRuntimeApiKey("anthropic", process.env.MY_KEY!);
+await customRuntime.setRuntimeApiKey("anthropic-api", process.env.MY_KEY!);
 
 const resourceLoader = new DefaultResourceLoader({
   systemPromptOverride: () => "You are helpful.",

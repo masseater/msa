@@ -2,6 +2,7 @@ import { uuidv7 } from "@msa/ai";
 import type { ExtensionAPI, ExtensionCommandContext } from "@msa/coding-agent";
 import { DynamicBorder, getMarkdownTheme } from "@msa/coding-agent";
 import { Container, Markdown, matchesKey, Text } from "@msa/tui";
+import { Clock, Effect } from "effect";
 
 type ContentBlock = {
   type?: string;
@@ -29,7 +30,7 @@ const extractTextParts = (content: unknown): string[] => {
 
   const textParts: string[] = [];
   for (const part of content) {
-    if (!part || typeof part !== "object") {
+    if (part === null || typeof part !== "object") {
       continue;
     }
 
@@ -49,7 +50,7 @@ const extractToolCallLines = (content: unknown): string[] => {
 
   const toolCalls: string[] = [];
   for (const part of content) {
-    if (!part || typeof part !== "object") {
+    if (part === null || typeof part !== "object") {
       continue;
     }
 
@@ -69,7 +70,11 @@ const buildConversationText = (entries: SessionEntry[]): string => {
   const sections: string[] = [];
 
   for (const entry of entries) {
-    if (entry.type !== "message" || !entry.message?.role) {
+    if (
+      entry.type !== "message" ||
+      entry.message?.role === undefined ||
+      entry.message?.role.length === 0
+    ) {
       continue;
     }
 
@@ -114,12 +119,12 @@ const buildSummaryPrompt = (conversationText: string): string =>
     "</conversation>",
   ].join("\n");
 
-const showSummaryUi = async (summary: string, ctx: ExtensionCommandContext) => {
+const showSummaryUi = (summary: string, ctx: ExtensionCommandContext) => {
   if (ctx.mode !== "tui") {
-    return;
+    return Promise.resolve();
   }
 
-  await ctx.ui.custom((_tui, theme, _kb, done) => {
+  return ctx.ui.custom((_tui, theme, _kb, done) => {
     const container = new Container();
     const border = new DynamicBorder((s: string) => theme.fg("accent", s));
     const mdTheme = getMarkdownTheme();
@@ -142,43 +147,28 @@ const showSummaryUi = async (summary: string, ctx: ExtensionCommandContext) => {
   });
 };
 
-export default function (msa: ExtensionAPI) {
-  msa.registerCommand("summarize", {
-    description: "Summarize the current conversation in a custom UI",
-    handler: async (_args, ctx) => {
-      const branch = ctx.sessionManager.getBranch();
-      const conversationText = buildConversationText(branch);
+const summarizeConversation = (ctx: ExtensionCommandContext, conversationText: string) =>
+  Effect.gen(function* () {
+    const model = ctx.modelRegistry.find("openai", "gpt-5.2");
+    if (model === undefined) {
+      if (ctx.hasUI) ctx.ui.notify("Model openai/gpt-5.2 not found", "warning");
+      return undefined;
+    }
+    if (!ctx.modelRegistry.hasConfiguredAuth(model)) {
+      if (ctx.hasUI) ctx.ui.notify("No authentication configured for openai/gpt-5.2", "warning");
+      return undefined;
+    }
 
-      if (!conversationText.trim()) {
-        if (ctx.hasUI) {
-          ctx.ui.notify("No conversation text found", "warning");
-        }
-        return;
-      }
+    const summaryMessages = [
+      {
+        role: "user" as const,
+        content: [{ type: "text" as const, text: buildSummaryPrompt(conversationText) }],
+        timestamp: yield* Clock.currentTimeMillis,
+      },
+    ];
 
-      if (ctx.hasUI) {
-        ctx.ui.notify("Preparing summary...", "info");
-      }
-
-      const model = ctx.modelRegistry.find("openai", "gpt-5.2");
-      if (!model) {
-        if (ctx.hasUI) ctx.ui.notify("Model openai/gpt-5.2 not found", "warning");
-        return;
-      }
-      if (!ctx.modelRegistry.hasConfiguredAuth(model)) {
-        if (ctx.hasUI) ctx.ui.notify("No authentication configured for openai/gpt-5.2", "warning");
-        return;
-      }
-
-      const summaryMessages = [
-        {
-          role: "user" as const,
-          content: [{ type: "text" as const, text: buildSummaryPrompt(conversationText) }],
-          timestamp: Date.now(),
-        },
-      ];
-
-      const response = await ctx.modelRegistry.complete(
+    const response = yield* Effect.promise(() =>
+      ctx.modelRegistry.complete(
         model,
         { messages: summaryMessages },
         {
@@ -186,14 +176,40 @@ export default function (msa: ExtensionAPI) {
           cacheRetention: "none",
           sessionId: uuidv7(),
         },
-      );
+      ),
+    );
 
-      const summary = response.content
-        .filter((c): c is { type: "text"; text: string } => c.type === "text")
-        .map((c) => c.text)
-        .join("\n");
+    return response.content
+      .filter((c): c is { type: "text"; text: string } => c.type === "text")
+      .map((c) => c.text)
+      .join("\n");
+  });
 
-      await showSummaryUi(summary, ctx);
-    },
+export default function (msa: ExtensionAPI) {
+  msa.registerCommand("summarize", {
+    description: "Summarize the current conversation in a custom UI",
+    handler: (_args, ctx) =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          const branch = ctx.sessionManager.getBranch();
+          const conversationText = buildConversationText(branch);
+
+          if (conversationText.trim().length === 0) {
+            if (ctx.hasUI) {
+              ctx.ui.notify("No conversation text found", "warning");
+            }
+            return;
+          }
+
+          if (ctx.hasUI) {
+            ctx.ui.notify("Preparing summary...", "info");
+          }
+
+          const summary = yield* summarizeConversation(ctx, conversationText);
+          if (summary === undefined) return;
+
+          yield* Effect.promise(() => showSummaryUi(summary, ctx));
+        }),
+      ),
   });
 }

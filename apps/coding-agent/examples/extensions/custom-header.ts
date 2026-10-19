@@ -1,73 +1,49 @@
-/**
- * Custom Header Extension
- *
- * Demonstrates ctx.ui.setHeader() for replacing the built-in header
- * (logo + keybinding hints) with a custom component showing the msa mascot.
- */
-
 import type { ExtensionAPI, Theme } from "@msa/coding-agent";
 import { VERSION } from "@msa/coding-agent";
+import { Effect } from "effect";
 
-// --- MSA MASCOT ---
-// Based on pi_mascot.ts - the msa agent character
 function getMsaMascot(theme: Theme): string[] {
-  // --- COLORS ---
-  // 3b1b Blue: R=80, G=180, B=230
   const msaBlue = (text: string) => theme.fg("accent", text);
-  const white = (text: string) => text; // Use plain white (or theme.fg("text", text))
-  const black = (text: string) => theme.fg("dim", text); // Use dim for contrast
+  const white = (text: string) => text;
+  const black = (text: string) => theme.fg("dim", text);
 
-  // --- GLYPHS ---
   const BLOCK = "█";
-  const PUPIL = "▌"; // Vertical half-block for the pupil
+  const PUPIL = "▌";
 
-  // --- CONSTRUCTION ---
-
-  // 1. The Eye Unit: [White Full Block][Black Vertical Sliver]
-  // This creates the "looking sideways" effect
   const eye = `${white(BLOCK)}${black(PUPIL)}`;
 
-  // 2. Line 1: The Eyes
-  // 5 spaces indent aligns them with the start of the legs
   const lineEyes = `     ${eye}  ${eye}`;
 
-  // 3. Line 2: The Wide Top Bar (The "Overhang")
-  // 14 blocks wide for that serif-style roof
   const lineBar = `  ${msaBlue(BLOCK.repeat(14))}`;
 
-  // 4. Lines 3-6: The Legs
-  // Indented 5 spaces relative to the very left edge
-  // Leg width: 2 blocks | Gap: 4 blocks
   const lineLeg = `     ${msaBlue(BLOCK.repeat(2))}    ${msaBlue(BLOCK.repeat(2))}`;
 
-  // --- ASSEMBLY ---
   return ["", lineEyes, lineBar, lineLeg, lineLeg, lineLeg, lineLeg, ""];
 }
 
 export default function (msa: ExtensionAPI) {
-  // Set custom header immediately on load (if UI is available)
-  msa.on("session_start", async (_event, ctx) => {
+  msa.on("session_start", (_event, ctx) => {
     if (ctx.mode === "tui") {
-      ctx.ui.setHeader((_tui, theme) => {
-        return {
-          render(_width: number): string[] {
-            const mascotLines = getMsaMascot(theme);
-            // Add a subtitle with hint
-            const subtitle = `${theme.fg("muted", "   shitty coding agent")}${theme.fg("dim", ` v${VERSION}`)}`;
-            return [...mascotLines, subtitle];
-          },
-          invalidate() {},
-        };
-      });
+      ctx.ui.setHeader((_tui, theme) => ({
+        render(_width: number): string[] {
+          const mascotLines = getMsaMascot(theme);
+
+          const subtitle = `${theme.fg("muted", "   shitty coding agent")}${theme.fg("dim", ` v${VERSION}`)}`;
+          return [...mascotLines, subtitle];
+        },
+        invalidate() {},
+      }));
     }
   });
 
-  // Command to restore built-in header
   msa.registerCommand("builtin-header", {
     description: "Restore built-in header with keybinding hints",
-    handler: async (_args, ctx) => {
-      ctx.ui.setHeader(undefined);
-      ctx.ui.notify("Built-in header restored", "info");
-    },
+    handler: (_args, ctx) =>
+      Effect.runPromise(
+        Effect.sync(() => {
+          ctx.ui.setHeader(undefined);
+          ctx.ui.notify("Built-in header restored", "info");
+        }),
+      ),
   });
 }

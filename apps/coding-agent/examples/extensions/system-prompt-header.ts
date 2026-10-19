@@ -1,8 +1,3 @@
-/**
- * Displays a status widget showing the system prompt length.
- *
- * Demonstrates ctx.getSystemPrompt() for accessing the effective system prompt.
- */
 import type { ExtensionAPI } from "@msa/coding-agent";
 
 export default function (msa: ExtensionAPI) {

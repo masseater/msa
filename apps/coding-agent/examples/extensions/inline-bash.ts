@@ -1,99 +1,99 @@
-/**
- * Inline Bash Extension - expands inline bash commands in user prompts.
- *
- * Start msa with this extension:
- *   msa -e ./examples/extensions/inline-bash.ts
- *
- * Then type prompts with inline bash:
- *   What's in !{pwd}?
- *   The current branch is !{git branch --show-current} and status: !{git status --short}
- *   My node version is !{node --version}
- *
- * The !{command} patterns are executed and replaced with their output before
- * the prompt is sent to the agent.
- *
- * Note: Regular !command syntax (whole-line bash) is preserved and works as before.
- */
 import type { ExtensionAPI } from "@msa/coding-agent";
+import { Effect, Option } from "effect";
+
+const PATTERN = /!\{([^}]+)\}/gu;
+const TIMEOUT_MS = 30000;
+
+interface Expansion {
+  command: string;
+  output: string;
+  error?: string;
+}
+
+const collectMatches = (text: string): Array<{ full: string; command: string }> => {
+  const matches: Array<{ full: string; command: string }> = [];
+  PATTERN.lastIndex = 0;
+  let match = PATTERN.exec(text);
+  while (match !== null) {
+    const [full, command] = match;
+    if (command !== undefined) matches.push({ full, command });
+    match = PATTERN.exec(text);
+  }
+  return matches;
+};
+
+const formatSummary = (expansions: Expansion[]): string =>
+  expansions
+    .map((e) => {
+      const status = e.error !== undefined && e.error.length > 0 ? ` (${e.error})` : "";
+      const preview = e.output.length > 50 ? `${e.output.slice(0, 50)}...` : e.output;
+      return `!{${e.command}}${status} -> "${preview}"`;
+    })
+    .join("\n");
+
+const expandCommands = (
+  msa: ExtensionAPI,
+  text: string,
+  matches: Array<{ full: string; command: string }>,
+) =>
+  Effect.gen(function* () {
+    let result = text;
+    const expansions: Expansion[] = [];
+
+    for (const { full, command } of matches) {
+      const bashResult = yield* Effect.promise(() =>
+        msa.exec("bash", ["-c", command], { timeout: TIMEOUT_MS }),
+      ).pipe(Effect.option);
+
+      if (Option.isNone(bashResult)) {
+        expansions.push({ command, output: "", error: "command failed" });
+        result = result.replace(full, "[error]");
+        continue;
+      }
+
+      const { stdout, stderr, code } = bashResult.value;
+      const trimmed = (stdout || stderr || "").trim();
+      if (code !== 0 && stderr.length > 0) {
+        expansions.push({ command, output: trimmed, error: `exit code ${code}` });
+      } else {
+        expansions.push({ command, output: trimmed });
+      }
+      result = result.replace(full, trimmed);
+    }
+
+    return { expansions, expanded: result };
+  });
 
 export default function (msa: ExtensionAPI) {
-  const PATTERN = /!\{([^}]+)\}/g;
-  const TIMEOUT_MS = 30000;
+  msa.on("input", (event, ctx) =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const text = event.text;
 
-  msa.on("input", async (event, ctx) => {
-    const text = event.text;
-
-    // Don't process if it's a whole-line bash command (starts with !)
-    // This preserves the existing !command behavior
-    if (text.trimStart().startsWith("!") && !text.trimStart().startsWith("!{")) {
-      return { action: "continue" };
-    }
-
-    // Check if there are any inline bash patterns
-    if (!PATTERN.test(text)) {
-      return { action: "continue" };
-    }
-
-    // Reset regex state after test()
-    PATTERN.lastIndex = 0;
-
-    let result = text;
-    const expansions: Array<{ command: string; output: string; error?: string }> = [];
-
-    // Find all matches first (to avoid issues with replacing while iterating)
-    const matches: Array<{ full: string; command: string }> = [];
-    let match = PATTERN.exec(text);
-    while (match) {
-      const [full, command] = match;
-      if (command !== undefined) matches.push({ full, command });
-      match = PATTERN.exec(text);
-    }
-
-    // Execute each command and collect results
-    for (const { full, command } of matches) {
-      try {
-        const bashResult = await msa.exec("bash", ["-c", command], {
-          timeout: TIMEOUT_MS,
-        });
-
-        const output = bashResult.stdout || bashResult.stderr || "";
-        const trimmed = output.trim();
-
-        if (bashResult.code !== 0 && bashResult.stderr) {
-          expansions.push({
-            command,
-            output: trimmed,
-            error: `exit code ${bashResult.code}`,
-          });
-        } else {
-          expansions.push({ command, output: trimmed });
+        if (text.trimStart().startsWith("!") && !text.trimStart().startsWith("!{")) {
+          return { action: "continue" };
         }
 
-        result = result.replace(full, trimmed);
-      } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : String(err);
-        expansions.push({ command, output: "", error: errorMsg });
-        result = result.replace(full, `[error: ${errorMsg}]`);
-      }
-    }
+        if (!PATTERN.test(text)) {
+          return { action: "continue" };
+        }
 
-    // Show what was expanded (if UI available)
-    if (ctx.hasUI && expansions.length > 0) {
-      const summary = expansions
-        .map((e) => {
-          const status = e.error ? ` (${e.error})` : "";
-          const preview = e.output.length > 50 ? `${e.output.slice(0, 50)}...` : e.output;
-          return `!{${e.command}}${status} -> "${preview}"`;
-        })
-        .join("\n");
+        const matches = collectMatches(text);
+        const { expansions, expanded } = yield* expandCommands(msa, text, matches);
 
-      ctx.ui.notify(`Expanded ${expansions.length} inline command(s):\n${summary}`, "info");
-    }
+        if (ctx.hasUI && expansions.length > 0) {
+          ctx.ui.notify(
+            `Expanded ${expansions.length} inline command(s):\n${formatSummary(expansions)}`,
+            "info",
+          );
+        }
 
-    return {
-      action: "transform",
-      text: result,
-      ...(event.images !== undefined ? { images: event.images } : {}),
-    };
-  });
+        return {
+          action: "transform",
+          text: expanded,
+          ...(event.images === undefined ? {} : { images: event.images }),
+        };
+      }),
+    ),
+  );
 }

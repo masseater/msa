@@ -1,97 +1,92 @@
-/**
- * Pure utility functions for plan mode.
- * Extracted for testability.
- */
+import { dual } from "effect/Function";
 
-// Destructive commands blocked in plan mode
 const DESTRUCTIVE_PATTERNS = [
-  /\brm\b/i,
-  /\brmdir\b/i,
-  /\bmv\b/i,
-  /\bcp\b/i,
-  /\bmkdir\b/i,
-  /\btouch\b/i,
-  /\bchmod\b/i,
-  /\bchown\b/i,
-  /\bchgrp\b/i,
-  /\bln\b/i,
-  /\btee\b/i,
-  /\btruncate\b/i,
-  /\bdd\b/i,
-  /\bshred\b/i,
-  /(^|[^<])>(?!>)/,
-  />>/,
-  /\bnpm\s+(install|uninstall|update|ci|link|publish)/i,
-  /\byarn\s+(add|remove|install|publish)/i,
-  /\bpnpm\s+(add|remove|install|publish)/i,
-  /\bpip\s+(install|uninstall)/i,
-  /\bapt(-get)?\s+(install|remove|purge|update|upgrade)/i,
-  /\bbrew\s+(install|uninstall|upgrade)/i,
-  /\bgit\s+(add|commit|push|pull|merge|rebase|reset|checkout|branch\s+-[dD]|stash|cherry-pick|revert|tag|init|clone)/i,
-  /\bsudo\b/i,
-  /\bsu\b/i,
-  /\bkill\b/i,
-  /\bpkill\b/i,
-  /\bkillall\b/i,
-  /\breboot\b/i,
-  /\bshutdown\b/i,
-  /\bsystemctl\s+(start|stop|restart|enable|disable)/i,
-  /\bservice\s+\S+\s+(start|stop|restart)/i,
-  /\b(vim?|nano|emacs|code|subl)\b/i,
+  /\brm\b/iu,
+  /\brmdir\b/iu,
+  /\bmv\b/iu,
+  /\bcp\b/iu,
+  /\bmkdir\b/iu,
+  /\btouch\b/iu,
+  /\bchmod\b/iu,
+  /\bchown\b/iu,
+  /\bchgrp\b/iu,
+  /\bln\b/iu,
+  /\btee\b/iu,
+  /\btruncate\b/iu,
+  /\bdd\b/iu,
+  /\bshred\b/iu,
+  /(^|[^<])>(?!>)/u,
+  />>/u,
+  /\bnpm\s+(install|uninstall|update|ci|link|publish)/iu,
+  /\byarn\s+(add|remove|install|publish)/iu,
+  /\bpnpm\s+(add|remove|install|publish)/iu,
+  /\bpip\s+(install|uninstall)/iu,
+  /\bapt(-get)?\s+(install|remove|purge|update|upgrade)/iu,
+  /\bbrew\s+(install|uninstall|upgrade)/iu,
+  /\bgit\s+(add|commit|push|pull|merge|rebase|reset|checkout|branch\s+-[dD]|stash|cherry-pick|revert|tag|init|clone)/iu,
+  /\bsudo\b/iu,
+  /\bsu\b/iu,
+  /\bkill\b/iu,
+  /\bpkill\b/iu,
+  /\bkillall\b/iu,
+  /\breboot\b/iu,
+  /\bshutdown\b/iu,
+  /\bsystemctl\s+(start|stop|restart|enable|disable)/iu,
+  /\bservice\s+\S+\s+(start|stop|restart)/iu,
+  /\b(vim?|nano|emacs|code|subl)\b/iu,
 ];
 
-// Safe read-only commands allowed in plan mode
 const SAFE_PATTERNS = [
-  /^\s*cat\b/,
-  /^\s*head\b/,
-  /^\s*tail\b/,
-  /^\s*less\b/,
-  /^\s*more\b/,
-  /^\s*grep\b/,
-  /^\s*find\b/,
-  /^\s*ls\b/,
-  /^\s*pwd\b/,
-  /^\s*echo\b/,
-  /^\s*printf\b/,
-  /^\s*wc\b/,
-  /^\s*sort\b/,
-  /^\s*uniq\b/,
-  /^\s*diff\b/,
-  /^\s*file\b/,
-  /^\s*stat\b/,
-  /^\s*du\b/,
-  /^\s*df\b/,
-  /^\s*tree\b/,
-  /^\s*which\b/,
-  /^\s*whereis\b/,
-  /^\s*type\b/,
-  /^\s*env\b/,
-  /^\s*printenv\b/,
-  /^\s*uname\b/,
-  /^\s*whoami\b/,
-  /^\s*id\b/,
-  /^\s*date\b/,
-  /^\s*cal\b/,
-  /^\s*uptime\b/,
-  /^\s*ps\b/,
-  /^\s*top\b/,
-  /^\s*htop\b/,
-  /^\s*free\b/,
-  /^\s*git\s+(status|log|diff|show|branch|remote|config\s+--get)/i,
-  /^\s*git\s+ls-/i,
-  /^\s*npm\s+(list|ls|view|info|search|outdated|audit)/i,
-  /^\s*yarn\s+(list|info|why|audit)/i,
-  /^\s*node\s+--version/i,
-  /^\s*python\s+--version/i,
-  /^\s*curl\s/i,
-  /^\s*wget\s+-O\s*-/i,
-  /^\s*jq\b/,
-  /^\s*sed\s+-n/i,
-  /^\s*awk\b/,
-  /^\s*rg\b/,
-  /^\s*fd\b/,
-  /^\s*bat\b/,
-  /^\s*eza\b/,
+  /^\s*cat\b/u,
+  /^\s*head\b/u,
+  /^\s*tail\b/u,
+  /^\s*less\b/u,
+  /^\s*more\b/u,
+  /^\s*grep\b/u,
+  /^\s*find\b/u,
+  /^\s*ls\b/u,
+  /^\s*pwd\b/u,
+  /^\s*echo\b/u,
+  /^\s*printf\b/u,
+  /^\s*wc\b/u,
+  /^\s*sort\b/u,
+  /^\s*uniq\b/u,
+  /^\s*diff\b/u,
+  /^\s*file\b/u,
+  /^\s*stat\b/u,
+  /^\s*du\b/u,
+  /^\s*df\b/u,
+  /^\s*tree\b/u,
+  /^\s*which\b/u,
+  /^\s*whereis\b/u,
+  /^\s*type\b/u,
+  /^\s*env\b/u,
+  /^\s*printenv\b/u,
+  /^\s*uname\b/u,
+  /^\s*whoami\b/u,
+  /^\s*id\b/u,
+  /^\s*date\b/u,
+  /^\s*cal\b/u,
+  /^\s*uptime\b/u,
+  /^\s*ps\b/u,
+  /^\s*top\b/u,
+  /^\s*htop\b/u,
+  /^\s*free\b/u,
+  /^\s*git\s+(status|log|diff|show|branch|remote|config\s+--get)/iu,
+  /^\s*git\s+ls-/iu,
+  /^\s*npm\s+(list|ls|view|info|search|outdated|audit)/iu,
+  /^\s*yarn\s+(list|info|why|audit)/iu,
+  /^\s*node\s+--version/iu,
+  /^\s*python\s+--version/iu,
+  /^\s*curl\s/iu,
+  /^\s*wget\s+-O\s*-/iu,
+  /^\s*jq\b/u,
+  /^\s*sed\s+-n/iu,
+  /^\s*awk\b/u,
+  /^\s*rg\b/u,
+  /^\s*fd\b/u,
+  /^\s*bat\b/u,
+  /^\s*eza\b/u,
 ];
 
 export function isSafeCommand(command: string): boolean {
@@ -108,13 +103,13 @@ export interface TodoItem {
 
 export function cleanStepText(text: string): string {
   let cleaned = text
-    .replace(/\*{1,2}([^*]+)\*{1,2}/g, "$1") // Remove bold/italic
-    .replace(/`([^`]+)`/g, "$1") // Remove code
+    .replace(/\*{1,2}([^*]+)\*{1,2}/gu, "$1")
+    .replace(/`([^`]+)`/gu, "$1")
     .replace(
-      /^(Use|Run|Execute|Create|Write|Read|Check|Verify|Update|Modify|Add|Remove|Delete|Install)\s+(the\s+)?/i,
+      /^(Use|Run|Execute|Create|Write|Read|Check|Verify|Update|Modify|Add|Remove|Delete|Install)\s+(the\s+)?/iu,
       "",
     )
-    .replace(/\s+/g, " ")
+    .replace(/\s+/gu, " ")
     .trim();
 
   if (cleaned.length > 0) {
@@ -128,17 +123,17 @@ export function cleanStepText(text: string): string {
 
 export function extractTodoItems(message: string): TodoItem[] {
   const items: TodoItem[] = [];
-  const headerMatch = message.match(/\*{0,2}Plan:\*{0,2}\s*\n/i);
-  if (!headerMatch) return items;
+  const headerMatch = message.match(/\*{0,2}Plan:\*{0,2}\s*\n/iu);
+  if (headerMatch === null) return items;
 
   const planSection = message.slice(message.indexOf(headerMatch[0]) + headerMatch[0].length);
-  const numberedPattern = /^\s*(\d+)[.)]\s+\*{0,2}([^*\n]+)/gm;
+  const numberedPattern = /^\s*(\d+)[.)]\s+\*{0,2}([^*\n]+)/gmu;
 
   for (const [, , stepText] of planSection.matchAll(numberedPattern)) {
     if (stepText === undefined) continue;
     const text = stepText
       .trim()
-      .replace(/\*{1,2}$/, "")
+      .replace(/\*{1,2}$/u, "")
       .trim();
     if (
       text.length > 5 &&
@@ -157,18 +152,23 @@ export function extractTodoItems(message: string): TodoItem[] {
 
 export function extractDoneSteps(message: string): number[] {
   const steps: number[] = [];
-  for (const match of message.matchAll(/\[DONE:(\d+)\]/gi)) {
+  for (const match of message.matchAll(/\[DONE:(\d+)\]/giu)) {
     const step = Number(match[1]);
     if (Number.isFinite(step)) steps.push(step);
   }
   return steps;
 }
 
-export function markCompletedSteps(text: string, items: TodoItem[]): number {
+function markCompletedStepsImpl(text: string, items: TodoItem[]): number {
   const doneSteps = extractDoneSteps(text);
   for (const step of doneSteps) {
     const item = items.find((t) => t.step === step);
-    if (item) item.completed = true;
+    if (item !== undefined) item.completed = true;
   }
   return doneSteps.length;
 }
+
+export const markCompletedSteps: {
+  (text: string, items: TodoItem[]): number;
+  (items: TodoItem[]): (text: string) => number;
+} = dual(2, markCompletedStepsImpl);

@@ -1,12 +1,6 @@
-/**
- * Structured Output Tool
- *
- * Demonstrates `terminate: true` so the agent can end on a tool call
- * without paying for an extra follow-up LLM turn.
- */
-
 import { defineTool, type ExtensionAPI } from "@msa/coding-agent";
 import { Text } from "@msa/tui";
+import { Effect } from "effect";
 import { Type } from "typebox";
 
 interface StructuredOutputDetails {
@@ -31,21 +25,22 @@ const structuredOutputTool = defineTool({
     actionItems: Type.Array(Type.String(), { description: "Concrete next steps or key bullets" }),
   }),
 
-  async execute(_toolCallId, params) {
-    return {
-      content: [{ type: "text", text: `Saved structured output: ${params.headline}` }],
-      details: {
-        headline: params.headline,
-        summary: params.summary,
-        actionItems: params.actionItems,
-      } satisfies StructuredOutputDetails,
-      terminate: true,
-    };
-  },
+  execute: (_toolCallId, params) =>
+    Effect.runPromise(
+      Effect.succeed({
+        content: [{ type: "text", text: `Saved structured output: ${params.headline}` }],
+        details: {
+          headline: params.headline,
+          summary: params.summary,
+          actionItems: params.actionItems,
+        } satisfies StructuredOutputDetails,
+        terminate: true,
+      }),
+    ),
 
   renderResult(result, _options, theme) {
     const details = result.details as StructuredOutputDetails | undefined;
-    if (!details) {
+    if (details === undefined) {
       const text = result.content[0];
       return new Text(text?.type === "text" ? text.text : "", 0, 0);
     }

@@ -1,11 +1,5 @@
-/**
- * Minimal SDK Usage
- *
- * Uses all defaults: discovers skills, extensions, tools, context files
- * from cwd and ~/.msa/agent. Model chosen from settings or first available.
- */
-
 import { createAgentSession } from "@msa/coding-agent";
+import { Console, Effect } from "effect";
 
 const { session } = await createAgentSession();
 
@@ -18,9 +12,9 @@ try {
 
   await session.prompt("What files are in the current directory?");
   session.state.messages.forEach((msg) => {
-    console.log(msg);
+    Effect.runSync(Console.log(msg));
   });
-  console.log();
+  Effect.runSync(Console.log());
 } finally {
   session.dispose();
 }

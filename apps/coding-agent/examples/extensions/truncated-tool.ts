@@ -1,35 +1,18 @@
-/**
- * Truncated Tool Example - Demonstrates proper output truncation for custom tools
- *
- * Custom tools MUST truncate their output to avoid overwhelming the LLM context.
- * The built-in limit is 50KB (~10k tokens) and 2000 lines, whichever is hit first.
- *
- * This example shows how to:
- * 1. Use the built-in truncation utilities
- * 2. Write full output to a temp file when truncated
- * 3. Inform the LLM where to find the complete output
- * 4. Custom rendering of tool calls and results
- *
- * The `rg` tool here wraps ripgrep with proper truncation. Compare this to the
- * built-in `grep` tool in src/core/tools/grep.ts for a more complete implementation.
- */
-
-import { execSync } from "child_process";
-import { mkdtemp, writeFile } from "node:fs/promises";
-import { tmpdir } from "os";
-import { join } from "path";
-
-import type { ExtensionAPI } from "@msa/coding-agent";
+import { NodeServices } from "@effect/platform-node";
+import type { ExtensionAPI, Theme } from "@msa/coding-agent";
 import {
   DEFAULT_MAX_BYTES,
   DEFAULT_MAX_LINES,
   formatSize,
   type TruncationResult,
   truncateHead,
-  withFileMutationQueue,
 } from "@msa/coding-agent";
 import { Text } from "@msa/tui";
+import { Data, Effect, FileSystem, ManagedRuntime, Path, Stream } from "effect";
+import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import { Type } from "typebox";
+
+const runtime = ManagedRuntime.make(NodeServices.layer);
 
 const RgParams = Type.Object({
   pattern: Type.String({ description: "Search pattern (regex)" }),
@@ -48,151 +31,165 @@ interface RgDetails {
   fullOutputPath?: string;
 }
 
+interface RgParamsValue {
+  pattern: string;
+  path?: string | undefined;
+  glob?: string | undefined;
+}
+
+class RgError extends Data.TaggedError("RgError")<{ readonly message: string }> {}
+
+const buildArgs = (params: RgParamsValue): string[] => {
+  const args = ["--line-number", "--color=never"];
+  if (params.glob !== undefined && params.glob.length > 0) args.push("--glob", params.glob);
+  args.push(params.pattern);
+  args.push(params.path || ".");
+  return args;
+};
+
+const runRipgrep = (cwd: string, args: string[]) =>
+  Effect.gen(function* () {
+    const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+    return yield* Effect.scoped(
+      Effect.gen(function* () {
+        const handle = yield* spawner.spawn(ChildProcess.make("rg", args, { cwd }));
+        const [stdout, exitCode] = yield* Effect.all(
+          [Stream.mkString(Stream.decodeText(handle.stdout)), handle.exitCode],
+          { concurrency: 2 },
+        );
+        return { stdout, exitCode };
+      }),
+    );
+  });
+
+const noMatchResult = (params: RgParamsValue) => ({
+  content: [{ type: "text" as const, text: "No matches found" }],
+  details: {
+    pattern: params.pattern,
+    path: params.path,
+    glob: params.glob,
+    matchCount: 0,
+  } as RgDetails,
+});
+
+const saveFullOutput = (output: string) =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const tempDir = yield* fs.makeTempDirectory({ prefix: "msa-rg-" });
+    const tempFile = path.join(tempDir, "output.txt");
+    yield* fs.writeFileString(tempFile, output);
+    return tempFile;
+  });
+
+const truncationNote = (truncation: TruncationResult, tempFile: string): string => {
+  const truncatedLines = truncation.totalLines - truncation.outputLines;
+  const truncatedBytes = truncation.totalBytes - truncation.outputBytes;
+  return (
+    `\n\n[Output truncated: showing ${truncation.outputLines} of ${truncation.totalLines} lines` +
+    ` (${formatSize(truncation.outputBytes)} of ${formatSize(truncation.totalBytes)}).` +
+    ` ${truncatedLines} lines (${formatSize(truncatedBytes)}) omitted.` +
+    ` Full output saved to: ${tempFile}]`
+  );
+};
+
+const search = (cwd: string, params: RgParamsValue) =>
+  Effect.gen(function* () {
+    const { stdout, exitCode } = yield* runRipgrep(cwd, buildArgs(params));
+
+    if (exitCode === 1 || stdout.trim().length === 0) {
+      return noMatchResult(params);
+    }
+    if (exitCode !== 0) {
+      return yield* new RgError({ message: `ripgrep failed with exit code ${exitCode}` });
+    }
+
+    const truncation = truncateHead(stdout, {
+      maxLines: DEFAULT_MAX_LINES,
+      maxBytes: DEFAULT_MAX_BYTES,
+    });
+    const matchCount = stdout.split("\n").filter((line) => line.trim()).length;
+    const details: RgDetails = {
+      pattern: params.pattern,
+      path: params.path,
+      glob: params.glob,
+      matchCount,
+    };
+
+    let resultText = truncation.content;
+    if (truncation.truncated) {
+      const tempFile = yield* saveFullOutput(stdout);
+      details.truncation = truncation;
+      details.fullOutputPath = tempFile;
+      resultText += truncationNote(truncation, tempFile);
+    }
+
+    return { content: [{ type: "text" as const, text: resultText }], details };
+  });
+
+const renderCall = (args: RgParamsValue, theme: Theme): Text => {
+  let text = theme.fg("toolTitle", theme.bold("rg "));
+  text += theme.fg("accent", `"${args.pattern}"`);
+  if (args.path !== undefined && args.path.length > 0) {
+    text += theme.fg("muted", ` in ${args.path}`);
+  }
+  if (args.glob !== undefined && args.glob.length > 0) {
+    text += theme.fg("dim", ` --glob ${args.glob}`);
+  }
+  return new Text(text, 0, 0);
+};
+
+const expandedOutput = (text: string, theme: Theme): string => {
+  const lines = text.split("\n").slice(0, 20);
+  const shown = lines.map((line) => `\n${theme.fg("dim", line)}`).join("");
+  return text.split("\n").length > 20
+    ? `${shown}\n${theme.fg("muted", "... (use read tool to see full output)")}`
+    : shown;
+};
+
+const renderResult = (
+  result: { content: ReadonlyArray<{ type: string; text?: string }>; details: unknown },
+  options: { expanded: boolean; isPartial: boolean },
+  theme: Theme,
+): Text => {
+  const details = result.details as RgDetails | undefined;
+
+  if (options.isPartial) {
+    return new Text(theme.fg("warning", "Searching..."), 0, 0);
+  }
+  if (details === undefined || details.matchCount === 0) {
+    return new Text(theme.fg("dim", "No matches found"), 0, 0);
+  }
+
+  let text = theme.fg("success", `${details.matchCount} matches`);
+  if (details.truncation?.truncated === true) {
+    text += theme.fg("warning", " (truncated)");
+  }
+
+  if (options.expanded) {
+    const content = result.content[0];
+    if (content?.type === "text") {
+      text += expandedOutput(content.text ?? "", theme);
+    }
+    if (details.fullOutputPath !== undefined && details.fullOutputPath.length > 0) {
+      text += `\n${theme.fg("dim", `Full output: ${details.fullOutputPath}`)}`;
+    }
+  }
+
+  return new Text(text, 0, 0);
+};
+
 export default function (msa: ExtensionAPI) {
   msa.registerTool({
     name: "rg",
     label: "ripgrep",
-    // Document the truncation limits in the tool description so the LLM knows
     description: `Search file contents using ripgrep. Output is truncated to ${DEFAULT_MAX_LINES} lines or ${formatSize(DEFAULT_MAX_BYTES)} (whichever is hit first). If truncated, full output is saved to a temp file.`,
     parameters: RgParams,
 
-    async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-      const { pattern, path: searchPath, glob } = params;
+    execute: (_toolCallId, params, _signal, _onUpdate, ctx) =>
+      runtime.runPromise(search(ctx.cwd, params)),
 
-      // Build the ripgrep command
-      const args = ["rg", "--line-number", "--color=never"];
-      if (glob) args.push("--glob", glob);
-      args.push(pattern);
-      args.push(searchPath || ".");
-
-      let output: string;
-      try {
-        output = execSync(args.join(" "), {
-          cwd: ctx.cwd,
-          encoding: "utf-8",
-          maxBuffer: 100 * 1024 * 1024, // 100MB buffer to capture full output
-        });
-      } catch (err: any) {
-        // ripgrep exits with 1 when no matches found
-        if (err.status === 1) {
-          return {
-            content: [{ type: "text", text: "No matches found" }],
-            details: { pattern, path: searchPath, glob, matchCount: 0 } as RgDetails,
-          };
-        }
-        throw new Error(`ripgrep failed: ${err.message}`, { cause: err });
-      }
-
-      if (!output.trim()) {
-        return {
-          content: [{ type: "text", text: "No matches found" }],
-          details: { pattern, path: searchPath, glob, matchCount: 0 } as RgDetails,
-        };
-      }
-
-      // Apply truncation using built-in utilities
-      // truncateHead keeps the first N lines/bytes (good for search results)
-      // truncateTail keeps the last N lines/bytes (good for logs/command output)
-      const truncation = truncateHead(output, {
-        maxLines: DEFAULT_MAX_LINES,
-        maxBytes: DEFAULT_MAX_BYTES,
-      });
-
-      // Count matches (each non-empty line with a match)
-      const matchCount = output.split("\n").filter((line) => line.trim()).length;
-
-      const details: RgDetails = {
-        pattern,
-        path: searchPath,
-        glob,
-        matchCount,
-      };
-
-      let resultText = truncation.content;
-
-      if (truncation.truncated) {
-        // Save full output to a temp file so LLM can access it if needed
-        const tempDir = await mkdtemp(join(tmpdir(), "msa-rg-"));
-        const tempFile = join(tempDir, "output.txt");
-        await withFileMutationQueue(tempFile, async () => {
-          await writeFile(tempFile, output, "utf8");
-        });
-
-        details.truncation = truncation;
-        details.fullOutputPath = tempFile;
-
-        // Add truncation notice - this helps the LLM understand the output is incomplete
-        const truncatedLines = truncation.totalLines - truncation.outputLines;
-        const truncatedBytes = truncation.totalBytes - truncation.outputBytes;
-
-        resultText += `\n\n[Output truncated: showing ${truncation.outputLines} of ${truncation.totalLines} lines`;
-        resultText += ` (${formatSize(truncation.outputBytes)} of ${formatSize(truncation.totalBytes)}).`;
-        resultText += ` ${truncatedLines} lines (${formatSize(truncatedBytes)}) omitted.`;
-        resultText += ` Full output saved to: ${tempFile}]`;
-      }
-
-      return {
-        content: [{ type: "text", text: resultText }],
-        details,
-      };
-    },
-
-    // Custom rendering of the tool call (shown before/during execution)
-    renderCall(args, theme, _context) {
-      let text = theme.fg("toolTitle", theme.bold("rg "));
-      text += theme.fg("accent", `"${args.pattern}"`);
-      if (args.path) {
-        text += theme.fg("muted", ` in ${args.path}`);
-      }
-      if (args.glob) {
-        text += theme.fg("dim", ` --glob ${args.glob}`);
-      }
-      return new Text(text, 0, 0);
-    },
-
-    // Custom rendering of the tool result
-    renderResult(result, { expanded, isPartial }, theme, _context) {
-      const details = result.details as RgDetails | undefined;
-
-      // Handle streaming/partial results
-      if (isPartial) {
-        return new Text(theme.fg("warning", "Searching..."), 0, 0);
-      }
-
-      // No matches
-      if (!details || details.matchCount === 0) {
-        return new Text(theme.fg("dim", "No matches found"), 0, 0);
-      }
-
-      // Build result display
-      let text = theme.fg("success", `${details.matchCount} matches`);
-
-      // Show truncation warning if applicable
-      if (details.truncation?.truncated) {
-        text += theme.fg("warning", " (truncated)");
-      }
-
-      // In expanded view, show the actual matches
-      if (expanded) {
-        const content = result.content[0];
-        if (content?.type === "text") {
-          // Show first 20 lines in expanded view, or all if fewer
-          const lines = content.text.split("\n").slice(0, 20);
-          for (const line of lines) {
-            text += `\n${theme.fg("dim", line)}`;
-          }
-          if (content.text.split("\n").length > 20) {
-            text += `\n${theme.fg("muted", "... (use read tool to see full output)")}`;
-          }
-        }
-
-        // Show temp file path if truncated
-        if (details.fullOutputPath) {
-          text += `\n${theme.fg("dim", `Full output: ${details.fullOutputPath}`)}`;
-        }
-      }
-
-      return new Text(text, 0, 0);
-    },
+    renderCall,
+    renderResult,
   });
 }

@@ -1,453 +1,124 @@
-/**
- * Preset Extension
- *
- * Allows defining named presets that configure model, thinking level, tools,
- * and system prompt instructions. Presets are defined in JSON config files
- * and can be activated via CLI flag, /preset command, or Ctrl+Shift+U to cycle.
- *
- * Config files (merged, project takes precedence):
- * - ~/.msa/agent/presets.json (global)
- * - <cwd>/.msa/presets.json (project-local)
- *
- * Example presets.json:
- * ```json
- * {
- *   "plan": {
- *     "provider": "openai-codex",
- *     "model": "gpt-5.2-codex",
- *     "thinkingLevel": "high",
- *     "tools": ["read", "grep", "find", "ls"],
- *     "instructions": "You are in PLANNING MODE. Your job is to deeply understand the problem and create a detailed implementation plan.\n\nRules:\n- DO NOT make any changes. You cannot edit or write files.\n- Read files IN FULL (no offset/limit) to get complete context. Partial reads miss critical details.\n- Explore thoroughly: grep for related code, find similar patterns, understand the architecture.\n- Ask clarifying questions if requirements are ambiguous. Do not assume.\n- Identify risks, edge cases, and dependencies before proposing solutions.\n\nOutput:\n- Create a structured plan with numbered steps.\n- For each step: what to change, why, and potential risks.\n- List files that will be modified.\n- Note any tests that should be added or updated.\n\nWhen done, ask the user if they want you to:\n1. Write the plan to a markdown file (e.g., PLAN.md)\n2. Create a GitHub issue with the plan\n3. Proceed to implementation (they should switch to 'implement' preset)"
- *   },
- *   "implement": {
- *     "provider": "anthropic",
- *     "model": "claude-sonnet-4-5",
- *     "thinkingLevel": "high",
- *     "tools": ["read", "bash", "edit", "write"],
- *     "instructions": "You are in IMPLEMENTATION MODE. Your job is to make focused, correct changes.\n\nRules:\n- Keep scope tight. Do exactly what was asked, no more.\n- Read files before editing to understand current state.\n- Make surgical edits. Prefer edit over write for existing files.\n- Explain your reasoning briefly before each change.\n- Run tests or type checks after changes if the project has them (npm test, npm run check, etc.).\n- If you encounter unexpected complexity, STOP and explain the issue rather than hacking around it.\n\nIf no plan exists:\n- Ask clarifying questions before starting.\n- Propose what you'll do and get confirmation for non-trivial changes.\n\nAfter completing changes:\n- Summarize what was done.\n- Note any follow-up work or tests that should be added."
- *   }
- * }
- * ```
- *
- * Usage:
- * - `msa --preset plan` - start with plan preset
- * - `/preset` - show selector to switch presets mid-session
- * - `/preset implement` - switch to implement preset directly
- * - `Ctrl+Shift+U` - cycle through presets
- *
- * CLI flags always override preset values.
- */
-
-import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
-
-import type { Api, Model } from "@msa/ai";
 import type { ExtensionAPI, ExtensionContext } from "@msa/coding-agent";
-import { CONFIG_DIR_NAME, DynamicBorder, getAgentDir } from "@msa/coding-agent";
-import { Container, Key, type SelectItem, SelectList, Text } from "@msa/tui";
+import { Key } from "@msa/tui";
+import { Effect } from "effect";
 
-// Preset configuration
-interface Preset {
-  /** Provider name (e.g., "anthropic", "openai") */
-  provider?: string;
-  /** Model ID (e.g., "claude-sonnet-4-5") */
-  model?: string;
-  /** Thinking level */
-  thinkingLevel?: "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
-  /** Tools to enable (replaces default set) */
-  tools?: string[];
-  /** Instructions to append to system prompt */
-  instructions?: string;
-}
+import { createPresetStore, type Preset, type PresetStore } from "./preset-store.ts";
+import { showPresetSelector } from "./preset-ui.ts";
 
-interface PresetsConfig {
-  [name: string]: Preset;
-}
-
-/**
- * Load presets from config files.
- * Project-local presets override global presets with the same name.
- */
-function loadPresets(cwd: string): PresetsConfig {
-  const globalPath = join(getAgentDir(), "presets.json");
-  const projectPath = join(cwd, CONFIG_DIR_NAME, "presets.json");
-
-  let globalPresets: PresetsConfig = {};
-  let projectPresets: PresetsConfig = {};
-
-  // Load global presets
-  if (existsSync(globalPath)) {
-    try {
-      const content = readFileSync(globalPath, "utf-8");
-      globalPresets = JSON.parse(content);
-    } catch (err) {
-      console.error(`Failed to load global presets from ${globalPath}: ${err}`);
-    }
-  }
-
-  // Load project presets
-  if (existsSync(projectPath)) {
-    try {
-      const content = readFileSync(projectPath, "utf-8");
-      projectPresets = JSON.parse(content);
-    } catch (err) {
-      console.error(`Failed to load project presets from ${projectPath}: ${err}`);
-    }
-  }
-
-  // Merge (project overrides global)
-  return { ...globalPresets, ...projectPresets };
-}
-
-interface OriginalState {
-  model: Model<Api> | undefined;
-  thinkingLevel: "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
-  tools: string[];
-}
-
-export default function presetExtension(msa: ExtensionAPI) {
-  let presets: PresetsConfig = {};
-  let activePresetName: string | undefined;
-  let activePreset: Preset | undefined;
-  let originalState: OriginalState | undefined;
-
-  // Register --preset CLI flag
-  msa.registerFlag("preset", {
-    description: "Preset configuration to use",
-    type: "string",
+const activate = (store: PresetStore, name: string, preset: Preset, ctx: ExtensionContext) =>
+  Effect.gen(function* () {
+    yield* Effect.promise(() => store.apply(name, preset, ctx));
+    ctx.ui.notify(`Preset "${name}" activated`, "info");
+    store.updateStatus(ctx);
   });
 
-  /**
-   * Apply a preset configuration.
-   */
-  async function applyPreset(
-    name: string,
-    preset: Preset,
-    ctx: ExtensionContext,
-  ): Promise<boolean> {
-    // Snapshot state before the first preset is applied (i.e. only when transitioning from no-preset)
-    if (activePresetName === undefined) {
-      originalState = {
-        model: ctx.model,
-        thinkingLevel: msa.getThinkingLevel(),
-        tools: msa.getActiveTools(),
-      };
-    }
-
-    // Apply model if specified
-    if (preset.provider && preset.model) {
-      const model = ctx.modelRegistry.find(preset.provider, preset.model);
-      if (model) {
-        const success = await msa.setModel(model);
-        if (!success) {
-          ctx.ui.notify(
-            `Preset "${name}": No API key for ${preset.provider}/${preset.model}`,
-            "warning",
-          );
-        }
-      } else {
-        ctx.ui.notify(
-          `Preset "${name}": Model ${preset.provider}/${preset.model} not found`,
-          "warning",
-        );
-      }
-    }
-
-    // Apply thinking level if specified
-    if (preset.thinkingLevel) {
-      msa.setThinkingLevel(preset.thinkingLevel);
-    }
-
-    // Apply tools if specified
-    if (preset.tools && preset.tools.length > 0) {
-      const allToolNames = msa.getAllTools().map((t) => t.name);
-      const validTools = preset.tools.filter((t) => allToolNames.includes(t));
-      const invalidTools = preset.tools.filter((t) => !allToolNames.includes(t));
-
-      if (invalidTools.length > 0) {
-        ctx.ui.notify(`Preset "${name}": Unknown tools: ${invalidTools.join(", ")}`, "warning");
-      }
-
-      if (validTools.length > 0) {
-        msa.setActiveTools(validTools);
-      }
-    }
-
-    // Store active preset for system prompt injection
-    activePresetName = name;
-    activePreset = preset;
-
-    return true;
-  }
-
-  /**
-   * Build description string for a preset.
-   */
-  function buildPresetDescription(preset: Preset): string {
-    const parts: string[] = [];
-
-    if (preset.provider && preset.model) {
-      parts.push(`${preset.provider}/${preset.model}`);
-    }
-    if (preset.thinkingLevel) {
-      parts.push(`thinking:${preset.thinkingLevel}`);
-    }
-    if (preset.tools) {
-      parts.push(`tools:${preset.tools.join(",")}`);
-    }
-    if (preset.instructions) {
-      const truncated =
-        preset.instructions.length > 30
-          ? `${preset.instructions.slice(0, 27)}...`
-          : preset.instructions;
-      parts.push(`"${truncated}"`);
-    }
-
-    return parts.join(" | ");
-  }
-
-  /**
-   * Show preset selector UI using custom SelectList component.
-   */
-  async function showPresetSelector(ctx: ExtensionContext): Promise<void> {
-    const presetNames = Object.keys(presets);
-
-    if (presetNames.length === 0) {
-      ctx.ui.notify(
-        `No presets defined. Add presets to ${join(getAgentDir(), "presets.json")} or ${join(ctx.cwd, CONFIG_DIR_NAME, "presets.json")}`,
-        "warning",
-      );
+const cyclePreset = (store: PresetStore, ctx: ExtensionContext) =>
+  Effect.gen(function* () {
+    const names = store.order();
+    if (names.length === 0) {
+      ctx.ui.notify("No presets defined. Add a presets.json to the agent directory.", "warning");
       return;
     }
 
-    // Build select items with descriptions
-    const items: SelectItem[] = Object.entries(presets).map(([name, preset]) => {
-      const isActive = name === activePresetName;
-      return {
-        value: name,
-        label: isActive ? `${name} (active)` : name,
-        description: buildPresetDescription(preset),
-      };
-    });
-
-    // Add "None" option to clear preset
-    items.push({
-      value: "(none)",
-      label: "(none)",
-      description: "Clear active preset, restore defaults",
-    });
-
-    const result = await ctx.ui.custom<string | null>((tui, theme, _kb, done) => {
-      const container = new Container();
-      container.addChild(new DynamicBorder((str) => theme.fg("accent", str)));
-
-      // Header
-      container.addChild(new Text(theme.fg("accent", theme.bold("Select Preset"))));
-
-      // SelectList with themed styling
-      const selectList = new SelectList(items, Math.min(items.length, 10), {
-        selectedPrefix: (text) => theme.fg("accent", text),
-        selectedText: (text) => theme.fg("accent", text),
-        description: (text) => theme.fg("muted", text),
-        scrollInfo: (text) => theme.fg("dim", text),
-        noMatch: (text) => theme.fg("warning", text),
-      });
-
-      selectList.onSelect = (item) => done(item.value);
-      selectList.onCancel = () => done(null);
-
-      container.addChild(selectList);
-
-      // Footer hint
-      container.addChild(new Text(theme.fg("dim", "↑↓ navigate • enter select • esc cancel")));
-
-      container.addChild(new DynamicBorder((str) => theme.fg("accent", str)));
-
-      return {
-        render(width: number) {
-          return container.render(width);
-        },
-        invalidate() {
-          container.invalidate();
-        },
-        handleInput(data: string) {
-          selectList.handleInput(data);
-          tui.requestRender();
-        },
-      };
-    });
-
-    if (!result) return;
-
-    if (result === "(none)") {
-      // Clear preset and restore original state
-      activePresetName = undefined;
-      activePreset = undefined;
-      if (originalState) {
-        if (originalState.model) {
-          await msa.setModel(originalState.model);
-        }
-        msa.setThinkingLevel(originalState.thinkingLevel);
-        msa.setActiveTools(originalState.tools);
-      } else {
-        msa.setActiveTools(["read", "bash", "edit", "write"]);
-      }
-      ctx.ui.notify("Preset cleared, defaults restored", "info");
-      updateStatus(ctx);
-      return;
-    }
-
-    const preset = presets[result];
-    if (preset) {
-      await applyPreset(result, preset, ctx);
-      ctx.ui.notify(`Preset "${result}" activated`, "info");
-      updateStatus(ctx);
-    }
-  }
-
-  /**
-   * Update status indicator.
-   */
-  function updateStatus(ctx: ExtensionContext) {
-    if (activePresetName) {
-      ctx.ui.setStatus("preset", ctx.ui.theme.fg("accent", `preset:${activePresetName}`));
-    } else {
-      ctx.ui.setStatus("preset", undefined);
-    }
-  }
-
-  function getPresetOrder(): string[] {
-    return Object.keys(presets).sort();
-  }
-
-  async function cyclePreset(ctx: ExtensionContext): Promise<void> {
-    const presetNames = getPresetOrder();
-    if (presetNames.length === 0) {
-      ctx.ui.notify(
-        `No presets defined. Add presets to ${join(getAgentDir(), "presets.json")} or ${join(ctx.cwd, CONFIG_DIR_NAME, "presets.json")}`,
-        "warning",
-      );
-      return;
-    }
-
-    const cycleList = ["(none)", ...presetNames];
-    const currentName = activePresetName ?? "(none)";
-    const currentIndex = cycleList.indexOf(currentName);
+    const cycleList = ["(none)", ...names];
+    const currentIndex = cycleList.indexOf(store.activeName ?? "(none)");
     const nextIndex = currentIndex === -1 ? 0 : (currentIndex + 1) % cycleList.length;
     const nextName = cycleList[nextIndex];
     if (nextName === undefined) return;
 
     if (nextName === "(none)") {
-      activePresetName = undefined;
-      activePreset = undefined;
-      if (originalState) {
-        if (originalState.model) {
-          await msa.setModel(originalState.model);
-        }
-        msa.setThinkingLevel(originalState.thinkingLevel);
-        msa.setActiveTools(originalState.tools);
-      } else {
-        msa.setActiveTools(["read", "bash", "edit", "write"]);
-      }
-      ctx.ui.notify("Preset cleared, defaults restored", "info");
-      updateStatus(ctx);
+      yield* Effect.promise(() => store.clear(ctx));
+      store.updateStatus(ctx);
       return;
     }
 
-    const preset = presets[nextName];
-    if (!preset) return;
+    const preset = store.presets[nextName];
+    if (preset === undefined) return;
+    yield* activate(store, nextName, preset, ctx);
+  });
 
-    await applyPreset(nextName, preset, ctx);
-    ctx.ui.notify(`Preset "${nextName}" activated`, "info");
-    updateStatus(ctx);
+const runPresetCommand = (store: PresetStore, args: string, ctx: ExtensionContext) =>
+  Effect.gen(function* () {
+    const name = args.trim();
+    if (name.length === 0) {
+      yield* showPresetSelector({ store, ctx });
+      return;
+    }
+
+    const preset = store.presets[name];
+    if (preset === undefined) {
+      const available = Object.keys(store.presets).join(", ") || "(none defined)";
+      ctx.ui.notify(`Unknown preset "${name}". Available: ${available}`, "error");
+      return;
+    }
+
+    yield* activate(store, name, preset, ctx);
+  });
+
+const restoreFromBranch = (msa: ExtensionAPI, store: PresetStore, ctx: ExtensionContext): void => {
+  const presetFlag = msa.getFlag("preset");
+  if (typeof presetFlag === "string" && presetFlag.length > 0) {
+    const preset = store.presets[presetFlag];
+    if (preset === undefined) {
+      const available = Object.keys(store.presets).join(", ") || "(none defined)";
+      ctx.ui.notify(`Unknown preset "${presetFlag}". Available: ${available}`, "warning");
+    } else {
+      void store.apply(presetFlag, preset, ctx);
+    }
   }
+
+  const entries = ctx.sessionManager.getEntries();
+  const presetEntry = entries
+    .filter(
+      (e: { type: string; customType?: string }) =>
+        e.type === "custom" && e.customType === "preset-state",
+    )
+    .pop() as { data?: { name: string } } | undefined;
+
+  const entryName = presetEntry?.data?.name;
+  const hasFlag = typeof presetFlag === "string" && presetFlag.length > 0;
+  if (entryName !== undefined && entryName.length > 0 && !hasFlag) {
+    store.restoreActive(entryName);
+  }
+
+  store.updateStatus(ctx);
+};
+
+export default function presetExtension(msa: ExtensionAPI) {
+  const store = createPresetStore(msa);
+
+  msa.registerFlag("preset", {
+    description: "Preset configuration to use",
+    type: "string",
+  });
 
   msa.registerShortcut(Key.ctrlShift("u"), {
     description: "Cycle presets",
-    handler: async (ctx) => {
-      await cyclePreset(ctx);
-    },
+    handler: (ctx) => Effect.runPromise(cyclePreset(store, ctx)),
   });
 
-  // Register /preset command
   msa.registerCommand("preset", {
     description: "Switch preset configuration",
-    handler: async (args, ctx) => {
-      // If preset name provided, apply directly
-      if (args?.trim()) {
-        const name = args.trim();
-        const preset = presets[name];
-
-        if (!preset) {
-          const available = Object.keys(presets).join(", ") || "(none defined)";
-          ctx.ui.notify(`Unknown preset "${name}". Available: ${available}`, "error");
-          return;
-        }
-
-        await applyPreset(name, preset, ctx);
-        ctx.ui.notify(`Preset "${name}" activated`, "info");
-        updateStatus(ctx);
-        return;
-      }
-
-      // Otherwise show selector
-      await showPresetSelector(ctx);
-    },
+    handler: (args, ctx) => Effect.runPromise(runPresetCommand(store, args, ctx)),
   });
 
-  // Inject preset instructions into system prompt
-  msa.on("before_agent_start", async (event) => {
-    if (activePreset?.instructions) {
-      return {
-        systemPrompt: `${event.systemPrompt}\n\n${activePreset.instructions}`,
-      };
+  msa.on("before_agent_start", (event) => {
+    const instructions = store.active?.instructions;
+    if (instructions !== undefined && instructions.length > 0) {
+      return { systemPrompt: `${event.systemPrompt}\n\n${instructions}` };
     }
     return undefined;
   });
 
-  // Initialize on session start
-  msa.on("session_start", async (_event, ctx) => {
-    // Load presets from config files
-    presets = loadPresets(ctx.cwd);
-
-    // Check for --preset flag
-    const presetFlag = msa.getFlag("preset");
-    if (typeof presetFlag === "string" && presetFlag) {
-      const preset = presets[presetFlag];
-      if (preset) {
-        await applyPreset(presetFlag, preset, ctx);
-        ctx.ui.notify(`Preset "${presetFlag}" activated`, "info");
-      } else {
-        const available = Object.keys(presets).join(", ") || "(none defined)";
-        ctx.ui.notify(`Unknown preset "${presetFlag}". Available: ${available}`, "warning");
-      }
-    }
-
-    // Restore preset from session state
-    const entries = ctx.sessionManager.getEntries();
-    const presetEntry = entries
-      .filter(
-        (e: { type: string; customType?: string }) =>
-          e.type === "custom" && e.customType === "preset-state",
-      )
-      .pop() as { data?: { name: string } } | undefined;
-
-    if (presetEntry?.data?.name && !presetFlag) {
-      const preset = presets[presetEntry.data.name];
-      if (preset) {
-        activePresetName = presetEntry.data.name;
-        activePreset = preset;
-        // Don't re-apply model/tools on restore, just keep the name for instructions
-      }
-    }
-
-    updateStatus(ctx);
+  msa.on("session_start", (_event, ctx) => {
+    store.load(ctx.cwd);
+    restoreFromBranch(msa, store, ctx);
   });
 
-  // Persist preset state
-  msa.on("turn_start", async () => {
-    if (activePresetName) {
-      msa.appendEntry("preset-state", { name: activePresetName });
+  msa.on("turn_start", () => {
+    const name = store.activeName;
+    if (name !== undefined && name.length > 0) {
+      msa.appendEntry("preset-state", { name });
     }
   });
 }

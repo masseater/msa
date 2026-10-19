@@ -1,119 +1,126 @@
-/**
- * RPC Extension UI Demo
- *
- * Purpose-built extension that exercises all RPC-supported extension UI methods.
- * Designed to be loaded alongside the rpc-extension-ui-example.ts script to
- * demonstrate the full extension UI protocol.
- *
- * UI methods exercised:
- * - select() - on tool_call for dangerous bash commands
- * - confirm() - on session_before_switch
- * - input() - via /rpc-input command
- * - editor() - via /rpc-editor command
- * - notify() - after each dialog completes
- * - setStatus() - on turn_start/turn_end
- * - setWidget() - on session_start
- * - setTitle() - on session_start
- * - setEditorText() - via /rpc-prefill command
- */
-
 import type { ExtensionAPI } from "@msa/coding-agent";
+import { Effect } from "effect";
 
-export default function (msa: ExtensionAPI) {
-  let turnCount = 0;
+interface DemoState {
+  turnCount: number;
+}
 
-  // -- setTitle, setWidget, setStatus on session lifecycle --
-
-  msa.on("session_start", async (event, ctx) => {
+const registerStatusEvents = (msa: ExtensionAPI, state: DemoState): void => {
+  msa.on("session_start", (event, ctx) => {
     ctx.ui.setTitle(event.reason === "new" ? "msa RPC Demo (new session)" : "msa RPC Demo");
     ctx.ui.setWidget("rpc-demo", ["--- RPC Extension UI Demo ---", "Loaded and ready."]);
-    ctx.ui.setStatus("rpc-demo", `Turns: ${turnCount}`);
+    ctx.ui.setStatus("rpc-demo", `Turns: ${state.turnCount}`);
   });
 
-  // -- setStatus on turn lifecycle --
-
-  msa.on("turn_start", async (_event, ctx) => {
-    turnCount++;
-    ctx.ui.setStatus("rpc-demo", `Turn ${turnCount} running...`);
+  msa.on("turn_start", (_event, ctx) => {
+    state.turnCount++;
+    ctx.ui.setStatus("rpc-demo", `Turn ${state.turnCount} running...`);
   });
 
-  msa.on("turn_end", async (_event, ctx) => {
-    ctx.ui.setStatus("rpc-demo", `Turn ${turnCount} done`);
+  msa.on("turn_end", (_event, ctx) => {
+    ctx.ui.setStatus("rpc-demo", `Turn ${state.turnCount} done`);
   });
+};
 
-  // -- select on dangerous tool calls --
+const registerGuardEvents = (msa: ExtensionAPI): void => {
+  msa.on("tool_call", (event, ctx) =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        if (event.toolName !== "bash") return undefined;
 
-  msa.on("tool_call", async (event, ctx) => {
-    if (event.toolName !== "bash") return undefined;
+        const command = event.input.command as string;
+        const isDangerous =
+          /\brm\s+(-rf?|--recursive)/iu.test(command) || /\bsudo\b/iu.test(command);
 
-    const command = event.input.command as string;
-    const isDangerous = /\brm\s+(-rf?|--recursive)/i.test(command) || /\bsudo\b/i.test(command);
+        if (isDangerous) {
+          if (!ctx.hasUI) {
+            return { block: true, reason: "Dangerous command blocked (no UI)" };
+          }
 
-    if (isDangerous) {
-      if (!ctx.hasUI) {
-        return { block: true, reason: "Dangerous command blocked (no UI)" };
-      }
+          const choice = yield* Effect.promise(() =>
+            ctx.ui.select(`Dangerous command: ${command}`, ["Allow", "Block"]),
+          );
+          if (choice !== "Allow") {
+            ctx.ui.notify("Command blocked by user", "warning");
+            return { block: true, reason: "Blocked by user" };
+          }
+          ctx.ui.notify("Command allowed", "info");
+        }
 
-      const choice = await ctx.ui.select(`Dangerous command: ${command}`, ["Allow", "Block"]);
-      if (choice !== "Allow") {
-        ctx.ui.notify("Command blocked by user", "warning");
-        return { block: true, reason: "Blocked by user" };
-      }
-      ctx.ui.notify("Command allowed", "info");
-    }
+        return undefined;
+      }),
+    ),
+  );
 
-    return undefined;
-  });
+  msa.on("session_before_switch", (event, ctx) =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        if (event.reason !== "new") return;
+        if (!ctx.hasUI) return;
 
-  // -- confirm on session clear --
+        const confirmed = yield* Effect.promise(() =>
+          ctx.ui.confirm("Clear session?", "All messages will be lost."),
+        );
+        if (!confirmed) {
+          ctx.ui.notify("Clear cancelled", "info");
+          return { cancel: true };
+        }
+        return undefined;
+      }),
+    ),
+  );
+};
 
-  msa.on("session_before_switch", async (event, ctx) => {
-    if (event.reason !== "new") return;
-    if (!ctx.hasUI) return;
-
-    const confirmed = await ctx.ui.confirm("Clear session?", "All messages will be lost.");
-    if (!confirmed) {
-      ctx.ui.notify("Clear cancelled", "info");
-      return { cancel: true };
-    }
-    return undefined;
-  });
-
-  // -- input via command --
-
+const registerCommands = (msa: ExtensionAPI): void => {
   msa.registerCommand("rpc-input", {
     description: "Prompt for text input (demonstrates ctx.ui.input in RPC)",
-    handler: async (_args, ctx) => {
-      const value = await ctx.ui.input("Enter a value", "type something...");
-      if (value) {
-        ctx.ui.notify(`You entered: ${value}`, "info");
-      } else {
-        ctx.ui.notify("Input cancelled", "info");
-      }
-    },
+    handler: (_args, ctx) =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          const value = yield* Effect.promise(() =>
+            ctx.ui.input("Enter a value", "type something..."),
+          );
+          if (value !== undefined && value.length > 0) {
+            ctx.ui.notify(`You entered: ${value}`, "info");
+          } else {
+            ctx.ui.notify("Input cancelled", "info");
+          }
+        }),
+      ),
   });
-
-  // -- editor via command --
 
   msa.registerCommand("rpc-editor", {
     description: "Open multi-line editor (demonstrates ctx.ui.editor in RPC)",
-    handler: async (_args, ctx) => {
-      const text = await ctx.ui.editor("Edit some text", "Line 1\nLine 2\nLine 3");
-      if (text) {
-        ctx.ui.notify(`Editor submitted (${text.split("\n").length} lines)`, "info");
-      } else {
-        ctx.ui.notify("Editor cancelled", "info");
-      }
-    },
+    handler: (_args, ctx) =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          const text = yield* Effect.promise(() =>
+            ctx.ui.editor("Edit some text", "Line 1\nLine 2\nLine 3"),
+          );
+          if (text !== undefined && text.length > 0) {
+            ctx.ui.notify(`Editor submitted (${text.split("\n").length} lines)`, "info");
+          } else {
+            ctx.ui.notify("Editor cancelled", "info");
+          }
+        }),
+      ),
   });
-
-  // -- setEditorText via command --
 
   msa.registerCommand("rpc-prefill", {
     description: "Prefill the input editor (demonstrates ctx.ui.setEditorText in RPC)",
-    handler: async (_args, ctx) => {
-      ctx.ui.setEditorText("This text was set by the rpc-demo extension.");
-      ctx.ui.notify("Editor prefilled", "info");
-    },
+    handler: (_args, ctx) =>
+      Effect.runPromise(
+        Effect.sync(() => {
+          ctx.ui.setEditorText("This text was set by the rpc-demo extension.");
+          ctx.ui.notify("Editor prefilled", "info");
+        }),
+      ),
   });
+};
+
+export default function (msa: ExtensionAPI) {
+  const state: DemoState = { turnCount: 0 };
+  registerStatusEvents(msa, state);
+  registerGuardEvents(msa);
+  registerCommands(msa);
 }

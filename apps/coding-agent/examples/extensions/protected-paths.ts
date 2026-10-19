@@ -1,16 +1,9 @@
-/**
- * Protected Paths Extension
- *
- * Blocks write and edit operations to protected paths.
- * Useful for preventing accidental modifications to sensitive files.
- */
-
 import type { ExtensionAPI } from "@msa/coding-agent";
 
 export default function (msa: ExtensionAPI) {
   const protectedPaths = [".env", ".git/", "node_modules/"];
 
-  msa.on("tool_call", async (event, ctx) => {
+  msa.on("tool_call", (event, ctx) => {
     if (event.toolName !== "write" && event.toolName !== "edit") {
       return undefined;
     }

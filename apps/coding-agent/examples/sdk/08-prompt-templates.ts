@@ -1,9 +1,3 @@
-/**
- * Prompt Templates
- *
- * File-based templates that inject content when invoked with /templatename.
- */
-
 import {
   createAgentSession,
   createSyntheticSourceInfo,
@@ -12,8 +6,8 @@ import {
   type PromptTemplate,
   SessionManager,
 } from "@msa/coding-agent";
+import { Console, Effect } from "effect";
 
-// Define custom templates
 const deployTemplate: PromptTemplate = {
   name: "deploy",
   description: "Deploy the application",
@@ -36,16 +30,15 @@ const loader = new DefaultResourceLoader({
 });
 await loader.reload();
 
-// Discover templates from cwd/.msa/prompts/ and ~/.msa/agent/prompts/
 const discovered = loader.getPrompts().prompts;
-console.log("Discovered prompt templates:");
+Effect.runSync(Console.log("Discovered prompt templates:"));
 for (const template of discovered) {
-  console.log(`  /${template.name}: ${template.description}`);
+  Effect.runSync(Console.log(`  /${template.name}: ${template.description}`));
 }
 
 const { session } = await createAgentSession({
   resourceLoader: loader,
   sessionManager: SessionManager.inMemory(),
 });
-console.log(`Session created with ${discovered.length + 1} prompt templates`);
+Effect.runSync(Console.log(`Session created with ${discovered.length + 1} prompt templates`));
 session.dispose();

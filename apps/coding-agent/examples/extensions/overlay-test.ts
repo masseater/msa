@@ -1,13 +1,3 @@
-/**
- * Overlay Test - validates overlay compositing with inline text inputs
- *
- * Usage: msa --extension ./examples/extensions/overlay-test.ts
- *
- * Run /overlay-test to show a floating overlay with:
- * - Inline text inputs within menu items
- * - Edge case tests (wide chars, styled text, emoji)
- */
-
 import type { ExtensionAPI, ExtensionCommandContext, Theme } from "@msa/coding-agent";
 import {
   CURSOR_MARKER,
@@ -16,28 +6,67 @@ import {
   renderFakeCursor,
   visibleWidth,
 } from "@msa/tui";
+import { Effect } from "effect";
 
 export default function (msa: ExtensionAPI) {
   msa.registerCommand("overlay-test", {
     description: "Test overlay rendering with edge cases",
-    handler: async (_args: string, ctx: ExtensionCommandContext) => {
-      const result = await ctx.ui.custom<{ action: string; query?: string } | undefined>(
-        (_tui, theme, _keybindings, done) => new OverlayTestComponent(theme, done),
-        { overlay: true },
-      );
+    handler: (_args: string, ctx: ExtensionCommandContext) =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          const result = yield* Effect.promise(() =>
+            ctx.ui.custom<{ action: string; query?: string } | undefined>(
+              (_tui, theme, _keybindings, done) => new OverlayTestComponent(theme, done),
+              { overlay: true },
+            ),
+          );
 
-      if (result) {
-        const msg = result.query ? `${result.action}: "${result.query}"` : result.action;
-        ctx.ui.notify(msg, "info");
-      }
-    },
+          if (result !== undefined) {
+            const msg =
+              result.query !== undefined && result.query.length > 0
+                ? `${result.action}: "${result.query}"`
+                : result.action;
+            ctx.ui.notify(msg, "info");
+          }
+        }),
+      ),
   });
 }
+
+interface OverlayItem {
+  label: string;
+  hasInput: boolean;
+  text: string;
+  cursor: number;
+}
+
+const renderItem = (
+  item: OverlayItem,
+  isSelected: boolean,
+  focused: boolean,
+  th: Theme,
+): string => {
+  const prefix = isSelected ? " ▶ " : "   ";
+
+  if (!item.hasInput) {
+    return prefix + (isSelected ? th.fg("accent", item.label) : th.fg("text", item.label));
+  }
+
+  const label = isSelected ? th.fg("accent", `${item.label}:`) : th.fg("text", `${item.label}:`);
+  let inputDisplay = item.text;
+  if (isSelected) {
+    const before = inputDisplay.slice(0, item.cursor);
+    const cursorChar = inputDisplay[item.cursor] ?? " ";
+    const after = inputDisplay.slice(item.cursor + 1);
+    const marker = focused ? CURSOR_MARKER : "";
+    inputDisplay = `${before}${marker}${renderFakeCursor(cursorChar)}${after}`;
+  }
+  return `${prefix + label} ${inputDisplay}`;
+};
 
 class OverlayTestComponent implements Focusable {
   readonly width = 70;
 
-  /** Focusable interface - set by TUI when focus changes */
   focused = false;
 
   private selected = 0;
@@ -113,7 +142,6 @@ class OverlayTestComponent implements Focusable {
     lines.push(row(` ${th.fg("accent", "🧪 Overlay Test")}`));
     lines.push(row(""));
 
-    // Edge cases - full width lines to test compositing at boundaries
     lines.push(row(` ${th.fg("dim", "─── Edge Cases (borders should align) ───")}`));
     lines.push(
       row(
@@ -128,35 +156,10 @@ class OverlayTestComponent implements Focusable {
     lines.push(row(" Emoji: 👨‍👩‍👧‍👦 🇯🇵 🚀 💻 🎉 🔥 😀 🎯 🌟 💡 🎨 🔧 📦 🏆 🌈 🎪 🎭 🎬 🎮 🎲"));
     lines.push(row(""));
 
-    // Menu with inline inputs
     lines.push(row(` ${th.fg("dim", "─── Actions ───")}`));
 
     for (let i = 0; i < this.items.length; i++) {
-      const item = this.items[i]!;
-      const isSelected = i === this.selected;
-      const prefix = isSelected ? " ▶ " : "   ";
-
-      let content: string;
-      if (item.hasInput) {
-        const label = isSelected
-          ? th.fg("accent", `${item.label}:`)
-          : th.fg("text", `${item.label}:`);
-
-        let inputDisplay = item.text;
-        if (isSelected) {
-          const before = inputDisplay.slice(0, item.cursor);
-          const cursorChar = inputDisplay[item.cursor] ?? " ";
-          const after = inputDisplay.slice(item.cursor + 1);
-          // Emit hardware cursor marker for IME support when focused
-          const marker = this.focused ? CURSOR_MARKER : "";
-          inputDisplay = `${before}${marker}${renderFakeCursor(cursorChar)}${after}`;
-        }
-        content = `${prefix + label} ${inputDisplay}`;
-      } else {
-        content = prefix + (isSelected ? th.fg("accent", item.label) : th.fg("text", item.label));
-      }
-
-      lines.push(row(content));
+      lines.push(row(renderItem(this.items[i]!, i === this.selected, this.focused, th)));
     }
 
     lines.push(row(""));

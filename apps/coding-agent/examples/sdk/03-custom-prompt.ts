@@ -1,26 +1,20 @@
-/**
- * Custom System Prompt
- *
- * Shows how to replace or modify the default system prompt.
- */
-
 import {
   createAgentSession,
   DefaultResourceLoader,
   getAgentDir,
   SessionManager,
 } from "@msa/coding-agent";
+import { Console, Effect } from "effect";
 
 const cwd = process.cwd();
 const agentDir = getAgentDir();
 
-// Option 1: Replace prompt entirely
 const loader1 = new DefaultResourceLoader({
   cwd,
   agentDir,
   systemPromptOverride: () => `You are a helpful assistant that speaks like a pirate.
 Always end responses with "Arrr!"`,
-  // Needed to avoid DefaultResourceLoader appending APPEND_SYSTEM.md from ~/.msa/agent or <cwd>/.msa.
+
   appendSystemPromptOverride: () => [],
 });
 await loader1.reload();
@@ -37,14 +31,13 @@ try {
     }
   });
 
-  console.log("=== Replace prompt ===");
+  Effect.runSync(Console.log("=== Replace prompt ==="));
   await session1.prompt("What is 2 + 2?");
-  console.log("\n");
+  Effect.runSync(Console.log("\n"));
 } finally {
   session1.dispose();
 }
 
-// Option 2: Append instructions to the default prompt
 const loader2 = new DefaultResourceLoader({
   cwd,
   agentDir,
@@ -67,9 +60,9 @@ try {
     }
   });
 
-  console.log("=== Modify prompt ===");
+  Effect.runSync(Console.log("=== Modify prompt ==="));
   await session2.prompt("List 3 benefits of TypeScript.");
-  console.log();
+  Effect.runSync(Console.log());
 } finally {
   session2.dispose();
 }
