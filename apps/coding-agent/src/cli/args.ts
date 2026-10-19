@@ -34,7 +34,6 @@ export interface Args {
   excludeTools?: string[];
   noTools?: boolean;
   noBuiltinTools?: boolean;
-  orchestrator?: boolean;
   extensions?: string[];
   noExtensions?: boolean;
   noMcp?: boolean;
@@ -164,7 +163,11 @@ export function parseArgs(args: string[]): Args {
     } else if (arg === "--no-builtin-tools" || arg === "-nbt") {
       result.noBuiltinTools = true;
     } else if (arg === "--orchestrator") {
-      result.orchestrator = true;
+      result.diagnostics.push({
+        type: "error",
+        message:
+          "--orchestrator is the default: the orchestrator tools are always enabled. Remove the flag.",
+      });
     } else if ((arg === "--tools" || arg === "-t") && nextArg !== undefined) {
       i++;
       const tools = nextArg
@@ -355,7 +358,6 @@ ${chalk.bold("Options:")}
                                  Only +name/-name entries add to or remove from the defaults
   --exclude-tools, -xt <tools>   Comma-separated denylist of tool names or patterns (*) to disable
                                  Applies to all tools, MCP tools included
-  --orchestrator                 Enable the tools that start and steer separate sessions
   --thinking <level>             Set thinking level: off, minimal, low, medium, high, xhigh, max
   --extension, -e <path>         Load an extension file or builtin:<name> (can be used multiple times)
   --no-extensions, -ne           Disable extension discovery and built-in extensions (explicit -e paths still work)

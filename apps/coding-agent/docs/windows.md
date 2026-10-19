@@ -38,11 +38,11 @@ To replace the model-facing `bash` tool with `powershell`, add this to `~/.msa/a
 
 ```json
 {
-  "defaultTools": ["read", "powershell", "edit", "write"]
+  "defaultTools": ["-bash", "+powershell"]
 }
 ```
 
-`["-bash", "+powershell"]` does the same while keeping any other default tools you configured.
+This keeps the other default tools.
 
 Restart msa, then ask it to run a harmless PowerShell command. The `!` and `!!` editor commands continue to use Bash. The `powershell` tool is available only when msa runs as a native Windows process.
 

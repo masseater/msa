@@ -41,7 +41,7 @@ function registerModel(
   });
 }
 
-function createHarness() {
+function createHarness(options?: { isWorker?: boolean }) {
   return Effect.gen(function* () {
     mkdirSync(tempDir, { recursive: true });
     const sessionDir = `${tempDir}/sessions`;
@@ -68,13 +68,35 @@ function createHarness() {
         modelRuntime,
         model,
         sessionManager,
-        orchestrator: true,
+        ...(options?.isWorker !== undefined ? { isWorker: options.isWorker } : {}),
       }),
     );
     sessionManager.appendMessage({ role: "user", content: "start", timestamp: 1 });
     return { session, sessionManager, sessionDir };
   });
 }
+
+it("starts with the orchestrator tools active", () =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const { session } = yield* createHarness();
+      expect(session.getActiveToolNames()).toEqual(
+        expect.arrayContaining(["create_task", "list_tasks", "replan", "stop_task"]),
+      );
+      expect(session.systemPrompt).toContain("You work as an orchestrator");
+      session.dispose();
+    }),
+  ));
+
+it("does not start an orchestrator inside a worker session", () =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const { session } = yield* createHarness({ isWorker: true });
+      expect(session.orchestrator).toBeUndefined();
+      expect(session.getActiveToolNames()).not.toContain("create_task");
+      session.dispose();
+    }),
+  ));
 
 it("keeps worker transcripts out of the sessions --continue and /resume pick from", () =>
   Effect.runPromise(

@@ -114,10 +114,10 @@ See [Settings](settings.md#tools) for configuring the default tool selection.
   Disables default built-in tools while retaining extension and custom tools.
 - `-nt`, `--no-tools`<br>
   Starts with all built-in, extension, custom, and MCP tools disabled.
-- `--orchestrator`<br>
-  Adds the orchestrator tools (`create_task`, `list_tasks`, `read_task`, `set_task_depends`, `set_task_instruction`, `set_task_priority`, `set_task_model`, `send_message`, `send_note`, `search_reports`, `stop_task`, `rerun_task`, `set_max_concurrent_sessions`, `replan`). Tasks declare their dependencies and the paths they touch; the scheduler starts them within the path and concurrency limits, assigns a separate reviewer session after each worker, and closes each round with a review task. Dependencies and instructions change after creation while a task has not started; a running task is stopped first. Tasks, sessions, reports, and shared notes live in SQLite (`orchestrator.database`, default `<agent dir>/orchestrator.db`); `/sessions` opens the DAG, where `d` edits a task's dependencies and `i` its instruction.
 
-Default enabled tools are `read`, `bash`, `edit`, `write`, `memory`, and `pr_watch`, unless `defaultTools` changes them. `--tools` with plain names replaces the whole selection, so name every tool you want. Like `defaultTools`, it also accepts a list of only `+name` and `-name` entries, which adds tools to or removes them from the default selection: `msa --tools +codemode,-write` keeps the other default tools, enables `codemode`, and disables `write`. These entries take exact tool names, not `*` patterns; use `--exclude-tools` to disable tools by pattern. Plain names and `+name`/`-name` entries cannot be mixed. `/reload` enables tools newly added to `defaultTools`, but a tool removed with `-name` stays removed.
+Default enabled tools are `read`, `bash`, `edit`, `write`, `memory`, `pr_watch`, `model_policy`, `model_upgrade`, and the orchestrator tools, unless `defaultTools` changes them. `--tools` with plain names replaces the whole selection, so name every tool you want. Like `defaultTools`, it also accepts a list of only `+name` and `-name` entries, which adds tools to or removes them from the default selection: `msa --tools +codemode,-write` keeps the other default tools, enables `codemode`, and disables `write`. These entries take exact tool names, not `*` patterns; use `--exclude-tools` to disable tools by pattern. Plain names and `+name`/`-name` entries cannot be mixed. `/reload` enables tools newly added to `defaultTools`, but a tool removed with `-name` stays removed.
+
+The orchestrator tools are `create_task`, `list_tasks`, `read_task`, `set_task_depends`, `set_task_instruction`, `set_task_priority`, `set_task_model`, `send_message`, `send_note`, `search_reports`, `stop_task`, `rerun_task`, `set_max_concurrent_sessions`, and `replan`. They break the request into tasks: tasks declare their dependencies and the paths they touch, the scheduler starts them within the path and concurrency limits, assigns a separate reviewer session after each worker, and closes each round with a review task. Dependencies and instructions change after creation while a task has not started; a running task is stopped first. Tasks, sessions, reports, and shared notes live in SQLite (`orchestrator.database`, default `<agent dir>/orchestrator.db`); `/tasks` opens the DAG, where `d` edits a task's dependencies and `i` its instruction.
 
 `--tools` selects the tools declared to the model. It does not remove MCP tools, whose reach is set by their [exposure](mcp.md#control-tool-exposure): `msa --tools read,codemode` keeps every MCP tool callable from codemode scripts. An MCP tool that no entry names or matches is never declared directly, whatever its exposure; only `tool_search`, if listed, can load it. Once an entry starts with `mcp__`, `--tools` filters MCP tools too, so this keeps only the tools of the `github` server:
 
@@ -127,18 +127,21 @@ msa --tools read,bash,codemode,'mcp__github__*'
 
 The MCP resource tools (`list_mcp_resources`, `list_mcp_resource_templates`, `read_mcp_resource`) count as MCP tools. To remove MCP tools, use `--exclude-tools 'mcp__*'` or [`--no-mcp`](#resources).
 
-| Built-in     | Purpose                                                       |
-| ------------ | ------------------------------------------------------------- |
-| `read`       | Read text files and supported images                          |
-| `bash`       | Run shell commands                                            |
-| `powershell` | Run PowerShell commands on Windows                            |
-| `edit`       | Apply exact text replacements to an existing file             |
-| `write`      | Create or overwrite a file                                    |
-| `grep`       | Search file contents                                          |
-| `find`       | Find paths using glob patterns                                |
-| `ls`         | List directory contents                                       |
-| `memory`     | Save, search, list, and forget long-term memories             |
-| `pr_watch`   | Watch a pull request and report CI, review, and merge changes |
+| Built-in                   | Purpose                                                           |
+| -------------------------- | ----------------------------------------------------------------- |
+| `read`                     | Read text files and supported images                              |
+| `bash`                     | Run shell commands                                                |
+| `powershell`               | Run PowerShell commands on Windows                                |
+| `edit`                     | Apply exact text replacements to an existing file                 |
+| `write`                    | Create or overwrite a file                                        |
+| `grep`                     | Search file contents                                              |
+| `find`                     | Find paths using glob patterns                                    |
+| `ls`                       | List directory contents                                           |
+| `memory`                   | Save, search, list, and forget long-term memories                 |
+| `pr_watch`                 | Watch a pull request and report CI, review, and merge changes     |
+| `model_policy`             | Read and change `modelPolicy` from the model's side               |
+| `model_upgrade`            | List and apply model upgrades                                     |
+| `create_task` and the rest | Split the request into tasks and steer the sessions that run them |
 
 Built-in extensions add two more tools. They are off by default; the MCP extension turns them on when an MCP server needs them (see [MCP](mcp.md#control-tool-exposure)). To enable them yourself, name them in `--tools` or `defaultTools`.
 

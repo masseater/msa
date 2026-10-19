@@ -13,6 +13,7 @@ import { stripBom } from "../utils/text.ts";
 import { DEFAULT_HTTP_IDLE_TIMEOUT_MS, parseHttpIdleTimeoutMs } from "./http-dispatcher.ts";
 import type { ResolvedMemorySettings } from "./memory/memory.ts";
 import { EMPTY_MODEL_POLICY, mergeModelPolicies, type ModelPolicy } from "./model-policy.ts";
+import { ORCHESTRATOR_TOOL_NAMES } from "./orchestrator/tool-names.ts";
 import { SETTINGS_DEFAULTS } from "./settings-defaults.ts";
 import type {
   CacheWarmingMode,
@@ -103,6 +104,7 @@ export const DEFAULT_TOOL_NAMES: readonly string[] = [
   "pr_watch",
   "model_policy",
   "model_upgrade",
+  ...ORCHESTRATOR_TOOL_NAMES,
   "web_search",
   "web_fetch",
 ];

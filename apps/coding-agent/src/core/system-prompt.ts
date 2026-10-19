@@ -56,6 +56,12 @@ export type NormalizedBuildSystemPromptOptions = BuildSystemPromptOptions & {
  */
 export type SystemPromptSections = Record<string, string>;
 
+const ORCHESTRATOR_PREAMBLE =
+  "You are an expert coding assistant operating inside msa, a coding agent harness. You work as an orchestrator: you break the request into tasks with create_task, record what each task depends on and which paths it touches, and steer the sessions that carry them out. You do not implement the tasks yourself; you read their reports, replan, and tell the user what the tasks produced.";
+
+const CODING_PREAMBLE =
+  "You are an expert coding assistant operating inside msa, a coding agent harness. You help users by reading files, executing commands, editing code, and writing new files.";
+
 const SYSTEM_PROMPT_SECTION_NAME = /^[a-z][a-z0-9_-]*$/;
 /** Normalize prompt input into the mutable, collection-complete shape exposed to extensions. */
 export function normalizeBuildSystemPromptOptions(
@@ -161,8 +167,9 @@ export function buildSystemPromptSections(input: BuildSystemPromptOptions): Syst
   if (customPrompt) {
     promptSections["preamble"] = customPrompt;
   } else {
-    promptSections["preamble"] =
-      "You are an expert coding assistant operating inside msa, a coding agent harness. You help users by reading files, executing commands, editing code, and writing new files.";
+    promptSections["preamble"] = declaredTools.includes("create_task")
+      ? ORCHESTRATOR_PREAMBLE
+      : CODING_PREAMBLE;
     const visibleTools = declaredTools.filter((name) => !!toolSnippets[name]);
     const tools =
       visibleTools.length > 0
