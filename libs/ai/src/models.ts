@@ -248,6 +248,12 @@ export interface Provider<TApi extends Api = Api> {
     handle: DeferredHandle,
     options?: DeferredCancelOptions,
   ): Promise<void>;
+  /** Present when the provider can count a request's input tokens exactly. */
+  countTokens?(
+    model: Model<TApi>,
+    context: TranscriptContext,
+    options?: SimpleStreamOptions,
+  ): Promise<number>;
 
   /** Present when the provider supports dedicated image models. Never rejects. */
   generateImages?(
@@ -391,6 +397,15 @@ export interface Models {
     handle: DeferredHandle,
     options?: ModelsDeferredCancelOptions,
   ): Promise<void>;
+  /**
+   * Input tokens of the request `streamSimple()` would send, counted by the owning provider
+   * with auth resolved like `stream()`. Undefined when the provider cannot count tokens.
+   */
+  countTokens(
+    model: Model<Api>,
+    context: Context,
+    options?: ModelsSimpleStreamOptions,
+  ): Promise<number | undefined>;
 
   /**
    * Generate images through the owning provider with auth resolved like
@@ -1096,6 +1111,21 @@ class ModelsImpl implements MutableModels {
     await provider.cancelDeferred(requestModel, handle, requestOptions);
   }
 
+  async countTokens(
+    model: Model<Api>,
+    context: Context,
+    options?: ModelsSimpleStreamOptions,
+  ): Promise<number | undefined> {
+    const provider = this.requireChatProvider(model);
+    if (!provider.countTokens) return undefined;
+    const { requestModel, requestOptions } = await this.applyAuth(model, options);
+    return provider.countTokens(
+      requestModel,
+      normalizeContext(context),
+      requestOptions as SimpleStreamOptions,
+    );
+  }
+
   async generateImages(
     model: ImageModel<ImageApi>,
     context: ImagesContext,
@@ -1314,6 +1344,18 @@ export function createProvider<TApi extends Api = Api>(
         }
         return implementation.fetchDeferred(model, handle, options);
       });
+  }
+  if (streams.some((entry) => entry.countTokens !== undefined)) {
+    provider.countTokens = async (model, context, options) => {
+      const implementation = apiFor(model);
+      if (!implementation?.countTokens) {
+        throw new ModelsError(
+          "provider",
+          `Provider ${input.id} cannot count tokens for "${model.api}"`,
+        );
+      }
+      return implementation.countTokens(model, context, options);
+    };
   }
   if (streams.some((entry) => entry.cancelDeferred !== undefined)) {
     provider.cancelDeferred = async (model, handle, options) => {

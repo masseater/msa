@@ -11,3 +11,8 @@ import { openCodeProvider } from "./opencode.ts";
 export function cliAgentProviders(): Provider[] {
   return [openCodeProvider(), ...claudeCodeProviders()];
 }
+
+/** Whether requests to `providerId` run another agent, which adds its own prompt and tools. */
+export function isCliAgentProvider(providerId: string): boolean {
+  return cliAgentProviders().some((provider) => provider.id === providerId);
+}

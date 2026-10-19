@@ -208,12 +208,26 @@ Response:
     "sessionName": "my-feature-work",
     "autoCompactionEnabled": true,
     "messageCount": 5,
-    "pendingMessageCount": 0
+    "pendingMessageCount": 0,
+    "contextUsage": {
+      "tokens": 60000,
+      "contextWindow": 200000,
+      "percent": 30,
+      "breakdown": {
+        "method": "estimated",
+        "tokens": 60000,
+        "entries": [
+          { "part": "system", "name": "project_context", "tokens": 6000 },
+          { "part": "tools", "name": "bash", "tokens": 900 },
+          { "part": "toolResults", "name": "read", "tokens": 41000 }
+        ]
+      }
+    }
   }
 }
 ```
 
-The `model` field is a full [Model](#model-object) object, or omitted when no model is selected. The `sessionName` field is the display name set via `set_session_name`, or omitted if not set.
+The `model` field is a full [Model](#model-object) object, or omitted when no model is selected. The `sessionName` field is the display name set via `set_session_name`, or omitted if not set. `contextUsage` is omitted when the model has no context window. Its `breakdown` lists every element of the next request; `part` is `system`, `tools`, `conversation`, `toolResults`, `compaction`, or `other`, and the entries sum to `tokens`. `method` is `exact` when the provider counted the request and `estimated` when the total comes from the latest response's usage.
 
 ### get_messages
 
