@@ -32,14 +32,13 @@ describeEval(
   "Add model to existing provider",
   { harness, judges: [judge], judgeThreshold: null },
   (it) => {
-    it("adds the model without replacing existing models", async ({ run }) => {
-      await run([
+    it("adds the model without replacing existing models", ({ run }) =>
+      run([
         {
           type: "prompt",
           content: `Configure this running msa installation with a new \`${PROVIDER_ID}/${MODEL_ID}\` model. Do not create project-local configuration. Show it as “${MODEL_NAME}”. It accepts text, supports reasoning, has a 32,768-token context window and a 4,096-token maximum output, and has no usage cost.`,
         },
         { type: "reload" },
-      ]);
-    });
+      ]));
   },
 );

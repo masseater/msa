@@ -1,3 +1,5 @@
+import { Effect, ManagedRuntime, Schema } from "effect";
+import { FetchHttpClient, HttpBody, HttpClient, HttpClientRequest } from "effect/http";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vite-plus/test";
 
 import {
@@ -55,13 +57,35 @@ function body(model: string, prompt: string, stream = true) {
   return { model, messages: [{ role: "user", content: prompt }], stream };
 }
 
-async function post(url: string, headers: Record<string, string>, payload: unknown) {
-  return fetch(url, {
-    method: "POST",
-    headers: { "content-type": "application/json", ...headers },
-    body: JSON.stringify(payload),
-  });
-}
+const encodeJson = Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown));
+
+const httpRuntime = ManagedRuntime.make(FetchHttpClient.layer);
+
+type Reply = { status: number; contentType: string | undefined; text: string };
+
+const post = (
+  url: string,
+  headers: Record<string, string>,
+  payload: unknown,
+): Effect.Effect<Reply> =>
+  Effect.promise(() =>
+    httpRuntime.runPromise(
+      Effect.gen(function* () {
+        const client = yield* HttpClient.HttpClient;
+        const text = yield* encodeJson(payload);
+        const request = HttpClientRequest.post(url).pipe(
+          HttpClientRequest.setHeaders({ "content-type": "application/json", ...headers }),
+          HttpClientRequest.setBody(HttpBody.raw(text, { contentType: "application/json" })),
+        );
+        const response = yield* client.execute(request);
+        return {
+          status: response.status,
+          contentType: response.headers["content-type"],
+          text: yield* response.text,
+        };
+      }).pipe(Effect.orDie),
+    ),
+  );
 
 function streamedText(mode: Fixture["mode"], raw: string): string {
   if (mode === "stream") {
@@ -86,57 +110,85 @@ function streamedText(mode: Fixture["mode"], raw: string): string {
     .join("");
 }
 
+const run = (effect: Effect.Effect<void>) => Effect.runPromise(effect);
+
+function acceptanceTests(fixture: Fixture, server: AcmeServer) {
+  it("accepts the probe request and records it", () =>
+    run(
+      Effect.gen(function* () {
+        const response = yield* post(
+          fixture.url(server),
+          fixture.headers,
+          body(fixture.model, fixture.prompt),
+        );
+        expect(response.status).toBe(200);
+        expect(response.contentType).toContain(fixture.contentType);
+        expect(streamedText(fixture.mode, response.text)).toBe(fixture.response);
+        expect(server.validRequestReceived()).toBe(true);
+      }),
+    ));
+
+  it("does not treat a non-probe success as the probe", () =>
+    run(
+      Effect.gen(function* () {
+        const response = yield* post(
+          fixture.url(server),
+          fixture.headers,
+          body(fixture.model, "hello"),
+        );
+        expect(response.status).toBe(200);
+        expect(server.validRequestReceived()).toBe(false);
+      }),
+    ));
+
+  it("clears the probe flag on reset", () =>
+    run(
+      Effect.gen(function* () {
+        yield* post(fixture.url(server), fixture.headers, body(fixture.model, fixture.prompt));
+        expect(server.validRequestReceived()).toBe(true);
+        server.reset();
+        expect(server.validRequestReceived()).toBe(false);
+      }),
+    ));
+}
+
+function rejectionTests(fixture: Fixture, server: AcmeServer) {
+  it("rejects a bad credential with 401 and does not record a probe", () =>
+    run(
+      Effect.gen(function* () {
+        const response = yield* post(
+          fixture.url(server),
+          fixture.unauthorizedHeaders,
+          body(fixture.model, fixture.prompt),
+        );
+        expect(response.status).toBe(401);
+        expect(response.text).toBe(fixture.unauthorized);
+        expect(server.validRequestReceived()).toBe(false);
+      }),
+    ));
+
+  it("rejects a malformed request with 422 and does not record a probe", () =>
+    run(
+      Effect.gen(function* () {
+        const response = yield* post(
+          fixture.url(server),
+          fixture.headers,
+          body(fixture.model, fixture.prompt, false),
+        );
+        expect(response.status).toBe(422);
+        expect(response.text).toBe(fixture.invalid);
+        expect(server.validRequestReceived()).toBe(false);
+      }),
+    ));
+}
+
 describe.each(fixtures)("$mode fixture", (fixture) => {
   const server = createAcmeServer(fixture.mode);
 
-  beforeAll(() => server.start());
+  beforeAll(() => Effect.runPromise(server.start));
   beforeEach(() => server.reset());
-  afterAll(() => server.stop());
+  afterAll(() => Effect.runPromise(server.stop));
 
-  it("accepts the probe request and records it", async () => {
-    const response = await post(
-      fixture.url(server),
-      fixture.headers,
-      body(fixture.model, fixture.prompt),
-    );
-    expect(response.status).toBe(200);
-    expect(response.headers.get("content-type")).toContain(fixture.contentType);
-    expect(streamedText(fixture.mode, await response.text())).toBe(fixture.response);
-    expect(server.validRequestReceived()).toBe(true);
-  });
-
-  it("rejects a bad credential with 401 and does not record a probe", async () => {
-    const response = await post(
-      fixture.url(server),
-      fixture.unauthorizedHeaders,
-      body(fixture.model, fixture.prompt),
-    );
-    expect(response.status).toBe(401);
-    expect(await response.text()).toBe(fixture.unauthorized);
-    expect(server.validRequestReceived()).toBe(false);
-  });
-
-  it("rejects a malformed request with 422 and does not record a probe", async () => {
-    const response = await post(
-      fixture.url(server),
-      fixture.headers,
-      body(fixture.model, fixture.prompt, false),
-    );
-    expect(response.status).toBe(422);
-    expect(await response.text()).toBe(fixture.invalid);
-    expect(server.validRequestReceived()).toBe(false);
-  });
-
-  it("does not treat a non-probe success as the probe", async () => {
-    const response = await post(fixture.url(server), fixture.headers, body(fixture.model, "hello"));
-    expect(response.status).toBe(200);
-    expect(server.validRequestReceived()).toBe(false);
-  });
-
-  it("clears the probe flag on reset", async () => {
-    await post(fixture.url(server), fixture.headers, body(fixture.model, fixture.prompt));
-    expect(server.validRequestReceived()).toBe(true);
-    server.reset();
-    expect(server.validRequestReceived()).toBe(false);
-  });
+  acceptanceTests(fixture, server);
+  rejectionTests(fixture, server);
 });

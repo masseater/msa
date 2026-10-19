@@ -1,8 +1,10 @@
 import { Buffer } from "node:buffer";
-import { isAbsolute, resolve } from "node:path";
 
-import { Data } from "effect";
+import * as NodePath from "@effect/platform-node/NodePath";
+import { Data, ManagedRuntime, Path } from "effect";
 import { dual } from "effect/Function";
+
+const nodePath = ManagedRuntime.make(NodePath.layer).runSync(Path.Path);
 
 const GIST_ID_RE = /^[0-9a-fA-F]{20,}$/u;
 const GIST_URL_RE = /^https:\/\/gist\.github\.com\/(?:[^/]+\/)?([0-9a-fA-F]{20,})(?:[/#?].*)?$/u;
@@ -46,7 +48,7 @@ export const parseRef: {
   (ref: string, cwd: string): SessionRef;
 } = dual(2, (ref: string, cwd: string): SessionRef => {
   if (ref.endsWith(".html") || ref.endsWith(".jsonl")) {
-    return { type: "file", path: isAbsolute(ref) ? ref : resolve(cwd, ref) };
+    return { type: "file", path: nodePath.isAbsolute(ref) ? ref : nodePath.resolve(cwd, ref) };
   }
 
   const [, shareId] = SHARE_URL_RE.exec(ref) ?? [];

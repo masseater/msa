@@ -1,18 +1,16 @@
-import { spawnSync } from "node:child_process";
-import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+
+import { Effect, Schema } from "effect";
 
 import type { DocumentationVariant, EvalTask } from "./plan.ts";
+import { files, pathOperations, readEnv, runCommand, sha256Hex } from "./platform.ts";
 
-const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const repositoryRoot = resolve(packageRoot, "../..");
+const packageRoot = pathOperations.resolve(import.meta.dirname, "..");
+const repositoryRoot = pathOperations.resolve(packageRoot, "../..");
 
 export type BuiltImages = Record<DocumentationVariant, { name: string; id: string }>;
 
-type DockerContext = {
+export type DockerContext = {
   images: BuiltImages;
   artifactDirectory: string;
   authPath: string;
@@ -21,175 +19,174 @@ type DockerContext = {
   runsPerVariant: number;
 };
 
-function execute(
-  command: string,
-  args: readonly string[],
-  capture = false,
-): { status: number; stdout: string } {
-  const result = spawnSync(command, args, {
-    cwd: packageRoot,
-    stdio: capture ? ["ignore", "pipe", "inherit"] : "inherit",
-    encoding: "utf8",
-  });
-  if (result.error) throw result.error;
-  return { status: result.status ?? 1, stdout: capture ? result.stdout : "" };
-}
+const execute = (command: string, args: readonly string[], capture: boolean) =>
+  runCommand(command, args, { cwd: packageRoot, output: capture ? "capture" : "inherit" });
 
-function requireSuccess(command: string, args: readonly string[]): void {
-  const { status } = execute(command, args);
-  if (status !== 0) throw new Error(`${command} exited with status ${status}.`);
-}
+const requireSuccess = (command: string, args: readonly string[]): Effect.Effect<void> =>
+  Effect.flatMap(execute(command, args, false), ({ status }) =>
+    status === 0 ? Effect.void : Effect.die(new Error(`${command} exited with status ${status}.`)),
+  );
 
-export function buildImages(): BuiltImages {
-  const prefix = `msa-evals-${createHash("sha256").update(repositoryRoot).digest("hex").slice(0, 12)}`;
-  const images = {
-    without_docs: { name: `${prefix}-without-docs:local`, id: "" },
-    with_docs: { name: `${prefix}-with-docs:local`, id: "" },
-  } satisfies BuiltImages;
-  for (const variant of ["without_docs", "with_docs"] as const) {
-    requireSuccess("docker", [
+const buildImage = (
+  variant: DocumentationVariant,
+  name: string,
+): Effect.Effect<{ name: string; id: string }> =>
+  Effect.gen(function* () {
+    yield* requireSuccess("docker", [
       "build",
       "--target",
       variant,
       "--tag",
-      images[variant].name,
+      name,
       "--file",
-      join(packageRoot, "docker", "Dockerfile"),
+      pathOperations.join(packageRoot, "docker", "Dockerfile"),
       repositoryRoot,
     ]);
-    const inspected = execute(
+    const inspected = yield* execute(
       "docker",
-      ["image", "inspect", "--format", "{{.Id}}", images[variant].name],
+      ["image", "inspect", "--format", "{{.Id}}", name],
       true,
     );
-    if (inspected.status !== 0 || !inspected.stdout.trim())
-      throw new Error(`Cannot inspect ${images[variant].name}.`);
-    images[variant].id = inspected.stdout.trim();
-  }
-  return images;
-}
+    const id = inspected.stdout.trim();
+    if (inspected.status !== 0 || id === "") {
+      return yield* Effect.die(new Error(`Cannot inspect ${name}.`));
+    }
+    return { name, id };
+  });
 
-function environment(name: string, value: string): string[] {
-  return ["--env", `${name}=${value}`];
-}
+export const buildImages: Effect.Effect<BuiltImages> = Effect.gen(function* () {
+  const digest = yield* sha256Hex(repositoryRoot);
+  const prefix = `msa-evals-${digest.slice(0, 12)}`;
+  const withoutDocs = yield* buildImage("without_docs", `${prefix}-without-docs:local`);
+  const withDocs = yield* buildImage("with_docs", `${prefix}-with-docs:local`);
+  return { without_docs: withoutDocs, with_docs: withDocs };
+});
 
-export function requireEvalAuthFile(provider: string): string {
-  const path = join(
-    process.env["MSA_CODING_AGENT_DIR"]
-      ? resolve(process.env["MSA_CODING_AGENT_DIR"])
-      : join(homedir(), ".msa", "agent"),
-    "auth.json",
-  );
-  if (!existsSync(path) || !statSync(path).isFile())
-    throw new Error(`Eval authentication file does not exist: ${path}`);
-  let credentials: unknown;
-  try {
-    credentials = JSON.parse(readFileSync(path, "utf8"));
-  } catch (error) {
-    throw new Error(`Eval authentication file is invalid: ${path}`, { cause: error });
-  }
-  if (
-    typeof credentials !== "object" ||
-    credentials === null ||
-    Array.isArray(credentials) ||
-    !Object.hasOwn(credentials, provider)
-  ) {
-    throw new Error(`Eval authentication file has no credential for provider ${provider}.`);
-  }
-  return path;
-}
+const environment = (name: string, value: string): string[] => ["--env", `${name}=${value}`];
 
-function dockerArgs(
-  context: DockerContext,
-  variant: DocumentationVariant,
-  outputDirectory: string,
-  entrypointArgs: readonly string[],
-): string[] {
-  mkdirSync(outputDirectory, { recursive: true, mode: 0o700 });
-  const args = [
-    "run",
-    "--rm",
-    "--read-only",
-    "--tmpfs",
-    "/tmp:rw,exec,mode=1777",
-    "--tmpfs",
-    "/repo/node_modules/.vite-temp:rw,exec,mode=1777",
-    "--mount",
-    `type=bind,source=${outputDirectory},target=/artifacts`,
-    ...environment("MSA_EVAL_ARTIFACT_DIR", "/artifacts"),
-    ...environment("MSA_EVAL_RUNS_PER_VARIANT", String(context.runsPerVariant)),
-    ...environment("MSA_EVAL_SANDBOX_UID", "65532"),
-    ...environment("MSA_EVAL_SANDBOX_GID", "65532"),
-    ...environment("MSA_PROVIDER", context.provider),
-    ...environment("MSA_MODEL", context.model),
-  ];
-  if (typeof process.getuid === "function" && typeof process.getgid === "function") {
-    args.push(
-      ...environment("MSA_EVAL_ARTIFACT_UID", String(process.getuid())),
-      ...environment("MSA_EVAL_ARTIFACT_GID", String(process.getgid())),
+const decodeCredentials = Schema.decodeUnknownEffect(
+  Schema.fromJsonString(Schema.Record(Schema.String, Schema.Unknown)),
+);
+
+export const requireEvalAuthFile = (provider: string): Effect.Effect<string> =>
+  Effect.gen(function* () {
+    const configuredDirectory = readEnv("MSA_CODING_AGENT_DIR");
+    const directory =
+      configuredDirectory === undefined || configuredDirectory === ""
+        ? pathOperations.join(homedir(), ".msa", "agent")
+        : pathOperations.resolve(configuredDirectory);
+    const path = pathOperations.join(directory, "auth.json");
+    if (!(yield* files.exists(path))) {
+      return yield* Effect.die(new Error(`Eval authentication file does not exist: ${path}`));
+    }
+    const credentials = yield* decodeCredentials(yield* files.readFileString(path)).pipe(
+      Effect.mapError(
+        (error) => new Error(`Eval authentication file is invalid: ${path}`, { cause: error }),
+      ),
+      Effect.orDie,
     );
-  }
-  args.push(
-    "--mount",
-    `type=bind,source=${context.authPath},target=/run/msa-eval-secrets/auth.json,readonly`,
-  );
-  args.push(context.images[variant].name, ...entrypointArgs);
-  return args;
-}
+    if (!Object.hasOwn(credentials, provider)) {
+      return yield* Effect.die(
+        new Error(`Eval authentication file has no credential for provider ${provider}.`),
+      );
+    }
+    return path;
+  });
 
-export function createDockerContext(
-  images: BuiltImages,
-  artifactDirectory: string,
-  authPath: string,
-  provider: string,
-  model: string,
-  runsPerVariant: number,
-): DockerContext {
-  return { images, artifactDirectory, authPath, provider, model, runsPerVariant };
-}
+const dockerArgs = ({
+  context,
+  variant,
+  outputDirectory,
+  entrypointArgs,
+}: {
+  context: DockerContext;
+  variant: DocumentationVariant;
+  outputDirectory: string;
+  entrypointArgs: readonly string[];
+}): Effect.Effect<string[]> =>
+  Effect.gen(function* () {
+    yield* files.makeDirectory(outputDirectory, 0o700);
+    const args = [
+      "run",
+      "--rm",
+      "--read-only",
+      "--tmpfs",
+      "/tmp:rw,exec,mode=1777",
+      "--tmpfs",
+      "/repo/node_modules/.vite-temp:rw,exec,mode=1777",
+      "--mount",
+      `type=bind,source=${outputDirectory},target=/artifacts`,
+      ...environment("MSA_EVAL_ARTIFACT_DIR", "/artifacts"),
+      ...environment("MSA_EVAL_RUNS_PER_VARIANT", String(context.runsPerVariant)),
+      ...environment("MSA_EVAL_SANDBOX_UID", "65532"),
+      ...environment("MSA_EVAL_SANDBOX_GID", "65532"),
+      ...environment("MSA_PROVIDER", context.provider),
+      ...environment("MSA_MODEL", context.model),
+    ];
+    if (typeof process.getuid === "function" && typeof process.getgid === "function") {
+      args.push(
+        ...environment("MSA_EVAL_ARTIFACT_UID", String(process.getuid())),
+        ...environment("MSA_EVAL_ARTIFACT_GID", String(process.getgid())),
+      );
+    }
+    args.push(
+      "--mount",
+      `type=bind,source=${context.authPath},target=/run/msa-eval-secrets/auth.json,readonly`,
+      context.images[variant].name,
+      ...entrypointArgs,
+    );
+    return args;
+  });
 
-export function discoverCases(
-  context: DockerContext,
-  variant: DocumentationVariant,
-  files: readonly string[],
-  vitestArgs: readonly string[],
-): string {
-  const outputDirectory = join(context.artifactDirectory, "discovery", variant);
-  const args = dockerArgs(context, variant, outputDirectory, [
-    "--discover",
-    "--project",
-    "docs",
-    ...files,
-    ...vitestArgs,
-  ]);
-  const { status } = execute("docker", args);
-  if (status !== 0) throw new Error(`${variant} eval discovery failed.`);
-  return join(outputDirectory, "discovered-tests.json");
-}
+export const discoverCases = ({
+  context,
+  variant,
+  files: evalFiles,
+  vitestArgs,
+}: {
+  context: DockerContext;
+  variant: DocumentationVariant;
+  files: readonly string[];
+  vitestArgs: readonly string[];
+}): Effect.Effect<string> =>
+  Effect.gen(function* () {
+    const outputDirectory = pathOperations.join(context.artifactDirectory, "discovery", variant);
+    const args = yield* dockerArgs({
+      context,
+      variant,
+      outputDirectory,
+      entrypointArgs: ["--discover", "--project", "docs", ...evalFiles, ...vitestArgs],
+    });
+    const { status } = yield* execute("docker", args, false);
+    if (status !== 0) return yield* Effect.die(new Error(`${variant} eval discovery failed.`));
+    return pathOperations.join(outputDirectory, "discovered-tests.json");
+  });
 
-function taskDirectoryName(task: EvalTask): string {
-  const identity = JSON.stringify([
-    task.evalSet,
-    task.caseId,
-    task.variant,
-    task.model,
-    task.runNumber,
-  ]);
-  return createHash("sha256").update(identity).digest("hex");
-}
+const taskDirectoryName = (task: EvalTask): Effect.Effect<string> =>
+  sha256Hex(JSON.stringify([task.evalSet, task.caseId, task.variant, task.model, task.runNumber]));
 
-export function runTask(context: DockerContext, task: EvalTask): string | undefined {
-  const outputDirectory = join(context.artifactDirectory, "tasks", taskDirectoryName(task));
-  const testName = `${task.evalSet} ${task.caseId}`;
-  const exactName = `^${testName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`;
-  const args = dockerArgs(context, task.variant, outputDirectory, [
-    "--project",
-    "docs",
-    task.file,
-    "--testNamePattern",
-    exactName,
-  ]);
-  execute("docker", args);
-  const reportPath = join(outputDirectory, "vitest.json");
-  return existsSync(reportPath) ? reportPath : undefined;
-}
+export const runTask = ({
+  context,
+  task,
+}: {
+  context: DockerContext;
+  task: EvalTask;
+}): Effect.Effect<string | undefined> =>
+  Effect.gen(function* () {
+    const outputDirectory = pathOperations.join(
+      context.artifactDirectory,
+      "tasks",
+      yield* taskDirectoryName(task),
+    );
+    const testName = `${task.evalSet} ${task.caseId}`;
+    const exactName = `^${testName.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")}$`;
+    const args = yield* dockerArgs({
+      context,
+      variant: task.variant,
+      outputDirectory,
+      entrypointArgs: ["--project", "docs", task.file, "--testNamePattern", exactName],
+    });
+    yield* execute("docker", args, false);
+    const reportPath = pathOperations.join(outputDirectory, "vitest.json");
+    return (yield* files.exists(reportPath)) ? reportPath : undefined;
+  });

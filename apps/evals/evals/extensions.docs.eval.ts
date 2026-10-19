@@ -1,7 +1,9 @@
 import { contentText } from "@msa/ai";
+import { Effect } from "effect";
 import { describeEval, StructuredOutputJudge, ToolCallJudge } from "vitest-evals";
 
-import { createMsaDocumentationEvalHarness, DOCUMENTATION_EVAL_TOOLS } from "../src/harness.ts";
+import { createMsaDocumentationEvalHarness } from "../src/harness.ts";
+import { DOCUMENTATION_EVAL_TOOLS } from "../src/system-prompt.ts";
 
 const TOOL_NAME = "hello";
 const TOOL_ARGUMENTS = { name: "Bob" };
@@ -9,21 +11,22 @@ const TOOL_RESULT = "Hello, Bob!";
 
 const harness = createMsaDocumentationEvalHarness({
   tools: [...DOCUMENTATION_EVAL_TOOLS, TOOL_NAME],
-  output: ({ response, session }) => {
-    const extensions = session.resourceLoader.getExtensions();
-    const result = [...session.messages]
-      .reverse()
-      .find(
-        (message) =>
-          message.role === "toolResult" && message.toolName === TOOL_NAME && !message.isError,
-      );
-    return {
-      response,
-      extensionErrors: extensions.errors,
-      toolLoaded: extensions.extensions.some(({ tools }) => tools.has(TOOL_NAME)),
-      toolResult: result?.role === "toolResult" ? contentText(result.content, "\n") : null,
-    };
-  },
+  output: ({ response, session }) =>
+    Effect.sync(() => {
+      const extensions = session.resourceLoader.getExtensions();
+      const result = [...session.messages]
+        .reverse()
+        .find(
+          (message) =>
+            message.role === "toolResult" && message.toolName === TOOL_NAME && !message.isError,
+        );
+      return {
+        response,
+        extensionErrors: extensions.errors,
+        toolLoaded: extensions.extensions.some(({ tools }) => tools.has(TOOL_NAME)),
+        toolResult: result?.role === "toolResult" ? contentText(result.content, "\n") : null,
+      };
+    }),
 });
 
 describeEval(
@@ -46,8 +49,8 @@ describeEval(
     judgeThreshold: null,
   },
   (it) => {
-    it("creates, reloads, and invokes the extension", async ({ run }) => {
-      await run([
+    it("creates, reloads, and invokes the extension", ({ run }) =>
+      run([
         {
           type: "prompt",
           content:
@@ -59,7 +62,6 @@ describeEval(
           content:
             "Use the hello tool to greet Bob. Respond with exactly the tool's greeting and nothing else.",
         },
-      ]);
-    });
+      ]));
   },
 );

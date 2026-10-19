@@ -1,3 +1,5 @@
+import { dual } from "effect/Function";
+
 export const DOCUMENTATION_VARIANTS = ["without_docs", "with_docs"] as const;
 export type DocumentationVariant = (typeof DOCUMENTATION_VARIANTS)[number];
 
@@ -26,7 +28,13 @@ export function parseDiscoveredCases(value: unknown): DiscoveredEvalCase[] {
       throw new TypeError("Discovered eval case is invalid.");
     }
     const [evalSet, caseId, ...extra] = item["name"].split(" > ");
-    if (!evalSet?.trim() || !caseId?.trim() || extra.length > 0) {
+    if (
+      evalSet === undefined ||
+      evalSet.trim() === "" ||
+      caseId === undefined ||
+      caseId.trim() === "" ||
+      extra.length > 0
+    ) {
       throw new TypeError(`Documentation eval must use "<eval set> > <case>": ${item["name"]}`);
     }
     const identity = JSON.stringify([evalSet, caseId]);
@@ -37,24 +45,26 @@ export function parseDiscoveredCases(value: unknown): DiscoveredEvalCase[] {
   });
 }
 
-export function createTaskPlan(
-  cases: readonly DiscoveredEvalCase[],
-  model: string,
-  runsPerVariant: number,
-): EvalTask[] {
-  if (!model.includes("/") || model.startsWith("/") || model.endsWith("/")) {
-    throw new TypeError("Model identity must contain a provider and model.");
-  }
-  if (!Number.isSafeInteger(runsPerVariant) || runsPerVariant < 1) {
-    throw new TypeError("Runs per variant must be a positive integer.");
-  }
-  const tasks: EvalTask[] = [];
-  for (const evalCase of cases) {
-    for (let runNumber = 1; runNumber <= runsPerVariant; runNumber += 1) {
-      const variants: DocumentationVariant[] =
-        runNumber % 2 === 1 ? ["without_docs", "with_docs"] : ["with_docs", "without_docs"];
-      for (const variant of variants) tasks.push({ ...evalCase, variant, model, runNumber });
+export const createTaskPlan: {
+  (model: string, runsPerVariant: number): (cases: readonly DiscoveredEvalCase[]) => EvalTask[];
+  (cases: readonly DiscoveredEvalCase[], model: string, runsPerVariant: number): EvalTask[];
+} = dual(
+  3,
+  (cases: readonly DiscoveredEvalCase[], model: string, runsPerVariant: number): EvalTask[] => {
+    if (!model.includes("/") || model.startsWith("/") || model.endsWith("/")) {
+      throw new TypeError("Model identity must contain a provider and model.");
     }
-  }
-  return tasks;
-}
+    if (!Number.isSafeInteger(runsPerVariant) || runsPerVariant < 1) {
+      throw new TypeError("Runs per variant must be a positive integer.");
+    }
+    const tasks: EvalTask[] = [];
+    for (const evalCase of cases) {
+      for (let runNumber = 1; runNumber <= runsPerVariant; runNumber += 1) {
+        const variants: DocumentationVariant[] =
+          runNumber % 2 === 1 ? ["without_docs", "with_docs"] : ["with_docs", "without_docs"];
+        for (const variant of variants) tasks.push({ ...evalCase, variant, model, runNumber });
+      }
+    }
+    return tasks;
+  },
+);
