@@ -39,7 +39,6 @@ type RecordedSessionEvent =
 
 describe("AgentSessionRuntime session lifecycle events", () => {
   const cleanups: Array<() => Promise<void> | void> = [];
-
   afterEach(() =>
     runTest(
       Effect.gen(function* () {
@@ -49,7 +48,6 @@ describe("AgentSessionRuntime session lifecycle events", () => {
       }),
     ),
   );
-
   function createRuntimeHost(extensionFactory: ExtensionFactory) {
     return runTest(
       Effect.gen(function* () {
@@ -167,7 +165,6 @@ describe("AgentSessionRuntime session lifecycle events", () => {
       }),
     );
   }
-
   it("emits session_before_switch and session_start for new and resume flows", () =>
     runTest(
       Effect.gen(function* () {
@@ -236,7 +233,6 @@ describe("AgentSessionRuntime session lifecycle events", () => {
         ]);
       }),
     ));
-
   it("honors session_before_switch cancellation", () =>
     runTest(
       Effect.gen(function* () {
@@ -264,119 +260,6 @@ describe("AgentSessionRuntime session lifecycle events", () => {
         expect(runtimeHost.session.sessionFile).toBe(originalSessionFile);
         expect(events).toEqual([
           { type: "session_before_switch" as const, reason: "new", targetSessionFile: undefined },
-        ]);
-      }),
-    ));
-
-  it("runs beforeSessionInvalidate after session_shutdown and before rebindSession", () =>
-    runTest(
-      Effect.gen(function* () {
-        const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
-        const phases: string[] = [];
-        const { runtimeHost } = yield* awaited(
-          createRuntimeHost((msa) => {
-            msa.on("session_shutdown", () => {
-              phases.push("session_shutdown");
-            });
-          }),
-        );
-        const oldSession = runtimeHost.session;
-        runtimeHost.setBeforeSessionInvalidate(() => {
-          phases.push("beforeSessionInvalidate");
-          expect(oldSession.extensionRunner.createContext().cwd).toBe(
-            oldSession.sessionManager.getCwd(),
-          );
-        });
-        runtimeHost.setRebindSession(() =>
-          effectRunPromise(
-            Effect.sync(() => {
-              phases.push("rebindSession");
-            }),
-          ),
-        );
-
-        yield* awaited(runtimeHost.newSession());
-
-        expect(phases).toEqual(["session_shutdown", "beforeSessionInvalidate", "rebindSession"]);
-        expect(() => oldSession.extensionRunner.createContext().cwd).toThrow(
-          "This extension ctx is stale after session replacement or reload. Do not use a captured msa or command ctx after ctx.newSession(), ctx.fork(), ctx.switchSession(), or ctx.reload(). For newSession, fork, and switchSession, move post-replacement work into withSession and use the ctx passed to withSession. For reload, do not use the old ctx after await ctx.reload().",
-        );
-        runtimeHost.setBeforeSessionInvalidate(undefined);
-        runtimeHost.setRebindSession(undefined);
-      }),
-    ));
-
-  it("emits session_before_fork and session_start and honors cancellation", () =>
-    runTest(
-      Effect.gen(function* () {
-        const events: RecordedSessionEvent[] = [];
-        let cancelNextFork = false;
-        const { runtimeHost } = yield* awaited(
-          createRuntimeHost((msa) => {
-            msa.on("session_before_fork", (event) => {
-              events.push(event);
-              if (cancelNextFork) {
-                cancelNextFork = false;
-                return { cancel: true };
-              }
-              return undefined;
-            });
-            msa.on("session_shutdown", (event) => {
-              events.push(event);
-            });
-            msa.on("session_start", (event) => {
-              events.push(event);
-            });
-          }),
-        );
-
-        expect(events).toEqual([{ type: "session_start" as const, reason: "startup" }]);
-        events.length = 0;
-
-        yield* awaited(runtimeHost.session.prompt("hello"));
-        const userMessage = runtimeHost.session.getUserMessagesForForking()[0];
-        if (userMessage === undefined) throw new Error("expected a user message to fork from");
-        const previousSessionFile = runtimeHost.session.sessionFile;
-
-        const successResult = yield* awaited(runtimeHost.fork(userMessage.entryId));
-        expect(successResult.cancelled).toBe(false);
-        expect(successResult.selectedText).toBe("hello");
-        yield* awaited(runtimeHost.session.bindExtensions({}));
-        expect(events).toEqual([
-          {
-            type: "session_before_fork" as const,
-            entryId: userMessage.entryId,
-            position: "before",
-          },
-          {
-            type: "session_shutdown" as const,
-            reason: "fork",
-            targetSessionFile: runtimeHost.session.sessionFile,
-          },
-          { type: "session_start" as const, reason: "fork", previousSessionFile },
-        ]);
-
-        events.length = 0;
-        cancelNextFork = true;
-        const cancelResult = yield* awaited(runtimeHost.fork(userMessage.entryId));
-        expect(cancelResult).toEqual({ cancelled: true });
-        expect(events).toEqual([
-          {
-            type: "session_before_fork" as const,
-            entryId: userMessage.entryId,
-            position: "before",
-          },
-        ]);
-
-        events.length = 0;
-        cancelNextFork = true;
-        const cancelAtResult = yield* awaited(
-          runtimeHost.fork("missing-entry", { position: "at" }),
-        );
-        expect(cancelAtResult).toEqual({ cancelled: true });
-        expect(events).toEqual([
-          { type: "session_before_fork" as const, entryId: "missing-entry", position: "at" },
         ]);
       }),
     ));

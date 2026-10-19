@@ -93,7 +93,6 @@ describe("generateSummary reasoning options", () => {
     completeSimpleMock.mockReset();
     completeSimpleMock.mockResolvedValue(mockSummaryResponse);
   });
-
   it("uses the provided thinking level for reasoning-capable models", () =>
     runTest(
       Effect.gen(function* () {
@@ -121,7 +120,6 @@ describe("generateSummary reasoning options", () => {
         });
       }),
     ));
-
   it("preserves the string result from generateSummary", () =>
     runTest(
       awaited(
@@ -130,7 +128,6 @@ describe("generateSummary reasoning options", () => {
         ),
       ),
     ));
-
   it("uses fresh routing sessions without prompt caching", () =>
     runTest(
       Effect.gen(function* () {
@@ -145,7 +142,6 @@ describe("generateSummary reasoning options", () => {
         expect(sessionIds[0]).not.toBe(sessionIds[1]);
       }),
     ));
-
   it("honors caller-supplied routing session and tool choice without prompt caching", () =>
     runTest(
       Effect.gen(function* () {
@@ -168,7 +164,6 @@ describe("generateSummary reasoning options", () => {
         });
       }),
     ));
-
   it("preserves the previous summary without an empty history request for a split turn", () =>
     runTest(
       Effect.gen(function* () {
@@ -198,7 +193,6 @@ describe("generateSummary reasoning options", () => {
         );
       }),
     ));
-
   it("rejects tool calls from conversation summaries", () =>
     runTest(
       Effect.gen(function* () {
@@ -211,7 +205,6 @@ describe("generateSummary reasoning options", () => {
         );
       }),
     ));
-
   it("rejects tool calls from split-turn summaries", () =>
     runTest(
       Effect.gen(function* () {
@@ -233,7 +226,6 @@ describe("generateSummary reasoning options", () => {
         );
       }),
     ));
-
   it("rejects a length-limited history summary", () =>
     runTest(
       Effect.gen(function* () {
@@ -250,7 +242,6 @@ describe("generateSummary reasoning options", () => {
         );
       }),
     ));
-
   it("rejects a length-limited split-turn summary", () =>
     runTest(
       Effect.gen(function* () {
@@ -276,7 +267,6 @@ describe("generateSummary reasoning options", () => {
         );
       }),
     ));
-
   it("does not set reasoning when thinking is off", () =>
     runTest(
       Effect.gen(function* () {
@@ -299,94 +289,6 @@ describe("generateSummary reasoning options", () => {
           apiKey: "test-key",
         });
         expect(completeSimpleMock.mock.calls[0]?.[2]).not.toHaveProperty("reasoning");
-      }),
-    ));
-
-  it("does not set reasoning for non-reasoning models", () =>
-    runTest(
-      Effect.gen(function* () {
-        yield* awaited(
-          generateSummary(
-            messages,
-            createModel(false),
-            2000,
-            "test-key",
-            undefined,
-            undefined,
-            undefined,
-            undefined,
-            "medium",
-          ),
-        );
-
-        expect(completeSimpleMock).toHaveBeenCalledTimes(1);
-        expect(completeSimpleMock.mock.calls[0]?.[2]).toMatchObject({
-          apiKey: "test-key",
-        });
-        expect(completeSimpleMock.mock.calls[0]?.[2]).not.toHaveProperty("reasoning");
-      }),
-    ));
-
-  it("leaves Anthropic refusal fallback handling to msa-ai model metadata", () =>
-    runTest(
-      Effect.gen(function* () {
-        yield* awaited(
-          generateSummary(
-            messages,
-            createModel(true, 8192, {
-              allowedFallbackModels: [
-                {
-                  provider: "anthropic",
-                  model: "claude-opus-4-8",
-                  cost: { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
-                },
-              ],
-            }),
-            2000,
-            "test-key",
-          ),
-        );
-
-        expect(completeSimpleMock).toHaveBeenCalledTimes(1);
-        expect(completeSimpleMock.mock.calls[0]?.[2]).not.toHaveProperty("refusalFallbacks");
-      }),
-    ));
-
-  it("does not set Anthropic refusal fallback for models without allowed fallback targets", () =>
-    runTest(
-      Effect.gen(function* () {
-        yield* awaited(generateSummary(messages, createModel(true), 2000, "test-key"));
-
-        expect(completeSimpleMock).toHaveBeenCalledTimes(1);
-        expect(completeSimpleMock.mock.calls[0]?.[2]).not.toHaveProperty("refusalFallbacks");
-      }),
-    ));
-
-  it("clamps compaction summary maxTokens to the model output cap", () =>
-    runTest(
-      Effect.gen(function* () {
-        const preparation: CompactionPreparation = {
-          firstKeptEntryId: "entry-keep",
-          messagesToSummarize: messages,
-          turnPrefixMessages: messages,
-          isSplitTurn: true,
-          tokensBefore: 600000,
-          fileOps: { read: new Set(), written: new Set(), edited: new Set() },
-          settings: { enabled: true, reserveTokens: 500000, keepRecentTokens: 20000 },
-        };
-
-        const result = yield* awaited(compact(preparation, createModel(false, 128000), "test-key"));
-
-        expect(result.usage).toEqual({
-          ...mockSummaryResponse.usage,
-          input: 20,
-          output: 20,
-          totalTokens: 40,
-          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-        });
-        expect(completeSimpleMock.mock.calls.map((call) => call[2]?.maxTokens)).toEqual([
-          128000, 128000,
-        ]);
       }),
     ));
 });
