@@ -25,11 +25,9 @@ class ProcessRunner extends Context.Service<
 const processRunnerLayer: Layer.Layer<ProcessRunner> = Layer.effect(
   ProcessRunner,
   Effect.gen(function* () {
-    // oxlint-disable-next-line effecttsgo/unstable-api-usage -- v4 platform services are pre-GA
     const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
     const spawn = (options: ProcessOptions, inheritStdio: boolean) =>
       spawner.spawn(
-        // oxlint-disable-next-line effecttsgo/unstable-api-usage -- v4 platform services are pre-GA
         ChildProcess.make(options.command, options.args, {
           cwd: options.cwd,
           stderr: inheritStdio ? "inherit" : "pipe",
@@ -62,9 +60,7 @@ const processRunnerLayer: Layer.Layer<ProcessRunner> = Layer.effect(
         }).pipe(Effect.scoped, Effect.orDie),
     });
   }),
-)
-  // oxlint-disable-next-line effecttsgo/unstable-api-usage -- v4 platform services are pre-GA
-  .pipe(Layer.provide(NodeServices.layer));
+).pipe(Layer.provide(NodeServices.layer));
 
 const captureProcess = (
   options: ProcessOptions,

@@ -23,7 +23,6 @@ class BuildBinariesError extends Data.TaggedError("BuildBinariesError")<{
   readonly message: string;
 }> {}
 
-// oxlint-disable-next-line effecttsgo/unstable-api-usage -- v4 platform errors are pre-GA
 type FileSystemError = PlatformError.PlatformError;
 
 const requestedPlatforms = () => {
@@ -44,9 +43,7 @@ const makeContext = () =>
   Effect.gen(function* () {
     const workspace = yield* Workspace;
     const { repoRoot, version } = yield* workspace.loadCodingAgentPackage;
-    // oxlint-disable-next-line effecttsgo/unstable-api-usage -- v4 platform services are pre-GA
     const fs = yield* FileSystem.FileSystem;
-    // oxlint-disable-next-line effecttsgo/unstable-api-usage -- v4 platform services are pre-GA
     const path = yield* Path.Path;
     return {
       fs,
@@ -174,7 +171,6 @@ const buildPlatformArtifact = (context: Context, platform: ReleasePlatform) =>
 
 const writeChecksums = (context: Context) =>
   Effect.gen(function* () {
-    // oxlint-disable-next-line effecttsgo/unstable-api-usage -- v4 platform services are pre-GA
     const crypto = yield* Crypto.Crypto;
     const lines: string[] = [];
     for (const platform of context.platforms) {
@@ -254,7 +250,6 @@ const program = Effect.gen(function* () {
   );
 });
 
-// oxlint-disable-next-line effecttsgo/unstable-api-usage -- v4 platform services are pre-GA
 const mainLayer = Layer.mergeAll(NodeServices.layer, processRunnerLayer, workspaceLayer);
 
 runMainWith(program, mainLayer);

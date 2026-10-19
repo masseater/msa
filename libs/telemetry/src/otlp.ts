@@ -258,17 +258,12 @@ class EffectTelemetry {
 function exporters(options: OtlpTelemetryOptions) {
   const base = options.endpoint.replace(/\/+$/u, "");
   const resource = { serviceName: options.serviceName, serviceVersion: options.serviceVersion };
-  // oxlint-disable-next-line effecttsgo/unstable-api-usage -- OtlpTracer (effect/unstable) is the only Effect OTLP trace exporter
   const traces = OtlpTracer.layer({ url: `${base}/v1/traces`, resource });
-  // oxlint-disable-next-line effecttsgo/unstable-api-usage -- OtlpMetrics (effect/unstable) is the only Effect OTLP metric exporter
   const metrics = OtlpMetrics.layer({ url: `${base}/v1/metrics`, resource });
-  // oxlint-disable-next-line effecttsgo/unstable-api-usage -- OtlpLogger (effect/unstable) is the only Effect OTLP log exporter
   const logs = OtlpLogger.layer({ url: `${base}/v1/logs`, resource, mergeWithExisting: false });
   return Layer.mergeAll(traces, metrics, logs).pipe(
     Layer.provideMerge(Layer.sync(Metric.MetricRegistry, () => new Map())),
-    // oxlint-disable-next-line effecttsgo/unstable-api-usage -- OtlpSerialization (effect/unstable) encodes the OTLP payloads
     Layer.provide(OtlpSerialization.layerJson),
-    // oxlint-disable-next-line effecttsgo/unstable-api-usage -- FetchHttpClient (effect/unstable) is the only Effect HTTP client
     Layer.provide(FetchHttpClient.layer),
   );
 }
@@ -279,7 +274,6 @@ export const layer = (options: OtlpTelemetryOptions): Layer.Layer<OtlpTelemetry>
     OtlpTelemetry,
     Effect.gen(function* () {
       const services = yield* Effect.context<never>();
-      // oxlint-disable-next-line effecttsgo/unstable-api-usage -- OtlpExporter (effect/unstable) owns the buffers to flush
       const flusher = yield* OtlpExporter.Flusher;
       return { context: new EffectTelemetry(services).context(undefined), flush: flusher.flush };
     }),

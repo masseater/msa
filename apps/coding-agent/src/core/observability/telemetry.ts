@@ -129,7 +129,6 @@ export async function startTelemetry(inputs: TelemetryInputs): Promise<Telemetry
 }
 
 /** The receiver answers any request once the collector is up; the status code does not matter. */
-// oxlint-disable-next-line effecttsgo/unstable-api-usage -- HttpClient (effect/unstable) is the only Effect HTTP client
 const receiverReady = HttpClient.get(`${LGTM_OTLP_ENDPOINT}/v1/traces`).pipe(
   Effect.asVoid,
   Effect.retry({ schedule: Schedule.spaced(Duration.seconds(1)), times: 600 }),
@@ -183,5 +182,4 @@ export const layer = (inputs: TelemetryInputs): Layer.Layer<Telemetry> =>
         status: Effect.map(Ref.get(state), (current) => ({ destination, state: current })),
       };
     }),
-    // oxlint-disable-next-line effecttsgo/unstable-api-usage -- FetchHttpClient (effect/unstable) is the only Effect HTTP client
   ).pipe(Layer.provide(FetchHttpClient.layer));

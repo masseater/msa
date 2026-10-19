@@ -1,3 +1,5 @@
+import { mkdirSync } from "node:fs";
+import { dirname } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
 const SCHEMA = `
@@ -143,6 +145,7 @@ function migrateTasks(database: DatabaseSync): void {
 }
 
 function openDatabase(path: string): DatabaseSync {
+  mkdirSync(dirname(path), { recursive: true });
   const database = new DatabaseSync(path, { timeout: 5_000 });
   database.exec("PRAGMA journal_mode = WAL");
   database.exec("PRAGMA synchronous = NORMAL");
