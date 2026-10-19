@@ -8,7 +8,8 @@ test_root="$(mktemp -d "$temp_parent/msa-test.XXXXXX")"
 git_askpass="$(type -P false)"
 readonly temp_parent test_root git_askpass
 
-mkdir -p "$test_root/home/.config" "$test_root/tmp" "$test_root/cache/npm"
+mkdir -p "$test_root/home/.config" "$test_root/tmp" "$test_root/cache/npm" "$test_root/run"
+chmod 700 "$test_root/run"
 # Mark the generated root so cleanup can verify ownership before deleting it.
 touch "$test_root/.msa-test-owned" "$test_root/npm-userconfig" "$test_root/npm-globalconfig"
 
@@ -20,6 +21,10 @@ cleanup() {
 	case "$test_root" in
 		"$temp_parent"/msa-test.*)
 			if [[ -d "$test_root" && ! -L "$test_root" && -f "$test_root/.msa-test-owned" ]]; then
+				# Rootless podman leaves storage owned by subordinate UIDs that only podman can remove.
+				if [[ -d "$test_root/home/.local/share/containers" ]]; then
+					env -i "${test_env[@]}" podman system reset --force >/dev/null 2>&1 || true
+				fi
 				rm -rf -- "$test_root"
 			else
 				printf "Refusing to remove unverified test directory: %s\n" "$test_root" >&2
@@ -47,6 +52,7 @@ test_env=(
 	"TEMP=$test_root/tmp"
 	"XDG_CONFIG_HOME=$test_root/home/.config"
 	"XDG_CACHE_HOME=$test_root/cache"
+	"XDG_RUNTIME_DIR=$test_root/run"
 	"LANG=C"
 	"LC_ALL=C"
 	"TZ=UTC"
@@ -60,6 +66,8 @@ test_env=(
 	"NPM_CONFIG_GLOBALCONFIG=$test_root/npm-globalconfig"
 	"NPM_CONFIG_CACHE=$test_root/cache/npm"
 	"MSA_NO_LOCAL_LLM=1"
+	# Without an endpoint, every CLI run would start the msa-grafana-lgtm container through podman.
+	"MSA_OTLP_ENDPOINT=http://127.0.0.1:9"
 )
 
 # Native Windows needs these inherited values to launch child processes.

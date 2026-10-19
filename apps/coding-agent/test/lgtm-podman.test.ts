@@ -11,7 +11,7 @@ const podmanRuns = podman !== undefined && spawnSync(podman, ["ps"]).status === 
 
 /**
  * Reads real `podman ps` output. A pod's infra container gives a named container in each state
- * without pulling an image. CI has no podman, so these run only where podman answers `podman ps`.
+ * without pulling an image. These run only where podman answers `podman ps`.
  */
 describe.skipIf(!podmanRuns)("msa-grafana-lgtm reuse decision against real podman", () => {
   const pods: string[] = [];
