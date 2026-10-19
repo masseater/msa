@@ -12,6 +12,7 @@ import {
 import type { Orchestrator } from "../../../core/orchestrator/orchestrator.ts";
 import type { TaskSnapshot } from "../../../core/orchestrator/types.ts";
 import { toErrorMessage } from "../../../utils/errors.ts";
+import { shortId } from "../../../utils/text.ts";
 import { theme } from "../theme/theme.ts";
 import { DynamicBorder } from "./dynamic-border.ts";
 import { keyHint } from "./keybinding-hints.ts";
@@ -102,7 +103,11 @@ export class TasksView implements Component, Focusable {
     const cursor = selected ? theme.fg("accent", "›") : " ";
     const title = selected ? theme.bold(task.title) : task.title;
     const mark = task.replan === null ? "" : ` ${theme.fg("muted", "↺")}`;
-    const meta = theme.fg("dim", modelName(task.model ?? "default"));
+    const id = shortId(task.id);
+    const meta = theme.fg(
+      "dim",
+      [id, modelName(task.model ?? "default")].filter(Boolean).join("  "),
+    );
     const left = ` ${cursor} ${glyph(task)} ${title}${mark}`;
     const gap = Math.max(2, width - visibleWidth(left) - visibleWidth(meta) - 1);
     return truncateToWidth(`${left}${" ".repeat(gap)}${meta}`, width);

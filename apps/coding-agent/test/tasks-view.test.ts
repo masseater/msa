@@ -426,3 +426,33 @@ describe("TasksView dependencies", () => {
     expect(screen().join("\n")).not.toContain("dependency 1");
   });
 });
+
+describe("TasksView ids", () => {
+  it("shows a short id in the list and the full id in the detail", () => {
+    const id = "01a1518a-ff46-75e6-90be-7024913caa86";
+    const { view, screen } = setup({
+      initialId: id,
+      tasks: [task(id, { title: "watch the release", status: "running" })],
+    });
+    expect(screen().join("\n")).toContain("01a1518a  flash");
+    expect(screen().join("\n")).not.toContain(id);
+
+    view.handleInput(ENTER);
+    expect(screen().join("\n")).toContain(`id  ${id}`);
+  });
+
+  it("shows an id that already fits the row whole", () => {
+    const { screen } = setup({
+      tasks: [task("t-mvejhav4-1", { title: "task with a readable id" })],
+    });
+    expect(screen().join("\n")).toContain("t-mvejhav4-1  flash");
+  });
+
+  it("leaves the id column out before a task has an id", () => {
+    const { screen } = setup({ tasks: [task("", { title: "not started" })] });
+    const row = screen().find((line) => line.includes("not started"));
+    expect(row).toBeDefined();
+    expect(row).not.toContain("undefined");
+    expect(row?.trimEnd()).toMatch(/not started +flash$/);
+  });
+});

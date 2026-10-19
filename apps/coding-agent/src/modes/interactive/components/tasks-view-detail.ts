@@ -40,6 +40,7 @@ function sessionLines(orchestrator: Orchestrator, task: TaskSnapshot): string[] 
 
 function sections(orchestrator: Orchestrator, task: TaskSnapshot, width: number): string[] {
   const lines: string[] = [];
+  if (task.id !== "") lines.push(`   ${theme.fg("muted", "id")}  ${task.id}`);
   const section = (title: string) => lines.push("", theme.fg("accent", ` ${title}`));
   const body = (text: string, limit: number) => {
     const { visualLines, skippedCount } = truncateToVisualLines(text, limit, width - 3);
