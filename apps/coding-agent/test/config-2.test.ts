@@ -1,13 +1,18 @@
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "fs";
-import { tmpdir } from "os";
-import { delimiter, join } from "path";
-
-import { readEnv } from "../src/core/process-env.ts";
-afterEach(() => vi.unstubAllEnvs());
-
+import {
+  changeMode,
+  joinPath,
+  makeDirectory,
+  makeTempDir,
+  pathDelimiter,
+  removePath,
+  runTest,
+  writeTextFile,
+} from "@msa/testing";
+import { Effect } from "effect";
 import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 
 import { detectInstallMethod, getSelfUpdateCommand, getUpdateInstruction } from "../src/config.ts";
+import { readEnv } from "../src/core/process-env.ts";
 
 const execPathDescriptor = Object.getOwnPropertyDescriptor(process, "execPath");
 const originalPath = readEnv("PATH");
@@ -22,64 +27,59 @@ function setExecPath(value: string): void {
   });
 }
 
-afterEach(() => {
-  if (execPathDescriptor !== undefined) {
-    Object.defineProperty(process, "execPath", execPathDescriptor);
-  }
-  if (originalPath === undefined) {
-    vi.stubEnv("PATH", undefined);
-  } else {
-    vi.stubEnv("PATH", originalPath);
-  }
-  if (originalMsaPackageDir === undefined) {
-    vi.stubEnv("MSA_PACKAGE_DIR", undefined);
-  } else {
-    vi.stubEnv("MSA_PACKAGE_DIR", originalMsaPackageDir);
-  }
-  if (originalArgv1 === undefined) {
-    process.argv.splice(1, 1);
-  } else {
-    process.argv[1] = originalArgv1;
-  }
-  if (tempDir !== undefined && tempDir.length > 0) {
-    chmodSync(tempDir, 0o700);
-    rmSync(tempDir, { recursive: true, force: true });
-    tempDir = undefined;
-  }
-});
+afterEach(() =>
+  runTest(
+    Effect.gen(function* () {
+      vi.unstubAllEnvs();
+      if (execPathDescriptor !== undefined) {
+        Object.defineProperty(process, "execPath", execPathDescriptor);
+      }
+      if (originalPath === undefined) vi.stubEnv("PATH", undefined);
+      else vi.stubEnv("PATH", originalPath);
+      if (originalMsaPackageDir === undefined) vi.stubEnv("MSA_PACKAGE_DIR", undefined);
+      else vi.stubEnv("MSA_PACKAGE_DIR", originalMsaPackageDir);
+      if (originalArgv1 === undefined) process.argv.splice(1, 1);
+      else process.argv[1] = originalArgv1;
+      if (tempDir !== undefined && tempDir.length > 0) {
+        yield* removePath(tempDir);
+        tempDir = undefined;
+      }
+    }),
+  ),
+);
 
-function createNpmPrefixInstall(template = "msa-prefix-"): { prefix: string; packageDir: string } {
-  const prefix = mkdtempSync(join(tmpdir(), template));
-  const root = join(prefix, "lib", "node_modules");
-  const scopeDir = join(root, "@msa");
-  const packageDir = join(scopeDir, "coding-agent");
-  mkdirSync(packageDir, { recursive: true });
+const createNpmPrefixInstall = Effect.fn("createNpmPrefixInstall")(function* (
+  template = "msa-prefix-",
+) {
+  const prefix = yield* makeTempDir(template);
+  const root = joinPath(prefix, "lib", "node_modules");
+  const scopeDir = joinPath(root, "@msa");
+  const packageDir = joinPath(scopeDir, "coding-agent");
+  yield* makeDirectory(packageDir);
   tempDir = prefix;
   vi.stubEnv("MSA_PACKAGE_DIR", packageDir);
-  setExecPath(join(packageDir, "dist", "cli.js"));
+  setExecPath(joinPath(packageDir, "dist", "cli.js"));
   return { prefix, packageDir };
-}
+});
 
-function createBunGlobalInstall(): { packageDir: string } {
-  const temp = mkdtempSync(join(tmpdir(), "msa-bun-"));
-  const prefix = join(temp, ".bun");
-  const bunBin = join(prefix, "bin");
-  const root = join(prefix, "install", "global", "node_modules");
-  const scopeDir = join(root, "@msa");
-  const packageDir = join(scopeDir, "coding-agent");
-  mkdirSync(packageDir, { recursive: true });
-  mkdirSync(bunBin, { recursive: true });
-  writeFileSync(
-    join(bunBin, process.platform === "win32" ? "bun.cmd" : "bun"),
-    createFakeBunScript(bunBin),
-  );
-  chmodSync(join(bunBin, process.platform === "win32" ? "bun.cmd" : "bun"), 0o755);
+const createBunGlobalInstall = Effect.fn("createBunGlobalInstall")(function* () {
+  const temp = yield* makeTempDir("msa-bun-");
+  const prefix = joinPath(temp, ".bun");
+  const bunBin = joinPath(prefix, "bin");
+  const root = joinPath(prefix, "install", "global", "node_modules");
+  const scopeDir = joinPath(root, "@msa");
+  const packageDir = joinPath(scopeDir, "coding-agent");
+  yield* makeDirectory(packageDir);
+  yield* makeDirectory(bunBin);
+  const bunPath = joinPath(bunBin, process.platform === "win32" ? "bun.cmd" : "bun");
+  yield* writeTextFile(bunPath, createFakeBunScript(bunBin));
+  yield* changeMode(bunPath, 0o755);
   tempDir = temp;
-  vi.stubEnv("PATH", `${bunBin}${delimiter}${originalPath ?? ""}`);
+  vi.stubEnv("PATH", `${bunBin}${pathDelimiter}${originalPath ?? ""}`);
   vi.stubEnv("MSA_PACKAGE_DIR", packageDir);
-  setExecPath(join(packageDir, "dist", "cli.js"));
+  setExecPath(joinPath(packageDir, "dist", "cli.js"));
   return { packageDir };
-}
+});
 
 function createFakeBunScript(bunBin: string): string {
   if (process.platform === "win32") {
@@ -109,76 +109,60 @@ describe("detectInstallMethod", () => {
       "Update @msa/coding-agent using the package manager, wrapper, or source checkout that provides this installation.",
     );
   });
-  test("self-updates npm installs from custom prefixes", () => {
-    const { prefix } = createNpmPrefixInstall();
-
-    const command = getSelfUpdateCommand("@msa/coding-agent");
-
-    expect(detectInstallMethod()).toBe("npm");
-    expect(command).toEqual({
-      command: "npm",
-      args: [
-        "--prefix",
-        prefix,
-        "install",
-        "-g",
-        "--ignore-scripts",
-        "--min-release-age=0",
-        "@msa/coding-agent",
-      ],
-      display: `npm --prefix ${prefix} install -g --ignore-scripts --min-release-age=0 @msa/coding-agent`,
-    });
-  });
-  test("self-updates exact npm versions without uninstalling the current package", () => {
-    const { prefix } = createNpmPrefixInstall();
-
-    const command = getSelfUpdateCommand("@msa/coding-agent", undefined, {
-      packageName: "@msa/coding-agent",
-      installSpec: "@msa/coding-agent@1.2.3",
-    });
-
-    expect(command).toEqual({
-      command: "npm",
-      args: [
-        "--prefix",
-        prefix,
-        "install",
-        "-g",
-        "--ignore-scripts",
-        "--min-release-age=0",
-        "@msa/coding-agent@1.2.3",
-      ],
-      display: `npm --prefix ${prefix} install -g --ignore-scripts --min-release-age=0 @msa/coding-agent@1.2.3`,
-    });
-  });
-  test("self-updates renamed packages from the current install prefix", () => {
-    const { prefix } = createNpmPrefixInstall();
-
-    const command = getSelfUpdateCommand(
-      "@mariozechner/pi-coding-agent",
-      undefined,
-      "@new-scope/msa",
-    );
-
-    expect(command).toEqual({
-      command: "npm",
-      args: [
-        "--prefix",
-        prefix,
-        "install",
-        "-g",
-        "--ignore-scripts",
-        "--min-release-age=0",
-        "@new-scope/msa",
-      ],
-      display: `npm --prefix ${prefix} uninstall -g @mariozechner/pi-coding-agent && npm --prefix ${prefix} install -g --ignore-scripts --min-release-age=0 @new-scope/msa`,
-      steps: [
-        {
+  test("self-updates npm installs from custom prefixes", () =>
+    runTest(
+      Effect.gen(function* () {
+        const { prefix } = yield* createNpmPrefixInstall();
+        const command = getSelfUpdateCommand("@msa/coding-agent");
+        expect(detectInstallMethod()).toBe("npm");
+        expect(command).toEqual({
           command: "npm",
-          args: ["--prefix", prefix, "uninstall", "-g", "@mariozechner/pi-coding-agent"],
-          display: `npm --prefix ${prefix} uninstall -g @mariozechner/pi-coding-agent`,
-        },
-        {
+          args: [
+            "--prefix",
+            prefix,
+            "install",
+            "-g",
+            "--ignore-scripts",
+            "--min-release-age=0",
+            "@msa/coding-agent",
+          ],
+          display: `npm --prefix ${prefix} install -g --ignore-scripts --min-release-age=0 @msa/coding-agent`,
+        });
+      }),
+    ));
+  test("self-updates exact npm versions without uninstalling the current package", () =>
+    runTest(
+      Effect.gen(function* () {
+        const { prefix } = yield* createNpmPrefixInstall();
+        const command = getSelfUpdateCommand("@msa/coding-agent", undefined, {
+          packageName: "@msa/coding-agent",
+          installSpec: "@msa/coding-agent@1.2.3",
+        });
+        expect(command).toEqual({
+          command: "npm",
+          args: [
+            "--prefix",
+            prefix,
+            "install",
+            "-g",
+            "--ignore-scripts",
+            "--min-release-age=0",
+            "@msa/coding-agent@1.2.3",
+          ],
+          display: `npm --prefix ${prefix} install -g --ignore-scripts --min-release-age=0 @msa/coding-agent@1.2.3`,
+        });
+      }),
+    ));
+  test("self-updates renamed packages from the current install prefix", () =>
+    runTest(
+      Effect.gen(function* () {
+        const { prefix } = yield* createNpmPrefixInstall();
+        const command = getSelfUpdateCommand(
+          "@mariozechner/pi-coding-agent",
+          undefined,
+          "@new-scope/msa",
+        );
+        expect(command).toEqual({
           command: "npm",
           args: [
             "--prefix",
@@ -189,54 +173,76 @@ describe("detectInstallMethod", () => {
             "--min-release-age=0",
             "@new-scope/msa",
           ],
-          display: `npm --prefix ${prefix} install -g --ignore-scripts --min-release-age=0 @new-scope/msa`,
-        },
-      ],
-    });
-  });
-  test("self-update respects configured npmCommand", () => {
-    const { prefix } = createNpmPrefixInstall();
-
-    const command = getSelfUpdateCommand("@msa/coding-agent", ["npm", "--prefix", prefix]);
-
-    expect(command).toEqual({
-      command: "npm",
-      args: [
-        "--prefix",
-        prefix,
-        "install",
-        "-g",
-        "--ignore-scripts",
-        "--min-release-age=0",
-        "@msa/coding-agent",
-      ],
-      display: `npm --prefix ${prefix} install -g --ignore-scripts --min-release-age=0 @msa/coding-agent`,
-    });
-  });
-  test("self-update treats empty npmCommand as unset", () => {
-    const { prefix } = createNpmPrefixInstall();
-
-    const command = getSelfUpdateCommand("@msa/coding-agent", []);
-
-    expect(command?.args).toEqual([
-      "--prefix",
-      prefix,
-      "install",
-      "-g",
-      "--ignore-scripts",
-      "--min-release-age=0",
-      "@msa/coding-agent",
-    ]);
-  });
-  test("quotes npm self-update display paths", () => {
-    const { prefix } = createNpmPrefixInstall("msa prefix ");
-
-    const command = getSelfUpdateCommand("@msa/coding-agent");
-
-    expect(command?.display).toBe(
-      `npm --prefix "${prefix}" install -g --ignore-scripts --min-release-age=0 @msa/coding-agent`,
-    );
-  });
+          display: `npm --prefix ${prefix} uninstall -g @mariozechner/pi-coding-agent && npm --prefix ${prefix} install -g --ignore-scripts --min-release-age=0 @new-scope/msa`,
+          steps: [
+            {
+              command: "npm",
+              args: ["--prefix", prefix, "uninstall", "-g", "@mariozechner/pi-coding-agent"],
+              display: `npm --prefix ${prefix} uninstall -g @mariozechner/pi-coding-agent`,
+            },
+            {
+              command: "npm",
+              args: [
+                "--prefix",
+                prefix,
+                "install",
+                "-g",
+                "--ignore-scripts",
+                "--min-release-age=0",
+                "@new-scope/msa",
+              ],
+              display: `npm --prefix ${prefix} install -g --ignore-scripts --min-release-age=0 @new-scope/msa`,
+            },
+          ],
+        });
+      }),
+    ));
+  test("self-update respects configured npmCommand", () =>
+    runTest(
+      Effect.gen(function* () {
+        const { prefix } = yield* createNpmPrefixInstall();
+        const command = getSelfUpdateCommand("@msa/coding-agent", ["npm", "--prefix", prefix]);
+        expect(command).toEqual({
+          command: "npm",
+          args: [
+            "--prefix",
+            prefix,
+            "install",
+            "-g",
+            "--ignore-scripts",
+            "--min-release-age=0",
+            "@msa/coding-agent",
+          ],
+          display: `npm --prefix ${prefix} install -g --ignore-scripts --min-release-age=0 @msa/coding-agent`,
+        });
+      }),
+    ));
+  test("self-update treats empty npmCommand as unset", () =>
+    runTest(
+      Effect.gen(function* () {
+        const { prefix } = yield* createNpmPrefixInstall();
+        const command = getSelfUpdateCommand("@msa/coding-agent", []);
+        expect(command?.args).toEqual([
+          "--prefix",
+          prefix,
+          "install",
+          "-g",
+          "--ignore-scripts",
+          "--min-release-age=0",
+          "@msa/coding-agent",
+        ]);
+      }),
+    ));
+  test("quotes npm self-update display paths", () =>
+    runTest(
+      Effect.gen(function* () {
+        const { prefix } = yield* createNpmPrefixInstall("msa prefix ");
+        const command = getSelfUpdateCommand("@msa/coding-agent");
+        expect(command?.display).toBe(
+          `npm --prefix "${prefix}" install -g --ignore-scripts --min-release-age=0 @msa/coding-agent`,
+        );
+      }),
+    ));
   test("does not infer Windows npm custom prefixes from package paths", () => {
     const packageDir = "C:\\Users\\Admin\\npm prefix\\node_modules\\@msa\\coding-agent";
     vi.stubEnv("MSA_PACKAGE_DIR", packageDir);
@@ -247,16 +253,23 @@ describe("detectInstallMethod", () => {
       "Run: npm install -g --ignore-scripts --min-release-age=0 @msa/coding-agent",
     );
   });
-  test("self-updates bun global installs from bun pm bin", () => {
-    createBunGlobalInstall();
-
-    const command = getSelfUpdateCommand("@msa/coding-agent");
-
-    expect(detectInstallMethod()).toBe("bun");
-    expect(command).toEqual({
-      command: "bun",
-      args: ["install", "-g", "--ignore-scripts", "--minimum-release-age=0", "@msa/coding-agent"],
-      display: "bun install -g --ignore-scripts --minimum-release-age=0 @msa/coding-agent",
-    });
-  });
+  test("self-updates bun global installs from bun pm bin", () =>
+    runTest(
+      Effect.gen(function* () {
+        yield* createBunGlobalInstall();
+        const command = getSelfUpdateCommand("@msa/coding-agent");
+        expect(detectInstallMethod()).toBe("bun");
+        expect(command).toEqual({
+          command: "bun",
+          args: [
+            "install",
+            "-g",
+            "--ignore-scripts",
+            "--minimum-release-age=0",
+            "@msa/coding-agent",
+          ],
+          display: "bun install -g --ignore-scripts --minimum-release-age=0 @msa/coding-agent",
+        });
+      }),
+    ));
 });
