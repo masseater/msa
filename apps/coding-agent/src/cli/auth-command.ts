@@ -1,6 +1,9 @@
 import type { AuthResult } from "@msa/ai";
+import { Data } from "effect";
+import { dual } from "effect/Function";
 
 import { APP_NAME } from "../config.ts";
+import { writeLog } from "../core/platform.ts";
 import type { Args } from "./args.ts";
 
 export type AuthCommandKind = "check" | "api_key" | "bearer_token";
@@ -14,7 +17,13 @@ export interface AuthCommand {
   minExpiryMs?: number;
 }
 
-export class AuthCommandError extends Error {}
+export class AuthCommandError extends Data.TaggedError("AuthCommandError")<{
+  readonly message: string;
+}> {
+  constructor(message: string) {
+    super({ message });
+  }
+}
 
 const AUTH_COMMAND_USAGE: Record<AuthCommandKind, string> = {
   check: `${APP_NAME} auth check --provider <provider> [--json] [--credentials] [--no-refresh]`,
@@ -42,7 +51,7 @@ export function isAuthCommandHelp(args: string[]): boolean {
 }
 
 export function printAuthCommandHelp(): void {
-  console.log(`Usage:
+  writeLog(`Usage:
   msa auth print-api-key [--provider <provider>] [--model <model>]
   msa auth print-bearer-token [--provider <provider>] [--model <model>] [--min-expiry <duration>]
   msa auth check [--provider <provider>] [--model <model>] [--json] [--credentials] [--no-refresh]
@@ -61,16 +70,39 @@ export function parseAuthCommand(args: string[]): AuthCommand | undefined {
         : args[1] === "print-bearer-token"
           ? "bearer_token"
           : undefined;
-  if (!kind) {
+  if (kind === undefined) {
     throw new AuthCommandError(
       `Unknown auth command "${args[1] ?? ""}". Use "${APP_NAME} auth print-api-key", "${APP_NAME} auth print-bearer-token", or "${APP_NAME} auth check".`,
     );
   }
 
-  const commandArgs: string[] = [];
-  let json = false;
-  let credentials = false;
-  let noRefresh = false;
+  const parsed = parseAuthCommandOptions(args, kind);
+  return parsed.minExpiryMs === undefined
+    ? { kind, ...parsed.flags }
+    : { kind, ...parsed.flags, minExpiryMs: parsed.minExpiryMs };
+}
+
+interface AuthCommandFlags {
+  args: string[];
+  json: boolean;
+  credentials: boolean;
+  noRefresh: boolean;
+}
+
+function parseMinExpiryMs(value: string | undefined): number {
+  const match = value !== undefined && value !== "" ? /^(\d+)(ms|s|m|h)$/iu.exec(value) : null;
+  if (match === null)
+    throw new AuthCommandError("--min-expiry must use a duration such as 30m or 1h");
+  const amount = Number(match[1]);
+  const unit = match[2];
+  return amount * (unit === "ms" ? 1 : unit === "s" ? 1_000 : unit === "m" ? 60_000 : 3_600_000);
+}
+
+function parseAuthCommandOptions(
+  args: string[],
+  kind: AuthCommandKind,
+): { flags: AuthCommandFlags; minExpiryMs?: number } {
+  const flags: AuthCommandFlags = { args: [], json: false, credentials: false, noRefresh: false };
   let minExpiryMs: number | undefined;
   for (let index = 2; index < args.length; index++) {
     const arg = args[index];
@@ -78,31 +110,22 @@ export function parseAuthCommand(args: string[]): AuthCommand | undefined {
     if (arg === "--min-expiry") {
       if (kind !== "bearer_token")
         throw new AuthCommandError("--min-expiry is only supported by print-bearer-token");
-      const value = args[++index];
-      const match = value ? /^(\d+)(ms|s|m|h)$/iu.exec(value) : undefined;
-      if (!match) throw new AuthCommandError("--min-expiry must use a duration such as 30m or 1h");
-      const amount = Number(match[1]);
-      const unit = match[2];
-      minExpiryMs =
-        amount * (unit === "ms" ? 1 : unit === "s" ? 1_000 : unit === "m" ? 60_000 : 3_600_000);
+      minExpiryMs = parseMinExpiryMs(args[++index]);
       continue;
     }
     if (arg === "--json" || arg === "--credentials" || arg === "--no-refresh") {
       if (kind !== "check") throw new AuthCommandError(`${arg} is only supported by auth check`);
-      if (arg === "--json") json = true;
-      else if (arg === "--credentials") credentials = true;
-      else noRefresh = true;
+      if (arg === "--json") flags.json = true;
+      else if (arg === "--credentials") flags.credentials = true;
+      else flags.noRefresh = true;
       continue;
     }
-    commandArgs.push(arg);
+    flags.args.push(arg);
   }
-
-  return minExpiryMs === undefined
-    ? { kind, args: commandArgs, json, credentials, noRefresh }
-    : { kind, args: commandArgs, json, credentials, noRefresh, minExpiryMs };
+  return minExpiryMs === undefined ? { flags } : { flags, minExpiryMs };
 }
 
-export function validateAuthCommandArgs(
+function validateAuthCommandArgsImpl(
   args: Args,
   kind: AuthCommandKind,
 ): { provider?: string | undefined; model?: string | undefined } {
@@ -116,12 +139,12 @@ export function validateAuthCommandArgs(
     throw new AuthCommandError("Auth commands only accept --provider and --model");
   }
   if (kind === "check") {
-    if (!provider && !model) {
+    if ((provider === undefined || provider === "") && (model === undefined || model === "")) {
       throw new AuthCommandError("Auth checks require --provider <provider> or --model <model>");
     }
     return { provider, model };
   }
-  if (!provider && !model) {
+  if ((provider === undefined || provider === "") && (model === undefined || model === "")) {
     throw new AuthCommandError(
       "Credential printing requires --provider <provider> or --model <model>",
     );
@@ -129,8 +152,18 @@ export function validateAuthCommandArgs(
   return { provider, model };
 }
 
+export const validateAuthCommandArgs: {
+  (
+    args: Args,
+    kind: AuthCommandKind,
+  ): { provider?: string | undefined; model?: string | undefined };
+  (
+    kind: AuthCommandKind,
+  ): (args: Args) => { provider?: string | undefined; model?: string | undefined };
+} = dual((args: IArguments) => args.length >= 2, validateAuthCommandArgsImpl);
+
 export function getAuthCredential(auth: AuthResult | undefined): string | undefined {
-  if (auth?.auth.apiKey) return auth.auth.apiKey;
+  if (auth?.auth.apiKey !== undefined && auth?.auth.apiKey !== "") return auth.auth.apiKey;
   const authorization = Object.entries(auth?.auth.headers ?? {}).find(
     ([name]) => name.toLowerCase() === "authorization",
   )?.[1];

@@ -1,5 +1,9 @@
 import { existsSync, readFileSync } from "fs";
-import path from "node:path";
+
+import { dual } from "effect/Function";
+
+import { writeError } from "../core/platform.ts";
+import { posix } from "./platform-extra.ts";
 
 export interface ChangelogEntry {
   major: number;
@@ -10,8 +14,8 @@ export interface ChangelogEntry {
 
 const GITHUB_REPO = "masseater/msa";
 const CHANGELOG_LINK_BASE_PATH = "apps/coding-agent";
-const URL_SCHEME_RE = /^[a-z][a-z0-9+.-]*:/i;
-const INLINE_MARKDOWN_LINK_RE = /(!?\[[^\]\n]+\]\()([^\s)]+)((?:\s+[^)]*)?\))/g;
+const URL_SCHEME_RE = /^[a-z][a-z0-9+.-]*:/iu;
+const INLINE_MARKDOWN_LINK_RE = /(!?\[[^\]\n]+\]\()([^\s)]+)((?:\s+[^)]*)?\))/gu;
 
 function entryVersion(entry: ChangelogEntry): string {
   return `${entry.major}.${entry.minor}.${entry.patch}`;
@@ -46,8 +50,8 @@ function normalizePathPart(value: string): string {
 function resolveRepositoryPath(targetPath: string): string | undefined {
   const normalizedTarget = normalizePathPart(targetPath);
   const joined = normalizedTarget.startsWith("/")
-    ? path.posix.normalize(normalizedTarget.replace(/^\/+/, ""))
-    : path.posix.normalize(path.posix.join(CHANGELOG_LINK_BASE_PATH, normalizedTarget));
+    ? posix.normalize(normalizedTarget.replace(/^\/+/u, ""))
+    : posix.normalize(posix.join(CHANGELOG_LINK_BASE_PATH, normalizedTarget));
 
   if (joined === "." || joined.startsWith("../") || joined === "..") {
     return undefined;
@@ -61,7 +65,7 @@ function isDirectoryTarget(originalPath: string, repositoryPath: string): boolea
     return true;
   }
 
-  const basename = path.posix.basename(repositoryPath);
+  const basename = posix.basename(repositoryPath);
   return !basename.includes(".");
 }
 
@@ -87,12 +91,12 @@ function normalizeChangelogLinkTarget(target: string, tag: string): string {
   }
 
   const { fragment, pathPart, query } = splitLocalTarget(canonicalTarget);
-  if (!pathPart) {
+  if (pathPart === "") {
     return canonicalTarget;
   }
 
   const repositoryPath = resolveRepositoryPath(pathPart);
-  if (!repositoryPath) {
+  if (repositoryPath === undefined || repositoryPath === "") {
     return canonicalTarget;
   }
 
@@ -100,20 +104,20 @@ function normalizeChangelogLinkTarget(target: string, tag: string): string {
   return `https://github.com/${GITHUB_REPO}/${route}/${tag}/${encodeURI(repositoryPath)}${query}${fragment}`;
 }
 
-export function normalizeChangelogLinks(
-  markdown: string,
-  version: string | ChangelogEntry,
-): string {
+function normalizeChangelogLinksImpl(markdown: string, version: string | ChangelogEntry): string {
   const tag = normalizeTag(version);
-  return markdown.replace(INLINE_MARKDOWN_LINK_RE, (_match, prefix, target, suffix) => {
-    return `${prefix}${normalizeChangelogLinkTarget(target, tag)}${suffix}`;
-  });
+  return markdown.replace(
+    INLINE_MARKDOWN_LINK_RE,
+    (_match, prefix, target, suffix) =>
+      `${prefix}${normalizeChangelogLinkTarget(target, tag)}${suffix}`,
+  );
 }
 
-/**
- * Parse changelog entries from CHANGELOG.md
- * Scans for ## lines and collects content until next ## or EOF
- */
+export const normalizeChangelogLinks: {
+  (markdown: string, version: string | ChangelogEntry): string;
+  (version: string | ChangelogEntry): (markdown: string) => string;
+} = dual((args: IArguments) => args.length >= 2, normalizeChangelogLinksImpl);
+
 export function parseChangelog(changelogPath: string): ChangelogEntry[] {
   if (!existsSync(changelogPath)) {
     return [];
@@ -128,18 +132,15 @@ export function parseChangelog(changelogPath: string): ChangelogEntry[] {
     let currentVersion: { major: number; minor: number; patch: number } | null = null;
 
     for (const line of lines) {
-      // Check if this is a version header (## [x.y.z] ...)
       if (line.startsWith("## ")) {
-        // Save previous entry if exists
-        if (currentVersion && currentLines.length > 0) {
+        if (currentVersion !== null && currentLines.length > 0) {
           entries.push({
             ...currentVersion,
             content: currentLines.join("\n").trim(),
           });
         }
 
-        // Try to parse version from this line
-        const versionMatch = line.match(/##\s+\[?(\d+)\.(\d+)\.(\d+)\]?/);
+        const versionMatch = line.match(/##\s+\[?(\d+)\.(\d+)\.(\d+)\]?/u);
         const [, major, minor, patch] = versionMatch ?? [];
         if (major !== undefined && minor !== undefined && patch !== undefined) {
           currentVersion = {
@@ -149,18 +150,15 @@ export function parseChangelog(changelogPath: string): ChangelogEntry[] {
           };
           currentLines = [line];
         } else {
-          // Reset if we can't parse version
           currentVersion = null;
           currentLines = [];
         }
-      } else if (currentVersion) {
-        // Collect lines for current version
+      } else if (currentVersion !== null) {
         currentLines.push(line);
       }
     }
 
-    // Save last entry
-    if (currentVersion && currentLines.length > 0) {
+    if (currentVersion !== null && currentLines.length > 0) {
       entries.push({
         ...currentVersion,
         content: currentLines.join("\n").trim(),
@@ -169,25 +167,18 @@ export function parseChangelog(changelogPath: string): ChangelogEntry[] {
 
     return entries;
   } catch (error) {
-    console.error(`Warning: Could not parse changelog: ${error}`);
+    writeError(`Warning: Could not parse changelog: ${error}`);
     return [];
   }
 }
 
-/**
- * Compare versions. Returns: -1 if v1 < v2, 0 if v1 === v2, 1 if v1 > v2
- */
-export function compareVersions(v1: ChangelogEntry, v2: ChangelogEntry): number {
+function compareVersions(v1: ChangelogEntry, v2: ChangelogEntry): number {
   if (v1.major !== v2.major) return v1.major - v2.major;
   if (v1.minor !== v2.minor) return v1.minor - v2.minor;
   return v1.patch - v2.patch;
 }
 
-/**
- * Get entries newer than lastVersion
- */
-export function getNewEntries(entries: ChangelogEntry[], lastVersion: string): ChangelogEntry[] {
-  // Parse lastVersion
+function getNewEntriesImpl(entries: ChangelogEntry[], lastVersion: string): ChangelogEntry[] {
   const parts = lastVersion.split(".").map(Number);
   const last: ChangelogEntry = {
     major: parts[0] || 0,
@@ -199,5 +190,9 @@ export function getNewEntries(entries: ChangelogEntry[], lastVersion: string): C
   return entries.filter((entry) => compareVersions(entry, last) > 0);
 }
 
-// Re-export getChangelogPath from paths.ts for convenience
+export const getNewEntries: {
+  (entries: ChangelogEntry[], lastVersion: string): ChangelogEntry[];
+  (lastVersion: string): (entries: ChangelogEntry[]) => ChangelogEntry[];
+} = dual((args: IArguments) => args.length >= 2, getNewEntriesImpl);
+
 export { getChangelogPath } from "../config.ts";

@@ -3,7 +3,11 @@ import { constants as osConstants } from "node:os";
 import { Effect, FileSystem } from "effect";
 import { dual } from "effect/Function";
 
-import { spawnProcess, waitForChildProcess } from "../../utils/child-process.ts";
+import {
+  type ChildProcess,
+  spawnProcess,
+  waitForChildProcess,
+} from "../../utils/child-process.ts";
 import {
   getShellConfig,
   getShellEnv,
@@ -14,7 +18,7 @@ import {
 } from "../../utils/shell.ts";
 import { fromPromise, platformRuntime, ToolFailure, unwrapForeign } from "../platform/index.ts";
 
-type SpawnedShell = ReturnType<typeof spawnProcess>;
+type SpawnedShell = ChildProcess;
 
 const MAX_TIMEOUT_MS = 2_147_483_647;
 const MAX_TIMEOUT_SECONDS = MAX_TIMEOUT_MS / 1000;

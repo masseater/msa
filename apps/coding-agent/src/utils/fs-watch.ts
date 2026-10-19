@@ -1,20 +1,20 @@
 import { type FSWatcher, type WatchListener, watch } from "node:fs";
 
+import { dual } from "effect/Function";
+
 export const FS_WATCH_RETRY_DELAY_MS = 5000;
 
 export function closeWatcher(watcher: FSWatcher | null | undefined): void {
-  if (!watcher) {
+  if (watcher === undefined || watcher === null) {
     return;
   }
 
   try {
     watcher.close();
-  } catch {
-    // Ignore watcher close errors
-  }
+  } catch {}
 }
 
-export function watchWithErrorHandler(
+function watchWithErrorHandlerImpl(
   path: string,
   listener: WatchListener<string>,
   onError: () => void,
@@ -28,3 +28,8 @@ export function watchWithErrorHandler(
     return null;
   }
 }
+
+export const watchWithErrorHandler: {
+  (path: string, listener: WatchListener<string>, onError: () => void): FSWatcher | null;
+  (listener: WatchListener<string>, onError: () => void): (path: string) => FSWatcher | null;
+} = dual((args: IArguments) => args.length >= 3, watchWithErrorHandlerImpl);

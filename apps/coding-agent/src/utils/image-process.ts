@@ -1,10 +1,13 @@
+import * as Effect from "effect/Effect";
+import { dual } from "effect/Function";
+
+import { awaited, awaiting } from "../core/awaiting.ts";
 import { convertImageBytesToPng } from "./image-convert.ts";
 import { formatDimensionNote, type ImageResizeOptions, resizeImage } from "./image-resize.ts";
 
 export interface ProcessImageOptions {
-  /** Whether to resize images to inline provider limits. Default: true */
   autoResizeImages?: boolean;
-  /** Optional resize overrides. Uses resizeImage defaults when omitted. */
+
   resizeOptions?: ImageResizeOptions | undefined;
 }
 
@@ -46,81 +49,92 @@ function normalizeSupportedImageMimeType(mimeType: string): string | null {
   }
 }
 
-async function normalizeImage(
-  bytes: Uint8Array,
-  mimeType: string,
-): Promise<NormalizedImage | null> {
-  const normalizedMimeType = normalizeSupportedImageMimeType(mimeType);
-  if (normalizedMimeType) {
-    return { bytes, mimeType: normalizedMimeType };
-  }
+function normalizeImage(bytes: Uint8Array, mimeType: string): Promise<NormalizedImage | null> {
+  return Effect.runPromise(
+    awaiting(function* () {
+      const normalizedMimeType = normalizeSupportedImageMimeType(mimeType);
+      if (normalizedMimeType !== null && normalizedMimeType !== "") {
+        return { bytes, mimeType: normalizedMimeType };
+      }
 
-  const pngBytes = await convertImageBytesToPng(bytes);
-  if (!pngBytes) {
-    return null;
-  }
+      const pngBytes = yield* awaited(convertImageBytesToPng(bytes));
+      if (pngBytes === null) {
+        return null;
+      }
 
-  return {
-    bytes: pngBytes,
-    mimeType: "image/png",
-    convertedFrom: baseMimeType(mimeType),
-  };
+      return {
+        bytes: pngBytes,
+        mimeType: "image/png",
+        convertedFrom: baseMimeType(mimeType),
+      };
+    }),
+  );
 }
 
 function conversionHint(from: string | undefined, to: string): string | undefined {
-  if (!from || from === to) return undefined;
+  if (from === undefined || from === "" || from === to) return undefined;
   return `[Image converted from ${from} to ${to}.]`;
 }
 
-export async function processImage(
+function processImageImpl(
   bytes: Uint8Array,
   mimeType: string,
   options?: ProcessImageOptions,
 ): Promise<ProcessImageResult> {
-  const autoResizeImages = options?.autoResizeImages ?? true;
-  const normalized = await normalizeImage(bytes, mimeType);
-  if (!normalized) {
-    return {
-      ok: false,
-      message: "[Image omitted: could not be converted to a supported inline image format.]",
-    };
-  }
+  return Effect.runPromise(
+    awaiting(function* () {
+      const autoResizeImages = options?.autoResizeImages ?? true;
+      const normalized = yield* awaited(normalizeImage(bytes, mimeType));
+      if (normalized === null) {
+        return {
+          ok: false,
+          message: "[Image omitted: could not be converted to a supported inline image format.]",
+        };
+      }
 
-  if (autoResizeImages) {
-    const resized = await resizeImage(
-      normalized.bytes,
-      normalized.mimeType,
-      options?.resizeOptions,
-    );
-    if (!resized) {
+      if (autoResizeImages) {
+        const resized = yield* awaited(
+          resizeImage(normalized.bytes, normalized.mimeType, options?.resizeOptions),
+        );
+        if (resized === null) {
+          return {
+            ok: false,
+            message: "[Image omitted: could not be resized below the inline image size limit.]",
+          };
+        }
+
+        const hints: string[] = [];
+        const convertedHint = conversionHint(normalized.convertedFrom, resized.mimeType);
+        if (convertedHint !== undefined && convertedHint !== "") hints.push(convertedHint);
+        const dimensionNote = formatDimensionNote(resized);
+        if (dimensionNote !== undefined && dimensionNote !== "") hints.push(dimensionNote);
+
+        return {
+          ok: true,
+          data: resized.data,
+          mimeType: resized.mimeType,
+          hints,
+        };
+      }
+
+      const hints: string[] = [];
+      const convertedHint = conversionHint(normalized.convertedFrom, normalized.mimeType);
+      if (convertedHint !== undefined && convertedHint !== "") hints.push(convertedHint);
+
       return {
-        ok: false,
-        message: "[Image omitted: could not be resized below the inline image size limit.]",
+        ok: true,
+        data: Buffer.from(normalized.bytes).toString("base64"),
+        mimeType: normalized.mimeType,
+        hints,
       };
-    }
-
-    const hints: string[] = [];
-    const convertedHint = conversionHint(normalized.convertedFrom, resized.mimeType);
-    if (convertedHint) hints.push(convertedHint);
-    const dimensionNote = formatDimensionNote(resized);
-    if (dimensionNote) hints.push(dimensionNote);
-
-    return {
-      ok: true,
-      data: resized.data,
-      mimeType: resized.mimeType,
-      hints,
-    };
-  }
-
-  const hints: string[] = [];
-  const convertedHint = conversionHint(normalized.convertedFrom, normalized.mimeType);
-  if (convertedHint) hints.push(convertedHint);
-
-  return {
-    ok: true,
-    data: Buffer.from(normalized.bytes).toString("base64"),
-    mimeType: normalized.mimeType,
-    hints,
-  };
+    }),
+  );
 }
+
+export const processImage: {
+  (bytes: Uint8Array, mimeType: string, options?: ProcessImageOptions): Promise<ProcessImageResult>;
+  (
+    mimeType: string,
+    options?: ProcessImageOptions,
+  ): (bytes: Uint8Array) => Promise<ProcessImageResult>;
+} = dual((args: IArguments) => args.length >= 2, processImageImpl);

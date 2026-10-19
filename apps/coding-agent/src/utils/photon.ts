@@ -1,34 +1,21 @@
-/**
- * Photon image processing wrapper.
- *
- * This module provides a unified interface to @silvia-odwyer/photon-node that works in:
- * 1. Node.js (development, npm run build)
- * 2. Bun compiled binaries (standalone distribution)
- *
- * The challenge: photon-node's CJS entry uses fs.readFileSync(__dirname + '/photon_rs_bg.wasm')
- * which bakes the build machine's absolute path into Bun compiled binaries.
- *
- * Solution:
- * 1. Patch fs.readFileSync to redirect missing photon_rs_bg.wasm reads
- * 2. Copy photon_rs_bg.wasm next to the executable in build:binary
- */
-
-import type { PathOrFileDescriptor } from "fs";
 import { createRequire } from "module";
-import * as path from "path";
 import { fileURLToPath } from "url";
+
+import * as Effect from "effect/Effect";
+
+import { awaited, awaiting } from "../core/awaiting.ts";
+import { dirname, join } from "../core/platform-node.ts";
 
 const require = createRequire(import.meta.url);
 const fs = require("fs") as typeof import("fs");
 
-// Re-export types from the main package
 export type { PhotonImage as PhotonImageType } from "@silvia-odwyer/photon-node";
 
 type ReadFileSync = typeof fs.readFileSync;
+type PathOrFileDescriptor = Parameters<ReadFileSync>[0];
 
 const WASM_FILENAME = "photon_rs_bg.wasm";
 
-// Lazy-loaded photon module
 let photonModule: typeof import("@silvia-odwyer/photon-node") | null = null;
 let loadPromise: Promise<typeof import("@silvia-odwyer/photon-node") | null> | null = null;
 
@@ -43,11 +30,11 @@ function pathOrNull(file: PathOrFileDescriptor): string | null {
 }
 
 function getFallbackWasmPaths(): string[] {
-  const execDir = path.dirname(process.execPath);
+  const execDir = dirname(process.execPath);
   return [
-    path.join(execDir, WASM_FILENAME),
-    path.join(execDir, "photon", WASM_FILENAME),
-    path.join(process.cwd(), WASM_FILENAME),
+    join(execDir, WASM_FILENAME),
+    join(execDir, "photon", WASM_FILENAME),
+    join(process.cwd(), WASM_FILENAME),
   ];
 }
 
@@ -60,12 +47,12 @@ function patchPhotonWasmRead(): () => void {
     const [file, options] = args;
     const resolvedPath = pathOrNull(file);
 
-    if (resolvedPath?.endsWith(WASM_FILENAME)) {
+    if (resolvedPath?.endsWith(WASM_FILENAME) === true) {
       try {
         return originalReadFileSync(...args);
       } catch (error) {
         const err = error as NodeJS.ErrnoException;
-        if (err?.code && err.code !== "ENOENT") {
+        if (err?.code !== undefined && err?.code !== "" && err.code !== "ENOENT") {
           throw error;
         }
 
@@ -109,31 +96,34 @@ function patchPhotonWasmRead(): () => void {
   };
 }
 
-/**
- * Load the photon module asynchronously.
- * Returns cached module on subsequent calls.
- */
-export async function loadPhoton(): Promise<typeof import("@silvia-odwyer/photon-node") | null> {
-  if (photonModule) {
-    return photonModule;
-  }
+export function loadPhoton(): Promise<typeof import("@silvia-odwyer/photon-node") | null> {
+  return Effect.runPromise(
+    awaiting(function* () {
+      if (photonModule !== null) {
+        return photonModule;
+      }
 
-  if (loadPromise) {
-    return loadPromise;
-  }
+      if (loadPromise !== null) {
+        return yield* awaited(loadPromise);
+      }
 
-  loadPromise = (async () => {
-    const restoreReadFileSync = patchPhotonWasmRead();
-    try {
-      photonModule = await import("@silvia-odwyer/photon-node");
-      return photonModule;
-    } catch {
-      photonModule = null;
-      return photonModule;
-    } finally {
-      restoreReadFileSync();
-    }
-  })();
+      loadPromise = (() =>
+        Effect.runPromise(
+          awaiting(function* () {
+            const restoreReadFileSync = patchPhotonWasmRead();
+            try {
+              photonModule = yield* awaited(import("@silvia-odwyer/photon-node"));
+              return photonModule;
+            } catch {
+              photonModule = null;
+              return photonModule;
+            } finally {
+              restoreReadFileSync();
+            }
+          }),
+        ))();
 
-  return loadPromise;
+      return yield* awaited(loadPromise);
+    }),
+  );
 }

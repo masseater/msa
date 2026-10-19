@@ -1,10 +1,7 @@
-/**
- * Builds one msa assistant reply from incremental pieces and emits the matching
- * stream events: blocks are opened lazily, closed in order, and the stream ends
- * with exactly one terminal event.
- */
 import { createAssistantMessageEventStream } from "@msa/ai/compat";
 import type { AssistantMessage, JsonObject, Model } from "@msa/ai/compat";
+
+import { nowMs } from "../../core/platform.ts";
 
 export interface Usage {
   input: number;
@@ -33,7 +30,7 @@ export function createReply(model: Model<string>) {
       cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
     },
     stopReason: "pending",
-    timestamp: Date.now(),
+    timestamp: nowMs(),
   } as AssistantMessage;
 
   let started = false;
@@ -49,7 +46,7 @@ export function createReply(model: Model<string>) {
   const block = (key: string, kind: "text" | "thinking") => {
     const mapKey = `${kind}:${key}`;
     let entry = open.get(mapKey);
-    if (!entry) {
+    if (entry === undefined) {
       start();
       entry = { index: message.content.length, kind };
       message.content.push(
@@ -77,7 +74,7 @@ export function createReply(model: Model<string>) {
   };
 
   const appendText = (key: string, delta: string) => {
-    if (!delta) return;
+    if (delta === "") return;
     const index = block(key, "text");
     (message.content[index] as { text: string }).text += delta;
     stream.push({ type: "text_delta", contentIndex: index, delta, partial: message });
@@ -94,16 +91,17 @@ export function createReply(model: Model<string>) {
     get hasContent() {
       return message.content.length > 0;
     },
-    /** Set a text block's full text; only the part beyond what was already emitted is streamed. */
+
     setText(key: string, full: string) {
       const current = open.get(`text:${key}`);
-      const have = current ? (message.content[current.index] as { text: string }).text : "";
+      const have =
+        current === undefined ? "" : (message.content[current.index] as { text: string }).text;
       if (full.length > have.length && full.startsWith(have))
         appendText(key, full.slice(have.length));
     },
     appendText,
     appendThinking(key: string, delta: string) {
-      if (!delta) return;
+      if (delta === "") return;
       const index = block(key, "thinking");
       (message.content[index] as { thinking: string }).thinking += delta;
       stream.push({ type: "thinking_delta", contentIndex: index, delta, partial: message });

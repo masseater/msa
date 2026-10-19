@@ -9,12 +9,16 @@ import {
   rmSync,
 } from "fs";
 import { arch, platform } from "os";
-import { join } from "path";
 import { Readable } from "stream";
 import { pipeline } from "stream/promises";
 
+import * as Effect from "effect/Effect";
+import { dual } from "effect/Function";
+
 import { APP_NAME, getBinDir } from "../config.ts";
-import { readEnv } from "../core/process-env.ts";
+import { awaited, awaiting } from "../core/awaiting.ts";
+import { join } from "../core/platform-node.ts";
+import { nowMs, randomUnit, readEnv } from "../core/platform.ts";
 import { fetchWithRetry } from "./management-http.ts";
 
 const TOOLS_DIR = getBinDir();
@@ -23,16 +27,16 @@ const DOWNLOAD_TIMEOUT_MS = 120_000;
 
 function isOfflineModeEnabled(): boolean {
   const value = readEnv("MSA_OFFLINE");
-  if (!value) return false;
+  if (value === undefined || value === "") return false;
   return value === "1" || value.toLowerCase() === "true" || value.toLowerCase() === "yes";
 }
 
 interface ToolConfig {
   name: string;
-  repo: string; // GitHub repo (e.g., "sharkdp/fd")
-  binaryName: string; // Name of the binary inside the archive
-  systemBinaryNames?: string[]; // Alternative system command names to try before downloading
-  tagPrefix: string; // Prefix for tags (e.g., "v" for v1.0.0, "" for 1.0.0)
+  repo: string;
+  binaryName: string;
+  systemBinaryNames?: string[];
+  tagPrefix: string;
   getAssetName: (version: string, plat: string, architecture: string) => string | null;
 }
 
@@ -78,29 +82,25 @@ const TOOLS: Record<string, ToolConfig> = {
   },
 };
 
-// Check if a command exists in PATH by trying to run it
 function commandExists(cmd: string): boolean {
   try {
     const result = spawnSync(cmd, ["--version"], { stdio: "pipe" });
-    // Check for ENOENT error (command not found)
+
     return result.error === undefined || result.error === null;
   } catch {
     return false;
   }
 }
 
-// Get the path to a tool (system-wide or in our tools dir)
 export function getToolPath(tool: "fd" | "rg"): string | null {
   const config = TOOLS[tool];
-  if (!config) return null;
+  if (config === undefined) return null;
 
-  // Check our tools directory first
   const localPath = join(TOOLS_DIR, config.binaryName + (platform() === "win32" ? ".exe" : ""));
   if (existsSync(localPath)) {
     return localPath;
   }
 
-  // Check system PATH - if found, just return the command name (it's in PATH)
   const systemBinaryNames = config.systemBinaryNames ?? [config.binaryName];
   for (const systemBinaryName of systemBinaryNames) {
     if (commandExists(systemBinaryName)) {
@@ -111,59 +111,62 @@ export function getToolPath(tool: "fd" | "rg"): string | null {
   return null;
 }
 
-// Resolve the latest release version from the release page redirect.
-// The api.github.com releases endpoint counts against the anonymous API
-// quota (60 requests/hour per IP), which is permanently exhausted behind
-// shared egress IPs such as corporate proxies and CI runners. The web
-// endpoint answers with a redirect to the tagged release at no quota cost
-// and lives on the same origin as the binary download itself.
-export async function getLatestVersion(repo: string): Promise<string> {
-  const response = await fetchWithRetry(
-    `https://github.com/${repo}/releases/latest`,
-    {
-      headers: { "User-Agent": `${APP_NAME}-coding-agent` },
-      redirect: "manual",
-    },
-    { timeoutMs: NETWORK_TIMEOUT_MS },
+export function getLatestVersion(repo: string): Promise<string> {
+  return Effect.runPromise(
+    awaiting(function* () {
+      const response = yield* awaited(
+        fetchWithRetry(
+          `https://github.com/${repo}/releases/latest`,
+          {
+            headers: { "User-Agent": `${APP_NAME}-coding-agent` },
+            redirect: "manual",
+          },
+          { timeoutMs: NETWORK_TIMEOUT_MS },
+        ),
+      );
+
+      try {
+        yield* awaited(response.body?.cancel());
+      } catch {}
+
+      const location =
+        response.status >= 300 && response.status < 400 ? response.headers.get("location") : null;
+      if (location === null || location === "") {
+        throw new Error(
+          `Failed to resolve latest ${repo} release: HTTP ${response.status} without redirect`,
+        );
+      }
+
+      const tag = new URL(location, "https://github.com").pathname.split("/").pop();
+      if (tag === undefined || tag === "" || !location.includes("/releases/tag/")) {
+        throw new Error(
+          `Failed to resolve latest ${repo} release: unexpected redirect to ${location}`,
+        );
+      }
+      return decodeURIComponent(tag).replace(/^v/u, "");
+    }),
   );
-
-  // Only the status and headers matter here. Discard the body so the
-  // connection can be reused.
-  try {
-    await response.body?.cancel();
-  } catch {
-    // Discarding the body is best-effort.
-  }
-
-  const location =
-    response.status >= 300 && response.status < 400 ? response.headers.get("location") : null;
-  if (!location) {
-    throw new Error(
-      `Failed to resolve latest ${repo} release: HTTP ${response.status} without redirect`,
-    );
-  }
-
-  const tag = new URL(location, "https://github.com").pathname.split("/").pop();
-  if (!tag || !location.includes("/releases/tag/")) {
-    throw new Error(`Failed to resolve latest ${repo} release: unexpected redirect to ${location}`);
-  }
-  return decodeURIComponent(tag).replace(/^v/, "");
 }
 
-// Download a file from URL
-async function downloadFile(url: string, dest: string): Promise<void> {
-  const response = await fetchWithRetry(url, undefined, { timeoutMs: DOWNLOAD_TIMEOUT_MS });
+function downloadFile(url: string, dest: string): Promise<void> {
+  return Effect.runPromise(
+    awaiting(function* () {
+      const response = yield* awaited(
+        fetchWithRetry(url, undefined, { timeoutMs: DOWNLOAD_TIMEOUT_MS }),
+      );
 
-  if (!response.ok) {
-    throw new Error(`Download failed with HTTP ${response.status}: ${url}`);
-  }
+      if (!response.ok) {
+        throw new Error(`Download failed with HTTP ${response.status}: ${url}`);
+      }
 
-  if (!response.body) {
-    throw new Error("No response body");
-  }
+      if (response.body === null) {
+        throw new Error("No response body");
+      }
 
-  const fileStream = createWriteStream(dest);
-  await pipeline(Readable.fromWeb(response.body as any), fileStream);
+      const fileStream = createWriteStream(dest);
+      yield* awaited(pipeline(Readable.fromWeb(response.body as any), fileStream));
+    }),
+  );
 }
 
 function findBinaryRecursively(rootDir: string, binaryFileName: string): string | null {
@@ -171,7 +174,7 @@ function findBinaryRecursively(rootDir: string, binaryFileName: string): string 
 
   while (stack.length > 0) {
     const currentDir = stack.pop();
-    if (!currentDir) continue;
+    if (currentDir === undefined || currentDir === "") continue;
 
     const entries = readdirSync(currentDir, { withFileTypes: true });
     for (const entry of entries) {
@@ -189,15 +192,15 @@ function findBinaryRecursively(rootDir: string, binaryFileName: string): string 
 }
 
 function formatSpawnFailure(result: SpawnSyncReturns<Buffer>): string {
-  if (result.error?.message) {
+  if (result.error?.message !== undefined && result.error?.message !== "") {
     return result.error.message;
   }
   const stderr = result.stderr?.toString().trim();
-  if (stderr) {
+  if (stderr !== "") {
     return stderr;
   }
   const stdout = result.stdout?.toString().trim();
-  if (stdout) {
+  if (stdout !== "") {
     return stdout;
   }
   return `exit status ${result.status ?? "unknown"}`;
@@ -205,7 +208,7 @@ function formatSpawnFailure(result: SpawnSyncReturns<Buffer>): string {
 
 function runExtractionCommand(command: string, args: string[]): string | null {
   const result = spawnSync(command, args, { stdio: "pipe" });
-  if (!result.error && result.status === 0) {
+  if (result.error === undefined && result.status === 0) {
     return null;
   }
   return `${command}: ${formatSpawnFailure(result)}`;
@@ -213,14 +216,14 @@ function runExtractionCommand(command: string, args: string[]): string | null {
 
 function extractTarGzArchive(archivePath: string, extractDir: string, assetName: string): void {
   const failure = runExtractionCommand("tar", ["xzf", archivePath, "-C", extractDir]);
-  if (failure) {
+  if (failure !== null && failure !== "") {
     throw new Error(`Failed to extract ${assetName}: ${failure}`);
   }
 }
 
 function getWindowsTarCommand(): string {
   const systemRoot = readEnv("SystemRoot") ?? readEnv("WINDIR");
-  if (systemRoot) {
+  if (systemRoot !== undefined && systemRoot !== "") {
     const systemTar = join(systemRoot, "System32", "tar.exe");
     if (existsSync(systemTar)) {
       return systemTar;
@@ -233,15 +236,13 @@ function extractZipArchive(archivePath: string, extractDir: string, assetName: s
   const failures: string[] = [];
 
   if (platform() === "win32") {
-    // Windows ships bsdtar as tar.exe, which supports zip files. Prefer the
-    // System32 binary over Git Bash's GNU tar, which does not handle zip archives.
     const tarFailure = runExtractionCommand(getWindowsTarCommand(), [
       "xf",
       archivePath,
       "-C",
       extractDir,
     ]);
-    if (!tarFailure) return;
+    if (tarFailure === null || tarFailure === "") return;
     failures.push(tarFailure);
 
     const script =
@@ -257,105 +258,97 @@ function extractZipArchive(archivePath: string, extractDir: string, assetName: s
       archivePath,
       extractDir,
     ]);
-    if (!powershellFailure) return;
+    if (powershellFailure === null || powershellFailure === "") return;
     failures.push(powershellFailure);
   } else {
     const unzipFailure = runExtractionCommand("unzip", ["-q", archivePath, "-d", extractDir]);
-    if (!unzipFailure) return;
+    if (unzipFailure === null || unzipFailure === "") return;
     failures.push(unzipFailure);
 
     const tarFailure = runExtractionCommand("tar", ["xf", archivePath, "-C", extractDir]);
-    if (!tarFailure) return;
+    if (tarFailure === null || tarFailure === "") return;
     failures.push(tarFailure);
   }
 
   throw new Error(`Failed to extract ${assetName}: ${failures.join("; ")}`);
 }
 
-// Download and install a tool
-async function downloadTool(tool: "fd" | "rg"): Promise<string> {
-  const config = TOOLS[tool];
-  if (!config) throw new Error(`Unknown tool: ${tool}`);
+function downloadTool(tool: "fd" | "rg"): Promise<string> {
+  return Effect.runPromise(
+    awaiting(function* () {
+      const config = TOOLS[tool];
+      if (config === undefined) throw new Error(`Unknown tool: ${tool}`);
 
-  const plat = platform();
-  const architecture = arch();
+      const plat = platform();
+      const architecture = arch();
 
-  // fd is pinned on darwin/x64, so skip the version lookup there.
-  const version =
-    tool === "fd" && plat === "darwin" && architecture === "x64"
-      ? "10.3.0"
-      : await getLatestVersion(config.repo);
+      const version =
+        tool === "fd" && plat === "darwin" && architecture === "x64"
+          ? "10.3.0"
+          : yield* awaited(getLatestVersion(config.repo));
 
-  // Get asset name for this platform
-  const assetName = config.getAssetName(version, plat, architecture);
-  if (!assetName) {
-    throw new Error(`Unsupported platform: ${plat}/${architecture}`);
-  }
+      const assetName = config.getAssetName(version, plat, architecture);
+      if (assetName === null || assetName === "") {
+        throw new Error(`Unsupported platform: ${plat}/${architecture}`);
+      }
 
-  // Create tools directory
-  mkdirSync(TOOLS_DIR, { recursive: true });
+      mkdirSync(TOOLS_DIR, { recursive: true });
 
-  const downloadUrl = `https://github.com/${config.repo}/releases/download/${config.tagPrefix}${version}/${assetName}`;
-  const archivePath = join(TOOLS_DIR, assetName);
-  const binaryExt = plat === "win32" ? ".exe" : "";
-  const binaryPath = join(TOOLS_DIR, config.binaryName + binaryExt);
+      const downloadUrl = `https://github.com/${config.repo}/releases/download/${config.tagPrefix}${version}/${assetName}`;
+      const archivePath = join(TOOLS_DIR, assetName);
+      const binaryExt = plat === "win32" ? ".exe" : "";
+      const binaryPath = join(TOOLS_DIR, config.binaryName + binaryExt);
 
-  // Download
-  await downloadFile(downloadUrl, archivePath);
+      yield* awaited(downloadFile(downloadUrl, archivePath));
 
-  // Extract into a unique temp directory. fd and rg downloads can run concurrently
-  // during startup, so sharing a fixed directory causes races.
-  const extractDir = join(
-    TOOLS_DIR,
-    `extract_tmp_${config.binaryName}_${process.pid}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`,
-  );
-  mkdirSync(extractDir, { recursive: true });
-
-  try {
-    if (assetName.endsWith(".tar.gz")) {
-      extractTarGzArchive(archivePath, extractDir, assetName);
-    } else if (assetName.endsWith(".zip")) {
-      extractZipArchive(archivePath, extractDir, assetName);
-    } else {
-      throw new Error(`Unsupported archive format: ${assetName}`);
-    }
-
-    // Find the binary in extracted files. Some archives contain files directly
-    // at root, others nest under a versioned subdirectory.
-    const binaryFileName = config.binaryName + binaryExt;
-    const extractedDir = join(extractDir, assetName.replace(/\.(tar\.gz|zip)$/, ""));
-    const extractedBinaryCandidates = [
-      join(extractedDir, binaryFileName),
-      join(extractDir, binaryFileName),
-    ];
-    let extractedBinary = extractedBinaryCandidates.find((candidate) => existsSync(candidate));
-
-    if (!extractedBinary) {
-      extractedBinary = findBinaryRecursively(extractDir, binaryFileName) ?? undefined;
-    }
-
-    if (extractedBinary) {
-      renameSync(extractedBinary, binaryPath);
-    } else {
-      throw new Error(
-        `Binary not found in archive: expected ${binaryFileName} under ${extractDir}`,
+      const extractDir = join(
+        TOOLS_DIR,
+        `extract_tmp_${config.binaryName}_${process.pid}_${nowMs()}_${randomUnit().toString(36).slice(2, 10)}`,
       );
-    }
+      mkdirSync(extractDir, { recursive: true });
 
-    // Make executable (Unix only)
-    if (plat !== "win32") {
-      chmodSync(binaryPath, 0o755);
-    }
-  } finally {
-    // Cleanup
-    rmSync(archivePath, { force: true });
-    rmSync(extractDir, { recursive: true, force: true });
-  }
+      try {
+        if (assetName.endsWith(".tar.gz")) {
+          extractTarGzArchive(archivePath, extractDir, assetName);
+        } else if (assetName.endsWith(".zip")) {
+          extractZipArchive(archivePath, extractDir, assetName);
+        } else {
+          throw new Error(`Unsupported archive format: ${assetName}`);
+        }
 
-  return binaryPath;
+        const binaryFileName = config.binaryName + binaryExt;
+        const extractedDir = join(extractDir, assetName.replace(/\.(tar\.gz|zip)$/u, ""));
+        const extractedBinaryCandidates = [
+          join(extractedDir, binaryFileName),
+          join(extractDir, binaryFileName),
+        ];
+        let extractedBinary = extractedBinaryCandidates.find((candidate) => existsSync(candidate));
+
+        if (extractedBinary === undefined || extractedBinary === "") {
+          extractedBinary = findBinaryRecursively(extractDir, binaryFileName) ?? undefined;
+        }
+
+        if (extractedBinary !== undefined && extractedBinary !== "") {
+          renameSync(extractedBinary, binaryPath);
+        } else {
+          throw new Error(
+            `Binary not found in archive: expected ${binaryFileName} under ${extractDir}`,
+          );
+        }
+
+        if (plat !== "win32") {
+          chmodSync(binaryPath, 0o755);
+        }
+      } finally {
+        rmSync(archivePath, { force: true });
+        rmSync(extractDir, { recursive: true, force: true });
+      }
+
+      return binaryPath;
+    }),
+  );
 }
 
-// Termux package names for tools
 const TERMUX_PACKAGES: Record<string, string> = {
   fd: "fd",
   rg: "ripgrep",
@@ -366,66 +359,63 @@ export interface ToolStatus {
   message: string;
 }
 
-/**
- * Ensure a tool is available, downloading if necessary.
- * Reports progress through `onStatus`; status messages are otherwise silent.
- * Returns the tool path, or undefined if unavailable.
- */
-export async function ensureTool(
+function ensureToolImpl(
   tool: "fd" | "rg",
   onStatus?: (status: ToolStatus) => void,
 ): Promise<string | undefined> {
-  const existingPath = getToolPath(tool);
-  if (existingPath) {
-    return existingPath;
-  }
+  return Effect.runPromise(
+    awaiting(function* () {
+      const existingPath = getToolPath(tool);
+      if (existingPath !== null && existingPath !== "") {
+        return existingPath;
+      }
 
-  const config = TOOLS[tool];
-  if (!config) return undefined;
+      const config = TOOLS[tool];
+      if (config === undefined) return undefined;
 
-  if (isOfflineModeEnabled()) {
-    onStatus?.({
-      type: "warning",
-      message: `${config.name} not found. Offline mode enabled, skipping download.`,
-    });
-    return undefined;
-  }
+      if (isOfflineModeEnabled()) {
+        onStatus?.({
+          type: "warning",
+          message: `${config.name} not found. Offline mode enabled, skipping download.`,
+        });
+        return undefined;
+      }
 
-  // On Android/Termux, Linux binaries don't work due to Bionic libc incompatibility.
-  // Users must install via pkg.
-  if (platform() === "android") {
-    const pkgName = TERMUX_PACKAGES[tool] ?? tool;
-    onStatus?.({
-      type: "warning",
-      message: `${config.name} not found. Install with: pkg install ${pkgName}`,
-    });
-    return undefined;
-  }
+      if (platform() === "android") {
+        const pkgName = TERMUX_PACKAGES[tool] ?? tool;
+        onStatus?.({
+          type: "warning",
+          message: `${config.name} not found. Install with: pkg install ${pkgName}`,
+        });
+        return undefined;
+      }
 
-  // Tool not found - download it
-  onStatus?.({ type: "info", message: `${config.name} not found. Downloading...` });
+      onStatus?.({ type: "info", message: `${config.name} not found. Downloading...` });
 
-  try {
-    const path = await downloadTool(tool);
-    onStatus?.({ type: "info", message: `${config.name} installed to ${path}` });
-    return path;
-  } catch (e) {
-    // Include the error cause chain: fetch failures surface as a bare
-    // "fetch failed" TypeError with the actionable detail (DNS, TLS,
-    // timeout) hidden in the cause. Depth-capped to guard against
-    // circular cause chains.
-    const messages: string[] = [];
-    for (
-      let current: unknown = e, depth = 0;
-      current instanceof Error && depth < 5;
-      current = current.cause, depth++
-    ) {
-      if (!messages.includes(current.message)) messages.push(current.message);
-    }
-    onStatus?.({
-      type: "warning",
-      message: `Failed to download ${config.name}: ${messages.length > 0 ? messages.join(": ") : String(e)}`,
-    });
-    return undefined;
-  }
+      try {
+        const path = yield* awaited(downloadTool(tool));
+        onStatus?.({ type: "info", message: `${config.name} installed to ${path}` });
+        return path;
+      } catch (e) {
+        const messages: string[] = [];
+        for (
+          let current: unknown = e, depth = 0;
+          current instanceof Error && depth < 5;
+          current = current.cause, depth++
+        ) {
+          if (!messages.includes(current.message)) messages.push(current.message);
+        }
+        onStatus?.({
+          type: "warning",
+          message: `Failed to download ${config.name}: ${messages.length > 0 ? messages.join(": ") : String(e)}`,
+        });
+        return undefined;
+      }
+    }),
+  );
 }
+
+export const ensureTool: {
+  (tool: "fd" | "rg", onStatus?: (status: ToolStatus) => void): Promise<string | undefined>;
+  (onStatus?: (status: ToolStatus) => void): (tool: "fd" | "rg") => Promise<string | undefined>;
+} = dual((args: IArguments) => args.length >= 1, ensureToolImpl);

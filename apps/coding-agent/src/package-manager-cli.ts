@@ -1,6 +1,6 @@
-import { join } from "node:path";
-
 import chalk from "chalk";
+import * as Effect from "effect/Effect";
+import { dual } from "effect/Function";
 
 import { selectConfig } from "./cli/config-selector.ts";
 import { createProjectTrustContext } from "./cli/project-trust.ts";
@@ -17,18 +17,23 @@ import {
   type SelfUpdatePackageTarget,
   VERSION,
 } from "./config.ts";
+import { awaited, awaiting } from "./core/awaiting.ts";
 import type { InlineExtension } from "./core/extensions/types.ts";
 import { ModelRuntime } from "./core/model-runtime.ts";
 import { DefaultPackageManager } from "./core/package-manager.ts";
+import { join } from "./core/platform-node.ts";
+import { writeError, writeLog } from "./core/platform.ts";
 import { type AppMode, resolveProjectTrusted } from "./core/project-trust.ts";
 import { DefaultResourceLoader, isBuiltinExtension } from "./core/resource-loader.ts";
 import { SettingsManager } from "./core/settings-manager.ts";
 import { hasTrustRequiringProjectResources, ProjectTrustStore } from "./core/trust-manager.ts";
 import { spawnProcess } from "./utils/child-process.ts";
+import { callbackPromise } from "./utils/interop.ts";
 import {
   formatVersionCheckError,
   getLatestMsaRelease,
   isNewerPackageVersion,
+  type LatestMsaRelease,
 } from "./utils/version-check.ts";
 import {
   cleanupWindowsSelfUpdateQuarantine,
@@ -61,9 +66,9 @@ interface PackageCommandOptions {
 function reportSettingsErrors(settingsManager: SettingsManager, context: string): void {
   const errors = settingsManager.drainErrors();
   for (const { scope, error } of errors) {
-    console.error(chalk.yellow(`Warning (${context}, ${scope} settings): ${error.message}`));
-    if (error.stack) {
-      console.error(chalk.dim(error.stack));
+    writeError(chalk.yellow(`Warning (${context}, ${scope} settings): ${error.message}`));
+    if (error.stack !== undefined && error.stack !== "") {
+      writeError(chalk.dim(error.stack));
     }
   }
 }
@@ -84,7 +89,7 @@ function getPackageCommandUsage(command: PackageCommand): string {
 const CONFIG_COMMAND_USAGE = `${APP_NAME} config [-l] [--approve|--no-approve]`;
 
 function printConfigCommandHelp(): void {
-  console.log(`${chalk.bold("Usage:")}
+  writeLog(`${chalk.bold("Usage:")}
   ${CONFIG_COMMAND_USAGE}
 
 Open the resource configuration TUI to enable or disable package resources.
@@ -101,7 +106,7 @@ Options:
 function printPackageCommandHelp(command: PackageCommand): void {
   switch (command) {
     case "install":
-      console.log(`${chalk.bold("Usage:")}
+      writeLog(`${chalk.bold("Usage:")}
   ${getPackageCommandUsage("install")}
 
 Install a package and add it to settings.
@@ -122,7 +127,7 @@ Examples:
       return;
 
     case "remove":
-      console.log(`${chalk.bold("Usage:")}
+      writeLog(`${chalk.bold("Usage:")}
   ${getPackageCommandUsage("remove")}
 
 Remove a package and its source from settings.
@@ -140,7 +145,7 @@ Examples:
       return;
 
     case "update":
-      console.log(`${chalk.bold("Usage:")}
+      writeLog(`${chalk.bold("Usage:")}
   ${getPackageCommandUsage("update")}
 
 Update msa, installed packages, or model catalogs.
@@ -165,7 +170,7 @@ Short forms:
       return;
 
     case "list":
-      console.log(`${chalk.bold("Usage:")}
+      writeLog(`${chalk.bold("Usage:")}
   ${getPackageCommandUsage("list")}
 
 List installed packages from user and project settings.
@@ -174,7 +179,6 @@ Options:
   -a, --approve      Trust project-local files for this command
   -na, --no-approve  Ignore project-local files for this command
 `);
-      return;
   }
 }
 
@@ -191,7 +195,7 @@ function parsePackageCommand(args: string[]): PackageCommandOptions | undefined 
   ) {
     command = rawCommand;
   }
-  if (!command) {
+  if (command === undefined) {
     return undefined;
   }
 
@@ -289,9 +293,9 @@ function parsePackageCommand(args: string[]): PackageCommandOptions | undefined 
       }
 
       const value = rest[index + 1];
-      if (!value || value.startsWith("-")) {
+      if (value === undefined || value === "" || value.startsWith("-")) {
         missingOptionValue = missingOptionValue ?? arg;
-      } else if (extensionFlagSource) {
+      } else if (extensionFlagSource !== undefined && extensionFlagSource !== "") {
         conflictingOptions = conflictingOptions ?? "--extension can only be provided once";
         index++;
       } else {
@@ -306,49 +310,60 @@ function parsePackageCommand(args: string[]): PackageCommandOptions | undefined 
       continue;
     }
 
-    if (!source) {
-      source = arg;
-    } else {
+    if (source !== undefined && source !== "") {
       invalidArgument = invalidArgument ?? arg;
+    } else {
+      source = arg;
     }
   }
 
   let updateTarget: UpdateTarget | undefined;
   let showExtensionsSkippedNote = false;
   if (command === "update") {
-    if (allFlag && (selfFlag || extensionsFlag || modelsFlag || extensionFlagSource)) {
+    if (
+      allFlag &&
+      (selfFlag ||
+        extensionsFlag ||
+        modelsFlag ||
+        (extensionFlagSource !== undefined && extensionFlagSource !== ""))
+    ) {
       conflictingOptions =
         conflictingOptions ??
         "--all cannot be combined with --self, --extensions, --models, or --extension";
     }
-    if (allFlag && source) {
+    if (allFlag && source !== undefined && source !== "") {
       conflictingOptions =
         conflictingOptions ?? "--all cannot be combined with a positional source";
     }
 
     if (modelsFlag) {
-      if (selfFlag || extensionsFlag || allFlag || extensionFlagSource) {
+      if (
+        selfFlag ||
+        extensionsFlag ||
+        allFlag ||
+        (extensionFlagSource !== undefined && extensionFlagSource !== "")
+      ) {
         conflictingOptions =
           conflictingOptions ??
           "--models cannot be combined with --self, --extensions, --all, or --extension";
       }
-      if (source) {
+      if (source !== undefined && source !== "") {
         conflictingOptions =
           conflictingOptions ?? "--models cannot be combined with a positional source";
       }
       updateTarget = { type: "models" };
-    } else if (extensionFlagSource) {
+    } else if (extensionFlagSource !== undefined && extensionFlagSource !== "") {
       if (selfFlag || extensionsFlag || allFlag) {
         conflictingOptions =
           conflictingOptions ??
           "--extension cannot be combined with --self, --extensions, or --all";
       }
-      if (source) {
+      if (source !== undefined && source !== "") {
         conflictingOptions =
           conflictingOptions ?? "--extension cannot be combined with a positional source";
       }
       updateTarget = { type: "extensions", source: extensionFlagSource };
-    } else if (source) {
+    } else if (source !== undefined && source !== "") {
       const sourceIsSelf = source === "self" || source === "msa";
       if (sourceIsSelf) {
         updateTarget = extensionsFlag ? { type: "all" } : { type: "self" };
@@ -398,62 +413,111 @@ function updateTargetIncludesExtensions(target: UpdateTarget): boolean {
   return target.type === "all" || target.type === "extensions";
 }
 
-async function refreshModelCatalogs(agentDir: string): Promise<void> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 15_000);
-  try {
-    const modelRuntime = await ModelRuntime.create({
-      authPath: join(agentDir, "auth.json"),
-      modelsPath: join(agentDir, "models.json"),
-      allowModelNetwork: false,
-      signal: controller.signal,
-    });
-    const result = await modelRuntime.refresh({
-      allowNetwork: true,
-      force: true,
-      signal: controller.signal,
-    });
-    if (result.aborted) {
-      throw new Error("Model catalog refresh timed out.");
-    }
-    if (result.errors.size > 0) {
-      const details = Array.from(
-        result.errors,
-        ([provider, error]) => `${provider}: ${error.message}`,
-      ).join("; ");
-      throw new Error(`Could not refresh model catalogs: ${details}`);
-    }
-  } finally {
-    clearTimeout(timeout);
-  }
-  console.log(chalk.green("Model catalogs refreshed"));
+function refreshModelCatalogs(agentDir: string): Promise<void> {
+  return Effect.runPromise(
+    awaiting(function* () {
+      const signal = AbortSignal.timeout(15_000);
+      const modelRuntime = yield* awaited(
+        ModelRuntime.create({
+          authPath: join(agentDir, "auth.json"),
+          modelsPath: join(agentDir, "models.json"),
+          allowModelNetwork: false,
+          signal,
+        }),
+      );
+      const result = yield* awaited(
+        modelRuntime.refresh({
+          allowNetwork: true,
+          force: true,
+          signal,
+        }),
+      );
+      if (result.aborted) {
+        throw new Error("Model catalog refresh timed out.");
+      }
+      if (result.errors.size > 0) {
+        const details = Array.from(
+          result.errors,
+          ([provider, error]) => `${provider}: ${error.message}`,
+        ).join("; ");
+        throw new Error(`Could not refresh model catalogs: ${details}`);
+      }
+      writeLog(chalk.green("Model catalogs refreshed"));
+    }),
+  );
 }
 
 function printSelfUpdateUnavailable(
   npmCommand?: string[],
   updatePackageTarget: SelfUpdatePackageTarget = PACKAGE_NAME,
 ): void {
-  console.error(`error: ${APP_NAME} cannot self-update this installation.`);
-  console.error(getSelfUpdateUnavailableInstruction(PACKAGE_NAME, npmCommand, updatePackageTarget));
+  writeError(`error: ${APP_NAME} cannot self-update this installation.`);
+  writeError(getSelfUpdateUnavailableInstruction(PACKAGE_NAME, npmCommand, updatePackageTarget));
 
   const entrypoint = process.argv[1];
-  if (entrypoint) {
-    console.error("");
-    console.error(`Location of ${APP_NAME} executable: ${entrypoint}`);
+  if (entrypoint !== undefined && entrypoint !== "") {
+    writeError("");
+    writeError(`Location of ${APP_NAME} executable: ${entrypoint}`);
   }
 }
 
+function* performSelfUpdate(
+  force: boolean,
+  npmCommand: string[] | undefined,
+): Generator<Effect.Effect<unknown>, void, unknown> {
+  const selfUpdatePlan = (yield* awaited(getSelfUpdatePlan(force))) as SelfUpdatePlan;
+  if (!selfUpdatePlan.shouldRun) return;
+
+  const installMethod = detectInstallMethod();
+  if (process.platform === "win32" && installMethod !== "npm" && installMethod !== "pnpm") {
+    writeError(
+      chalk.red(`${APP_NAME} self-update on Windows is only supported for npm and pnpm installs.`),
+    );
+    writeError(
+      chalk.dim(`Detected install method: ${installMethod}. Update ${APP_NAME} manually.`),
+    );
+    process.exitCode = 1;
+    return;
+  }
+  const selfUpdateTarget = {
+    packageName: PACKAGE_NAME,
+    installSpec: selfUpdatePlan.installSpec,
+  };
+  const selfUpdateCommand = getSelfUpdateCommand(PACKAGE_NAME, npmCommand, selfUpdateTarget);
+  if (selfUpdateCommand === undefined) {
+    printSelfUpdateUnavailable(npmCommand, selfUpdateTarget);
+    process.exitCode = 1;
+    return;
+  }
+  try {
+    if (installMethod === "npm") {
+      yield* awaited(prepareWindowsNpmSelfUpdate());
+    }
+    yield* awaited(runSelfUpdate(selfUpdateCommand));
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Unknown package command error";
+    writeError(chalk.red(`Error: ${message}`));
+    if (installMethod === "pnpm") {
+      printPnpmSelfUpdateMetadataHint();
+    }
+    printSelfUpdateFallback(selfUpdateCommand);
+    process.exitCode = 1;
+    return;
+  }
+  writeLog(chalk.green(`Updated ${APP_NAME} from ${VERSION} to ${selfUpdatePlan.version}`));
+}
+
 function printSelfUpdateFallback(command: SelfUpdateCommand): void {
-  console.error(chalk.dim(`If this keeps failing, run this command yourself: ${command.display}`));
+  writeError(chalk.dim(`If this keeps failing, run this command yourself: ${command.display}`));
 }
 
 function printPnpmSelfUpdateMetadataHint(): void {
-  console.error(
+  writeError(
     chalk.yellow(
       "If pnpm reports missing package versions, its cached registry metadata may be stale.",
     ),
   );
-  console.error(chalk.yellow(`Run \`pnpm store prune\` and retry \`${APP_NAME} update --self\`.`));
+  writeError(chalk.yellow(`Run \`pnpm store prune\` and retry \`${APP_NAME} update --self\`.`));
 }
 
 interface SelfUpdatePlan {
@@ -462,62 +526,76 @@ interface SelfUpdatePlan {
   shouldRun: boolean;
 }
 
-async function getSelfUpdatePlan(force: boolean): Promise<SelfUpdatePlan> {
-  let latestRelease: Awaited<ReturnType<typeof getLatestMsaRelease>>;
-  try {
-    latestRelease = await getLatestMsaRelease(VERSION, { retry: true });
-  } catch (error: unknown) {
-    throw new Error(
-      `Could not determine latest ${APP_NAME} version: ${formatVersionCheckError(error)}`,
-      {
-        cause: error,
-      },
-    );
-  }
-  if (!latestRelease) {
-    throw new Error(`Could not determine latest ${APP_NAME} version.`);
-  }
+function getSelfUpdatePlan(force: boolean): Promise<SelfUpdatePlan> {
+  return Effect.runPromise(
+    awaiting(function* () {
+      let latestRelease: LatestMsaRelease | undefined;
+      try {
+        latestRelease = yield* awaited(getLatestMsaRelease(VERSION, { retry: true }));
+      } catch (error: unknown) {
+        throw new Error(
+          `Could not determine latest ${APP_NAME} version: ${formatVersionCheckError(error)}`,
+          {
+            cause: error,
+          },
+        );
+      }
+      if (latestRelease === undefined) {
+        throw new Error(`Could not determine latest ${APP_NAME} version.`);
+      }
 
-  const installSpec = `${PACKAGE_NAME}@${latestRelease.version}`;
-  if (force || isNewerPackageVersion(latestRelease.version, VERSION)) {
-    return { installSpec, version: latestRelease.version, shouldRun: true };
-  }
+      const installSpec = `${PACKAGE_NAME}@${latestRelease.version}`;
+      if (force || isNewerPackageVersion(latestRelease.version, VERSION)) {
+        return { installSpec, version: latestRelease.version, shouldRun: true };
+      }
 
-  console.log(chalk.green(`${APP_NAME} is already up to date (v${VERSION})`));
-  return { installSpec, version: latestRelease.version, shouldRun: false };
+      writeLog(chalk.green(`${APP_NAME} is already up to date (v${VERSION})`));
+      return { installSpec, version: latestRelease.version, shouldRun: false };
+    }),
+  );
 }
 
-async function runSelfUpdate(command: SelfUpdateCommand): Promise<void> {
-  console.log(chalk.dim(`Updating ${APP_NAME} with ${command.display}...`));
-  for (const step of command.steps ?? [command]) {
-    await new Promise<void>((resolve, reject) => {
-      const child = spawnProcess(step.command, step.args, {
-        stdio: "inherit",
-      });
-      child.on("error", (error) => {
-        reject(error);
-      });
-      child.on("close", (code, signal) => {
-        if (code === 0) {
-          resolve();
-        } else if (signal) {
-          reject(new Error(`${step.display} terminated by signal ${signal}`));
-        } else {
-          reject(new Error(`${step.display} exited with code ${code ?? "unknown"}`));
-        }
-      });
-    });
-  }
+function runSelfUpdate(command: SelfUpdateCommand): Promise<void> {
+  return Effect.runPromise(
+    awaiting(function* () {
+      writeLog(chalk.dim(`Updating ${APP_NAME} with ${command.display}...`));
+      for (const step of command.steps ?? [command]) {
+        yield* awaited(
+          callbackPromise<void>((resolve, reject) => {
+            const child = spawnProcess(step.command, step.args, {
+              stdio: "inherit",
+            });
+            child.on("error", (error) => {
+              reject(error);
+            });
+            child.on("close", (code, signal) => {
+              if (code === 0) {
+                resolve();
+              } else if (signal === null) {
+                reject(new Error(`${step.display} exited with code ${code ?? "unknown"}`));
+              } else {
+                reject(new Error(`${step.display} terminated by signal ${signal}`));
+              }
+            });
+          }),
+        );
+      }
+    }),
+  );
 }
 
-function prepareWindowsNpmSelfUpdate(): void {
+function prepareWindowsNpmSelfUpdate(): Promise<void> {
   if (process.platform !== "win32") {
-    return;
+    return Effect.runPromise(Effect.void);
   }
 
   const packageDir = getPackageDir();
-  cleanupWindowsSelfUpdateQuarantine(packageDir);
-  quarantineWindowsNativeDependencies(packageDir);
+  return Effect.runPromise(
+    awaiting(function* () {
+      yield* awaited(cleanupWindowsSelfUpdateQuarantine(packageDir));
+      yield* awaited(quarantineWindowsNativeDependencies(packageDir));
+    }),
+  );
 }
 
 export interface PackageCommandRuntimeOptions {
@@ -535,370 +613,363 @@ function getCommandAppMode(): AppMode {
 
 function reportProjectTrustWarnings(warnings: readonly string[]): void {
   for (const warning of warnings) {
-    console.error(chalk.yellow(`Warning: ${warning}`));
+    writeError(chalk.yellow(`Warning: ${warning}`));
   }
 }
 
-async function createCommandSettingsManager(options: {
+function createCommandSettingsManager(options: {
   cwd: string;
   agentDir: string;
   projectTrustOverride?: boolean | undefined;
   useSavedProjectTrustOnly?: boolean | undefined;
   extensionFactories?: InlineExtension[] | undefined;
 }): Promise<CommandSettingsResult> {
-  const settingsManager = SettingsManager.create(options.cwd, options.agentDir, {
-    projectTrusted: false,
-  });
-  const projectTrustWarnings: string[] = [];
-  const trustStore = new ProjectTrustStore(options.agentDir);
-  if (options.useSavedProjectTrustOnly) {
-    const savedProjectTrusted = trustStore.get(options.cwd) === true;
-    settingsManager.setProjectTrusted(options.projectTrustOverride ?? savedProjectTrusted);
-    return { settingsManager, projectTrustWarnings };
-  }
+  return Effect.runPromise(
+    awaiting(function* () {
+      const settingsManager = SettingsManager.create(options.cwd, options.agentDir, {
+        projectTrusted: false,
+      });
+      const projectTrustWarnings: string[] = [];
+      const trustStore = new ProjectTrustStore(options.agentDir);
+      if (options.useSavedProjectTrustOnly === true) {
+        const savedProjectTrusted = trustStore.get(options.cwd) === true;
+        settingsManager.setProjectTrusted(options.projectTrustOverride ?? savedProjectTrusted);
+        return { settingsManager, projectTrustWarnings };
+      }
 
-  const appMode = getCommandAppMode();
-  const extensionsResult =
-    options.projectTrustOverride === undefined && hasTrustRequiringProjectResources(options.cwd)
-      ? await new DefaultResourceLoader({
+      const appMode = getCommandAppMode();
+      const extensionsResult =
+        options.projectTrustOverride === undefined && hasTrustRequiringProjectResources(options.cwd)
+          ? yield* awaited(
+              new DefaultResourceLoader({
+                cwd: options.cwd,
+                agentDir: options.agentDir,
+                settingsManager,
+                extensionFactories: options.extensionFactories,
+              }).loadProjectTrustExtensions(),
+            )
+          : undefined;
+      for (const error of extensionsResult?.errors ?? []) {
+        projectTrustWarnings.push(`Failed to load extension "${error.path}": ${error.error}`);
+      }
+
+      const projectTrusted = yield* awaited(
+        resolveProjectTrusted({
           cwd: options.cwd,
-          agentDir: options.agentDir,
-          settingsManager,
-          extensionFactories: options.extensionFactories,
-        }).loadProjectTrustExtensions()
-      : undefined;
-  for (const error of extensionsResult?.errors ?? []) {
-    projectTrustWarnings.push(`Failed to load extension "${error.path}": ${error.error}`);
-  }
-
-  const projectTrusted = await resolveProjectTrusted({
-    cwd: options.cwd,
-    trustStore,
-    trustOverride: options.projectTrustOverride,
-    defaultProjectTrust: settingsManager.getDefaultProjectTrust(),
-    extensionsResult,
-    projectTrustContext: createProjectTrustContext({
-      cwd: options.cwd,
-      mode: appMode,
-      settingsManager,
-      hasUI: appMode === "interactive",
+          trustStore,
+          trustOverride: options.projectTrustOverride,
+          defaultProjectTrust: settingsManager.getDefaultProjectTrust(),
+          extensionsResult,
+          projectTrustContext: createProjectTrustContext({
+            cwd: options.cwd,
+            mode: appMode,
+            settingsManager,
+            hasUI: appMode === "interactive",
+          }),
+          onExtensionError: (message) => projectTrustWarnings.push(message),
+        }),
+      );
+      settingsManager.setProjectTrusted(projectTrusted);
+      return { settingsManager, projectTrustWarnings };
     }),
-    onExtensionError: (message) => projectTrustWarnings.push(message),
-  });
-  settingsManager.setProjectTrusted(projectTrusted);
-  return { settingsManager, projectTrustWarnings };
+  );
 }
 
-export async function handleConfigCommand(
+function handleConfigCommandImpl(
   args: string[],
   runtimeOptions: PackageCommandRuntimeOptions = {},
 ): Promise<boolean> {
-  const [command, ...rest] = args;
-  if (command !== "config") {
-    return false;
-  }
+  return Effect.runPromise(
+    awaiting(function* () {
+      const [command, ...rest] = args;
+      if (command !== "config") {
+        return false;
+      }
 
-  if (rest.includes("-h") || rest.includes("--help")) {
-    printConfigCommandHelp();
-    return true;
-  }
-
-  let local = false;
-  let projectTrustOverride: boolean | undefined;
-  for (const arg of rest) {
-    if (arg === "-l" || arg === "--local") {
-      local = true;
-    } else if (arg === "-a" || arg === "--approve") {
-      projectTrustOverride = true;
-    } else if (arg === "-na" || arg === "--no-approve") {
-      projectTrustOverride = false;
-    } else if (arg.startsWith("-")) {
-      console.error(chalk.red(`Unknown option ${arg} for "config".`));
-      console.error(chalk.dim(`Use "${APP_NAME} --help" or "${CONFIG_COMMAND_USAGE}".`));
-      process.exitCode = 1;
-      return true;
-    } else {
-      console.error(chalk.red(`Unexpected argument ${arg}.`));
-      console.error(chalk.dim(`Usage: ${CONFIG_COMMAND_USAGE}`));
-      process.exitCode = 1;
-      return true;
-    }
-  }
-
-  const cwd = process.cwd();
-  const agentDir = getAgentDir();
-  const { settingsManager, projectTrustWarnings } = await createCommandSettingsManager({
-    cwd,
-    agentDir,
-    projectTrustOverride,
-    extensionFactories: runtimeOptions.extensionFactories,
-  });
-  reportProjectTrustWarnings(projectTrustWarnings);
-  if (local && !settingsManager.isProjectTrusted()) {
-    console.error(
-      chalk.red("Project is not trusted. Use --approve to modify local resource config."),
-    );
-    process.exitCode = 1;
-    return true;
-  }
-  reportSettingsErrors(settingsManager, "config command");
-  const builtinExtensions = (runtimeOptions.extensionFactories ?? [])
-    .filter(isBuiltinExtension)
-    .map((input) => input.name);
-  const globalSettingsManager = SettingsManager.create(cwd, agentDir, { projectTrusted: false });
-  const globalResolvedPaths = await new DefaultPackageManager({
-    cwd,
-    agentDir,
-    settingsManager: globalSettingsManager,
-    builtinExtensions,
-  }).resolve();
-  const projectResolvedPaths = settingsManager.isProjectTrusted()
-    ? await new DefaultPackageManager({
-        cwd,
-        agentDir,
-        settingsManager,
-        builtinExtensions,
-      }).resolve()
-    : globalResolvedPaths;
-
-  await selectConfig({
-    resolvedPaths: { global: globalResolvedPaths, project: projectResolvedPaths },
-    settingsManager,
-    cwd,
-    agentDir,
-    writeScope: local ? "project" : "global",
-    projectModeAvailable: settingsManager.isProjectTrusted(),
-  });
-
-  process.exit(0);
-}
-
-export async function handlePackageCommand(
-  args: string[],
-  runtimeOptions: PackageCommandRuntimeOptions = {},
-): Promise<boolean> {
-  const options = parsePackageCommand(args);
-  if (!options) {
-    return false;
-  }
-
-  if (options.help) {
-    printPackageCommandHelp(options.command);
-    return true;
-  }
-
-  if (options.invalidOption) {
-    console.error(chalk.red(`Unknown option ${options.invalidOption} for "${options.command}".`));
-    console.error(
-      chalk.dim(`Use "${APP_NAME} --help" or "${getPackageCommandUsage(options.command)}".`),
-    );
-    process.exitCode = 1;
-    return true;
-  }
-
-  if (options.missingOptionValue) {
-    console.error(chalk.red(`Missing value for ${options.missingOptionValue}.`));
-    console.error(chalk.dim(`Usage: ${getPackageCommandUsage(options.command)}`));
-    process.exitCode = 1;
-    return true;
-  }
-
-  if (options.invalidArgument) {
-    console.error(chalk.red(`Unexpected argument ${options.invalidArgument}.`));
-    console.error(chalk.dim(`Usage: ${getPackageCommandUsage(options.command)}`));
-    process.exitCode = 1;
-    return true;
-  }
-
-  if (options.conflictingOptions) {
-    console.error(chalk.red(options.conflictingOptions));
-    console.error(chalk.dim(`Usage: ${getPackageCommandUsage(options.command)}`));
-    process.exitCode = 1;
-    return true;
-  }
-
-  const source = options.source;
-  if ((options.command === "install" || options.command === "remove") && !source) {
-    console.error(chalk.red(`Missing ${options.command} source.`));
-    console.error(chalk.dim(`Usage: ${getPackageCommandUsage(options.command)}`));
-    process.exitCode = 1;
-    return true;
-  }
-
-  if (options.command === "update" && options.updateTarget?.type === "models") {
-    try {
-      await refreshModelCatalogs(getAgentDir());
-    } catch (error: unknown) {
-      const message =
-        error instanceof Error ? error.message : "Unknown model catalog refresh error";
-      console.error(chalk.red(`Error: ${message}`));
-      process.exitCode = 1;
-    }
-    return true;
-  }
-
-  const cwd = process.cwd();
-  const agentDir = getAgentDir();
-  const writesProjectPackageConfig =
-    (options.command === "install" || options.command === "remove") && options.local;
-  const { settingsManager, projectTrustWarnings } = await createCommandSettingsManager({
-    cwd,
-    agentDir,
-    projectTrustOverride: options.projectTrustOverride,
-    useSavedProjectTrustOnly: options.command === "update",
-    extensionFactories: runtimeOptions.extensionFactories,
-  });
-  reportProjectTrustWarnings(projectTrustWarnings);
-  if (!settingsManager.isProjectTrusted() && writesProjectPackageConfig) {
-    console.error(
-      chalk.red("Project is not trusted. Use --approve to modify local package config."),
-    );
-    process.exitCode = 1;
-    return true;
-  }
-  reportSettingsErrors(settingsManager, "package command");
-  const selfUpdateNpmCommand = settingsManager.getGlobalSettings().npmCommand;
-
-  const packageManager = new DefaultPackageManager({ cwd, agentDir, settingsManager });
-
-  packageManager.setProgressCallback((event) => {
-    if (event.type === "start") {
-      process.stdout.write(chalk.dim(`${event.message}\n`));
-    }
-  });
-
-  try {
-    switch (options.command) {
-      case "install":
-        await packageManager.installAndPersist(source!, { local: options.local });
-        console.log(chalk.green(`Installed ${source}`));
+      if (rest.includes("-h") || rest.includes("--help")) {
+        printConfigCommandHelp();
         return true;
+      }
 
-      case "remove": {
-        const removed = await packageManager.removeAndPersist(source!, { local: options.local });
-        if (!removed) {
-          console.error(chalk.red(`No matching package found for ${source}`));
+      let local = false;
+      let projectTrustOverride: boolean | undefined;
+      for (const arg of rest) {
+        if (arg === "-l" || arg === "--local") {
+          local = true;
+        } else if (arg === "-a" || arg === "--approve") {
+          projectTrustOverride = true;
+        } else if (arg === "-na" || arg === "--no-approve") {
+          projectTrustOverride = false;
+        } else if (arg.startsWith("-")) {
+          writeError(chalk.red(`Unknown option ${arg} for "config".`));
+          writeError(chalk.dim(`Use "${APP_NAME} --help" or "${CONFIG_COMMAND_USAGE}".`));
+          process.exitCode = 1;
+          return true;
+        } else {
+          writeError(chalk.red(`Unexpected argument ${arg}.`));
+          writeError(chalk.dim(`Usage: ${CONFIG_COMMAND_USAGE}`));
           process.exitCode = 1;
           return true;
         }
-        console.log(chalk.green(`Removed ${source}`));
-        return true;
       }
 
-      case "list": {
-        const configuredPackages = packageManager.listConfiguredPackages();
-        const userPackages = configuredPackages.filter((pkg) => pkg.scope === "user");
-        const projectPackages = configuredPackages.filter((pkg) => pkg.scope === "project");
-
-        if (configuredPackages.length === 0) {
-          console.log(chalk.dim("No packages installed."));
-          return true;
-        }
-
-        const formatPackage = (pkg: (typeof configuredPackages)[number]) => {
-          const display = pkg.filtered ? `${pkg.source} (filtered)` : pkg.source;
-          console.log(`  ${display}`);
-          if (pkg.installedPath) {
-            console.log(chalk.dim(`    ${pkg.installedPath}`));
-          }
-        };
-
-        if (userPackages.length > 0) {
-          console.log(chalk.bold("User packages:"));
-          for (const pkg of userPackages) {
-            formatPackage(pkg);
-          }
-        }
-
-        if (projectPackages.length > 0) {
-          if (userPackages.length > 0) console.log();
-          console.log(chalk.bold("Project packages:"));
-          for (const pkg of projectPackages) {
-            formatPackage(pkg);
-          }
-        }
-
+      const cwd = process.cwd();
+      const agentDir = getAgentDir();
+      const { settingsManager, projectTrustWarnings } = yield* awaited(
+        createCommandSettingsManager({
+          cwd,
+          agentDir,
+          projectTrustOverride,
+          extensionFactories: runtimeOptions.extensionFactories,
+        }),
+      );
+      reportProjectTrustWarnings(projectTrustWarnings);
+      if (local && !settingsManager.isProjectTrusted()) {
+        writeError(
+          chalk.red("Project is not trusted. Use --approve to modify local resource config."),
+        );
+        process.exitCode = 1;
         return true;
       }
+      reportSettingsErrors(settingsManager, "config command");
+      const builtinExtensions = (runtimeOptions.extensionFactories ?? [])
+        .filter(isBuiltinExtension)
+        .map((input) => input.name);
+      const globalSettingsManager = SettingsManager.create(cwd, agentDir, {
+        projectTrusted: false,
+      });
+      const globalResolvedPaths = yield* awaited(
+        new DefaultPackageManager({
+          cwd,
+          agentDir,
+          settingsManager: globalSettingsManager,
+          builtinExtensions,
+        }).resolve(),
+      );
+      const projectResolvedPaths = settingsManager.isProjectTrusted()
+        ? yield* awaited(
+            new DefaultPackageManager({
+              cwd,
+              agentDir,
+              settingsManager,
+              builtinExtensions,
+            }).resolve(),
+          )
+        : globalResolvedPaths;
 
-      case "update": {
-        const target = options.updateTarget ?? { type: "self" };
-        if (options.showExtensionsSkippedNote) {
-          console.log(
-            chalk.dim(
-              `Extensions are skipped. Run ${APP_NAME} update --extensions to update extensions.`,
-            ),
-          );
-        }
-        if (updateTargetIncludesExtensions(target)) {
-          const updateSource = target.type === "extensions" ? target.source : undefined;
-          await packageManager.update(updateSource);
-          if (updateSource) {
-            console.log(chalk.green(`Updated ${updateSource}`));
-          } else {
-            console.log(chalk.green("Updated packages"));
-          }
-        }
-        if (updateTargetIncludesSelf(target)) {
-          const selfUpdatePlan = await getSelfUpdatePlan(options.force);
-          if (!selfUpdatePlan.shouldRun) {
-            return true;
-          }
+      yield* awaited(
+        selectConfig({
+          resolvedPaths: { global: globalResolvedPaths, project: projectResolvedPaths },
+          settingsManager,
+          cwd,
+          agentDir,
+          writeScope: local ? "project" : "global",
+          projectModeAvailable: settingsManager.isProjectTrusted(),
+        }),
+      );
 
-          const installMethod = detectInstallMethod();
-          if (process.platform === "win32" && installMethod !== "npm" && installMethod !== "pnpm") {
-            console.error(
-              chalk.red(
-                `${APP_NAME} self-update on Windows is only supported for npm and pnpm installs.`,
-              ),
-            );
-            console.error(
-              chalk.dim(`Detected install method: ${installMethod}. Update ${APP_NAME} manually.`),
-            );
-            process.exitCode = 1;
-            return true;
-          }
-          const selfUpdateTarget = {
-            packageName: PACKAGE_NAME,
-            installSpec: selfUpdatePlan.installSpec,
-          };
-          const selfUpdateCommand = getSelfUpdateCommand(
-            PACKAGE_NAME,
-            selfUpdateNpmCommand,
-            selfUpdateTarget,
-          );
-          if (!selfUpdateCommand) {
-            printSelfUpdateUnavailable(selfUpdateNpmCommand, selfUpdateTarget);
-            process.exitCode = 1;
-            return true;
-          }
-          try {
-            if (installMethod === "npm") {
-              prepareWindowsNpmSelfUpdate();
-            }
-            await runSelfUpdate(selfUpdateCommand);
-          } catch (error: unknown) {
-            const message =
-              error instanceof Error ? error.message : "Unknown package command error";
-            console.error(chalk.red(`Error: ${message}`));
-            if (installMethod === "pnpm") {
-              printPnpmSelfUpdateMetadataHint();
-            }
-            printSelfUpdateFallback(selfUpdateCommand);
-            process.exitCode = 1;
-            return true;
-          }
-          console.log(
-            chalk.green(`Updated ${APP_NAME} from ${VERSION} to ${selfUpdatePlan.version}`),
-          );
-        }
-        return true;
-      }
-    }
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : "Unknown package command error";
-    console.error(chalk.red(`Error: ${message}`));
-    process.exitCode = 1;
-    return true;
-  }
+      process.exit(0);
+    }),
+  );
 }
+
+export const handleConfigCommand: {
+  (args: string[], runtimeOptions?: PackageCommandRuntimeOptions): Promise<boolean>;
+  (runtimeOptions?: PackageCommandRuntimeOptions): (args: string[]) => Promise<boolean>;
+} = dual((args: IArguments) => args.length >= 1, handleConfigCommandImpl);
+
+function handlePackageCommandImpl(
+  args: string[],
+  runtimeOptions: PackageCommandRuntimeOptions = {},
+): Promise<boolean> {
+  return Effect.runPromise(
+    awaiting(function* () {
+      const options = parsePackageCommand(args);
+      if (options === undefined) {
+        return false;
+      }
+
+      if (options.help) {
+        printPackageCommandHelp(options.command);
+        return true;
+      }
+
+      if (options.invalidOption !== undefined && options.invalidOption !== "") {
+        writeError(chalk.red(`Unknown option ${options.invalidOption} for "${options.command}".`));
+        writeError(
+          chalk.dim(`Use "${APP_NAME} --help" or "${getPackageCommandUsage(options.command)}".`),
+        );
+        process.exitCode = 1;
+        return true;
+      }
+
+      if (options.missingOptionValue !== undefined && options.missingOptionValue !== "") {
+        writeError(chalk.red(`Missing value for ${options.missingOptionValue}.`));
+        writeError(chalk.dim(`Usage: ${getPackageCommandUsage(options.command)}`));
+        process.exitCode = 1;
+        return true;
+      }
+
+      if (options.invalidArgument !== undefined && options.invalidArgument !== "") {
+        writeError(chalk.red(`Unexpected argument ${options.invalidArgument}.`));
+        writeError(chalk.dim(`Usage: ${getPackageCommandUsage(options.command)}`));
+        process.exitCode = 1;
+        return true;
+      }
+
+      if (options.conflictingOptions !== undefined && options.conflictingOptions !== "") {
+        writeError(chalk.red(options.conflictingOptions));
+        writeError(chalk.dim(`Usage: ${getPackageCommandUsage(options.command)}`));
+        process.exitCode = 1;
+        return true;
+      }
+
+      const source = options.source;
+      if (
+        (options.command === "install" || options.command === "remove") &&
+        (source === undefined || source === "")
+      ) {
+        writeError(chalk.red(`Missing ${options.command} source.`));
+        writeError(chalk.dim(`Usage: ${getPackageCommandUsage(options.command)}`));
+        process.exitCode = 1;
+        return true;
+      }
+
+      if (options.command === "update" && options.updateTarget?.type === "models") {
+        try {
+          yield* awaited(refreshModelCatalogs(getAgentDir()));
+        } catch (error: unknown) {
+          const message =
+            error instanceof Error ? error.message : "Unknown model catalog refresh error";
+          writeError(chalk.red(`Error: ${message}`));
+          process.exitCode = 1;
+        }
+        return true;
+      }
+
+      const cwd = process.cwd();
+      const agentDir = getAgentDir();
+      const writesProjectPackageConfig =
+        (options.command === "install" || options.command === "remove") && options.local;
+      const { settingsManager, projectTrustWarnings } = yield* awaited(
+        createCommandSettingsManager({
+          cwd,
+          agentDir,
+          projectTrustOverride: options.projectTrustOverride,
+          useSavedProjectTrustOnly: options.command === "update",
+          extensionFactories: runtimeOptions.extensionFactories,
+        }),
+      );
+      reportProjectTrustWarnings(projectTrustWarnings);
+      if (!settingsManager.isProjectTrusted() && writesProjectPackageConfig) {
+        writeError(
+          chalk.red("Project is not trusted. Use --approve to modify local package config."),
+        );
+        process.exitCode = 1;
+        return true;
+      }
+      reportSettingsErrors(settingsManager, "package command");
+      const selfUpdateNpmCommand = settingsManager.getGlobalSettings().npmCommand;
+
+      const packageManager = new DefaultPackageManager({ cwd, agentDir, settingsManager });
+
+      packageManager.setProgressCallback((event) => {
+        if (event.type === "start") {
+          process.stdout.write(chalk.dim(`${event.message}\n`));
+        }
+      });
+
+      try {
+        switch (options.command) {
+          case "install":
+            yield* awaited(packageManager.installAndPersist(source!, { local: options.local }));
+            writeLog(chalk.green(`Installed ${source}`));
+            return true;
+
+          case "remove": {
+            const removed = yield* awaited(
+              packageManager.removeAndPersist(source!, { local: options.local }),
+            );
+            if (!removed) {
+              writeError(chalk.red(`No matching package found for ${source}`));
+              process.exitCode = 1;
+              return true;
+            }
+            writeLog(chalk.green(`Removed ${source}`));
+            return true;
+          }
+
+          case "list": {
+            const configuredPackages = packageManager.listConfiguredPackages();
+            const userPackages = configuredPackages.filter((pkg) => pkg.scope === "user");
+            const projectPackages = configuredPackages.filter((pkg) => pkg.scope === "project");
+
+            if (configuredPackages.length === 0) {
+              writeLog(chalk.dim("No packages installed."));
+              return true;
+            }
+
+            const formatPackage = (pkg: (typeof configuredPackages)[number]) => {
+              const display = pkg.filtered ? `${pkg.source} (filtered)` : pkg.source;
+              writeLog(`  ${display}`);
+              if (pkg.installedPath !== undefined && pkg.installedPath !== "") {
+                writeLog(chalk.dim(`    ${pkg.installedPath}`));
+              }
+            };
+
+            if (userPackages.length > 0) {
+              writeLog(chalk.bold("User packages:"));
+              for (const pkg of userPackages) {
+                formatPackage(pkg);
+              }
+            }
+
+            if (projectPackages.length > 0) {
+              if (userPackages.length > 0) writeLog();
+              writeLog(chalk.bold("Project packages:"));
+              for (const pkg of projectPackages) {
+                formatPackage(pkg);
+              }
+            }
+
+            return true;
+          }
+
+          case "update": {
+            const target = options.updateTarget ?? { type: "self" };
+            if (options.showExtensionsSkippedNote) {
+              writeLog(
+                chalk.dim(
+                  `Extensions are skipped. Run ${APP_NAME} update --extensions to update extensions.`,
+                ),
+              );
+            }
+            if (updateTargetIncludesExtensions(target)) {
+              const updateSource = target.type === "extensions" ? target.source : undefined;
+              yield* awaited(packageManager.update(updateSource));
+              if (updateSource !== undefined && updateSource !== "") {
+                writeLog(chalk.green(`Updated ${updateSource}`));
+              } else {
+                writeLog(chalk.green("Updated packages"));
+              }
+            }
+            if (updateTargetIncludesSelf(target)) {
+              yield* performSelfUpdate(options.force, selfUpdateNpmCommand);
+            }
+            return true;
+          }
+        }
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : "Unknown package command error";
+        writeError(chalk.red(`Error: ${message}`));
+        process.exitCode = 1;
+        return true;
+      }
+    }),
+  );
+}
+
+export const handlePackageCommand: {
+  (args: string[], runtimeOptions?: PackageCommandRuntimeOptions): Promise<boolean>;
+  (runtimeOptions?: PackageCommandRuntimeOptions): (args: string[]) => Promise<boolean>;
+} = dual((args: IArguments) => args.length >= 1, handlePackageCommandImpl);

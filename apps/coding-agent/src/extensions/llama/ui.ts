@@ -1,9 +1,6 @@
 import {
-  type Component,
   Container,
   type Focusable,
-  fuzzyFilter,
-  Input,
   type SelectItem,
   SelectList,
   Spacer,
@@ -13,15 +10,19 @@ import {
   visibleWidth,
 } from "@msa/tui";
 import { Effect } from "effect";
+import { dual } from "effect/Function";
 
+import { awaited, awaiting, awaitingWith } from "../../core/awaiting.ts";
 import type { ExtensionCommandContext } from "../../core/extensions/types.ts";
 import type { KeybindingsManager } from "../../core/keybindings.ts";
-import { DynamicBorder } from "../../modes/interactive/components/dynamic-border.ts";
 import { keyHint } from "../../modes/interactive/components/keybinding-hints.ts";
 import type { Theme } from "../../modes/interactive/theme/theme.ts";
 import { toErrorMessage } from "../../utils/errors.ts";
+import { callbackPromise } from "../../utils/interop.ts";
 import type { LlamaModelInfo, LlamaProgress } from "./client.ts";
+import { HuggingFaceSearch } from "./huggingface-search.ts";
 import type { HuggingFaceModel } from "./huggingface.ts";
+import { frame, selectTheme } from "./ui-frame.ts";
 
 const DOWNLOAD_VALUE = "\0download";
 
@@ -37,7 +38,8 @@ interface ProgressState extends LlamaProgress {
 
 function contextLabel(model: LlamaModelInfo): string | undefined {
   const context = model.meta?.n_ctx ?? model.meta?.n_ctx_train;
-  if (context) return context >= 1000 ? `${Math.round(context / 1000)}k` : String(context);
+  if (context !== undefined && context !== 0)
+    return context >= 1000 ? `${Math.round(context / 1000)}k` : String(context);
   const args = model.status.args ?? [];
   for (let index = 0; index < args.length - 1; index++) {
     if (args[index] !== "--ctx-size" && args[index] !== "-c" && args[index] !== "-ctx") continue;
@@ -54,31 +56,8 @@ function modelDescription(model: LlamaModelInfo): string {
   if (loaded) details.push("loaded");
   else if (model.status.value !== "unloaded") details.push(model.status.value);
   const context = loaded ? contextLabel(model) : undefined;
-  if (context) details.push(`${context} context`);
+  if (context !== undefined && context !== "") details.push(`${context} context`);
   return details.join(" · ");
-}
-
-function selectTheme(theme: Theme) {
-  return {
-    selectedPrefix: (text: string) => theme.fg("accent", text),
-    selectedText: (text: string) => theme.fg("accent", text),
-    description: (text: string) => theme.fg("muted", text),
-    scrollInfo: (text: string) => theme.fg("dim", text),
-    noMatch: (text: string) => theme.fg("warning", text),
-  };
-}
-
-function frame(theme: Theme, title: string, body: Component[], footer?: string): Container {
-  const container = new Container();
-  container.addChild(new DynamicBorder((text: string) => theme.fg("accent", text)));
-  container.addChild(new Text(theme.fg("accent", theme.bold(title)), 1, 0));
-  for (const child of body) container.addChild(child);
-  if (footer) {
-    container.addChild(new Spacer(1));
-    container.addChild(new Text(theme.fg("dim", footer), 1, 0));
-  }
-  container.addChild(new DynamicBorder((text: string) => theme.fg("accent", text)));
-  return container;
 }
 
 export interface LlamaUi {
@@ -94,203 +73,6 @@ export interface LlamaUi {
   updateProgress(state: ProgressState): void;
 }
 
-function compactCount(value: number): string {
-  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(value >= 10_000_000 ? 0 : 1)}M`;
-  if (value >= 1_000) return `${(value / 1_000).toFixed(value >= 100_000 ? 0 : 1)}k`;
-  return String(value);
-}
-
-class HuggingFaceSearch extends Container implements Focusable {
-  private readonly tui: TUI;
-  private readonly theme: Theme;
-  private readonly keybindings: KeybindingsManager;
-  private readonly search: (query: string, signal: AbortSignal) => Promise<HuggingFaceModel[]>;
-  private readonly cache: Map<string, HuggingFaceModel[]>;
-  private readonly onSelectModel: (model: string | undefined) => void;
-  private readonly input = new Input();
-  private readonly resultsContainer = new Container();
-  private results: HuggingFaceModel[] = [];
-  private filteredResults: HuggingFaceModel[] = [];
-  private selectedIndex = 0;
-  private query = "";
-  private status = "Type at least 2 characters";
-  private debounce: ReturnType<typeof setTimeout> | undefined;
-  private request: AbortController | undefined;
-  private closed = false;
-  private _focused = false;
-
-  constructor(
-    tui: TUI,
-    theme: Theme,
-    keybindings: KeybindingsManager,
-    search: (query: string, signal: AbortSignal) => Promise<HuggingFaceModel[]>,
-    cache: Map<string, HuggingFaceModel[]>,
-    onSelectModel: (model: string | undefined) => void,
-  ) {
-    super();
-    this.tui = tui;
-    this.theme = theme;
-    this.keybindings = keybindings;
-    this.search = search;
-    this.cache = cache;
-    this.onSelectModel = onSelectModel;
-    this.addChild(new Text(theme.fg("dim", "Model name or owner/repository[:quant]"), 1, 0));
-    this.addChild(this.input);
-    this.addChild(new Spacer(1));
-    this.addChild(this.resultsContainer);
-    this.updateResults();
-  }
-
-  get focused(): boolean {
-    return this._focused;
-  }
-
-  set focused(value: boolean) {
-    this._focused = value;
-    this.input.focused = value;
-  }
-
-  private updateResults(): void {
-    this.resultsContainer.clear();
-    const maxVisible = 10;
-    const start = Math.max(
-      0,
-      Math.min(
-        this.selectedIndex - Math.floor(maxVisible / 2),
-        this.filteredResults.length - maxVisible,
-      ),
-    );
-    const end = Math.min(start + maxVisible, this.filteredResults.length);
-    for (let index = start; index < end; index++) {
-      const model = this.filteredResults[index];
-      if (!model) continue;
-      const prefix = index === this.selectedIndex ? "→ " : "  ";
-      const details = `${compactCount(model.downloads)} downloads`;
-      this.resultsContainer.addChild(
-        new Text(
-          index === this.selectedIndex
-            ? this.theme.fg("accent", `${prefix}${model.id}  ${details}`)
-            : `${prefix}${model.id}${this.theme.fg("muted", `  ${details}`)}`,
-          0,
-          0,
-        ),
-      );
-    }
-    if (start > 0 || end < this.filteredResults.length) {
-      this.resultsContainer.addChild(
-        new Text(
-          this.theme.fg("dim", `  (${this.selectedIndex + 1}/${this.filteredResults.length})`),
-          0,
-          0,
-        ),
-      );
-    }
-    if (this.filteredResults.length === 0) {
-      this.resultsContainer.addChild(new Text(this.theme.fg("dim", `  ${this.status}`), 0, 0));
-    } else if (this.status === "Searching Hugging Face…") {
-      this.resultsContainer.addChild(new Text(this.theme.fg("dim", `  ${this.status}`), 0, 0));
-    }
-    this.tui.requestRender();
-  }
-
-  private filterResults(): void {
-    if (this.query) {
-      const matches = new Set(
-        fuzzyFilter(this.results, this.query, (model) => model.id).map((model) => model.id),
-      );
-      this.filteredResults = this.results.filter((model) => matches.has(model.id));
-    } else {
-      this.filteredResults = this.results;
-    }
-    this.selectedIndex = Math.min(this.selectedIndex, Math.max(0, this.filteredResults.length - 1));
-    this.updateResults();
-  }
-
-  private scheduleSearch(): void {
-    if (this.debounce) clearTimeout(this.debounce);
-    this.request?.abort();
-    this.request = undefined;
-    if (this.query.length < 2) {
-      this.status = "Type at least 2 characters";
-      this.filterResults();
-      return;
-    }
-    const cached = this.cache.get(this.query.toLowerCase());
-    if (cached) {
-      this.results = cached;
-      this.status = cached.length === 0 ? "No GGUF models found" : "";
-      this.filterResults();
-      return;
-    }
-    this.status = "Searching Hugging Face…";
-    this.filterResults();
-    this.debounce = setTimeout(() => void this.runSearch(this.query), 500);
-  }
-
-  private async runSearch(query: string): Promise<void> {
-    const request = new AbortController();
-    this.request = request;
-    try {
-      const results = await this.search(query, request.signal);
-      this.cache.set(query.toLowerCase(), results);
-      if (this.closed || request.signal.aborted || this.query !== query) return;
-      this.results = results;
-      this.selectedIndex = 0;
-      this.status = results.length === 0 ? "No GGUF models found" : "";
-      this.filterResults();
-    } catch (error) {
-      if (this.closed || request.signal.aborted || this.query !== query) return;
-      this.results = [];
-      this.status = toErrorMessage(error);
-      this.filterResults();
-    } finally {
-      if (this.request === request) this.request = undefined;
-    }
-  }
-
-  private close(model: string | undefined): void {
-    if (this.closed) return;
-    this.closed = true;
-    if (this.debounce) clearTimeout(this.debounce);
-    this.request?.abort();
-    this.onSelectModel(model);
-  }
-
-  handleInput(data: string): void {
-    if (this.keybindings.matches(data, "tui.select.up")) {
-      if (this.filteredResults.length > 0) {
-        this.selectedIndex =
-          this.selectedIndex === 0 ? this.filteredResults.length - 1 : this.selectedIndex - 1;
-        this.updateResults();
-      }
-      return;
-    }
-    if (this.keybindings.matches(data, "tui.select.down")) {
-      if (this.filteredResults.length > 0) {
-        this.selectedIndex =
-          this.selectedIndex === this.filteredResults.length - 1 ? 0 : this.selectedIndex + 1;
-        this.updateResults();
-      }
-      return;
-    }
-    if (this.keybindings.matches(data, "tui.select.confirm")) {
-      const exact = /^[^/\s]+\/[^:\s]+(?::[^\s:]+)?$/u.test(this.query) ? this.query : undefined;
-      const selected = exact ?? this.filteredResults[this.selectedIndex]?.id;
-      if (selected) this.close(selected);
-      return;
-    }
-    if (this.keybindings.matches(data, "tui.select.cancel")) {
-      this.close(undefined);
-      return;
-    }
-    this.input.handleInput(data);
-    const query = this.input.getValue().trim();
-    if (query === this.query) return;
-    this.query = query;
-    this.scheduleSearch();
-  }
-}
-
 class LlamaView implements LlamaUi, Focusable {
   private readonly tui: TUI;
   private readonly theme: Theme;
@@ -302,7 +84,7 @@ class LlamaView implements LlamaUi, Focusable {
   private progressPromise: Promise<void> | undefined;
   private progressResolver: (() => void) | undefined;
   private showingProgress = false;
-  private _focused = false;
+  private isFocused = false;
 
   constructor(tui: TUI, theme: Theme, keybindings: KeybindingsManager) {
     this.tui = tui;
@@ -314,12 +96,12 @@ class LlamaView implements LlamaUi, Focusable {
   }
 
   get focused(): boolean {
-    return this._focused;
+    return this.isFocused;
   }
 
   set focused(value: boolean) {
-    this._focused = value;
-    if (this.inputTarget) this.inputTarget.focused = value;
+    this.isFocused = value;
+    if (this.inputTarget !== undefined) this.inputTarget.focused = value;
   }
 
   private setContent(
@@ -327,14 +109,14 @@ class LlamaView implements LlamaUi, Focusable {
     inputHandler?: { handleInput?(data: string): void },
     inputTarget?: Focusable,
   ): void {
-    if (this.inputTarget) this.inputTarget.focused = false;
+    if (this.inputTarget !== undefined) this.inputTarget.focused = false;
     this.progressPromise = undefined;
     this.progressResolver = undefined;
     this.showingProgress = false;
     this.content = content;
     this.inputHandler = inputHandler;
     this.inputTarget = inputTarget;
-    if (this.inputTarget) this.inputTarget.focused = this._focused;
+    if (this.inputTarget !== undefined) this.inputTarget.focused = this.isFocused;
     this.tui.requestRender();
   }
 
@@ -357,7 +139,7 @@ class LlamaView implements LlamaUi, Focusable {
         description: "Hugging Face owner/repository[:quant]",
       },
     ];
-    return new Promise((resolve) => {
+    return callbackPromise((resolve) => {
       const list = new SelectList(items, Math.min(items.length, 12), selectTheme(this.theme), {
         minPrimaryColumnWidth: 36,
         maxPrimaryColumnWidth: 56,
@@ -366,7 +148,7 @@ class LlamaView implements LlamaUi, Focusable {
         if (item.value === DOWNLOAD_VALUE) resolve({ type: "download" });
         else {
           const model = byId.get(item.value);
-          if (model) resolve({ type: "model", model });
+          if (model !== undefined) resolve({ type: "model", model });
         }
       };
       list.onCancel = () => resolve({ type: "close" });
@@ -383,7 +165,7 @@ class LlamaView implements LlamaUi, Focusable {
   }
 
   select(title: string, options: string[]): Promise<string | undefined> {
-    return new Promise((resolve) => {
+    return callbackPromise((resolve) => {
       const list = new SelectList(
         options.map((option) => ({ value: option, label: option })),
         Math.min(options.length, 12),
@@ -403,22 +185,29 @@ class LlamaView implements LlamaUi, Focusable {
     });
   }
 
-  async confirm(title: string, message: string): Promise<boolean> {
-    return (await this.select(`${title}\n${message}`, ["Yes", "No"])) === "Yes";
+  confirm(title: string, message: string): Promise<boolean> {
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        return (yield* awaited(this.select(`${title}\n${message}`, ["Yes", "No"]))) === "Yes";
+      }, this),
+    );
   }
 
-  async connectionError(serverUrl: string, message: string): Promise<"retry" | "close"> {
-    const choice = await this.select(`llama.cpp unavailable\n${serverUrl}\n\n${message}`, [
-      "Retry",
-      "Close",
-    ]);
-    return choice === "Retry" ? "retry" : "close";
+  connectionError(serverUrl: string, message: string): Promise<"retry" | "close"> {
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        const choice = yield* awaited(
+          this.select(`llama.cpp unavailable\n${serverUrl}\n\n${message}`, ["Retry", "Close"]),
+        );
+        return choice === "Retry" ? "retry" : "close";
+      }, this),
+    );
   }
 
   searchModels(
     search: (query: string, signal: AbortSignal) => Promise<HuggingFaceModel[]>,
   ): Promise<string | undefined> {
-    return new Promise((resolve) => {
+    return callbackPromise((resolve) => {
       const component = new HuggingFaceSearch(
         this.tui,
         this.theme,
@@ -447,8 +236,8 @@ class LlamaView implements LlamaUi, Focusable {
   }
 
   progress(state: ProgressState): Promise<void> {
-    if (!this.progressPromise) {
-      this.progressPromise = new Promise((resolve) => {
+    if (this.progressPromise === undefined) {
+      this.progressPromise = callbackPromise((resolve) => {
         this.progressResolver = resolve;
       });
     }
@@ -478,14 +267,18 @@ class LlamaView implements LlamaUi, Focusable {
         ),
       );
     }
-    if (state.detail) body.push(new Text(this.theme.fg("dim", state.detail), 1, 0));
+    if (state.detail !== undefined && state.detail !== "")
+      body.push(new Text(this.theme.fg("dim", state.detail), 1, 0));
     this.content = frame(this.theme, state.title, body, keyHint("tui.select.cancel", "stop"));
     this.inputHandler = undefined;
     this.tui.requestRender();
   }
 
   handleInput(data: string): void {
-    if (this.progressResolver && this.keybindings.matches(data, "tui.select.cancel")) {
+    if (
+      this.progressResolver !== undefined &&
+      this.keybindings.matches(data, "tui.select.cancel")
+    ) {
       const resolve = this.progressResolver;
       this.progressPromise = undefined;
       this.progressResolver = undefined;
@@ -507,25 +300,36 @@ class LlamaView implements LlamaUi, Focusable {
   }
 }
 
-export async function showLlamaUi(
+function showLlamaUiImpl(
   ctx: ExtensionCommandContext,
   run: (ui: LlamaUi) => Promise<void>,
 ): Promise<void> {
-  await ctx.ui.custom<void>((tui, theme, keybindings, done) => {
-    const view = new LlamaView(tui, theme, keybindings);
-    Effect.runFork(
-      Effect.tryPromise(() => run(view)).pipe(
-        Effect.catch((error) =>
-          Effect.sync(() => ctx.ui.notify(toErrorMessage(error.cause), "error")),
-        ),
-        Effect.ensuring(Effect.sync(() => done())),
-      ),
-    );
-    return view;
-  });
+  return Effect.runPromise(
+    awaiting(function* () {
+      yield* awaited(
+        ctx.ui.custom<void>((tui, theme, keybindings, done) => {
+          const view = new LlamaView(tui, theme, keybindings);
+          Effect.runFork(
+            Effect.tryPromise(() => run(view)).pipe(
+              Effect.catch((error) =>
+                Effect.sync(() => ctx.ui.notify(toErrorMessage(error.cause), "error")),
+              ),
+              Effect.ensuring(Effect.sync(() => done())),
+            ),
+          );
+          return view;
+        }),
+      );
+    }),
+  );
 }
 
-export async function runWithProgress<T>(
+export const showLlamaUi: {
+  (ctx: ExtensionCommandContext, run: (ui: LlamaUi) => Promise<void>): Promise<void>;
+  (run: (ui: LlamaUi) => Promise<void>): (ctx: ExtensionCommandContext) => Promise<void>;
+} = dual((args: IArguments) => args.length >= 2, showLlamaUiImpl);
+
+function runWithProgressImpl<T>(
   ui: LlamaUi,
   options: {
     title: string;
@@ -537,44 +341,74 @@ export async function runWithProgress<T>(
     cancel(): Promise<void>;
   },
 ): Promise<{ cancelled: true } | { cancelled: false; value: T }> {
-  const controller = new AbortController();
-  const state: ProgressState = {
-    title: options.title,
-    model: options.model,
-    message: options.initialMessage,
-  };
-  const settled = options
-    .run(controller.signal, (progress) => {
-      Object.assign(state, progress);
-      ui.updateProgress(state);
-    })
-    .then(
-      (value) => ({ ok: true as const, value }),
-      (error: unknown) => ({ ok: false as const, error }),
-    );
-  let completed = false;
-  settled.finally(() => {
-    completed = true;
-  });
+  return Effect.runPromise(
+    awaiting(function* () {
+      const controller = new AbortController();
+      const state: ProgressState = {
+        title: options.title,
+        model: options.model,
+        message: options.initialMessage,
+      };
+      const settled = options
+        .run(controller.signal, (progress) => {
+          Object.assign(state, progress);
+          ui.updateProgress(state);
+        })
+        .then(
+          (value) => ({ ok: true as const, value }),
+          (error: unknown) => ({ ok: false as const, error }),
+        );
+      const progress = { completed: false };
+      settled.finally(() => {
+        progress.completed = true;
+      });
 
-  while (!completed) {
-    const outcome = await Promise.race([
-      settled.then(() => "settled" as const),
-      ui.progress(state).then(() => "stop" as const),
-    ]);
-    if (outcome === "settled") break;
-    const stop = await ui.confirm(options.cancelTitle, options.cancelMessage);
-    if (!stop || completed) continue;
-    try {
-      await options.cancel();
-    } finally {
-      controller.abort(new Error("Cancelled"));
-    }
-    await settled;
-    return { cancelled: true };
-  }
+      while (!progress.completed) {
+        const outcome = yield* awaited(
+          Promise.race([
+            settled.then(() => "settled" as const),
+            ui.progress(state).then(() => "stop" as const),
+          ]),
+        );
+        if (outcome === "settled") break;
+        const stop = yield* awaited(ui.confirm(options.cancelTitle, options.cancelMessage));
+        if (!stop || progress.completed) continue;
+        try {
+          yield* awaited(options.cancel());
+        } finally {
+          controller.abort(new Error("Cancelled"));
+        }
+        yield* awaited(settled);
+        return { cancelled: true };
+      }
 
-  const result = await settled;
-  if (!result.ok) throw result.error;
-  return { cancelled: false, value: result.value };
+      const result = yield* awaited(settled);
+      if (!result.ok) throw result.error;
+      return { cancelled: false, value: result.value };
+    }),
+  );
 }
+
+export const runWithProgress: {
+  <T>(
+    ui: LlamaUi,
+    options: {
+      title: string;
+      model: string;
+      initialMessage: string;
+      cancelTitle: string;
+      cancelMessage: string;
+      run(signal: AbortSignal, update: (progress: LlamaProgress) => void): Promise<T>;
+      cancel(): Promise<void>;
+    },
+  ): Promise<{ cancelled: true } | { cancelled: false; value: T }>;
+  <T>(options: {
+    title: string;
+    model: string;
+    initialMessage: string;
+    cancelTitle: string;
+    cancelMessage: string;
+    run(signal: AbortSignal, update: (progress: LlamaProgress) => void): Promise<T>;
+    cancel(): Promise<void>;
+  }): (ui: LlamaUi) => Promise<{ cancelled: true } | { cancelled: false; value: T }>;
+} = dual((args: IArguments) => args.length >= 2, runWithProgressImpl);

@@ -1,31 +1,27 @@
 import { realpathSync, statSync } from "node:fs";
 import { homedir } from "node:os";
-import { isAbsolute, join, resolve as nodeResolvePath, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { spawnProcessSync } from "./child-process.ts";
+import { dual } from "effect/Function";
 
-const UNICODE_SPACES = /[\u00A0\u2000-\u200A\u202F\u205F\u3000]/g;
+import { join, resolve as nodeResolvePath, relative, sep } from "../core/platform-node.ts";
+import { spawnProcessSync } from "./child-process.ts";
+import { isAbsolute } from "./platform-extra.ts";
+
+const UNICODE_SPACES = /[\u00A0\u2000-\u200A\u202F\u205F\u3000]/gu;
 
 export interface PathInputOptions {
-  /** Trim leading/trailing whitespace before normalization. */
   trim?: boolean;
-  /** Expand leading `~` to a home directory. Defaults to true. */
+
   expandTilde?: boolean;
-  /** Home directory used for `~` expansion. Defaults to `os.homedir()`. */
+
   homeDir?: string;
-  /** Strip a leading `@`, used for CLI @file paths. */
+
   stripAtPrefix?: boolean;
-  /** Normalize unicode space variants to regular spaces. */
+
   normalizeUnicodeSpaces?: boolean;
 }
 
-/**
- * Resolve a path to its canonical (real) form, following symlinks.
- * Falls back to the raw path if resolution fails (e.g. the target does
- * not exist yet), so that callers never crash on missing filesystem
- * entries.
- */
 export function canonicalizePath(path: string): string {
   try {
     return realpathSync(path);
@@ -43,14 +39,9 @@ export function getFileRevision(path: string): string | undefined {
   }
 }
 
-/**
- * Returns true if the value is NOT a package source (npm:, git:, etc.),
- * a built-in extension (builtin:), or a remote URL protocol. Bare names,
- * relative paths, and file: URLs are considered local.
- */
 export function isLocalPath(value: string): boolean {
   const trimmed = value.trim();
-  // Known non-local prefixes. file: URLs are local paths and are intentionally resolved by resolvePath().
+
   if (
     trimmed.startsWith("npm:") ||
     trimmed.startsWith("git:") ||
@@ -65,23 +56,22 @@ export function isLocalPath(value: string): boolean {
   return true;
 }
 
-/** Convert Git Bash, MSYS, Cygwin, and WSL drive paths to a form native Windows APIs accept. */
 export function normalizeWindowsShellPath(filePath: string): string {
   if (!filePath.startsWith("/") || filePath.startsWith("//") || filePath.includes("\\"))
     return filePath;
-  const match = filePath.match(/^\/(?:mnt\/|cygdrive\/)?([a-z])(?:\/(.*))?$/i);
+  const match = filePath.match(/^\/(?:mnt\/|cygdrive\/)?([a-z])(?:\/(.*))?$/iu);
   const [, drive, rest] = match ?? [];
   if (drive === undefined) return filePath;
   const suffix = rest?.replaceAll("/", "\\");
   return `${drive.toUpperCase()}:\\${suffix ?? ""}`;
 }
 
-export function normalizePath(input: string, options: PathInputOptions = {}): string {
-  let normalized = options.trim ? input.trim() : input;
-  if (options.normalizeUnicodeSpaces) {
+function normalizePathImpl(input: string, options: PathInputOptions = {}): string {
+  let normalized = options.trim === true ? input.trim() : input;
+  if (options.normalizeUnicodeSpaces === true) {
     normalized = normalized.replace(UNICODE_SPACES, " ");
   }
-  if (options.stripAtPrefix && normalized.startsWith("@")) {
+  if (options.stripAtPrefix === true && normalized.startsWith("@")) {
     normalized = normalized.slice(1);
   }
   if (process.platform === "win32") {
@@ -99,14 +89,19 @@ export function normalizePath(input: string, options: PathInputOptions = {}): st
     }
   }
 
-  if (/^file:\/\//.test(normalized)) {
+  if (/^file:\/\//u.test(normalized)) {
     return fileURLToPath(normalized);
   }
 
   return normalized;
 }
 
-export function resolvePath(
+export const normalizePath: {
+  (input: string, options?: PathInputOptions): string;
+  (options?: PathInputOptions): (input: string) => string;
+} = dual((args: IArguments) => args.length >= 1, normalizePathImpl);
+
+function resolvePathImpl(
   input: string,
   baseDir: string = process.cwd(),
   options: PathInputOptions = {},
@@ -118,7 +113,12 @@ export function resolvePath(
     : nodeResolvePath(normalizedBaseDir, normalized);
 }
 
-export function getCwdRelativePath(filePath: string, cwd: string): string | undefined {
+export const resolvePath: {
+  (input: string, baseDir?: string, options?: PathInputOptions): string;
+  (baseDir?: string, options?: PathInputOptions): (input: string) => string;
+} = dual((args: IArguments) => args.length >= 1, resolvePathImpl);
+
+function getCwdRelativePathImpl(filePath: string, cwd: string): string | undefined {
   const resolvedCwd = resolvePath(cwd);
   const resolvedPath = resolvePath(filePath, resolvedCwd);
   const relativePath = relative(resolvedCwd, resolvedPath);
@@ -126,21 +126,35 @@ export function getCwdRelativePath(filePath: string, cwd: string): string | unde
     relativePath === "" ||
     (relativePath !== ".." && !relativePath.startsWith(`..${sep}`) && !isAbsolute(relativePath));
 
-  return isInsideCwd ? relativePath || "." : undefined;
+  return isInsideCwd ? (relativePath === "" ? "." : relativePath) : undefined;
 }
 
-/** Replaces a leading home directory with `~`; other paths are returned unchanged. */
-export function abbreviateHomePath(filePath: string, home: string = homedir()): string {
-  if (!home || !filePath.startsWith(home)) return filePath;
+export const getCwdRelativePath: {
+  (filePath: string, cwd: string): string | undefined;
+  (cwd: string): (filePath: string) => string | undefined;
+} = dual((args: IArguments) => args.length >= 2, getCwdRelativePathImpl);
+
+function abbreviateHomePathImpl(filePath: string, home: string = homedir()): string {
+  if (home === "" || !filePath.startsWith(home)) return filePath;
   const rest = filePath.slice(home.length);
   if (rest !== "" && !rest.startsWith("/") && !rest.startsWith("\\")) return filePath;
   return `~${rest}`;
 }
 
-export function formatPathRelativeToCwdOrAbsolute(filePath: string, cwd: string): string {
+export const abbreviateHomePath: {
+  (filePath: string, home?: string): string;
+  (home?: string): (filePath: string) => string;
+} = dual((args: IArguments) => args.length >= 1, abbreviateHomePathImpl);
+
+function formatPathRelativeToCwdOrAbsoluteImpl(filePath: string, cwd: string): string {
   const absolutePath = resolvePath(filePath, cwd);
   return (getCwdRelativePath(absolutePath, cwd) ?? absolutePath).split(sep).join("/");
 }
+
+export const formatPathRelativeToCwdOrAbsolute: {
+  (filePath: string, cwd: string): string;
+  (cwd: string): (filePath: string) => string;
+} = dual((args: IArguments) => args.length >= 2, formatPathRelativeToCwdOrAbsoluteImpl);
 
 export function markPathIgnoredByCloudSync(path: string): void {
   const attrs =

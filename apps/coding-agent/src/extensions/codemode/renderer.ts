@@ -1,12 +1,3 @@
-/**
- * Presentation for the codemode tool.
- *
- * The call shows the script; the result lists the nested tool calls with their status as they
- * run and the cost of its model calls, followed by the script output without the "Script completed"
- * header, and the time the script has been running (`Elapsed`) or took (`Took`), like bash rows.
- * Nested calls are not separate tool rows because they never reach the model as tool calls.
- */
-
 import { Container, Spacer, Text } from "@msa/tui";
 
 import type { ToolDefinition } from "../../core/extensions/types.ts";
@@ -23,14 +14,13 @@ import { highlightCode, type Theme } from "../../modes/interactive/theme/theme.t
 import type { CodemodeNestedCall, CodemodeToolDetails } from "./tool.ts";
 
 const COLLAPSED_ARGS_CHARS = 80;
-const SCRIPT_HEADER = /^Script (completed|failed)\nWall time [\d.]+ seconds\nOutput:\n$/;
+const SCRIPT_HEADER = /^Script (completed|failed)\nWall time [\d.]+ seconds\nOutput:\n$/u;
 
 function formatDuration(ms: number | undefined): string {
   if (ms === undefined) return "";
   return ms < 1000 ? `${Math.round(ms)}ms` : `${(ms / 1000).toFixed(1)}s`;
 }
 
-/** Cents for larger amounts, two significant digits for the fractions of a cent classifier calls cost. */
 function formatCost(cost: number): string {
   return `$${cost >= 0.01 ? cost.toFixed(2) : cost.toPrecision(2)}`;
 }
@@ -55,10 +45,11 @@ function formatCall(call: CodemodeNestedCall, theme: Theme, expanded: boolean): 
       : call.args;
   const duration = formatDuration(call.durationMs);
   let line = `${statusIcon(call, theme)} ${theme.fg("toolTitle", call.name)}`;
-  if (args) line += ` ${theme.fg("muted", args)}`;
-  if (duration) line += ` ${theme.fg("dim", duration)}`;
-  if (call.cost) line += ` ${theme.fg("dim", formatCost(call.cost))}`;
-  if (expanded && call.error)
+  if (args !== "") line += ` ${theme.fg("muted", args)}`;
+  if (duration !== "") line += ` ${theme.fg("dim", duration)}`;
+  if (call.cost !== undefined && call.cost !== 0)
+    line += ` ${theme.fg("dim", formatCost(call.cost))}`;
+  if (expanded && call.error !== undefined && call.error !== "")
     line += `\n    ${theme.fg("error", call.error.split("\n").join("\n    "))}`;
   return line;
 }
@@ -69,7 +60,7 @@ export const codemodeRenderers: Pick<
 > = {
   renderCall(args, theme, context) {
     startToolTimer(context);
-    // The code includes the `// @options:` line, so options show as part of the script.
+
     const code = str((args as { code?: unknown } | undefined)?.code);
     const title = theme.fg("toolTitle", theme.bold("codemode"));
     const component = (context.lastComponent as Container | undefined) ?? new Container();
@@ -78,16 +69,16 @@ export const codemodeRenderers: Pick<
       component.addChild(new Text(`${title} ${theme.fg("error", "[invalid arg]")}`, 0, 0));
       return component;
     }
-    const source = code.replace(/\r/g, "").trimEnd();
+    const source = code.replace(/\r/gu, "").trimEnd();
     if (!context.expanded) {
-      const lines = source ? source.split("\n").length : 0;
+      const lines = source === "" ? 0 : source.split("\n").length;
       component.addChild(
         new SingleLine(lines > 0 ? `${title} ${expandHint(`${lines} lines of code`)}` : title),
       );
       return component;
     }
     component.addChild(new Text(title, 0, 0));
-    if (source) {
+    if (source !== "") {
       component.addChild(
         new Text(highlightCode(replaceTabs(source), "javascript").join("\n"), 0, 0),
       );
@@ -100,7 +91,6 @@ export const codemodeRenderers: Pick<
     component.clear();
     const calls = result.details?.calls ?? [];
     if (calls.length > 0 && !options.expanded) {
-      // Collapsed: the latest call, which shows what the script is doing now.
       const earlier = calls.length - 1;
       const more = earlier > 0 ? `  ${theme.fg("muted", `+${earlier} earlier calls`)}` : "";
       component.addChild(new Spacer(1));
@@ -116,8 +106,6 @@ export const codemodeRenderers: Pick<
       component.addChild(new Text(lines.join("\n"), 0, 0));
     }
 
-    // Drop the "Script completed\nWall time ...\nOutput:\n" header. Rejected input (invalid options)
-    // has no header.
     const [first, ...rest] = result.content;
     const hasHeader = first?.type === "text" && SCRIPT_HEADER.test(first.text);
     const output = options.isPartial
@@ -126,12 +114,12 @@ export const codemodeRenderers: Pick<
           { ...result, content: hasHeader ? rest : result.content },
           context.showImages,
         ).trim();
-    if (output && !options.expanded) {
+    if (output !== "" && !options.expanded) {
       component.addChild(new Spacer(1));
       component.addChild(collapsedOutput(output, "first", timerText));
       return component;
     }
-    if (output) {
+    if (output !== "") {
       const color = context.isError ? "error" : "toolOutput";
       const styled = replaceTabs(output)
         .split("\n")
@@ -140,7 +128,7 @@ export const codemodeRenderers: Pick<
       component.addChild(new Spacer(1));
       component.addChild(new Text(styled, 0, 0));
     }
-    if (timerText) {
+    if (timerText !== undefined && timerText !== "") {
       component.addChild(new Spacer(1));
       component.addChild(new Text(theme.fg("muted", timerText), 0, 0));
     }

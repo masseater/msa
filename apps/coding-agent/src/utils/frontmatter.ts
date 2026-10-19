@@ -8,7 +8,7 @@ type ParsedFrontmatter<T extends Record<string, unknown>> = {
 };
 
 const normalizeNewlines = (value: string): string =>
-  value.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  value.replace(/\r\n/gu, "\n").replace(/\r/gu, "\n");
 
 const extractFrontmatter = (content: string): { yamlString: string | null; body: string } => {
   const normalized = normalizeNewlines(stripBom(content));
@@ -32,7 +32,7 @@ export const parseFrontmatter = <T extends Record<string, unknown> = Record<stri
   content: string,
 ): ParsedFrontmatter<T> => {
   const { yamlString, body } = extractFrontmatter(content);
-  if (!yamlString) {
+  if (yamlString === null || yamlString === "") {
     return { frontmatter: {} as T, body };
   }
   const parsed = parse(yamlString);

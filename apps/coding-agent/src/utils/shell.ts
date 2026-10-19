@@ -1,9 +1,10 @@
 import { spawn, spawnSync } from "child_process";
 import { existsSync } from "node:fs";
-import { delimiter, join } from "node:path";
 
 import { getBinDir } from "../config.ts";
-import { envNames, envSnapshot, readEnv } from "../core/process-env.ts";
+import { join } from "../core/platform-node.ts";
+import { readEnv } from "../core/platform.ts";
+import { delimiter } from "./platform-extra.ts";
 
 export interface ShellConfig {
   shell: string;
@@ -11,12 +12,9 @@ export interface ShellConfig {
   commandTransport?: "argv" | "stdin";
 }
 
-/**
- * Find bash executable on PATH (cross-platform)
- */
 function isLegacyWslBashPath(path: string): boolean {
-  const normalized = path.replace(/\//g, "\\").toLowerCase();
-  return /^[a-z]:\\windows\\(?:system32|sysnative)\\bash\.exe$/.test(normalized);
+  const normalized = path.replace(/\//gu, "\\").toLowerCase();
+  return /^[a-z]:\\windows\\(?:system32|sysnative)\\bash\.exe$/u.test(normalized);
 }
 
 function getBashShellConfig(shell: string): ShellConfig {
@@ -27,50 +25,36 @@ function getBashShellConfig(shell: string): ShellConfig {
 
 export function findExecutableOnPath(executable: string): string | null {
   if (process.platform === "win32") {
-    // Windows: Use 'where' and verify file exists (where can return non-existent paths)
     try {
       const result = spawnSync("where", [executable], {
         encoding: "utf-8",
         timeout: 5000,
         windowsHide: true,
       });
-      if (result.status === 0 && result.stdout) {
-        const firstMatch = result.stdout.trim().split(/\r?\n/)[0];
-        if (firstMatch && existsSync(firstMatch)) {
+      if (result.status === 0 && result.stdout !== "") {
+        const firstMatch = result.stdout.trim().split(/\r?\n/u)[0];
+        if (firstMatch !== undefined && firstMatch !== "" && existsSync(firstMatch)) {
           return firstMatch;
         }
       }
-    } catch {
-      // Ignore errors
-    }
+    } catch {}
     return null;
   }
 
-  // Unix: Use 'which' and trust its output (handles Termux and special filesystems)
   try {
     const result = spawnSync("which", [executable], { encoding: "utf-8", timeout: 5000 });
-    if (result.status === 0 && result.stdout) {
-      const firstMatch = result.stdout.trim().split(/\r?\n/)[0];
-      if (firstMatch) {
+    if (result.status === 0 && result.stdout !== "") {
+      const firstMatch = result.stdout.trim().split(/\r?\n/u)[0];
+      if (firstMatch !== undefined && firstMatch !== "") {
         return firstMatch;
       }
     }
-  } catch {
-    // Ignore errors
-  }
+  } catch {}
   return null;
 }
 
-/**
- * Resolve shell configuration based on platform and an optional explicit shell path.
- * Resolution order:
- * 1. User-specified shellPath
- * 2. On Windows: Git Bash in known locations, then bash on PATH
- * 3. On Unix: /bin/bash, then bash on PATH, then fallback to sh
- */
 export function getShellConfig(customShellPath?: string): ShellConfig {
-  // 1. Check user-specified shell path
-  if (customShellPath) {
+  if (customShellPath !== undefined && customShellPath !== "") {
     if (existsSync(customShellPath)) {
       return getBashShellConfig(customShellPath);
     }
@@ -78,14 +62,13 @@ export function getShellConfig(customShellPath?: string): ShellConfig {
   }
 
   if (process.platform === "win32") {
-    // 2. Try Git Bash in known locations
     const paths: string[] = [];
     const programFiles = readEnv("ProgramFiles");
-    if (programFiles) {
+    if (programFiles !== undefined && programFiles !== "") {
       paths.push(`${programFiles}\\Git\\bin\\bash.exe`);
     }
     const programFilesX86 = readEnv("ProgramFiles(x86)");
-    if (programFilesX86) {
+    if (programFilesX86 !== undefined && programFilesX86 !== "") {
       paths.push(`${programFilesX86}\\Git\\bin\\bash.exe`);
     }
 
@@ -95,9 +78,8 @@ export function getShellConfig(customShellPath?: string): ShellConfig {
       }
     }
 
-    // 3. Fallback: search bash.exe on PATH (Cygwin, MSYS2, WSL, etc.)
     const bashOnPath = findExecutableOnPath("bash.exe");
-    if (bashOnPath) {
+    if (bashOnPath !== null && bashOnPath !== "") {
       return getBashShellConfig(bashOnPath);
     }
 
@@ -110,13 +92,12 @@ export function getShellConfig(customShellPath?: string): ShellConfig {
     );
   }
 
-  // Unix: try /bin/bash, then bash on PATH, then fallback to sh
   if (existsSync("/bin/bash")) {
     return getBashShellConfig("/bin/bash");
   }
 
   const bashOnPath = findExecutableOnPath("bash");
-  if (bashOnPath) {
+  if (bashOnPath !== null && bashOnPath !== "") {
     return getBashShellConfig(bashOnPath);
   }
 
@@ -131,14 +112,13 @@ export const POWERSHELL_ARGS = [
   "-Command",
 ] as const;
 
-/** Resolve PowerShell on Windows, preferring PowerShell 7 when available. */
 export function getPowerShellConfig(): ShellConfig {
   if (process.platform !== "win32") {
     throw new Error("The powershell tool is only available on Windows.");
   }
 
   const shell = findExecutableOnPath("pwsh.exe") ?? findExecutableOnPath("powershell.exe");
-  if (!shell) {
+  if (shell === null || shell === "") {
     throw new Error(
       "No PowerShell executable found. Install PowerShell or add powershell.exe/pwsh.exe to PATH.",
     );
@@ -149,7 +129,7 @@ export function getPowerShellConfig(): ShellConfig {
 
 export function getShellEnv(): NodeJS.ProcessEnv {
   const binDir = getBinDir();
-  const pathKey = envNames().find((key) => key.toLowerCase() === "path") ?? "PATH";
+  const pathKey = Object.keys(process.env).find((key) => key.toLowerCase() === "path") ?? "PATH";
   const currentPath = readEnv(pathKey) ?? "";
   const pathEntries = currentPath.split(delimiter).filter(Boolean);
   const hasBinDir = pathEntries.includes(binDir);
@@ -158,26 +138,26 @@ export function getShellEnv(): NodeJS.ProcessEnv {
     : [binDir, currentPath].filter(Boolean).join(delimiter);
 
   return {
-    ...envSnapshot(),
+    ...process.env,
     [pathKey]: updatedPath,
   };
 }
 
-/**
- * Sanitize binary output for display/storage.
- * Removes characters that crash string-width or cause display issues:
- * - Control characters (except tab, newline, carriage return)
- * - Unicode interlinear annotation characters U+FFF9..U+FFFB (crash string-width due to a bug)
- */
 export function sanitizeBinaryOutput(str: string): string {
-  // All removed characters are single UTF-16 code units, so surrogate pairs are never split.
-  return str.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\uFFF9-\uFFFB]/g, "");
+  return Array.from(str)
+    .filter((char) => {
+      const code = char.codePointAt(0) ?? 0;
+      return !(
+        code <= 0x08 ||
+        code === 0x0b ||
+        code === 0x0c ||
+        (code >= 0x0e && code <= 0x1f) ||
+        (code >= 0xfff9 && code <= 0xfffb)
+      );
+    })
+    .join("");
 }
 
-/**
- * Detached child processes must be tracked so they can be killed on parent
- * shutdown signals (SIGHUP/SIGTERM).
- */
 const trackedDetachedChildPids = new Set<number>();
 
 export function trackDetachedChildPid(pid: number): void {
@@ -195,12 +175,8 @@ export function killTrackedDetachedChildren(): void {
   trackedDetachedChildPids.clear();
 }
 
-/**
- * Kill a process and all its children (cross-platform)
- */
 export function killProcessTree(pid: number): void {
   if (process.platform === "win32") {
-    // Use the trusted System32 executable so cleanup does not depend on PATH.
     try {
       const child = spawn(
         join(readEnv("SystemRoot") ?? "C:\\Windows", "System32", "taskkill.exe"),
@@ -211,22 +187,16 @@ export function killProcessTree(pid: number): void {
           windowsHide: true,
         },
       );
-      // A failed spawn emits "error" asynchronously; consume it to avoid crashing Node.
+
       child.once("error", () => {});
-    } catch {
-      // Ignore errors if taskkill fails.
-    }
+    } catch {}
   } else {
-    // Use SIGKILL on Unix/Linux/Mac
     try {
       process.kill(-pid, "SIGKILL");
     } catch {
-      // Fallback to killing just the child if process group kill fails
       try {
         process.kill(pid, "SIGKILL");
-      } catch {
-        // Process already dead
-      }
+      } catch {}
     }
   }
 }

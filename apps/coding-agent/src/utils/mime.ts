@@ -1,4 +1,4 @@
-import { open } from "node:fs/promises";
+import { readHead } from "./node-fs.ts";
 
 const IMAGE_TYPE_SNIFF_BYTES = 4100;
 const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
@@ -22,17 +22,10 @@ export function detectSupportedImageMimeType(buffer: Uint8Array): string | null 
   return null;
 }
 
-export async function detectSupportedImageMimeTypeFromFile(
-  filePath: string,
-): Promise<string | null> {
-  const fileHandle = await open(filePath, "r");
-  try {
-    const buffer = Buffer.alloc(IMAGE_TYPE_SNIFF_BYTES);
-    const { bytesRead } = await fileHandle.read(buffer, 0, IMAGE_TYPE_SNIFF_BYTES, 0);
-    return detectSupportedImageMimeType(buffer.subarray(0, bytesRead));
-  } finally {
-    await fileHandle.close();
-  }
+export function detectSupportedImageMimeTypeFromFile(filePath: string): Promise<string | null> {
+  return readHead({ path: filePath, length: IMAGE_TYPE_SNIFF_BYTES }).then(
+    detectSupportedImageMimeType,
+  );
 }
 
 function isPng(buffer: Uint8Array): boolean {

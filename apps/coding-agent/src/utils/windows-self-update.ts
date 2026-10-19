@@ -1,8 +1,11 @@
-import { randomUUID } from "node:crypto";
-import { copyFileSync, existsSync, mkdirSync, renameSync, rmSync } from "node:fs";
-import { basename, dirname, join, relative, resolve, toNamespacedPath } from "node:path";
+import * as Effect from "effect/Effect";
 
+import { awaited, awaiting } from "../core/awaiting.ts";
+import { basename, dirname, join, randomUuid, relative, resolve } from "../core/platform-node.ts";
+import { nowMs } from "../core/platform.ts";
+import { copyFile, exists, makeDirectory, remove, rename } from "./node-fs.ts";
 import { getCwdRelativePath } from "./paths.ts";
+import { toNamespacedPath } from "./platform-extra.ts";
 
 const QUARANTINE_DIR_NAME = ".msa-native-quarantine";
 
@@ -48,38 +51,32 @@ function getLoadedSharedObjectsInPackageDir(packageDir: string): string[] {
   return loadedFiles;
 }
 
-export function cleanupWindowsSelfUpdateQuarantine(packageDir: string): void {
+export function cleanupWindowsSelfUpdateQuarantine(packageDir: string): Promise<void> {
   const quarantineRoot = getQuarantineRoot(packageDir);
-  if (!quarantineRoot) {
-    return;
+  if (quarantineRoot === undefined || quarantineRoot === "") {
+    return Effect.runPromise(Effect.void);
   }
-  try {
-    rmSync(quarantineRoot, { recursive: true, force: true });
-  } catch {
-    // A previous msa process may still be exiting and holding a native addon.
-  }
+  return remove({ path: quarantineRoot, recursive: true, force: true }).catch(() => undefined);
 }
 
-export function quarantineWindowsNativeDependencies(packageDir: string): void {
+export function quarantineWindowsNativeDependencies(packageDir: string): Promise<void> {
   const resolvedPackageDir = normalizePath(packageDir);
   const quarantineRoot = getQuarantineRoot(resolvedPackageDir);
-  if (!quarantineRoot) {
-    return;
+  if (quarantineRoot === undefined || quarantineRoot === "") {
+    return Effect.runPromise(Effect.void);
   }
 
   const loadedFiles = getLoadedSharedObjectsInPackageDir(resolvedPackageDir);
-  if (loadedFiles.length === 0) {
-    return;
-  }
-
-  const quarantineRunDir = join(quarantineRoot, `${Date.now()}-${process.pid}-${randomUUID()}`);
-  for (const loadedFile of loadedFiles) {
-    if (!existsSync(loadedFile)) {
-      continue;
-    }
-    const quarantinePath = join(quarantineRunDir, relative(resolvedPackageDir, loadedFile));
-    mkdirSync(dirname(quarantinePath), { recursive: true });
-    renameSync(loadedFile, quarantinePath);
-    copyFileSync(quarantinePath, loadedFile);
-  }
+  const quarantineRunDir = join(quarantineRoot, `${nowMs()}-${process.pid}-${randomUuid()}`);
+  return Effect.runPromise(
+    awaiting(function* () {
+      for (const loadedFile of loadedFiles) {
+        if (!(yield* awaited(exists(loadedFile)))) continue;
+        const quarantinePath = join(quarantineRunDir, relative(resolvedPackageDir, loadedFile));
+        yield* awaited(makeDirectory({ path: dirname(quarantinePath) }));
+        yield* awaited(rename({ from: loadedFile, to: quarantinePath }));
+        yield* awaited(copyFile({ from: quarantinePath, to: loadedFile }));
+      }
+    }),
+  );
 }

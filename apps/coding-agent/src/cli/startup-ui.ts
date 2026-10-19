@@ -7,6 +7,8 @@ import {
   type TUI,
   TuiMainScreen,
 } from "@msa/tui";
+import * as Effect from "effect/Effect";
+import { dual } from "effect/Function";
 
 import {
   APP_NAME,
@@ -16,6 +18,7 @@ import {
   getSettingsPath,
   PACKAGE_NAME,
 } from "../config.ts";
+import { awaited, awaiting, performed } from "../core/awaiting.ts";
 import { areExperimentalFeaturesEnabled } from "../core/experimental.ts";
 import { KeybindingsManager } from "../core/keybindings.ts";
 import { DefaultPackageManager, type ResolvedResource } from "../core/package-manager.ts";
@@ -40,6 +43,7 @@ import {
   setTheme,
   type Theme,
 } from "../modes/interactive/theme/theme.ts";
+import { callbackPromise } from "../utils/interop.ts";
 
 const OFFICIAL_PACKAGE_NAME = "@msa/coding-agent";
 const OFFICIAL_APP_NAME = "msa";
@@ -70,51 +74,59 @@ function loadThemes(resources: ResolvedResource[]): Theme[] {
     if (!resource.enabled) continue;
     try {
       const loadedTheme = loadThemeFromPath(resource.path);
-      if (loadedTheme.name) {
+      if (loadedTheme.name !== undefined && loadedTheme.name !== "") {
         if (seen.has(loadedTheme.name)) continue;
         seen.add(loadedTheme.name);
       }
       themes.push(loadedTheme);
-    } catch {
-      // Startup prompts should not fail because a theme is broken. The normal
-      // resource loader reports theme diagnostics later in startup.
-    }
+    } catch {}
   }
   return themes;
 }
 
-async function loadStartupThemes(settingsManager: SettingsManager): Promise<Theme[]> {
-  const globalSettingsManager = SettingsManager.inMemory(settingsManager.getGlobalSettings(), {
-    projectTrusted: false,
-  });
-  const packageManager = new DefaultPackageManager({
-    cwd: process.cwd(),
-    agentDir: getAgentDir(),
-    settingsManager: globalSettingsManager,
-  });
-  const resolvedPaths = await packageManager.resolve(async () => "skip");
-  return loadThemes(resolvedPaths.themes);
+function loadStartupThemes(settingsManager: SettingsManager): Promise<Theme[]> {
+  return Effect.runPromise(
+    awaiting(function* () {
+      const globalSettingsManager = SettingsManager.inMemory(settingsManager.getGlobalSettings(), {
+        projectTrusted: false,
+      });
+      const packageManager = new DefaultPackageManager({
+        cwd: process.cwd(),
+        agentDir: getAgentDir(),
+        settingsManager: globalSettingsManager,
+      });
+      const resolvedPaths = yield* awaited(
+        packageManager.resolve(() => Effect.runPromise(Effect.succeed("skip"))),
+      );
+      return loadThemes(resolvedPaths.themes);
+    }),
+  );
 }
 
-export async function createStartupTui(settingsManager: SettingsManager): Promise<TUI> {
-  setCapabilityOverrides(settingsManager.getTerminalCapabilityOverrides());
-  setRegisteredThemes(await loadStartupThemes(settingsManager));
-  // The system theme starts in grayscale until the terminal reports its colors.
-  markTerminalColorsPending();
-  initTheme(
-    resolveThemeSetting(settingsManager.getThemeSetting(), getTerminalTheme()) ?? SYSTEM_THEME_NAME,
+export function createStartupTui(settingsManager: SettingsManager): Promise<TUI> {
+  return Effect.runPromise(
+    awaiting(function* () {
+      setCapabilityOverrides(settingsManager.getTerminalCapabilityOverrides());
+      setRegisteredThemes(yield* awaited(loadStartupThemes(settingsManager)));
+
+      markTerminalColorsPending();
+      initTheme(
+        resolveThemeSetting(settingsManager.getThemeSetting(), getTerminalTheme()) ??
+          SYSTEM_THEME_NAME,
+      );
+      setKeybindings(KeybindingsManager.create());
+      const ui: TUI = new TuiMainScreen(
+        new ProcessTerminal(),
+        settingsManager.getShowHardwareCursor(),
+        getAgentDir(),
+      );
+      ui.setClearOnShrink(settingsManager.getClearOnShrink());
+      return ui;
+    }),
   );
-  setKeybindings(KeybindingsManager.create());
-  const ui: TUI = new TuiMainScreen(
-    new ProcessTerminal(),
-    settingsManager.getShowHardwareCursor(),
-    getAgentDir(),
-  );
-  ui.setClearOnShrink(settingsManager.getClearOnShrink());
-  return ui;
 }
 
-export function startStartupTui(ui: TUI, settingsManager: SettingsManager): void {
+function startStartupTuiImpl(ui: TUI, settingsManager: SettingsManager): void {
   ui.start();
   const themeSetting = settingsManager.getThemeSetting();
   queryStartupTerminalColors(ui, () => {
@@ -122,10 +134,11 @@ export function startStartupTui(ui: TUI, settingsManager: SettingsManager): void
   });
 }
 
-/**
- * Query the terminal's colors without waiting for them. When they arrive, including after the timeout,
- * record them for the system theme and "" (terminal default) tokens, run `onColors`, and re-render.
- */
+export const startStartupTui: {
+  (ui: TUI, settingsManager: SettingsManager): void;
+  (settingsManager: SettingsManager): (ui: TUI) => void;
+} = dual((args: IArguments) => args.length >= 2, startStartupTuiImpl);
+
 function queryStartupTerminalColors(ui: TUI, onColors: () => void): void {
   void requestTerminalColors(ui, (colors) => {
     setTerminalColors(colors);
@@ -135,19 +148,16 @@ function queryStartupTerminalColors(ui: TUI, onColors: () => void): void {
   });
 }
 
-async function clearStartupTui(ui: TUI): Promise<void> {
-  ui.clear();
-  ui.requestRender();
-  await new Promise((resolve) => setTimeout(resolve, 25));
+function clearStartupTui(ui: TUI): Promise<void> {
+  return Effect.runPromise(
+    awaiting(function* () {
+      ui.clear();
+      ui.requestRender();
+      yield* performed(Effect.sleep(25));
+    }),
+  );
 }
 
-/**
- * First-time setup runs when all of these hold:
- * - this is the official msa distribution (not a fork/rebrand)
- * - experimental features are enabled (MSA_EXPERIMENTAL=1)
- * - the default agent directory is used (no custom agent dir override)
- * - setup was not completed before (settings.json does not exist)
- */
 export function shouldRunFirstTimeSetup(settingsPath: string = getSettingsPath()): boolean {
   if (
     !isOfficialDistribution({
@@ -161,113 +171,163 @@ export function shouldRunFirstTimeSetup(settingsPath: string = getSettingsPath()
   if (!areExperimentalFeaturesEnabled()) {
     return false;
   }
-  if (readEnv(ENV_AGENT_DIR)) {
+  if (readEnv(ENV_AGENT_DIR) !== undefined && readEnv(ENV_AGENT_DIR) !== "") {
     return false;
   }
   return !existsSync(settingsPath);
 }
 
-export async function showStartupSelector<T>(
+function showStartupSelectorImpl<T>(
   settingsManager: SettingsManager,
   title: string,
   options: Array<{ label: string; value: T }>,
 ): Promise<T | undefined> {
-  const ui = await createStartupTui(settingsManager);
-  return new Promise((resolve) => {
-    let settled = false;
-    const finish = async (result: T | undefined) => {
-      if (settled) {
-        return;
-      }
-      settled = true;
-      await clearStartupTui(ui);
-      ui.stop();
-      resolve(result);
-    };
+  return Effect.runPromise(
+    awaiting(function* () {
+      const ui = yield* awaited(createStartupTui(settingsManager));
+      return yield* awaited(
+        callbackPromise((resolve) => {
+          let settled = false;
+          const finish = (result: T | undefined) =>
+            Effect.runPromise(
+              awaiting(function* () {
+                if (settled) {
+                  return;
+                }
+                settled = true;
+                yield* awaited(clearStartupTui(ui));
+                ui.stop();
+                resolve(result);
+              }),
+            );
 
-    const selector = new ExtensionSelectorComponent(
-      title,
-      options.map((option) => option.label),
-      (option) => void finish(options.find((entry) => entry.label === option)?.value),
-      () => void finish(undefined),
-      { tui: ui },
-    );
-    ui.addChild(selector);
-    ui.setFocus(selector);
-    startStartupTui(ui, settingsManager);
-  });
+          const selector = new ExtensionSelectorComponent(
+            title,
+            options.map((option) => option.label),
+            (option) => void finish(options.find((entry) => entry.label === option)?.value),
+            () => void finish(undefined),
+            { tui: ui },
+          );
+          ui.addChild(selector);
+          ui.setFocus(selector);
+          startStartupTui(ui, settingsManager);
+        }),
+      );
+    }),
+  );
 }
 
-/** Show the first-time setup dialog and persist the result */
-export async function showFirstTimeSetup(settingsManager: SettingsManager): Promise<void> {
-  const ui = await createStartupTui(settingsManager);
-  return new Promise((resolve) => {
-    let settled = false;
-    const finish = async (result: FirstTimeSetupResult | undefined) => {
-      if (settled) {
-        return;
-      }
-      settled = true;
-      if (result) {
-        settingsManager.setTheme(result.theme);
-        settingsManager.setEnableAnalytics(result.shareAnalytics);
-        await settingsManager.flush();
-      }
-      await clearStartupTui(ui);
-      ui.stop();
-      resolve();
-    };
+export const showStartupSelector: {
+  <T>(
+    settingsManager: SettingsManager,
+    title: string,
+    options: Array<{ label: string; value: T }>,
+  ): Promise<T | undefined>;
+  <T>(
+    title: string,
+    options: Array<{ label: string; value: T }>,
+  ): (settingsManager: SettingsManager) => Promise<T | undefined>;
+} = dual((args: IArguments) => args.length >= 3, showStartupSelectorImpl);
 
-    ui.start();
-    let previewTheme = SYSTEM_THEME_NAME;
-    setTheme(previewTheme);
-    const component = new FirstTimeSetupComponent({
-      onThemePreview: (themeName) => {
-        previewTheme = themeName;
-        setTheme(themeName);
-        ui.requestRender();
-      },
-      onSubmit: (result) => void finish(result),
-      onCancel: () => void finish(undefined),
-    });
-    ui.addChild(component);
-    ui.setFocus(component);
-    ui.requestRender();
-    // The terminal's colors regenerate the system theme; re-rendering rebuilds the dialog with it.
-    queryStartupTerminalColors(ui, () => setTheme(previewTheme));
-  });
+export function showFirstTimeSetup(settingsManager: SettingsManager): Promise<void> {
+  return Effect.runPromise(
+    awaiting(function* () {
+      const ui = yield* awaited(createStartupTui(settingsManager));
+      return yield* awaited(
+        callbackPromise((resolve) => {
+          let settled = false;
+          const finish = (result: FirstTimeSetupResult | undefined) =>
+            Effect.runPromise(
+              awaiting(function* () {
+                if (settled) {
+                  return;
+                }
+                settled = true;
+                if (result !== undefined) {
+                  settingsManager.setTheme(result.theme);
+                  settingsManager.setEnableAnalytics(result.shareAnalytics);
+                  yield* awaited(settingsManager.flush());
+                }
+                yield* awaited(clearStartupTui(ui));
+                ui.stop();
+                resolve();
+              }),
+            );
+
+          ui.start();
+          let previewTheme = SYSTEM_THEME_NAME;
+          setTheme(previewTheme);
+          const component = new FirstTimeSetupComponent({
+            onThemePreview: (themeName) => {
+              previewTheme = themeName;
+              setTheme(themeName);
+              ui.requestRender();
+            },
+            onSubmit: (result) => void finish(result),
+            onCancel: () => void finish(undefined),
+          });
+          ui.addChild(component);
+          ui.setFocus(component);
+          ui.requestRender();
+
+          queryStartupTerminalColors(ui, () => setTheme(previewTheme));
+        }),
+      );
+    }),
+  );
 }
 
-export async function showStartupInput(
+function showStartupInputImpl(
   settingsManager: SettingsManager,
   title: string,
   placeholder?: string,
 ): Promise<string | undefined> {
-  const ui = await createStartupTui(settingsManager);
-  return new Promise((resolve) => {
-    let settled = false;
-    const finish = async (result: string | undefined) => {
-      if (settled) {
-        return;
-      }
-      settled = true;
-      input.dispose();
-      await clearStartupTui(ui);
-      ui.stop();
-      resolve(result);
-    };
+  return Effect.runPromise(
+    awaiting(function* () {
+      const ui = yield* awaited(createStartupTui(settingsManager));
+      return yield* awaited(
+        callbackPromise((resolve) => {
+          let settled = false;
+          const finish = (result: string | undefined) =>
+            Effect.runPromise(
+              awaiting(function* () {
+                if (settled) {
+                  return;
+                }
+                settled = true;
+                input.dispose();
+                yield* awaited(clearStartupTui(ui));
+                ui.stop();
+                resolve(result);
+              }),
+            );
 
-    const input = new ExtensionInputComponent(
-      title,
-      placeholder,
-      (value) => void finish(value),
-      () => void finish(undefined),
-      {
-        tui: ui,
-      },
-    );
-    ui.addChild(input);
-    ui.setFocus(input);
-    startStartupTui(ui, settingsManager);
-  });
+          const input = new ExtensionInputComponent(
+            title,
+            placeholder,
+            (value) => void finish(value),
+            () => void finish(undefined),
+            {
+              tui: ui,
+            },
+          );
+          ui.addChild(input);
+          ui.setFocus(input);
+          startStartupTui(ui, settingsManager);
+        }),
+      );
+    }),
+  );
 }
+
+export const showStartupInput: {
+  (
+    settingsManager: SettingsManager,
+    title: string,
+    placeholder?: string,
+  ): Promise<string | undefined>;
+  (
+    title: string,
+    placeholder?: string,
+  ): (settingsManager: SettingsManager) => Promise<string | undefined>;
+} = dual((args: IArguments) => args.length >= 2, showStartupInputImpl);

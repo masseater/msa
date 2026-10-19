@@ -1,3 +1,4 @@
+import { dual } from "effect/Function";
 export interface DecodedHtmlEntity {
   text: string;
   length: number;
@@ -35,7 +36,7 @@ export function decodeHtmlEntity(entity: string): string | undefined {
   return undefined;
 }
 
-export function decodeHtmlEntityAt(html: string, index: number): DecodedHtmlEntity | undefined {
+function decodeHtmlEntityAtImpl(html: string, index: number): DecodedHtmlEntity | undefined {
   const semicolonIndex = html.indexOf(";", index + 1);
   if (semicolonIndex === -1 || semicolonIndex - index > 16) {
     return undefined;
@@ -49,3 +50,8 @@ export function decodeHtmlEntityAt(html: string, index: number): DecodedHtmlEnti
 
   return { text: decoded, length: semicolonIndex - index + 1 };
 }
+
+export const decodeHtmlEntityAt: {
+  (html: string, index: number): DecodedHtmlEntity | undefined;
+  (index: number): (html: string) => DecodedHtmlEntity | undefined;
+} = dual((args: IArguments) => args.length >= 2, decodeHtmlEntityAtImpl);

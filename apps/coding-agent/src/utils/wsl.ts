@@ -1,17 +1,18 @@
-import { readFileSync } from "node:fs";
+import * as Effect from "effect/Effect";
 
 import { envSnapshot } from "../core/process-env.ts";
+import { readText } from "./node-fs.ts";
 
-/** Windows Subsystem for Linux, where Windows executables are reachable through interop. */
-export function isWSL(env: NodeJS.ProcessEnv = envSnapshot()): boolean {
-  if (env["WSL_DISTRO_NAME"] || env["WSLENV"]) {
-    return true;
+export function isWSL(env: NodeJS.ProcessEnv = envSnapshot()): Promise<boolean> {
+  if (
+    (env["WSL_DISTRO_NAME"] !== undefined && env["WSL_DISTRO_NAME"] !== "") ||
+    (env["WSLENV"] !== undefined && env["WSLENV"] !== "")
+  ) {
+    return Effect.runPromise(Effect.succeed(true));
   }
 
-  try {
-    const release = readFileSync("/proc/version", "utf-8");
-    return /microsoft|wsl/i.test(release);
-  } catch {
-    return false;
-  }
+  return readText("/proc/version").then(
+    (release) => /microsoft|wsl/iu.test(release),
+    () => false,
+  );
 }

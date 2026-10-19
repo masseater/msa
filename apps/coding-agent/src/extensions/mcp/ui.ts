@@ -1,8 +1,3 @@
-/**
- * The `/mcp` manager view: menus that rebuild while servers connect, a read-only status screen, and
- * the sign-in screen that accepts a pasted redirect URL.
- */
-
 import {
   type Component,
   Container,
@@ -17,7 +12,9 @@ import {
   visibleWidth,
 } from "@msa/tui";
 import { Effect } from "effect";
+import { dual } from "effect/Function";
 
+import { awaited, awaiting } from "../../core/awaiting.ts";
 import type { ExtensionCommandContext } from "../../core/extensions/types.ts";
 import type { KeybindingsManager } from "../../core/keybindings.ts";
 import { AuthUrlComponent } from "../../modes/interactive/components/auth-url.ts";
@@ -25,39 +22,33 @@ import { DynamicBorder } from "../../modes/interactive/components/dynamic-border
 import { keyHint } from "../../modes/interactive/components/keybinding-hints.ts";
 import { getSelectListTheme, type Theme } from "../../modes/interactive/theme/theme.ts";
 import { toErrorMessage } from "../../utils/errors.ts";
+import { callbackPromise } from "../../utils/interop.ts";
 
 export interface McpMenu {
   title: string;
-  /** Shown below the title. */
+
   details?: string | undefined;
-  /** Shown below the details in the error color. */
+
   error?: string | undefined;
   items: SelectItem[];
-  /** Shown when there are no items. */
+
   empty?: string | undefined;
-  /** Value of the item selected when the menu opens. */
+
   selected?: string | undefined;
-  /** What the confirm key does, for the key hint. */
+
   confirmLabel: string;
-  /** What the cancel key does, for the key hint. */
+
   cancelLabel: string;
 }
 
 export interface McpUi {
-  /**
-   * Show a menu and resolve to the chosen item's value, or undefined when cancelled. `subscribe`
-   * rebuilds the menu on every change, keeping the selected item.
-   */
   menu(
     build: () => McpMenu,
     subscribe?: (listener: () => void) => () => void,
   ): Promise<string | undefined>;
-  /** Show a message while an operation runs. With `onCancel`, the cancel key calls it. */
+
   status(title: string, message: string, onCancel?: () => void): void;
-  /**
-   * Show the authorization URL and wait for a pasted redirect URL. Resolves to undefined when
-   * cancelled or when `signal` aborts (the browser reached the callback).
-   */
+
   redirectUrl(
     title: string,
     authorizationUrl: string,
@@ -70,7 +61,7 @@ function frame(theme: Theme, title: string, body: Component[], footer?: string):
   container.addChild(new DynamicBorder((text: string) => theme.fg("accent", text)));
   container.addChild(new Text(theme.fg("accent", theme.bold(title)), 1, 0));
   for (const child of body) container.addChild(child);
-  if (footer) {
+  if (footer !== undefined && footer !== "") {
     container.addChild(new Spacer(1));
     container.addChild(new Text(theme.fg("dim", footer), 1, 0));
   }
@@ -87,7 +78,7 @@ export class McpManagerView implements McpUi, Component, Focusable {
   private content: Container;
   private inputHandler: ((data: string) => void) | undefined;
   private inputTarget: Focusable | undefined;
-  private _focused = false;
+  private isFocused = false;
 
   constructor(tui: TUI, theme: Theme, keybindings: KeybindingsManager) {
     this.tui = tui;
@@ -97,12 +88,12 @@ export class McpManagerView implements McpUi, Component, Focusable {
   }
 
   get focused(): boolean {
-    return this._focused;
+    return this.isFocused;
   }
 
   set focused(value: boolean) {
-    this._focused = value;
-    if (this.inputTarget) this.inputTarget.focused = value;
+    this.isFocused = value;
+    if (this.inputTarget !== undefined) this.inputTarget.focused = value;
   }
 
   private setContent(
@@ -110,11 +101,11 @@ export class McpManagerView implements McpUi, Component, Focusable {
     inputHandler?: (data: string) => void,
     inputTarget?: Focusable,
   ): void {
-    if (this.inputTarget) this.inputTarget.focused = false;
+    if (this.inputTarget !== undefined) this.inputTarget.focused = false;
     this.content = content;
     this.inputHandler = inputHandler;
     this.inputTarget = inputTarget;
-    if (this.inputTarget) this.inputTarget.focused = this._focused;
+    if (this.inputTarget !== undefined) this.inputTarget.focused = this.isFocused;
     this.tui.requestRender();
   }
 
@@ -122,7 +113,7 @@ export class McpManagerView implements McpUi, Component, Focusable {
     build: () => McpMenu,
     subscribe?: (listener: () => void) => () => void,
   ): Promise<string | undefined> {
-    return new Promise((resolve) => {
+    return callbackPromise((resolve) => {
       let unsubscribe: (() => void) | undefined;
       let settled = false;
       const finish = (value: string | undefined) => {
@@ -136,8 +127,10 @@ export class McpManagerView implements McpUi, Component, Focusable {
         const menu = build();
         const wanted = selected ?? menu.selected;
         const body: Component[] = [];
-        if (menu.details) body.push(new Text(this.theme.fg("muted", menu.details), 1, 0));
-        if (menu.error) body.push(new Text(this.theme.fg("error", menu.error), 1, 0));
+        if (menu.details !== undefined && menu.details !== "")
+          body.push(new Text(this.theme.fg("muted", menu.details), 1, 0));
+        if (menu.error !== undefined && menu.error !== "")
+          body.push(new Text(this.theme.fg("error", menu.error), 1, 0));
         body.push(new Spacer(1));
         const footer = `${keyHint("tui.select.confirm", menu.confirmLabel)} • ${keyHint("tui.select.cancel", menu.cancelLabel)}`;
         if (menu.items.length === 0) {
@@ -177,7 +170,7 @@ export class McpManagerView implements McpUi, Component, Focusable {
 
   status(title: string, message: string, onCancel?: () => void): void {
     const body = [new Spacer(1), new Text(this.theme.fg("muted", message), 1, 0)];
-    if (!onCancel) {
+    if (onCancel === undefined) {
       this.setContent(frame(this.theme, title, body));
       return;
     }
@@ -194,7 +187,7 @@ export class McpManagerView implements McpUi, Component, Focusable {
     authorizationUrl: string,
     signal: AbortSignal,
   ): Promise<string | undefined> {
-    return new Promise((resolve) => {
+    return callbackPromise((resolve) => {
       let settled = false;
       const finish = (value: string | undefined) => {
         if (settled) return;
@@ -239,7 +232,7 @@ export class McpManagerView implements McpUi, Component, Focusable {
         (data) => {
           if (this.keybindings.matches(data, "tui.select.confirm")) {
             const value = input.getValue().trim();
-            if (value) finish(value);
+            if (value !== "") finish(value);
             return;
           }
           if (this.keybindings.matches(data, "tui.select.cancel")) {
@@ -273,21 +266,31 @@ export class McpManagerView implements McpUi, Component, Focusable {
   }
 }
 
-/** Run `manage` in the manager view until it returns. */
-export async function showMcpManager(
+function showMcpManagerImpl(
   ctx: ExtensionCommandContext,
   manage: (ui: McpUi) => Promise<void>,
 ): Promise<void> {
-  await ctx.ui.custom<void>((tui, theme, keybindings, done) => {
-    const view = new McpManagerView(tui, theme, keybindings);
-    Effect.runFork(
-      Effect.tryPromise(() => manage(view)).pipe(
-        Effect.catch((error) =>
-          Effect.sync(() => ctx.ui.notify(toErrorMessage(error.cause), "error")),
-        ),
-        Effect.ensuring(Effect.sync(() => done())),
-      ),
-    );
-    return view;
-  });
+  return Effect.runPromise(
+    awaiting(function* () {
+      yield* awaited(
+        ctx.ui.custom<void>((tui, theme, keybindings, done) => {
+          const view = new McpManagerView(tui, theme, keybindings);
+          Effect.runFork(
+            Effect.tryPromise(() => manage(view)).pipe(
+              Effect.catch((error) =>
+                Effect.sync(() => ctx.ui.notify(toErrorMessage(error.cause), "error")),
+              ),
+              Effect.ensuring(Effect.sync(() => done())),
+            ),
+          );
+          return view;
+        }),
+      );
+    }),
+  );
 }
+
+export const showMcpManager: {
+  (ctx: ExtensionCommandContext, manage: (ui: McpUi) => Promise<void>): Promise<void>;
+  (manage: (ui: McpUi) => Promise<void>): (ctx: ExtensionCommandContext) => Promise<void>;
+} = dual((args: IArguments) => args.length >= 2, showMcpManagerImpl);

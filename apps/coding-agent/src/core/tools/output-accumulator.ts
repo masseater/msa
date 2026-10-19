@@ -1,6 +1,6 @@
 import { Effect, FileSystem } from "effect";
 
-import { createOutputFileStream } from "../../utils/output-files.ts";
+import { createOutputFileStream, type OutputFileStream as OutputFile } from "../../utils/output-files.ts";
 import { platformRuntime, rethrowCause } from "../platform/index.ts";
 import {
   DEFAULT_MAX_BYTES,
@@ -30,7 +30,7 @@ function byteLength(text: string): number {
   return Buffer.byteLength(text, "utf-8");
 }
 
-type OutputFileStream = ReturnType<typeof createOutputFileStream>["stream"];
+type OutputFileStream = OutputFile["stream"];
 
 const readOutputFile = (path: string, maxBytes: number) =>
   Effect.scoped(

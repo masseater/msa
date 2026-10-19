@@ -1,66 +1,18 @@
-import hljs from "highlight.js/lib/core.js";
-import bash from "highlight.js/lib/languages/bash.js";
-import c from "highlight.js/lib/languages/c.js";
-import cpp from "highlight.js/lib/languages/cpp.js";
-import csharp from "highlight.js/lib/languages/csharp.js";
-import dart from "highlight.js/lib/languages/dart.js";
-import go from "highlight.js/lib/languages/go.js";
-import groovy from "highlight.js/lib/languages/groovy.js";
-import java from "highlight.js/lib/languages/java.js";
-import javascript from "highlight.js/lib/languages/javascript.js";
-import json from "highlight.js/lib/languages/json.js";
-import kotlin from "highlight.js/lib/languages/kotlin.js";
-import lua from "highlight.js/lib/languages/lua.js";
-import nix from "highlight.js/lib/languages/nix.js";
-import perl from "highlight.js/lib/languages/perl.js";
-import php from "highlight.js/lib/languages/php.js";
-import python from "highlight.js/lib/languages/python.js";
-import ruby from "highlight.js/lib/languages/ruby.js";
-import rust from "highlight.js/lib/languages/rust.js";
-import scala from "highlight.js/lib/languages/scala.js";
-import swift from "highlight.js/lib/languages/swift.js";
-import typescript from "highlight.js/lib/languages/typescript.js";
+import { dual } from "effect/Function";
 
+import { highlightJs as hljs } from "./highlight-languages.ts";
 import { decodeHtmlEntityAt } from "./html.ts";
-
-const eagerLanguages = {
-  python,
-  java,
-  go,
-  javascript,
-  json,
-  cpp,
-  typescript,
-  php,
-  ruby,
-  c,
-  csharp,
-  nix,
-  bash,
-  rust,
-  scala,
-  kotlin,
-  swift,
-  dart,
-  groovy,
-  perl,
-  lua,
-};
-
-for (const [name, language] of Object.entries(eagerLanguages)) {
-  hljs.registerLanguage(name, language);
-}
+import { callbackPromise } from "./interop.ts";
 
 let allLanguagesPromise: Promise<void> | undefined;
 
 export function loadAllHighlightLanguages(): Promise<void> {
-  if (!allLanguagesPromise) {
-    allLanguagesPromise = new Promise((resolve) => {
+  if (allLanguagesPromise === undefined) {
+    allLanguagesPromise = callbackPromise((resolve) => {
       setImmediate(() => {
         void import("highlight.js/lib/index.js").then(
           () => resolve(),
           () => {
-            // Eager languages and plaintext fallback remain available.
             resolve();
           },
         );
@@ -84,13 +36,13 @@ const SPAN_CLOSE = "</span>";
 const HIGHLIGHT_CLASS_PREFIX = "hljs-";
 
 function getScopeFromSpanTag(tag: string): string | undefined {
-  const match = /\sclass\s*=\s*(?:"([^"]*)"|'([^']*)')/.exec(tag);
+  const match = /\sclass\s*=\s*(?:"([^"]*)"|'([^']*)')/u.exec(tag);
   const classValue = match?.[1] ?? match?.[2];
-  if (!classValue) {
+  if (classValue === undefined || classValue === "") {
     return undefined;
   }
 
-  for (const className of classValue.split(/\s+/)) {
+  for (const className of classValue.split(/\s+/u)) {
     if (className.startsWith(HIGHLIGHT_CLASS_PREFIX)) {
       return className.slice(HIGHLIGHT_CLASS_PREFIX.length);
     }
@@ -101,14 +53,14 @@ function getScopeFromSpanTag(tag: string): string | undefined {
 
 function getScopeFormatter(scope: string, theme: HighlightTheme): HighlightFormatter | undefined {
   const exact = theme[scope];
-  if (exact) {
+  if (exact !== undefined) {
     return exact;
   }
 
   const dotIndex = scope.indexOf(".");
   if (dotIndex !== -1) {
     const prefixFormatter = theme[scope.slice(0, dotIndex)];
-    if (prefixFormatter) {
+    if (prefixFormatter !== undefined) {
       return prefixFormatter;
     }
   }
@@ -116,7 +68,7 @@ function getScopeFormatter(scope: string, theme: HighlightTheme): HighlightForma
   const dashIndex = scope.indexOf("-");
   if (dashIndex !== -1) {
     const prefixFormatter = theme[scope.slice(0, dashIndex)];
-    if (prefixFormatter) {
+    if (prefixFormatter !== undefined) {
       return prefixFormatter;
     }
   }
@@ -130,11 +82,11 @@ function getActiveFormatter(
 ): HighlightFormatter | undefined {
   for (let i = scopes.length - 1; i >= 0; i--) {
     const scope = scopes[i];
-    if (!scope) {
+    if (scope === undefined || scope === "") {
       continue;
     }
     const formatter = getScopeFormatter(scope, theme);
-    if (formatter) {
+    if (formatter !== undefined) {
       return formatter;
     }
   }
@@ -155,22 +107,23 @@ function isSpanOpenTagStart(html: string, index: number): boolean {
   );
 }
 
-export function renderHighlightedHtml(html: string, theme: HighlightTheme = {}): string {
+function renderHighlightedHtmlImpl(html: string, theme: HighlightTheme = {}): string {
   let output = "";
   let textBuffer = "";
   const scopes: Array<string | undefined> = [];
 
   const flushText = () => {
-    if (!textBuffer) {
+    if (textBuffer === "") {
       return;
     }
     const formatter = getActiveFormatter(scopes, theme);
-    output += formatter
-      ? textBuffer
-          .split("\n")
-          .map((line) => (line ? formatter(line) : line))
-          .join("\n")
-      : textBuffer;
+    output +=
+      formatter === undefined
+        ? textBuffer
+        : textBuffer
+            .split("\n")
+            .map((line) => (line === "" ? line : formatter(line)))
+            .join("\n");
     textBuffer = "";
   };
 
@@ -199,7 +152,7 @@ export function renderHighlightedHtml(html: string, theme: HighlightTheme = {}):
 
     if (html[index] === "&") {
       const decoded = decodeHtmlEntityAt(html, index);
-      if (decoded) {
+      if (decoded !== undefined) {
         textBuffer += decoded.text;
         index += decoded.length;
         continue;
@@ -214,15 +167,26 @@ export function renderHighlightedHtml(html: string, theme: HighlightTheme = {}):
   return output;
 }
 
-export function highlight(code: string, options: HighlightOptions = {}): string {
-  const html = options.language
-    ? hljs.highlight(code, {
-        language: options.language,
-        ignoreIllegals: options.ignoreIllegals,
-      }).value
-    : hljs.highlightAuto(code, options.languageSubset).value;
+export const renderHighlightedHtml: {
+  (html: string, theme?: HighlightTheme): string;
+  (theme?: HighlightTheme): (html: string) => string;
+} = dual((args: IArguments) => args.length >= 1, renderHighlightedHtmlImpl);
+
+function highlightImpl(code: string, options: HighlightOptions = {}): string {
+  const html =
+    options.language !== undefined && options.language !== ""
+      ? hljs.highlight(code, {
+          language: options.language,
+          ignoreIllegals: options.ignoreIllegals,
+        }).value
+      : hljs.highlightAuto(code, options.languageSubset).value;
   return renderHighlightedHtml(html, options.theme);
 }
+
+export const highlight: {
+  (code: string, options?: HighlightOptions): string;
+  (options?: HighlightOptions): (code: string) => string;
+} = dual((args: IArguments) => args.length >= 1, highlightImpl);
 
 export function supportsLanguage(name: string): boolean {
   return hljs.getLanguage(name) !== undefined;

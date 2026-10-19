@@ -1,6 +1,7 @@
 import {
   type ChildProcess,
   type ChildProcessByStdio,
+  execFile,
   spawn as nodeSpawn,
   spawnSync as nodeSpawnSync,
   type SpawnOptions,
@@ -11,29 +12,64 @@ import {
   type StdioPipe,
 } from "node:child_process";
 import type { Readable, Writable } from "node:stream";
+import { promisify } from "node:util";
 
 import crossSpawn from "cross-spawn";
+import { dual } from "effect/Function";
+
+import { schedule, type Scheduled } from "../core/platform.ts";
+import { callbackPromise } from "./interop.ts";
+
+export type { ChildProcess };
 
 const EXIT_STDIO_GRACE_MS = 100;
 
-export function spawnProcess(
-  command: string,
-  args: string[],
-  options: SpawnOptionsWithStdioTuple<StdioNull, StdioPipe, StdioPipe>,
-): ChildProcessByStdio<null, Readable, Readable>;
-export function spawnProcess(
-  command: string,
-  args: string[],
-  options: SpawnOptionsWithStdioTuple<StdioPipe, StdioPipe, StdioPipe>,
-): ChildProcessByStdio<Writable, Readable, Readable>;
-export function spawnProcess(command: string, args: string[], options: SpawnOptions): ChildProcess;
-export function spawnProcess(command: string, args: string[], options: SpawnOptions): ChildProcess {
+export function execFileText(options: {
+  command: string;
+  args: string[];
+  env?: NodeJS.ProcessEnv;
+  timeout?: number;
+}): Promise<{ stdout: string; stderr: string }> {
+  return promisify(execFile)(options.command, options.args, {
+    ...(options.env === undefined ? {} : { env: options.env }),
+    ...(options.timeout === undefined ? {} : { timeout: options.timeout }),
+    encoding: "utf8",
+  });
+}
+
+type PipedStdio = SpawnOptionsWithStdioTuple<StdioPipe, StdioPipe, StdioPipe>;
+type NullInputStdio = SpawnOptionsWithStdioTuple<StdioNull, StdioPipe, StdioPipe>;
+
+function spawnProcessImpl(command: string, args: string[], options: SpawnOptions): ChildProcess {
   return process.platform === "win32"
     ? crossSpawn(command, args, options)
     : nodeSpawn(command, args, options);
 }
 
-export function spawnProcessSync(
+export const spawnProcess: {
+  (
+    command: string,
+    args: string[],
+    options: NullInputStdio,
+  ): ChildProcessByStdio<null, Readable, Readable>;
+  (
+    command: string,
+    args: string[],
+    options: PipedStdio,
+  ): ChildProcessByStdio<Writable, Readable, Readable>;
+  (command: string, args: string[], options: SpawnOptions): ChildProcess;
+  (
+    args: string[],
+    options: NullInputStdio,
+  ): (command: string) => ChildProcessByStdio<null, Readable, Readable>;
+  (
+    args: string[],
+    options: PipedStdio,
+  ): (command: string) => ChildProcessByStdio<Writable, Readable, Readable>;
+  (args: string[], options: SpawnOptions): (command: string) => ChildProcess;
+} = dual((args: IArguments) => args.length >= 3, spawnProcessImpl);
+
+function spawnProcessSyncImpl(
   command: string,
   args: string[],
   options: SpawnSyncOptionsWithStringEncoding,
@@ -43,29 +79,30 @@ export function spawnProcessSync(
     : nodeSpawnSync(command, args, options);
 }
 
-/**
- * Wait for a child process to terminate without hanging on inherited stdio handles.
- *
- * A short-lived child can `exit` while a detached descendant keeps its stdout/stderr
- * pipe open. We must not resolve and destroy the streams on a fixed deadline measured
- * from `exit`, or output still being written past that deadline is silently lost
- * (earendil-works/pi#5303). Instead, after `exit` we wait for the pipes to fall idle:
- * the grace timer is re-armed on every chunk, so an actively writing descendant keeps
- * us reading, while a quiet inherited handle (e.g. a Windows daemonized descendant
- * that never lets `close` fire) still releases us after the grace elapses.
- */
+export const spawnProcessSync: {
+  (
+    command: string,
+    args: string[],
+    options: SpawnSyncOptionsWithStringEncoding,
+  ): SpawnSyncReturns<string>;
+  (
+    args: string[],
+    options: SpawnSyncOptionsWithStringEncoding,
+  ): (command: string) => SpawnSyncReturns<string>;
+} = dual((args: IArguments) => args.length >= 3, spawnProcessSyncImpl);
+
 export function waitForChildProcess(child: ChildProcess): Promise<number | null> {
-  return new Promise((resolve, reject) => {
+  return callbackPromise((resolve, reject) => {
     let settled = false;
     let exited = false;
     let exitCode: number | null = null;
-    let postExitTimer: NodeJS.Timeout | undefined;
+    let postExitTimer: Scheduled | undefined;
     let stdoutEnded = child.stdout === null;
     let stderrEnded = child.stderr === null;
 
     const cleanup = () => {
-      if (postExitTimer) {
-        clearTimeout(postExitTimer);
+      if (postExitTimer !== undefined) {
+        postExitTimer.cancel();
         postExitTimer = undefined;
       }
       child.removeListener("error", onError);
@@ -94,13 +131,11 @@ export function waitForChildProcess(child: ChildProcess): Promise<number | null>
     };
 
     const armIdleTimer = () => {
-      if (postExitTimer) clearTimeout(postExitTimer);
-      postExitTimer = setTimeout(() => finalize(exitCode), EXIT_STDIO_GRACE_MS);
+      postExitTimer?.cancel();
+      postExitTimer = schedule(() => finalize(exitCode), EXIT_STDIO_GRACE_MS);
     };
 
     const onData = () => {
-      // Output is still arriving after exit; defer finalizing so we don't
-      // destroy the stream mid-write and truncate the tail.
       if (exited && !settled) armIdleTimer();
     };
 
