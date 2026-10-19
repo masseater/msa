@@ -797,6 +797,7 @@ describe("codemode models", () => {
     const imageRequests: ImagesObservation[] = [];
     let active = 0;
     let maxActive = 0;
+    let gate: { size: number; opened: boolean; waiting: (() => void)[] } | undefined;
     harness.session.modelRuntime.registerProvider("scorer", {
       apiKey: "secret-key",
       models: [scorerModel, painterModel],
@@ -835,7 +836,20 @@ describe("codemode models", () => {
           classify: async (model, context, options): Promise<ClassifierResult> => {
             active++;
             maxActive = Math.max(maxActive, active);
-            await new Promise((resolve) => setTimeout(resolve, 10));
+            const held = gate;
+            if (held === undefined || held.opened) {
+              await new Promise((resolve) => setTimeout(resolve, 10));
+            } else {
+              await new Promise<void>((resolve) => {
+                held.waiting.push(resolve);
+                if (active < held.size) {
+                  setTimeout(resolve, 1000);
+                  return;
+                }
+                held.opened = true;
+                for (const release of held.waiting.splice(0)) release();
+              });
+            }
             active--;
             const text = context.state["text"];
             observed.push({ baseUrl: model.baseUrl, apiKey: options?.apiKey, text });
@@ -864,7 +878,15 @@ describe("codemode models", () => {
       },
     });
     harness.session.setActiveToolsByName(["codemode"]);
-    return { harness, observed, imageRequests, maxActive: () => maxActive };
+    return {
+      harness,
+      observed,
+      imageRequests,
+      maxActive: () => maxActive,
+      holdUntilInFlight: (size: number) => {
+        gate = { size, opened: false, waiting: [] };
+      },
+    };
   }
 
   async function run(harness: Harness, code: string): Promise<ToolResultMessage> {
@@ -893,7 +915,8 @@ describe("codemode models", () => {
   });
 
   it("lists models and classifies with catalog auth, ignoring script-supplied fields", async () => {
-    const { harness, observed, maxActive } = await setup();
+    const { harness, observed, maxActive, holdUntilInFlight } = await setup();
+    holdUntilInFlight(4);
     const result = await run(
       harness,
       `
