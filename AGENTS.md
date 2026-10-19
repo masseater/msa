@@ -73,6 +73,11 @@ release. Add a tool name to select part of the graph. For example, run
 - ライブラリが export する型・スキーマ・enum・定数を書き写さない。
 - 外部 API のクライアントは手で包まず、Effect 公式のパッケージ、distilled.cloud、公開 OpenAPI から `@effect/openapi-generator` で生成、の順に選ぶ。
 
+## 一括の書き換え
+
+- 同じ形の書き換えを多くのファイルに当てるときは、使い捨てのスクリプト（python・node の一時スクリプト、sed、perl の一行置換）を書かない。msa の組み込みの codemod ツールを使う（issue #95 で作る）。
+- 組み込みのレシピで足りないときは、レシピを足す（`tools/codemods/`）。その場のスクリプトは、レシピを足すより明らかに小さいと分かる場合だけにして、何を探して何が足りなかったかをコミットメッセージに残す。
+
 ## テスト
 
 - モックを使わない。実モジュールを呼び出す（DB も本物を一時ディレクトリに作って使う）。古典学派（Detroit school）のテストにする。外部プロセスやネットワークを避けられない場合だけ例外にし、理由はコミットログに書く。
