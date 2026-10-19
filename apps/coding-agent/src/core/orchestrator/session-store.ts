@@ -164,6 +164,10 @@ function assignmentsOfSession(database: DatabaseSync, sessionId: string): Assign
   return rows.map(toAssignment);
 }
 
+function deleteAssignmentsOfSession(database: DatabaseSync, sessionId: string): void {
+  database.prepare("DELETE FROM assignments WHERE session_id = ?").run(sessionId);
+}
+
 function assignmentsOfTask(database: DatabaseSync, taskId: string): Assignment[] {
   const rows = database
     .prepare("SELECT * FROM assignments WHERE task_id = ? ORDER BY created_at, session_id")
@@ -261,6 +265,7 @@ export const sessionStore = {
   listAssignments,
   assignmentsOfSession,
   assignmentsOfTask,
+  deleteAssignmentsOfSession,
   sessionViews,
   insertReport,
   reportsOfTask,

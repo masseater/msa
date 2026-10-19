@@ -1,9 +1,13 @@
 import type { DatabaseSync } from "node:sqlite";
 
+import { replanStore } from "./replan-store.ts";
 import { scheduler } from "./scheduler.ts";
 import { store } from "./store.ts";
 import type {
   OrchestratorSnapshot,
+  ReplanMark,
+  ReplanRole,
+  ReplanView,
   RoundView,
   TaskSnapshot,
   TaskView,
@@ -69,6 +73,32 @@ function roundViews(
   }));
 }
 
+function taskMarks(replan: ReplanView | undefined): Map<string, ReplanMark> {
+  const marked = new Map<string, ReplanMark>();
+  if (replan === undefined) return marked;
+  const add = (ids: readonly string[], role: ReplanRole) => {
+    for (const id of ids) marked.set(id, { id: replan.id, reason: replan.reason, role });
+  };
+  add(
+    replan.stopped.map((item) => item.taskId),
+    "stopped",
+  );
+  add(
+    replan.created.map((item) => item.taskId),
+    "created",
+  );
+  add(
+    replan.dropped.map((item) => item.taskId),
+    "dropped",
+  );
+  return marked;
+}
+
+function handoffOf(task: TaskView): string | null {
+  const stopped = task.reports.filter((report) => report.status === "stopped");
+  return stopped.at(-1)?.content ?? null;
+}
+
 function buildSnapshot(
   database: DatabaseSync,
   project: string,
@@ -81,14 +111,20 @@ function buildSnapshot(
   const free =
     maxConcurrentSessions - sessions.filter((session) => session.status === "running").length;
   const runningKeys = scheduler.occupiedKeys(running);
+  const replans = replanStore.listReplans(database, project, 10);
+  const latest = replans[0];
+  const byTask = taskMarks(latest?.undoneAt === null ? latest : undefined);
   const snapshots: TaskSnapshot[] = views.map((task) => ({
     ...task,
     waitingReason: task.status === "waiting" ? reasonFor(task, byId, free, runningKeys) : null,
+    handoff: handoffOf(task),
+    replan: byTask.get(task.id) ?? null,
   }));
   return {
     tasks: snapshots,
     sessions: store.sessionViews(database, project),
     rounds: roundViews(database, project, views),
+    replans,
     maxConcurrentSessions,
   };
 }
@@ -99,6 +135,10 @@ export type {
   CreateTaskInput,
   NoteDelivery,
   OrchestratorSnapshot,
+  ReplanInput,
+  ReplanResult,
+  ReplanUndoResult,
+  ReplanView,
   ReportHit,
   SendNoteInput,
   TaskSnapshot,

@@ -274,6 +274,20 @@ function workTasksOfRound(database: DatabaseSync, project: string, round: string
   return rows.map(toTask);
 }
 
+function clearDependencies(database: DatabaseSync, taskId: string): void {
+  database.prepare("DELETE FROM task_dependencies WHERE task_id = ?").run(taskId);
+}
+
+function deleteTask(database: DatabaseSync, taskId: string): void {
+  database
+    .prepare("DELETE FROM task_dependencies WHERE task_id = ? OR depends_on = ?")
+    .run(taskId, taskId);
+  database.prepare("DELETE FROM assignments WHERE task_id = ?").run(taskId);
+  database.prepare("DELETE FROM reports WHERE task_id = ?").run(taskId);
+  database.prepare("DELETE FROM note_targets WHERE task_id = ?").run(taskId);
+  database.prepare("DELETE FROM tasks WHERE id = ?").run(taskId);
+}
+
 export const taskStore = {
   insertTask,
   getTask,
@@ -286,6 +300,8 @@ export const taskStore = {
   addDependency,
   removeDependency,
   replaceDependencies,
+  clearDependencies,
+  deleteTask,
   unfinishedDependencies,
   readyTasks,
   tasksWithCondition,

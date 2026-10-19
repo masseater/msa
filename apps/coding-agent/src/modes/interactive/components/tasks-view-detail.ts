@@ -50,6 +50,10 @@ function sections(orchestrator: Orchestrator, task: TaskSnapshot, width: number)
     section("Waiting");
     lines.push(`   ${task.waitingReason.detail}`);
   }
+  if (task.replan !== null) {
+    section("Replan");
+    lines.push(truncateToWidth(`   ${task.replan.role} · ${task.replan.reason}`, width));
+  }
   if (task.dependsOn.length > 0) {
     section("Depends on");
     lines.push(`   ${task.dependsOn.join("   ")}`);
@@ -71,8 +75,12 @@ function sections(orchestrator: Orchestrator, task: TaskSnapshot, width: number)
       for (const line of activity.slice(-8)) lines.push(truncateToWidth(`   ${line}`, width));
     }
   }
+  if (task.handoff !== null) {
+    section("Handoff");
+    body(task.handoff, 10);
+  }
   const last = task.reports.at(-1);
-  if (last !== undefined) {
+  if (last !== undefined && last.status !== "stopped") {
     section(last.status === "failed" ? "Error" : "Report");
     body(last.content, 12);
   }

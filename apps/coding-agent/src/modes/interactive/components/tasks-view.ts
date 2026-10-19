@@ -18,6 +18,7 @@ import { taskDetail } from "./tasks-view-detail.ts";
 import { type TasksViewState, viewHelpers } from "./tasks-view-helpers.ts";
 
 const { STATUS_LABEL, glyph, finished, stoppable, modelName, depthOf, roundTasks } = viewHelpers;
+const { describeReplan } = viewHelpers;
 
 type Composing =
   | { kind: "message"; taskId: string }
@@ -88,8 +89,9 @@ export class TasksView implements Component, Focusable {
   private rowLine(task: TaskSnapshot, selected: boolean, width: number): string {
     const cursor = selected ? theme.fg("accent", "›") : " ";
     const title = selected ? theme.bold(task.title) : task.title;
+    const mark = task.replan === null ? "" : ` ${theme.fg("muted", "↺")}`;
     const meta = theme.fg("dim", modelName(task.model ?? "default"));
-    const left = ` ${cursor} ${glyph(task)} ${title}`;
+    const left = ` ${cursor} ${glyph(task)} ${title}${mark}`;
     const gap = Math.max(2, width - visibleWidth(left) - visibleWidth(meta) - 1);
     return truncateToWidth(`${left}${" ".repeat(gap)}${meta}`, width);
   }
@@ -155,6 +157,10 @@ export class TasksView implements Component, Focusable {
   private renderList(width: number): string[] {
     const tasks = this.tasks();
     const lines = this.header("Tasks", viewHelpers.describeTaskCounts(tasks) ?? "", width);
+    const replan = this.options.orchestrator.snapshot.replans[0];
+    if (replan !== undefined) {
+      lines.push(truncateToWidth(` ${theme.fg("muted", describeReplan(replan))}`, width));
+    }
     if (tasks.length === 0) {
       lines.push("", ` ${keyHint("tui.select.cancel", "close")}`);
       return lines;

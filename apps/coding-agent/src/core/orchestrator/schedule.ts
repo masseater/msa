@@ -9,6 +9,7 @@ import { store } from "./store.ts";
 
 function scheduleEffect(runtime: Runtime): Effect.Effect<string[], OrchestratorError> {
   return Effect.gen(function* () {
+    if (runtime.replanning) return [];
     const database = runtime.database;
     const project = runtime.options.project;
     const running = store.runningSessions(database, project);

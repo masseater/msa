@@ -1,6 +1,7 @@
 import type { ToolDefinition } from "../extensions/types.ts";
 import type { Orchestrator } from "./orchestrator.ts";
 import { messageToolsA, messageToolsB, messageToolsC } from "./tools-message.ts";
+import { replanTools } from "./tools-replan.ts";
 import { taskToolsA, taskToolsB } from "./tools-task.ts";
 
 export const ORCHESTRATOR_TOOL_NAMES = [
@@ -17,6 +18,8 @@ export const ORCHESTRATOR_TOOL_NAMES = [
   "stop_task",
   "rerun_task",
   "set_max_concurrent_sessions",
+  "replan",
+  "undo_replan",
 ] as const;
 
 export function isOrchestratorTool(name: string): boolean {
@@ -32,5 +35,6 @@ export function createOrchestratorToolDefinitions(
     ...messageToolsA(orchestrator),
     ...messageToolsC(orchestrator),
     ...messageToolsB(orchestrator),
+    ...replanTools(orchestrator),
   } as Record<(typeof ORCHESTRATOR_TOOL_NAMES)[number], ToolDefinition>;
 }
