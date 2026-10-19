@@ -47,6 +47,8 @@
     "*.ts",
     "tools/**/*.ts",
     ".msa/extensions/**/*.ts",
+    "scripts/host.ts",
+    "scripts/smoke-test-codemode-binary.ts",
     "scripts/model-catalog-protocol.ts",
     "scripts/model-catalog-protocol.test.ts",
     "scripts/agent-treeshake-smoke-entry.ts",

@@ -19,9 +19,7 @@ const isScannedTopLevel = (name: string): boolean =>
   !name.startsWith(".") && name !== "node_modules" && !PROJECT_ROOTS.includes(name);
 
 const program = Effect.gen(function* () {
-  // oxlint-disable-next-line effecttsgo/unstable-api-usage -- v4 platform services are pre-GA
   const fs = yield* FileSystem.FileSystem;
-  // oxlint-disable-next-line effecttsgo/unstable-api-usage -- v4 platform services are pre-GA
   const path = yield* Path.Path;
   const root = path.resolve(import.meta.dirname, "..");
 
@@ -61,5 +59,4 @@ const program = Effect.gen(function* () {
   }
 });
 
-// oxlint-disable-next-line effecttsgo/unstable-api-usage -- v4 platform services are pre-GA
 runMainWith(program, NodeServices.layer);

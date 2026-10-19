@@ -29,6 +29,41 @@
     "resolveJsonModule": true,
     "allowImportingTsExtensions": true,
     "rewriteRelativeImportExtensions": true,
-    "types": ["node"]
+    "types": ["node"],
+    "plugins": [
+      {
+        "name": "@effect/language-service",
+        "allowedUnstableApis": [
+          "@effect/platform-node/NodeFileSystem#layer",
+          "@effect/platform-node/NodeHttpClient#layerUndici",
+          "@effect/platform-node/NodeHttpServer#layerTest",
+          "@effect/platform-node/NodeRuntime#runMain",
+          "@effect/platform-node/NodeServices#layer",
+          "effect/Crypto#Crypto",
+          "effect/FileSystem#FileSystem",
+          "effect/http/FetchHttpClient#layer",
+          "effect/http/HttpClient#execute",
+          "effect/http/HttpClient#get",
+          "effect/http/HttpClientRequest#fromWeb",
+          "effect/http/HttpEffect#fromWebHandler",
+          "effect/http/HttpServer#HttpServer",
+          "effect/http/HttpServer#serve",
+          "effect/http/HttpServerRequest#HttpServerRequest",
+          "effect/http/HttpServerResponse#empty",
+          "effect/http/HttpServerResponse#text",
+          "effect/net/NetAddress#isInetAddress",
+          "effect/net/NetAddress#isUnixPathAddress",
+          "effect/observability/OtlpExporter#Flusher",
+          "effect/observability/OtlpLogger#layer",
+          "effect/observability/OtlpMetrics#layer",
+          "effect/observability/OtlpSerialization#layerJson",
+          "effect/observability/OtlpTracer#layer",
+          "effect/Path#Path",
+          "effect/PlatformError#PlatformError",
+          "effect/process/ChildProcess#make",
+          "effect/process/ChildProcessSpawner#ChildProcessSpawner"
+        ]
+      }
+    ]
   }
 }
