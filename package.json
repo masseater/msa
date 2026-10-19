@@ -50,7 +50,10 @@
   "commitlint": {
     "extends": [
       "@commitlint/config-conventional"
-    ]
+    ],
+    "rules": {
+      "subject-case": [0]
+    }
   },
   "devEngines": {
     "packageManager": {
