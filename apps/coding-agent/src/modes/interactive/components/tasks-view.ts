@@ -24,12 +24,13 @@ import { type TasksViewState, viewHelpers } from "./tasks-view-helpers.ts";
 const { STATUS_LABEL, glyph, finished, stoppable, modelName, depthOf, roundTasks } = viewHelpers;
 const { describeReplan } = viewHelpers;
 
+type StateField = "currentState" | "goalState";
+
 type Composing =
   | { kind: "message"; taskId: string }
   | { kind: "note"; round: string }
-  | { kind: "priority"; taskId: string }
   | { kind: "depends"; taskId: string }
-  | { kind: "instruction"; taskId: string };
+  | { kind: "state"; taskId: string; field: StateField };
 
 function composerLabel(composing: Composing): string {
   switch (composing.kind) {
@@ -37,12 +38,10 @@ function composerLabel(composing: Composing): string {
       return "Message to this task";
     case "note":
       return `Shared note to round ${composing.round}`;
-    case "priority":
-      return "New priority";
     case "depends":
       return `Dependencies of ${composing.taskId}  +id  -id`;
-    case "instruction":
-      return `Instruction for ${composing.taskId}`;
+    case "state":
+      return `${composing.field === "currentState" ? "Current state" : "Goal state"} of ${composing.taskId}`;
   }
 }
 
@@ -247,10 +246,7 @@ export class TasksView implements Component, Focusable {
   }
 
   private renderDetail(task: TaskSnapshot, width: number): ViewFrame {
-    const right = theme.fg(
-      "dim",
-      `${STATUS_LABEL[task.status].toLowerCase()} · ${task.round} · priority ${task.priority}`,
-    );
+    const right = theme.fg("dim", `${STATUS_LABEL[task.status].toLowerCase()} · ${task.round}`);
     return {
       header: this.header(`${glyph(task)} ${task.title}`, right, width),
       body: taskDetail.sections(this.options.orchestrator, task, width),
@@ -319,12 +315,18 @@ export class TasksView implements Component, Focusable {
       this.startComposing({ kind: "message", taskId: selected.id });
     } else if (kb.matches(data, "app.orchestrator.note") && selected !== undefined) {
       this.startComposing({ kind: "note", round: selected.round });
-    } else if (kb.matches(data, "app.orchestrator.priority") && selected !== undefined) {
-      this.startComposing({ kind: "priority", taskId: selected.id });
     } else if (kb.matches(data, "app.orchestrator.depends") && selected !== undefined) {
       this.startComposing({ kind: "depends", taskId: selected.id });
-    } else if (kb.matches(data, "app.orchestrator.instruction") && selected !== undefined) {
-      this.startComposing({ kind: "instruction", taskId: selected.id });
+    } else if (kb.matches(data, "app.orchestrator.currentState") && selected !== undefined) {
+      this.startComposing(
+        { kind: "state", taskId: selected.id, field: "currentState" },
+        selected.currentState,
+      );
+    } else if (kb.matches(data, "app.orchestrator.goalState") && selected !== undefined) {
+      this.startComposing(
+        { kind: "state", taskId: selected.id, field: "goalState" },
+        selected.goalState,
+      );
     } else if (
       kb.matches(data, "app.orchestrator.stop") &&
       selected !== undefined &&
@@ -362,9 +364,9 @@ export class TasksView implements Component, Focusable {
     this.scroll = 0;
   }
 
-  private startComposing(composing: Composing): void {
+  private startComposing(composing: Composing, initial = ""): void {
     this.composing = composing;
-    this.input.setValue("");
+    this.input.setValue(initial);
     this.input.focused = this.isFocused;
   }
 
@@ -382,12 +384,6 @@ export class TasksView implements Component, Focusable {
     const failed = (error: unknown) => {
       this.options.onError(toErrorMessage(error));
     };
-    if (composing.kind === "priority") {
-      this.options.orchestrator
-        .setPriority(composing.taskId, Number.parseInt(text, 10))
-        .catch(failed);
-      return;
-    }
     if (composing.kind === "note") {
       this.options.orchestrator
         .sendNote({ content: text, audience: "round", round: composing.round })
@@ -400,8 +396,10 @@ export class TasksView implements Component, Focusable {
         .catch(failed);
       return;
     }
-    if (composing.kind === "instruction") {
-      this.options.orchestrator.setInstruction(composing.taskId, text).catch(failed);
+    if (composing.kind === "state") {
+      this.options.orchestrator
+        .setState({ taskId: composing.taskId, [composing.field]: text })
+        .catch(failed);
       return;
     }
     this.options.orchestrator.sendMessage(composing.taskId, text).catch(failed);

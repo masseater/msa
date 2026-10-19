@@ -18,7 +18,7 @@ describe("TUI fake cursor", () => {
     tui.setFocus(input);
     tui.start();
     await terminal.waitForRender();
-    assert.ok(terminal.getWrites().includes("> \x1b[7ma\x1b[27mbc"));
+    assert.ok(terminal.getWrites().includes("> abc\x1b[7m \x1b[27m"));
 
     terminal.clearWrites();
     tui.setShowHardwareCursor(true);
@@ -37,7 +37,7 @@ describe("TUI fake cursor", () => {
     tui.addChild(input);
     tui.start();
     await terminal.waitForRender();
-    assert.ok(terminal.getWrites().includes("> \x1b[7ma\x1b[27mbc"));
+    assert.ok(terminal.getWrites().includes("> abc\x1b[7m \x1b[27m"));
     tui.stop();
   });
 });

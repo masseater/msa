@@ -34,34 +34,33 @@ function latestReport(task: TaskView): Report | undefined {
   return task.reports.at(-1);
 }
 
+function stateBlock(tag: string, value: string): string {
+  return `<${tag}>\n${value}\n</${tag}>`;
+}
+
 function workerPrompt(
-  tasks: readonly TaskView[],
+  task: TaskView,
   dependencies: readonly TaskView[],
   notes: readonly Note[],
 ): string {
-  const work =
-    tasks.length === 1
-      ? `<task id="${tasks[0]?.id ?? ""}" title="${tasks[0]?.title ?? ""}">\n${tasks[0]?.prompt ?? ""}\n</task>`
-      : [
-          "You are doing several tasks that touch the same paths, so they run in this one session.",
-          ...tasks.map(
-            (task) => `<task id="${task.id}" title="${task.title}">\n${task.prompt}\n</task>`,
-          ),
-        ].join("\n\n");
-  return [work, dependencyBlock(dependencies), notesBlock(notes)].filter(Boolean).join("\n\n");
+  return [
+    stateBlock("current-state", task.currentState),
+    stateBlock("goal-state", task.goalState),
+    dependencyBlock(dependencies),
+    notesBlock(notes),
+  ]
+    .filter(Boolean)
+    .join("\n\n");
 }
 
-function taskReviewerPrompt(
-  tasks: readonly TaskView[],
-  workerReport: string,
-  notes: readonly Note[],
-): string {
-  const work = tasks
-    .map(
-      (task) =>
-        `<task id="${task.id}" title="${task.title}">\n${task.prompt}\n</task>\n<worker-report>\n${truncateReport(workerReport)}\n</worker-report>`,
-    )
-    .join("\n\n");
+function taskReviewerPrompt(task: TaskView, workerReport: string, notes: readonly Note[]): string {
+  const work = [
+    `<task id="${task.id}" title="${task.title}">`,
+    stateBlock("current-state", task.currentState),
+    stateBlock("goal-state", task.goalState),
+    "</task>",
+    `<worker-report>\n${truncateReport(workerReport)}\n</worker-report>`,
+  ].join("\n");
   return [
     "You are reviewing work another session just did. You did not write it.",
     "Read the report, inspect the changed files and the surrounding code, and check the work against the task. Do not redo it and do not edit files.",
@@ -102,7 +101,7 @@ function roundReviewPrompt(
 }
 
 function taskHeading(task: Task): string {
-  return `${task.id} [${task.kind}, ${task.status}, round ${task.round}, priority ${task.priority}] ${task.title}`;
+  return `${task.id} [${task.kind}, ${task.status}, round ${task.round}] ${task.title}`;
 }
 
 function formatTaskList(tasks: readonly TaskView[]): string {
@@ -119,9 +118,8 @@ function assignmentText(task: TaskView): string {
 
 function describeTask(task: TaskView): string {
   const dependencies = task.dependsOn.length > 0 ? task.dependsOn.join(", ") : "-";
-  const paths = task.paths.length > 0 ? ` paths ${task.paths.join(", ")}` : "";
   const condition = task.condition === null ? "" : ` condition "${task.condition}"`;
-  return `${taskHeading(task)} — depends on ${dependencies}; ${assignmentText(task)}${paths}${condition}`;
+  return `${taskHeading(task)} — depends on ${dependencies}; ${assignmentText(task)}${condition}`;
 }
 
 function formatTaskDetail(task: TaskView, sessions: readonly string[]): string {
@@ -133,7 +131,8 @@ function formatTaskDetail(task: TaskView, sessions: readonly string[]): string {
     describeTask(task),
     `Dependents: ${task.dependents.join(", ") || "-"}`,
     sessions.length > 0 ? `Sessions: ${sessions.join(", ")}` : "Sessions: -",
-    `<prompt>\n${task.prompt}\n</prompt>`,
+    stateBlock("current-state", task.currentState),
+    stateBlock("goal-state", task.goalState),
     ...reports,
   ].join("\n\n");
 }
@@ -187,6 +186,7 @@ function formatReplan(result: ReplanResult): string {
 }
 
 export const prompts = {
+  stateBlock,
   notesBlock,
   dependencyBlock,
   latestReport,

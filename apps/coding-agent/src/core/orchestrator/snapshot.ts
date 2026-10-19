@@ -1,7 +1,6 @@
 import type { DatabaseSync } from "node:sqlite";
 
 import { replanStore } from "./replan-store.ts";
-import { scheduler } from "./scheduler.ts";
 import { store } from "./store.ts";
 import type {
   OrchestratorSnapshot,
@@ -18,7 +17,6 @@ function reasonFor(
   task: TaskView,
   byId: ReadonlyMap<string, TaskView>,
   free: number,
-  runningKeys: readonly string[],
 ): WaitingReason {
   const unfinished = task.dependsOn.filter(
     (dependency) => byId.get(dependency)?.status !== "completed",
@@ -32,9 +30,6 @@ function reasonFor(
     return { kind: "review", detail: "round has no work to review yet" };
   }
   if (free <= 0) return { kind: "capacity", detail: "no free session slot" };
-  if (scheduler.blockedByPaths(task, runningKeys)) {
-    return { kind: "paths", detail: "paths are in use by a running task" };
-  }
   return { kind: "scheduling", detail: "about to start" };
 }
 
@@ -106,16 +101,14 @@ function buildSnapshot(
 ): OrchestratorSnapshot {
   const views = taskViews(database, project);
   const byId = new Map(views.map((task) => [task.id, task]));
-  const running = views.filter((task) => task.status === "running");
   const sessions = store.listSessions(database, project);
   const free =
     maxConcurrentSessions - sessions.filter((session) => session.status === "running").length;
-  const runningKeys = scheduler.occupiedKeys(running);
   const replans = replanStore.listReplans(database, project, 10);
   const byTask = taskMarks(replans[0]);
   const snapshots: TaskSnapshot[] = views.map((task) => ({
     ...task,
-    waitingReason: task.status === "waiting" ? reasonFor(task, byId, free, runningKeys) : null,
+    waitingReason: task.status === "waiting" ? reasonFor(task, byId, free) : null,
     handoff: handoffOf(task),
     replan: byTask.get(task.id) ?? null,
   }));
@@ -140,7 +133,7 @@ export type {
   ReportHit,
   SendNoteInput,
   SetTaskDependsInput,
-  SetTaskInstructionInput,
+  SetTaskStateInput,
   TaskSnapshot,
   TaskView,
 } from "./types.ts";

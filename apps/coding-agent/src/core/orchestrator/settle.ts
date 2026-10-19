@@ -33,7 +33,9 @@ function settleEffect(
       store.updateSession(runtime.database, sessionId, { status: outcome.status }, now);
       return outcomes.applyOutcome(runtime, assignments, outcome, now);
     });
-    if (review.length > 0) yield* starting.startTasks(runtime, review, "reviewer", outcome.content);
+    for (const task of review) {
+      yield* starting.startTasks(runtime, task, "reviewer", outcome.content);
+    }
     const started = yield* scheduling.scheduleEffect(runtime);
     yield* Effect.sync(() => {
       runtime.publish();

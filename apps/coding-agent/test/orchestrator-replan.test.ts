@@ -35,13 +35,17 @@ it("stops at the turn boundary, hands the memo to the split tasks, and resumes t
   Effect.runPromise(
     Effect.gen(function* () {
       const { orchestrator, workers } = setup();
-      const a = yield* create(orchestrator, { title: "a", prompt: "do a" });
+      const a = yield* create(orchestrator, {
+        title: "a",
+        currentState: "the client still speaks v2",
+        goalState: "the client speaks v3",
+      });
       const memo = "branch feat/a, commit abc123 port the client, 2 checks still failing";
 
       const pending = replan(orchestrator, {
         reason: "the api moved to v3",
         tasks: [
-          { from: [a.id], title: "a client", prompt: "port the client to v3" },
+          { from: [a.id], title: "a client", goalState: "the client speaks v3" },
           { from: [a.id], title: "a docs" },
         ],
       });
@@ -66,10 +70,12 @@ it("stops at the turn boundary, hands the memo to the split tasks, and resumes t
       yield* waitFor(() => workers.length === 3);
       const [client, docs] = result.created;
       const clientPrompt = workers[1]?.prompts[0] ?? "";
-      expect(clientPrompt).toContain("port the client to v3");
+      expect(clientPrompt).toContain("the client speaks v3");
+      expect(clientPrompt).toContain("the client still speaks v2");
       expect(clientPrompt).toContain(memo);
       expect(clientPrompt).toContain("the api moved to v3");
-      expect(workers[2]?.prompts[0] ?? "").toContain("do a");
+      expect(workers[2]?.prompts[0] ?? "").toContain("the client still speaks v2");
+      expect(workers[2]?.prompts[0] ?? "").toContain("the client speaks v3");
       expect(workers[2]?.prompts[0] ?? "").toContain(memo);
 
       const clientView = yield* read(orchestrator, client!.taskId);
@@ -86,12 +92,21 @@ it("aborts without touching the plan when the wrap-up fails", () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const { orchestrator, workers } = setup();
-      const a = yield* create(orchestrator, { title: "a", prompt: "do a" });
-      const b = yield* create(orchestrator, { title: "b", prompt: "do b", dependsOn: [a.id] });
+      const a = yield* create(orchestrator, {
+        title: "a",
+        currentState: "a is not written",
+        goalState: "a works",
+      });
+      const b = yield* create(orchestrator, {
+        title: "b",
+        currentState: "b is not written",
+        goalState: "b works",
+        dependsOn: [a.id],
+      });
 
       const pending = replan(orchestrator, {
         reason: "new plan",
-        tasks: [{ from: [a.id], title: "a2", prompt: "do a again" }],
+        tasks: [{ from: [a.id], title: "a2", goalState: "a works again" }],
         drop: [{ taskId: b.id, reason: "not needed" }],
       });
       yield* waitFor(() => orchestrator.replanning);
@@ -116,7 +131,11 @@ it("rejects a cycle among the new tasks and writes nothing", () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const { orchestrator, workers } = setup();
-      const a = yield* create(orchestrator, { title: "a", prompt: "do a" });
+      const a = yield* create(orchestrator, {
+        title: "a",
+        currentState: "a is not written",
+        goalState: "a works",
+      });
       const before = orchestrator.snapshot.tasks.length;
 
       const result = yield* Effect.result(
@@ -126,8 +145,20 @@ it("rejects a cycle among the new tasks and writes nothing", () =>
               reason: "new plan",
               stop: false,
               tasks: [
-                { key: "one", title: "one", prompt: "do one", dependsOn: ["two"] },
-                { key: "two", title: "two", prompt: "do two", dependsOn: ["one"] },
+                {
+                  key: "one",
+                  title: "one",
+                  currentState: "one is not written",
+                  goalState: "one works",
+                  dependsOn: ["two"],
+                },
+                {
+                  key: "two",
+                  title: "two",
+                  currentState: "two is not written",
+                  goalState: "two works",
+                  dependsOn: ["one"],
+                },
               ],
               keep: [a.id],
             }),
@@ -142,16 +173,54 @@ it("rejects a cycle among the new tasks and writes nothing", () =>
     }),
   ));
 
+it("rejects a new task without a current state or a goal state", () =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const { orchestrator, workers } = setup();
+      yield* create(orchestrator, {
+        title: "a",
+        currentState: "a is not written",
+        goalState: "a works",
+      });
+      const before = orchestrator.snapshot.tasks.length;
+
+      const result = yield* Effect.result(
+        Effect.tryPromise({
+          try: () =>
+            orchestrator.replan({
+              reason: "new plan",
+              stop: false,
+              tasks: [{ title: "half", currentState: "half is not written" }],
+            }),
+          catch: orchestratorError,
+        }),
+      );
+      expect(Result.isFailure(result)).toBe(true);
+      if (Result.isFailure(result)) expect(result.failure.message).toContain("goal state");
+      expect(orchestrator.snapshot.tasks).toHaveLength(before);
+      expect(workers).toHaveLength(1);
+    }),
+  ));
+
 it("rewires a kept task onto the tasks that replace another one", () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const { orchestrator, workers } = setup();
-      const a = yield* create(orchestrator, { title: "a", prompt: "do a" });
-      const b = yield* create(orchestrator, { title: "b", prompt: "do b", dependsOn: [a.id] });
+      const a = yield* create(orchestrator, {
+        title: "a",
+        currentState: "a is not written",
+        goalState: "a works",
+      });
+      const b = yield* create(orchestrator, {
+        title: "b",
+        currentState: "b is not written",
+        goalState: "b works",
+        dependsOn: [a.id],
+      });
 
       const pending = replan(orchestrator, {
         reason: "split a",
-        tasks: [{ from: [a.id], key: "a1", title: "a1", prompt: "first half" }],
+        tasks: [{ from: [a.id], key: "a1", title: "a1", goalState: "the first half works" }],
         keep: [b.id],
         rewire: [{ taskId: b.id, dependsOn: ["a1"] }],
       });
@@ -171,7 +240,11 @@ it("keeps a task, resumes it in a new session, and puts the memo in the prompt",
   Effect.runPromise(
     Effect.gen(function* () {
       const { orchestrator, workers } = setup();
-      const a = yield* create(orchestrator, { title: "a", prompt: "do a" });
+      const a = yield* create(orchestrator, {
+        title: "a",
+        currentState: "a is not written",
+        goalState: "a works",
+      });
 
       const pending = replan(orchestrator, { reason: "same plan", keep: [a.id] });
       yield* stopAndWrapUp(orchestrator, [workers[0]!], "two checks still failing");
@@ -182,7 +255,8 @@ it("keeps a task, resumes it in a new session, and puts the memo in the prompt",
       expect(result.kept).toEqual([a.id]);
       expect(result.started).toEqual([a.id]);
       yield* waitFor(() => workers.length === 2);
-      expect(workers[1]?.prompts[0]).toContain("do a");
+      expect(workers[1]?.prompts[0]).toContain("a is not written");
+      expect(workers[1]?.prompts[0]).toContain("a works");
       expect(workers[1]?.prompts[0]).toContain("two checks still failing");
       expect(taskStatus(orchestrator, a.id)).toBe("running");
     }),
@@ -192,8 +266,17 @@ it("closes a dropped task with its reason and lets the round review go", () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const { orchestrator, workers } = setup();
-      const a = yield* create(orchestrator, { title: "a", prompt: "do a" });
-      const b = yield* create(orchestrator, { title: "b", prompt: "do b", dependsOn: [a.id] });
+      const a = yield* create(orchestrator, {
+        title: "a",
+        currentState: "a is not written",
+        goalState: "a works",
+      });
+      const b = yield* create(orchestrator, {
+        title: "b",
+        currentState: "b is not written",
+        goalState: "b works",
+        dependsOn: [a.id],
+      });
 
       const pending = replan(orchestrator, {
         reason: "a covers b",
@@ -214,16 +297,25 @@ it("closes a dropped task with its reason and lets the round review go", () =>
     }),
   ));
 
-it("merges several tasks into one and carries their prompts and memo", () =>
+it("merges several tasks into one and carries their states and memo", () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const { orchestrator, workers } = setup();
-      const a = yield* create(orchestrator, { title: "a", prompt: "do a" });
-      const b = yield* create(orchestrator, { title: "b", prompt: "do b", dependsOn: [a.id] });
+      const a = yield* create(orchestrator, {
+        title: "a",
+        currentState: "a is not written",
+        goalState: "a works",
+      });
+      const b = yield* create(orchestrator, {
+        title: "b",
+        currentState: "b is not written",
+        goalState: "b works",
+        dependsOn: [a.id],
+      });
 
       const pending = replan(orchestrator, {
         reason: "a and b are one change",
-        tasks: [{ from: [a.id, b.id], title: "ab", prompt: "do a and b together" }],
+        tasks: [{ from: [a.id, b.id], title: "ab" }],
       });
       yield* stopAndWrapUp(orchestrator, [workers[0]!], "half of a is done");
 
@@ -235,7 +327,10 @@ it("merges several tasks into one and carries their prompts and memo", () =>
       expect(taskStatus(orchestrator, a.id)).toBe("stopped");
       expect(taskStatus(orchestrator, b.id)).toBe("stopped");
       yield* waitFor(() => workers.length === 2);
-      expect(workers[1]?.prompts[0]).toContain("do a and b together");
+      expect(workers[1]?.prompts[0]).toContain("a is not written");
+      expect(workers[1]?.prompts[0]).toContain("b is not written");
+      expect(workers[1]?.prompts[0]).toContain("a works");
+      expect(workers[1]?.prompts[0]).toContain("b works");
       expect(workers[1]?.prompts[0]).toContain("half of a is done");
       const view = yield* read(orchestrator, merged.taskId);
       expect(view.dependsOn).toEqual([]);
@@ -246,15 +341,32 @@ it("rewires waiting work without stopping anything when stop is false", () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const { orchestrator, workers } = setup();
-      const a = yield* create(orchestrator, { title: "a", prompt: "do a" });
-      const b = yield* create(orchestrator, { title: "b", prompt: "do b", dependsOn: [a.id] });
+      const a = yield* create(orchestrator, {
+        title: "a",
+        currentState: "a is not written",
+        goalState: "a works",
+      });
+      const b = yield* create(orchestrator, {
+        title: "b",
+        currentState: "b is not written",
+        goalState: "b works",
+        dependsOn: [a.id],
+      });
 
       const result = yield* Effect.promise(() =>
         orchestrator.replan({
           reason: "b needs the split first",
           stop: false,
           keep: [a.id, b.id],
-          tasks: [{ key: "half", title: "half", prompt: "do half", dependsOn: [a.id] }],
+          tasks: [
+            {
+              key: "half",
+              title: "half",
+              currentState: "half is not written",
+              goalState: "half works",
+              dependsOn: [a.id],
+            },
+          ],
           rewire: [{ taskId: b.id, dependsOn: ["half"] }],
         }),
       );

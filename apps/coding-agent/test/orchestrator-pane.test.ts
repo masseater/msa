@@ -51,7 +51,8 @@ function paneTasks(): TaskSnapshot[] {
       title: "build the pane",
       status: "running",
       updatedAt: Date.now() - 120_000,
-      condition: "the pane splits 7:3",
+      currentState: "the screen has one pane",
+      goalState: "the pane splits 7:3",
       reports: [
         {
           id: "r1",
@@ -250,6 +251,7 @@ describe("orchestrator pane contents", () => {
     expect(text).toContain("01a1518a · flash · 2m ago");
     expect(text).toContain("○ wire the keys");
     expect(text).toContain("● running · main");
+    expect(text).toContain("now    the screen has one pane");
     expect(text).toContain("goal   the pane splits 7:3");
     expect(text).toContain("report 1m ago worker: the divider renders");
     expect(text.match(/the divider renders/g)).toHaveLength(1);

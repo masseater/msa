@@ -9,10 +9,11 @@ import { type Runtime, nowMillis } from "./runtime.ts";
 import { scheduling } from "./schedule.ts";
 import { store } from "./store.ts";
 import { taskActions } from "./task-actions.ts";
+import { requireStates } from "./text.ts";
 import type {
   CreateTaskInput,
   SetTaskDependsInput,
-  SetTaskInstructionInput,
+  SetTaskStateInput,
   Task,
   TaskView,
 } from "./types.ts";
@@ -41,6 +42,7 @@ function createTask(
     const now = yield* nowMillis;
     const database = runtime.database;
     const project = runtime.options.project;
+    const states = requireStates(`Task ${input.title}`, input.currentState, input.goalState);
     if (input.model !== undefined) runtime.options.resolveModel(input.model);
     const round = resolveRound(runtime, input);
     const id = newId("t");
@@ -50,12 +52,10 @@ function createTask(
       round,
       kind: "work",
       title: input.title,
-      prompt: input.prompt,
+      currentState: states.currentState,
+      goalState: states.goalState,
       status: "waiting",
-      priority: input.priority ?? 0,
       cwd: input.cwd ?? runtime.options.cwd,
-      paths: input.paths ?? [],
-      repos: input.repos ?? [],
       condition: input.condition ?? null,
       model: input.model ?? null,
       thinkingLevel: input.thinkingLevel ?? null,
@@ -156,40 +156,32 @@ function setDepends(
   });
 }
 
-function setInstruction(
+function setState(
   runtime: Runtime,
-  input: SetTaskInstructionInput,
+  input: SetTaskStateInput,
 ): Effect.Effect<TaskView, OrchestratorError> {
   return Effect.gen(function* () {
     const now = yield* nowMillis;
-    const prompt = input.prompt.trim();
-    if (prompt === "") throw new Error("The instruction cannot be empty");
+    if (input.currentState === undefined && input.goalState === undefined) {
+      throw new Error("Pass the current state, the goal state, or both");
+    }
     const task = yield* Effect.sync(() => taskOf(runtime, input.taskId, "taskId"));
     if (task.kind === "review") {
-      throw new Error(`${task.id} is a round review; its instruction comes from the round`);
+      throw new Error(`${task.id} is a round review; its states come from the round`);
     }
     if (task.status === "running") {
       throw new Error(
-        `${task.id} is running. Stop it with stop_task before rewriting the instruction, or send_message to steer it now.`,
+        `${task.id} is running. Stop it with stop_task before rewriting its states, or send_message to steer it now.`,
       );
     }
-    yield* Effect.sync(() => store.updateTask(runtime.database, task.id, { prompt }, now));
+    const states = requireStates(
+      `Task ${task.id}`,
+      input.currentState ?? task.currentState,
+      input.goalState ?? task.goalState,
+    );
+    yield* Effect.sync(() => store.updateTask(runtime.database, task.id, states, now));
     yield* Effect.sync(() => runtime.publish());
     return actionHelpers.taskView(runtime, task.id);
-  });
-}
-
-function setPriority(
-  runtime: Runtime,
-  taskId: string,
-  priority: number,
-): Effect.Effect<TaskView, OrchestratorError> {
-  return Effect.gen(function* () {
-    const now = yield* nowMillis;
-    yield* Effect.sync(() => store.updateTask(runtime.database, taskId, { priority }, now));
-    yield* scheduling.scheduleEffect(runtime);
-    yield* Effect.sync(() => runtime.publish());
-    return actionHelpers.taskView(runtime, taskId);
   });
 }
 
@@ -226,8 +218,7 @@ function setModel(
 export const actions = {
   createTask,
   setDepends,
-  setInstruction,
-  setPriority,
+  setState,
   setModel,
   ...taskActions,
 };

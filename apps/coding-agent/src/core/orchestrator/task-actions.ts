@@ -70,7 +70,7 @@ function sendMessage(
     const task = store.getTask(runtime.database, taskId);
     if (task === undefined) throw new Error(`Unknown task: ${taskId}`);
     if (task.status === "completed" || task.status === "failed" || task.status === "stopped") {
-      yield* starting.startTasks(runtime, [task], "worker", "", message);
+      yield* starting.startTasks(runtime, task, "worker", "", message);
       yield* Effect.sync(() => runtime.publish());
       return actionHelpers.taskView(runtime, taskId);
     }
@@ -116,7 +116,7 @@ function rerun(
     const task = store.getTask(runtime.database, taskId);
     if (task === undefined) throw new Error(`Unknown task: ${taskId}`);
     if (task.status === "running") throw new Error(`${taskId} is already running`);
-    yield* starting.startTasks(runtime, [task], "worker", "", extra);
+    yield* starting.startTasks(runtime, task, "worker", "", extra);
     yield* Effect.sync(() => runtime.publish());
     return actionHelpers.taskView(runtime, taskId);
   });

@@ -148,13 +148,13 @@ On native Windows, `app.suspend` has no default because Windows terminals do not
 | `app.session.deleteNoninvasive`   | `ctrl+backspace`   | Delete session when query is empty                  |
 | `app.orchestrator.message`        | `n`                | Send a message to the selected task in `/sessions`  |
 | `app.orchestrator.note`           | `b`                | Send a shared note to the selected task's round     |
-| `app.orchestrator.priority`       | `p`                | Change the selected task's priority                 |
 | `app.orchestrator.toggleFinished` | `c`                | Show or hide finished tasks                         |
 | `app.orchestrator.rerun`          | `r`                | Rerun the selected task in a new session            |
 | `app.orchestrator.stop`           | `s`                | Stop the selected task                              |
 | `app.orchestrator.model`          | `m`                | Switch the selected task's model                    |
 | `app.orchestrator.depends`        | `d`                | Change the selected task's dependencies             |
-| `app.orchestrator.instruction`    | `i`                | Rewrite the selected task's instruction             |
+| `app.orchestrator.currentState`   | `w`                | Rewrite the selected task's current state           |
+| `app.orchestrator.goalState`      | `g`                | Rewrite the selected task's goal state              |
 | `app.orchestrator.sessions`       | `shift+right`      | Open `/sessions` from the editor                    |
 | `app.orchestrator.back`           | `shift+left`       | Close `/sessions`                                   |
 | `app.orchestrator.paneWiden`      | `ctrl+shift+left`  | Widen the sessions pane                             |

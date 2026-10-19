@@ -22,12 +22,10 @@ export interface Task {
   round: string;
   kind: TaskKind;
   title: string;
-  prompt: string;
+  currentState: string;
+  goalState: string;
   status: TaskStatus;
-  priority: number;
   cwd: string;
-  paths: readonly string[];
-  repos: readonly string[];
   condition: string | null;
   model: string | null;
   thinkingLevel: ThinkingLevel | null;
@@ -92,13 +90,7 @@ export interface RoundView {
   taskIds: readonly string[];
 }
 
-export type WaitingKind =
-  | "dependencies"
-  | "condition"
-  | "capacity"
-  | "paths"
-  | "scheduling"
-  | "review";
+export type WaitingKind = "dependencies" | "condition" | "capacity" | "scheduling" | "review";
 
 export interface WaitingReason {
   kind: WaitingKind;
@@ -127,13 +119,11 @@ export interface ReportHit {
 
 export interface CreateTaskInput {
   title: string;
-  prompt: string;
+  currentState: string;
+  goalState: string;
   dependsOn?: readonly string[];
   round?: string;
-  paths?: readonly string[];
-  repos?: readonly string[];
   condition?: string;
-  priority?: number;
   model?: string;
   thinkingLevel?: ThinkingLevel;
   cwd?: string;
@@ -145,9 +135,10 @@ export interface SetTaskDependsInput {
   remove?: readonly string[];
 }
 
-export interface SetTaskInstructionInput {
+export interface SetTaskStateInput {
   taskId: string;
-  prompt: string;
+  currentState?: string;
+  goalState?: string;
 }
 
 export interface SendNoteInput {
@@ -167,12 +158,10 @@ export interface ReplanTaskInput {
   key?: string;
   from?: readonly string[];
   title: string;
-  prompt?: string;
+  currentState?: string;
+  goalState?: string;
   dependsOn?: readonly string[];
   round?: string;
-  paths?: readonly string[];
-  repos?: readonly string[];
-  priority?: number;
   model?: string;
   thinkingLevel?: ThinkingLevel;
   cwd?: string;

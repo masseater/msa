@@ -65,6 +65,18 @@ function resolveRefs(
   }
 }
 
+function inheritedState(
+  entry: Entry,
+  views: ReadonlyMap<string, TaskView>,
+  pick: (task: TaskView) => string,
+): string {
+  return entry.from
+    .flatMap((id) => views.get(id) ?? [])
+    .map(pick)
+    .filter((value) => value.trim() !== "")
+    .join("\n\n");
+}
+
 function validateEntries(
   runtime: Runtime,
   entries: readonly Entry[],
@@ -74,8 +86,12 @@ function validateEntries(
   for (const entry of entries) {
     if (entry.input.title.trim() === "") throw fail("Every task needs a title");
     for (const id of entry.from) assertKnown(views, id, "from");
-    if (entry.from.length === 0 && (entry.input.prompt ?? "").trim() === "") {
-      throw fail(`Task ${entry.input.title} needs a prompt when it replaces nothing`);
+    const states = {
+      currentState: entry.input.currentState ?? inheritedState(entry, views, (t) => t.currentState),
+      goalState: entry.input.goalState ?? inheritedState(entry, views, (t) => t.goalState),
+    };
+    if (states.currentState.trim() === "" || states.goalState.trim() === "") {
+      throw fail(`Task ${entry.input.title} needs a current state and a goal state`);
     }
     if (entry.input.model !== undefined) runtime.options.resolveModel(entry.input.model);
     resolveRefs(entry.input.dependsOn ?? [], keys, views, "dependsOn");

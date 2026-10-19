@@ -101,7 +101,8 @@ export class SessionPane implements Component {
         ),
       );
     }
-    lines.push(...this.field("goal", firstLine(task.condition ?? task.prompt), width, 2));
+    lines.push(...this.field("now", firstLine(task.currentState), width, 2));
+    lines.push(...this.field("goal", firstLine(task.goalState), width, 2));
     if (task.dependsOn.length > 0) {
       lines.push(...this.field("deps", this.dependencies(orchestrator, task), width, 2));
     }

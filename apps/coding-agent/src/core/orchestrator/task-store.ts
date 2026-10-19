@@ -9,12 +9,10 @@ interface TaskRow {
   round: string;
   kind: string;
   title: string;
-  prompt: string;
+  current_state: string;
+  goal_state: string;
   status: string;
-  priority: number;
   cwd: string;
-  paths: string;
-  repos: string;
   condition: string | null;
   model: string | null;
   thinking_level: string | null;
@@ -29,12 +27,10 @@ function toTask(row: TaskRow): Task {
     round: row.round,
     kind: row.kind as TaskKind,
     title: row.title,
-    prompt: row.prompt,
+    currentState: row.current_state,
+    goalState: row.goal_state,
     status: row.status as TaskStatus,
-    priority: row.priority,
     cwd: row.cwd,
-    paths: JSON.parse(row.paths) as string[],
-    repos: JSON.parse(row.repos) as string[],
     condition: row.condition,
     model: row.model,
     thinkingLevel: row.thinking_level as Task["thinkingLevel"],
@@ -46,9 +42,9 @@ function toTask(row: TaskRow): Task {
 function insertTask(database: DatabaseSync, task: Task): void {
   database
     .prepare(
-      `INSERT INTO tasks (id, project, round, kind, title, prompt, status, priority, cwd, paths,
-         repos, condition, model, thinking_level, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO tasks (id, project, round, kind, title, current_state, goal_state, status, cwd,
+         condition, model, thinking_level, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       task.id,
@@ -56,12 +52,10 @@ function insertTask(database: DatabaseSync, task: Task): void {
       task.round,
       task.kind,
       task.title,
-      task.prompt,
+      task.currentState,
+      task.goalState,
       task.status,
-      task.priority,
       task.cwd,
-      JSON.stringify(task.paths),
-      JSON.stringify(task.repos),
       task.condition,
       task.model,
       task.thinkingLevel,
@@ -84,9 +78,9 @@ function listTasks(database: DatabaseSync, project: string): Task[] {
 
 const PATCH_COLUMNS: Readonly<Record<string, string>> = {
   title: "title",
-  prompt: "prompt",
+  currentState: "current_state",
+  goalState: "goal_state",
   status: "status",
-  priority: "priority",
   condition: "condition",
   model: "model",
   thinkingLevel: "thinking_level",
@@ -96,7 +90,10 @@ function updateTask(
   database: DatabaseSync,
   id: string,
   patch: Partial<
-    Pick<Task, "title" | "prompt" | "status" | "priority" | "condition" | "model" | "thinkingLevel">
+    Pick<
+      Task,
+      "title" | "currentState" | "goalState" | "status" | "condition" | "model" | "thinkingLevel"
+    >
   >,
   now: number,
 ): void {
@@ -220,7 +217,7 @@ function readyTasks(database: DatabaseSync, project: string, kind: TaskKind): Ta
            SELECT 1 FROM task_dependencies d JOIN tasks dep ON dep.id = d.depends_on
            WHERE d.task_id = t.id AND dep.status <> 'completed'
          )
-       ORDER BY t.priority DESC, t.created_at, t.id`,
+       ORDER BY t.created_at, t.id`,
     )
     .all(project, kind) as unknown as TaskRow[];
   return rows.map(toTask);
@@ -230,7 +227,7 @@ function tasksWithCondition(database: DatabaseSync, project: string): Task[] {
   const rows = database
     .prepare(
       `SELECT * FROM tasks WHERE project = ? AND status = 'waiting' AND kind = 'work'
-         AND condition IS NOT NULL AND condition <> '' ORDER BY priority DESC, created_at, id`,
+         AND condition IS NOT NULL AND condition <> '' ORDER BY created_at, id`,
     )
     .all(project) as unknown as TaskRow[];
   return rows.map(toTask);

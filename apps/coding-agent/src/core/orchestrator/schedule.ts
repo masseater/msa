@@ -3,7 +3,6 @@ import { Effect, Fiber } from "effect";
 import { conditions } from "./condition.ts";
 import { type OrchestratorError, orchestratorError } from "./errors.ts";
 import { type Runtime, nowMillis } from "./runtime.ts";
-import { scheduler } from "./scheduler.ts";
 import { starting } from "./start.ts";
 import { store } from "./store.ts";
 
@@ -14,22 +13,16 @@ function scheduleEffect(runtime: Runtime): Effect.Effect<string[], OrchestratorE
     const project = runtime.options.project;
     const running = store.runningSessions(database, project);
     let free = runtime.maxConcurrentSessions - running.length;
-    const runningKeys = scheduler.occupiedKeys(
-      store.listTasks(database, project).filter((task) => task.status === "running"),
-    );
     const started: string[] = [];
-    for (const cluster of scheduler.clusterByPaths(store.readyTasks(database, project, "work"))) {
+    for (const task of store.readyTasks(database, project, "work")) {
       if (free <= 0) break;
-      const keys = cluster.flatMap(scheduler.pathKeys);
-      if (keys.length > 0 && scheduler.conflicts(keys, runningKeys)) continue;
-      yield* starting.startTasks(runtime, cluster, "worker");
-      started.push(...cluster.map((task) => task.id));
-      runningKeys.push(...keys);
+      yield* starting.startTasks(runtime, task, "worker");
+      started.push(task.id);
       free--;
     }
     for (const review of store.readyTasks(database, project, "review")) {
       if (free <= 0) break;
-      yield* starting.startTasks(runtime, [review], "reviewer");
+      yield* starting.startTasks(runtime, review, "reviewer");
       started.push(review.id);
       free--;
     }

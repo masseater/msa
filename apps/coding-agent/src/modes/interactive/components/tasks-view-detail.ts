@@ -95,9 +95,13 @@ function sections(orchestrator: Orchestrator, task: TaskSnapshot, width: number)
     section(last.status === "failed" ? "Error" : "Report");
     body(last.content, 12);
   }
-  if (task.prompt !== "") {
-    section("Task");
-    body(task.prompt, 6);
+  if (task.currentState !== "") {
+    section("Current state");
+    body(task.currentState, 6);
+  }
+  if (task.goalState !== "") {
+    section("Goal state");
+    body(task.goalState, 6);
   }
   return lines;
 }
@@ -107,9 +111,9 @@ function hints(task: TaskSnapshot): string {
     keyHint("app.orchestrator.message", task.status === "running" ? "steer" : "message"),
     keyHint("app.orchestrator.note", "note to round"),
     stoppable(task) ? keyHint("app.orchestrator.stop", "stop") : undefined,
-    keyHint("app.orchestrator.priority", "priority"),
     keyHint("app.orchestrator.depends", "deps"),
-    keyHint("app.orchestrator.instruction", "instruction"),
+    keyHint("app.orchestrator.currentState", "current state"),
+    keyHint("app.orchestrator.goalState", "goal state"),
     keyHint("app.orchestrator.model", "model"),
     keyHint("app.orchestrator.rerun", "rerun"),
     keyHint("tui.select.cancel", "back"),
@@ -126,9 +130,9 @@ function listHints(showFinished: boolean, selected: TaskSnapshot | undefined): s
     selected !== undefined && stoppable(selected)
       ? keyHint("app.orchestrator.stop", "stop")
       : undefined,
-    selected === undefined ? undefined : keyHint("app.orchestrator.priority", "priority"),
     selected === undefined ? undefined : keyHint("app.orchestrator.depends", "deps"),
-    selected === undefined ? undefined : keyHint("app.orchestrator.instruction", "instruction"),
+    selected === undefined ? undefined : keyHint("app.orchestrator.currentState", "current state"),
+    selected === undefined ? undefined : keyHint("app.orchestrator.goalState", "goal state"),
     keyHint("app.orchestrator.model", "model"),
     keyHint("tui.select.cancel", "close"),
   ]

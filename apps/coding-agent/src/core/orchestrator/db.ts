@@ -7,12 +7,10 @@ CREATE TABLE IF NOT EXISTS tasks (
   round TEXT NOT NULL,
   kind TEXT NOT NULL,
   title TEXT NOT NULL,
-  prompt TEXT NOT NULL,
+  current_state TEXT NOT NULL,
+  goal_state TEXT NOT NULL,
   status TEXT NOT NULL,
-  priority INTEGER NOT NULL DEFAULT 0,
   cwd TEXT NOT NULL,
-  paths TEXT NOT NULL DEFAULT '[]',
-  repos TEXT NOT NULL DEFAULT '[]',
   condition TEXT,
   model TEXT,
   thinking_level TEXT,
@@ -117,6 +115,33 @@ function dropReplanUndoColumns(database: DatabaseSync): void {
   });
 }
 
+function columnNames(database: DatabaseSync, table: string): string[] {
+  const rows = database.prepare(`PRAGMA table_info(${table})`).all() as unknown as {
+    name: string;
+  }[];
+  return rows.map((row) => row.name);
+}
+
+const LEGACY_TASK_COLUMNS = ["prompt", "priority", "paths", "repos"] as const;
+
+function migrateTasks(database: DatabaseSync): void {
+  const names = new Set(columnNames(database, "tasks"));
+  if (!names.has("prompt")) return;
+  transaction(database, () => {
+    if (!names.has("current_state")) {
+      database.exec("ALTER TABLE tasks ADD COLUMN current_state TEXT NOT NULL DEFAULT ''");
+    }
+    if (!names.has("goal_state")) {
+      database.exec("ALTER TABLE tasks ADD COLUMN goal_state TEXT NOT NULL DEFAULT ''");
+    }
+    database.exec("UPDATE tasks SET current_state = prompt WHERE current_state = ''");
+    database.exec("UPDATE tasks SET goal_state = title WHERE goal_state = ''");
+    for (const column of LEGACY_TASK_COLUMNS) {
+      if (names.has(column)) database.exec(`ALTER TABLE tasks DROP COLUMN ${column}`);
+    }
+  });
+}
+
 function openDatabase(path: string): DatabaseSync {
   const database = new DatabaseSync(path, { timeout: 5_000 });
   database.exec("PRAGMA journal_mode = WAL");
@@ -124,6 +149,7 @@ function openDatabase(path: string): DatabaseSync {
   database.exec("PRAGMA foreign_keys = OFF");
   database.exec(SCHEMA);
   dropReplanUndoColumns(database);
+  migrateTasks(database);
   return database;
 }
 

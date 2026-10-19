@@ -105,7 +105,11 @@ it("keeps worker transcripts out of the sessions --continue and /resume pick fro
       const orchestrator = session.orchestrator;
       if (orchestrator === undefined) throw new Error("orchestrator missing");
       const task = yield* Effect.promise(() =>
-        orchestrator.createTask({ title: "t", prompt: "do t" }),
+        orchestrator.createTask({
+          title: "t",
+          currentState: "t is not written",
+          goalState: "t works",
+        }),
       );
       yield* waitFor(
         () =>
