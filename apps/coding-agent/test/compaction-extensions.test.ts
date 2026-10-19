@@ -1,9 +1,14 @@
-import { existsSync, mkdirSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-
 import { Agent } from "@msa/agent-core";
 import { getModel, streamSimple } from "@msa/ai/compat";
-import { awaited, runTest, currentTimeMillis, joinPath } from "@msa/testing";
+import {
+  awaited,
+  currentTimeMillis,
+  joinPath,
+  makeDirectory,
+  removePath,
+  runTest,
+  tempRoot,
+} from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
@@ -33,9 +38,9 @@ describe.skipIf(!(API_KEY !== undefined && API_KEY.length > 0))("Compaction exte
 
   beforeEach(() =>
     runTest(
-      Effect.sync(() => {
-        tempDir = joinPath(tmpdir(), `msa-compaction-extensions-test-${currentTimeMillis()}`);
-        mkdirSync(tempDir, { recursive: true });
+      Effect.gen(function* () {
+        tempDir = joinPath(tempRoot(), `msa-compaction-extensions-test-${currentTimeMillis()}`);
+        yield* makeDirectory(tempDir);
         capturedEvents = [];
       }),
     ),
@@ -43,12 +48,12 @@ describe.skipIf(!(API_KEY !== undefined && API_KEY.length > 0))("Compaction exte
 
   afterEach(() =>
     runTest(
-      Effect.sync(() => {
+      Effect.gen(function* () {
         if (session !== null && session !== undefined) {
           session.dispose();
         }
-        if (tempDir.length > 0 && existsSync(tempDir)) {
-          rmSync(tempDir, { recursive: true });
+        if (tempDir.length > 0) {
+          yield* removePath(tempDir);
         }
       }),
     ),
