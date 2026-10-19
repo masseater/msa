@@ -1,11 +1,11 @@
-import { readdir, stat } from "node:fs/promises";
-import { join } from "node:path";
-
 import { BACKGROUND_CONTEXT as context } from "@msa/chord/context";
+import { Effect } from "effect";
+import { dual } from "effect/Function";
 
 import type { Storage, StorageWrite } from "../src/index.ts";
 import { openNodeJsonlStorage } from "../src/storage/jsonl/node.ts";
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
+import { fileSize, isDirectory, joinPath, listTree } from "./platform-support.ts";
 
 export type Backend = "sqlite" | "jsonl";
 export type Written = Record<StorageWrite["type"], number>;
@@ -21,22 +21,27 @@ export function heapAfterGc(): number {
   return process.memoryUsage().heapUsed;
 }
 
-export async function directorySize(path: string): Promise<number> {
+export const directorySize = Effect.fn("directorySize")(function* (path: string) {
   let total = 0;
-  for await (const entry of await readdir(path, { withFileTypes: true })) {
-    const full = join(path, entry.name);
-    total += entry.isDirectory() ? await directorySize(full) : (await stat(full)).size;
+  for (const entry of yield* listTree(path)) {
+    const full = joinPath(path, entry);
+    if (!(yield* isDirectory(full))) total += yield* fileSize(full);
   }
   return total;
-}
+});
 
-export function openBenchStorage(backend: Backend, directory: string): Promise<Storage> {
+function openBenchStorageImpl(backend: Backend, directory: string): Promise<Storage> {
   return Promise.resolve(
     backend === "sqlite"
-      ? openNodeSqliteStorage(join(directory, "session.sqlite"))
+      ? openNodeSqliteStorage(joinPath(directory, "session.sqlite"))
       : openNodeJsonlStorage(directory, context),
   );
 }
+
+export const openBenchStorage: {
+  (directory: string): (backend: Backend) => ReturnType<typeof openBenchStorageImpl>;
+  (backend: Backend, directory: string): ReturnType<typeof openBenchStorageImpl>;
+} = dual(2, openBenchStorageImpl);
 
 export function noWrites(): Written {
   return {
@@ -51,8 +56,7 @@ export function noWrites(): Written {
   };
 }
 
-// Counts each commit of `storage` in `meter`, calls `onCommit`, and adds the JSON characters of its writes per type.
-export function meterCommits(
+function meterCommitsImpl(
   storage: Storage,
   meter: { commits: number; readonly written: Written },
   onCommit?: () => void,
@@ -65,3 +69,15 @@ export function meterCommits(
     return commit(writes, commitContext);
   };
 }
+
+export const meterCommits: {
+  (
+    meter: { commits: number; readonly written: Written },
+    onCommit?: () => void,
+  ): (storage: Storage) => ReturnType<typeof meterCommitsImpl>;
+  (
+    storage: Storage,
+    meter: { commits: number; readonly written: Written },
+    onCommit?: () => void,
+  ): ReturnType<typeof meterCommitsImpl>;
+} = dual((args) => typeof args[1] === "object", meterCommitsImpl);

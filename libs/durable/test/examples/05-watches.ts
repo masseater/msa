@@ -1,11 +1,11 @@
-// Serialize asynchronous document work with a watch.
-// Run from libs/durable:
-//   node --conditions=source --experimental-strip-types test/examples/05-watches.ts
+import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import { BACKGROUND_CONTEXT } from "@msa/chord/context";
+import { Console, Effect } from "effect";
 
 import { defineDoc } from "../../src/index.ts";
 import { createSession } from "../../src/session/index.ts";
 import { MemoryStorage } from "../../src/storage/memory.ts";
+import { awaited } from "../effect-support.ts";
 
 const context = BACKGROUND_CONTEXT;
 const session = createSession(new MemoryStorage());
@@ -18,29 +18,53 @@ const Notes = defineDoc<{ text: string }>({
   fork: "asOf",
   initial: () => ({ text: "" }),
 });
-const chat = await session.commit(async (tx) => {
-  const conversation = await tx.createConversation({ ownership: { kind: "ownerless" } });
-  (await tx.doc(Notes, conversation.id)).text = "first";
-  return conversation;
-}, context);
 
-// A watch starts from one stable acquisition revision. Slow callbacks never
-// overlap; exact committed frames buffer, with a full-value reset after 100.
-const notesWatch = await session.watchDoc(Notes, chat.id, context);
-if (notesWatch === undefined) throw new Error("notes are absent");
-console.log("watch baseline:", notesWatch.value);
-const delivered = new Promise<void>((resolve) => {
+const main = Effect.gen(function* () {
+  const runSync = Effect.runSyncWith(yield* Effect.context<never>());
+
+  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
+  const chat = yield* awaited(
+    session.commit(
+      (tx) =>
+        runPromise(
+          Effect.gen(function* () {
+            const conversation = yield* awaited(
+              tx.createConversation({ ownership: { kind: "ownerless" } }),
+            );
+            (yield* awaited(tx.doc(Notes, conversation.id))).text = "first";
+            return conversation;
+          }),
+        ),
+      context,
+    ),
+  );
+
+  const notesWatch = yield* awaited(session.watchDoc(Notes, chat.id, context));
+  if (notesWatch === undefined) throw new Error("notes are absent");
+  yield* Console.log("watch baseline:", notesWatch.value);
+  const { promise: delivered, resolve } = Promise.withResolvers<void>();
   notesWatch.start((value, _ops, _deliveryContext) => {
-    console.log("watch update:", value);
+    runSync(Console.log("watch update:", value));
     resolve();
 
     return Promise.resolve();
   });
-});
-await session.commit(async (tx) => {
-  (await tx.doc(Notes, chat.id)).text = "observed asynchronously";
-}, context);
-await delivered;
-await notesWatch.stop();
+  yield* awaited(
+    session.commit(
+      (tx) =>
+        runPromise(
+          Effect.gen(function* () {
+            (yield* awaited(tx.doc(Notes, chat.id))).text = "observed asynchronously";
+          }),
+        ),
+      context,
+    ),
+  );
+  yield* awaited(delivered);
+  yield* awaited(notesWatch.stop());
 
-await session.close(context);
+  yield* awaited(session.close(context));
+});
+
+NodeRuntime.runMain(main);

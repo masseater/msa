@@ -18,6 +18,7 @@ import type {
   TaskRecord,
   TaskState,
 } from "../src/index.ts";
+import type { LiteralFits } from "./type-support.ts";
 
 const conversationId = idFromNumber<ConversationId>(1);
 const entryId = idFromNumber<EntryId>(2);
@@ -35,24 +36,13 @@ it("brands numeric IDs by record kind and carries task result types", () => {
   expectTypeOf(conversationId).toMatchTypeOf<number>();
   expectTypeOf<TaskResult<typeof taskId>>().toEqualTypeOf<number>();
 
-  const compileTimeFailures = () => {
-    const widenedTask: TaskId = idFromNumber<TaskId<{ ok: boolean }>>(7);
-    // @ts-expect-error an erased task result cannot be narrowed without a typed source
-    const narrowedTask: TaskId<string> = widenedTask;
-    // @ts-expect-error conversation IDs are not task IDs
-    const wrongTask: TaskId = conversationId;
-    // @ts-expect-error task IDs are not conversation IDs
-    const wrongConversation: ConversationId = taskId;
-    // @ts-expect-error entry IDs are not document IDs
-    const wrongDocument: DocumentId = entryId;
-    // @ts-expect-error entity IDs are not commit sequences
-    const wrongSequence: typeof seq = entryId;
-    void [narrowedTask, wrongTask, wrongConversation, wrongDocument, wrongSequence];
-  };
-  expectTypeOf(compileTimeFailures).toBeFunction();
+  expectTypeOf<TaskId>().not.toExtend<TaskId<string>>();
+  expectTypeOf(conversationId).not.toExtend<TaskId>();
+  expectTypeOf(taskId).not.toExtend<ConversationId>();
+  expectTypeOf(entryId).not.toExtend<DocumentId>();
+  expectTypeOf(entryId).not.toExtend<typeof seq>();
 });
 
-// Each value narrows on its discriminator.
 function expectEditAndStateDiscriminators() {
   const omit = { target: entryId, action: "omit" } satisfies ContextEdit;
   const replace = { target: entryId, action: "replace", messages: [] } satisfies ContextEdit;
@@ -112,60 +102,90 @@ function expectRecordDiscriminators() {
   expectTypeOf(conversationDocument.fork).toEqualTypeOf<"asOf">();
 }
 
+type Entry = typeof entryId;
+type Live = { phase: string };
+
 function editAndTaskStateFailures() {
-  // @ts-expect-error replacement edits require replacement messages
-  const missingReplacement: ContextEdit = { target: entryId, action: "replace" };
-  // @ts-expect-error omission edits cannot carry replacement messages
-  const omissionWithMessages: ContextEdit = { target: entryId, action: "omit", messages: [] };
-  const pendingWithOutcome: TaskState<{ phase: string }, number> = {
-    status: "pending",
-    checkpoint: { phase: "ready" },
-    // @ts-expect-error live task state cannot carry a terminal outcome
-    outcome: { status: "completed", result: 1 },
+  expectTypeOf<
+    LiteralFits<{ target: Entry; action: "replace" }, ContextEdit>
+  >().toEqualTypeOf<false>();
+  expectTypeOf<
+    LiteralFits<{ target: Entry; action: "omit"; messages: [] }, ContextEdit>
+  >().toEqualTypeOf<false>();
+  expectTypeOf<LiteralFits<{ target: Entry; action: "omit" }, ContextEdit>>().toEqualTypeOf<true>();
+  expectTypeOf<
+    LiteralFits<
+      {
+        status: "pending";
+        checkpoint: { phase: "ready" };
+        outcome: { status: "completed"; result: 1 };
+      },
+      TaskState<Live, number>
+    >
+  >().toEqualTypeOf<false>();
+  expectTypeOf<
+    LiteralFits<
+      {
+        status: "terminal";
+        checkpoint: { phase: "ready" };
+        outcome: { status: "completed"; result: 1 };
+      },
+      TaskState<Live, number>
+    >
+  >().toEqualTypeOf<false>();
+  expectTypeOf<
+    LiteralFits<
+      { status: "terminal"; outcome: { status: "completed"; result: 1 } },
+      TaskState<Live, number>
+    >
+  >().toEqualTypeOf<true>();
+  type TerminalRecord = {
+    id: typeof taskId;
+    conversationId: typeof conversationId;
+    kind: "test";
+    version: 1;
+    input: null;
+    state: { status: "terminal"; outcome: { status: "completed"; result: 1 } };
+    background: false;
+    abortRequested: false;
   };
-  // @ts-expect-error terminal task state cannot retain a live checkpoint
-  const terminalWithCheckpoint: TaskState<{ phase: string }, number> = {
-    status: "terminal",
-    checkpoint: { phase: "ready" },
-    outcome: { status: "completed", result: 1 },
-  };
-  // @ts-expect-error terminal task records cannot retain live memos
-  const terminalWithMemos: TaskRecord<null, { phase: string }, number> = {
-    id: taskId,
-    conversationId,
-    kind: "test",
-    version: 1,
-    input: null,
-    state: { status: "terminal", outcome: { status: "completed", result: 1 } },
-    background: false,
-    abortRequested: false,
-    memos: { retained: true },
-  };
-  void [
-    missingReplacement,
-    omissionWithMessages,
-    pendingWithOutcome,
-    terminalWithCheckpoint,
-    terminalWithMemos,
-  ];
+  expectTypeOf<
+    LiteralFits<TerminalRecord & { memos: { retained: true } }, TaskRecord<null, Live, number>>
+  >().toEqualTypeOf<false>();
+  expectTypeOf<LiteralFits<TerminalRecord, TaskRecord<null, Live, number>>>().toEqualTypeOf<true>();
 }
 
 function documentRecordFailures() {
-  // @ts-expect-error session documents do not declare conversation history behavior
-  const sessionWithHistory: DocumentRecord = {
-    id: documentId,
-    kind: "test",
-    createdAt: seq,
-    scope: { kind: "session" },
-    history: "latest",
-    fork: "current",
-  };
-  // @ts-expect-error conversation document creation requires history and fork policies
-  const conversationWithoutPolicy: DocumentCreate = {
-    id: documentId,
-    kind: "test",
-    scope: { kind: "conversation", conversationId },
-  };
+  type Document = typeof documentId;
+  expectTypeOf<
+    LiteralFits<
+      {
+        id: Document;
+        kind: "test";
+        createdAt: typeof seq;
+        scope: { kind: "session" };
+        history: "latest";
+        fork: "current";
+      },
+      DocumentRecord
+    >
+  >().toEqualTypeOf<false>();
+  expectTypeOf<
+    LiteralFits<
+      { id: Document; kind: "test"; createdAt: typeof seq; scope: { kind: "session" } },
+      DocumentRecord
+    >
+  >().toEqualTypeOf<true>();
+  expectTypeOf<
+    LiteralFits<
+      {
+        id: Document;
+        kind: "test";
+        scope: { kind: "conversation"; conversationId: typeof conversationId };
+      },
+      DocumentCreate
+    >
+  >().toEqualTypeOf<false>();
   const taskWithPolicy = {
     id: documentId,
     kind: "test",
@@ -173,79 +193,94 @@ function documentRecordFailures() {
     history: "latest",
     fork: "initial",
   } as const;
-  // @ts-expect-error task document creation cannot declare conversation policies
-  const taskCreateWithPolicy: DocumentCreate = taskWithPolicy;
-  const createWithSequence: DocumentCreate = {
-    id: documentId,
-    kind: "test",
-    scope: { kind: "session" },
-    // @ts-expect-error storage, not the create command, supplies createdAt
-    createdAt: seq,
-  };
-  void [sessionWithHistory, conversationWithoutPolicy, taskCreateWithPolicy, createWithSequence];
+  expectTypeOf(taskWithPolicy).not.toExtend<DocumentCreate>();
+  expectTypeOf<
+    LiteralFits<
+      { id: Document; kind: "test"; scope: { kind: "session" }; createdAt: typeof seq },
+      DocumentCreate
+    >
+  >().toEqualTypeOf<false>();
+  expectTypeOf<
+    LiteralFits<{ id: Document; kind: "test"; scope: { kind: "session" } }, DocumentCreate>
+  >().toEqualTypeOf<true>();
 }
 
 function documentContentFailures() {
-  // @ts-expect-error document bases cannot carry operation batches
-  const baseWithOps: DocumentContent = { kind: "base", version: 1, value: {}, ops: [] };
-  // @ts-expect-error document deltas cannot carry materialized values
-  const deltaWithValue: DocumentContent = { kind: "delta", version: 1, ops: [], value: {} };
-  const createWithDelta: StorageWrite = {
-    type: "document.create",
-    record: { id: documentId, kind: "test", scope: { kind: "session" } },
-    // @ts-expect-error document creation always starts from a complete base
-    content: { kind: "delta", version: 1, ops: [] },
+  expectTypeOf<
+    LiteralFits<{ kind: "base"; version: 1; value: {}; ops: [] }, DocumentContent>
+  >().toEqualTypeOf<false>();
+  expectTypeOf<
+    LiteralFits<{ kind: "delta"; version: 1; ops: []; value: {} }, DocumentContent>
+  >().toEqualTypeOf<false>();
+  expectTypeOf<
+    LiteralFits<{ kind: "delta"; version: 1; ops: [] }, DocumentContent>
+  >().toEqualTypeOf<true>();
+  type Created<Content> = {
+    type: "document.create";
+    record: { id: typeof documentId; kind: "test"; scope: { kind: "session" } };
+    content: Content;
   };
-  // @ts-expect-error completed outcomes cannot carry errors
-  const completedWithError: TaskOutcome<number> = {
-    status: "completed",
-    result: 1,
-    error: { message: "impossible" },
-  };
-  void [baseWithOps, deltaWithValue, createWithDelta, completedWithError];
+  expectTypeOf<
+    LiteralFits<Created<{ kind: "delta"; version: 1; ops: [] }>, StorageWrite>
+  >().toEqualTypeOf<false>();
+  expectTypeOf<
+    LiteralFits<Created<{ kind: "base"; version: 1; value: {} }>, StorageWrite>
+  >().toEqualTypeOf<true>();
+  expectTypeOf<
+    LiteralFits<
+      { status: "completed"; result: 1; error: { message: "impossible" } },
+      TaskOutcome<number>
+    >
+  >().toEqualTypeOf<false>();
 }
 
 function submissionRecordFailures() {
-  // @ts-expect-error queued submissions cannot reference transcript entries
-  const queuedWithEntry: SubmissionRecord = {
-    id: submissionId,
-    conversationId,
-    type: "input",
-    status: "queued",
-    entry: entryId,
-  };
-  // @ts-expect-error successful input submissions require an answer entry
-  const inputWithoutAnswer: SubmissionRecord = {
-    id: submissionId,
-    conversationId,
-    type: "input",
-    status: "done",
-    entry: entryId,
-  };
-  // @ts-expect-error passive write submissions never carry an answer
-  const writeWithAnswer: SubmissionRecord = {
-    id: submissionId,
-    conversationId,
-    type: "write",
-    status: "done",
-    entry: entryId,
-    answer: answerId,
-  };
-  const submissionCreateWithId: SubmissionCreate = {
-    // @ts-expect-error Session, not the submission create value, assigns its ID
-    id: submissionId,
-    conversationId,
-    type: "write",
-    status: "queued",
-  };
-  void [queuedWithEntry, inputWithoutAnswer, writeWithAnswer, submissionCreateWithId];
+  type Base = { id: typeof submissionId; conversationId: typeof conversationId };
+  expectTypeOf<
+    LiteralFits<Base & { type: "input"; status: "queued"; entry: Entry }, SubmissionRecord>
+  >().toEqualTypeOf<false>();
+  expectTypeOf<
+    LiteralFits<Base & { type: "input"; status: "queued" }, SubmissionRecord>
+  >().toEqualTypeOf<true>();
+  expectTypeOf<
+    LiteralFits<Base & { type: "input"; status: "done"; entry: Entry }, SubmissionRecord>
+  >().toEqualTypeOf<false>();
+  expectTypeOf<
+    LiteralFits<
+      Base & { type: "input"; status: "done"; entry: Entry; answer: Entry },
+      SubmissionRecord
+    >
+  >().toEqualTypeOf<true>();
+  expectTypeOf<
+    LiteralFits<
+      Base & { type: "write"; status: "done"; entry: Entry; answer: Entry },
+      SubmissionRecord
+    >
+  >().toEqualTypeOf<false>();
+  expectTypeOf<
+    LiteralFits<
+      {
+        id: typeof submissionId;
+        conversationId: typeof conversationId;
+        type: "write";
+        status: "queued";
+      },
+      SubmissionCreate
+    >
+  >().toEqualTypeOf<false>();
+  expectTypeOf<
+    LiteralFits<
+      { conversationId: typeof conversationId; type: "write"; status: "queued" },
+      SubmissionCreate
+    >
+  >().toEqualTypeOf<true>();
 }
 
 it("encodes discriminator-dependent fields", () => {
   expectEditAndStateDiscriminators();
   expectRecordDiscriminators();
-  expectTypeOf(editAndTaskStateFailures).toBeFunction();
-  expectTypeOf(documentRecordFailures).toBeFunction();
-  expectTypeOf(documentContentFailures).toBeFunction();
-  expectTypeOf(submissionRecordFailures).toBeFunction();
+  editAndTaskStateFailures();
+  documentRecordFailures();
+  documentContentFailures();
+  submissionRecordFailures();
 });

@@ -1,26 +1,22 @@
-// A Session stores conversations, transcript entries, tasks, and documents.
-// Run from libs/durable:
-//   node --conditions=source --experimental-strip-types test/examples/00-conversation.ts
+import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import { BACKGROUND_CONTEXT } from "@msa/chord/context";
+import { Console, Effect } from "effect";
 
 import { createSession } from "../../src/session/index.ts";
 import { MemoryStorage } from "../../src/storage/memory.ts";
+import { awaited } from "../effect-support.ts";
 
-// MemoryStorage keeps everything in memory; other storage backends keep it on disk.
 const session = createSession(new MemoryStorage());
 
-// Every Session call takes a context, which is used for cancellation.
-// BACKGROUND_CONTEXT means "never cancel".
 const context = BACKGROUND_CONTEXT;
 
-// All writes happen inside session.commit(). The callback receives a
-// transaction `tx`; everything it writes is saved together when the callback
-// returns, or discarded if it throws.
-// "ownerless" means no task created this conversation.
-const standalone = await session.commit(
-  (tx) => tx.createConversation({ ownership: { kind: "ownerless" } }),
-  context,
-);
-console.log("standalone conversation:", standalone);
+const main = Effect.gen(function* () {
+  const standalone = yield* awaited(
+    session.commit((tx) => tx.createConversation({ ownership: { kind: "ownerless" } }), context),
+  );
+  yield* Console.log("standalone conversation:", standalone);
 
-await session.close(context);
+  yield* awaited(session.close(context));
+});
+
+NodeRuntime.runMain(main);

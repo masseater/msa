@@ -1,140 +1,136 @@
-import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-
 import { BACKGROUND_CONTEXT } from "@msa/chord/context";
+import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
+import { currentTimeMillis } from "../src/clock.ts";
 import { getOrThrow, type WatchChange } from "../src/env/index.ts";
+import { environmentVariable } from "../src/env/node-process.ts";
 import { NodeExecutionEnv } from "../src/env/node.ts";
 import { registerEnvConformance } from "../src/testing/index.ts";
+import { awaited } from "./effect-support.ts";
+import {
+  joinPath,
+  makeTempDir,
+  removeDirRetrying,
+  runCommandOrFail,
+  writeBytes,
+} from "./platform-support.ts";
 
 const windows = process.platform === "win32";
-const gitBash = join(process.env["ProgramFiles"] ?? "C:\\Program Files", "Git", "bin", "bash.exe");
+const gitBash = joinPath(
+  environmentVariable("ProgramFiles", true) ?? "C:\\Program Files",
+  "Git",
+  "bin",
+  "bash.exe",
+);
 const context = BACKGROUND_CONTEXT;
 
-// Remove a test directory. On Windows, `taskkill /T` runs asynchronously and can miss descendants such as Git Bash's
-// `sleep`, so a killed command's processes can hold the directory for a while after `exec` settles; retry until they
-// exit.
-async function removeTempDir(dir: string, attempt = 0): Promise<void> {
-  try {
-    rmSync(dir, { recursive: true, force: true });
-  } catch (error) {
-    const code = (error as NodeJS.ErrnoException).code;
-    if (attempt >= 80 || (code !== "EBUSY" && code !== "EPERM" && code !== "ENOTEMPTY"))
-      throw error;
-    await new Promise((resolve) => {
-      setTimeout(resolve, 100);
-    });
-    await removeTempDir(dir, attempt + 1);
-  }
-}
+const withEnvDir = <A, E>(prefix: string, use: (cwd: string) => Effect.Effect<A, E>) =>
+  Effect.acquireUseRelease(makeTempDir(prefix), use, removeDirRetrying);
 
 registerEnvConformance(
   { describe, expect, it },
   "NodeExecutionEnv conformance",
-  async (use) => {
-    const cwd = mkdtempSync(join(tmpdir(), "msa-durable-env-conformance-"));
-    try {
-      await use(new NodeExecutionEnv({ cwd }));
-    } finally {
-      await removeTempDir(cwd);
-    }
-  },
-  // Git Bash's `ln -s` copies instead of linking unless native symlinks are enabled.
+  (use) =>
+    Effect.runPromise(
+      withEnvDir("msa-durable-env-conformance-", (cwd) =>
+        awaited(use(new NodeExecutionEnv({ cwd }))),
+      ),
+    ),
   windows ? { shell: [gitBash, "-c"], symlinks: false } : {},
 );
 
 registerEnvConformance(
   { describe, expect, it },
   "NodeExecutionEnv conformance with polling watches",
-  async (use) => {
-    const cwd = mkdtempSync(join(tmpdir(), "msa-durable-env-conformance-"));
-    try {
-      await use(new NodeExecutionEnv({ cwd, watch: { mode: "polling", pollIntervalMs: 100 } }));
-    } finally {
-      await removeTempDir(cwd);
-    }
-  },
+  (use) =>
+    Effect.runPromise(
+      withEnvDir("msa-durable-env-conformance-", (cwd) =>
+        awaited(
+          use(new NodeExecutionEnv({ cwd, watch: { mode: "polling", pollIntervalMs: 100 } })),
+        ),
+      ),
+    ),
   windows ? { shell: [gitBash, "-c"], symlinks: false } : {},
 );
 
-describe("NodeExecutionEnv watch limits", () => {
-  it("refuses a tree over the directory budget and stops with an error when one grows past it", async () => {
-    const cwd = mkdtempSync(join(tmpdir(), "msa-durable-env-watch-"));
-    try {
-      const env = new NodeExecutionEnv({ cwd, watch: { maxDirectories: 3 } });
-      getOrThrow(await env.createDir("tree/a/b", undefined, context));
-      getOrThrow(await env.createDir("tree/c", undefined, context));
-      expect(await env.watch([{ path: "tree", recursive: true }], () => {}, context)).toMatchObject(
-        {
-          ok: false,
-          error: { code: "invalid" },
-        },
-      );
+const refusesTreeOver = withEnvDir("msa-durable-env-watch-", (cwd) =>
+  Effect.gen(function* () {
+    const env = new NodeExecutionEnv({ cwd, watch: { maxDirectories: 3 } });
+    getOrThrow(yield* awaited(env.createDir("tree/a/b", undefined, context)));
+    getOrThrow(yield* awaited(env.createDir("tree/c", undefined, context)));
+    expect(
+      yield* awaited(env.watch([{ path: "tree", recursive: true }], () => {}, context)),
+    ).toMatchObject({
+      ok: false,
+      error: { code: "invalid" },
+    });
 
-      getOrThrow(await env.remove("tree/c", { recursive: true }, context));
-      const changes: WatchChange[] = [];
-      const watcher = getOrThrow(
-        await env.watch(
-          [{ path: "tree", recursive: true }],
-          (change) => changes.push(change),
-          context,
-        ),
-      );
-      getOrThrow(await env.createDir("tree/d", undefined, context));
-      const deadline = Date.now() + 3000;
-      const failed = async (): Promise<void> => {
-        if (changes.some((change) => "error" in change) || Date.now() >= deadline) return;
-        await new Promise((resolve) => {
-          setTimeout(resolve, 20);
-        });
-        await failed();
-      };
-      await failed();
-      expect(changes.at(-1)).toMatchObject({ error: { code: "invalid" } });
-      await watcher.close(context);
-    } finally {
-      await removeTempDir(cwd);
-    }
-  });
+    getOrThrow(yield* awaited(env.remove("tree/c", { recursive: true }, context)));
+    const changes: WatchChange[] = [];
+    const watcher = getOrThrow(
+      yield* awaited(
+        env.watch([{ path: "tree", recursive: true }], (change) => changes.push(change), context),
+      ),
+    );
+    getOrThrow(yield* awaited(env.createDir("tree/d", undefined, context)));
+    const deadline = currentTimeMillis() + 3000;
+    while (!changes.some((change) => "error" in change) && currentTimeMillis() < deadline)
+      yield* Effect.sleep(20);
+    expect(changes.at(-1)).toMatchObject({ error: { code: "invalid" } });
+    yield* awaited(watcher.close(context));
+  }),
+);
+
+describe("NodeExecutionEnv watch limits", () => {
+  it("refuses a tree over the directory budget and stops with an error when one grows past it", () =>
+    Effect.runPromise(refusesTreeOver));
 });
 
 describe("NodeExecutionEnv readers", () => {
   const dirs: string[] = [];
-  const tempDir = (): string => {
-    const dir = mkdtempSync(join(tmpdir(), "msa-durable-env-readers-"));
-    dirs.push(dir);
-    return dir;
-  };
-  afterEach(async () => {
-    for await (const dir of dirs.splice(0)) await removeTempDir(dir);
-  }, 15_000);
+  const tempDir = makeTempDir("msa-durable-env-readers-").pipe(
+    Effect.tap((dir) => Effect.sync(() => dirs.push(dir))),
+  );
+  afterEach(
+    () => Effect.runPromise(Effect.forEach(dirs.splice(0), removeDirRetrying, { discard: true })),
+    15_000,
+  );
 
-  it("reads ranges spanning several internal chunks exactly", async () => {
-    const cwd = tempDir();
-    const bytes = new Uint8Array(2.5 * 1024 * 1024);
-    for (let index = 0; index < bytes.length; index++) bytes[index] = (index * 31) % 251;
-    writeFileSync(join(cwd, "big.bin"), bytes);
-    const reader = getOrThrow(
-      await new NodeExecutionEnv({ cwd }).openBinaryReader("big.bin", undefined, context),
-    );
-    try {
-      const all = getOrThrow(await reader.read(0, bytes.length + 10, context));
-      expect(all.length).toBe(bytes.length);
-      expect(Buffer.from(all).equals(Buffer.from(bytes))).toBe(true);
-      const middle = getOrThrow(await reader.read(1024 * 1024 - 3, 7, context));
-      expect([...middle]).toEqual([...bytes.subarray(1024 * 1024 - 3, 1024 * 1024 + 4)]);
-    } finally {
-      await reader.close(context);
-    }
-  });
+  it("reads ranges spanning several internal chunks exactly", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const cwd = yield* tempDir;
+        const bytes = new Uint8Array(2.5 * 1024 * 1024);
+        for (let index = 0; index < bytes.length; index++) bytes[index] = (index * 31) % 251;
+        yield* writeBytes(joinPath(cwd, "big.bin"), bytes);
+        const reader = getOrThrow(
+          yield* awaited(
+            new NodeExecutionEnv({ cwd }).openBinaryReader("big.bin", undefined, context),
+          ),
+        );
+        yield* Effect.gen(function* () {
+          const all = getOrThrow(yield* awaited(reader.read(0, bytes.length + 10, context)));
+          expect(all.length).toBe(bytes.length);
+          expect(Buffer.from(all).equals(Buffer.from(bytes))).toBe(true);
+          const middle = getOrThrow(yield* awaited(reader.read(1024 * 1024 - 3, 7, context)));
+          expect([...middle]).toEqual([...bytes.subarray(1024 * 1024 - 3, 1024 * 1024 + 4)]);
+        }).pipe(
+          Effect.ensuring(Effect.asVoid(Effect.suspend(() => awaited(reader.close(context))))),
+        );
+      }),
+    ));
 
-  it.skipIf(windows)("refuses a FIFO without waiting for a writer", async () => {
-    const cwd = tempDir();
-    execFileSync("mkfifo", [join(cwd, "pipe")]);
-    const result = await new NodeExecutionEnv({ cwd }).openBinaryReader("pipe", undefined, context);
-    expect(result).toMatchObject({ ok: false, error: { code: "invalid" } });
-  });
+  it.skipIf(windows)("refuses a FIFO without waiting for a writer", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const cwd = yield* tempDir;
+        yield* runCommandOrFail("mkfifo", [joinPath(cwd, "pipe")]);
+        const result = yield* awaited(
+          new NodeExecutionEnv({ cwd }).openBinaryReader("pipe", undefined, context),
+        );
+        expect(result).toMatchObject({ ok: false, error: { code: "invalid" } });
+      }),
+    ),
+  );
 });

@@ -3,6 +3,7 @@ import { CodemodeSandbox } from "@msa/codemode";
 import { CODEMODE_SOURCE_GRAMMAR } from "@msa/codemode/source";
 import { defineTool, type ToolRegistration } from "@msa/durable";
 import { MemoryStorage } from "@msa/durable/storage/memory";
+import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { createCodemodeExtension } from "../src/codemode/codemode.ts";
@@ -11,8 +12,7 @@ import {
   codemodeDescription,
   codemodeSection,
 } from "../src/codemode/describe.ts";
-import { allEntries, chatSetup, openChat } from "./chat-support.ts";
-import { context } from "./session-support.ts";
+import { allEntries, chatSetup, openChat, awaited, context } from "./support.ts";
 
 function tool(
   name: string,
@@ -55,7 +55,6 @@ describe("code mode description and section", () => {
     expect(section).toContain("### `read`\nRead a file.");
     expect(section).toContain("read(args: {");
     expect(section).toContain("## github\nGitHub MCP server");
-    // Tools before namespaces; a namespace's tools after its heading.
     expect(section.indexOf("### `read`")).toBeLessThan(section.indexOf("## github"));
     expect(section.indexOf("## github")).toBeLessThan(
       section.indexOf("### `mcp__github__list_issues`"),
@@ -76,6 +75,40 @@ describe("code mode description and section", () => {
   });
 });
 
+const rendersSectionConversation = Effect.gen(function* () {
+  const setup = chatSetup();
+  setup.registry.install(
+    createCodemodeExtension({ sandbox: new CodemodeSandbox(), namespaces: [GITHUB] }),
+  );
+  setup.registry.install({
+    name: "tools",
+    tools: [
+      tool("read", "Read a file."),
+      tool("mcp__github__list_issues", "List issues.", { callers: ["tools"] }),
+      tool("mcp__github__get_issue", "Get an issue.", { deferred: true }),
+    ],
+  });
+  setup.faux.setResponses([fauxAssistantMessage([fauxText("hi")]) as AssistantMessage]);
+  const { harness, root } = yield* openChat(new MemoryStorage(), setup);
+  yield* awaited(
+    (yield* awaited(root.submit({ type: "input", content: "go" }, context))).wait(context),
+  );
+  const system = (yield* allEntries(root)).find((entry) => entry.kind === "msa.system")!;
+  const sections = (system.model![0] as { sections?: Record<string, string> }).sections!;
+  expect(sections["codemode"]).toContain("### `read`");
+  expect(sections["codemode"]).toContain("### `mcp__github__list_issues`");
+  expect(sections["codemode"]).not.toContain("mcp__github__get_issue");
+  expect(sections["codemode"]).not.toContain("### `codemode`");
+  const tools = (
+    system.model![0] as { toolsAdded?: { name: string; constrainedSampling?: unknown }[] }
+  ).toolsAdded!;
+  expect(tools.find((candidate) => candidate.name === "codemode")?.constrainedSampling).toEqual({
+    type: "grammar",
+    variants: { openai_lark: CODEMODE_SOURCE_GRAMMAR },
+  });
+  yield* awaited(harness.close(context));
+});
+
 describe("code mode description and section", () => {
   it("uses the longest matching namespace prefix", () => {
     const section = codemodeSection(
@@ -87,38 +120,6 @@ describe("code mode description and section", () => {
     expect(section).not.toContain("## git\n");
   });
 
-  it("renders the section from the conversation's callable tools into the system prompt", async () => {
-    const setup = chatSetup();
-    setup.registry.install(
-      createCodemodeExtension({ sandbox: new CodemodeSandbox(), namespaces: [GITHUB] }),
-    );
-    setup.registry.install({
-      name: "tools",
-      tools: [
-        tool("read", "Read a file."),
-        tool("mcp__github__list_issues", "List issues.", { callers: ["tools"] }),
-        tool("mcp__github__get_issue", "Get an issue.", { deferred: true }),
-      ],
-    });
-    setup.faux.setResponses([fauxAssistantMessage([fauxText("hi")]) as AssistantMessage]);
-    const { harness, root } = await openChat(new MemoryStorage(), setup);
-    await (await root.submit({ type: "input", content: "go" }, context)).wait(context);
-    const system = (await allEntries(root)).find((entry) => entry.kind === "msa.system")!;
-    const sections = (system.model![0] as { sections?: Record<string, string> }).sections!;
-    expect(sections["codemode"]).toContain("### `read`");
-    expect(sections["codemode"]).toContain("### `mcp__github__list_issues`");
-    // Deferred tools are found with searchTools(), not listed.
-    expect(sections["codemode"]).not.toContain("mcp__github__get_issue");
-    // The code mode tool itself is not callable from scripts.
-    expect(sections["codemode"]).not.toContain("### `codemode`");
-    // The tool declaration carries the script grammar; msa-ai applies it only for models that support it.
-    const tools = (
-      system.model![0] as { toolsAdded?: { name: string; constrainedSampling?: unknown }[] }
-    ).toolsAdded!;
-    expect(tools.find((candidate) => candidate.name === "codemode")?.constrainedSampling).toEqual({
-      type: "grammar",
-      variants: { openai_lark: CODEMODE_SOURCE_GRAMMAR },
-    });
-    await harness.close(context);
-  });
+  it("renders the section from the conversation's callable tools into the system prompt", () =>
+    Effect.runPromise(rendersSectionConversation));
 });

@@ -10,7 +10,6 @@ import {
 import type { Context } from "@msa/chord";
 import type {
   Conversation,
-  EntryRecord,
   HarnessOptions,
   HarnessSettings,
   Registry,
@@ -18,17 +17,18 @@ import type {
   ToolRegistration,
 } from "@msa/durable";
 import { createRegistry, Harness } from "@msa/durable/harness";
+import { Effect } from "effect";
 
+import { currentTimeMillis } from "../src/clock.ts";
 import type { ExecutionEnv } from "../src/env/index.ts";
+import { awaited } from "./effect-support.ts";
 import { context } from "./session-support.ts";
 
-/** Models and registry that survive a close/reopen, like a host process's own objects. */
 export type ChatSetup = {
   readonly faux: FauxProviderHandle;
   readonly models: Models;
   readonly registry: Registry;
   readonly reports: unknown[];
-  /** Live Harness settings; tests assign fields to change them between decisions. */
   readonly settings: { -readonly [K in keyof HarnessSettings]: HarnessSettings[K] };
   now: () => number;
 };
@@ -43,50 +43,50 @@ export function chatSetup(options: RegisterFauxProviderOptions = {}): ChatSetup 
     registry: createRegistry(),
     reports: [],
     settings: {},
-    now: () => Date.now(),
+    now: () => currentTimeMillis(),
   };
 }
 
-// Open a Harness over `storage` and return its root, configured with the faux model on first creation.
-export async function openChat(
+export const openChat = Effect.fn("openChat")(function* (
   storage: Storage,
   setup: ChatSetup,
-  /** One environment for every conversation, or an `env` function. */
   options: { readonly env?: ExecutionEnv | NonNullable<HarnessOptions["env"]> } = {},
-): Promise<{ readonly harness: Harness; readonly root: Conversation }> {
-  const harness = await Harness.open(
-    storage,
-    {
-      models: setup.models,
-      registry: setup.registry,
-      settings: setup.settings,
-      ...(options.env === undefined
-        ? {}
-        : {
-            env:
-              typeof options.env === "function" ? options.env : () => options.env as ExecutionEnv,
-          }),
-      now: () => setup.now(),
-      onReport: (error) => setup.reports.push(error),
-    },
-    context,
+) {
+  const harness = yield* awaited(
+    Harness.open(
+      storage,
+      {
+        models: setup.models,
+        registry: setup.registry,
+        settings: setup.settings,
+        ...(options.env === undefined
+          ? {}
+          : {
+              env:
+                typeof options.env === "function" ? options.env : () => options.env as ExecutionEnv,
+            }),
+        now: () => setup.now(),
+        onReport: (error) => setup.reports.push(error),
+      },
+      context,
+    ),
   );
-  const root = await harness.root(context, {
-    agent: { model: { provider: "faux", modelId: "faux-1" } },
-  });
+  const root = yield* awaited(
+    harness.root(context, {
+      agent: { model: { provider: "faux", modelId: "faux-1" } },
+    }),
+  );
   return { harness, root };
-}
+});
 
-// Raw entries of a conversation, oldest first.
-export async function allEntries(
+export const allEntries = Effect.fn("allEntries")(function* (
   conversation: Conversation,
   callContext: Context = context,
-): Promise<EntryRecord[]> {
-  const page = await conversation.entries({}, 1000, undefined, callContext);
+) {
+  const page = yield* awaited(conversation.entries({}, 1000, undefined, callContext));
   return [...page.items].reverse();
-}
+});
 
-// Text of the first text content of a message.
 export function textOf(message: Message | undefined): string | undefined {
   if (message === undefined) return undefined;
   if (message.role === "system") return undefined;
@@ -95,40 +95,29 @@ export function textOf(message: Message | undefined): string | undefined {
   return text?.type === "text" ? text.text : undefined;
 }
 
-// Poll `check` in real time until it holds; for waits that span throttle windows and timers.
-export async function waitFor(
-  check: () => boolean | Promise<boolean>,
-  timeoutMs = 5000,
-): Promise<void> {
-  const deadline = Date.now() + timeoutMs;
-  const poll = async (): Promise<void> => {
-    if (await check()) return;
-    if (Date.now() > deadline) throw new Error("Condition was not reached");
-    await new Promise((resolve) => {
-      setTimeout(resolve, 5);
-    });
-    await poll();
-  };
-  await poll();
-}
+export type Check = Effect.Effect<boolean> | (() => boolean | Promise<boolean>);
 
-// Faux response that never answers; the run stays busy until its generation is cancelled. `reached` resolves once the
-// request was sent, after the generation's preparation and request commits.
+export const waitFor = Effect.fn("waitFor")(function* (check: Check, timeoutMs = 5000) {
+  const probe = Effect.isEffect(check) ? check : Effect.suspend(() => awaited(check()));
+  const deadline = currentTimeMillis() + timeoutMs;
+  while (!(yield* probe)) {
+    if (currentTimeMillis() > deadline) throw new Error("Condition was not reached");
+    yield* Effect.sleep(5);
+  }
+});
+
 export function unanswered(): { readonly step: FauxResponseStep; readonly reached: Promise<void> } {
-  let reach!: () => void;
-  const reached = new Promise<void>((resolve) => {
-    reach = resolve;
-  });
-  const step: FauxResponseStep = (_context, options) =>
-    new Promise((_, reject) => {
-      reach();
-      const signal = options!.signal!;
-      signal.addEventListener("abort", () => reject(signal.reason), { once: true });
-    });
+  const { promise: reached, resolve: reach } = Promise.withResolvers<void>();
+  const step: FauxResponseStep = (_context, options) => {
+    reach();
+    const signal = options!.signal!;
+    const { promise, reject } = Promise.withResolvers<never>();
+    signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+    return promise;
+  };
   return { step, reached };
 }
 
-// The installed tools with these names, as `configure()` takes them.
 export function toolsNamed(setup: ChatSetup, ...names: string[]): ToolRegistration[] {
   const installed = setup.registry.snapshot().tools();
   return names.map((name) => {

@@ -7,7 +7,10 @@ import {
   type TaskId,
   type TaskRecord,
 } from "@msa/durable";
+import { Effect } from "effect";
+import { dual } from "effect/Function";
 
+import { awaited } from "./effect-support.ts";
 import { context, openTestSession } from "./session-support.ts";
 
 export type Checkpoint = { phase: "start" } | { phase: "next"; step: number };
@@ -16,8 +19,8 @@ export const WorkTask = defineTask<{ path: string }, Checkpoint, { ok: boolean }
   name: "test.work",
   version: 1,
   initial: () => ({ phase: "start" }),
-  phases: { start: async () => {}, next: async () => {} },
-  abort: async () => {},
+  phases: { start: () => Promise.resolve(), next: () => Promise.resolve() },
+  abort: () => Promise.resolve(),
 });
 
 export type Progress = { lines: string[] };
@@ -63,20 +66,40 @@ export function terminal(task: AnyTask): AnyTask {
   };
 }
 
-export function createTask(
+function createTaskImpl(
   session: ReturnType<typeof openTestSession>["session"],
   conversationId: ConversationId,
   withDocument = false,
 ): Promise<TaskId<{ ok: boolean }>> {
   return Promise.resolve(
-    session.commit(async (tx) => {
-      const taskId = await tx.createTask(
-        WorkTask,
-        { path: "a" },
-        { ownership: { kind: "conversation" }, conversationId },
-      );
-      if (withDocument) (await tx.doc(ProgressDoc, taskId)).lines.push("started");
-      return taskId;
-    }, context),
+    session.commit(
+      (tx) =>
+        Effect.runPromise(
+          Effect.gen(function* () {
+            const taskId = yield* awaited(
+              tx.createTask(
+                WorkTask,
+                { path: "a" },
+                { ownership: { kind: "conversation" }, conversationId },
+              ),
+            );
+            if (withDocument) (yield* awaited(tx.doc(ProgressDoc, taskId))).lines.push("started");
+            return taskId;
+          }),
+        ),
+      context,
+    ),
   );
 }
+
+export const createTask: {
+  (
+    conversationId: ConversationId,
+    withDocument?: boolean,
+  ): (session: ReturnType<typeof openTestSession>["session"]) => ReturnType<typeof createTaskImpl>;
+  (
+    session: ReturnType<typeof openTestSession>["session"],
+    conversationId: ConversationId,
+    withDocument?: boolean,
+  ): ReturnType<typeof createTaskImpl>;
+} = dual((args) => typeof args[0] === "object" && args[0] !== null, createTaskImpl);

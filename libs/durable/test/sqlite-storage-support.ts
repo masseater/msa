@@ -1,10 +1,9 @@
-import { mkdtemp } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
 import type { JsonValue } from "@msa/chord";
 import { BACKGROUND_CONTEXT } from "@msa/chord/context";
+import { Effect } from "effect";
+import { dual } from "effect/Function";
 
 import type { SqliteStorage } from "../src/storage/sqlite/index.ts";
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
@@ -18,6 +17,14 @@ import type {
   TaskRecord,
 } from "../src/types.ts";
 import { ROOT_CONVERSATION_ID } from "../src/types.ts";
+import { awaited } from "./effect-support.ts";
+import { joinPath, makeTempDir } from "./platform-support.ts";
+
+export type { SqliteStorage } from "../src/storage/sqlite/index.ts";
+export {
+  openNodeSqliteStorage,
+  type NodeSqliteStorageOptions,
+} from "../src/storage/sqlite/node.ts";
 
 export const context = BACKGROUND_CONTEXT;
 
@@ -25,20 +32,36 @@ export const openStorages = new Set<SqliteStorage>();
 
 export const tempDirectories = new Set<string>();
 
-export async function createSqliteStorage(
+export const createSqliteStorage = Effect.fn("createSqliteStorage")(function* (
   options: { readonly walAutoCheckpointPages?: number } = {},
 ) {
-  const directory = await mkdtemp(join(tmpdir(), "msa-durable-sqlite-"));
+  const directory = yield* makeTempDir("msa-durable-sqlite-");
   tempDirectories.add(directory);
-  const path = join(directory, "storage.sqlite");
-  const storage = await openNodeSqliteStorage(path, options);
+  const path = joinPath(directory, "storage.sqlite");
+  const storage = yield* awaited(openNodeSqliteStorage(path, options));
   openStorages.add(storage);
   return { storage, path };
-}
+});
 
-export function entry(id: EntryId, conversationId: ConversationId, data?: JsonValue): EntryRecord {
+function entryImpl(
+  id: EntryId,
+  conversationId: ConversationId,
+  data: JsonValue | undefined,
+): EntryRecord {
   return { id, conversationId, kind: "message", ...(data === undefined ? {} : { data }) };
 }
+
+export const entry: {
+  (
+    conversationId: ConversationId,
+    data: JsonValue | undefined,
+  ): (id: EntryId) => ReturnType<typeof entryImpl>;
+  (
+    id: EntryId,
+    conversationId: ConversationId,
+    data: JsonValue | undefined,
+  ): ReturnType<typeof entryImpl>;
+} = dual(3, entryImpl);
 
 export function createRoot(storage: Storage): Promise<Seq> {
   return Promise.resolve(
@@ -59,7 +82,12 @@ export function pendingTask(id: TaskId<JsonValue>): TaskRecord<JsonValue, JsonVa
   };
 }
 
-export function scalar(db: DatabaseSync, sql: string): number {
+function scalarImpl(db: DatabaseSync, sql: string): number {
   const row = db.prepare(sql).get() as { readonly value: number };
   return row.value;
 }
+
+export const scalar: {
+  (sql: string): (db: DatabaseSync) => ReturnType<typeof scalarImpl>;
+  (db: DatabaseSync, sql: string): ReturnType<typeof scalarImpl>;
+} = dual(2, scalarImpl);

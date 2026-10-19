@@ -7,12 +7,13 @@ import {
   section,
   type ToolRegistration,
 } from "@msa/durable";
+import { dual } from "effect/Function";
 
 import { resolveAgent, resolveSettings } from "../src/harness/agent.ts";
 
 export type AppTool = ToolRegistration & { readonly snippet?: string };
 
-export function tool(name: string, extra: Partial<AppTool> = {}): AppTool {
+function toolImpl(name: string, extra: Partial<AppTool> = {}): AppTool {
   return {
     name,
     description: `${name} tool`,
@@ -22,8 +23,12 @@ export function tool(name: string, extra: Partial<AppTool> = {}): AppTool {
   };
 }
 
-// Resolve `state` against `snapshot` and `settings`, collecting reports.
-export function resolve(
+export const tool: {
+  (extra?: Partial<AppTool>): (name: string) => ReturnType<typeof toolImpl>;
+  (name: string, extra?: Partial<AppTool>): ReturnType<typeof toolImpl>;
+} = dual((args) => typeof args[0] === "string", toolImpl);
+
+function resolveImpl(
   state: AgentState | undefined,
   snapshot: RegistrySnapshot<AppTool>,
   settings: HarnessSettings = {},
@@ -31,6 +36,23 @@ export function resolve(
 ) {
   return resolveAgent(state, snapshot, resolveSettings(settings), (error) => reports.push(error));
 }
+
+export const resolve: {
+  (
+    snapshot: RegistrySnapshot<AppTool>,
+    settings?: HarnessSettings,
+    reports?: unknown[],
+  ): (state: AgentState | undefined) => ReturnType<typeof resolveImpl>;
+  (
+    state: AgentState | undefined,
+    snapshot: RegistrySnapshot<AppTool>,
+    settings?: HarnessSettings,
+    reports?: unknown[],
+  ): ReturnType<typeof resolveImpl>;
+} = dual(
+  (args) => args.length >= 2 && args[1] !== undefined && "installed" in args[1],
+  resolveImpl,
+);
 
 export const read = tool("read");
 

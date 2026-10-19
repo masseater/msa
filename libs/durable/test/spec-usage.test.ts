@@ -1,8 +1,3 @@
-/**
- * The usage examples of docs/spec.md, compile-checked. Each block is copied as written apart from formatting, with
- * the names the spec leaves to the application typed in `spec-usage-names.ts`. Keep the two in sync; `test/examples/`
- * runs the same patterns end to end.
- */
 import { expect, expectTypeOf, it } from "vite-plus/test";
 
 import { createBashTool, createEditTool, createReadTool } from "../src/tools/index.ts";
@@ -17,14 +12,9 @@ import {
   subagentTools,
 } from "./spec-usage-extensions.ts";
 import type { SpecNames } from "./spec-usage-names.ts";
-import {
-  containerSequence,
-  hostSequence,
-  setupSequences,
-  taskSequences,
-} from "./spec-usage-sequences.ts";
+import { containerSequence, hostSequence, setupSequences } from "./spec-usage-sequences.ts";
+import { taskSequences } from "./spec-usage-task-sequences.ts";
 
-// Never called: the names the spec leaves to the application have no values.
 function examples(names: SpecNames) {
   const tools = {
     readTool: createReadTool(),

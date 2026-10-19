@@ -1,6 +1,8 @@
-import { readdir, stat } from "node:fs/promises";
-import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
+
+import { Effect } from "effect";
+
+import { fileSize, isFile, joinPath, listDirectory, pathExists } from "./platform-support.ts";
 
 export type DiskFootprint =
   | {
@@ -20,14 +22,9 @@ export type DiskFootprint =
       readonly taskFiles: number;
     };
 
-async function fileSize(path: string): Promise<number> {
-  try {
-    return (await stat(path)).size;
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return 0;
-    throw error;
-  }
-}
+const sizeOrZero = Effect.fn("sizeOrZero")(function* (path: string) {
+  return (yield* pathExists(path)) ? yield* fileSize(path) : 0;
+});
 
 function sqliteMetrics(path: string): Extract<DiskFootprint, { readonly kind: "sqlite" }> {
   const database = new DatabaseSync(path, { readOnly: true });
@@ -55,41 +52,48 @@ function sqliteMetrics(path: string): Extract<DiskFootprint, { readonly kind: "s
   }
 }
 
-async function jsonlMetrics(
-  directory: string,
-): Promise<Extract<DiskFootprint, { readonly kind: "jsonl" }>> {
-  const entries = await readdir(directory, { withFileTypes: true });
+const jsonlMetrics = Effect.fn("jsonlMetrics")(function* (directory: string) {
+  const entries = yield* listDirectory(directory);
   let mainBytes = 0;
   let auxiliaryBytes = 0;
   let fileCount = 0;
   let documentFiles = 0;
   let taskFiles = 0;
-  for await (const entry of entries) {
-    if (!entry.isFile()) continue;
-    const bytes = await fileSize(join(directory, entry.name));
+  for (const name of entries) {
+    const path = joinPath(directory, name);
+    if (!(yield* isFile(path))) continue;
+    const bytes = yield* sizeOrZero(path);
     fileCount++;
-    if (entry.name === "main.jsonl") mainBytes += bytes;
+    if (name === "main.jsonl") mainBytes += bytes;
     else auxiliaryBytes += bytes;
-    if (entry.name.startsWith("doc-") && entry.name.endsWith(".jsonl")) documentFiles++;
-    if (entry.name.startsWith("task-") && entry.name.endsWith(".jsonl")) taskFiles++;
+    if (name.startsWith("doc-") && name.endsWith(".jsonl")) documentFiles++;
+    if (name.startsWith("task-") && name.endsWith(".jsonl")) taskFiles++;
   }
-  return { kind: "jsonl", mainBytes, auxiliaryBytes, fileCount, documentFiles, taskFiles };
-}
+  const footprint: DiskFootprint = {
+    kind: "jsonl",
+    mainBytes,
+    auxiliaryBytes,
+    fileCount,
+    documentFiles,
+    taskFiles,
+  };
+  return footprint;
+});
 
-export async function diskFootprint(
+export const diskFootprint = Effect.fn("diskFootprint")(function* (
   backend: "memory" | "sqlite" | "jsonl",
   path: string | undefined,
-): Promise<DiskFootprint | undefined> {
+) {
   let disk: DiskFootprint | undefined;
   if (path !== undefined && backend === "sqlite") {
     disk = {
       ...sqliteMetrics(path),
-      mainBytes: await fileSize(path),
-      auxiliaryBytes: (await fileSize(`${path}-wal`)) + (await fileSize(`${path}-shm`)),
+      mainBytes: yield* sizeOrZero(path),
+      auxiliaryBytes: (yield* sizeOrZero(`${path}-wal`)) + (yield* sizeOrZero(`${path}-shm`)),
       fileCount: 3,
     };
   } else if (path !== undefined) {
-    disk = await jsonlMetrics(path);
+    disk = yield* jsonlMetrics(path);
   }
   return disk;
-}
+});

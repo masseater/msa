@@ -5,13 +5,15 @@ import {
   seedStorageBenchmark,
   storageBenchmarkPrimaryRecordCount,
 } from "@msa/durable/testing";
+import { Console, Effect } from "effect";
 
 import { openNodeJsonlStorage } from "../src/storage/jsonl/node.ts";
 import { MemoryStorage } from "../src/storage/memory.ts";
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
 import type { Storage } from "../src/types.ts";
+import { toJsonText, awaited } from "./effect-support.ts";
+import { makeTempFile, removeDir } from "./platform-support.ts";
 import { type DiskFootprint, diskFootprint } from "./storage-disk-footprint.ts";
-import { makeTempFile, removeDir } from "./temp-support.ts";
 
 export const STORAGE_BENCHMARK_BACKENDS = ["memory", "sqlite", "jsonl"] as const;
 
@@ -44,7 +46,9 @@ function snapshot(): MemorySnapshot {
   return { heapUsed: usage.heapUsed, rss: usage.rss, external: usage.external };
 }
 
-async function openBenchmarkStorage(backend: StorageBenchmarkBackend) {
+const openBenchmarkStorage = Effect.fn("openBenchmarkStorage")(function* (
+  backend: StorageBenchmarkBackend,
+) {
   let storage: Storage;
   let directory: string | undefined;
   let path: string | undefined;
@@ -52,53 +56,52 @@ async function openBenchmarkStorage(backend: StorageBenchmarkBackend) {
     storage = new MemoryStorage();
   } else {
     const name = backend === "sqlite" ? "storage.sqlite" : "storage";
-    ({ directory, path } = await makeTempFile(`msa-durable-${backend}-memory-`, name));
+    ({ directory, path } = yield* makeTempFile(`msa-durable-${backend}-memory-`, name));
     storage =
       backend === "sqlite"
-        ? await openNodeSqliteStorage(path)
-        : await openNodeJsonlStorage(path, BACKGROUND_CONTEXT);
+        ? yield* awaited(openNodeSqliteStorage(path))
+        : yield* awaited(openNodeJsonlStorage(path, BACKGROUND_CONTEXT));
   }
   return { storage, directory, path };
-}
+});
 
-// Read every scenario once checking its result, then nine more times.
-async function readEveryScenario(
+const readEveryScenario = Effect.fn("readEveryScenario")(function* (
   storage: Storage,
   dataset: Awaited<ReturnType<typeof seedStorageBenchmark>>,
-): Promise<void> {
+) {
   let checksum = 0;
-  for await (const scenario of STORAGE_READ_BENCHMARKS) {
-    const result = await scenario.run(storage, dataset);
+  for (const scenario of STORAGE_READ_BENCHMARKS) {
+    const result = yield* awaited(scenario.run(storage, dataset));
     if (result !== scenario.expected(dataset))
       throw new Error(`Invalid benchmark result: ${scenario.name}`);
     checksum += result;
   }
-  for await (const _ of Array.from({ length: 9 })) {
-    for await (const scenario of STORAGE_READ_BENCHMARKS)
-      checksum += await scenario.run(storage, dataset);
+  for (const _ of Array.from({ length: 9 })) {
+    for (const scenario of STORAGE_READ_BENCHMARKS)
+      checksum += yield* awaited(scenario.run(storage, dataset));
   }
   if (!Number.isFinite(checksum)) throw new Error("Storage memory read checksum is invalid");
-}
+});
 
-export async function runWorker(
+export const runWorker = Effect.fn("runWorker")(function* (
   backend: StorageBenchmarkBackend,
   scale: StorageBenchmarkScale,
-): Promise<void> {
-  const { storage, directory, path } = await openBenchmarkStorage(backend);
+) {
+  const { storage, directory, path } = yield* openBenchmarkStorage(backend);
 
-  try {
+  yield* Effect.gen(function* () {
     collectGarbage();
     const baseline = snapshot();
-    const dataset = await seedStorageBenchmark(storage, scale);
+    const dataset = yield* awaited(seedStorageBenchmark(storage, scale));
     collectGarbage();
     const postSeed = snapshot();
-    await readEveryScenario(storage, dataset);
+    yield* readEveryScenario(storage, dataset);
     collectGarbage();
     const postRead = snapshot();
-    const disk = await diskFootprint(backend, path);
+    const disk = yield* diskFootprint(backend, path);
     const recordCount = storageBenchmarkPrimaryRecordCount(scale);
-    console.log(
-      JSON.stringify({
+    yield* Console.log(
+      yield* toJsonText({
         backend,
         scale: scale.name,
         recordCount,
@@ -108,8 +111,12 @@ export async function runWorker(
         disk,
       }),
     );
-  } finally {
-    await storage.close(BACKGROUND_CONTEXT);
-    if (directory !== undefined) await removeDir(directory);
-  }
-}
+  }).pipe(
+    Effect.ensuring(
+      Effect.gen(function* () {
+        yield* awaited(storage.close(BACKGROUND_CONTEXT));
+        if (directory !== undefined) yield* removeDir(directory);
+      }),
+    ),
+  );
+});

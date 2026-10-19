@@ -1,11 +1,15 @@
 import { defineTask, type Id, type TaskId } from "@msa/durable";
 import { Harness } from "@msa/durable/harness";
 import { MemoryStorage } from "@msa/durable/storage/memory";
+import { Effect } from "effect";
 
+import { awaited } from "./effect-support.ts";
 import { ControlledStorage, context } from "./session-support.ts";
 import { aborted, deferred, openTasks } from "./task-support.ts";
 
-/** Waits for its signal, records that it saw it, and ends `aborted` through its abort handler. */
+export { safeNow } from "../src/harness/harness.ts";
+export { contained } from "../src/session/session.ts";
+
 export const signals: string[] = [];
 
 export const Waiting = defineTask<null, { phase: "work" }, null>({
@@ -13,23 +17,29 @@ export const Waiting = defineTask<null, { phase: "work" }, null>({
   version: 1,
   initial: () => ({ phase: "work" }),
   phases: {
-    work: async (_task, runtime) => {
-      await aborted(runtime.signal).catch(() => {});
-      signals.push("aborted");
-    },
+    work: (_task, runtime) =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          yield* awaited(aborted(runtime.signal).catch(() => {}));
+          signals.push("aborted");
+        }),
+      ),
   },
-  abort: async (_task, runtime, abortContext) => {
-    await runtime.commit(
-      () => ({ status: "terminal", outcome: { status: "aborted" } }),
-      abortContext,
-    );
-  },
+  abort: (_task, runtime, abortContext) =>
+    Effect.runPromise(
+      Effect.asVoid(
+        Effect.suspend(() =>
+          awaited(
+            runtime.commit(
+              () => ({ status: "terminal", outcome: { status: "aborted" } }),
+              abortContext,
+            ),
+          ),
+        ),
+      ),
+    ),
 });
 
-/**
- * Fails each Storage method named in `failing` once, with `error`. A scan of entries with a limit above 1 is the context
- * read's scan of its range, off the Session line; `heldRange` holds it until released.
- */
 export class FailingCalls extends ControlledStorage {
   readonly error = new Error("disk gone");
   readonly failing = new Set<string>();
@@ -43,16 +53,21 @@ export class FailingCalls extends ControlledStorage {
     this.#fail("task");
     return Promise.resolve(super.task(...args));
   }
-  override async scanEntries(...args: Parameters<MemoryStorage["scanEntries"]>) {
-    if (args[1] > 1) {
-      const held = this.heldRange;
-      if (held !== undefined) {
-        held.entered.resolve();
-        await held.release;
-      }
-      this.#fail("scanRange");
-    }
-    return super.scanEntries(...args);
+  override scanEntries(...args: Parameters<MemoryStorage["scanEntries"]>) {
+    const superScanEntries = super.scanEntries.bind(this);
+    return Effect.runPromise(
+      Effect.gen({ self: this }, function* () {
+        if (args[1] > 1) {
+          const held = this.heldRange;
+          if (held !== undefined) {
+            held.entered.resolve();
+            yield* awaited(held.release);
+          }
+          this.#fail("scanRange");
+        }
+        return yield* awaited(superScanEntries(...args));
+      }),
+    );
   }
   override mintId<I extends Id<string>>(): Promise<I> {
     this.#fail("mintId");
@@ -60,17 +75,14 @@ export class FailingCalls extends ControlledStorage {
   }
 }
 
-export async function started(storage: MemoryStorage) {
+export const started = Effect.fn("started")(function* (storage: MemoryStorage) {
   signals.length = 0;
-  const opened = await openTasks(storage, [Waiting]);
-  const root = await opened.harness.root(context);
+  const opened = yield* openTasks(storage, [Waiting]);
+  const root = yield* awaited(opened.harness.root(context));
   return { ...opened, root };
-}
+});
 
-export async function running(harness: Harness, id: TaskId): Promise<void> {
-  if ((await harness.getTask(id, context))?.state.status === "running") return;
-  await new Promise((resolve) => {
-    setTimeout(resolve, 1);
-  });
-  await running(harness, id);
-}
+export const running = Effect.fn("running")(function* (harness: Harness, id: TaskId) {
+  while ((yield* awaited(harness.getTask(id, context)))?.state.status !== "running")
+    yield* Effect.sleep(1);
+});

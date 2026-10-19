@@ -2,10 +2,9 @@ import { fauxAssistantMessage, fauxText, fauxToolCall, Type } from "@msa/ai";
 import { type AgentEvent, type ConversationId, defineDoc, defineTool } from "@msa/durable";
 import { watchEvents } from "@msa/durable/harness";
 import { MemoryStorage } from "@msa/durable/storage/memory";
+import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { chatSetup, openChat } from "./chat-support.ts";
-import { addTool } from "./harness-support.ts";
 import {
   settleLine,
   type Counter,
@@ -13,116 +12,150 @@ import {
   bump,
   open,
 } from "./session-document-retention-support.ts";
-import { context, createConversation } from "./session-support.ts";
-import { eventually } from "./task-support.ts";
+import {
+  chatSetup,
+  openChat,
+  awaited,
+  addTool,
+  context,
+  createConversation,
+  eventually,
+} from "./support.ts";
+
+const stepsTool = defineTool({
+  name: "steps",
+  description: "Streams three steps",
+  parameters: Type.Object({}),
+  execute: (_args, api) =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        for (const step of ["a\n", "b\n", "c\n"]) {
+          api.output(step);
+          yield* Effect.sleep(5);
+        }
+        return {};
+      }),
+    ),
+});
+
+const eventsWithRetention = Effect.fn("eventsWithRetention")(function* (
+  documentRetentionMs: number,
+) {
+  const setup = chatSetup();
+  setup.settings.documentRetentionMs = documentRetentionMs;
+  setup.settings.progress = { outputIntervalMs: 0 };
+  addTool(setup.registry, stepsTool);
+  setup.faux.setResponses([
+    fauxAssistantMessage([fauxToolCall("steps", {}, { id: "s1" })], { stopReason: "toolUse" }),
+    fauxAssistantMessage([fauxText("done")]),
+  ]);
+  const { harness, root } = yield* openChat(new MemoryStorage(), setup);
+  const stream = yield* awaited(watchEvents(harness, root.id, context));
+  const events: AgentEvent[] = [];
+  stream.start((batch) => {
+    events.push(...batch);
+
+    return Promise.resolve();
+  });
+  yield* awaited(
+    (yield* awaited(root.submit({ type: "input", content: "go" }, context))).wait(context),
+  );
+  yield* awaited(harness.waitForIdle(context));
+  yield* awaited(stream.stop());
+  yield* awaited(harness.close(context));
+  return events.map((event) =>
+    event.type === "tool_execution_update" ? `update:${JSON.stringify(event.output)}` : event.type,
+  );
+});
+
+const givesSameEvents = Effect.gen(function* () {
+  expect(yield* eventsWithRetention(0)).toEqual(yield* eventsWithRetention(600_000));
+});
 
 describe("document cache retention", () => {
-  it("gives the same events with documents evicted right after use as with documents kept", async () => {
-    const run = async (documentRetentionMs: number): Promise<string[]> => {
-      const setup = chatSetup();
-      setup.settings.documentRetentionMs = documentRetentionMs;
-      setup.settings.progress = { outputIntervalMs: 0 };
-      addTool(
-        setup.registry,
-        defineTool({
-          name: "steps",
-          description: "Streams three steps",
-          parameters: Type.Object({}),
-          execute: async (_args, api) => {
-            for await (const step of ["a\n", "b\n", "c\n"]) {
-              api.output(step);
-              await new Promise((resolve) => {
-                setTimeout(resolve, 5);
-              });
+  it("gives the same events with documents evicted right after use as with documents kept", () =>
+    Effect.runPromise(givesSameEvents));
+});
+
+const keepsReloadedNewer = Effect.gen(function* () {
+  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
+  const V1 = defineDoc<Counter>({
+    kind: "test.retention.versioned",
+    version: 1,
+    scope: "session",
+    initial: () => ({ count: 3 }),
+  });
+  const V2 = defineDoc<Counter & { v2: true }>({
+    kind: "test.retention.versioned",
+    version: 2,
+    scope: "session",
+    initial: () => ({ count: 0, v2: true }),
+    migrate: (value) => ({ count: (value as Counter).count, v2: true }),
+  });
+  const { session, sizes } = open(0);
+  yield* awaited(session.commit((tx) => tx.doc(V1).then(() => undefined), context));
+  const state = (yield* awaited(session.documentState(V1, context)))!;
+  expect(yield* awaited(session.snapshot(V2, context))).toEqual({ count: 3, v2: true });
+  yield* settleLine(session);
+  expect(sizes().cached).toBe(1);
+  state.dispose();
+  yield* eventually(() =>
+    runPromise(
+      Effect.gen(function* () {
+        yield* settleLine(session);
+        return sizes().cached === 0;
+      }),
+    ),
+  );
+  yield* awaited(session.close(context));
+});
+
+describe("document cache retention", () => {
+  it("keeps a reloaded newer version cached while an observer of the older one is attached", () =>
+    Effect.runPromise(keepsReloadedNewer));
+});
+
+const queuesOneSweep = Effect.gen(function* () {
+  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
+  const { session } = open(0);
+  const conversationIds: ConversationId[] = [];
+  for (const _ of Array.from({ length: 50 })) {
+    const id = yield* awaited(createConversation(session));
+    yield* bump(session, id);
+    conversationIds.push(id);
+  }
+  yield* eventually(() =>
+    runPromise(
+      Effect.gen(function* () {
+        yield* settleLine(session);
+        return session.documentCacheSizes.cached === 0;
+      }),
+    ),
+  );
+  const before = session.documentCacheSizes.sweeps;
+  yield* awaited(
+    session.commit(
+      (tx) =>
+        runPromise(
+          Effect.gen(function* () {
+            for (const id of conversationIds) {
+              (yield* awaited(tx.doc(CounterDoc, id))).count++;
+              yield* Effect.sleep(1);
             }
-            return {};
-          },
-        }),
-      );
-      setup.faux.setResponses([
-        fauxAssistantMessage([fauxToolCall("steps", {}, { id: "s1" })], { stopReason: "toolUse" }),
-        fauxAssistantMessage([fauxText("done")]),
-      ]);
-      const { harness, root } = await openChat(new MemoryStorage(), setup);
-      const stream = await watchEvents(harness, root.id, context);
-      const events: AgentEvent[] = [];
-      stream.start((batch) => {
-        events.push(...batch);
-
-        return Promise.resolve();
-      });
-      await (await root.submit({ type: "input", content: "go" }, context)).wait(context);
-      await harness.waitForIdle(context);
-      await stream.stop();
-      await harness.close(context);
-      // Ids and times differ between runs; the sequence of event types and tool outputs must not.
-      return events.map((event) =>
-        event.type === "tool_execution_update"
-          ? `update:${JSON.stringify(event.output)}`
-          : event.type,
-      );
-    };
-    expect(await run(0)).toEqual(await run(600_000));
-  });
+          }),
+        ),
+      context,
+    ),
+  );
+  yield* settleLine(session);
+  expect(session.documentCacheSizes.cached).toBe(0);
+  expect(session.documentCacheSizes.sweeps - before).toBeLessThanOrEqual(2);
+  yield* awaited(session.close(context));
 });
 
 describe("document cache retention", () => {
-  it("keeps a reloaded newer version cached while an observer of the older one is attached", async () => {
-    const V1 = defineDoc<Counter>({
-      kind: "test.retention.versioned",
-      version: 1,
-      scope: "session",
-      initial: () => ({ count: 3 }),
-    });
-    const V2 = defineDoc<Counter & { v2: true }>({
-      kind: "test.retention.versioned",
-      version: 2,
-      scope: "session",
-      initial: () => ({ count: 0, v2: true }),
-      migrate: (value) => ({ count: (value as Counter).count, v2: true }),
-    });
-    const { session, sizes } = open(0);
-    await session.commit((tx) => tx.doc(V1).then(() => undefined), context);
-    const state = (await session.documentState(V1, context))!;
-    expect(await session.snapshot(V2, context)).toEqual({ count: 3, v2: true });
-    await settleLine(session);
-    expect(sizes().cached).toBe(1);
-    state.dispose();
-    await eventually(async () => {
-      await settleLine(session);
-      return sizes().cached === 0;
-    });
-    await session.close(context);
-  });
-});
-
-describe("document cache retention", () => {
-  it("queues one sweep job, not one per document, while a commit holds the line", async () => {
-    const { session } = open(0);
-    const conversationIds: ConversationId[] = [];
-    for await (const _ of Array.from({ length: 50 })) {
-      const id = await createConversation(session);
-      await bump(session, id);
-      conversationIds.push(id);
-    }
-    await eventually(async () => {
-      await settleLine(session);
-      return session.documentCacheSizes.cached === 0;
-    });
-    const before = session.documentCacheSizes.sweeps;
-    // One commit loads 50 evicted documents from storage, each touched as it loads; the sweep job stays pending while
-    // the line is held.
-    await session.commit(async (tx) => {
-      for await (const id of conversationIds) {
-        (await tx.doc(CounterDoc, id)).count++;
-        await new Promise((resolve) => {
-          setTimeout(resolve, 0);
-        });
-      }
-    }, context);
-    await settleLine(session);
-    expect(session.documentCacheSizes.cached).toBe(0);
-    expect(session.documentCacheSizes.sweeps - before).toBeLessThanOrEqual(2);
-    await session.close(context);
-  });
+  it("queues one sweep job, not one per document, while a commit holds the line", () =>
+    Effect.runPromise(queuesOneSweep));
 });

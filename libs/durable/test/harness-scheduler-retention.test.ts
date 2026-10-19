@@ -1,9 +1,9 @@
-import { rm } from "node:fs/promises";
-
 import { LiveDoc, type Storage } from "@msa/durable";
+import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
+import { awaited } from "./effect-support.ts";
 import {
   status,
   sizes,
@@ -18,18 +18,21 @@ import {
   rejections,
   Spawner,
 } from "./harness-scheduler-retention-support.ts";
+import { removeDir } from "./platform-support.ts";
 import { context } from "./session-support.ts";
-import { deferred, eventually, settled } from "./task-support.ts";
+import { eventually } from "./task-support.ts";
 
-afterEach(async () => {
-  gates.clear();
-  runs.clear();
-  rejections.length = 0;
-  for await (const directory of directories.splice(0))
-    await rm(directory, { recursive: true, force: true });
-});
+afterEach(() =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      gates.clear();
+      runs.clear();
+      rejections.length = 0;
+      for (const directory of directories.splice(0)) yield* removeDir(directory);
+    }),
+  ),
+);
 
-// Count the task and conversation reads a storage serves.
 function countReads(storage: Storage): { tasks: number; conversations: number } {
   const reads = { tasks: 0, conversations: 0 };
   const task = storage.task.bind(storage);
@@ -45,226 +48,241 @@ function countReads(storage: Storage): { tasks: number; conversations: number } 
   return reads;
 }
 
-describe("scheduler retention", () => {
-  it("forgets ended subagent chains once their work ends", async () => {
-    const { harness, root } = await open();
-    const parent = await root.commit(
+const forgetsEndedSubagent = Effect.gen(function* () {
+  const { harness, root } = yield* open();
+  const parent = yield* awaited(
+    root.commit(
       (tx) => tx.createTask(Hold, { name: "parent" }, { ownership: { kind: "conversation" } }),
       context,
-    );
-    await subagentCycle(harness, root, parent, 0);
-    const baseline = sizes(harness);
-    for await (const n of Array.from({ length: 200 }, (_, i) => 1 + i))
-      await subagentCycle(harness, root, parent, n);
-    expect(sizes(harness)).toEqual(baseline);
-    gate("parent").resolve();
-    await harness.waitForTask(parent, context);
-    await harness.close(context);
-  });
+    ),
+  );
+  yield* subagentCycle(harness, root, parent, 0);
+  const baseline = sizes(harness);
+  for (const n of Array.from({ length: 200 }, (_, i) => 1 + i))
+    yield* subagentCycle(harness, root, parent, n);
+  expect(sizes(harness)).toEqual(baseline);
+  gate("parent").resolve();
+  yield* awaited(harness.waitForTask(parent, context));
+  yield* awaited(harness.close(context));
 });
 
 describe("scheduler retention", () => {
-  it("holds a live owner for work later created in a forgotten conversation, loading its chain again", async () => {
-    const storage = await openNodeSqliteStorage(await sqlitePath());
-    const reads = countReads(storage);
-    const { harness, root } = await open(storage);
-    // Live P -> ended B -> ended A -> conversation C, empty: forgotten.
-    const tree = await root.commit(async (tx) => {
-      const p = await tx.createTask(Hold, { name: "p" }, { ownership: { kind: "conversation" } });
-      const b = await tx.createTask(
-        Hold,
-        { name: "b" },
-        { ownership: { kind: "task", taskId: p } },
-      );
-      const a = await tx.createTask(
-        Hold,
-        { name: "a" },
-        { ownership: { kind: "task", taskId: b } },
-      );
-      const c = await tx.createConversation({ ownership: { kind: "task", taskId: a } });
-      return { p, b, a, c: c.id };
-    }, context);
-    gate("a").resolve();
-    gate("b").resolve();
-    await harness.waitForTask(tree.b, context);
-    const before = sizes(harness);
-    const loaded = reads.tasks + reads.conversations;
-    const c = (await harness.conversation(tree.c, context))!;
-    const d = await c.commit(
+  it("forgets ended subagent chains once their work ends", () =>
+    Effect.runPromise(forgetsEndedSubagent));
+});
+
+const holdsLiveOwnerStep1 = Effect.gen(function* () {
+  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
+  const storage = yield* awaited(openNodeSqliteStorage(yield* sqlitePath()));
+  const reads = countReads(storage);
+  const { harness, root } = yield* open(storage);
+  const tree = yield* awaited(
+    root.commit(
+      (tx) =>
+        runPromise(
+          Effect.gen(function* () {
+            const p = yield* awaited(
+              tx.createTask(Hold, { name: "p" }, { ownership: { kind: "conversation" } }),
+            );
+            const b = yield* awaited(
+              tx.createTask(Hold, { name: "b" }, { ownership: { kind: "task", taskId: p } }),
+            );
+            const a = yield* awaited(
+              tx.createTask(Hold, { name: "a" }, { ownership: { kind: "task", taskId: b } }),
+            );
+            const c = yield* awaited(
+              tx.createConversation({ ownership: { kind: "task", taskId: a } }),
+            );
+            return { p, b, a, c: c.id };
+          }),
+        ),
+      context,
+    ),
+  );
+  gate("a").resolve();
+  gate("b").resolve();
+  yield* awaited(harness.waitForTask(tree.b, context));
+  const before = sizes(harness);
+  const loaded = reads.tasks + reads.conversations;
+  const c = (yield* awaited(harness.conversation(tree.c, context)))!;
+  const d = yield* awaited(
+    c.commit(
       (tx) => tx.createTask(Hold, { name: "d" }, { ownership: { kind: "conversation" } }),
       context,
-    );
-    gate("p").resolve();
-    await eventually(async () => (await status(harness, tree.p)).status === "completing");
-    expect(reads.tasks + reads.conversations).toBeGreaterThan(loaded);
-    gate("d").resolve();
-    expect((await harness.waitForTask(d, context)).state.outcome.status).toBe("completed");
-    expect((await harness.waitForTask(tree.p, context)).state.outcome.status).toBe("completed");
-    expect(sizes(harness).settled).toBeLessThanOrEqual(before.settled);
-    await harness.close(context);
-  });
+    ),
+  );
+  gate("p").resolve();
+  return { runPromise, reads, harness, tree, before, loaded, d };
+});
+
+const holdsLiveOwner = Effect.gen(function* () {
+  const { runPromise, reads, harness, tree, before, loaded, d } = yield* holdsLiveOwnerStep1;
+  yield* eventually(() =>
+    runPromise(
+      Effect.gen(function* () {
+        return (yield* status(harness, tree.p)).status === "completing";
+      }),
+    ),
+  );
+  expect(reads.tasks + reads.conversations).toBeGreaterThan(loaded);
+  gate("d").resolve();
+  expect((yield* awaited(harness.waitForTask(d, context))).state.outcome.status).toBe("completed");
+  expect((yield* awaited(harness.waitForTask(tree.p, context))).state.outcome.status).toBe(
+    "completed",
+  );
+  expect(sizes(harness).settled).toBeLessThanOrEqual(before.settled);
+  yield* awaited(harness.close(context));
 });
 
 describe("scheduler retention", () => {
-  it("holds an owner for work its own terminal commit creates below a forgotten chain", async () => {
-    const { harness, root } = await open();
-    // Live P (a spawner) -> ended B -> ended A -> conversation C, empty: forgotten. P's terminal commit creates D in C.
-    const tree = await root.commit(async (tx) => {
-      const p = await tx.createTask(
-        Spawner,
-        { name: "p", into: 0 },
-        { ownership: { kind: "conversation" } },
-      );
-      const b = await tx.createTask(
-        Hold,
-        { name: "b" },
-        { ownership: { kind: "task", taskId: p } },
-      );
-      const a = await tx.createTask(
-        Hold,
-        { name: "a" },
-        { ownership: { kind: "task", taskId: b } },
-      );
-      const c = await tx.createConversation({ ownership: { kind: "task", taskId: a } });
-      return { p, b, c: c.id };
-    }, context);
-    // Point the spawner at C, now that its ID is known.
-    await root.commit(async (tx) => {
-      const record = (await tx.task(tree.p))!;
-      (tx as unknown as { setTask(value: unknown): void }).setTask({
-        ...record,
-        input: { name: "p", into: tree.c },
-      });
-    }, context);
-    gate("a").resolve();
-    gate("b").resolve();
-    await harness.waitForTask(tree.b, context);
-    gate("p").resolve();
-    await eventually(async () => (await status(harness, tree.p)).status !== "running");
-    expect((await status(harness, tree.p)).status).toBe("completing");
-    gate("inside.p").resolve();
-    expect((await harness.waitForTask(tree.p, context)).state.outcome.status).toBe("completed");
-    await harness.close(context);
-  });
+  it("holds a live owner for work later created in a forgotten conversation, loading its chain again", () =>
+    Effect.runPromise(holdsLiveOwner));
 });
 
-describe("scheduler retention", () => {
-  it("withdraws an input queued in a forgotten conversation below an abort-marked owner", async () => {
-    const { harness, root } = await open();
-    // Live P -> ended B -> conversation C with no task; C gets a queued input while P is cancelling.
-    const tree = await root.commit(async (tx) => {
-      const p = await tx.createTask(Hold, { name: "p" }, { ownership: { kind: "conversation" } });
-      const b = await tx.createTask(
-        Hold,
-        { name: "b" },
-        { ownership: { kind: "task", taskId: p } },
-      );
-      const c = await tx.createConversation({ ownership: { kind: "task", taskId: b } });
-      // A live child keeps P holding its abort until the input is withdrawn and the child ends.
-      const keep = await tx.createTask(
-        Hold,
-        { name: "keep" },
-        { ownership: { kind: "task", taskId: p } },
-      );
-      return { p, b, c: c.id, keep };
-    }, context);
-    gate("b").resolve();
-    await harness.waitForTask(tree.b, context);
-    const c = (await harness.conversation(tree.c, context))!;
-    // Busy, so the input queues instead of starting a run.
-    await c.commit(async (tx) => {
-      (await tx.doc(LiveDoc, tree.c)).run = { taskId: tree.keep, inputs: [] };
-    }, context);
-    const queued = (await c.submit({ type: "input", content: "later" }, context)).id;
-    await harness.abortTask(tree.p, context);
-    await eventually(async () => {
-      const settledState = await (await harness.submission(queued, context))!.status(context);
-      return settledState.status === "unanswered";
-    });
-    expect(await (await harness.submission(queued, context))!.status(context)).toMatchObject({
-      reason: "aborted",
-    });
-    await harness.waitForTask(tree.p, context);
-    await harness.close(context);
-  });
-});
+const holdsOwnerWorkStep1 = Effect.gen(function* () {
+  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-describe("scheduler retention", () => {
-  it("aborts work created in a forgotten conversation below an abort-marked owner before it runs", async () => {
-    const { harness, root } = await open();
-    const tree = await root.commit(async (tx) => {
-      const p = await tx.createTask(Hold, { name: "p" }, { ownership: { kind: "conversation" } });
-      const b = await tx.createTask(
-        Hold,
-        { name: "b" },
-        { ownership: { kind: "task", taskId: p } },
-      );
-      const c = await tx.createConversation({ ownership: { kind: "task", taskId: b } });
-      const keep = await tx.createTask(
-        Hold,
-        { name: "keep" },
-        { ownership: { kind: "task", taskId: p } },
-      );
-      return { p, b, c: c.id, keep };
-    }, context);
-    gate("b").resolve();
-    await harness.waitForTask(tree.b, context);
-    // P cancels; its live child keeps it holding.
-    await harness.commit(async (tx) => {
-      const record = (await tx.task(tree.p))!;
-      (tx as unknown as { setTask(value: unknown): void }).setTask({
-        ...record,
-        abortRequested: true,
-      });
-    }, context);
-    await eventually(async () => (await harness.getTask(tree.keep, context))!.abortRequested);
-    const c = (await harness.conversation(tree.c, context))!;
-    const late = await c.commit(
-      (tx) => tx.createTask(Hold, { name: "late" }, { ownership: { kind: "conversation" } }),
+  const { harness, root } = yield* open();
+  const tree = yield* awaited(
+    root.commit(
+      (tx) =>
+        runPromise(
+          Effect.gen(function* () {
+            const p = yield* awaited(
+              tx.createTask(
+                Spawner,
+                { name: "p", into: 0 },
+                { ownership: { kind: "conversation" } },
+              ),
+            );
+            const b = yield* awaited(
+              tx.createTask(Hold, { name: "b" }, { ownership: { kind: "task", taskId: p } }),
+            );
+            const a = yield* awaited(
+              tx.createTask(Hold, { name: "a" }, { ownership: { kind: "task", taskId: b } }),
+            );
+            const c = yield* awaited(
+              tx.createConversation({ ownership: { kind: "task", taskId: a } }),
+            );
+            return { p, b, c: c.id };
+          }),
+        ),
       context,
-    );
-    expect((await harness.waitForTask(late, context)).state.outcome.status).toBe("aborted");
-    expect(runs.get("late") ?? 0).toBe(0);
-    await harness.close(context);
-  });
+    ),
+  );
+  return { runPromise, harness, root, tree };
+});
+
+const holdsOwnerWork = Effect.gen(function* () {
+  const { runPromise, harness, root, tree } = yield* holdsOwnerWorkStep1;
+  yield* awaited(
+    root.commit(
+      (tx) =>
+        runPromise(
+          Effect.gen(function* () {
+            const record = (yield* awaited(tx.task(tree.p)))!;
+            (tx as unknown as { setTask(value: unknown): void }).setTask({
+              ...record,
+              input: { name: "p", into: tree.c },
+            });
+          }),
+        ),
+      context,
+    ),
+  );
+  gate("a").resolve();
+  gate("b").resolve();
+  yield* awaited(harness.waitForTask(tree.b, context));
+  gate("p").resolve();
+  yield* eventually(() =>
+    runPromise(
+      Effect.gen(function* () {
+        return (yield* status(harness, tree.p)).status !== "running";
+      }),
+    ),
+  );
+  expect((yield* status(harness, tree.p)).status).toBe("completing");
+  gate("inside.p").resolve();
+  expect((yield* awaited(harness.waitForTask(tree.p, context))).state.outcome.status).toBe(
+    "completed",
+  );
+  yield* awaited(harness.close(context));
 });
 
 describe("scheduler retention", () => {
-  it("keeps a scope busy while the chain of new work below a forgotten conversation loads", async () => {
-    const path = await sqlitePath();
-    const storage = await openNodeSqliteStorage(path);
-    const { harness, root } = await open(storage);
-    const tree = await root.commit(async (tx) => {
-      const b = await tx.createTask(Hold, { name: "b" }, { ownership: { kind: "conversation" } });
-      const c = await tx.createConversation({ ownership: { kind: "task", taskId: b } });
-      return { b, c: c.id };
-    }, context);
-    gate("b").resolve();
-    await harness.waitForTask(tree.b, context);
-    // Hold the chain load's read of C: the second read once holding, after the creating commit's own.
-    const read = storage.conversation.bind(storage);
-    const held = deferred<void>();
-    const reached = deferred<void>();
-    let holding = false;
-    let readsOfC = 0;
-    storage.conversation = async (id, readContext) => {
-      if (holding && id === tree.c && ++readsOfC === 2) {
-        reached.resolve();
-        await held.promise;
-      }
-      return read(id, readContext);
-    };
-    const c = (await harness.conversation(tree.c, context))!;
-    holding = true;
-    await c.commit(
-      (tx) => tx.createTask(Hold, { name: "d" }, { ownership: { kind: "conversation" } }),
+  it("holds an owner for work its own terminal commit creates below a forgotten chain", () =>
+    Effect.runPromise(holdsOwnerWork));
+});
+
+const withdrawsInputQueuedStep1 = Effect.gen(function* () {
+  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
+  const { harness, root } = yield* open();
+  const tree = yield* awaited(
+    root.commit(
+      (tx) =>
+        runPromise(
+          Effect.gen(function* () {
+            const p = yield* awaited(
+              tx.createTask(Hold, { name: "p" }, { ownership: { kind: "conversation" } }),
+            );
+            const b = yield* awaited(
+              tx.createTask(Hold, { name: "b" }, { ownership: { kind: "task", taskId: p } }),
+            );
+            const c = yield* awaited(
+              tx.createConversation({ ownership: { kind: "task", taskId: b } }),
+            );
+            const keep = yield* awaited(
+              tx.createTask(Hold, { name: "keep" }, { ownership: { kind: "task", taskId: p } }),
+            );
+            return { p, b, c: c.id, keep };
+          }),
+        ),
       context,
-    );
-    await reached.promise;
-    expect(await settled(harness.waitForIdle(context))).toBe(false);
-    held.resolve();
-    gate("d").resolve();
-    await harness.waitForIdle(context);
-    await harness.close(context);
+    ),
+  );
+  gate("b").resolve();
+  yield* awaited(harness.waitForTask(tree.b, context));
+  const c = (yield* awaited(harness.conversation(tree.c, context)))!;
+  yield* awaited(
+    c.commit(
+      (tx) =>
+        runPromise(
+          Effect.gen(function* () {
+            (yield* awaited(tx.doc(LiveDoc, tree.c))).run = { taskId: tree.keep, inputs: [] };
+          }),
+        ),
+      context,
+    ),
+  );
+  const queued = (yield* awaited(c.submit({ type: "input", content: "later" }, context))).id;
+  yield* awaited(harness.abortTask(tree.p, context));
+  return { runPromise, harness, tree, queued };
+});
+
+const withdrawsInputQueued = Effect.gen(function* () {
+  const { runPromise, harness, tree, queued } = yield* withdrawsInputQueuedStep1;
+  yield* eventually(() =>
+    runPromise(
+      Effect.gen(function* () {
+        const settledState = yield* awaited(
+          (yield* awaited(harness.submission(queued, context)))!.status(context),
+        );
+        return settledState.status === "unanswered";
+      }),
+    ),
+  );
+  expect(
+    yield* awaited((yield* awaited(harness.submission(queued, context)))!.status(context)),
+  ).toMatchObject({
+    reason: "aborted",
   });
+  yield* awaited(harness.waitForTask(tree.p, context));
+  yield* awaited(harness.close(context));
+});
+
+describe("scheduler retention", () => {
+  it("withdraws an input queued in a forgotten conversation below an abort-marked owner", () =>
+    Effect.runPromise(withdrawsInputQueued));
 });

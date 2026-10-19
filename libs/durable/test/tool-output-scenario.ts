@@ -1,14 +1,13 @@
-import { createModels } from "@msa/ai/models";
-import { fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall } from "@msa/ai/providers/faux";
+import { createModels, fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall } from "@msa/ai";
 import { BACKGROUND_CONTEXT as context } from "@msa/chord/context";
+import { defineTool, LiveDoc, type Conversation } from "@msa/durable";
+import { createRegistry, Harness } from "@msa/durable/harness";
+import { Effect } from "effect";
 import { Type } from "typebox";
 
 import { NodeExecutionEnv } from "../src/env/node.ts";
-import { createRegistry, Harness } from "../src/harness/index.ts";
-import { defineTool, LiveDoc, type Conversation } from "../src/index.ts";
 import { createBashTool } from "../src/tools/index.ts";
-import { addTool } from "./harness-support.ts";
-import { makeTempFile, removeDir, type TempFile, tempPath } from "./temp-support.ts";
+import { awaited, addTool, makeTempFile, removeDir, tempPath, type TempFile } from "./support.ts";
 import { type Backend, footprint, openStorage, timed } from "./tool-output-storage.ts";
 
 type Rate = "low" | "normal" | "high";
@@ -30,13 +29,9 @@ export const GIB = 1 << 30;
 export const LINE = "The quick brown fox jumps over the lazy dog. Unique identifier";
 export const BIG_FILE = tempPath("msa-durable-bench-1gib.txt");
 
-/** Output one tool writes per tick, and the pause between ticks. */
 const RATES: Record<Rate, { readonly lines: number; readonly pauseMs: number }> = {
-  // A line every 200 ms, like a slow build step.
   low: { lines: 1, pauseMs: 200 },
-  // Bursts of 25 lines every 50 ms (~40 KB/s), like a compiler or test run.
   normal: { lines: 25, pauseMs: 50 },
-  // Continuous 64 KiB chunks, yielding to the event loop between them.
   high: { lines: 800, pauseMs: 0 },
 };
 
@@ -44,7 +39,6 @@ type Metrics = {
   ms: number;
   liveCommits: number;
   liveOpKiB: number;
-  /** Output writes recorded as a whole-string set, including each slot's first write; the rest are appends/trims. */
   outputSets: number;
   commitP50Ms: number;
   commitP99Ms: number;
@@ -55,18 +49,9 @@ type Metrics = {
   heapAfterGcMiB?: number | undefined;
 };
 
-// One turn per write: the first at once, each later one after `pauseMs`, or after an immediate when it is 0.
-async function* turns(pauseMs: number): AsyncGenerator<void> {
-  yield;
-  for (;;) {
-    yield new Promise<void>((resolve) => {
-      if (pauseMs === 0) setImmediate(resolve);
-      else setTimeout(resolve, pauseMs);
-    });
-  }
-}
+const pause = (pauseMs: number): Effect.Effect<void> =>
+  pauseMs === 0 ? Effect.yieldNow : Effect.sleep(pauseMs);
 
-// Emits the scenario's output until stopped, or a GiB for a firehose.
 function emitTool(scenario: Exclude<Scenario, { kind: "cat" }>, flags: { readonly stop: boolean }) {
   const rate = scenario.kind === "rate" ? RATES[scenario.rate] : RATES.high;
   return defineTool({
@@ -74,33 +59,35 @@ function emitTool(scenario: Exclude<Scenario, { kind: "cat" }>, flags: { readonl
     description: "",
     parameters: Type.Object({}),
     outputLimits: { retain: scenario.retain },
-    execute: async (_args, api, callContext) => {
-      let counter = 0;
-      let written = 0;
-      // The firehose reuses one prebuilt chunk so it measures the Harness, not string building.
-      const prebuilt = scenario.kind === "firehose" ? lines(api.callId, 0, rate.lines) : undefined;
-      // Repetitive: identical lines with one numbered line per chunk, so the tail window keeps sliding.
-      const repeated = "y\n".repeat(32 * 1024 - 8);
-      for await (const _ of turns(rate.pauseMs)) {
-        if (flags.stop || (scenario.kind !== "rate" && written >= GIB)) break;
-        const chunk =
-          scenario.kind === "firehose" && scenario.repetitive === true
-            ? `${repeated}#${counter}\n`
-            : (prebuilt ?? lines(api.callId, counter, rate.lines));
-        counter += rate.lines;
-        api.output(chunk);
-        written += chunk.length;
-      }
-      // A persistent rate scenario stays in flight until close, so reopen replays the round.
-      if (scenario.kind === "rate" && scenario.backend !== "memory") {
-        await new Promise((_, reject) => {
-          callContext.abortSignal!.addEventListener("abort", () =>
-            reject(callContext.abortSignal!.reason),
-          );
-        });
-      }
-      return {};
-    },
+    execute: (_args, api, callContext) =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          let counter = 0;
+          let written = 0;
+          const prebuilt =
+            scenario.kind === "firehose" ? lines(api.callId, 0, rate.lines) : undefined;
+          const repeated = "y\n".repeat(32 * 1024 - 8);
+          for (let turn = 0; ; turn++) {
+            if (turn > 0) yield* pause(rate.pauseMs);
+            if (flags.stop || (scenario.kind !== "rate" && written >= GIB)) break;
+            const chunk =
+              scenario.kind === "firehose" && scenario.repetitive === true
+                ? `${repeated}#${counter}\n`
+                : (prebuilt ?? lines(api.callId, counter, rate.lines));
+            counter += rate.lines;
+            api.output(chunk);
+            written += chunk.length;
+          }
+          if (scenario.kind === "rate" && scenario.backend !== "memory") {
+            const { promise, reject } = Promise.withResolvers<never>();
+            callContext.abortSignal!.addEventListener("abort", () =>
+              reject(callContext.abortSignal!.reason),
+            );
+            return yield* awaited(promise);
+          }
+          return {};
+        }),
+      ),
   });
 }
 
@@ -128,7 +115,6 @@ function scenarioModels(scenario: Scenario, flags: { readonly stop: boolean }) {
   return { models, registry };
 }
 
-// Counts the `msa.live` commits of every observed Harness, their operation bytes, and their output sets.
 function liveObserver() {
   const counts = { liveCommits: 0, liveOpBytes: 0, outputSets: 0 };
   const observe = (target: Harness): void => {
@@ -151,8 +137,7 @@ type Opened = {
   readonly observe: (target: Harness) => void;
 };
 
-// Let the rate run for its time, then stop it. A persistent one closes mid-round and times replay on reopen.
-async function finishRate(
+const finishRate = Effect.fn("finishRate")(function* (
   scenario: Scenario & { kind: "rate" },
   flags: { stop: boolean },
   { path, reopen, observe }: Opened,
@@ -166,57 +151,62 @@ async function finishRate(
     submission: Awaited<ReturnType<Conversation["submit"]>>;
   },
   metrics: Partial<Metrics>,
-): Promise<Harness> {
-  await new Promise((resolve) => {
-    setTimeout(resolve, (scenario.seconds ?? RATE_SECONDS) * 1000);
-  });
+) {
+  yield* Effect.sleep((scenario.seconds ?? RATE_SECONDS) * 1000);
   flags.stop = true;
   if (scenario.backend === "memory") {
-    await submission.wait(context);
+    yield* awaited(submission.wait(context));
     return harness;
   }
-  // Let the last progress commit land, then close mid-round and time replay on reopen.
-  await new Promise((resolve) => {
-    setTimeout(resolve, 600);
-  });
-  metrics.midRoundKiB = await footprint(scenario.backend, path);
-  await harness.close(context);
+  yield* Effect.sleep(600);
+  metrics.midRoundKiB = yield* footprint(scenario.backend, path);
+  yield* awaited(harness.close(context));
   const reopened = performance.now();
-  const next = await reopen();
-  await next.snapshot(LiveDoc, root.id, context);
+  const next = yield* awaited(reopen());
+  yield* awaited(next.snapshot(LiveDoc, root.id, context));
   observe(next);
   metrics.replayMs = Math.round(performance.now() - reopened);
   next.resume();
-  await (await next.submission(submission.id, context))!.wait(context);
+  yield* awaited((yield* awaited(next.submission(submission.id, context)))!.wait(context));
   return next;
-}
+});
 
-async function measureScenario(
+const measureScenario = Effect.fn("measureScenario")(function* (
   scenario: Scenario,
   { directory, path }: TempFile,
-): Promise<Metrics> {
+) {
+  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
   const latencies: number[] = [];
   const flags = { stop: false };
   const { models, registry } = scenarioModels(scenario, flags);
   const nodeEnv = new NodeExecutionEnv({ cwd: directory });
   const env = () => nodeEnv;
-  const reopen = async () =>
-    Harness.open(
-      timed(await openStorage(scenario.backend, path), latencies),
-      { models, registry, env },
-      context,
+  const reopen = () =>
+    runPromise(
+      Effect.gen(function* () {
+        return yield* awaited(
+          Harness.open(
+            timed(yield* awaited(openStorage(scenario.backend, path)), latencies),
+            { models, registry, env },
+            context,
+          ),
+        );
+      }),
     );
-  let harness = await reopen();
-  const root = await harness.root(context, {
-    agent: { model: { provider: "faux", modelId: "faux-1" } },
-  });
+  let harness = yield* awaited(reopen());
+  const root = yield* awaited(
+    harness.root(context, {
+      agent: { model: { provider: "faux", modelId: "faux-1" } },
+    }),
+  );
   const { counts, observe } = liveObserver();
   observe(harness);
   const started = performance.now();
-  const submission = await root.submit({ type: "input", content: "go" }, context);
+  const submission = yield* awaited(root.submit({ type: "input", content: "go" }, context));
   const metrics: Partial<Metrics> = {};
   if (scenario.kind === "rate") {
-    harness = await finishRate(
+    harness = yield* finishRate(
       scenario,
       flags,
       { path, reopen, observe },
@@ -224,13 +214,13 @@ async function measureScenario(
       metrics,
     );
   } else {
-    await submission.wait(context);
+    yield* awaited(submission.wait(context));
   }
   const ms = Math.round(performance.now() - started);
-  if (scenario.backend !== "memory") metrics.finalKiB = await footprint(scenario.backend, path);
-  await harness.close(context);
+  if (scenario.backend !== "memory") metrics.finalKiB = yield* footprint(scenario.backend, path);
+  yield* awaited(harness.close(context));
   return summarize({ ms, counts, latencies, metrics });
-}
+});
 
 function summarize({
   ms,
@@ -260,16 +250,14 @@ function summarize({
   };
 }
 
-export async function runScenario(scenario: Scenario): Promise<Metrics> {
+export const runScenario = Effect.fn("runScenario")(function* (scenario: Scenario) {
   const name = scenario.backend === "sqlite" ? "session.sqlite" : "session";
-  const temp = await makeTempFile("msa-durable-tool-bench-", name);
+  const temp = yield* makeTempFile("msa-durable-tool-bench-", name);
   const { directory } = temp;
-  try {
-    return await measureScenario(scenario, temp);
-  } finally {
-    await removeDir(directory);
-  }
-}
+  return yield* Effect.suspend(() => measureScenario(scenario, temp)).pipe(
+    Effect.ensuring(Effect.asVoid(Effect.suspend(() => removeDir(directory)))),
+  );
+});
 
 function lines(prefix: string, first: number, count: number): string {
   let text = "";

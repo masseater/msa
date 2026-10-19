@@ -1,24 +1,17 @@
-/**
- * Tool output benchmark: drives the real tool task, adaptive progress throttle, and `msa.live` commits.
- *
- *   node --conditions=source --experimental-strip-types --expose-gc test/tool-output-bench.ts
- *
- * Each scenario runs in its own child process so peak RSS is its own. Rate scenarios write output for a fixed time,
- * then close the Harness mid-round (persistent backends) to measure replay of the round's delta chain on reopen, and
- * finish the run to measure the stored size after the round's base and reclamation. Throughput scenarios push 1 GiB.
- */
-import { execFile } from "node:child_process";
-import { open, stat } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import { promisify } from "node:util";
 
+import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
+import { Console, Effect } from "effect";
+
+import { fromJsonText, toJsonText } from "./effect-support.ts";
+import { fileSize, pathExists, runCommandOrFail, writeChunks } from "./platform-support.ts";
 import { BIG_FILE, GIB, LINE, runScenario, type Scenario } from "./tool-output-scenario.ts";
 
-async function main(): Promise<void> {
+const main = Effect.fn("main")(function* () {
   const [, , encoded] = process.argv;
   if (encoded !== undefined) {
-    const result = await runScenario(JSON.parse(encoded) as Scenario);
-    process.stdout.write(`${JSON.stringify(result)}\n`);
+    const result = yield* runScenario((yield* fromJsonText(encoded)) as Scenario);
+    process.stdout.write(`${yield* toJsonText(result)}\n`);
     return;
   }
   const scenarios: Scenario[] = [];
@@ -30,9 +23,7 @@ async function main(): Promise<void> {
     }
     for (const retain of ["head", "tail"] as const)
       scenarios.push({ kind: "firehose", backend, retain });
-    // Identical lines: how often Chord's bounded overlap search falls back to writing the whole tail window.
     scenarios.push({ kind: "firehose", backend, retain: "tail", repetitive: true });
-    // One long round: the delta chain a chatty tail tool builds before the round's base.
     if (backend !== "memory")
       scenarios.push({
         kind: "rate",
@@ -44,18 +35,22 @@ async function main(): Promise<void> {
       });
     scenarios.push({ kind: "cat", backend });
   }
-  await ensureBigFile();
+  yield* ensureBigFile();
   const rows: Record<string, unknown>[] = [];
-  for await (const scenario of scenarios) {
-    const { stdout } = await promisify(execFile)(
-      process.execPath,
-      [...process.execArgv, fileURLToPath(import.meta.url), JSON.stringify(scenario)],
-      { maxBuffer: 1 << 20 },
-    );
-    rows.push({ ...label(scenario), ...JSON.parse(stdout.trim().split("\n").at(-1)!) });
+  for (const scenario of scenarios) {
+    const stdout = yield* runCommandOrFail(process.execPath, [
+      ...process.execArgv,
+      fileURLToPath(import.meta.url),
+      yield* toJsonText(scenario),
+    ]);
+    const measured = (yield* fromJsonText(stdout.trim().split("\n").at(-1)!)) as Record<
+      string,
+      unknown
+    >;
+    rows.push({ ...label(scenario), ...measured });
   }
-  console.table(rows);
-}
+  yield* Console.table(rows);
+});
 
 function label(scenario: Scenario): Record<string, unknown> {
   if (scenario.kind === "rate") {
@@ -73,25 +68,21 @@ function label(scenario: Scenario): Record<string, unknown> {
   };
 }
 
-async function ensureBigFile(): Promise<void> {
-  if ((await stat(BIG_FILE).catch(() => undefined))?.size === GIB) return;
-  // Unique lines, written in 64 MiB blocks and cut at exactly 1 GiB.
-  const file = await open(BIG_FILE, "w");
-  try {
-    let index = 0;
-    const writeFrom = async (written: number): Promise<void> => {
-      if (written >= GIB) return;
-      let block = "";
-      while (block.length < 64 << 20)
-        block += `Line ${index++}: ${LINE}: ${(index * 7919).toString(16)}\n`;
-      const bytes = Buffer.from(block).subarray(0, GIB - written);
-      await file.write(bytes);
-      await writeFrom(written + bytes.length);
-    };
-    await writeFrom(0);
-  } finally {
-    await file.close();
+function* bigFileBlocks(): Generator<Uint8Array> {
+  let index = 0;
+  for (let written = 0; written < GIB;) {
+    let block = "";
+    while (block.length < 64 << 20)
+      block += `Line ${index++}: ${LINE}: ${(index * 7919).toString(16)}\n`;
+    const bytes = Buffer.from(block).subarray(0, GIB - written);
+    written += bytes.length;
+    yield bytes;
   }
 }
 
-await main();
+const ensureBigFile = Effect.fn("ensureBigFile")(function* () {
+  if ((yield* pathExists(BIG_FILE)) && (yield* fileSize(BIG_FILE)) === GIB) return;
+  yield* writeChunks(BIG_FILE, bigFileBlocks());
+});
+
+NodeRuntime.runMain(main());

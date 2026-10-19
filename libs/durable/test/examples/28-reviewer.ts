@@ -1,30 +1,26 @@
-// A reviewer agent next to the main one: a cheaper model, a review role and loop, read-only tools, and its own
-// checkout of the project.
-// Run from libs/durable:
-//   node --conditions=source --experimental-strip-types test/examples/28-reviewer.ts
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-
-import type { AssistantMessage } from "@msa/ai";
-import { createModels } from "@msa/ai/models";
-import { fauxAssistantMessage, fauxProvider, fauxToolCall } from "@msa/ai/providers/faux";
+import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
+import {
+  type AssistantMessage,
+  createModels,
+  fauxAssistantMessage,
+  fauxProvider,
+  fauxToolCall,
+} from "@msa/ai";
 import { BACKGROUND_CONTEXT } from "@msa/chord/context";
+import { AssistantEntry, defineExtension, hook, section } from "@msa/durable";
+import { createRegistry, GenerationTask, Harness } from "@msa/durable/harness";
+import { MemoryStorage } from "@msa/durable/storage/memory";
+import { Console, Effect } from "effect";
 
 import { NodeExecutionEnv } from "../../src/env/node.ts";
-import { createRegistry, GenerationTask, Harness } from "../../src/harness/index.ts";
-import { AssistantEntry, defineExtension, hook, section } from "../../src/index.ts";
-import { MemoryStorage } from "../../src/storage/memory.ts";
 import { CodingTools, createReadTool } from "../../src/tools/index.ts";
+import { awaited, joinPath, makeTempDir, removeDir, writeText } from "../support.ts";
 
 const context = BACKGROUND_CONTEXT;
 const textOf = (message: AssistantMessage) =>
   message.content.flatMap((part) => (part.type === "text" ? [part.text] : [])).join("");
 
-// ─── Product code: the reviewer extension ───────────────────────────────────
-
 const DONE = "No further findings.";
-// A role and a review loop: every answer that still has findings gets a second pass.
 const Reviewer = defineExtension({
   name: "reviewer",
   sections: [
@@ -42,69 +38,80 @@ const Reviewer = defineExtension({
   ],
 });
 
-// ─── Host setup ─────────────────────────────────────────────────────────────
+const mainStep1 = Effect.gen(function* () {
+  const worktree = yield* makeTempDir("msa-durable-review-");
+  yield* writeText(joinPath(worktree, "user.ts"), "export const name = (user) => user.name;\n");
 
-// The reviewer works in its own checkout, in practice a `git worktree add`.
-const worktree = await mkdtemp(join(tmpdir(), "msa-durable-review-"));
-await writeFile(join(worktree, "user.ts"), "export const name = (user) => user.name;\n");
+  const faux = fauxProvider({ models: [{ id: "big" }, { id: "small" }] });
+  const models = createModels();
+  models.setProvider(faux.provider);
+  faux.setResponses([
+    fauxAssistantMessage(fauxToolCall("read", { path: "user.ts" }), { stopReason: "toolUse" }),
+    fauxAssistantMessage("1. `name` does not handle a missing user."),
+    fauxAssistantMessage(`2. \`user\` has no type. ${DONE}`),
+  ]);
 
-const faux = fauxProvider({ models: [{ id: "big" }, { id: "small" }] });
-const models = createModels();
-models.setProvider(faux.provider);
-faux.setResponses([
-  fauxAssistantMessage(fauxToolCall("read", { path: "user.ts" }), { stopReason: "toolUse" }),
-  fauxAssistantMessage("1. `name` does not handle a missing user."),
-  fauxAssistantMessage(`2. \`user\` has no type. ${DONE}`),
-]);
+  const registry = createRegistry();
+  registry.install(CodingTools);
+  registry.install(Reviewer);
+  const harness = yield* awaited(
+    Harness.open(
+      new MemoryStorage(),
+      {
+        models,
+        registry,
+        settings: { extensions: [CodingTools] },
+        env: ({ cwd = process.cwd() }) => new NodeExecutionEnv({ cwd }),
+      },
+      context,
+    ),
+  );
+  yield* awaited(harness.root(context, { agent: { model: { provider: "faux", modelId: "big" } } }));
 
-const registry = createRegistry();
-registry.install(CodingTools);
-registry.install(Reviewer);
-const harness = await Harness.open(
-  new MemoryStorage(),
-  // The main agent selects only CodingTools; the reviewer opts in.
-  {
-    models,
-    registry,
-    settings: { extensions: [CodingTools] },
-    env: ({ cwd = process.cwd() }) => new NodeExecutionEnv({ cwd }),
-  },
-  context,
-);
-await harness.root(context, { agent: { model: { provider: "faux", modelId: "big" } } });
+  const reviewer = yield* awaited(
+    harness.createConversation(
+      {
+        ownership: { kind: "ownerless" },
+        agent: {
+          model: { provider: "faux", modelId: "small" },
+          extensions: [CodingTools, Reviewer],
+          tools: [createReadTool()],
+          cwd: worktree,
+        },
+      },
+      context,
+    ),
+  );
+  return { worktree, harness, reviewer };
+});
 
-// Everything the reviewer is, stored on its conversation: the model, exactly these extensions in this order, only
-// the read tool, and its directory. A restart keeps all of it.
-const reviewer = await harness.createConversation(
-  {
-    ownership: { kind: "ownerless" },
-    agent: {
-      model: { provider: "faux", modelId: "small" },
-      extensions: [CodingTools, Reviewer],
-      tools: [createReadTool()],
-      cwd: worktree,
-    },
-  },
-  context,
-);
-const agent = await reviewer.agent(context);
-console.log(
-  "reviewer:",
-  agent.model?.modelId,
-  agent.extensions.map((extension) => extension.name),
-  agent.tools.map((tool) => tool.name),
-  agent.cwd === worktree,
-);
+const main = Effect.gen(function* () {
+  const { worktree, harness, reviewer } = yield* mainStep1;
+  const agent = yield* awaited(reviewer.agent(context));
+  yield* Console.log(
+    "reviewer:",
+    agent.model?.modelId,
+    agent.extensions.map((extension) => extension.name),
+    agent.tools.map((tool) => tool.name),
+    agent.cwd === worktree,
+  );
 
-await (await reviewer.submit({ type: "input", content: "Review user.ts." }, context)).wait(context);
-const page = await reviewer.entries({}, 20, undefined, context);
-for (const entry of [...page.items].reverse()) {
-  const message = entry.model?.[0];
-  if (message?.role === "user") console.log(">", message.content);
-  if (AssistantEntry.is(entry) && textOf(message as AssistantMessage) !== "") {
-    console.log("reviewer:", textOf(message as AssistantMessage));
+  yield* awaited(
+    (yield* awaited(reviewer.submit({ type: "input", content: "Review user.ts." }, context))).wait(
+      context,
+    ),
+  );
+  const page = yield* awaited(reviewer.entries({}, 20, undefined, context));
+  for (const entry of [...page.items].reverse()) {
+    const message = entry.model?.[0];
+    if (message?.role === "user") yield* Console.log(">", message.content);
+    if (AssistantEntry.is(entry) && textOf(message as AssistantMessage) !== "") {
+      yield* Console.log("reviewer:", textOf(message as AssistantMessage));
+    }
   }
-}
 
-await harness.close(context);
-await rm(worktree, { recursive: true, force: true });
+  yield* awaited(harness.close(context));
+  yield* removeDir(worktree);
+});
+
+NodeRuntime.runMain(main);

@@ -1,7 +1,3 @@
-import { mkdirSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-
 import type { Context, JsonValue } from "@msa/chord";
 import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 import type {
@@ -10,32 +6,29 @@ import type {
   ToolExecutionResult,
   ToolRegistration,
 } from "@msa/durable";
+import { Cause, Effect, Exit } from "effect";
+import { dual } from "effect/Function";
 
 import { type ExecutionEnv, type FileError, type Result } from "../src/env/index.ts";
 import { NodeExecutionEnv } from "../src/env/node.ts";
-import { removeDirSync } from "./temp-support.ts";
+import { awaited } from "./effect-support.ts";
+import { makeTempDir, removeDirs } from "./platform-support.ts";
 
 export const tempDirs: string[] = [];
 
-export function createTempDir(): string {
-  const dir = join(
-    tmpdir(),
-    `msa-durable-tools-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-  );
-  mkdirSync(dir, { recursive: true });
-  tempDirs.push(dir);
-  return dir;
-}
+export const createTempDir: Effect.Effect<string> = makeTempDir("msa-durable-tools-").pipe(
+  Effect.tap((dir) => Effect.sync(() => tempDirs.push(dir))),
+);
 
-export function removeTempDirs(): void {
-  for (const dir of tempDirs) removeDirSync(dir);
-}
+export const removeTempDirs: Effect.Effect<void> = Effect.suspend(() =>
+  removeDirs(tempDirs.splice(0)),
+);
 
-export function createEnv(): NodeExecutionEnv {
-  return new NodeExecutionEnv({ cwd: createTempDir() });
-}
+export const createEnv: Effect.Effect<NodeExecutionEnv> = Effect.map(
+  createTempDir,
+  (cwd) => new NodeExecutionEnv({ cwd }),
+);
 
-// A minimal execution API: the environment, collected output and diagnostics, and nothing durable.
 export function fakeApi(env: ExecutionEnv | undefined): {
   api: ToolExecutionApi;
   output: string[];
@@ -52,37 +45,57 @@ export function fakeApi(env: ExecutionEnv | undefined): {
       output.push(typeof chunk === "string" ? chunk : new TextDecoder().decode(chunk)),
     retainedOutput: () => ({ text: output.join(""), truncated: false }),
     diagnostic: (diagnostic: ToolDiagnostic) => diagnostics.push(diagnostic),
-    details: async () => {},
-    // No model: `read` treats it as one that sees images.
+    details: () => Promise.resolve(),
     agent: () => Promise.resolve({}),
   } as unknown as ToolExecutionApi;
   return { api, output, diagnostics };
 }
 
-export async function run(
+function runImpl(
   tool: ToolRegistration,
   args: JsonValue,
   env: ExecutionEnv | undefined,
   context: Context = BACKGROUND_CONTEXT,
 ): Promise<ToolExecutionResult & { streamed: string[]; reported: ToolDiagnostic[] }> {
-  const { api, output, diagnostics } = fakeApi(env);
-  return { ...(await tool.execute(args, api, context)), streamed: output, reported: diagnostics };
+  return Effect.runPromise(
+    Effect.gen(function* () {
+      const { api, output, diagnostics } = fakeApi(env);
+      return {
+        ...(yield* awaited(tool.execute(args, api, context))),
+        streamed: output,
+        reported: diagnostics,
+      };
+    }),
+  );
 }
 
-// Run a tool expected to throw; returns the error with what it streamed and reported first.
-export async function runFailing(
+export const run: {
+  (
+    args: JsonValue,
+    env: ExecutionEnv | undefined,
+    context?: Context,
+  ): (tool: ToolRegistration) => ReturnType<typeof runImpl>;
+  (
+    tool: ToolRegistration,
+    args: JsonValue,
+    env: ExecutionEnv | undefined,
+    context?: Context,
+  ): ReturnType<typeof runImpl>;
+} = dual(
+  (args) => typeof args[0] === "object" && args[0] !== null && "execute" in args[0],
+  runImpl,
+);
+
+export const runFailing = Effect.fn("runFailing")(function* (
   tool: ToolRegistration,
   args: JsonValue,
   env: ExecutionEnv,
-): Promise<{ error: Error; streamed: string[]; reported: ToolDiagnostic[] }> {
+) {
   const { api, output, diagnostics } = fakeApi(env);
-  try {
-    await tool.execute(args, api, BACKGROUND_CONTEXT);
-  } catch (error) {
-    return { error: error as Error, streamed: output, reported: diagnostics };
-  }
-  throw new Error("Expected the tool to throw");
-}
+  const exit = yield* Effect.exit(awaited(tool.execute(args, api, BACKGROUND_CONTEXT)));
+  if (Exit.isSuccess(exit)) throw new Error("Expected the tool to throw");
+  return { error: Cause.squash(exit.cause) as Error, streamed: output, reported: diagnostics };
+});
 
 export function textOutput(result: ToolExecutionResult): string {
   return (result.output ?? [])
@@ -91,35 +104,35 @@ export function textOutput(result: ToolExecutionResult): string {
 }
 
 export function deferred(): { promise: Promise<void>; resolve: () => void } {
-  let resolve = () => {};
-  const promise = new Promise<void>((resolvePromise) => {
-    resolve = resolvePromise;
-  });
+  const { promise, resolve } = Promise.withResolvers<void>();
   return { promise, resolve };
 }
 
-export function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
-}
+export const delay = (ms: number): Promise<void> => Effect.runPromise(Effect.sleep(ms));
 
 export class BlockingWriteExecutionEnv extends NodeExecutionEnv {
   readonly firstWriteStarted = deferred();
   readonly finishFirstWrite = deferred();
   secondWriteStarted = false;
 
-  override async writeFile(
+  override writeFile(
     path: string,
     content: string | Uint8Array,
     context: Context,
   ): Promise<Result<void, FileError>> {
-    if (content === "first\n") {
-      this.firstWriteStarted.resolve();
-      await this.finishFirstWrite.promise;
-    } else if (content === "second\n") {
-      this.secondWriteStarted = true;
-    }
-    return super.writeFile(path, content, context);
+    const superWriteFile = super.writeFile.bind(this);
+    return Effect.runPromise(
+      Effect.gen({ self: this }, function* () {
+        if (content === "first\n") {
+          this.firstWriteStarted.resolve();
+          yield* awaited(this.finishFirstWrite.promise);
+        } else if (content === "second\n") {
+          this.secondWriteStarted = true;
+        }
+        return yield* awaited(superWriteFile(path, content, context));
+      }),
+    );
   }
 }
+
+export { TimeoutOutputExecutionEnv, TRUNCATED_OUTPUT_LINES } from "./tools-timeout-env-support.ts";

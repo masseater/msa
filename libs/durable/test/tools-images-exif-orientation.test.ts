@@ -1,6 +1,5 @@
-import { spawnSync } from "node:child_process";
-
 import { createNodePhotonImages } from "@msa/durable/images/node";
+import { Effect, Fiber } from "effect";
 import { afterAll, beforeAll, describe, expect, it } from "vite-plus/test";
 
 import { exifOrientation } from "../src/images/exif.ts";
@@ -10,6 +9,8 @@ import {
   type ImageProcessor,
   toBase64,
 } from "../src/tools/image.ts";
+import { awaited, sampleEvery, toJsonText } from "./effect-support.ts";
+import { runCommand } from "./platform-support.ts";
 import {
   decodedImage,
   encode,
@@ -25,15 +26,18 @@ import { removeImageDirectory } from "./tools-images-support.ts";
 
 let processor: ImageProcessor;
 
-beforeAll(async () => {
-  processor = await setUpImages();
-});
+beforeAll(() =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      processor = yield* setUpImages();
+    }),
+  ),
+);
 
 afterAll(removeImageDirectory);
 
 type Rgb = readonly [number, number, number];
 
-// A `width` by `height` image of `block`-pixel squares coloured row by row from `colors`.
 function blocks(
   colors: readonly (readonly Rgb[])[],
   block: number,
@@ -52,7 +56,6 @@ function blocks(
   return { rgba, width, height };
 }
 
-// A RIFF WEBP file with one chunk of `type` holding `data`.
 function webp(type: string, data: number[]): Uint8Array {
   return new Uint8Array([
     ...Buffer.from("RIFF"),
@@ -71,7 +74,6 @@ function webp(type: string, data: number[]): Uint8Array {
   ]);
 }
 
-// A RIFF WebP with a dummy `VP8 ` chunk and an `EXIF` chunk saying `orientation`, its TIFF data bare or prefixed.
 function webpWithOrientation(orientation: number, prefixed: boolean): Uint8Array {
   const chunk = (type: string, data: number[]): number[] => {
     const size = data.length;
@@ -109,11 +111,9 @@ const stored = [
 
 const mirror = <T>(grid: readonly (readonly T[])[]): T[][] => grid.map((row) => [...row].reverse());
 
-// A quarter turn clockwise: the left column, read bottom to top, becomes the top row.
 const turn = <T>(grid: readonly (readonly T[])[]): T[][] =>
   grid[0]!.map((_, x) => grid.map((row) => row[x]!).reverse());
 
-// What each orientation shows, from its EXIF definition: mirror, then turn clockwise.
 const upright: Record<number, Rgb[][]> = {
   1: stored.map((row) => [...row]),
   2: mirror(stored),
@@ -128,25 +128,31 @@ const upright: Record<number, Rgb[][]> = {
 describe("EXIF orientation", () => {
   it.each(Array.from({ length: 8 }, (_, i) => i + 1))(
     "turns orientation %i upright",
-    async (orientation) => {
-      const { rgba, width, height } = blocks(stored, 16);
-      const jpeg = withOrientation(encodeRgba(rgba, width, height, "jpeg"), orientation);
-      const prepared = await processor.prepare(jpeg, "image/jpeg", DEFAULT_IMAGE_LIMITS);
-      const image = decodedImage(prepared!.data);
-      const expected = upright[orientation]!;
-      expect({ width: image.width, height: image.height }).toEqual({
-        width: expected[0]!.length * 16,
-        height: expected.length * 16,
-      });
-      // The colour at the centre of each block, rounded to full channels against JPEG noise.
-      const seen = expected.map((row, by) =>
-        row.map((_, bx) => {
-          const at = ((by * 16 + 8) * image.width + bx * 16 + 8) * 4;
-          return [...image.rgba.subarray(at, at + 3)].map((channel) => (channel > 127 ? 255 : 0));
+    (orientation) =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          const { rgba, width, height } = blocks(stored, 16);
+          const jpeg = withOrientation(encodeRgba(rgba, width, height, "jpeg"), orientation);
+          const prepared = yield* awaited(
+            processor.prepare(jpeg, "image/jpeg", DEFAULT_IMAGE_LIMITS),
+          );
+          const image = decodedImage(prepared!.data);
+          const expected = upright[orientation]!;
+          expect({ width: image.width, height: image.height }).toEqual({
+            width: expected[0]!.length * 16,
+            height: expected.length * 16,
+          });
+          const seen = expected.map((row, by) =>
+            row.map((_, bx) => {
+              const at = ((by * 16 + 8) * image.width + bx * 16 + 8) * 4;
+              return [...image.rgba.subarray(at, at + 3)].map((channel) =>
+                channel > 127 ? 255 : 0,
+              );
+            }),
+          );
+          expect(seen).toEqual(expected);
         }),
-      );
-      expect(seen).toEqual(expected);
-    },
+      ),
   );
 
   it("reads big- and little-endian JPEG EXIF, after an APP0 segment, and 1 when absent or out of range", () => {
@@ -176,7 +182,6 @@ describe("imageDimensions", () => {
       height: 5,
     });
     expect(imageDimensions(gif(300, 200), "image/gif")).toEqual({ width: 300, height: 200 });
-    // VP8: frame tag, start code, then 14-bit width and height.
     expect(
       imageDimensions(
         webp("VP8 ", [0, 0, 0, 0x9d, 0x01, 0x2a, 0x2c, 0x01, 0xc8, 0x00]),
@@ -186,7 +191,6 @@ describe("imageDimensions", () => {
       width: 300,
       height: 200,
     });
-    // VP8L: signature, then width - 1 and height - 1 in 14 bits each.
     const bits = 299 | (199 << 14);
     expect(
       imageDimensions(
@@ -194,7 +198,6 @@ describe("imageDimensions", () => {
         "image/webp",
       ),
     ).toEqual({ width: 300, height: 200 });
-    // VP8X: flags, then width - 1 and height - 1 in 24 bits each.
     expect(
       imageDimensions(webp("VP8X", [0, 0, 0, 0, 0x2b, 0x01, 0, 0xc7, 0, 0]), "image/webp"),
     ).toEqual({
@@ -205,6 +208,25 @@ describe("imageDimensions", () => {
   });
 });
 
+const encodes3MiB = Effect.gen(function* () {
+  const source = new URL("../src/tools/image.ts", import.meta.url).href;
+  const script = `
+			const { toBase64 } = await import(${yield* toJsonText(source)});
+			const bytes = Uint8Array.from({ length: 3147295 }, (_, index) => (index * 37) % 256);
+			if (toBase64(bytes) !== Buffer.from(bytes).toString("base64")) throw new Error("mismatch");
+		`;
+  const args = [
+    "--experimental-strip-types",
+    "--max-heap-size=128",
+    "--input-type=module",
+    "-e",
+    script,
+  ];
+  const result = yield* runCommand(process.execPath, args);
+  expect(result.stderr).not.toMatch(/heap out of memory|mismatch/u);
+  expect(result.status).toBe(0);
+});
+
 describe("toBase64", () => {
   it("matches Buffer for every remainder length", () => {
     for (const length of [0, 1, 2, 3, 4, 5, 8191, 8192, 8193, 10_000, 16_385]) {
@@ -213,68 +235,60 @@ describe("toBase64", () => {
     }
   });
 
-  // #10923: building the output a character at a time took 138 MB of heap for a 3 MiB image.
-  it("encodes a 3 MiB image within a 128 MB heap", () => {
-    const source = new URL("../src/tools/image.ts", import.meta.url).href;
-    const script = `
-			const { toBase64 } = await import(${JSON.stringify(source)});
-			const bytes = Uint8Array.from({ length: 3147295 }, (_, index) => (index * 37) % 256);
-			if (toBase64(bytes) !== Buffer.from(bytes).toString("base64")) throw new Error("mismatch");
-		`;
-    const args = [
-      "--experimental-strip-types",
-      "--max-heap-size=128",
-      "--input-type=module",
-      "-e",
-      script,
-    ];
-    const result = spawnSync(process.execPath, args, { encoding: "utf8" });
-    expect(result.stderr).not.toMatch(/heap out of memory|mismatch/u);
-    expect(result.status).toBe(0);
-  }, 20_000);
+  it("encodes a 3 MiB image within a 128 MB heap", () => Effect.runPromise(encodes3MiB), 20_000);
+});
+
+const preparesWorkerThread = Effect.gen(function* () {
+  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
+  const photo = noisyPng(3000, 2000);
+  const prepareOn = (images: ImageProcessor): Promise<number> =>
+    runPromise(
+      Effect.gen(function* () {
+        let longest = 0;
+        let last = performance.now();
+        const ticks = yield* sampleEvery(5, () => {
+          const now = performance.now();
+          longest = Math.max(longest, now - last);
+          last = now;
+        });
+        yield* Effect.gen(function* () {
+          const prepared = images.prepare(photo, "image/png", DEFAULT_IMAGE_LIMITS);
+          expect(yield* awaited(prepared)).toBeDefined();
+          longest = Math.max(longest, performance.now() - last);
+        }).pipe(Effect.ensuring(Fiber.interrupt(ticks)));
+        return longest;
+      }),
+    );
+  const inline = yield* awaited(
+    prepareOn(yield* awaited(createNodePhotonImages({ worker: false }))),
+  );
+  const threaded = yield* awaited(prepareOn(processor));
+  expect(inline).toBeGreaterThan(200);
+  expect(threaded).toBeLessThan(inline / 4);
+});
+
+const givesSameResult = Effect.gen(function* () {
+  const limits = { ...DEFAULT_IMAGE_LIMITS, maxBytes: 20_000 };
+  const png = noisyPng(200, 200);
+  const copy = png.slice();
+  const threaded = yield* awaited(processor.prepare(png, "image/png", limits));
+  const inline = yield* awaited(
+    (yield* awaited(createNodePhotonImages({ worker: false }))).prepare(png, "image/png", limits),
+  );
+  expect(threaded?.mimeType).toBe("image/jpeg");
+  expect(threaded?.resized?.from).toEqual({ width: 200, height: 200 });
+  expect(threaded).toEqual(inline);
+  expect(png).toEqual(copy);
 });
 
 describe("createNodePhotonImages", () => {
-  it("prepares in a worker thread, leaving the event loop free", async () => {
-    const photo = noisyPng(3000, 2000);
-    const prepareOn = async (images: ImageProcessor): Promise<number> => {
-      // The longest gap between timer ticks while the image is prepared: the time the event loop was blocked.
-      let longest = 0;
-      let last = performance.now();
-      const ticks = setInterval(() => {
-        const now = performance.now();
-        longest = Math.max(longest, now - last);
-        last = now;
-      }, 5);
-      try {
-        const prepared = images.prepare(photo, "image/png", DEFAULT_IMAGE_LIMITS);
-        expect(await prepared).toBeDefined();
-        // Counted until the result arrived, including the gap the last tick did not see.
-        longest = Math.max(longest, performance.now() - last);
-      } finally {
-        clearInterval(ticks);
-      }
-      return longest;
-    };
-    const inline = await prepareOn(await createNodePhotonImages({ worker: false }));
-    const threaded = await prepareOn(processor);
-    // Compared with each other, not with fixed times: a busy machine stretches every gap.
-    expect(inline).toBeGreaterThan(200);
-    expect(threaded).toBeLessThan(inline / 4);
-  }, 60_000);
+  it(
+    "prepares in a worker thread, leaving the event loop free",
+    () => Effect.runPromise(preparesWorkerThread),
+    60_000,
+  );
 
-  it("gives the same result as the calling thread, and keeps the caller's bytes", async () => {
-    // A small byte limit sends a small image through re-encoding and shrinking, as a large one would.
-    const limits = { ...DEFAULT_IMAGE_LIMITS, maxBytes: 20_000 };
-    const png = noisyPng(200, 200);
-    const copy = png.slice();
-    const threaded = await processor.prepare(png, "image/png", limits);
-    const inline = await (
-      await createNodePhotonImages({ worker: false })
-    ).prepare(png, "image/png", limits);
-    expect(threaded?.mimeType).toBe("image/jpeg");
-    expect(threaded?.resized?.from).toEqual({ width: 200, height: 200 });
-    expect(threaded).toEqual(inline);
-    expect(png).toEqual(copy);
-  });
+  it("gives the same result as the calling thread, and keeps the caller's bytes", () =>
+    Effect.runPromise(givesSameResult));
 });

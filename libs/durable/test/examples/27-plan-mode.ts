@@ -1,27 +1,17 @@
-// Plan mode: the user switches a conversation into a read-only planning mode, the agent writes a plan into the
-// extension's own document, and switching back restores the full tool set.
-// Run from libs/durable:
-//   node --conditions=source --experimental-strip-types test/examples/27-plan-mode.ts
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-
-import { Type } from "@msa/ai";
-import { createModels } from "@msa/ai/models";
-import { fauxAssistantMessage, fauxProvider, fauxToolCall } from "@msa/ai/providers/faux";
+import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
+import { Type, createModels, fauxAssistantMessage, fauxProvider, fauxToolCall } from "@msa/ai";
 import { BACKGROUND_CONTEXT } from "@msa/chord/context";
+import { defineDoc, defineExtension, defineTool, section } from "@msa/durable";
+import { createRegistry, Harness } from "@msa/durable/harness";
+import { MemoryStorage } from "@msa/durable/storage/memory";
+import { Console, Effect } from "effect";
 
 import { NodeExecutionEnv } from "../../src/env/node.ts";
-import { createRegistry, Harness } from "../../src/harness/index.ts";
-import { defineDoc, defineExtension, defineTool, section } from "../../src/index.ts";
-import { MemoryStorage } from "../../src/storage/memory.ts";
 import { CodingTools, createReadTool } from "../../src/tools/index.ts";
+import { awaited, joinPath, makeTempDir, removeDir, writeText } from "../support.ts";
 
 const context = BACKGROUND_CONTEXT;
 
-// ─── Product code: the plan extension ───────────────────────────────────────
-
-// The current plan of a conversation. A fork keeps the plan it had at the fork entry.
 const PlanDoc = defineDoc<{ steps: string[] }>({
   kind: "app.plan",
   version: 1,
@@ -35,12 +25,28 @@ const submitPlan = defineTool({
   name: "submit_plan",
   description: "Submit the plan as a list of steps.",
   parameters: Type.Object({ steps: Type.Array(Type.String()) }),
-  execute: async (args, api, callContext) => {
-    await api.commit(async (tx) => {
-      (await tx.doc(PlanDoc, api.conversationId)).steps = args.steps;
-    }, callContext);
-    return { output: [{ type: "text", text: "Plan submitted." }], control: { terminate: true } };
-  },
+  execute: (args, api, callContext) =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
+        yield* awaited(
+          api.commit(
+            (tx) =>
+              runPromise(
+                Effect.gen(function* () {
+                  (yield* awaited(tx.doc(PlanDoc, api.conversationId))).steps = args.steps;
+                }),
+              ),
+            callContext,
+          ),
+        );
+        return {
+          output: [{ type: "text", text: "Plan submitted." }],
+          control: { terminate: true },
+        };
+      }),
+    ),
 });
 
 const Plan = defineExtension({
@@ -54,73 +60,89 @@ const Plan = defineExtension({
   ],
 });
 
-// Plan mode is a change to the conversation's agent: select the plan extension and offer only reading and
-// submitting. Clearing both returns to the host's default selection and every tool.
 const read = createReadTool();
 const enterPlanMode = { extensions: { add: [Plan] }, tools: [read, submitPlan] };
 const leavePlanMode = { extensions: null, tools: null };
 
-// ─── Host setup ─────────────────────────────────────────────────────────────
+const mainStep1 = Effect.gen(function* () {
+  const directory = yield* makeTempDir("msa-durable-plan-");
+  yield* writeText(joinPath(directory, "server.ts"), "app.listen(3000);\n");
 
-const directory = await mkdtemp(join(tmpdir(), "msa-durable-plan-"));
-await writeFile(join(directory, "server.ts"), "app.listen(3000);\n");
-
-const faux = fauxProvider();
-const models = createModels();
-models.setProvider(faux.provider);
-faux.setResponses([
-  fauxAssistantMessage(fauxToolCall("read", { path: "server.ts" }), { stopReason: "toolUse" }),
-  fauxAssistantMessage(
-    fauxToolCall("submit_plan", { steps: ["Read PORT from the environment", "Default to 3000"] }),
-    {
+  const faux = fauxProvider();
+  const models = createModels();
+  models.setProvider(faux.provider);
+  faux.setResponses([
+    fauxAssistantMessage(fauxToolCall("read", { path: "server.ts" }), {
       stopReason: "toolUse",
-    },
-  ),
-  fauxAssistantMessage("Implementing step 1."),
-]);
+    }),
+    fauxAssistantMessage(
+      fauxToolCall("submit_plan", {
+        steps: ["Read PORT from the environment", "Default to 3000"],
+      }),
+      {
+        stopReason: "toolUse",
+      },
+    ),
+    fauxAssistantMessage("Implementing step 1."),
+  ]);
 
-const registry = createRegistry();
-registry.install(CodingTools);
-registry.install(Plan);
-const harness = await Harness.open(
-  new MemoryStorage(),
-  // Installed, but only CodingTools is selected by default: conversations opt into plan mode.
-  {
-    models,
-    registry,
-    settings: { extensions: [CodingTools] },
-    env: () => new NodeExecutionEnv({ cwd: directory }),
-  },
-  context,
-);
-const root = await harness.root(context, {
-  agent: { model: { provider: "faux", modelId: "faux-1" } },
+  const registry = createRegistry();
+  registry.install(CodingTools);
+  registry.install(Plan);
+  const harness = yield* awaited(
+    Harness.open(
+      new MemoryStorage(),
+      {
+        models,
+        registry,
+        settings: { extensions: [CodingTools] },
+        env: () => new NodeExecutionEnv({ cwd: directory }),
+      },
+      context,
+    ),
+  );
+  const root = yield* awaited(
+    harness.root(context, {
+      agent: { model: { provider: "faux", modelId: "faux-1" } },
+    }),
+  );
+  return { directory, harness, root };
 });
-const tools = async () => (await root.agent(context)).tools.map((tool) => tool.name);
-console.log("tools:", await tools());
 
-await root.configure(enterPlanMode, context);
-console.log("plan mode tools:", await tools());
-await (
-  await root.submit({ type: "input", content: "Make the port configurable." }, context)
-).wait(context);
-console.log("plan:", (await harness.snapshot(PlanDoc, root.id, context))?.steps);
-
-await root.configure(leavePlanMode, context);
-console.log("tools again:", await tools());
-await (await root.submit({ type: "input", content: "Go ahead." }, context)).wait(context);
-
-// The model saw each switch as a system prompt change in its transcript.
-const { messages } = await root.context(context);
-for (const message of messages) {
-  if (message.role !== "system") continue;
-  console.log("system:", {
-    // A null section value removes it.
-    sections: message.sections,
-    added: message.toolsAdded?.map((tool) => tool.name),
-    removed: message.toolsRemoved?.map((tool) => tool.name),
+const main = Effect.gen(function* () {
+  const { directory, harness, root } = yield* mainStep1;
+  const tools = Effect.fn("tools")(function* () {
+    return (yield* awaited(root.agent(context))).tools.map((tool) => tool.name);
   });
-}
+  yield* Console.log("tools:", yield* tools());
 
-await harness.close(context);
-await rm(directory, { recursive: true, force: true });
+  yield* awaited(root.configure(enterPlanMode, context));
+  yield* Console.log("plan mode tools:", yield* tools());
+  yield* awaited(
+    (yield* awaited(
+      root.submit({ type: "input", content: "Make the port configurable." }, context),
+    )).wait(context),
+  );
+  yield* Console.log("plan:", (yield* awaited(harness.snapshot(PlanDoc, root.id, context)))?.steps);
+
+  yield* awaited(root.configure(leavePlanMode, context));
+  yield* Console.log("tools again:", yield* tools());
+  yield* awaited(
+    (yield* awaited(root.submit({ type: "input", content: "Go ahead." }, context))).wait(context),
+  );
+
+  const { messages } = yield* awaited(root.context(context));
+  for (const message of messages) {
+    if (message.role !== "system") continue;
+    yield* Console.log("system:", {
+      sections: message.sections,
+      added: message.toolsAdded?.map((tool) => tool.name),
+      removed: message.toolsRemoved?.map((tool) => tool.name),
+    });
+  }
+
+  yield* awaited(harness.close(context));
+  yield* removeDir(directory);
+});
+
+NodeRuntime.runMain(main);

@@ -1,4 +1,5 @@
 import type { Context } from "@msa/chord";
+import { Effect } from "effect";
 
 import {
   ExecutionError,
@@ -10,8 +11,11 @@ import {
 import { NodeExecutionEnv } from "../src/env/node.ts";
 import { createTempDir } from "./tools-support.ts";
 
-// An environment where only the listed programs exist; it records each command and prints `output`.
-export function programsEnv(installed: readonly string[], output: string, exitCode = 0) {
+export const programsEnv = Effect.fn("programsEnv")(function* (
+  installed: readonly string[],
+  output: string,
+  exitCode = 0,
+) {
   const commands: (string | readonly string[])[] = [];
   class ProgramsEnv extends NodeExecutionEnv {
     override exec(
@@ -29,5 +33,5 @@ export function programsEnv(installed: readonly string[], output: string, exitCo
       return Promise.resolve({ ok: true, value: { exitCode } });
     }
   }
-  return { env: new ProgramsEnv({ cwd: createTempDir() }), commands };
-}
+  return { env: new ProgramsEnv({ cwd: yield* createTempDir }), commands };
+});

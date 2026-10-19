@@ -1,5 +1,7 @@
-import { type ConversationId, defineDoc, defineDocFamily } from "@msa/durable";
+import { defineDoc, defineDocFamily } from "@msa/durable";
+import { Effect } from "effect";
 
+import { awaited } from "./effect-support.ts";
 import { context, createConversation, openTestSession } from "./session-support.ts";
 
 export type Live = {
@@ -47,14 +49,22 @@ export const MemberDoc = defineDocFamily<Member, string>({
   },
 });
 
-export async function setupLive(): Promise<
-  ReturnType<typeof openTestSession> & { readonly conversationId: ConversationId }
-> {
+export const setupLive = Effect.fn("setupLive")(function* () {
+  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
   const harness = openTestSession();
-  const conversationId = await createConversation(harness.session);
-  await harness.session.commit(async (tx) => {
-    const live = await tx.doc(LiveDoc, conversationId);
-    live.items.push("a", "b");
-  }, context);
+  const conversationId = yield* awaited(createConversation(harness.session));
+  yield* awaited(
+    harness.session.commit(
+      (tx) =>
+        runPromise(
+          Effect.gen(function* () {
+            const live = yield* awaited(tx.doc(LiveDoc, conversationId));
+            live.items.push("a", "b");
+          }),
+        ),
+      context,
+    ),
+  );
   return { ...harness, conversationId };
-}
+});

@@ -1,5 +1,6 @@
 import type { Context } from "@msa/chord";
 import { registerStorageConformance } from "@msa/durable/testing";
+import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { NodeExecutionEnv } from "../src/env/node.ts";
@@ -13,18 +14,22 @@ import {
   tempDirectories,
   tempDirectory,
 } from "./jsonl-storage-support.ts";
-import { removeDir } from "./temp-support.ts";
+import { awaited, removeDir } from "./support.ts";
 
-afterEach(async () => {
-  for await (const storage of openStorages) await storage.close(context);
-  openStorages.clear();
-  for await (const directory of tempDirectories) await removeDir(directory);
-  tempDirectories.clear();
+afterEach(() =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      for (const storage of openStorages) yield* awaited(storage.close(context));
+      openStorages.clear();
+      for (const directory of tempDirectories) yield* removeDir(directory);
+      tempDirectories.clear();
+    }),
+  ),
+);
+
+const createStorage = Effect.fn("createStorage")(function* () {
+  return yield* openStorage(yield* tempDirectory());
 });
-
-async function createStorage(): Promise<JsonlStorage> {
-  return openStorage(await tempDirectory());
-}
 
 class ReopeningStorage implements Storage {
   private current: JsonlStorage;
@@ -36,18 +41,28 @@ class ReopeningStorage implements Storage {
     this.directory = directory;
   }
 
-  async commit(writes: readonly StorageWrite[], commitContext: Context): Promise<Seq> {
-    if (this.closed) return this.current.commit(writes, commitContext);
-    try {
-      return await this.current.commit(writes, commitContext);
-    } finally {
-      await this.current.close(context);
-      this.current = await JsonlStorage.open(
-        this.directory,
-        new NodeExecutionEnv({ cwd: this.directory }),
-        context,
-      );
-    }
+  commit(writes: readonly StorageWrite[], commitContext: Context): Promise<Seq> {
+    return Effect.runPromise(
+      Effect.gen({ self: this }, function* () {
+        if (this.closed) return yield* awaited(this.current.commit(writes, commitContext));
+        return yield* Effect.gen({ self: this }, function* () {
+          return yield* awaited(this.current.commit(writes, commitContext));
+        }).pipe(
+          Effect.ensuring(
+            Effect.gen({ self: this }, function* () {
+              yield* awaited(this.current.close(context));
+              this.current = yield* awaited(
+                JsonlStorage.open(
+                  this.directory,
+                  new NodeExecutionEnv({ cwd: this.directory }),
+                  context,
+                ),
+              );
+            }),
+          ),
+        );
+      }),
+    );
   }
 
   mintId<I extends Id<string>>(): Promise<I> {
@@ -98,28 +113,36 @@ class ReopeningStorage implements Storage {
   scanDocuments: Storage["scanDocuments"] = (query, limit, cursor, readContext) =>
     this.current.scanDocuments(query, limit, cursor, readContext);
 
-  async close(closeContext: Context): Promise<void> {
-    if (this.closed) return;
-    this.closed = true;
-    await this.current.close(closeContext);
+  close(closeContext: Context): Promise<void> {
+    return Effect.runPromise(
+      Effect.gen({ self: this }, function* () {
+        if (this.closed) return;
+        this.closed = true;
+        yield* awaited(this.current.close(closeContext));
+      }),
+    );
   }
 }
 
-registerStorageConformance({ describe, expect, it }, "JsonlStorage", async (use) =>
-  use(await createStorage()),
+registerStorageConformance({ describe, expect, it }, "JsonlStorage", (use) =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      return yield* awaited(use(yield* createStorage()));
+    }),
+  ),
 );
 
-registerStorageConformance({ describe, expect, it }, "JsonlStorage across reopen", async (use) => {
-  const directory = await tempDirectory("msa-durable-jsonl-conformance-");
-  const current = await JsonlStorage.open(
-    directory,
-    new NodeExecutionEnv({ cwd: directory }),
-    context,
-  );
-  const storage = new ReopeningStorage(current, directory);
-  try {
-    await use(storage);
-  } finally {
-    await storage.close(context);
-  }
-});
+registerStorageConformance({ describe, expect, it }, "JsonlStorage across reopen", (use) =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const directory = yield* tempDirectory("msa-durable-jsonl-conformance-");
+      const current = yield* awaited(
+        JsonlStorage.open(directory, new NodeExecutionEnv({ cwd: directory }), context),
+      );
+      const storage = new ReopeningStorage(current, directory);
+      yield* Effect.asVoid(Effect.suspend(() => awaited(use(storage)))).pipe(
+        Effect.ensuring(Effect.asVoid(Effect.suspend(() => awaited(storage.close(context))))),
+      );
+    }),
+  ),
+);

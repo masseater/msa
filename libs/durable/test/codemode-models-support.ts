@@ -11,12 +11,20 @@ import {
 import { CodemodeSandbox } from "@msa/codemode";
 import { ToolResultEntry, UsageDoc } from "@msa/durable";
 import { MemoryStorage } from "@msa/durable/storage/memory";
+import { Effect } from "effect";
+import { dual } from "effect/Function";
 
 import { createCodemodeExtension } from "../src/codemode/codemode.ts";
 import type { ExecutionEnv } from "../src/env/index.ts";
-import { allEntries, chatSetup, openChat } from "./chat-support.ts";
-import { context } from "./session-support.ts";
-import { type Deferred, deferred } from "./task-support.ts";
+import {
+  allEntries,
+  chatSetup,
+  openChat,
+  awaited,
+  context,
+  type Deferred,
+  deferred,
+} from "./support.ts";
 
 export const COST = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
 
@@ -62,43 +70,60 @@ export function testModels(): CreateProviderOptions["models"] {
   ];
 }
 
-export function testClassifiers(
+function testClassifiersImpl(
   calls: Calls,
   gate: { readonly open: Deferred<void>; readonly atFour: boolean },
 ): CreateProviderOptions["classifiers"] {
   return {
     "test-classifier": {
-      classify: async (model, classifierContext): Promise<ClassifierResult> => {
-        calls.classify++;
-        if ((classifierContext.state as { fail?: boolean }).fail === true) {
-          return {
-            api: model.api,
-            provider: model.provider,
-            model: model.id,
-            answers: {},
-            stopReason: "error",
-            errorMessage: "quota exceeded",
-            timestamp: 0,
-          };
-        }
-        calls.inFlight++;
-        calls.maxInFlight = Math.max(calls.maxInFlight, calls.inFlight);
-        if (gate.atFour && calls.inFlight === 4) setTimeout(() => gate.open.resolve(), 50);
-        await gate.open.promise;
-        calls.inFlight--;
-        return {
-          api: model.api,
-          provider: model.provider,
-          model: model.id,
-          answers: { good: { value: true } } as unknown as ClassifierResult["answers"],
-          usage: USAGE,
-          stopReason: "stop",
-          timestamp: 0,
-        };
-      },
+      classify: (model, classifierContext): Promise<ClassifierResult> =>
+        Effect.runPromise(
+          Effect.gen(function* () {
+            calls.classify++;
+            if ((classifierContext.state as { fail?: boolean }).fail === true) {
+              return {
+                api: model.api,
+                provider: model.provider,
+                model: model.id,
+                answers: {},
+                stopReason: "error",
+                errorMessage: "quota exceeded",
+                timestamp: 0,
+              };
+            }
+            calls.inFlight++;
+            calls.maxInFlight = Math.max(calls.maxInFlight, calls.inFlight);
+            if (gate.atFour && calls.inFlight === 4)
+              yield* Effect.forkDetach(
+                Effect.sleep(50).pipe(Effect.andThen(Effect.sync(() => gate.open.resolve()))),
+              );
+            yield* awaited(gate.open.promise);
+            calls.inFlight--;
+            return {
+              api: model.api,
+              provider: model.provider,
+              model: model.id,
+              answers: { good: { value: true } } as unknown as ClassifierResult["answers"],
+              usage: USAGE,
+              stopReason: "stop",
+              timestamp: 0,
+            };
+          }),
+        ),
     },
   };
 }
+
+export const testClassifiers: {
+  (gate: {
+    readonly open: Deferred<void>;
+    readonly atFour: boolean;
+  }): (calls: Calls) => ReturnType<typeof testClassifiersImpl>;
+  (
+    calls: Calls,
+    gate: { readonly open: Deferred<void>; readonly atFour: boolean },
+  ): ReturnType<typeof testClassifiersImpl>;
+} = dual(2, testClassifiersImpl);
 
 export function testImages(calls: Calls): CreateProviderOptions["images"] {
   return {
@@ -118,11 +143,9 @@ export function testImages(calls: Calls): CreateProviderOptions["images"] {
   };
 }
 
-// A chat whose models also have a classifier and an image model of a test provider, and the code mode extension.
 export function modelsChat() {
   const setup = chatSetup();
   const calls = { classify: 0, images: 0, inFlight: 0, maxInFlight: 0 };
-  // \`atFour\`: hold classifier calls until four run, then a little longer, so a fifth would show up.
   const gate = { open: deferred(), atFour: false };
   gate.open.resolve();
   (setup.models as MutableModels).setProvider(
@@ -138,20 +161,26 @@ export function modelsChat() {
   return { setup, calls, gate };
 }
 
-export async function run(chat: ReturnType<typeof modelsChat>, code: string, env?: ExecutionEnv) {
+export const run = Effect.fn("run")(function* (
+  chat: ReturnType<typeof modelsChat>,
+  code: string,
+  env?: ExecutionEnv,
+) {
   chat.setup.faux.setResponses([
     fauxAssistantMessage([fauxToolCall("codemode", { code }, { id: "s1" })], {
       stopReason: "toolUse",
     }),
     fauxAssistantMessage([fauxText("done")]),
   ]);
-  const { harness, root } = await openChat(
+  const { harness, root } = yield* openChat(
     new MemoryStorage(),
     chat.setup,
     env === undefined ? {} : { env },
   );
-  await (await root.submit({ type: "input", content: "go" }, context)).wait(context);
-  const entry = (await allEntries(root)).find((candidate) => ToolResultEntry.is(candidate))!;
+  yield* awaited(
+    (yield* awaited(root.submit({ type: "input", content: "go" }, context))).wait(context),
+  );
+  const entry = (yield* allEntries(root)).find((candidate) => ToolResultEntry.is(candidate))!;
   const message = entry.model![0] as {
     content: { type: string; text?: string }[];
     details?: unknown;
@@ -160,7 +189,7 @@ export async function run(chat: ReturnType<typeof modelsChat>, code: string, env
     .map((item) => item.text ?? `<${item.type}>`)
     .join("")
     .replace(/^Script (completed|failed)\nWall time [\d.]+ seconds\nOutput:\n/u, "");
-  const usage = await harness.snapshot(UsageDoc, root.id, context);
-  await harness.close(context);
+  const usage = yield* awaited(harness.snapshot(UsageDoc, root.id, context));
+  yield* awaited(harness.close(context));
   return { text, message, usage };
-}
+});

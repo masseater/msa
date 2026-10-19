@@ -17,8 +17,11 @@ import {
   ToolResultEntry,
 } from "@msa/durable";
 import { MemoryStorage } from "@msa/durable/storage/memory";
+import { Effect } from "effect";
+import { dual } from "effect/Function";
 
 import { allEntries, type ChatSetup, openChat } from "./chat-support.ts";
+import { awaited } from "./effect-support.ts";
 import { context } from "./session-support.ts";
 
 export const EchoParameters = Type.Object({ text: Type.Optional(Type.String()) });
@@ -27,7 +30,7 @@ export type Echo = ToolRegistration<typeof EchoParameters>;
 
 export type Execute = Echo["execute"];
 
-export function tool(name: string, execute: Execute, extra: Partial<Echo> = {}): Echo {
+function toolImpl(name: string, execute: Execute, extra: Partial<Echo> = {}): Echo {
   return defineTool({
     name,
     description: `The ${name} tool`,
@@ -37,7 +40,11 @@ export function tool(name: string, execute: Execute, extra: Partial<Echo> = {}):
   });
 }
 
-// A tool-calling answer with one call per `[name, args, id]`.
+export const tool: {
+  (execute: Execute, extra?: Partial<Echo>): (name: string) => ReturnType<typeof toolImpl>;
+  (name: string, execute: Execute, extra?: Partial<Echo>): ReturnType<typeof toolImpl>;
+} = dual((args) => typeof args[0] === "string", toolImpl);
+
 export function calls(
   ...list: readonly (readonly [string, Record<string, JsonValue>, string])[]
 ): AssistantMessage {
@@ -49,20 +56,20 @@ export function calls(
 
 export const DONE = fauxAssistantMessage([fauxText("done")]);
 
-export async function run(
+export const run = Effect.fn("run")(function* (
   setup: ChatSetup,
   responses: FauxResponseStep[],
   prepare?: (harness: Harness, root: Conversation) => Promise<void>,
   options: Parameters<typeof openChat>[2] = {},
-): Promise<{ harness: Harness; root: Conversation; entries: EntryRecord[]; status: string }> {
+) {
   setup.faux.setResponses(responses);
-  const { harness, root } = await openChat(new MemoryStorage(), setup, options);
-  await prepare?.(harness, root);
-  const settled = await (
-    await root.submit({ type: "input", content: "go" }, context)
-  ).wait(context);
-  return { harness, root, entries: await allEntries(root), status: settled.status };
-}
+  const { harness, root } = yield* openChat(new MemoryStorage(), setup, options);
+  yield* awaited(prepare?.(harness, root));
+  const settled = yield* awaited(
+    (yield* awaited(root.submit({ type: "input", content: "go" }, context))).wait(context),
+  );
+  return { harness, root, entries: yield* allEntries(root), status: settled.status };
+});
 
 export function results(entries: readonly EntryRecord[]): ToolResultMessage[] {
   return entries

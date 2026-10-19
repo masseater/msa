@@ -1,4 +1,5 @@
 import { BACKGROUND_CONTEXT } from "@msa/chord/context";
+import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { idFromNumber } from "../src/ids.ts";
@@ -6,6 +7,7 @@ import type { SqliteDatabase, SqliteExecutor, SqliteValue } from "../src/storage
 import { SqliteStorage } from "../src/storage/sqlite/index.ts";
 import { NodeSqliteDatabase, openNodeSqliteDatabase } from "../src/storage/sqlite/node.ts";
 import { type DocumentId, type EntryId, ROOT_CONVERSATION_ID } from "../src/types.ts";
+import { awaited } from "./effect-support.ts";
 
 type SettlementMode = "immediate" | "delay" | "reject";
 
@@ -38,14 +40,18 @@ class ControlledSettlementDatabase implements SqliteDatabase {
     const mode = this.mode;
     this.mode = "immediate";
     if (mode === "immediate") return this.delegate.transaction(callback);
-    const settlement = this.delegate.transaction(async (transaction) => {
-      const value = await callback(transaction);
-      if (mode === "reject") throw new Error("controlled settlement rejection");
-      return value;
-    });
-    return new Promise<T>((resolve, reject) => {
-      this.pendingSettlement = () => void settlement.then(resolve, reject);
-    });
+    const settlement = this.delegate.transaction((transaction) =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          const value = yield* awaited(callback(transaction));
+          if (mode === "reject") throw new Error("controlled settlement rejection");
+          return value;
+        }),
+      ),
+    );
+    const { promise, resolve, reject } = Promise.withResolvers<T>();
+    this.pendingSettlement = () => void settlement.then(resolve, reject);
+    return promise;
   }
 
   close(): Promise<void> {
@@ -65,7 +71,10 @@ class ControlledSettlementDatabase implements SqliteDatabase {
   }
 }
 
-async function expectDelayedCommit(database: ControlledSettlementDatabase, storage: SqliteStorage) {
+const expectDelayedCommit = Effect.fn("expectDelayedCommit")(function* (
+  database: ControlledSettlementDatabase,
+  storage: SqliteStorage,
+) {
   database.controlNextSettlement("delay");
   const committing = storage.commit(
     [
@@ -83,16 +92,17 @@ async function expectDelayedCommit(database: ControlledSettlementDatabase, stora
   let committed = false;
   void committing.then(() => {
     committed = true;
+    return undefined;
   });
-  await Promise.resolve();
+  yield* awaited(Promise.resolve());
   expect(committed).toBe(false);
-  expect(await storage.mintId<EntryId>()).toBe(2);
+  expect(yield* awaited(storage.mintId<EntryId>())).toBe(2);
   database.settle();
-  await expect(committing).resolves.toBe(1);
-  expect(await storage.mintId<EntryId>()).toBe(101);
-}
+  yield* awaited(expect(committing).resolves.toBe(1));
+  expect(yield* awaited(storage.mintId<EntryId>())).toBe(101);
+});
 
-async function expectRejectedCommit(
+const expectRejectedCommit = Effect.fn("expectRejectedCommit")(function* (
   database: ControlledSettlementDatabase,
   storage: SqliteStorage,
 ) {
@@ -110,70 +120,105 @@ async function expectRejectedCommit(
     ],
     BACKGROUND_CONTEXT,
   );
-  expect(await storage.mintId<EntryId>()).toBe(102);
+  expect(yield* awaited(storage.mintId<EntryId>())).toBe(102);
   database.settle();
-  await expect(rejected).rejects.toThrow("controlled settlement rejection");
-  expect(await storage.mintId<EntryId>()).toBe(103);
-  expect(await storage.entry(idFromNumber<EntryId>(200), BACKGROUND_CONTEXT)).toBeUndefined();
-  await storage.close(BACKGROUND_CONTEXT);
-}
+  yield* awaited(expect(rejected).rejects.toThrow("controlled settlement rejection"));
+  expect(yield* awaited(storage.mintId<EntryId>())).toBe(103);
+  expect(
+    yield* awaited(storage.entry(idFromNumber<EntryId>(200), BACKGROUND_CONTEXT)),
+  ).toBeUndefined();
+  yield* awaited(storage.close(BACKGROUND_CONTEXT));
+});
 
-describe("portable SQLite facade settlement", () => {
-  it("rejects a transaction handle used after its transaction settles", async () => {
-    const database = await openNodeSqliteDatabase(":memory:");
-    await database.exec("CREATE TABLE stale_probe (value INTEGER)");
-    let handle!: SqliteExecutor;
-    await database.transaction(async (transaction) => {
-      handle = transaction;
-      await transaction.run("INSERT INTO stale_probe (value) VALUES (?)", 1);
-    });
-    const stale = "SQLite transaction handle is no longer active";
-    await expect(handle.exec("INSERT INTO stale_probe (value) VALUES (2)")).rejects.toThrow(stale);
-    await expect(handle.run("INSERT INTO stale_probe (value) VALUES (?)", 3)).rejects.toThrow(
-      stale,
-    );
-    expect(await database.all("SELECT value FROM stale_probe")).toEqual([{ value: 1 }]);
-    await database.close();
-  });
+const rejectsTransactionHandle = Effect.gen(function* () {
+  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-  it("does not preserve the callback error when rollback itself fails", async () => {
-    const database = await openNodeSqliteDatabase(":memory:");
-    await database.exec("CREATE TABLE rollback_probe (value INTEGER)");
-    await expect(
-      database.transaction(async (transaction) => {
-        await transaction.exec("INSERT INTO rollback_probe (value) VALUES (1)");
-        await transaction.exec("COMMIT");
-        throw new Error("rejected after an escaped commit");
-      }),
-    ).rejects.toThrow(AggregateError);
-    expect(await database.get("SELECT value FROM rollback_probe")).toEqual({ value: 1 });
-    await database.close();
-  });
+  const database = yield* awaited(openNodeSqliteDatabase(":memory:"));
+  yield* awaited(database.exec("CREATE TABLE stale_probe (value INTEGER)"));
+  let handle!: SqliteExecutor;
+  yield* awaited(
+    database.transaction((transaction) =>
+      runPromise(
+        Effect.gen(function* () {
+          handle = transaction;
+          yield* awaited(transaction.run("INSERT INTO stale_probe (value) VALUES (?)", 1));
+        }),
+      ),
+    ),
+  );
+  const stale = "SQLite transaction handle is no longer active";
+  yield* awaited(
+    expect(handle.exec("INSERT INTO stale_probe (value) VALUES (2)")).rejects.toThrow(stale),
+  );
+  yield* awaited(
+    expect(handle.run("INSERT INTO stale_probe (value) VALUES (?)", 3)).rejects.toThrow(stale),
+  );
+  expect(yield* awaited(database.all("SELECT value FROM stale_probe"))).toEqual([{ value: 1 }]);
+  yield* awaited(database.close());
+});
 
-  it("awaits async transaction settlement and adopts IDs only after success", async () => {
-    const database = new ControlledSettlementDatabase(await openNodeSqliteDatabase(":memory:"));
-    database.controlNextSettlement("delay");
-    const opening = SqliteStorage.open(database);
-    let opened = false;
-    void opening.then(() => {
-      opened = true;
-    });
-    await Promise.resolve();
-    expect(opened).toBe(false);
-    database.settle();
-    const storage = await opening;
-    await expectDelayedCommit(database, storage);
-    await expectRejectedCommit(database, storage);
+const doesNotPreserve = Effect.gen(function* () {
+  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
+  const database = yield* awaited(openNodeSqliteDatabase(":memory:"));
+  yield* awaited(database.exec("CREATE TABLE rollback_probe (value INTEGER)"));
+  yield* awaited(
+    expect(
+      database.transaction((transaction) =>
+        runPromise(
+          Effect.gen(function* () {
+            yield* awaited(transaction.exec("INSERT INTO rollback_probe (value) VALUES (1)"));
+            yield* awaited(transaction.exec("COMMIT"));
+            throw new Error("rejected after an escaped commit");
+          }),
+        ),
+      ),
+    ).rejects.toThrow(AggregateError),
+  );
+  expect(yield* awaited(database.get("SELECT value FROM rollback_probe"))).toEqual({
+    value: 1,
   });
+  yield* awaited(database.close());
+});
+
+const awaitsAsyncTransaction = Effect.gen(function* () {
+  const database = new ControlledSettlementDatabase(
+    yield* awaited(openNodeSqliteDatabase(":memory:")),
+  );
+  database.controlNextSettlement("delay");
+  const opening = SqliteStorage.open(database);
+  let opened = false;
+  void opening.then(() => {
+    opened = true;
+    return undefined;
+  });
+  yield* awaited(Promise.resolve());
+  expect(opened).toBe(false);
+  database.settle();
+  const storage = yield* awaited(opening);
+  yield* expectDelayedCommit(database, storage);
+  yield* expectRejectedCommit(database, storage);
 });
 
 describe("portable SQLite facade settlement", () => {
-  it("reads a document from one committed state while a commit replaces its base", async () => {
-    const id = idFromNumber<DocumentId>(5);
-    // Each yield count starts the commit at a different point of the read's record and revision queries.
-    for await (const yields of Array.from({ length: 16 }, (_, i) => i)) {
-      const storage = await SqliteStorage.open(await openNodeSqliteDatabase(":memory:"));
-      await storage.commit(
+  it("rejects a transaction handle used after its transaction settles", () =>
+    Effect.runPromise(rejectsTransactionHandle));
+
+  it("does not preserve the callback error when rollback itself fails", () =>
+    Effect.runPromise(doesNotPreserve));
+
+  it("awaits async transaction settlement and adopts IDs only after success", () =>
+    Effect.runPromise(awaitsAsyncTransaction));
+});
+
+const readsDocumentOne = Effect.gen(function* () {
+  const id = idFromNumber<DocumentId>(5);
+  for (const yields of Array.from({ length: 16 }, (_, i) => i)) {
+    const storage = yield* awaited(
+      SqliteStorage.open(yield* awaited(openNodeSqliteDatabase(":memory:"))),
+    );
+    yield* awaited(
+      storage.commit(
         [
           {
             type: "document.create",
@@ -182,25 +227,32 @@ describe("portable SQLite facade settlement", () => {
           },
         ],
         BACKGROUND_CONTEXT,
-      );
-      const read = storage.document(id, "current", BACKGROUND_CONTEXT);
-      await Array.from({ length: yields }).reduce<Promise<void>>(
+      ),
+    );
+    const read = storage.document(id, "current", BACKGROUND_CONTEXT);
+    yield* awaited(
+      Array.from({ length: yields }).reduce<Promise<void>>(
         (pending) => pending.then(() => undefined),
         Promise.resolve(),
-      );
-      const replace = storage.commit(
-        [
-          {
-            type: "document.change",
-            id,
-            content: { kind: "base", version: 1, value: { value: 2 } },
-          },
-        ],
-        BACKGROUND_CONTEXT,
-      );
-      const [stored] = await Promise.all([read, replace]);
-      expect([{ value: 1 }, { value: 2 }]).toContainEqual(stored?.value);
-      await storage.close(BACKGROUND_CONTEXT);
-    }
-  });
+      ),
+    );
+    const replace = storage.commit(
+      [
+        {
+          type: "document.change",
+          id,
+          content: { kind: "base", version: 1, value: { value: 2 } },
+        },
+      ],
+      BACKGROUND_CONTEXT,
+    );
+    const [stored] = yield* awaited(Promise.all([read, replace]));
+    expect([{ value: 1 }, { value: 2 }]).toContainEqual(stored?.value);
+    yield* awaited(storage.close(BACKGROUND_CONTEXT));
+  }
+});
+
+describe("portable SQLite facade settlement", () => {
+  it("reads a document from one committed state while a commit replaces its base", () =>
+    Effect.runPromise(readsDocumentOne));
 });

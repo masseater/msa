@@ -1,7 +1,5 @@
-// Loaded by vitest for every test file: `MSA_DURABLE_DOCUMENT_RETENTION_MS` sets the document retention of every Session
-// that keeps the default, so the suite can run with each unattached document evicted right after use
-// (the `evicting` project in vitest.config.ts).
+import { environmentVariable } from "../src/env/node-process.ts";
 import { setDefaultDocumentRetention } from "../src/session/session.ts";
 
-const forced = process.env["MSA_DURABLE_DOCUMENT_RETENTION_MS"];
+const forced = environmentVariable("MSA_DURABLE_DOCUMENT_RETENTION_MS", true);
 if (forced !== undefined) setDefaultDocumentRetention(Number(forced));

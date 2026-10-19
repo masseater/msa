@@ -1,43 +1,28 @@
-import { mkdirSync, rmSync } from "node:fs";
-import { type FileHandle, open } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-
 import { BACKGROUND_CONTEXT, withAbortSignal } from "@msa/chord/context";
+import { Effect } from "effect";
+import { dual } from "effect/Function";
+import { vi } from "vite-plus/test";
 
 import { type ShellExecOptions } from "../src/env/index.ts";
 import { NodeExecutionEnv } from "../src/env/node.ts";
+import { awaited } from "./effect-support.ts";
+import { makeTempDir, removeDirRetrying, restoreWritable } from "./platform-support.ts";
 
 export const tempDirs: string[] = [];
 
 export const chmodRestorePaths: string[] = [];
 
-export function createTempDir(): string {
-  const dir = join(
-    tmpdir(),
-    `msa-durable-env-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-  );
-  mkdirSync(dir, { recursive: true });
-  tempDirs.push(dir);
-  return dir;
-}
+export const createTempDir: Effect.Effect<string> = makeTempDir("msa-durable-env-").pipe(
+  Effect.tap((dir) => Effect.sync(() => tempDirs.push(dir))),
+);
 
-// Remove a test directory. On Windows, `taskkill /T` runs asynchronously and can miss descendants such as Git Bash's
-// `sleep`, so a killed command's processes can hold the directory for a while after `exec` settles; retry until they
-// exit.
-export async function removeTempDir(dir: string, attempt = 0): Promise<void> {
-  try {
-    rmSync(dir, { recursive: true, force: true });
-  } catch (error) {
-    const code = (error as NodeJS.ErrnoException).code;
-    if (attempt >= 80 || (code !== "EBUSY" && code !== "EPERM" && code !== "ENOTEMPTY"))
-      throw error;
-    await new Promise((resolve) => {
-      setTimeout(resolve, 100);
-    });
-    await removeTempDir(dir, attempt + 1);
-  }
-}
+export const removeTempDir = removeDirRetrying;
+
+export const cleanUpEnvTests: Effect.Effect<void> = Effect.gen(function* () {
+  vi.restoreAllMocks();
+  yield* Effect.forEach(chmodRestorePaths.splice(0), restoreWritable, { discard: true });
+  yield* Effect.forEach(tempDirs.splice(0), removeTempDir, { discard: true });
+});
 
 export function abortedContext() {
   const controller = new AbortController();
@@ -45,31 +30,65 @@ export function abortedContext() {
   return withAbortSignal(controller.signal, BACKGROUND_CONTEXT);
 }
 
-export async function fileHandlePrototype(path: string): Promise<FileHandle> {
-  const handle = await open(path, "r");
-  await handle.close();
-  return Object.getPrototypeOf(handle) as FileHandle;
+export interface NodeFileHandle {
+  readonly fd: number;
+  sync(): Promise<void>;
+  read(...args: unknown[]): Promise<unknown>;
+  close(): Promise<void>;
 }
 
-export async function collectShellOutput(
+type FsPromises = {
+  open(path: string, flags: string): Promise<NodeFileHandle>;
+};
+
+const nodeFsPromises = (): FsPromises =>
+  (process.getBuiltinModule as (id: string) => unknown)("node:fs/promises") as FsPromises;
+
+export const fileHandlePrototype = Effect.fn("fileHandlePrototype")(function* (path: string) {
+  const handle = yield* awaited(nodeFsPromises().open(path, "r"));
+  yield* awaited(handle.close());
+  return Object.getPrototypeOf(handle) as NodeFileHandle;
+});
+
+function collectShellOutputImpl(
   env: NodeExecutionEnv,
   command: string,
   options: ShellExecOptions | undefined,
   context: Parameters<NodeExecutionEnv["exec"]>[2],
 ): Promise<{ result: Awaited<ReturnType<NodeExecutionEnv["exec"]>>; output: string }> {
-  let output = "";
-  const result = await env.exec(
-    command,
-    {
-      ...options,
-      onOutput: (text) => {
-        output += text;
-      },
-    },
-    context,
+  return Effect.runPromise(
+    Effect.gen(function* () {
+      let output = "";
+      const result = yield* awaited(
+        env.exec(
+          command,
+          {
+            ...options,
+            onOutput: (text) => {
+              output += text;
+            },
+          },
+          context,
+        ),
+      );
+      return { result, output };
+    }),
   );
-  return { result, output };
 }
+
+export const collectShellOutput: {
+  (
+    command: string,
+    options: ShellExecOptions | undefined,
+    context: Parameters<NodeExecutionEnv["exec"]>[2],
+  ): (env: NodeExecutionEnv) => ReturnType<typeof collectShellOutputImpl>;
+  (
+    env: NodeExecutionEnv,
+    command: string,
+    options: ShellExecOptions | undefined,
+    context: Parameters<NodeExecutionEnv["exec"]>[2],
+  ): ReturnType<typeof collectShellOutputImpl>;
+} = dual(4, collectShellOutputImpl);
 
 export function toBashSingleQuotedArg(value: string): string {
   return `'${value.replace(/\\/gu, "/").replace(/'/gu, `'"'"'`)}'`;
