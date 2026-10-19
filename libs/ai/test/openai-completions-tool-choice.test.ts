@@ -80,6 +80,12 @@ const localOpenAICompletionsModel = {
   maxTokens: 8192,
 } satisfies Omit<Model<"openai-completions">, "id" | "name" | "compat">;
 
+const openRouterModel = {
+  ...localOpenAICompletionsModel,
+  provider: "openrouter",
+  baseUrl: "https://openrouter.ai/api/v1",
+} satisfies Omit<Model<"openai-completions">, "id" | "name" | "compat">;
+
 type CapturedParams = {
   chat_template_kwargs?: Record<string, unknown>;
   thinking?: unknown;
@@ -319,7 +325,7 @@ describe("openai-completions tool_choice", () => {
       },
     ];
 
-    const model = getModel("openrouter", "z-ai/glm-5.2")!;
+    const model = { ...openRouterModel, id: "z-ai/glm-5.2", name: "GLM 5.2" };
     const response = await streamSimple(
       model,
       {
@@ -842,7 +848,7 @@ describe("openai-completions tool_choice", () => {
   });
 
   it("uses system messages for non-OpenAI/Anthropic OpenRouter reasoning model instructions", async () => {
-    const model = getModel("openrouter", "deepseek/deepseek-v4-pro")!;
+    const model = { ...openRouterModel, id: "deepseek/deepseek-v4-pro", name: "DeepSeek V4 Pro" };
     let payload: unknown;
 
     await streamSimple(
@@ -865,14 +871,17 @@ describe("openai-completions tool_choice", () => {
 
   it("keeps developer messages for OpenAI and Anthropic OpenRouter batch instructions", async () => {
     for (const model of [
-      getModel("openrouter", "openai/gpt-5.2-codex"),
-      getModel("openrouter", "anthropic/claude-fable-5.1:batch"),
+      { ...openRouterModel, id: "openai/gpt-5.2-codex", name: "GPT-5.2 Codex" },
+      {
+        ...openRouterModel,
+        id: "anthropic/claude-fable-5.1:batch",
+        name: "Claude Fable 5.1 batch",
+      },
     ]) {
-      expect(model).toBeDefined();
       let payload: unknown;
 
       await streamSimple(
-        model!,
+        model,
         {
           systemPrompt: "Follow instructions.",
           messages: [{ role: "user", content: "Hi", timestamp: Date.now() }],
