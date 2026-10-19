@@ -171,8 +171,6 @@ jobs:
             exit 1
           fi
 
-          node scripts/smoke-test-codemode-binary.ts "${BINARY}"
-
   release:
     runs-on: ubuntu-latest
     needs:

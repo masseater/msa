@@ -132,6 +132,7 @@ export default defineConfig({
       "apps/evals/vitest.test.config.ts",
       "libs/chord",
       "libs/telemetry",
+      "tools/vitest.config.ts",
     ],
     reporters: onGitHubActions ? ["dot", "github-actions"] : ["dot"],
   },
@@ -181,6 +182,12 @@ export default defineConfig({
         },
       },
       {
+        files: ["**/*.ts"],
+        rules: {
+          "import/extensions": ["error", "ignorePackages", { js: "never", checkTypeImports: true }],
+        },
+      },
+      {
         files: ["tools/**", "lint.config.ts", "syncpack.config.ts", "vite.config.ts"],
         rules: {
           "no-comments/disallowComments": [
@@ -209,9 +216,6 @@ export default defineConfig({
       verify: {
         command: "vp check",
         dependsOn: [
-          "engine-checks",
-          "workspace-layout",
-          "lint-categories",
           "syncpack",
           "actions-lint",
           "mcp-conformance",
@@ -220,12 +224,6 @@ export default defineConfig({
           "test-all",
         ],
       },
-      "engine-checks": {
-        command:
-          "node scripts/check-ts-relative-imports.ts && node scripts/check-entry-graphs.ts && node scripts/check-browser-smoke.ts",
-      },
-      "workspace-layout": "node tools/workspace-layout.ts",
-      "lint-categories": "node tools/lint-categories.ts",
       "actions-lint": {
         command:
           'uvx --from actionlint-py@1.7.12.25 actionlint && uvx zizmor@1.30.1 $(test -n "$CLAUDE_CODE_REMOTE" && echo --no-online-audits) .github && ast-grep scan --rule .github/rules/no-full-history-checkout.yml .github/workflows',
@@ -273,14 +271,13 @@ export default defineConfig({
         cache: false,
       },
       test: {
-        command:
-          "vp run --no-cache test:scripts && vp test run && vp run --no-cache --filter @msa/tui test",
+        command: "vp test run && vp run --no-cache --filter @msa/tui test",
         cache: false,
       },
       "test-all": {
         command: "bash test.sh",
         cache: false,
-        dependsOn: ["build", "daemon-build", "engine-checks"],
+        dependsOn: ["build", "daemon-build"],
       },
     },
   },

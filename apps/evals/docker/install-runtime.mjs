@@ -1,9 +1,9 @@
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import { Effect } from "effect";
 
-import { codingAgentName } from "../../../scripts/coding-agent-smoke.ts";
 import { files, pathOperations, runCommand } from "../src/platform.ts";
 
+const codingAgentName = "@msa/coding-agent";
 const repositoryRoot = pathOperations.resolve(import.meta.dirname, "../../..");
 const codingAgentEntry = pathOperations.basename(codingAgentName);
 const VISIBLE_DIRECTORIES = ["docs", "examples", "src", "test", "tests"];
