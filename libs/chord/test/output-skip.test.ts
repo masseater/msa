@@ -7,7 +7,6 @@ import {
   type OutputSkip,
 } from "../src/output.ts";
 
-/** Deterministic PRNG (mulberry32) so failures reproduce from the printed seed. */
 function random(seed: number): () => number {
   let state = seed >>> 0;
   return () => {
@@ -19,8 +18,6 @@ function random(seed: number): () => number {
   };
 }
 
-// Decoded shell output: ASCII, multi-byte and astral characters, replacement characters, CR/LF, tabs, and control
-// characters that sanitizing removes after bounding.
 const ALPHABET = [
   "a",
   "b",
@@ -53,11 +50,6 @@ function measure(text: string): OutputSkip {
   return { bytes: Buffer.byteLength(text, "utf8"), newlines, endsWithNewline: text.endsWith("\n") };
 }
 
-/**
- * Code-point boundaries after which the rest of `text` still proves that everything before it is outside the tail
- * window. The rest only shrinks as the cut moves right, so the legal cuts are a prefix of the boundaries; one pass
- * finds them without measuring every suffix again.
- */
 function legalCuts(text: string, limits: OutputLimits): number[] {
   let { bytes, newlines } = measure(text);
   const cuts: number[] = [];
@@ -72,11 +64,6 @@ function legalCuts(text: string, limits: OutputLimits): number[] {
   return cuts;
 }
 
-/**
- * Feed random output to one buffer in full and to another through a reference skipper that follows the contract of
- * `ShellOutputInfo.skipped`: it holds undelivered text, and when it flushes, it may replace a prefix of it by counts if
- * the rest exceeds the window. Snapshots must agree whenever both buffers have seen the same output.
- */
 function checkSeed(seed: number): void {
   const next = random(seed);
   const limits: OutputLimits = {
@@ -88,7 +75,6 @@ function checkSeed(seed: number): void {
   const skipping = new OutputBuffer(limits);
   let pending = "";
   let skips = 0;
-  // Snapshots of both buffers whenever they have seen the same output, compared once per seed.
   const delivered: BoundedOutput[] = [];
   const expected: BoundedOutput[] = [];
   const flush = (): void => {
@@ -102,7 +88,6 @@ function checkSeed(seed: number): void {
       skipping.push(pending);
     }
     pending = "";
-    // Progress snapshots happen between deliveries and compact stored chunks.
     if (next() < 0.5) skipping.snapshot();
     delivered.push(skipping.snapshot());
     expected.push(full.snapshot());
@@ -125,8 +110,6 @@ function checkSeed(seed: number): void {
 }
 
 describe("OutputBuffer skipped output", () => {
-  // Progress commits snapshot at arbitrary moments; snapshots compact what is stored and must never change the window.
-  // A compaction to exactly the kept window lost the character that decides where a later window's first line starts.
   it("keeps the same tail whenever progress snapshots happen", () => {
     for (let seed = 1; seed <= 3000; seed++) {
       const next = random(seed);
@@ -156,7 +139,6 @@ describe("OutputBuffer skipped output", () => {
     const limits: OutputLimits = { maxBytes: 1000, maxLines: 2, retain: "tail" };
     const full = new OutputBuffer(limits);
     const skipping = new OutputBuffer(limits);
-    // The skipped text ends without a newline, so its last line continues in the delivered text.
     const omitted = "one\ntwo\nthr";
     const kept = "ee\nfour\nfive\nsix";
     full.push(omitted + kept);
