@@ -8,7 +8,7 @@ const ANTHROPIC_ALLOWED_FALLBACK_MODELS = {
   "claude-opus-5": ["claude-opus-4-8"],
 } satisfies Record<string, string[]>;
 
-const VERIFIED_ANTHROPIC_MID_CONVO_EFFORT_PROVIDERS = new Set(["anthropic", "openrouter"]);
+const VERIFIED_ANTHROPIC_MID_CONVO_EFFORT_PROVIDERS = new Set(["anthropic-api", "openrouter"]);
 
 const MID_CONVO_EFFORT_UNSUPPORTED_ANTHROPIC_MODELS = new Set([
   "openrouter:anthropic/claude-opus-5",
@@ -106,7 +106,7 @@ export function applyAnthropicMessagesCompatMetadata(model: Model<Api>): void {
 export function isAnthropicFallbackMetadataModel(
   model: Model<Api>,
 ): model is Model<"anthropic-messages"> {
-  if (model.provider !== "anthropic" || model.api !== "anthropic-messages") return false;
+  if (model.provider !== "anthropic-api" || model.api !== "anthropic-messages") return false;
   return (
     model.id in ANTHROPIC_ALLOWED_FALLBACK_MODELS ||
     Object.values(ANTHROPIC_ALLOWED_FALLBACK_MODELS).some((fallbackModelIds) =>
@@ -142,7 +142,7 @@ export function applyAnthropicAllowedFallbackModelMetadata(
 const ANTHROPIC_PROMPT_CACHE: ModelPromptCache = { short: 300, long: 3600 };
 
 export function applyPromptCacheMetadata(model: Model<Api>): void {
-  if (model.provider === "anthropic" && model.api === "anthropic-messages") {
+  if (model.provider === "anthropic-api" && model.api === "anthropic-messages") {
     model.promptCache = ANTHROPIC_PROMPT_CACHE;
   }
 }
@@ -159,7 +159,7 @@ function getAnthropicMessagesCompat(
   ) {
     compat.supportsMidConvoEffort = true;
   }
-  if (provider === "anthropic" && supportsAnthropicMidConvoSystemMessages(modelId)) {
+  if (provider === "anthropic-api" && supportsAnthropicMidConvoSystemMessages(modelId)) {
     compat.supportsMidConvoSystemMessages = true;
     compat.supportsMidConvoToolChanges = true;
   }

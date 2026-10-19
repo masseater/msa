@@ -18,6 +18,7 @@ import {
   numberedLines,
   mountTranscriptWithEditor,
 } from "./tui-alt-screen-helpers.ts";
+import { InputOverlay } from "./tui-alt-screen-input-overlay.ts";
 import { VirtualTerminal } from "./virtual-terminal.ts";
 
 describe("TuiAltScreen", () => {
@@ -26,6 +27,7 @@ describe("TuiAltScreen", () => {
   cases();
   jumpsBetweenOSC133Semantic();
   supportsConfigurableKeyboardViewportNavigation();
+  givesViewportKeysToClaimingComponent();
 });
 
 function scrollsTranscriptHalfPageCustom(): void {
@@ -240,6 +242,33 @@ function supportsConfigurableKeyboardViewportNavigation(): void {
         yield* Effect.promise(() => terminal.waitForRender());
         assert.deepStrictEqual(trimmedViewport(terminal), numberedLines(5, 12));
 
+        tui.stop();
+      }),
+    ));
+}
+
+function givesViewportKeysToClaimingComponent(): void {
+  it("gives viewport keys to a focused component that claims them", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const terminal = new VirtualTerminal(20, 6);
+        const tui = new TuiAltScreen(terminal);
+        tui.addChild(
+          new Text(Array.from({ length: 12 }, (_, index) => `line ${index + 1}`).join("\n"), 0, 0),
+        );
+        const view = new InputOverlay();
+        view.wantsViewportKeys = true;
+        tui.setFocus(view);
+        tui.start();
+        yield* Effect.promise(() => terminal.waitForRender());
+        const topBefore = tui.viewportTop;
+
+        const keys = ["\x1b[5~", "\x1b[6~", "\x1b[1;5A"];
+        for (const key of keys) terminal.sendInput(key);
+        yield* Effect.promise(() => terminal.waitForRender());
+
+        assert.deepStrictEqual(view.inputs, keys);
+        assert.strictEqual(tui.viewportTop, topBefore);
         tui.stop();
       }),
     ));

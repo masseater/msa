@@ -44,6 +44,7 @@ export const workspaceSourcePaths = {
   chordDelta: fileURLToPath(new URL("./libs/chord/src/delta/index.ts", import.meta.url)),
   chordNode: fileURLToPath(new URL("./libs/chord/src/node.ts", import.meta.url)),
   telemetryIndex: fileURLToPath(new URL("./libs/telemetry/src/index.ts", import.meta.url)),
+  telemetryOtlp: fileURLToPath(new URL("./libs/telemetry/src/otlp.ts", import.meta.url)),
   telemetryTesting: fileURLToPath(
     new URL("./libs/telemetry/src/testing/index.ts", import.meta.url),
   ),
@@ -84,6 +85,7 @@ export const testBaseConfig = {
         find: /^@msa\/telemetry$/u,
         replacement: workspaceSourcePaths.telemetryIndex,
       },
+      { find: /^@msa\/telemetry\/otlp$/u, replacement: workspaceSourcePaths.telemetryOtlp },
       {
         find: /^@msa\/telemetry\/testing$/u,
         replacement: workspaceSourcePaths.telemetryTesting,

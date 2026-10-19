@@ -13,8 +13,11 @@ import type {
   QueuedInputDisposition,
   SessionStats,
 } from "../../core/agent-session.ts";
+import type { PromptMode } from "../../core/ask.ts";
 import type { BashResult } from "../../core/bash-executor.ts";
 import type { CompactionResult } from "../../core/compaction/index.ts";
+import type { ContextBreakdown } from "../../core/context-breakdown.ts";
+import type { ContextUsage } from "../../core/extensions/types.ts";
 import type { SessionEntry, SessionTreeNode } from "../../core/session-manager.ts";
 import type { SourceInfo } from "../../core/source-info.ts";
 
@@ -30,6 +33,8 @@ export type RpcCommand =
       message: string;
       images?: ImageContent[] | undefined;
       streamingBehavior?: "steer" | "followUp" | undefined;
+      /** `"ask"`: the turn can only answer, as `/ask` does. */
+      mode?: PromptMode | undefined;
     }
   | { id?: string | undefined; type: "steer"; message: string; images?: ImageContent[] | undefined }
   | {
@@ -127,6 +132,8 @@ export interface RpcSessionState {
   autoCompactionEnabled: boolean;
   messageCount: number;
   pendingMessageCount: number;
+  /** Size of the next request, with `tokens` equal to the breakdown's total. */
+  contextUsage?: (ContextUsage & { breakdown: ContextBreakdown }) | undefined;
 }
 
 // ============================================================================

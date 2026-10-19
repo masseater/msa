@@ -204,10 +204,10 @@ describe.skipIf(
   it("handles cross-provider handoff from Anthropic to OpenAI Codex", { retry: 2 }, () =>
     Effect.runPromise(
       Effect.gen(function* () {
-        const anthropicModel = getModel("anthropic", "claude-sonnet-4-5");
+        const anthropicModel = getModel("anthropic-api", "claude-sonnet-4-5");
         const codexModel = getModel("openai", "gpt-5.5");
 
-        const anthropicApiKey = getEnvApiKey("anthropic");
+        const anthropicApiKey = getEnvApiKey("anthropic-api");
         const openaiApiKey = getEnvApiKey("openai");
         if (
           anthropicApiKey === undefined ||

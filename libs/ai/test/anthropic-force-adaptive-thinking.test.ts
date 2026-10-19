@@ -91,7 +91,7 @@ describe("Anthropic forceAdaptiveThinking compat override", () => {
   it("uses adaptive thinking with native xhigh effort for Claude Fable 5", () =>
     Effect.runPromise(
       Effect.gen(function* () {
-        const payload = yield* capturePayload(getModel("anthropic", "claude-fable-5"), {
+        const payload = yield* capturePayload(getModel("anthropic-api", "claude-fable-5"), {
           reasoning: "xhigh",
         });
 
@@ -104,7 +104,7 @@ describe("Anthropic forceAdaptiveThinking compat override", () => {
     Effect.runPromise(
       Effect.gen(function* () {
         const model: Model<"anthropic-messages"> = {
-          ...getModel("anthropic", "claude-opus-4-8"),
+          ...getModel("anthropic-api", "claude-opus-4-8"),
           compat: { forceAdaptiveThinking: false },
         };
         const payload = yield* capturePayload(model, { reasoning: "medium" });

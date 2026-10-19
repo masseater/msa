@@ -7,13 +7,14 @@ import { areExperimentalFeaturesEnabled } from "../../../core/experimental.ts";
 import type { ContextUsage } from "../../../core/extensions/types.ts";
 import type { ReadonlyFooterDataProvider } from "../../../core/footer-data-provider.ts";
 import { describeGoalIndicator } from "../../../core/goal.ts";
+import { describePrWatchIndicator } from "../../../core/pr-watch/summary.ts";
 import {
   addUsageToTotals,
   createUsageTotals,
   type UsageTotals,
 } from "../../../core/usage-totals.ts";
 import { theme } from "../theme/theme.ts";
-import { describeSessionCounts } from "./sessions-view.ts";
+import { viewHelpers } from "./tasks-view-helpers.ts";
 
 /**
  * Sanitize text for display in a single-line status.
@@ -320,14 +321,15 @@ export class FooterComponent implements Component {
       );
     }
 
-    const sessions = describeSessionCounts(this.session.orchestrator?.sessions ?? []);
-    if (sessions) {
+    const prWatch = describePrWatchIndicator(this.session.prWatch);
+    if (prWatch) {
+      lines.push(truncateToWidth(theme.fg("dim", prWatch), width, theme.fg("dim", "...")));
+    }
+
+    const tasks = viewHelpers.describeTaskCounts(this.session.orchestrator?.snapshot.tasks ?? []);
+    if (tasks) {
       lines.push(
-        truncateToWidth(
-          `${sessions}  ${theme.fg("dim", "/sessions")}`,
-          width,
-          theme.fg("dim", "..."),
-        ),
+        truncateToWidth(`${tasks}  ${theme.fg("dim", "/tasks")}`, width, theme.fg("dim", "...")),
       );
     }
 

@@ -5,6 +5,7 @@ import { join } from "path";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
 import { DEFAULT_HTTP_IDLE_TIMEOUT_MS } from "../src/core/http-dispatcher.ts";
+import { ORCHESTRATOR_TOOL_NAMES } from "../src/core/orchestrator/tool-names.ts";
 import { type Settings, SettingsManager } from "../src/core/settings-manager.ts";
 
 describe("SettingsManager", () => {
@@ -707,7 +708,19 @@ describe("SettingsManager", () => {
     it("applies +name and -name to the default selection", () => {
       expect(
         SettingsManager.inMemory({ defaultTools: ["+codemode", "-write"] }).getDefaultTools(),
-      ).toEqual(["read", "bash", "edit", "memory", "web_search", "web_fetch", "codemode"]);
+      ).toEqual([
+        "read",
+        "bash",
+        "edit",
+        "memory",
+        "pr_watch",
+        "model_policy",
+        "model_upgrade",
+        ...ORCHESTRATOR_TOOL_NAMES,
+        "web_search",
+        "web_fetch",
+        "codemode",
+      ]);
       expect(
         SettingsManager.inMemory({ defaultTools: ["read", "+grep", "+read"] }).getDefaultTools(),
       ).toEqual(["read", "grep"]);
@@ -742,6 +755,10 @@ describe("SettingsManager", () => {
         "edit",
         "write",
         "memory",
+        "pr_watch",
+        "model_policy",
+        "model_upgrade",
+        ...ORCHESTRATOR_TOOL_NAMES,
         "web_search",
         "web_fetch",
         "codemode",

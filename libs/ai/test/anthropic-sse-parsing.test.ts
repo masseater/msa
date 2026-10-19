@@ -127,7 +127,7 @@ describe("Anthropic raw SSE parsing", () => {
     Effect.runPromise(
       Effect.gen(function* () {
         const effectContext = yield* Effect.context();
-        const model = getModel("anthropic", "claude-haiku-4-5");
+        const model = getModel("anthropic-api", "claude-haiku-4-5");
         const providerEvents: unknown[] = [];
         const eventModels: Model<Api>[] = [];
         const result = yield* Effect.promise(() =>
@@ -166,7 +166,7 @@ describe("Anthropic raw SSE parsing", () => {
   it("keeps signed thinking replayable when a proxy relabels the model", () =>
     Effect.runPromise(
       Effect.gen(function* () {
-        const model = getModel("anthropic", "claude-opus-5");
+        const model = getModel("anthropic-api", "claude-opus-5");
         const responseModel = "kimi-for-coding";
         const initialContext = normalizeContext({
           messages: [{ role: "user", content: "Hello", timestamp: 1 }],
@@ -201,11 +201,11 @@ describe("Anthropic raw SSE parsing", () => {
       Effect.gen(function* () {
         const fallbackModel = "fallback-model";
         const model: Model<"anthropic-messages"> = {
-          ...getModel("anthropic", "claude-opus-5"),
+          ...getModel("anthropic-api", "claude-opus-5"),
           compat: {
             allowedFallbackModels: [
               {
-                provider: "anthropic",
+                provider: "anthropic-api",
                 model: fallbackModel,
                 cost: { input: 3, output: 5, cacheRead: 0, cacheWrite: 0 },
               },
@@ -236,7 +236,7 @@ describe("Anthropic raw SSE parsing", () => {
   it("fails safely when Anthropic falls back after output begins", () =>
     Effect.runPromise(
       Effect.gen(function* () {
-        const model = getModel("anthropic", "claude-opus-5");
+        const model = getModel("anthropic-api", "claude-opus-5");
         const response = createSseResponse([
           {
             event: "message_start",
@@ -309,7 +309,7 @@ describe("Anthropic raw SSE parsing", () => {
 
         yield* Effect.promise(() =>
           streamAnthropic(
-            getModel("anthropic", "claude-fable-5-1"),
+            getModel("anthropic-api", "claude-fable-5-1"),
             normalizeContext({ messages: [{ role: "user", content: "Hello", timestamp: 1 }] }),
             {
               client,
@@ -374,7 +374,7 @@ describe("Anthropic raw SSE parsing", () => {
 
         const result = yield* Effect.promise(() =>
           streamAnthropic(
-            getModel("anthropic", "claude-fable-5-1"),
+            getModel("anthropic-api", "claude-fable-5-1"),
             normalizeContext({ messages: [{ role: "user", content: "Hello", timestamp: 1 }] }),
             { client },
           ).result(),
@@ -423,7 +423,7 @@ describe("Anthropic raw SSE parsing", () => {
 
         const result = yield* Effect.promise(() =>
           streamAnthropic(
-            getModel("anthropic", "claude-fable-5-1"),
+            getModel("anthropic-api", "claude-fable-5-1"),
             normalizeContext({ messages: [{ role: "user", content: "Hello", timestamp: 1 }] }),
             { client: createFakeAnthropicClient(createSseResponse(events)) },
           ).result(),
@@ -450,7 +450,7 @@ describe("Anthropic raw SSE parsing", () => {
 
 describe("Anthropic raw SSE parsing", () => {
   it("repairs malformed SSE JSON and malformed streamed tool JSON", async () => {
-    const model = getModel("anthropic", "claude-haiku-4-5");
+    const model = getModel("anthropic-api", "claude-haiku-4-5");
     const context = normalizeContext({
       messages: [{ role: "user", content: "Use the edit tool.", timestamp: currentTimeMillis() }],
       tools: [
@@ -541,7 +541,7 @@ describe("Anthropic raw SSE parsing", () => {
   it("preserves content from content_block_start events", () =>
     Effect.runPromise(
       Effect.gen(function* () {
-        const model = getModel("anthropic", "claude-haiku-4-5");
+        const model = getModel("anthropic-api", "claude-haiku-4-5");
         const context = normalizeContext({
           messages: [
             { role: "user", content: "Say hello.", timestamp: yield* Clock.currentTimeMillis },
@@ -652,7 +652,7 @@ describe("Anthropic raw SSE parsing", () => {
   it("preserves refusal stop details from message_delta", () =>
     Effect.runPromise(
       Effect.gen(function* () {
-        const model = getModel("anthropic", "claude-fable-5");
+        const model = getModel("anthropic-api", "claude-fable-5");
         const context = normalizeContext({
           messages: [
             { role: "user", content: "blocked request", timestamp: yield* Clock.currentTimeMillis },
@@ -718,7 +718,7 @@ describe("Anthropic raw SSE parsing", () => {
   it("preserves sensitive stop reasons with a descriptive error message", () =>
     Effect.runPromise(
       Effect.gen(function* () {
-        const model = getModel("anthropic", "claude-haiku-4-5");
+        const model = getModel("anthropic-api", "claude-haiku-4-5");
         const context = normalizeContext({
           messages: [
             { role: "user", content: "blocked request", timestamp: yield* Clock.currentTimeMillis },
@@ -775,7 +775,7 @@ describe("Anthropic raw SSE parsing", () => {
   it("treats message_delta without usage as a no-op for usage accumulation", () =>
     Effect.runPromise(
       Effect.gen(function* () {
-        const model = getModel("anthropic", "claude-haiku-4-5");
+        const model = getModel("anthropic-api", "claude-haiku-4-5");
         const context = normalizeContext({
           messages: [
             { role: "user", content: "Say hello.", timestamp: yield* Clock.currentTimeMillis },
@@ -813,7 +813,7 @@ describe("Anthropic raw SSE parsing", () => {
   it("ignores unknown SSE events after message_stop", () =>
     Effect.runPromise(
       Effect.gen(function* () {
-        const model = getModel("anthropic", "claude-haiku-4-5");
+        const model = getModel("anthropic-api", "claude-haiku-4-5");
         const context = normalizeContext({
           messages: [
             { role: "user", content: "Say hello.", timestamp: yield* Clock.currentTimeMillis },

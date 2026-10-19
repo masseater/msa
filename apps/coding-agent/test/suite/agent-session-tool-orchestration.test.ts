@@ -133,7 +133,16 @@ describe("AgentSession tool orchestration", () => {
     expect(plain.session.getAllTools().map((tool) => tool.name)).toEqual(
       expect.arrayContaining(["codemode", "tool_search"]),
     );
-    expect(plain.session.getActiveToolNames()).toEqual(["read", "bash", "edit", "write", "memory"]);
+    expect(plain.session.getActiveToolNames()).toEqual([
+      "read",
+      "bash",
+      "edit",
+      "write",
+      "memory",
+      "pr_watch",
+      "model_policy",
+      "model_upgrade",
+    ]);
 
     // --tools and the defaultTools setting name them explicitly.
     const allowed = await createHarness({

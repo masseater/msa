@@ -20,7 +20,8 @@ import { createToolNameMatcher } from "./mcp-servers.ts";
 import { convertToLlm } from "./messages.ts";
 import { findInitialModel } from "./model-resolver.ts";
 import { ModelRuntime } from "./model-runtime.ts";
-import { isOrchestratorTool, ORCHESTRATOR_TOOL_NAMES } from "./orchestrator/tools.ts";
+import type { SessionTelemetryOptions } from "./observability/session-telemetry.ts";
+import { isOrchestratorTool, ORCHESTRATOR_TOOL_NAMES } from "./orchestrator/tool-names.ts";
 import { mergeProviderAttributionHeaders } from "./provider-attribution.ts";
 import type { ResourceLoader } from "./resource-loader.ts";
 import { DefaultResourceLoader } from "./resource-loader.ts";
@@ -113,11 +114,9 @@ export interface CreateAgentSessionOptions {
   settingsManager?: SettingsManager;
   /** Session start event metadata for extension runtime startup. */
   sessionStartEvent?: SessionStartEvent | undefined;
-  /**
-   * Register the orchestrator tools (`start_session` and the rest). They start inactive; activate
-   * them with `tools` or the `defaultTools` setting.
-   */
-  orchestrator?: boolean | undefined;
+  isWorker?: boolean | undefined;
+  /** Where the session's turn, LLM request, and tool call spans go. Default: nowhere. */
+  telemetry?: SessionTelemetryOptions | undefined;
 }
 
 /** Result from createAgentSession */
@@ -179,7 +178,7 @@ function getDefaultAgentDir(): string {
  * // With explicit model
  * import { getModel } from '@msa/ai';
  * const { session } = await createAgentSession({
- *   model: getModel('anthropic', 'claude-opus-4-5'),
+ *   model: getModel('anthropic-api', 'claude-opus-4-5'),
  *   thinkingLevel: 'high',
  * });
  *
@@ -216,6 +215,7 @@ export async function createAgentSession(
     options.modelRuntime ?? (await ModelRuntime.create({ authPath, modelsPath }));
 
   const settingsManager = options.settingsManager ?? SettingsManager.create(cwd, agentDir);
+  modelRuntime.setModelPolicy(settingsManager.getModelPolicy());
   const sessionManager =
     options.sessionManager ?? SessionManager.create(cwd, getDefaultSessionDir(cwd, agentDir));
 
@@ -512,10 +512,11 @@ export async function createAgentSession(
     excludedToolNames,
     extensionRunnerRef,
     sessionStartEvent: options.sessionStartEvent,
+    telemetry: options.telemetry,
     // Workers get the orchestrator's settings, project trust, resources, and tool selection, minus
     // the orchestrator tools; the worker cwd only moves their tools and transcripts.
     createWorkerSession:
-      options.orchestrator && resourceLoader instanceof DefaultResourceLoader
+      !options.isWorker && resourceLoader instanceof DefaultResourceLoader
         ? async (worker) => {
             const workerResourceLoader = resourceLoader.fork();
             await workerResourceLoader.reload();
@@ -536,6 +537,8 @@ export async function createAgentSession(
               ...(options.customTools ? { customTools: options.customTools } : {}),
               model: worker.model,
               thinkingLevel: worker.thinkingLevel,
+              isWorker: true,
+              telemetry: worker.telemetry,
               // An emptied allowlist still means no tools; emptied +/- entries mean the defaults.
               ...(workerTools && !(workerTools.length === 0 && toolModifiers)
                 ? { tools: workerTools }

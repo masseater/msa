@@ -22,7 +22,7 @@ interface CapturedPayload {
   fallbacks?: Array<{ model: string }>;
 }
 
-function managedModel(provider = "anthropic"): Model<"anthropic-messages"> {
+function managedModel(provider = "anthropic-api"): Model<"anthropic-messages"> {
   return {
     id: "claude-fable-5-1",
     name: "Claude Fable 5.1",
@@ -307,9 +307,9 @@ describe("Anthropic mid-conversation effort", () => {
 
 describe("Anthropic mid-conversation effort", () => {
   it("generates exact model and transport gates", () => {
-    const direct = getModel("anthropic", "claude-fable-5-1");
+    const direct = getModel("anthropic-api", "claude-fable-5-1");
     const openRouter = getModel("openrouter", "anthropic/claude-fable-5.1");
-    const unsupported = getModel("anthropic", "claude-opus-4-8");
+    const unsupported = getModel("anthropic-api", "claude-opus-4-8");
     expect(direct.compat?.supportsMidConvoEffort).toBe(true);
     expect(direct.thinkingLevelMap?.off).toBeNull();
     expect(openRouter.api).toBe("anthropic-messages");
@@ -319,17 +319,19 @@ describe("Anthropic mid-conversation effort", () => {
     expect(
       getModel("openrouter", "anthropic/claude-opus-5").compat?.supportsMidConvoEffort,
     ).toBeUndefined();
-    expect(getModel("anthropic", "claude-opus-5").compat?.allowedFallbackModels).toBeUndefined();
+    expect(
+      getModel("anthropic-api", "claude-opus-5").compat?.allowedFallbackModels,
+    ).toBeUndefined();
   });
 
   it("supports off only on managed models that accept disabled thinking", () => {
     for (const id of ["claude-opus-5", "claude-haiku-5-5"] as const) {
-      const model = getModel("anthropic", id);
+      const model = getModel("anthropic-api", id);
       expect(model.compat?.supportsMidConvoEffort).toBe(true);
       expect(model.thinkingLevelMap?.off).not.toBeNull();
     }
     for (const id of ["claude-opus-5-5", "claude-sonnet-5-5", "claude-fable-5-1"] as const) {
-      expect(getModel("anthropic", id).thinkingLevelMap?.off).toBeNull();
+      expect(getModel("anthropic-api", id).thinkingLevelMap?.off).toBeNull();
     }
   });
 });

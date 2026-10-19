@@ -31,7 +31,7 @@ describe.skipIf(
   it("streams Claude Opus 4.8 with reasoning enabled", { retry: 2, timeout: 30000 }, () =>
     Effect.runPromise(
       Effect.gen(function* () {
-        const model = getModel("anthropic", "claude-opus-4-8");
+        const model = getModel("anthropic-api", "claude-opus-4-8");
         let capturedPayload: AnthropicThinkingPayload | undefined;
         const s = streamSimple(model, makeContext(), {
           reasoning: "high",

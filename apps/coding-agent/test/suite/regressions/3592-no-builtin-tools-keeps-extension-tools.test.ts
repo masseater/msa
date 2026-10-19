@@ -10,6 +10,7 @@ import {
   createAgentSessionFromServices,
   createAgentSessionServices,
 } from "../../../src/core/agent-session-services.ts";
+import { ORCHESTRATOR_TOOL_NAMES } from "../../../src/core/orchestrator/tool-names.ts";
 import { DefaultResourceLoader } from "../../../src/core/resource-loader.ts";
 import { createAgentSession } from "../../../src/core/sdk.ts";
 import { SessionManager } from "../../../src/core/session-manager.ts";
@@ -64,7 +65,7 @@ describe("regression #3592: no-builtin-tools keeps extension tools enabled", () 
     const { session } = await createAgentSession({
       cwd: tempDir,
       agentDir,
-      model: getModel("anthropic", "claude-sonnet-4-5")!,
+      model: getModel("anthropic-api", "claude-sonnet-4-5")!,
       settingsManager,
       sessionManager,
       resourceLoader,
@@ -83,18 +84,24 @@ describe("regression #3592: no-builtin-tools keeps extension tools enabled", () 
         .getAllTools()
         .map((tool) => tool.name)
         .sort(),
-    ).toEqual([
-      "bash",
-      "dynamic_tool",
-      "edit",
-      "find",
-      "grep",
-      "ls",
-      "memory",
-      "powershell",
-      "read",
-      "write",
-    ]);
+    ).toEqual(
+      [
+        "bash",
+        "dynamic_tool",
+        "edit",
+        "find",
+        "grep",
+        "ls",
+        "memory",
+        "model_policy",
+        "model_upgrade",
+        "powershell",
+        "pr_watch",
+        "read",
+        "write",
+        ...ORCHESTRATOR_TOOL_NAMES,
+      ].sort(),
+    );
     expect(session.getActiveToolNames()).toEqual(["dynamic_tool"]);
     expect(session.systemPrompt).toContain("- dynamic_tool: Run dynamic test behavior");
     expect(session.systemPrompt).not.toContain("- read:");
@@ -123,7 +130,7 @@ describe("regression #3592: no-builtin-tools keeps extension tools enabled", () 
     const { session } = await createAgentSessionFromServices({
       services,
       sessionManager,
-      model: getModel("anthropic", "claude-sonnet-4-5")!,
+      model: getModel("anthropic-api", "claude-sonnet-4-5")!,
       noTools: "builtin",
     });
 

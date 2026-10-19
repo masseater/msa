@@ -17,11 +17,11 @@ const CLAUDE_4_6_MODEL_IDS = new Set([
   "claude-opus-4.6",
   "claude-sonnet-4.6",
 ]);
-const ANTHROPIC_HOSTS = new Set(["anthropic", "opencode", "opencode-go"]);
+const ANTHROPIC_HOSTS = new Set(["anthropic-api", "opencode", "opencode-go"]);
 const OPENCODE_HOSTS = new Set(["opencode", "opencode-go"]);
 
 function overrideAnthropicLimits(candidate: Model<any>): void {
-  if (candidate.provider === "anthropic" && CLAUDE_5_5_MODEL_IDS.has(candidate.id)) {
+  if (candidate.provider === "anthropic-api" && CLAUDE_5_5_MODEL_IDS.has(candidate.id)) {
     mergeThinkingLevelMap(candidate, {
       ...(candidate.id === "claude-haiku-5-5" ? {} : { off: null }),
       minimal: null,

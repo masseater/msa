@@ -60,6 +60,9 @@ describe("system prompt updates", () => {
         "edit",
         "write",
         "memory",
+        "pr_watch",
+        "model_policy",
+        "model_upgrade",
       ]);
       expect(getSystemMessageText(head)).toBe(harness.session.systemPrompt);
     } finally {
@@ -75,7 +78,7 @@ describe("system prompt updates", () => {
       const created = await createAgentSession({
         cwd: tempDir,
         agentDir: join(tempDir, "agent"),
-        model: getModel("anthropic", "claude-sonnet-4-5")!,
+        model: getModel("anthropic-api", "claude-sonnet-4-5")!,
         settingsManager: SettingsManager.inMemory(),
         sessionManager,
         noTools: "all",

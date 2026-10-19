@@ -16,8 +16,7 @@ type StreamOptionsWithExtras = StreamOptions & Record<string, unknown>;
 
 import { resolveApiKey } from "./oauth.ts";
 
-const oauthTokens = await Promise.all([resolveApiKey("anthropic"), resolveApiKey("openai-codex")]);
-const [anthropicOAuthToken, openaiCodexToken] = oauthTokens;
+const openaiCodexToken = await resolveApiKey("openai-codex");
 
 const testEmptyMessage = Effect.fn("testEmptyMessage")(function* <TApi extends Api>(
   llm: Model<TApi>,
@@ -203,7 +202,7 @@ describe("AI Providers Empty Message Tests", () => {
   describe.skipIf(
     envValue("ANTHROPIC_API_KEY") === undefined || envValue("ANTHROPIC_API_KEY") === "",
   )("Anthropic Provider Empty Messages", () => {
-    const llm = getModel("anthropic", "claude-haiku-4-5");
+    const llm = getModel("anthropic-api", "claude-haiku-4-5");
 
     it("should handle empty content array", { retry: 3, timeout: 30000 }, () =>
       Effect.runPromise(testEmptyMessage(llm)),
@@ -219,36 +218,6 @@ describe("AI Providers Empty Message Tests", () => {
 
     it("should handle empty assistant message in conversation", { retry: 3, timeout: 30000 }, () =>
       Effect.runPromise(testEmptyAssistantMessage(llm)),
-    );
-  });
-});
-
-describe("AI Providers Empty Message Tests", () => {
-  describe("Anthropic OAuth Provider Empty Messages", () => {
-    const llm = getModel("anthropic", "claude-haiku-4-5");
-
-    it.skipIf(anthropicOAuthToken === undefined || anthropicOAuthToken === "")(
-      "should handle empty content array",
-      { retry: 3, timeout: 30000 },
-      () => Effect.runPromise(testEmptyMessage(llm, { apiKey: anthropicOAuthToken })),
-    );
-
-    it.skipIf(anthropicOAuthToken === undefined || anthropicOAuthToken === "")(
-      "should handle empty string content",
-      { retry: 3, timeout: 30000 },
-      () => Effect.runPromise(testEmptyStringMessage(llm, { apiKey: anthropicOAuthToken })),
-    );
-
-    it.skipIf(anthropicOAuthToken === undefined || anthropicOAuthToken === "")(
-      "should handle whitespace-only content",
-      { retry: 3, timeout: 30000 },
-      () => Effect.runPromise(testWhitespaceOnlyMessage(llm, { apiKey: anthropicOAuthToken })),
-    );
-
-    it.skipIf(anthropicOAuthToken === undefined || anthropicOAuthToken === "")(
-      "should handle empty assistant message in conversation",
-      { retry: 3, timeout: 30000 },
-      () => Effect.runPromise(testEmptyAssistantMessage(llm, { apiKey: anthropicOAuthToken })),
     );
   });
 });

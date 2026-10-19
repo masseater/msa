@@ -13,6 +13,7 @@
  * Modes use this class and add their own I/O layer on top.
  */
 
+import { execFile } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { basename, dirname } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
@@ -29,6 +30,7 @@ import {
   type AgentToolCallOutcome,
   type BeforeToolCallContext,
   type BeforeToolCallResult,
+  declareToolChanges,
   type PrepareNextTurnContext,
   runToolCall,
   type ThinkingLevel,
@@ -57,16 +59,27 @@ import {
   resetApiProviders,
   streamSimple,
 } from "@msa/ai/compat";
+import { NOOP_TELEMETRY_CONTEXT } from "@msa/telemetry";
+import { Effect } from "effect";
 
+import { VERSION } from "../config.ts";
 import { getThemeByName, theme } from "../modes/interactive/theme/theme.ts";
 import { toErrorMessage } from "../utils/errors.ts";
 import { stripFrontmatter } from "../utils/frontmatter.ts";
 import { processImage } from "../utils/image-process.ts";
 import { normalizeToolResultImages } from "../utils/tool-result-images.ts";
+import {
+  ASK_SECTION_NAME,
+  ASK_SECTION_TEXT,
+  askDefinition,
+  parseAskCommand,
+  type PromptMode,
+} from "./ask.ts";
 import { formatNoApiKeyFoundMessage, formatNoModelSelectedMessage } from "./auth-guidance.ts";
 import { type BashResult, executeBashWithOperations } from "./bash-executor.ts";
 import { generateBugReportSummary } from "./bug-report.ts";
 import type { CacheWarmer, CacheWarmingStatus } from "./cache-warmer.ts";
+import { isCliAgentProvider } from "./cli-agents/index.ts";
 import {
   type CompactionPreparation,
   type CompactionResult,
@@ -81,6 +94,7 @@ import {
   prepareCompaction,
   shouldCompact,
 } from "./compaction/index.ts";
+import { type ContextBreakdown, measureContextBreakdown } from "./context-breakdown.ts";
 import { DEFAULT_THINKING_LEVEL, THINKING_LEVEL_OPTIONS } from "./defaults.ts";
 import { exportSessionToHtml, type ToolHtmlRenderer } from "./export-html/index.ts";
 import { createToolHtmlRenderer } from "./export-html/tool-renderer.ts";
@@ -145,7 +159,10 @@ import { ModelRegistry } from "./model-registry.ts";
 import { resolveModelReference } from "./model-resolver.ts";
 import type { ModelRuntime } from "./model-runtime.ts";
 import { NestedToolCallRunner } from "./nested-tool-calls.ts";
-import { Neo4jSessionGraph } from "./orchestrator/neo4j-graph.ts";
+import {
+  SessionTelemetry,
+  type SessionTelemetryOptions,
+} from "./observability/session-telemetry.ts";
 import {
   type CreateWorkerOptions,
   ORCHESTRATOR_REPORT_MESSAGE_TYPE,
@@ -154,6 +171,9 @@ import {
   type WorkerSession,
 } from "./orchestrator/orchestrator.ts";
 import { createOrchestratorToolDefinitions } from "./orchestrator/tools.ts";
+import { makeGh } from "./pr-watch/gh.ts";
+import { PrWatch, type PrWatchSnapshot } from "./pr-watch/service.ts";
+import { createPrWatchHost } from "./pr-watch/session-host.ts";
 import { expandPromptTemplate, type PromptTemplate } from "./prompt-templates.ts";
 import type { ResourceExtensionPaths, ResourceLoader } from "./resource-loader.ts";
 import { exportSessionToJsonl } from "./session-export.ts";
@@ -189,6 +209,9 @@ import {
 import { type BashOperations, createLocalBashOperations } from "./tools/bash.ts";
 import { createAllToolDefinitions } from "./tools/index.ts";
 import { createMemoryToolDefinition } from "./tools/memory.ts";
+import { createModelPolicyToolDefinition } from "./tools/model-policy.ts";
+import { createModelUpgradeToolDefinition } from "./tools/model-upgrade.ts";
+import { createPrWatchToolDefinition } from "./tools/pr-watch.ts";
 import { createToolDefinitionFromAgentTool } from "./tools/tool-definition-wrapper.ts";
 import { addUsageToTotals, combineUsage, createUsageTotals } from "./usage-totals.ts";
 import {
@@ -294,6 +317,8 @@ export type AgentSessionEvent =
   | { type: "bash_execution_update"; id?: string | undefined; delta: string }
   /** The active `/goal` changed: set, evaluated, ended, or started or finished evaluating. */
   | { type: "goal_changed"; goal: GoalSnapshot | undefined }
+  /** A watched pull request changed state, or the set of watches changed. */
+  | { type: "pr_watch_changed"; prWatch: PrWatchSnapshot }
   /** A session the orchestrator started changed state or streamed. */
   | { type: "orchestrator_changed" }
   /** `/goal` without arguments, or `/goal clear` without an active goal. */
@@ -376,6 +401,8 @@ export interface AgentSessionConfig {
    * tools.
    */
   createWorkerSession?: ((options: CreateWorkerOptions) => Promise<WorkerSession>) | undefined;
+  /** Where the session's spans, metrics, and logs go. Default: nowhere. */
+  telemetry?: SessionTelemetryOptions | undefined;
 }
 
 export interface ExtensionBindings {
@@ -400,6 +427,12 @@ export interface PromptOptions {
   streamingBehavior?: "steer" | "followUp" | undefined;
   /** Source of input for extension input event handlers. Defaults to "interactive". */
   source?: InputSource;
+  /**
+   * `"ask"` makes this turn answer only: the read-only tools are declared and the rest are not, the
+   * system prompt says to answer without starting work, and the next turn is back to the full
+   * loadout. `prompt("/ask <question>")` is the same turn.
+   */
+  mode?: PromptMode | undefined;
   /** Internal hook used by RPC mode to observe how an accepted prompt was dispatched. Not called if the prompt is rejected. */
   preflightResult?: (disposition: PromptDisposition) => void;
 }
@@ -509,7 +542,9 @@ export class AgentSession {
   private _lastAssistantToolResults: AgentMessage[] = [];
   private _lastActivityOutcome: AgentActivityOutcome = "completed";
   private readonly _goal: GoalLoop;
+  private readonly _prWatch: PrWatch;
   private readonly _orchestrator: Orchestrator | undefined;
+  private readonly _telemetry: SessionTelemetry;
   private _totalTokensCache: { entryCount: number; total: number } | undefined;
   private _isBeforeSettle = false;
   private _abortDuringBeforeSettle = false;
@@ -528,6 +563,12 @@ export class AgentSession {
    * `setActiveToolsByName()` deactivates a tool or the next agent run starts.
    */
   private _pendingToolNames = new Set<string>();
+  /** Whether the running turn is an `/ask` turn, which declares only the read-only tools. */
+  private _askRun = false;
+  /** The loadout an ask turn replaced, which the next turn goes back to. */
+  private _loadoutBeforeAsk: string[] = [];
+  /** The read-only variants of tools that also write, by tool name. */
+  private _askVariants: Map<string, { tool: AgentTool; definition: ToolDefinition }> = new Map();
   private _usesDefaultTools: boolean;
   private _defaultToolModifiers: string[];
   /** Matches the `--tools` entries: tool names or patterns. */
@@ -578,6 +619,7 @@ export class AgentSession {
     this._customTools = config.customTools ?? [];
     this._cwd = config.cwd;
     this._modelRuntime = config.modelRuntime;
+    this._modelRuntime.setModelPolicy(this.settingsManager.getModelPolicy());
     this._cacheWarmer = config.cacheWarmer;
     if (this._cacheWarmer) {
       this._cacheWarmer.onWarmed = (entry) => this._emit({ type: "entry_appended", entry });
@@ -626,15 +668,37 @@ export class AgentSession {
       findActiveGoalCondition(this.sessionManager.getBranch()),
     );
 
+    const telemetry = config.telemetry ?? { context: NOOP_TELEMETRY_CONTEXT, role: "main" };
+    this._telemetry = new SessionTelemetry(telemetry.context, telemetry.role);
+    this.subscribe((event) => this._telemetry.handle(event));
+
+    this._prWatch = new PrWatch({
+      gh: makeGh({ cwd: this._cwd }),
+      host: createPrWatchHost({
+        telemetry: telemetry.context,
+        threadId: this.sessionManager.getSessionId(),
+        sendMessage: (message, options) => {
+          void this.sendCustomMessage(message, options);
+        },
+        changed: () => this._emit({ type: "pr_watch_changed", prWatch: this._prWatch.snapshot() }),
+      }),
+      defaultIntervalMs: () => this.settingsManager.getPrWatchIntervalMs(),
+      statusIntervalMs: () => this.settingsManager.getPrWatchStatusIntervalMs(),
+    });
+
     const createWorkerSession = config.createWorkerSession;
     this._orchestrator = createWorkerSession
       ? new Orchestrator({
           project: this.sessionManager.getSessionId(),
           cwd: this._cwd,
-          connectGraph: () => Neo4jSessionGraph.connect(),
+          databasePath: this.settingsManager.getOrchestratorDatabasePath(),
+          handoffDirectory: this.settingsManager.getHandoffDirectory(),
+          version: VERSION,
           createWorker: createWorkerSession,
           resolveModel: (reference) => this._resolveOrchestratorModel(reference),
           defaults: () => this._orchestratorDefaults(),
+          runCondition: (command, cwd) => this._runCondition(command, cwd),
+          telemetry: telemetry.context,
           report: (text, details) =>
             void this.sendCustomMessage(
               {
@@ -1081,16 +1145,7 @@ export class AgentSession {
         signal,
       );
       const nextContext = previousSnapshot?.context ?? context;
-      const runOptions = this._runSystemPromptOptions ?? this._baseSystemPromptOptions;
-      const options = normalizeBuildSystemPromptOptions({
-        ...runOptions,
-        selectedTools: this.getActiveToolNames(),
-        toolSnippets: { ...this._baseSystemPromptOptions.toolSnippets, ...runOptions.toolSnippets },
-        toolGuidelines: {
-          ...this._baseSystemPromptOptions.toolGuidelines,
-          ...runOptions.toolGuidelines,
-        },
-      });
+      const options = this._nextTurnPromptOptions();
       const updateMessage = this._preparePromptAndToolLoadout(options, nextContext.messages);
       // Keep session.systemPrompt and ctx.getSystemPrompt() in step with what the provider sees.
       this._runSystemPromptOptions = options;
@@ -1606,6 +1661,7 @@ export class AgentSession {
       // Dispose must succeed even if an abort hook throws.
     }
     void this._orchestrator?.dispose().catch(() => undefined);
+    void this._prWatch.dispose();
     this._memory?.close();
     this._memory = undefined;
 
@@ -1613,6 +1669,7 @@ export class AgentSession {
       "This extension ctx is stale after session replacement or reload. Do not use a captured msa or command ctx after ctx.newSession(), ctx.fork(), ctx.switchSession(), or ctx.reload(). For newSession, fork, and switchSession, move post-replacement work into withSession and use the ctx passed to withSession. For reload, do not use the old ctx after await ctx.reload().",
     );
     this._disconnectFromAgent();
+    this._telemetry.close();
     this._eventListeners = [];
     if (this._cacheWarmer) {
       this._cacheWarmer.onWarmed = undefined;
@@ -1687,8 +1744,15 @@ export class AgentSession {
   /**
    * Get the names of currently active tools, which are the tools declared to the model.
    * Tools with `codemode` or `deferred` exposure are callable from other tools without being active.
+   * In an `/ask` turn they are the loadout the turn replaces, not the fewer tools it declares, so
+   * an extension that adds a tool to what it reads does not carry the turn's selection into the next.
    */
   getActiveToolNames(): string[] {
+    return this._askRun ? [...this._loadoutBeforeAsk] : this._declaredToolNames();
+  }
+
+  /** The names of the tools the next request declares. */
+  private _declaredToolNames(): string[] {
     return this.agent.state.tools.map((t) => t.name);
   }
 
@@ -1769,7 +1833,7 @@ export class AgentSession {
    * `codemode` or `deferred` tool.
    */
   private _getCallableTools(
-    active: ReadonlySet<string> = new Set(this.getActiveToolNames()),
+    active: ReadonlySet<string> = new Set(this._declaredToolNames()),
   ): AgentTool[] {
     return [...this._toolRegistry.values()].filter((tool) => {
       const exposure = this._getToolExposure(tool.name);
@@ -1788,11 +1852,12 @@ export class AgentSession {
    * requests (see {@link _installHiddenDeclarationsProjection}).
    */
   private _applyToolLoadout(toolNames: string[]): AgentTool[] {
+    if (this._askRun) this._loadoutBeforeAsk = [...new Set(toolNames)];
     const tools = [...new Set(toolNames)].flatMap((name) => {
       const tool = this._toolRegistry.get(name);
-      return tool && this._getToolExposure(name) !== "hidden" && this._isActivatable(name)
-        ? [tool]
-        : [];
+      if (!tool || this._getToolExposure(name) === "hidden" || !this._isActivatable(name))
+        return [];
+      return this._askRun ? this._askTool(name, tool) : [tool];
     });
     const hooks = tools.flatMap((tool) => {
       const entry = this._toolDefinitions.get(tool.name);
@@ -1834,6 +1899,36 @@ export class AgentSession {
     this._hiddenDeclarations = hidden;
     this.agent.state.tools = declared;
     return declared;
+  }
+
+  /**
+   * What an ask turn declares for the registered tool `name`: the tool when it is read-only, its
+   * read-only variant when it has one, and nothing otherwise.
+   */
+  private _askTool(name: string, tool: AgentTool): AgentTool[] {
+    const definition = this._toolDefinitions.get(name)?.definition;
+    const asked = definition ? askDefinition(definition) : undefined;
+    if (!asked) return [];
+    if (asked === definition) return [tool];
+    const variant = this._askVariants.get(name)?.tool;
+    return variant ? [variant] : [];
+  }
+
+  /**
+   * Make the run an ask turn's: add the ask section to its system prompt, and describe the
+   * variants in place of the tools they narrow.
+   */
+  private _applyAskPrompt(options: NormalizedBuildSystemPromptOptions): void {
+    options.sections[ASK_SECTION_NAME] = ASK_SECTION_TEXT;
+    if (options.forceSystemPrompt !== undefined) {
+      options.forceSystemPrompt = `${options.forceSystemPrompt}\n\n${ASK_SECTION_TEXT}`;
+    }
+    for (const [name, { definition }] of this._askVariants) {
+      // Empty values, not deletions: the run's options are laid over the base options on every
+      // turn of the run, so a deleted entry would bring the full tool's text back.
+      options.toolSnippets[name] = this._normalizePromptSnippet(definition.promptSnippet) ?? "";
+      options.toolGuidelines[name] = this._normalizePromptGuidelines(definition.promptGuidelines);
+    }
   }
 
   /** Whether compaction or branch summarization is currently running */
@@ -1963,6 +2058,31 @@ export class AgentSession {
     messages: AgentMessage[] = this.agent.state.messages,
   ): SystemMessage | undefined {
     options.selectedTools = this._applyToolLoadout(options.selectedTools).map((tool) => tool.name);
+    return this._promptUpdate(options, messages);
+  }
+
+  /** Prompt options for the next turn: the run's prompt with the current active tools. */
+  private _nextTurnPromptOptions(): NormalizedBuildSystemPromptOptions {
+    const runOptions = this._runSystemPromptOptions ?? this._baseSystemPromptOptions;
+    return normalizeBuildSystemPromptOptions({
+      ...runOptions,
+      selectedTools: this.getActiveToolNames(),
+      toolSnippets: { ...this._baseSystemPromptOptions.toolSnippets, ...runOptions.toolSnippets },
+      toolGuidelines: {
+        ...this._baseSystemPromptOptions.toolGuidelines,
+        ...runOptions.toolGuidelines,
+      },
+    });
+  }
+
+  /**
+   * The system message patching the prompt sections the model has (replayed from `messages`)
+   * to `options`, or undefined when the prompt is unchanged.
+   */
+  private _promptUpdate(
+    options: NormalizedBuildSystemPromptOptions,
+    messages: AgentMessage[],
+  ): SystemMessage | undefined {
     // The tool list and rules must match the declarations the request carries.
     options.hiddenTools = [...this._hiddenDeclarations];
     const sections = diffSystemPromptSections(
@@ -2057,13 +2177,22 @@ export class AgentSession {
    * starting another, and an abort requested meanwhile aborts the run as soon as it exists.
    * @param onStarted Called once the run's messages are prepared, before the first request.
    */
-  private async _startRun(trigger: BeforeAgentStartTrigger, onStarted?: () => void): Promise<void> {
+  private async _startRun(
+    trigger: BeforeAgentStartTrigger,
+    onStarted?: () => void,
+    mode?: PromptMode,
+  ): Promise<void> {
     this._isAgentRunActive = true;
     this._agentRunAbortRequested = false;
+    if (mode === "ask") {
+      this._loadoutBeforeAsk = this._declaredToolNames();
+      this._askRun = true;
+    }
     let messages: AgentMessage[];
     try {
       messages = await this._prepareRun(trigger);
     } catch (error) {
+      this._endAskRun();
       this._isAgentRunActive = false;
       this._flushPendingBashMessages();
       this._flushPendingCustomMessages();
@@ -2102,10 +2231,19 @@ export class AgentSession {
       if (this._agentRunAbortRequested) this._finishCancelledRetry();
       this._failedResponse = undefined;
       this._runSystemPromptOptions = undefined;
+      this._endAskRun();
       this._flushPendingBashMessages();
       this._flushPendingCustomMessages();
       await this._emitAgentSettled();
     }
+  }
+
+  /** Go back to the loadout an ask turn replaced, so the next turn is a normal one. */
+  private _endAskRun(): void {
+    if (!this._askRun) return;
+    this._askRun = false;
+    this._setActiveTools(this._loadoutBeforeAsk);
+    this._loadoutBeforeAsk = [];
   }
 
   /**
@@ -2180,6 +2318,7 @@ export class AgentSession {
         timestamp: Date.now(),
       });
     }
+    if (this._askRun) this._applyAskPrompt(result.systemPromptOptions);
     const updateMessage = this._preparePromptAndToolLoadout(result.systemPromptOptions);
     this._runSystemPromptOptions = result.systemPromptOptions;
     if (updateMessage) messages.unshift(updateMessage);
@@ -2319,6 +2458,16 @@ export class AgentSession {
       await this._runGoalCommand(goalCommand, options);
       return;
     }
+    const askCommand = expandPromptTemplates ? parseAskCommand(text) : undefined;
+    if (askCommand) {
+      if (!askCommand.question) throw new Error("Usage: /ask <question>");
+      await this.prompt(askCommand.question, {
+        ...options,
+        expandPromptTemplates: false,
+        mode: "ask",
+      });
+      return;
+    }
     const memoryCommand = expandPromptTemplates ? parseMemoryCommand(text) : undefined;
     if (memoryCommand) {
       await this._runMemoryCommand(memoryCommand, options);
@@ -2363,6 +2512,9 @@ export class AgentSession {
 
     // If streaming, queue via steer() or followUp() based on option
     if (this.isStreaming) {
+      if (options?.mode === "ask") {
+        throw new Error("Cannot ask while the agent is running. Wait for the turn to finish.");
+      }
       if (!options?.streamingBehavior) {
         throw new Error(
           "Agent is already processing. Specify streamingBehavior ('steer' or 'followUp') to queue the message.",
@@ -2397,8 +2549,10 @@ export class AgentSession {
       throw new Error(formatNoApiKeyFoundMessage(this.model.provider));
     }
 
-    await this._startRun({ messageType: "user", prompt: expandedText, images: currentImages }, () =>
-      preflightResult?.("started"),
+    await this._startRun(
+      { messageType: "user", prompt: expandedText, images: currentImages },
+      () => preflightResult?.("started"),
+      options?.mode,
     );
   }
 
@@ -2710,6 +2864,15 @@ export class AgentSession {
     return { steering, followUp };
   }
 
+  flushQueue(): number {
+    const count = this.agent.flushQueuedMessages();
+    if (count === 0) return 0;
+    this._steeringMessages = [...this._steeringMessages, ...this._followUpMessages];
+    this._followUpMessages = [];
+    this._emitQueueUpdate();
+    return count;
+  }
+
   /** Number of pending messages (includes both steering and follow-up) */
   get pendingMessageCount(): number {
     return this._steeringMessages.length + this._followUpMessages.length;
@@ -2765,6 +2928,11 @@ export class AgentSession {
   /** Long-term memory for this session; undefined when memory is disabled. */
   get memory(): MemoryService | undefined {
     return this._memory;
+  }
+
+  /** The pull requests this session watches in the background. */
+  get prWatch(): PrWatchSnapshot {
+    return this._prWatch.snapshot();
   }
 
   get goal(): GoalSnapshot | undefined {
@@ -2854,8 +3022,25 @@ export class AgentSession {
       this._modelRuntime.getAvailableSnapshot(),
       () => true,
     );
-    if (result.status !== "resolved") throw new Error(`"${reference}" is not an available model`);
-    return result.model;
+    if (result.status === "resolved") return result.model;
+    const name = reference.slice(reference.indexOf("/") + 1).toLowerCase();
+    const candidates = this._modelRuntime
+      .getAvailableSnapshot()
+      .filter((model) => name !== "" && model.id.toLowerCase().includes(name))
+      .map((model) => `${model.provider}/${model.id}`);
+    throw new Error(
+      `"${reference}" is not an available model.${
+        candidates.length > 0 ? ` Use one of: ${candidates.join(", ")}` : ""
+      }`,
+    );
+  }
+
+  private _runCondition(command: string, cwd: string): Promise<boolean> {
+    const { promise, resolve } = Promise.withResolvers<boolean>();
+    execFile("/bin/sh", ["-c", command], { cwd, timeout: 60_000 }, (error) =>
+      resolve(error === null),
+    );
+    return promise;
   }
 
   private _orchestratorDefaults(): OrchestratorDefaults {
@@ -4107,6 +4292,14 @@ export class AgentSession {
       toolRegistry.set(tool.name, tool);
     }
     this._toolRegistry = toolRegistry;
+    this._askVariants = new Map(
+      Array.from(definitionRegistry.values()).flatMap(({ definition, sourceInfo }) => {
+        const variant = definition.readOnlyVariant;
+        if (!variant || variant.annotations?.readOnlyHint !== true) return [];
+        const [tool] = wrapRegisteredTools([{ definition: variant, sourceInfo }], runner);
+        return tool ? [[definition.name, { tool, definition: variant }] as const] : [];
+      }),
+    );
 
     const nextActiveToolNames = (
       options?.activeToolNames ? [...options.activeToolNames] : [...previousActiveToolNames]
@@ -4181,6 +4374,16 @@ export class AgentSession {
             bash: { commandPrefix: shellCommandPrefix, shellPath },
           }),
           ...(this._memory ? { memory: createMemoryToolDefinition(this._memory) } : {}),
+          pr_watch: createPrWatchToolDefinition(this._prWatch),
+          model_policy: createModelPolicyToolDefinition({
+            settingsManager: this.settingsManager,
+            modelRuntime: this._modelRuntime,
+            currentModel: () => this.model,
+          }),
+          model_upgrade: createModelUpgradeToolDefinition({
+            settingsManager: this.settingsManager,
+            modelRuntime: this._modelRuntime,
+          }),
         };
 
     this._baseToolDefinitions = new Map(
@@ -4913,6 +5116,45 @@ export class AgentSession {
       contextWindow,
       percent,
     };
+  }
+
+  /**
+   * The request the next turn would send, split into its elements. Built by the agent loop's
+   * own transform and conversion, counted by the provider when it can, and otherwise
+   * apportioned to the context usage.
+   */
+  async getContextBreakdown(): Promise<ContextBreakdown> {
+    // Under a virtual selection, the physical model that served the latest response.
+    const model = this._limitsModel();
+    const thinkingLevel = this.routedModel?.thinkingLevel ?? this.thinkingLevel;
+    const transformContext = this.agent.transformContext;
+    const transcript = this.agent.state.messages;
+    const update = this._promptUpdate(this._nextTurnPromptOptions(), transcript);
+    const pending = declareToolChanges(
+      { messages: transcript, tools: this.agent.state.tools },
+      update ? [update] : [],
+    );
+    return Effect.runPromise(
+      measureContextBreakdown({
+        messages: transcript,
+        pending,
+        transformContext: transformContext ? (messages) => transformContext(messages) : undefined,
+        convertToLlm: (messages) => this.agent.convertToLlm(messages),
+        countTokens: async (messages) =>
+          model
+            ? this._modelRuntime.countTokens(
+                model,
+                { messages },
+                {
+                  sessionId: this.sessionId,
+                  ...(thinkingLevel === "off" ? {} : { reasoning: thinkingLevel }),
+                },
+              )
+            : undefined,
+        usageTokens: this.getContextUsage()?.tokens ?? null,
+        addingProvider: model && isCliAgentProvider(model.provider) ? model.provider : undefined,
+      }),
+    );
   }
 
   /**

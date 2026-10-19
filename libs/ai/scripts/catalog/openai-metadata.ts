@@ -47,7 +47,7 @@ export function applyStrictToolCompatMetadata(model: Model<Api>): void {
       ...(model.compat as OpenAIResponsesCompat | undefined),
       supportsStrictMode: true,
     };
-  } else if (model.provider === "anthropic" && model.api === "anthropic-messages") {
+  } else if (model.provider === "anthropic-api" && model.api === "anthropic-messages") {
     mergeAnthropicMessagesCompat(model, { supportsStrictTools: true });
   }
 }

@@ -162,10 +162,10 @@ const checkTreeshakeCatalogs = (metafile: Metafile) =>
     if (
       catalogInputs.length !== 1 ||
       onlyCatalog === undefined ||
-      !normalizePath(onlyCatalog).endsWith("/anthropic.json")
+      !normalizePath(onlyCatalog).endsWith("/anthropic-api.json")
     ) {
       return yield* fail(
-        `Agent selective-provider bundle catalogs: expected only anthropic.json, found ${describeFound(catalogInputs)}`,
+        `Agent selective-provider bundle catalogs: expected only anthropic-api.json, found ${describeFound(catalogInputs)}`,
       );
     }
   });

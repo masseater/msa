@@ -3,6 +3,7 @@
  * own sign-in (usually its CLI's login command) and contributes tools once it is signed in.
  */
 
+import { claudeCodeService } from "./cli-agents/claude-service.ts";
 import type { ToolDefinition } from "./extensions/types.ts";
 import { createWebFetchToolDefinition } from "./tools/web-fetch.ts";
 import { createWebSearchToolDefinition } from "./tools/web-search.ts";
@@ -79,7 +80,7 @@ const treg: ExternalService = {
   },
 };
 
-export const EXTERNAL_SERVICES: readonly ExternalService[] = [treg];
+export const EXTERNAL_SERVICES: readonly ExternalService[] = [treg, claudeCodeService];
 
 export function findExternalService(
   services: readonly ExternalService[],

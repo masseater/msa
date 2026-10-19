@@ -1,8 +1,7 @@
 import { Effect } from "effect";
 
 import { anthropicMessagesApi } from "../api/anthropic-messages.lazy.ts";
-import { lazyOAuth, promptUser, throwIfAborted } from "../auth/helpers.ts";
-import { loadAnthropicOAuth } from "../auth/oauth/load.ts";
+import { promptUser, throwIfAborted } from "../auth/helpers.ts";
 import type {
   ApiKeyAuth,
   ApiKeyCredential,
@@ -14,14 +13,13 @@ import {
   ANTHROPIC_AUTH_TOKEN_ENV,
   ANTHROPIC_FEDERATION_RULE_ID_ENV,
   ANTHROPIC_IDENTITY_TOKEN_FILE_ENV,
-  ANTHROPIC_OAUTH_TOKEN_ENV,
   ANTHROPIC_ORGANIZATION_ID_ENV,
   ANTHROPIC_SERVICE_ACCOUNT_ID_ENV,
   ANTHROPIC_WORKSPACE_ID_ENV,
 } from "../env-api-keys.ts";
 import { createProvider, type Provider } from "../models.ts";
 import type { ProviderEnv } from "../types.ts";
-import { ANTHROPIC_MODELS } from "./anthropic.models.ts";
+import { ANTHROPIC_API_MODELS } from "./anthropic-api.models.ts";
 
 const isPresent = (value: string | undefined): value is string =>
   value !== undefined && value !== "";
@@ -90,10 +88,8 @@ const resolveAnthropicApiKey = Effect.fn("resolveAnthropicApiKey")(function* ({
     };
   }
 
-  for (const envVar of [ANTHROPIC_OAUTH_TOKEN_ENV, ANTHROPIC_API_KEY_ENV]) {
-    const apiKey = yield* env(envVar);
-    if (isPresent(apiKey)) return { auth: { apiKey }, source: envVar };
-  }
+  const apiKey = yield* env(ANTHROPIC_API_KEY_ENV);
+  if (isPresent(apiKey)) return { auth: { apiKey }, source: ANTHROPIC_API_KEY_ENV };
 
   const federation = yield* resolveFederationEnv(env);
   if (federation === undefined) return undefined;
@@ -110,18 +106,13 @@ function anthropicApiKeyAuth(): ApiKeyAuth {
 
 export function anthropicProvider(): Provider<"anthropic-messages"> {
   return createProvider({
-    id: "anthropic",
-    name: "Anthropic",
+    id: "anthropic-api",
+    name: "Anthropic API",
     baseUrl: "https://api.anthropic.com",
     auth: {
       apiKey: anthropicApiKeyAuth(),
-      oauth: lazyOAuth({
-        name: "Anthropic (Claude Pro/Max)",
-        isSubscription: true,
-        load: loadAnthropicOAuth,
-      }),
     },
-    models: Object.values(ANTHROPIC_MODELS),
+    models: Object.values(ANTHROPIC_API_MODELS),
     api: anthropicMessagesApi(),
   });
 }

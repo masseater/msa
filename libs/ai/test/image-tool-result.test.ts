@@ -14,8 +14,7 @@ type StreamOptionsWithExtras = StreamOptions & Record<string, unknown>;
 
 import { resolveApiKey } from "./oauth.ts";
 
-const oauthTokens = await Promise.all([resolveApiKey("anthropic"), resolveApiKey("openai-codex")]);
-const [anthropicOAuthToken, openaiCodexToken] = oauthTokens;
+const openaiCodexToken = await resolveApiKey("openai-codex");
 
 const handleToolWithImageResult = Effect.fn("handleToolWithImageResult")(function* <
   TApi extends Api,
@@ -217,7 +216,7 @@ describe("Tool Results with Images", () => {
   describe.skipIf(
     envValue("ANTHROPIC_API_KEY") === undefined || envValue("ANTHROPIC_API_KEY") === "",
   )("Anthropic Provider (claude-haiku-4-5)", () => {
-    const model = getModel("anthropic", "claude-haiku-4-5");
+    const model = getModel("anthropic-api", "claude-haiku-4-5");
 
     it("should handle tool result with only image", { retry: 3, timeout: 30000 }, () =>
       Effect.runPromise(handleToolWithImageResult(model)),
@@ -239,25 +238,6 @@ describe("Tool Results with Images", () => {
 
     it("should handle tool result with text and image", { retry: 3, timeout: 30000 }, () =>
       Effect.runPromise(handleToolWithTextAndImageResult(llm)),
-    );
-  });
-});
-
-describe("Tool Results with Images", () => {
-  describe("Anthropic OAuth Provider (claude-sonnet-4-5)", () => {
-    const model = getModel("anthropic", "claude-sonnet-4-5");
-
-    it.skipIf(anthropicOAuthToken === undefined || anthropicOAuthToken === "")(
-      "should handle tool result with only image",
-      { retry: 3, timeout: 30000 },
-      () => Effect.runPromise(handleToolWithImageResult(model, { apiKey: anthropicOAuthToken })),
-    );
-
-    it.skipIf(anthropicOAuthToken === undefined || anthropicOAuthToken === "")(
-      "should handle tool result with text and image",
-      { retry: 3, timeout: 30000 },
-      () =>
-        Effect.runPromise(handleToolWithTextAndImageResult(model, { apiKey: anthropicOAuthToken })),
     );
   });
 });

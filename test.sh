@@ -12,6 +12,13 @@ mkdir -p "$test_root/home/.config" "$test_root/tmp" "$test_root/cache/npm"
 # Mark the generated root so cleanup can verify ownership before deleting it.
 touch "$test_root/.msa-test-owned" "$test_root/npm-userconfig" "$test_root/npm-globalconfig"
 
+# Rootless podman stores files owned by subordinate IDs under the isolated home, which only podman can remove.
+remove_podman_storage() {
+	[[ -d "$test_root/home/.local/share/containers" ]] || return 0
+	env -i "PATH=$PATH" "HOME=$test_root/home" "TMPDIR=$test_root/tmp" "XDG_CONFIG_HOME=$test_root/home/.config" \
+		podman system reset --force >/dev/null 2>&1 || true
+}
+
 # Only remove the marked directory created above, never an unverified path.
 cleanup() {
 	local status=$?
@@ -20,6 +27,7 @@ cleanup() {
 	case "$test_root" in
 		"$temp_parent"/msa-test.*)
 			if [[ -d "$test_root" && ! -L "$test_root" && -f "$test_root/.msa-test-owned" ]]; then
+				remove_podman_storage
 				rm -rf -- "$test_root"
 			else
 				printf "Refusing to remove unverified test directory: %s\n" "$test_root" >&2

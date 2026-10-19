@@ -667,8 +667,18 @@ export interface ToolDefinition<
    */
   reachesTools?: (input: Record<string, unknown>) => "all" | readonly string[];
 
-  /** Hints about what the tool does, for example from an MCP server. */
+  /**
+   * Hints about what the tool does, for example from an MCP server. `readOnlyHint: true` is what an
+   * `/ask` turn needs to keep the tool; a tool without it is not declared in that turn.
+   */
   annotations?: ToolAnnotations;
+
+  /**
+   * The part of the tool that only reads, for a tool that reads and writes through one parameter
+   * (an `action`, for example). An `/ask` turn declares it in place of the tool, and it must carry
+   * `annotations.readOnlyHint: true`.
+   */
+  readOnlyVariant?: ToolDefinition<any, any>;
 
   /**
    * Whether registering the tool activates it. Default: `true` for `direct` and `model-only` tools;
@@ -1944,7 +1954,7 @@ export interface ExtensionAPI {
    *
    * @example
    * // Override baseUrl for an existing provider
-   * msa.registerProvider("anthropic", {
+   * msa.registerProvider("anthropic-api", {
    *   baseUrl: "https://proxy.example.com"
    * });
    *

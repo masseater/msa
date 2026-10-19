@@ -64,7 +64,7 @@ import type { InlineExtension } from "./core/extensions/types.ts";
 import { applyHttpProxySettings, configureHttpDispatcher } from "./core/http-dispatcher.ts";
 import { resolveCliModel, resolveModelScope, type ScopedModel } from "./core/model-resolver.ts";
 import { ModelRuntime } from "./core/model-runtime.ts";
-import { ORCHESTRATOR_TOOL_NAMES } from "./core/orchestrator/tools.ts";
+import { describeTelemetry, startTelemetry } from "./core/observability/telemetry.ts";
 import { restoreStdout, takeOverStdout } from "./core/output-guard.ts";
 import { type AppMode, resolveProjectTrusted } from "./core/project-trust.ts";
 import type { CreateAgentSessionOptions } from "./core/sdk.ts";
@@ -76,7 +76,7 @@ import {
 } from "./core/session-cwd.ts";
 import { assertValidSessionId, SessionManager } from "./core/session-manager.ts";
 import { collectSettingsDiagnostics, deduplicateDiagnostics } from "./core/settings-diagnostics.ts";
-import { isToolModifier, SettingsManager } from "./core/settings-manager.ts";
+import { SettingsManager } from "./core/settings-manager.ts";
 import { printTimings, resetTimings, time } from "./core/timings.ts";
 import { hasTrustRequiringProjectResources, ProjectTrustStore } from "./core/trust-manager.ts";
 import { builtInExtensions } from "./extensions/index.ts";
@@ -612,15 +612,6 @@ function buildSessionOptions(
   if (parsed.tools) {
     options.tools = [...parsed.tools];
   }
-  if (parsed.orchestrator) {
-    const tools = options.tools ?? [];
-    options.tools = [
-      ...tools,
-      ...(tools.length === 0 || tools.every(isToolModifier)
-        ? ORCHESTRATOR_TOOL_NAMES.map((name) => `+${name}`)
-        : ORCHESTRATOR_TOOL_NAMES),
-    ];
-  }
   if (parsed.excludeTools) {
     options.excludeTools = [...parsed.excludeTools];
   }
@@ -760,6 +751,17 @@ export async function main(args: string[], options?: MainOptions) {
   if (appMode === "interactive" && parsed.useTheme !== undefined) {
     startupSettingsManager.applyOverrides({ theme: parsed.useTheme });
   }
+
+  const telemetry =
+    parsed.help || parsed.listModels !== undefined
+      ? undefined
+      : await startTelemetry({
+          envEndpoint: process.env["MSA_OTLP_ENDPOINT"],
+          settingsEndpoint: startupSettingsManager.getOtlpEndpoint(),
+          path: process.env["PATH"],
+          version: VERSION,
+        });
+  time("startTelemetry");
 
   // Decide the final runtime cwd before creating cwd-bound runtime services.
   // --session and --resume may select a session from another project, so project-local
@@ -944,7 +946,7 @@ export async function main(args: string[], options?: MainOptions) {
       excludeTools: sessionOptions.excludeTools,
       noTools: sessionOptions.noTools,
       customTools: sessionOptions.customTools,
-      orchestrator: true,
+      telemetry: telemetry && { context: telemetry.context, role: "main" },
     });
     const cliThinkingOverride = parsed.thinking !== undefined || cliThinkingFromModel;
     if (created.session.model && cliThinkingOverride) {
@@ -962,6 +964,7 @@ export async function main(args: string[], options?: MainOptions) {
     cwd: sessionManager.getCwd(),
     agentDir,
     sessionManager,
+    ...(telemetry ? { telemetry } : {}),
   });
   time("createAgentSessionRuntime");
   const { services, session, modelFallbackMessage } = runtime;
@@ -1011,6 +1014,9 @@ export async function main(args: string[], options?: MainOptions) {
   const startupDiagnostics = deduplicateDiagnostics([
     ...startupSettingsDiagnostics,
     ...runtime.diagnostics,
+    ...(telemetry
+      ? [{ type: "info" as const, message: describeTelemetry(telemetry.status()) }]
+      : []),
   ]);
   const hasRuntimeErrors = runtime.diagnostics.some((diagnostic) => diagnostic.type === "error");
   if (appMode !== "interactive" || hasRuntimeErrors) {

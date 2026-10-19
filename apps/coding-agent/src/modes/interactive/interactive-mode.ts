@@ -62,6 +62,7 @@ import {
   RELEASES_URL,
   VERSION,
 } from "../../config.ts";
+import { completeAccountsArgument, runAccountsCommand } from "../../core/accounts.ts";
 import {
   type AgentSessionRuntime,
   SessionImportFileNotFoundError,
@@ -107,10 +108,21 @@ import { describeGoalEntry, describeGoalStatus } from "../../core/goal.ts";
 import { configureHttpDispatcher, formatHttpIdleTimeoutMs } from "../../core/http-dispatcher.ts";
 import { type AppKeybinding, KeybindingsManager } from "../../core/keybindings.ts";
 import { createCompactionSummaryMessage, createCustomMessage } from "../../core/messages.ts";
+import { saveModelPolicy } from "../../core/model-policy.ts";
 import {
   findExactModelReferenceMatch,
+  findModelPolicyDenial,
+  formatModelPolicyDenialError,
   resolveModelScopeFromModels,
 } from "../../core/model-resolver.ts";
+import {
+  candidatesNamedByChanges,
+  createUpgradeReplacements,
+  findModelUpgrades,
+  planModelUpgrades,
+  rewriteModelReferencesInSettings,
+} from "../../core/model-upgrade.ts";
+import { describeTelemetry } from "../../core/observability/telemetry.ts";
 import { ORCHESTRATOR_REPORT_MESSAGE_TYPE } from "../../core/orchestrator/orchestrator.ts";
 import { DefaultPackageManager } from "../../core/package-manager.ts";
 import type { ResourceDiagnostic } from "../../core/resource-loader.ts";
@@ -126,8 +138,10 @@ import {
   BUILTIN_SLASH_COMMANDS,
   canonicalizeBuiltinSlashCommand,
   formatHelpMarkdown,
+  handoffPrompt,
   INIT_PROMPT,
   isBuiltinSlashCommandName,
+  parseHandoffCommand,
   slashCommandName,
   withSkillCommands,
 } from "../../core/slash-commands.ts";
@@ -186,9 +200,9 @@ import { wordmark } from "./components/logo.ts";
 import { MemoryView } from "./components/memory-view.ts";
 import { createMermaidMarkdownTransformer } from "./components/mermaid.ts";
 import { ModelSelectorComponent } from "./components/model-selector.ts";
+import { ModelUpgradeSelectorComponent } from "./components/model-upgrade-selector.ts";
 import { ScopedModelsSelectorComponent } from "./components/scoped-models-selector.ts";
 import { SessionSelectorComponent } from "./components/session-selector.ts";
-import { createSessionReportRenderer, SessionsView } from "./components/sessions-view.ts";
 import { SettingsSelectorComponent } from "./components/settings-selector.ts";
 import { SkillInvocationMessageComponent } from "./components/skill-invocation-message.ts";
 import {
@@ -199,6 +213,8 @@ import {
   type StatusIndicator,
   WorkingStatusIndicator,
 } from "./components/status-indicator.ts";
+import { createTaskReportRenderer, viewHelpers } from "./components/tasks-view-helpers.ts";
+import { TasksView } from "./components/tasks-view.ts";
 import { ThemedText } from "./components/themed-text.ts";
 import { ThinkingSelectorComponent } from "./components/thinking-selector.ts";
 import { ToolExecutionComponent } from "./components/tool-execution.ts";
@@ -208,9 +224,15 @@ import { TrustSelectorComponent } from "./components/trust-selector.ts";
 import { UserMessageSelectorComponent } from "./components/user-message-selector.ts";
 import { UserMessageComponent } from "./components/user-message.ts";
 import { EditorSlot } from "./editor-slot.ts";
+import {
+  EMPTY_ENTER_BURST_IDLE,
+  type EmptyEnterBurst,
+  registerEmptyEnter,
+} from "./empty-enter-burst.ts";
 import { ExtensionDialogs } from "./extension-dialogs.ts";
 import { ExtensionWidgets } from "./extension-widgets.ts";
 import { editInExternalEditor } from "./external-editor.ts";
+import { offerHandoff } from "./handoff-resume.ts";
 import { formatHotkeysMarkdown } from "./hotkeys.ts";
 import { getStartupVisibility, renderLoadedResources } from "./loaded-resources.ts";
 import {
@@ -221,6 +243,7 @@ import {
 } from "./login-flow.ts";
 import { refreshModelCatalogs } from "./model-catalog-refresh.ts";
 import { getModelSearchText } from "./model-search.ts";
+import { OrchestratorPane } from "./orchestrator-pane.ts";
 import { ProgramStatusReporter } from "./program-status-reporter.ts";
 import { formatSessionInfo, type SessionInfo } from "./session-info.ts";
 import { shareSession } from "./session-share.ts";
@@ -397,6 +420,7 @@ export class InteractiveMode {
   private transcriptScrollView: TuiLayouts.ScrollView | undefined;
   private fullscreenLayoutRoot: Component | undefined;
   private pendingMessagesContainer: Container;
+  private emptyEnterBurst: EmptyEnterBurst = EMPTY_ENTER_BURST_IDLE;
   private statusContainer: Container;
   private defaultEditor: CustomEditor;
   private editor: ActiveEditor;
@@ -406,6 +430,14 @@ export class InteractiveMode {
   private fdPath: string | undefined;
   private editorContainer: Container;
   private readonly editorSlot: EditorSlot;
+  private readonly tasksViewState = viewHelpers.createTasksViewState();
+  private readonly orchestratorPane = new OrchestratorPane({
+    orchestrator: () => this.session.orchestrator,
+    state: this.tasksViewState,
+    columns: () => this.ui.terminal.columns,
+    rows: () => Math.max(1, this.ui.terminal.rows),
+    requestRender: () => this.ui.requestRender(),
+  });
   private readonly loginFlow: LoginFlow;
   private footer: FooterComponent;
   private footerContainer: Container;
@@ -721,7 +753,10 @@ export class InteractiveMode {
       };
     }
 
-    const thinkingCommand = slashCommands.find((command) => command.name === "thinking");
+    const accountsCommand = slashCommands.find((command) => command.name === "accounts");
+    if (accountsCommand) accountsCommand.getArgumentCompletions = completeAccountsArgument;
+
+    const thinkingCommand = slashCommands.find((command) => command.name === "effort");
     if (thinkingCommand) {
       thinkingCommand.getArgumentCompletions = (prefix: string): AutocompleteItem[] | null => {
         return createFuzzyAutocompleteItems(
@@ -969,7 +1004,7 @@ export class InteractiveMode {
       scrollbarThumbStyle: (text) => theme.fg("scrollbarThumb", text),
     });
     this.transcriptScrollView = viewport.transcript;
-    this.fullscreenLayoutRoot = viewport.root;
+    this.fullscreenLayoutRoot = this.orchestratorPane.layout(viewport.root);
     this.mountInteractiveTui(this.renderer, [
       this.documentContainer,
       this.pendingMessagesContainer,
@@ -1212,6 +1247,12 @@ export class InteractiveMode {
       this.showWarning(
         `${APP_NAME} crashed on ${when} (${crash.message}). Run /bug to report it; the crash details are attached automatically.`,
       );
+    }
+
+    if (!initialMessage && !initialMessages?.length) {
+      await offerHandoff(this.session, this.extensionDialogs).catch((error: unknown) => {
+        this.showError(error instanceof Error ? error.message : "Unknown error occurred");
+      });
     }
 
     // Process initial messages
@@ -1494,9 +1535,7 @@ export class InteractiveMode {
     }
     this.footer.setSession(this.session);
     this.updateGoalTicker();
-    if (this.session.getActiveToolNames().includes("start_session")) {
-      void this.session.orchestrator?.refresh();
-    }
+    void this.session.orchestrator?.refresh();
     this.footer.setAutoCompactEnabled(this.session.autoCompactionEnabled);
     this.footerDataProvider.setCwd(this.sessionManager.getCwd());
     this.hideThinkingBlock = this.settingsManager.getHideThinkingBlock();
@@ -2296,6 +2335,7 @@ export class InteractiveMode {
     this.defaultEditor.onAction("app.session.tree", () => this.showTreeSelector());
     this.defaultEditor.onAction("app.session.fork", () => this.showUserMessageSelector());
     this.defaultEditor.onAction("app.session.resume", () => this.showSessionSelector());
+    this.orchestratorPane.bindKeys(this.defaultEditor, () => this.showTasksView());
 
     this.defaultEditor.onChange = (text: string) => {
       const wasBashMode = this.isBashMode;
@@ -2447,8 +2487,8 @@ export class InteractiveMode {
       return true;
     }
     if (text === "/status") {
-      this.handleSessionCommand();
       this.editor.setText("");
+      await this.handleSessionCommand();
       return true;
     }
     if (text === "/release-notes") {
@@ -2485,6 +2525,17 @@ export class InteractiveMode {
       const providerRef = text.startsWith("/login ") ? text.slice(7).trim() : undefined;
       this.editor.setText("");
       await this.loginFlow.login(providerRef);
+      return true;
+    }
+    if (text === "/accounts" || text.startsWith("/accounts ")) {
+      this.editor.setText("");
+      await runAccountsCommand(text.slice("/accounts".length), {
+        ui: this.createExtensionUIContext(),
+        refreshProviders: async () => {
+          await this.session.modelRuntime.refresh({ allowNetwork: false });
+          this.setupAutocompleteProvider();
+        },
+      });
       return true;
     }
     if (text === "/logout") {
@@ -2528,8 +2579,8 @@ export class InteractiveMode {
       this.editor.setText("");
       return true;
     }
-    if (text === "/sessions") {
-      this.showSessionsView();
+    if (text === "/tasks" || text === "/sessions") {
+      this.showTasksView();
       this.editor.setText("");
       return true;
     }
@@ -2549,13 +2600,25 @@ export class InteractiveMode {
   private setupEditorSubmitHandler(): void {
     this.defaultEditor.onSubmit = async (text: string) => {
       text = text.trim();
-      if (!text) return;
+      if (!text) {
+        this.handleEmptyEnter();
+        return;
+      }
+      this.emptyEnterBurst = EMPTY_ENTER_BURST_IDLE;
 
       // A skill takes its exact name from a built-in command; the command keeps its aliases.
       if (text.startsWith("/") && !this.isSkillCommand(text)) {
         text = canonicalizeBuiltinSlashCommand(text);
+        const handoff = parseHandoffCommand(text);
         if (text === "/init") text = INIT_PROMPT;
-        else if (await this.handleBuiltinCommand(text)) return;
+        else if (handoff !== undefined) {
+          if (this.session.orchestrator === undefined) {
+            this.showWarning("/handoff needs the orchestrator, which this session does not have");
+            this.editor.setText("");
+            return;
+          }
+          text = handoffPrompt(handoff.path);
+        } else if (await this.handleBuiltinCommand(text)) return;
       }
 
       // Handle bash command (! for normal, !! for excluded from context)
@@ -2610,6 +2673,15 @@ export class InteractiveMode {
       }
       this.editor.addToHistory?.(text);
     };
+  }
+
+  private handleEmptyEnter(): void {
+    const { burst, fire } = registerEmptyEnter(this.emptyEnterBurst, Date.now());
+    this.emptyEnterBurst = burst;
+    if (!fire) return;
+    const sent = this.session.flushQueue();
+    if (sent === 0) return;
+    this.showStatus(`Sent ${sent} queued message${sent > 1 ? "s" : ""}`);
   }
 
   private subscribeToAgent(): void {
@@ -3053,6 +3125,11 @@ export class InteractiveMode {
         this.ui.requestRender();
         break;
 
+      case "pr_watch_changed":
+        this.footer.invalidate();
+        this.ui.requestRender();
+        break;
+
       case "goal_status": {
         const goal = event.goal;
         const now = Date.now();
@@ -3257,7 +3334,7 @@ export class InteractiveMode {
         if (message.display) {
           const renderer =
             message.customType === ORCHESTRATOR_REPORT_MESSAGE_TYPE
-              ? (createSessionReportRenderer(this.session.orchestrator) as MessageRenderer)
+              ? (createTaskReportRenderer(this.session.orchestrator) as MessageRenderer)
               : this.session.extensionRunner.getMessageRenderer(message.customType);
           const component = new CustomMessageComponent(
             message,
@@ -4568,6 +4645,10 @@ export class InteractiveMode {
       this.showModelSelector();
       return;
     }
+    if (searchTerm === "upgrade") {
+      this.showModelUpgradeSelector();
+      return;
+    }
 
     const model = await this.findExactModelMatch(searchTerm);
     if (model) {
@@ -4582,7 +4663,56 @@ export class InteractiveMode {
       return;
     }
 
+    const denial = findModelPolicyDenial({
+      reference: searchTerm,
+      policy: this.session.modelRuntime.getModelPolicy(),
+      catalogModels: this.session.modelRuntime.getCatalogModels(),
+    });
+    if (denial) {
+      this.showError(formatModelPolicyDenialError(denial));
+      return;
+    }
+
     this.showModelSelector(searchTerm);
+  }
+
+  private showModelUpgradeSelector(): void {
+    const candidates = findModelUpgrades(this.session.modelRuntime.getCatalogModels());
+    const plan = planModelUpgrades({
+      candidates,
+      layers: {
+        global: this.settingsManager.getGlobalSettings(),
+        project: this.settingsManager.getProjectSettings(),
+      },
+    });
+    const named = candidatesNamedByChanges(candidates, plan.changes);
+    const shown = named.length > 0 ? named : candidates.filter((entry) => entry.confident);
+    if (shown.length === 0) {
+      this.showStatus("No model upgrades found");
+      return;
+    }
+    this.editorSlot.showSelector((done) => {
+      const component = new ModelUpgradeSelectorComponent(shown, {
+        onApply: async (candidate) => {
+          const replacements = createUpgradeReplacements([candidate]);
+          const written = this.settingsManager.rewriteModelReferences((layer) =>
+            rewriteModelReferencesInSettings(layer, replacements),
+          );
+          await this.settingsManager.flush();
+          const count = written.global.length + written.project.length;
+          this.footer.invalidate();
+          return count === 0
+            ? `${candidate.from.id} → ${candidate.to.id} · no setting names it`
+            : `${candidate.from.id} → ${candidate.to.id} · ${count} setting${count === 1 ? "" : "s"}`;
+        },
+        onCancel: () => {
+          done();
+          this.ui.requestRender();
+        },
+        requestRender: () => this.ui.requestRender(),
+      });
+      return { component, focus: component, dispose: () => {} };
+    });
   }
 
   private async findExactModelMatch(searchTerm: string): Promise<Model<any> | undefined> {
@@ -4716,6 +4846,18 @@ export class InteractiveMode {
         defaultProvider && defaultModel
           ? { provider: defaultProvider, id: defaultModel }
           : undefined,
+        {
+          getPolicy: () => this.session.modelRuntime.getModelPolicy(),
+          getCatalogModels: () => this.session.modelRuntime.getCatalogModels(),
+          savePolicy: (policy) =>
+            saveModelPolicy(
+              {
+                settingsManager: this.settingsManager,
+                modelRuntime: this.session.modelRuntime,
+              },
+              policy,
+            ),
+        },
       );
       return { component: selector, focus: selector, dispose: () => selector.dispose() };
     });
@@ -5063,30 +5205,39 @@ export class InteractiveMode {
     });
   }
 
-  private showSessionsView(initialId?: string): void {
+  private showTasksView(initialId?: string): void {
     const orchestrator = this.session.orchestrator;
-    if (!orchestrator || !this.session.getActiveToolNames().includes("start_session")) {
-      this.showStatus(`Requires ${APP_NAME} --orchestrator`);
+    if (!orchestrator) {
+      this.showStatus("The orchestrator is unavailable in this session");
       return;
     }
     void orchestrator.refresh();
     this.editorSlot.showSelector((done) => {
       const tick = setInterval(() => this.ui.requestRender(), 1000);
-      const view = new SessionsView(
+      const closePane = this.orchestratorPane.openSessions();
+      const view = new TasksView(
         {
           orchestrator,
           onClose: () => {
             done();
             this.ui.requestRender();
           },
-          onPickModel: (id) => this.showSessionModelSelector(id),
+          onPickModel: (id) => this.showTaskModelSelector(id),
           onError: (message) => this.showError(message),
           requestRender: () => this.ui.requestRender(),
           maxHeight: () => this.ui.terminal.rows - 4,
+          state: this.tasksViewState,
         },
         initialId,
       );
-      return { component: view, focus: view, dispose: () => clearInterval(tick) };
+      return {
+        component: view,
+        focus: view,
+        dispose: () => {
+          clearInterval(tick);
+          closePane();
+        },
+      };
     });
   }
 
@@ -5112,13 +5263,13 @@ export class InteractiveMode {
     });
   }
 
-  private showSessionModelSelector(id: string): void {
+  private showTaskModelSelector(id: string): void {
     const orchestrator = this.session.orchestrator;
     if (!orchestrator) return;
     this.editorSlot.showSelector((done) => {
       const back = () => {
         done();
-        this.showSessionsView(id);
+        this.showTasksView(id);
       };
       const selector = new ModelSelectorComponent(
         this.ui,
@@ -5490,9 +5641,10 @@ export class InteractiveMode {
     this.ui.requestRender();
   }
 
-  private handleSessionCommand(): void {
+  private async handleSessionCommand(): Promise<void> {
     const entries = this.sessionManager.getEntries();
     const model = this.session.model;
+    const contextBreakdown = await this.session.getContextBreakdown();
     const info: SessionInfo = {
       stats: this.session.getSessionStats(),
       sessionName: this.sessionManager.getSessionName(),
@@ -5501,6 +5653,10 @@ export class InteractiveMode {
       cacheWarmingMode: this.settingsManager.getCacheWarmingMode(),
       cacheWarmingStatus: this.session.cacheWarmingStatus,
       selectedModelKey: `${model?.provider}/${model?.id}`,
+      contextBreakdown,
+      contextWindow: this.session.getContextUsage()?.contextWindow ?? model?.contextWindow,
+      telemetry:
+        this.runtimeHost.telemetry && describeTelemetry(this.runtimeHost.telemetry.status()),
     };
     this.chatContainer.addChild(new Spacer(1));
     this.chatContainer.addChild(new ThemedText(() => formatSessionInfo(info), 1, 0));

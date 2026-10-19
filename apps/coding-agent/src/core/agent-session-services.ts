@@ -8,6 +8,7 @@ import { toErrorMessage } from "../utils/errors.ts";
 import { resolvePath } from "../utils/paths.ts";
 import type { SessionStartEvent, ToolDefinition } from "./extensions/index.ts";
 import { ModelRuntime } from "./model-runtime.ts";
+import type { SessionTelemetryOptions } from "./observability/session-telemetry.ts";
 import {
   DefaultResourceLoader,
   type DefaultResourceLoaderOptions,
@@ -74,7 +75,7 @@ export interface CreateAgentSessionFromServicesOptions {
   excludeTools?: CreateAgentSessionOptions["excludeTools"] | undefined;
   noTools?: CreateAgentSessionOptions["noTools"] | undefined;
   customTools?: ToolDefinition[] | undefined;
-  orchestrator?: boolean | undefined;
+  telemetry?: SessionTelemetryOptions | undefined;
 }
 
 /**
@@ -158,6 +159,7 @@ export async function createAgentSessionServices(
       signal: options.modelRuntimeSignal,
     }));
   const settingsManager = options.settingsManager ?? SettingsManager.create(cwd, agentDir);
+  modelRuntime.setModelPolicy(settingsManager.getModelPolicy());
   const resourceLoader = new DefaultResourceLoader({
     ...(options.resourceLoaderOptions ?? {}),
     cwd,
@@ -245,6 +247,6 @@ export async function createAgentSessionFromServices(
     noTools: options.noTools,
     customTools: options.customTools,
     sessionStartEvent: options.sessionStartEvent,
-    orchestrator: options.orchestrator,
+    telemetry: options.telemetry,
   });
 }

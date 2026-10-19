@@ -150,6 +150,11 @@ export interface Models {
     handle: DeferredHandle,
     options?: ModelsDeferredCancelOptions,
   ): Promise<void>;
+  countTokens(
+    model: Model<Api>,
+    context: Context,
+    options?: ModelsSimpleStreamOptions,
+  ): Promise<number | undefined>;
 
   generateImages(
     model: ImageModel<ImageApi>,

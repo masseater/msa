@@ -52,7 +52,7 @@ describe("Cache Retention (MSA_CACHE_RETENTION)", () => {
       () =>
         Effect.runPromise(
           Effect.gen(function* () {
-            const model = getModel("anthropic", "claude-haiku-4-5");
+            const model = getModel("anthropic-api", "claude-haiku-4-5");
             let capturedPayload: any = null;
 
             const s = stream(model, context, {
@@ -81,7 +81,7 @@ describe("Cache Retention (MSA_CACHE_RETENTION)", () => {
         Effect.runPromise(
           Effect.gen(function* () {
             vi.stubEnv("MSA_CACHE_RETENTION", "long");
-            const model = getModel("anthropic", "claude-haiku-4-5");
+            const model = getModel("anthropic-api", "claude-haiku-4-5");
             let capturedPayload: any = null;
 
             const s = stream(model, context, {
@@ -110,7 +110,7 @@ describe("Cache Retention (MSA_CACHE_RETENTION)", () => {
     it("should add ttl for non-api.anthropic.com baseUrl by default", async () => {
       vi.stubEnv("MSA_CACHE_RETENTION", "long");
 
-      const baseModel = getModel("anthropic", "claude-haiku-4-5");
+      const baseModel = getModel("anthropic-api", "claude-haiku-4-5");
       const proxyModel = {
         ...baseModel,
         baseUrl: "https://my-proxy.example.com/v1",
@@ -146,7 +146,7 @@ describe("Cache Retention (MSA_CACHE_RETENTION)", () => {
 
   describe("Anthropic Provider", () => {
     it("should omit ttl when supportsLongCacheRetention is false", async () => {
-      const baseModel = getModel("anthropic", "claude-haiku-4-5");
+      const baseModel = getModel("anthropic-api", "claude-haiku-4-5");
       const proxyModel = {
         ...baseModel,
         baseUrl: "https://my-proxy.example.com/v1",
@@ -183,7 +183,7 @@ describe("Cache Retention (MSA_CACHE_RETENTION)", () => {
 
   describe("Anthropic Provider", () => {
     it("should omit cache_control when cacheRetention is none", async () => {
-      const baseModel = getModel("anthropic", "claude-haiku-4-5");
+      const baseModel = getModel("anthropic-api", "claude-haiku-4-5");
       let capturedPayload: any = null;
 
       try {
@@ -215,7 +215,7 @@ describe("Cache Retention (MSA_CACHE_RETENTION)", () => {
 
   describe("Anthropic Provider", () => {
     it("should add cache_control to string user messages", async () => {
-      const baseModel = getModel("anthropic", "claude-haiku-4-5");
+      const baseModel = getModel("anthropic-api", "claude-haiku-4-5");
       let capturedPayload: any = null;
 
       try {
@@ -249,7 +249,7 @@ describe("Cache Retention (MSA_CACHE_RETENTION)", () => {
 
   describe("Anthropic Provider", () => {
     it("should set 1h cache TTL when cacheRetention is long", async () => {
-      const baseModel = getModel("anthropic", "claude-haiku-4-5");
+      const baseModel = getModel("anthropic-api", "claude-haiku-4-5");
       let capturedPayload: any = null;
 
       try {

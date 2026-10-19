@@ -8,7 +8,7 @@ import { currentTimeMillis } from "../src/utils/clock.ts";
 const models = createModels();
 models.setProvider(anthropicProvider());
 
-const model = models.getModel("anthropic", "claude-haiku-4-5");
+const model = models.getModel("anthropic-api", "claude-haiku-4-5");
 if (model === undefined) throw new Error("model not found");
 
 const auth = await models.getAuth(model.provider);

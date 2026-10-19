@@ -4,11 +4,11 @@ import { getModels, getProviders } from "../src/compat.ts";
 import type { Api, Model } from "../src/types.ts";
 
 const EXPECTED_CURRENT_ADAPTIVE_THINKING_MODELS = [
-  "anthropic/claude-fable-5",
-  "anthropic/claude-haiku-5-5",
-  "anthropic/claude-opus-4-8",
-  "anthropic/claude-opus-5",
-  "anthropic/claude-sonnet-5",
+  "anthropic-api/claude-fable-5",
+  "anthropic-api/claude-haiku-5-5",
+  "anthropic-api/claude-opus-4-8",
+  "anthropic-api/claude-opus-5",
+  "anthropic-api/claude-sonnet-5",
   "opencode/claude-opus-4-8",
   "opencode/claude-opus-5",
 ];

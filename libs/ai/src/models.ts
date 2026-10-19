@@ -525,6 +525,23 @@ const attachDeferred = <TApi extends Api>(
         }),
       );
   }
+  if (implementations.streams.some((entry) => entry.countTokens !== undefined)) {
+    provider.countTokens = (model, context, options) =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          const count = apiFor(model)?.countTokens;
+          if (count === undefined) {
+            return yield* Effect.die(
+              new ModelsError(
+                "provider",
+                `Provider ${provider.id} cannot count tokens for "${model.api}"`,
+              ),
+            );
+          }
+          return yield* Effect.promise(() => count(model, context, options));
+        }),
+      );
+  }
 };
 
 const dispatcher =
@@ -1245,6 +1262,24 @@ const cancelDeferred = ({
     }),
   );
 
+const countModelTokens = ({
+  state,
+  model,
+  context,
+  options,
+}: StreamRequest<Api, ModelsSimpleStreamOptions>): Promise<number | undefined> =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const provider = requireChatProvider({ state, model });
+      const count = provider.countTokens?.bind(provider);
+      if (count === undefined) return undefined;
+      const { requestModel, requestOptions } = yield* applyAuth({ state, model, options });
+      return yield* Effect.promise(() =>
+        count(requestModel, normalizeContext(context), requestOptions as SimpleStreamOptions),
+      );
+    }),
+  );
+
 interface ImagesRequest {
   readonly state: ModelsState;
   readonly model: ImageModel<ImageApi>;
@@ -1486,6 +1521,14 @@ class ModelsImpl implements MutableModels {
     options?: ModelsDeferredCancelOptions,
   ): Promise<void> {
     return cancelDeferred({ state: this.state, model, handle, options });
+  }
+
+  countTokens(
+    model: Model<Api>,
+    context: Context,
+    options?: ModelsSimpleStreamOptions,
+  ): Promise<number | undefined> {
+    return countModelTokens({ state: this.state, model, context, options });
   }
 
   generateImages(

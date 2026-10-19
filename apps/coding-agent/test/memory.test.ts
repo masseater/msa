@@ -418,6 +418,28 @@ describe("MemoryService", () => {
     }
   });
 
+  it("leaves the embedding endpoint alone until a memory exists", async () => {
+    const { baseUrl, inputs } = await embeddingServer([[1, 0]]);
+    const service = new MemoryService({
+      settings: settings({ embedding: embeddingSettings(baseUrl) }),
+      cwd: tempDir(),
+    });
+    try {
+      expect(await service.recall("how do we ship releases?")).toEqual([]);
+      expect(await service.search("releases")).toEqual([]);
+      expect(inputs).toEqual([]);
+
+      await service.save({ content: "releases ship through the Homebrew tap" });
+      await service.recall("how do we ship releases?");
+      expect(inputs).toEqual([
+        "D: releases ship through the Homebrew tap",
+        "Q: how do we ship releases?",
+      ]);
+    } finally {
+      service.close();
+    }
+  });
+
   it("re-embeds memories that were saved without a vector", async () => {
     const dir = tempDir();
     const database = join(dir, "memory.db");

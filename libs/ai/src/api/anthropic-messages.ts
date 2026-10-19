@@ -101,40 +101,6 @@ function getCacheControl(
   };
 }
 
-const claudeCodeVersion = "2.1.280";
-
-const claudeCodeTools = [
-  "Read",
-  "Write",
-  "Edit",
-  "Bash",
-  "Grep",
-  "Glob",
-  "AskUserQuestion",
-  "EnterPlanMode",
-  "ExitPlanMode",
-  "KillShell",
-  "NotebookEdit",
-  "Skill",
-  "Task",
-  "TaskOutput",
-  "TodoWrite",
-  "WebFetch",
-  "WebSearch",
-];
-
-const ccToolLookup = new Map(claudeCodeTools.map((t) => [t.toLowerCase(), t]));
-
-const toClaudeCodeName = (name: string) => ccToolLookup.get(name.toLowerCase()) ?? name;
-const fromClaudeCodeName = (name: string, tools?: Tool[]) => {
-  if (tools !== undefined && tools.length > 0) {
-    const lowerName = name.toLowerCase();
-    const matchedTool = tools.find((tool) => tool.name.toLowerCase() === lowerName);
-    if (matchedTool !== undefined) return matchedTool.name;
-  }
-  return name;
-};
-
 function convertContentBlocks(content: (TextContent | ImageContent)[]):
   | string
   | Array<
@@ -284,7 +250,7 @@ function getAnthropicFederation(
   headers: ProviderHeaders | undefined,
   env: ProviderEnv | undefined,
 ): AnthropicFederationConfig | undefined {
-  if (model.provider !== "anthropic" || hasRequestAuth(apiKey, headers)) return undefined;
+  if (model.provider !== "anthropic-api" || hasRequestAuth(apiKey, headers)) return undefined;
   const federationRuleId = getProviderEnvValue(ANTHROPIC_FEDERATION_RULE_ID_ENV, env);
   const organizationId = getProviderEnvValue(ANTHROPIC_ORGANIZATION_ID_ENV, env);
   const identityTokenFile = getProviderEnvValue(ANTHROPIC_IDENTITY_TOKEN_FILE_ENV, env);
@@ -540,7 +506,6 @@ export const stream = modelCall<
       context,
       getAnthropicCompat(model).supportsMidConvoSystemMessages,
     );
-    const currentTools = getCurrentTools(normalizedContext.messages);
 
     Effect.runFork(
       Effect.gen(function* () {
@@ -562,38 +527,9 @@ export const stream = modelCall<
           timestamp: currentTimeMillis(),
         };
         yield* Effect.gen(function* () {
-          let client: Anthropic;
-          let isOAuth: boolean;
+          const client = createRequestClient(model, options);
           let usageModel = model;
           let inputTransformations: BetaInputTransformation[] | undefined;
-          if (options?.client === undefined) {
-            const apiKey = options?.apiKey;
-            const federation = getAnthropicFederation(
-              model,
-              apiKey,
-              options?.headers,
-              options?.env,
-            );
-            if (federation === undefined)
-              assertRequestAuth(model.provider, apiKey, options?.headers);
-
-            const cacheRetention = resolveCacheRetention(options?.cacheRetention, options?.env);
-            const cacheSessionId = cacheRetention === "none" ? undefined : options?.sessionId;
-
-            const created = createClient(
-              model,
-              apiKey,
-              options?.headers,
-              options?.fetch,
-              cacheSessionId,
-              federation,
-            );
-            client = created.client;
-            isOAuth = created.isOAuthToken;
-          } else {
-            client = options.client;
-            isOAuth = false;
-          }
           const requestOptions = {
             ...(options?.signal === undefined ? {} : { signal: options.signal }),
             ...(options?.timeoutMs === undefined ? {} : { timeout: options.timeoutMs }),
@@ -605,7 +541,6 @@ export const stream = modelCall<
               const built = buildParams(
                 model,
                 normalizedContext,
-                isOAuth,
                 options,
                 disablePreferredStrictTools,
               );
@@ -744,9 +679,7 @@ export const stream = modelCall<
                     const block: Block = {
                       type: "toolCall",
                       id: event.content_block.id,
-                      name: isOAuth
-                        ? fromClaudeCodeName(event.content_block.name, currentTools)
-                        : event.content_block.name,
+                      name: event.content_block.name,
                       arguments: (event.content_block.input as Record<string, any>) ?? {},
                       partialJson: "",
                       index: event.index,
@@ -967,6 +900,19 @@ function mapThinkingLevelToEffort(
   }
 }
 
+function createRequestClient(
+  model: Model<"anthropic-messages">,
+  options: AnthropicOptions | undefined,
+): Anthropic {
+  if (options?.client !== undefined) return options.client;
+  const apiKey = options?.apiKey;
+  const federation = getAnthropicFederation(model, apiKey, options?.headers, options?.env);
+  if (federation === undefined) assertRequestAuth(model.provider, apiKey, options?.headers);
+  const cacheRetention = resolveCacheRetention(options?.cacheRetention, options?.env);
+  const cacheSessionId = cacheRetention === "none" ? undefined : options?.sessionId;
+  return createClient(model, apiKey, options?.headers, options?.fetch, cacheSessionId, federation);
+}
+
 export const streamSimple = modelCall<
   Parameters<StreamFunction<"anthropic-messages", SimpleStreamOptions>>[0],
   Parameters<StreamFunction<"anthropic-messages", SimpleStreamOptions>>[1],
@@ -977,53 +923,85 @@ export const streamSimple = modelCall<
     model: Model<"anthropic-messages">,
     context: TranscriptContext,
     options?: SimpleStreamOptions,
-  ): AssistantMessageEventStream => {
-    if (
-      getAnthropicFederation(model, options?.apiKey, options?.headers, options?.env) === undefined
-    ) {
-      assertRequestAuth(model.provider, options?.apiKey, options?.headers);
-    }
-
-    const base = {
-      ...buildBaseOptions(model, context, options, options?.apiKey),
-      toolChoice: options?.toolChoice,
-    } satisfies AnthropicOptions;
-    if (options?.reasoning === undefined) {
-      return stream(model, context, {
-        ...base,
-        thinkingEnabled: false,
-      } satisfies AnthropicOptions);
-    }
-
-    if (model.compat?.forceAdaptiveThinking === true) {
-      const effort = mapThinkingLevelToEffort(model, options.reasoning);
-      return stream(model, context, {
-        ...base,
-        thinkingEnabled: true,
-        effort,
-      } satisfies AnthropicOptions);
-    }
-
-    const adjusted = adjustMaxTokensForThinking(
-      base.maxTokens,
-      model.maxTokens,
-      options.reasoning,
-      options.thinkingBudgets,
-    );
-
-    const maxTokens = clampMaxTokensToContext(model, context, adjusted.maxTokens);
-
-    return stream(model, context, {
-      ...base,
-      maxTokens,
-      thinkingEnabled: true,
-      thinkingBudgetTokens: Math.min(adjusted.thinkingBudget, Math.max(0, maxTokens - 1024)),
-    } satisfies AnthropicOptions);
-  },
+  ): AssistantMessageEventStream =>
+    stream(model, context, toAnthropicOptions(model, context, options)),
 );
 
-function isOAuthToken(apiKey: string): boolean {
-  return apiKey.includes("sk-ant-oat");
+export const countTokens = (
+  model: Model<"anthropic-messages">,
+  context: TranscriptContext,
+  options?: SimpleStreamOptions,
+): Promise<number> =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const anthropicOptions = toAnthropicOptions(model, context, options);
+      const client = createRequestClient(model, anthropicOptions);
+      const normalizedContext = resolveTranscript(
+        context,
+        getAnthropicCompat(model).supportsMidConvoSystemMessages,
+      );
+      const { params } = buildParams(model, normalizedContext, anthropicOptions);
+      const counted = yield* Effect.promise(() =>
+        client.beta.messages.countTokens(
+          {
+            model: params.model,
+            messages: params.messages,
+            ...(params.system === undefined ? {} : { system: params.system }),
+            ...(params.tools === undefined ? {} : { tools: params.tools }),
+            ...(params.thinking === undefined ? {} : { thinking: params.thinking }),
+            ...(params.tool_choice === undefined ? {} : { tool_choice: params.tool_choice }),
+            ...(params.output_config === undefined ? {} : { output_config: params.output_config }),
+            ...(params.context_management === undefined || params.context_management === null
+              ? {}
+              : { context_management: params.context_management }),
+            ...(params.betas === undefined ? {} : { betas: params.betas }),
+          },
+          { ...(options?.signal === undefined ? {} : { signal: options.signal }), maxRetries: 0 },
+        ),
+      );
+      return counted.input_tokens;
+    }),
+  );
+
+function toAnthropicOptions(
+  model: Model<"anthropic-messages">,
+  context: TranscriptContext,
+  options: SimpleStreamOptions | undefined,
+): AnthropicOptions {
+  if (
+    getAnthropicFederation(model, options?.apiKey, options?.headers, options?.env) === undefined
+  ) {
+    assertRequestAuth(model.provider, options?.apiKey, options?.headers);
+  }
+
+  const base = {
+    ...buildBaseOptions(model, context, options, options?.apiKey),
+    toolChoice: options?.toolChoice,
+  } satisfies AnthropicOptions;
+  if (options?.reasoning === undefined) {
+    return { ...base, thinkingEnabled: false } satisfies AnthropicOptions;
+  }
+
+  if (model.compat?.forceAdaptiveThinking === true) {
+    const effort = mapThinkingLevelToEffort(model, options.reasoning);
+    return { ...base, thinkingEnabled: true, effort } satisfies AnthropicOptions;
+  }
+
+  const adjusted = adjustMaxTokensForThinking(
+    base.maxTokens,
+    model.maxTokens,
+    options.reasoning,
+    options.thinkingBudgets,
+  );
+
+  const maxTokens = clampMaxTokensToContext(model, context, adjusted.maxTokens);
+
+  return {
+    ...base,
+    maxTokens,
+    thinkingEnabled: true,
+    thinkingBudgetTokens: Math.min(adjusted.thinkingBudget, Math.max(0, maxTokens - 1024)),
+  } satisfies AnthropicOptions;
 }
 
 function createClient(
@@ -1033,29 +1011,7 @@ function createClient(
   fetch?: typeof globalThis.fetch,
   sessionId?: string,
   federation?: AnthropicFederationConfig,
-): { client: Anthropic; isOAuthToken: boolean } {
-  if (apiKey !== undefined && apiKey !== "" && isOAuthToken(apiKey)) {
-    const client = new MsaAnthropic({
-      apiKey: null,
-      authToken: apiKey,
-      baseURL: model.baseUrl,
-      dangerouslyAllowBrowser: true,
-      fetch,
-      defaultHeaders: mergeClientHeaders(
-        {
-          accept: "application/json",
-          "anthropic-dangerous-direct-browser-access": "true",
-          "user-agent": `claude-cli/${claudeCodeVersion}`,
-          "x-app": "cli",
-        },
-        model.headers,
-        optionsHeaders,
-      ),
-    });
-
-    return { client, isOAuthToken: true };
-  }
-
+): Anthropic {
   const compat = getAnthropicCompat(model);
   const sessionAffinityHeaders: ProviderHeaders = {};
   if (sessionId !== undefined && sessionId !== "" && compat.sendSessionAffinityHeaders) {
@@ -1085,10 +1041,10 @@ function createClient(
       });
       federationClient = { key, fetch, client };
     }
-    return { client: federationClient.client.withOptions({ defaultHeaders }), isOAuthToken: false };
+    return federationClient.client.withOptions({ defaultHeaders });
   }
 
-  const client = new MsaAnthropic({
+  return new MsaAnthropic({
     apiKey: apiKey ?? null,
     authToken: null,
     baseURL: model.baseUrl,
@@ -1096,14 +1052,11 @@ function createClient(
     fetch,
     defaultHeaders,
   });
-
-  return { client, isOAuthToken: false };
 }
 
 function getBetaFeatures(
   model: Model<"anthropic-messages">,
   context: TranscriptContext,
-  usesOAuth: boolean,
   nativeToolChanges: boolean,
   options?: AnthropicOptions,
 ): NonNullable<MessageCreateParamsStreaming["betas"]> {
@@ -1126,7 +1079,6 @@ function getBetaFeatures(
   }
 
   const features: NonNullable<MessageCreateParamsStreaming["betas"]> = [];
-  if (usesOAuth) features.push("claude-code-20250219", "oauth-2025-04-20");
   if (shouldUseFineGrainedToolStreamingBeta(model, context))
     features.push(FINE_GRAINED_TOOL_STREAMING_BETA);
   if (
@@ -1148,7 +1100,6 @@ function getBetaFeatures(
 function buildParams(
   model: Model<"anthropic-messages">,
   context: TranscriptContext,
-  usesOAuth: boolean,
   options?: AnthropicOptions,
   disablePreferredStrictTools = false,
 ): {
@@ -1171,7 +1122,6 @@ function buildParams(
   ): BetaTool[] => {
     const definitions = convertTools(
       tools,
-      usesOAuth,
       compat.supportsEagerToolInputStreaming,
       compat.supportsStrictTools,
       toolCacheControl,
@@ -1202,14 +1152,13 @@ function buildParams(
   const effortMessages = model.compat?.supportsMidConvoEffort === true && !thinkingDisabled;
   const converted = convertMessages(
     conversationMessages,
-    usesOAuth,
     cacheControl,
     compat.allowEmptySignature,
     effortMessages ? model.provider : undefined,
     nativeToolChanges ? convertToolDefinitions : undefined,
   );
   const activeEffort = options?.effort ?? "high";
-  const betaFeatures = getBetaFeatures(model, context, usesOAuth, nativeToolChanges, options);
+  const betaFeatures = getBetaFeatures(model, context, nativeToolChanges, options);
   const params: MessageCreateParamsStreaming = {
     model: model.id,
     messages: effortMessages
@@ -1220,22 +1169,7 @@ function buildParams(
     ...(betaFeatures.length > 0 ? { betas: betaFeatures } : {}),
   };
 
-  if (usesOAuth) {
-    params.system = [
-      {
-        type: "text",
-        text: "You are Claude Code, Anthropic's official CLI for Claude.",
-        ...(cacheControl === undefined ? {} : { cache_control: cacheControl }),
-      },
-    ];
-    if (initialSystemText !== "") {
-      params.system.push({
-        type: "text",
-        text: sanitizeSurrogates(initialSystemText),
-        ...(cacheControl === undefined ? {} : { cache_control: cacheControl }),
-      });
-    }
-  } else if (initialSystemText !== "") {
+  if (initialSystemText !== "") {
     params.system = [
       {
         type: "text",
@@ -1349,7 +1283,6 @@ interface ConvertedAnthropicMessages {
 
 function convertMessages(
   transformedMessages: Message[],
-  usesOAuth: boolean,
   cacheControl?: CacheControlEphemeral,
   allowEmptySignature = false,
   managedProvider?: string,
@@ -1380,7 +1313,7 @@ function convertMessages(
             type: "tool_removal",
             tool: {
               type: "tool_reference",
-              name: usesOAuth ? toClaudeCodeName(tool.name) : tool.name,
+              name: tool.name,
             },
           });
         }
@@ -1475,7 +1408,7 @@ function convertMessages(
           blocks.push({
             type: "tool_use",
             id: block.id,
-            name: usesOAuth ? toClaudeCodeName(block.name) : block.name,
+            name: block.name,
             input: block.arguments ?? {},
           });
         }
@@ -1616,7 +1549,6 @@ const isAnthropicStrictUnsupportedKeyword: UnsupportedStrictSchemaKeywordCheck =
 
 function convertTools(
   tools: Tool[],
-  usesOAuth: boolean,
   supportsEagerToolInputStreaming: boolean,
   supportsStrictTools: boolean,
   cacheControl?: CacheControlEphemeral,
@@ -1654,7 +1586,7 @@ function convertTools(
         : legacyInputSchema;
 
     return {
-      name: usesOAuth ? toClaudeCodeName(tool.name) : tool.name,
+      name: tool.name,
       description: tool.description,
       ...(supportsEagerToolInputStreaming ? { eager_input_streaming: true } : {}),
       ...(strict === true ? { strict: true } : {}),

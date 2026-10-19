@@ -4,6 +4,7 @@
 
 import { type Static, Type } from "typebox";
 
+import { readOnlyVariantOf } from "../ask.ts";
 import type { ToolDefinition } from "../extensions/types.ts";
 import {
   formatMemoryList,
@@ -42,6 +43,16 @@ const memorySchema = Type.Object({
   ),
 });
 
+const memoryReadSchema = Type.Object({
+  action: Type.Union([Type.Literal("search"), Type.Literal("list")], {
+    description: "search: find memories by meaning and keywords; list: newest memories",
+  }),
+  query: Type.Optional(Type.String({ description: "What to look for (action: search)" })),
+  limit: Type.Optional(
+    Type.Number({ description: "Maximum results (actions: search, list; default 5)" }),
+  ),
+});
+
 export type MemoryToolInput = Static<typeof memorySchema>;
 
 export const memoryToolSystemPromptContribution = {
@@ -54,7 +65,7 @@ export const memoryToolSystemPromptContribution = {
 export function createMemoryToolDefinition(
   service: MemoryService,
 ): ToolDefinition<typeof memorySchema, Record<string, unknown> | undefined> {
-  return {
+  const memory: ToolDefinition<typeof memorySchema, Record<string, unknown> | undefined> = {
     name: "memory",
     label: "memory",
     description:
@@ -142,5 +153,15 @@ export function createMemoryToolDefinition(
         }
       }
     },
+  };
+  return {
+    ...memory,
+    readOnlyVariant: readOnlyVariantOf(memory, {
+      actions: ["search", "list"],
+      parameters: memoryReadSchema,
+      description:
+        "Long-term memory shared across sessions, read only: search memories by meaning and keywords, or list the newest.",
+      promptSnippet: "Search and list long-term memories across sessions",
+    }),
   };
 }

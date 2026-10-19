@@ -57,7 +57,7 @@ const anthropicModel: Model<"anthropic-messages"> = {
   id: "claude-test",
   name: "Claude Test",
   api: "anthropic-messages",
-  provider: "anthropic",
+  provider: "anthropic-api",
   baseUrl: "https://api.anthropic.com",
   reasoning: false,
   input: ["text"],

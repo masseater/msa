@@ -10,7 +10,6 @@ const importOAuthModule = (specifier: string): Promise<unknown> => {
 };
 
 type OAuthFlowLoaders = {
-  anthropic: () => OAuthAuth | Promise<OAuthAuth>;
   openaiCodex: () => OAuthAuth | Promise<OAuthAuth>;
   openaiChatGPT: () => OAuthAuth | Promise<OAuthAuth>;
   openrouter: () => OAuthAuth | Promise<OAuthAuth>;
@@ -37,13 +36,6 @@ const loadOAuth = (source: OAuthModuleSource): Promise<OAuthAuth> =>
       return source.fromModule(yield* Effect.promise(() => importOAuthModule(source.specifier)));
     }),
   );
-
-export const loadAnthropicOAuth = (): Promise<OAuthAuth> =>
-  loadOAuth({
-    bundled: (loaders) => loaders.anthropic(),
-    specifier: "./anthropic.ts",
-    fromModule: (module) => (module as { anthropicOAuth: OAuthAuth }).anthropicOAuth,
-  });
 
 export const loadOpenAICodexOAuth = (): Promise<OAuthAuth> =>
   loadOAuth({

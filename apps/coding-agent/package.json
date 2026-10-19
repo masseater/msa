@@ -1,6 +1,6 @@
 {
   "name": "@msa/coding-agent",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "Coding agent CLI with read, bash, edit, write tools and session management",
   "keywords": [
     "agent",
@@ -59,6 +59,7 @@
     "@msa/ai": "workspace:*",
     "@msa/codemode": "workspace:*",
     "@msa/mcp": "workspace:*",
+    "@msa/telemetry": "workspace:*",
     "@msa/tui": "workspace:*",
     "@silvia-odwyer/photon-node": "catalog:",
     "brace-expansion": "catalog:",
@@ -72,7 +73,6 @@
     "ignore": "catalog:",
     "jiti": "catalog:",
     "minimatch": "catalog:",
-    "neo4j-driver": "catalog:",
     "proper-lockfile": "catalog:",
     "quickjs-wasi": "catalog:",
     "semver": "catalog:",

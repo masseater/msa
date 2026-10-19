@@ -90,6 +90,7 @@ function createSession(options: {
       getCwd: () => "/tmp/project",
     },
     getContextUsage: () => ({ contextWindow: 200_000, percent: 12.3 }),
+    prWatch: { entries: [], last: undefined },
     routedModel: options.routedModel,
     modelRuntime: {
       isUsingSubscription: () => options.usingSubscription ?? false,
@@ -249,7 +250,7 @@ describe("FooterComponent width handling", () => {
   it("marks explicitly identified subscription auth", () => {
     const session = createSession({
       sessionName: "",
-      provider: "anthropic",
+      provider: "anthropic-api",
       usingSubscription: true,
     });
     const footer = new FooterComponent(session, createFooterData(1));

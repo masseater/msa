@@ -52,7 +52,7 @@ export function applyImageInputMetadata(model: AnyModel): void {
   if (!model.input.includes("image")) return;
 
   const providerLimits: AnyModel["inputLimits"] =
-    model.provider === "anthropic"
+    model.provider === "anthropic-api"
       ? {
           maxRequestBytes: 32 * 1024 * 1024,
           images: {

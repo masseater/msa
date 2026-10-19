@@ -10,6 +10,7 @@ import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 
 import { AgentSession } from "../src/core/agent-session.ts";
 import { AuthStorage } from "../src/core/auth-storage.ts";
+import { EMPTY_MODEL_POLICY } from "../src/core/model-policy.ts";
 import {
   defaultModelPerProvider,
   findInitialModel,
@@ -30,7 +31,7 @@ const mockModels: Model<"anthropic-messages">[] = [
     id: "claude-sonnet-4-5",
     name: "Claude Sonnet 4.5",
     api: "anthropic-messages",
-    provider: "anthropic",
+    provider: "anthropic-api",
     baseUrl: "https://api.anthropic.com",
     reasoning: true,
     input: ["text", "image"],
@@ -98,22 +99,22 @@ function referenceModel(provider: string, id: string): Model<Api> {
 }
 
 const referenceCatalog = [
-  referenceModel("anthropic", "claude-sonnet-4-5"),
-  referenceModel("anthropic", "claude-sonnet-4-5-20250929"),
-  referenceModel("anthropic", "claude-opus-4-8"),
-  referenceModel("anthropic", "exact"),
+  referenceModel("anthropic-api", "claude-sonnet-4-5"),
+  referenceModel("anthropic-api", "claude-sonnet-4-5-20250929"),
+  referenceModel("anthropic-api", "claude-opus-4-8"),
+  referenceModel("anthropic-api", "exact"),
   // Fuzzy-matches "shared"; an ambiguous exact "shared" must not fall through to it.
-  referenceModel("anthropic", "shared-pro"),
+  referenceModel("anthropic-api", "shared-pro"),
   referenceModel("openai", "gpt-4o"),
   referenceModel("openrouter", "qwen/qwen3-coder:exacto"),
   referenceModel("openrouter", "openai/gpt-4o:extended"),
   referenceModel("gw-a", "shared"),
-  referenceModel("gw-a", "anthropic/future"),
-  referenceModel("gw-a", "anthropic/exact"),
-  referenceModel("gw-a", "anthropic/claude-opus-4.8"),
-  referenceModel("gw-a", "anthropic/claude-opus"),
+  referenceModel("gw-a", "anthropic-api/future"),
+  referenceModel("gw-a", "anthropic-api/exact"),
+  referenceModel("gw-a", "anthropic-api/claude-opus-4.8"),
+  referenceModel("gw-a", "anthropic-api/claude-opus"),
   referenceModel("gw-b", "shared"),
-  referenceModel("gw-b", "anthropic/future"),
+  referenceModel("gw-b", "anthropic-api/future"),
   referenceModel("gw-b", "claude-opus-4-8"),
   referenceModel("gw-b", "gw-b/free"),
   referenceModel("gw-b", "zz:free"),
@@ -139,18 +140,18 @@ const referenceCases: ReferenceCase[] = [
   {
     name: "exact id",
     text: "claude-sonnet-4-5",
-    expected: { model: "anthropic/claude-sonnet-4-5" },
+    expected: { model: "anthropic-api/claude-sonnet-4-5" },
   },
   { name: "exact id is case-insensitive", text: "GPT-4O", expected: { model: "openai/gpt-4o" } },
   {
     name: "fuzzy prefers aliases over dated ids",
     text: "sonnet",
-    expected: { model: "anthropic/claude-sonnet-4-5" },
+    expected: { model: "anthropic-api/claude-sonnet-4-5" },
   },
   {
     name: "thinking suffix",
     text: "sonnet:high",
-    expected: { model: "anthropic/claude-sonnet-4-5", thinkingLevel: "high" },
+    expected: { model: "anthropic-api/claude-sonnet-4-5", thinkingLevel: "high" },
   },
   {
     name: "colon in a literal id is not a thinking suffix",
@@ -235,46 +236,46 @@ const referenceCases: ReferenceCase[] = [
   {
     // #10160
     name: "provider prefix without a direct model selects the usable raw id",
-    text: "anthropic/future",
+    text: "anthropic-api/future",
     usable: ["gw-b"],
-    expected: { model: "gw-b/anthropic/future" },
+    expected: { model: "gw-b/anthropic-api/future" },
   },
   {
     // #5823
     name: "usable qualified match beats a usable raw id",
-    text: "anthropic/exact",
-    usable: ["anthropic", "gw-a"],
-    expected: { model: "anthropic/exact" },
+    text: "anthropic-api/exact",
+    usable: ["anthropic-api", "gw-a"],
+    expected: { model: "anthropic-api/exact" },
   },
   {
     // #5643
     name: "usable raw id beats an unusable qualified match",
-    text: "anthropic/exact",
+    text: "anthropic-api/exact",
     usable: ["gw-a"],
-    expected: { model: "gw-a/anthropic/exact" },
+    expected: { model: "gw-a/anthropic-api/exact" },
   },
   {
     name: "unusable qualified match is kept when nothing is usable",
-    text: "anthropic/exact",
-    expected: { model: "anthropic/exact" },
+    text: "anthropic-api/exact",
+    expected: { model: "anthropic-api/exact" },
   },
 
   {
     name: "named provider's usable fuzzy match beats a raw id elsewhere",
-    text: "anthropic/claude-opus",
-    usable: ["anthropic"],
-    expected: { model: "anthropic/claude-opus-4-8" },
+    text: "anthropic-api/claude-opus",
+    usable: ["anthropic-api"],
+    expected: { model: "anthropic-api/claude-opus-4-8" },
   },
   {
     name: "usable raw id beats the named provider's unusable fuzzy match",
-    text: "anthropic/claude-opus",
+    text: "anthropic-api/claude-opus",
     usable: ["gw-a"],
-    expected: { model: "gw-a/anthropic/claude-opus" },
+    expected: { model: "gw-a/anthropic-api/claude-opus" },
   },
   {
     name: "named provider's fuzzy match is kept when nothing is usable",
-    text: "anthropic/claude-opus",
-    expected: { model: "anthropic/claude-opus-4-8" },
+    text: "anthropic-api/claude-opus",
+    expected: { model: "anthropic-api/claude-opus-4-8" },
   },
   {
     name: "named provider's literal id beats its fuzzy matches",
@@ -287,19 +288,22 @@ const referenceCases: ReferenceCase[] = [
     name: "fuzzy prefers usable providers",
     text: "opus",
     usable: ["gw-a"],
-    expected: { model: "gw-a/anthropic/claude-opus-4.8" },
+    expected: { model: "gw-a/anthropic-api/claude-opus-4.8" },
   },
   {
     name: "fuzzy id tie across usable providers is ambiguous",
     text: "opus",
-    usable: ["anthropic", "gw-a", "gw-b"],
-    expected: { ambiguous: ["anthropic/claude-opus-4-8", "gw-b/claude-opus-4-8"], usableCount: 2 },
+    usable: ["anthropic-api", "gw-a", "gw-b"],
+    expected: {
+      ambiguous: ["anthropic-api/claude-opus-4-8", "gw-b/claude-opus-4-8"],
+      usableCount: 2,
+    },
   },
   {
     name: "fuzzy id tie resolves to the sole usable provider",
     text: "opus",
-    usable: ["anthropic"],
-    expected: { model: "anthropic/claude-opus-4-8" },
+    usable: ["anthropic-api"],
+    expected: { model: "anthropic-api/claude-opus-4-8" },
   },
 
   // Explicit provider constraint
@@ -513,10 +517,21 @@ describe("resolveModelScopeWithDiagnostics", () => {
 });
 
 describe("resolveCliModel", () => {
-  test("does not strip invalid :suffix as thinking level in --model (treat as raw id)", () => {
-    const registry = {
-      getModels: () => allModels,
+  /** A ModelRuntime stub with no model policy, so every listed model is usable. */
+  function policyFreeRuntime(
+    models: readonly unknown[] | (() => readonly unknown[]),
+    hasConfiguredAuth?: (provider: string) => boolean,
+  ) {
+    const list = () => (typeof models === "function" ? models() : models);
+    return {
+      getModels: list,
+      getCatalogModels: list,
+      getModelPolicy: () => EMPTY_MODEL_POLICY,
+      ...(hasConfiguredAuth ? { hasConfiguredAuth } : {}),
     } as unknown as Parameters<typeof resolveCliModel>[0]["modelRuntime"];
+  }
+  test("does not strip invalid :suffix as thinking level in --model (treat as raw id)", () => {
+    const registry = policyFreeRuntime(allModels);
 
     const result = resolveCliModel({
       cliProvider: "openai",
@@ -530,9 +545,7 @@ describe("resolveCliModel", () => {
   });
 
   test("allows custom model ids for explicit providers without double prefixing", () => {
-    const registry = {
-      getModels: () => allModels,
-    } as unknown as Parameters<typeof resolveCliModel>[0]["modelRuntime"];
+    const registry = policyFreeRuntime(allModels);
 
     const result = resolveCliModel({
       cliProvider: "openrouter",
@@ -546,9 +559,7 @@ describe("resolveCliModel", () => {
   });
 
   test("returns a clear error when there are no models", () => {
-    const registry = {
-      getModels: () => [],
-    } as unknown as Parameters<typeof resolveCliModel>[0]["modelRuntime"];
+    const registry = policyFreeRuntime([]);
 
     const result = resolveCliModel({
       cliProvider: "openai",
@@ -561,7 +572,7 @@ describe("resolveCliModel", () => {
   });
 
   describe("duplicate raw ids behind a known provider prefix (#10160)", () => {
-    const direct = { ...mockModels[0], id: "claude-sonnet-4-5", provider: "anthropic" };
+    const direct = { ...mockModels[0], id: "claude-sonnet-4-5", provider: "anthropic-api" };
     const openrouter = {
       ...mockModels[0],
       id: "anthropic/claude-opus-5.5",
@@ -573,10 +584,7 @@ describe("resolveCliModel", () => {
       provider: "custom-gateway",
     };
     const registry = (configured: string[]) =>
-      ({
-        getModels: () => [direct, openrouter, gateway],
-        hasConfiguredAuth: (provider: string) => configured.includes(provider),
-      }) as unknown as Parameters<typeof resolveCliModel>[0]["modelRuntime"];
+      policyFreeRuntime([direct, openrouter, gateway], (provider) => configured.includes(provider));
 
     test("selects the authenticated gateway, with or without a thinking suffix", () => {
       for (const [cliModel, thinkingLevel] of [
@@ -637,9 +645,7 @@ describe("resolveCliModel", () => {
     const modelsWithNeuralwatt = [...allModels, neuralwattModel];
 
     test("strips :thinking suffix from custom model id in fallback path", () => {
-      const registry = {
-        getModels: () => modelsWithNeuralwatt,
-      } as unknown as Parameters<typeof resolveCliModel>[0]["modelRuntime"];
+      const registry = policyFreeRuntime(modelsWithNeuralwatt);
 
       const result = resolveCliModel({
         cliModel: "neuralwatt/zai-org/GLM-5.1-FP8:high",
@@ -655,9 +661,7 @@ describe("resolveCliModel", () => {
     });
 
     test("custom model without thinking suffix works normally in fallback path", () => {
-      const registry = {
-        getModels: () => modelsWithNeuralwatt,
-      } as unknown as Parameters<typeof resolveCliModel>[0]["modelRuntime"];
+      const registry = policyFreeRuntime(modelsWithNeuralwatt);
 
       const result = resolveCliModel({
         cliModel: "neuralwatt/zai-org/GLM-5.1-FP8",
@@ -671,9 +675,7 @@ describe("resolveCliModel", () => {
     });
 
     test("all valid thinking levels work in fallback path", () => {
-      const registry = {
-        getModels: () => modelsWithNeuralwatt,
-      } as unknown as Parameters<typeof resolveCliModel>[0]["modelRuntime"];
+      const registry = policyFreeRuntime(modelsWithNeuralwatt);
 
       for (const level of ["off", "minimal", "low", "medium", "high", "xhigh", "max"]) {
         const result = resolveCliModel({
@@ -688,9 +690,7 @@ describe("resolveCliModel", () => {
     });
 
     test("invalid thinking suffix on custom model is treated as part of model id", () => {
-      const registry = {
-        getModels: () => modelsWithNeuralwatt,
-      } as unknown as Parameters<typeof resolveCliModel>[0]["modelRuntime"];
+      const registry = policyFreeRuntime(modelsWithNeuralwatt);
 
       const result = resolveCliModel({
         cliModel: "neuralwatt/zai-org/GLM-5.1-FP8:banana",
@@ -705,9 +705,7 @@ describe("resolveCliModel", () => {
     });
 
     test("explicit --provider with custom model:thinking strips suffix correctly", () => {
-      const registry = {
-        getModels: () => modelsWithNeuralwatt,
-      } as unknown as Parameters<typeof resolveCliModel>[0]["modelRuntime"];
+      const registry = policyFreeRuntime(modelsWithNeuralwatt);
 
       const result = resolveCliModel({
         cliProvider: "neuralwatt",
@@ -722,9 +720,7 @@ describe("resolveCliModel", () => {
     });
 
     test("with explicit --thinking, :suffix is kept as part of model id", () => {
-      const registry = {
-        getModels: () => modelsWithNeuralwatt,
-      } as unknown as Parameters<typeof resolveCliModel>[0]["modelRuntime"];
+      const registry = policyFreeRuntime(modelsWithNeuralwatt);
 
       const result = resolveCliModel({
         cliModel: "neuralwatt/zai-org/GLM-5.1-FP8:high",
@@ -834,8 +830,8 @@ describe("default model selection", () => {
 
   describe("persisted default model scoping", () => {
     const tempDirs: string[] = [];
-    const sonnet = getModel("anthropic", "claude-sonnet-4-5")!;
-    const opus = getModel("anthropic", "claude-opus-4-8")!;
+    const sonnet = getModel("anthropic-api", "claude-sonnet-4-5")!;
+    const opus = getModel("anthropic-api", "claude-opus-4-8")!;
 
     afterEach(() => {
       for (const dir of tempDirs.splice(0)) {
@@ -856,7 +852,9 @@ describe("default model selection", () => {
         settingsManager.setEnabledModels(options.persistedScope);
       }
 
-      const authStorage = AuthStorage.inMemory({ anthropic: { type: "api_key", key: "test-key" } });
+      const authStorage = AuthStorage.inMemory({
+        "anthropic-api": { type: "api_key", key: "test-key" },
+      });
       const modelRuntime = getModelRuntime(
         await createModelRegistry(authStorage, join(tempDir, "models.json")),
       );

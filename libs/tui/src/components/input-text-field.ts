@@ -26,7 +26,7 @@ export class InputTextField {
 
   setValue(value: string): void {
     this.value = value;
-    this.cursor = Math.min(this.cursor, value.length);
+    this.cursor = value.length;
   }
 
   protected moveCursorLeft(): void {

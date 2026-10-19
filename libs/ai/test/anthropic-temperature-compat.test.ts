@@ -68,7 +68,7 @@ describe("Anthropic temperature compatibility", () => {
   it("omits temperature for Claude Opus 4.7", () =>
     Effect.runPromise(
       Effect.gen(function* () {
-        const payload = yield* capturePayload(getModel("anthropic", "claude-opus-4-7"), {
+        const payload = yield* capturePayload(getModel("anthropic-api", "claude-opus-4-7"), {
           temperature: 0,
         });
 
@@ -79,7 +79,7 @@ describe("Anthropic temperature compatibility", () => {
   it("omits temperature for Claude Opus 4.8", () =>
     Effect.runPromise(
       Effect.gen(function* () {
-        const payload = yield* capturePayload(getModel("anthropic", "claude-opus-4-8"), {
+        const payload = yield* capturePayload(getModel("anthropic-api", "claude-opus-4-8"), {
           temperature: 0,
         });
 
@@ -90,7 +90,7 @@ describe("Anthropic temperature compatibility", () => {
   it("omits default temperature for Claude Opus 4.7", () =>
     Effect.runPromise(
       Effect.gen(function* () {
-        const payload = yield* capturePayload(getModel("anthropic", "claude-opus-4-7"), {
+        const payload = yield* capturePayload(getModel("anthropic-api", "claude-opus-4-7"), {
           temperature: 1,
         });
 
@@ -101,7 +101,7 @@ describe("Anthropic temperature compatibility", () => {
   it("keeps temperature for Claude Opus 4.6", () =>
     Effect.runPromise(
       Effect.gen(function* () {
-        const payload = yield* capturePayload(getModel("anthropic", "claude-opus-4-6"), {
+        const payload = yield* capturePayload(getModel("anthropic-api", "claude-opus-4-6"), {
           temperature: 0,
         });
 
@@ -114,7 +114,7 @@ describe("Anthropic temperature compatibility", () => {
   it("keeps temperature for Claude Sonnet 4.6", () =>
     Effect.runPromise(
       Effect.gen(function* () {
-        const payload = yield* capturePayload(getModel("anthropic", "claude-sonnet-4-6"), {
+        const payload = yield* capturePayload(getModel("anthropic-api", "claude-sonnet-4-6"), {
           temperature: 0,
         });
 

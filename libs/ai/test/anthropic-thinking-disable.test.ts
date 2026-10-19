@@ -121,7 +121,7 @@ describe("Anthropic thinking disable payload", () => {
   it("sends thinking.type=disabled for budget-based reasoning models when thinking is off", () =>
     Effect.runPromise(
       Effect.gen(function* () {
-        const payload = yield* capturePayload(getModel("anthropic", "claude-sonnet-4-5"));
+        const payload = yield* capturePayload(getModel("anthropic-api", "claude-sonnet-4-5"));
 
         expect(payload.thinking).toEqual({ type: "disabled" });
         expect(payload.output_config).toBeUndefined();
@@ -131,7 +131,7 @@ describe("Anthropic thinking disable payload", () => {
   it("sends thinking.type=disabled for adaptive reasoning models when thinking is off", () =>
     Effect.runPromise(
       Effect.gen(function* () {
-        const payload = yield* capturePayload(getModel("anthropic", "claude-opus-4-6"));
+        const payload = yield* capturePayload(getModel("anthropic-api", "claude-opus-4-6"));
 
         expect(payload.thinking).toEqual({ type: "disabled" });
         expect(payload.output_config).toBeUndefined();
@@ -141,7 +141,7 @@ describe("Anthropic thinking disable payload", () => {
   it("sends thinking.type=disabled for Claude Opus 4.8 when thinking is off", () =>
     Effect.runPromise(
       Effect.gen(function* () {
-        const payload = yield* capturePayload(getModel("anthropic", "claude-opus-4-8"));
+        const payload = yield* capturePayload(getModel("anthropic-api", "claude-opus-4-8"));
 
         expect(payload.thinking).toEqual({ type: "disabled" });
         expect(payload.output_config).toBeUndefined();
@@ -151,7 +151,7 @@ describe("Anthropic thinking disable payload", () => {
   it("omits thinking.type=disabled for Claude Fable 5 when thinking is off", () =>
     Effect.runPromise(
       Effect.gen(function* () {
-        const payload = yield* capturePayload(getModel("anthropic", "claude-fable-5"));
+        const payload = yield* capturePayload(getModel("anthropic-api", "claude-fable-5"));
 
         expect(payload.thinking).toBeUndefined();
         expect(payload.output_config).toBeUndefined();
@@ -163,7 +163,7 @@ describe("Anthropic thinking disable payload", () => {
   it("uses adaptive thinking for Claude Opus 4.8 when reasoning is enabled", () =>
     Effect.runPromise(
       Effect.gen(function* () {
-        const payload = yield* capturePayload(getModel("anthropic", "claude-opus-4-8"), {
+        const payload = yield* capturePayload(getModel("anthropic-api", "claude-opus-4-8"), {
           reasoning: "high",
         });
 
@@ -177,7 +177,7 @@ describe("Anthropic thinking disable payload", () => {
   it("uses adaptive thinking for Claude Sonnet 5 when reasoning is enabled", () =>
     Effect.runPromise(
       Effect.gen(function* () {
-        const payload = yield* capturePayload(getModel("anthropic", "claude-sonnet-5"), {
+        const payload = yield* capturePayload(getModel("anthropic-api", "claude-sonnet-5"), {
           reasoning: "high",
         });
 
@@ -189,7 +189,7 @@ describe("Anthropic thinking disable payload", () => {
   it("maps xhigh reasoning to effort=xhigh for Claude Opus 4.8", () =>
     Effect.runPromise(
       Effect.gen(function* () {
-        const payload = yield* capturePayload(getModel("anthropic", "claude-opus-4-8"), {
+        const payload = yield* capturePayload(getModel("anthropic-api", "claude-opus-4-8"), {
           reasoning: "xhigh",
         });
 
@@ -206,7 +206,7 @@ describe.skipIf(
     Effect.runPromise(
       Effect.gen(function* () {
         const result = yield* Effect.promise(() =>
-          runWithoutReasoning(getModel("anthropic", "claude-sonnet-4-5")),
+          runWithoutReasoning(getModel("anthropic-api", "claude-sonnet-4-5")),
         );
 
         expect(result.thinkingEventCount).toBe(0);

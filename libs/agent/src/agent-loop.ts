@@ -347,7 +347,7 @@ async function runLoop(
  * the executable set, so replay always yields exactly `context.tools`. Otherwise a new
  * system message is inserted before the first non-system pending message.
  */
-function declareToolChanges(
+export function declareToolChanges(
   context: AgentContext,
   pendingMessages: AgentMessage[],
 ): AgentMessage[] {

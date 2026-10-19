@@ -4,7 +4,7 @@ import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { stream as streamAnthropic } from "../src/api/anthropic-messages.ts";
-import { ANTHROPIC_AUTH_TOKEN_ENV, ANTHROPIC_OAUTH_TOKEN_ENV } from "../src/env-api-keys.ts";
+import { ANTHROPIC_AUTH_TOKEN_ENV } from "../src/env-api-keys.ts";
 import { createModels } from "../src/models.ts";
 import { anthropicProvider } from "../src/providers/anthropic.ts";
 import type { Model } from "../src/types.ts";
@@ -71,7 +71,7 @@ const anthropicModel: Model<"anthropic-messages"> = {
   id: "claude-test",
   name: "Claude Test",
   api: "anthropic-messages",
-  provider: "anthropic",
+  provider: "anthropic-api",
   baseUrl: "https://api.anthropic.com",
   reasoning: false,
   input: ["text"],
@@ -106,7 +106,6 @@ describe("Anthropic auth token env", () => {
                   Promise.resolve(
                     {
                       ANTHROPIC_AUTH_TOKEN: "auth-token",
-                      ANTHROPIC_OAUTH_TOKEN: "oauth-token",
                       ANTHROPIC_API_KEY: "api-key",
                     }[name],
                   ),
@@ -120,37 +119,6 @@ describe("Anthropic auth token env", () => {
         expect(auth).toEqual({
           auth: { headers: { Authorization: "Bearer auth-token" } },
           source: ANTHROPIC_AUTH_TOKEN_ENV,
-        });
-      }),
-    ));
-});
-
-describe("Anthropic auth token env", () => {
-  it("preserves ANTHROPIC_OAUTH_TOKEN as OAuth-shaped API auth", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const provider = anthropicProvider();
-        const auth = yield* Effect.promise(() =>
-          Promise.resolve(
-            provider.auth.apiKey?.resolve({
-              ctx: {
-                env: (name) =>
-                  Promise.resolve(
-                    {
-                      ANTHROPIC_OAUTH_TOKEN: "oauth-token",
-                      ANTHROPIC_API_KEY: "api-key",
-                    }[name],
-                  ),
-                fileExists: () => Promise.resolve(false),
-              },
-              signal: neverAbortedSignal,
-            }),
-          ),
-        );
-
-        expect(auth).toEqual({
-          auth: { apiKey: "oauth-token" },
-          source: ANTHROPIC_OAUTH_TOKEN_ENV,
         });
       }),
     ));
@@ -172,7 +140,6 @@ describe("Anthropic auth token env", () => {
           string | null
         >;
         expect(headers["Authorization"]).toBe("Bearer gateway-token");
-        expect(mockState.createParams?.["betas"] ?? []).not.toContain("oauth-2025-04-20");
         expect(mockState.createParams?.["system"]).toEqual([
           expect.objectContaining({ text: "System prompt." }),
         ]);
@@ -197,7 +164,6 @@ describe("Anthropic auth token env", () => {
         expect(mockState.constructorOpts?.["authToken"]).toBeNull();
         const headers = mockState.constructorOpts?.["defaultHeaders"] as Record<string, string>;
         expect(headers["Authorization"]).toBe("Bearer ctx-token");
-        expect(mockState.createParams?.["betas"] ?? []).not.toContain("oauth-2025-04-20");
         expect(mockState.createParams?.["system"]).toEqual([
           expect.objectContaining({ text: "System prompt." }),
         ]);
@@ -206,26 +172,6 @@ describe("Anthropic auth token env", () => {
 });
 
 describe("Anthropic auth token env", () => {
-  it("preserves OAuth request shaping for ANTHROPIC_OAUTH_TOKEN", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const models = createModels({
-          authContext: {
-            env: (name) =>
-              Promise.resolve(name === "ANTHROPIC_OAUTH_TOKEN" ? "sk-ant-oat-test" : undefined),
-            fileExists: () => Promise.resolve(false),
-          },
-        });
-        models.setProvider(anthropicProvider());
-
-        yield* Effect.promise(() => models.streamSimple(anthropicModel, context).result());
-
-        expect(mockState.constructorOpts?.["apiKey"]).toBeNull();
-        expect(mockState.constructorOpts?.["authToken"]).toBe("sk-ant-oat-test");
-        expect(mockState.createParams?.["betas"]).toContain("oauth-2025-04-20");
-      }),
-    ));
-
   it("lets explicit request headers override ANTHROPIC_AUTH_TOKEN", () =>
     Effect.runPromise(
       Effect.gen(function* () {

@@ -91,6 +91,8 @@ export interface Component {
 
   wantsKeyRelease?: boolean;
 
+  wantsViewportKeys?: boolean;
+
   invalidate(): void;
 }
 

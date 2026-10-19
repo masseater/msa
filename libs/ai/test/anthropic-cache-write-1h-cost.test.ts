@@ -78,7 +78,7 @@ describe("Anthropic 1h cache write cost", () => {
   it("prices the 1h portion at 2x input and the rest at the 5m rate", () =>
     Effect.runPromise(
       Effect.gen(function* () {
-        const model = getModel("anthropic", "claude-opus-4-8");
+        const model = getModel("anthropic-api", "claude-opus-4-8");
         const response = createSseResponse(
           eventsWithCacheCreation({
             ephemeral_5m_input_tokens: 600_000,
@@ -102,7 +102,7 @@ describe("Anthropic 1h cache write cost", () => {
   it("prices 1h cache writes reported only in message_delta", () =>
     Effect.runPromise(
       Effect.gen(function* () {
-        const model = getModel("anthropic", "claude-haiku-4-5");
+        const model = getModel("anthropic-api", "claude-haiku-4-5");
         const response = createSseResponse([
           {
             event: "message_start",
@@ -146,7 +146,7 @@ describe("Anthropic 1h cache write cost", () => {
   it("falls back to the 5m rate when no breakdown is reported", () =>
     Effect.runPromise(
       Effect.gen(function* () {
-        const model = getModel("anthropic", "claude-opus-4-8");
+        const model = getModel("anthropic-api", "claude-opus-4-8");
         const response = createSseResponse(eventsWithCacheCreation(undefined));
         const result = yield* Effect.promise(() =>
           streamAnthropic(model, context, {

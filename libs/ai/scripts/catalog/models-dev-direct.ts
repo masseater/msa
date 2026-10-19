@@ -14,7 +14,7 @@ const MODELS_DEV_OPENAI_UNSUPPORTED_MODEL_IDS = new Set(["gpt-5.6"]);
 const DIRECT_PROVIDERS: readonly DirectProvider[] = [
   {
     source: "anthropic",
-    provider: "anthropic",
+    provider: "anthropic-api",
     api: "anthropic-messages",
     baseUrl: "https://api.anthropic.com",
   },

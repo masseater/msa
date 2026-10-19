@@ -122,7 +122,7 @@ export type KnownClassifierApi = "typesafe-system-one" | "llama-cpp-classify" | 
 export type ClassifierApi = KnownClassifierApi | (string & {});
 
 export type KnownProvider =
-  | "anthropic"
+  | "anthropic-api"
   | "openai"
   | "openai-codex"
   | "openrouter"

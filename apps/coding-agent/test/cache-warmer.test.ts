@@ -32,11 +32,11 @@ import type { CacheWarmingMode } from "../src/core/settings-manager.ts";
 import { createInMemoryModelRegistry } from "./model-runtime-test-utils.ts";
 
 const adaptiveModel: Model<Api> = {
-  ...getBuiltinModel("anthropic", "claude-opus-4-6"),
+  ...getBuiltinModel("anthropic-api", "claude-opus-4-6"),
   promptCache: { short: 300, long: 3600 },
 };
 const budgetModel: Model<Api> = {
-  ...getBuiltinModel("anthropic", "claude-sonnet-4-5"),
+  ...getBuiltinModel("anthropic-api", "claude-sonnet-4-5"),
   promptCache: { short: 300, long: 3600 },
 };
 const openaiModel: Model<Api> = {

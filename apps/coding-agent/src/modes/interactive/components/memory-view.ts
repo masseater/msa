@@ -14,11 +14,13 @@ import {
   wrapTextWithAnsi,
 } from "@msa/tui";
 
-import { formatAge, type MemoryService } from "../../../core/memory/memory.ts";
+import type { MemoryService } from "../../../core/memory/memory.ts";
 import type { MemoryKind, MemoryRecord } from "../../../core/memory/store.ts";
 import { toErrorMessage } from "../../../utils/errors.ts";
+import { formatAge } from "../../../utils/text.ts";
 import { theme } from "../theme/theme.ts";
 import { rawKeyHint } from "./keybinding-hints.ts";
+import { fitView, type ViewFrame } from "./scroll-window.ts";
 
 /** Memories the view lists at once; enough to browse by hand, small enough to redraw fast. */
 const LIST_LIMIT = 200;
@@ -68,6 +70,8 @@ export interface MemoryViewOptions {
  * what msa remembers at a glance; the keys forget, search, and add without leaving the screen.
  */
 export class MemoryView implements Component, Focusable {
+  /** The view owns the paging keys while it is open, so they scroll it and not the transcript. */
+  readonly wantsViewportKeys = true;
   private readonly options: MemoryViewOptions;
   private records: MemoryRecord[];
   private selectedId: string | undefined;
@@ -77,6 +81,10 @@ export class MemoryView implements Component, Focusable {
   private inputMode: "search" | "add" | undefined;
   private readonly searchInput = new Input({ prompt: "› ", placeholder: "Search memories" });
   private readonly addInput = new Input({ prompt: "› ", placeholder: "Memory to remember" });
+  /** First body line drawn; the list follows the cursor, the detail follows the scroll keys. */
+  private scroll = 0;
+  /** Body rows the last frame had room for. */
+  private room = 0;
   private _focused = false;
 
   constructor(options: MemoryViewOptions) {
@@ -123,10 +131,13 @@ export class MemoryView implements Component, Focusable {
   render(width: number): string[] {
     const rows = this.rows();
     const open = this.openId ? rows.find((record) => record.id === this.openId) : undefined;
-    const lines = open ? this.renderDetail(open, width) : this.renderList(rows, width);
+    const frame = open ? this.renderDetail(open, width) : this.renderList(rows, width);
     const max = Math.max(8, this.options.maxHeight());
-    const hints = lines.pop() ?? "";
-    return [...lines.slice(0, max - 1), hints];
+    const room = Math.max(0, max - frame.header.length - frame.footer.length);
+    this.room = Math.min(room, frame.body.length);
+    const fitted = fitView(frame, width, max, this.scroll);
+    this.scroll = fitted.offset;
+    return fitted.lines;
   }
 
   private header(title: string, right: string, width: number): string[] {
@@ -148,28 +159,30 @@ export class MemoryView implements Component, Focusable {
     return theme.fg("dim", parts.join(" · "));
   }
 
-  private renderList(rows: readonly MemoryRecord[], width: number): string[] {
+  private renderList(rows: readonly MemoryRecord[], width: number): ViewFrame {
     const right =
       this.query === undefined ? this.describeCounts() : theme.fg("dim", `search: ${this.query}`);
-    const lines = this.header("Memory", right, width);
+    const header = this.header("Memory", right, width);
+    const selected = this.selected(rows);
+    const body: string[] = [];
+    let cursorLine: number | undefined;
     if (this.busy && rows.length === 0) {
-      lines.push("", ` ${theme.fg("muted", "searching…")}`, "");
+      body.push("", ` ${theme.fg("muted", "searching…")}`);
     } else if (rows.length === 0) {
-      lines.push(
+      body.push(
         "",
         ` ${theme.fg("muted", this.query === undefined ? "No memories stored yet." : "No matching memories.")}`,
-        "",
       );
     } else {
-      const selected = this.selected(rows);
       let group: string | undefined;
       for (const record of rows) {
         const label = record.scope === "project" ? `Project (${record.project ?? "?"})` : "Global";
         if (label !== group) {
           group = label;
-          lines.push(theme.fg("muted", ` ${label}`));
+          body.push(theme.fg("muted", ` ${label}`));
         }
         const isSelected = record.id === selected?.id;
+        if (isSelected) cursorLine = body.length;
         const cursor = isSelected ? theme.fg("accent", "›") : " ";
         const content = isSelected
           ? theme.bold(firstLine(record.content))
@@ -177,54 +190,65 @@ export class MemoryView implements Component, Focusable {
         const meta = theme.fg("dim", formatAge(record.updatedAt));
         const left = ` ${cursor} ${glyph(record)} ${content}`;
         const gap = Math.max(2, width - visibleWidth(left) - visibleWidth(meta) - 1);
-        lines.push(truncateToWidth(`${left}${" ".repeat(gap)}${meta}`, width));
+        body.push(truncateToWidth(`${left}${" ".repeat(gap)}${meta}`, width));
       }
-      lines.push("");
     }
     if (this.inputMode === "search") {
-      lines.push(...this.searchInput.render(width));
-      lines.push(` ${rawKeyHint("enter", "search")}  ${rawKeyHint("esc", "cancel")}`);
-      return lines;
+      return {
+        header,
+        body,
+        footer: [
+          "",
+          ...this.searchInput.render(width),
+          ` ${rawKeyHint("enter", "search")}  ${rawKeyHint("esc", "cancel")}`,
+        ],
+      };
     }
     if (this.inputMode === "add") {
-      lines.push(...this.addInput.render(width));
-      lines.push(` ${rawKeyHint("enter", "save")}  ${rawKeyHint("esc", "cancel")}`);
-      return lines;
+      return {
+        header,
+        body,
+        footer: [
+          "",
+          ...this.addInput.render(width),
+          ` ${rawKeyHint("enter", "save")}  ${rawKeyHint("esc", "cancel")}`,
+        ],
+      };
     }
-    const selected = this.selected(rows);
-    lines.push(
-      ` ${[
-        rawKeyHint("↑↓", "select"),
-        rawKeyHint("enter", "open"),
-        rawKeyHint("/", "search"),
-        rawKeyHint("a", "add"),
-        selected ? rawKeyHint("d", "forget") : undefined,
-        rawKeyHint("esc", "close"),
-      ]
-        .filter(Boolean)
-        .join("  ")}`,
-    );
-    return lines;
+    return {
+      header,
+      body,
+      cursorLine,
+      footer: [
+        "",
+        ` ${[
+          rawKeyHint("↑↓", "select"),
+          rawKeyHint("enter", "open"),
+          rawKeyHint("/", "search"),
+          rawKeyHint("a", "add"),
+          selected ? rawKeyHint("d", "forget") : undefined,
+          rawKeyHint("esc", "close"),
+        ]
+          .filter(Boolean)
+          .join("  ")}`,
+      ],
+    };
   }
 
-  private renderDetail(record: MemoryRecord, width: number): string[] {
-    const lines = this.header(
+  private renderDetail(record: MemoryRecord, width: number): ViewFrame {
+    const header = this.header(
       `${glyph(record)} ${firstLine(record.content)}`,
       theme.fg("dim", `${record.kind} · ${scopeLabel(record)} · ${formatAge(record.updatedAt)}`),
       width,
     );
-    lines.push(
-      ...record.content
-        .split("\n")
-        .flatMap((line) => wrapTextWithAnsi(line, width - 4))
-        .map((line) => `   ${line}`),
-    );
-    lines.push("", theme.fg("accent", " Details"));
+    const body = record.content
+      .split("\n")
+      .flatMap((line) => wrapTextWithAnsi(line, width - 4))
+      .map((line) => `   ${line}`);
+    body.push("", theme.fg("accent", " Details"));
     const detail = (label: string, value: string) => {
       const gap = Math.max(1, 12 - visibleWidth(label));
-      lines.push(
-        truncateToWidth(`   ${theme.fg("muted", label)}${" ".repeat(gap)}${value}`, width),
-      );
+      body.push(truncateToWidth(`   ${theme.fg("muted", label)}${" ".repeat(gap)}${value}`, width));
     };
     detail("id", record.id);
     detail("kind", `${record.kind} · ${scopeLabel(record)}`);
@@ -237,9 +261,11 @@ export class MemoryView implements Component, Focusable {
       `${record.useCount} ${record.useCount === 1 ? "time" : "times"}${record.lastUsedAt ? ` · last ${formatAge(record.lastUsedAt)}` : ""}`,
     );
     detail("embedding", record.embeddingModel ?? "none (keyword search only)");
-    lines.push("");
-    lines.push(` ${[rawKeyHint("d", "forget"), rawKeyHint("esc", "back")].join("  ")}`);
-    return lines;
+    return {
+      header,
+      body,
+      footer: ["", ` ${[rawKeyHint("d", "forget"), rawKeyHint("esc", "back")].join("  ")}`],
+    };
   }
 
   handleInput(data: string): void {
@@ -253,19 +279,41 @@ export class MemoryView implements Component, Focusable {
     const selected = this.openId
       ? rows.find((record) => record.id === this.openId)
       : this.selected(rows);
+    const page = Math.max(1, this.room - 1);
+    const half = Math.max(1, Math.floor(this.room / 2));
     if (kb.matches(data, "tui.select.cancel")) {
-      if (this.openId) this.openId = undefined;
+      if (this.openId) this.openDetail(undefined);
       else if (this.query !== undefined) {
         this.query = undefined;
         this.selectedId = undefined;
         this.reload();
       } else this.options.onClose();
+    } else if (this.openId && kb.matches(data, "tui.select.up")) {
+      this.scrollBy(-1);
+    } else if (this.openId && kb.matches(data, "tui.select.down")) {
+      this.scrollBy(1);
+    } else if (this.openId && kb.matches(data, "tui.select.pageUp")) {
+      this.scrollBy(-page);
+    } else if (this.openId && kb.matches(data, "tui.select.pageDown")) {
+      this.scrollBy(page);
+    } else if (this.openId && matchesKey(data, "ctrl+u")) {
+      this.scrollBy(-half);
+    } else if (this.openId && matchesKey(data, "ctrl+d")) {
+      this.scrollBy(half);
     } else if (!this.openId && kb.matches(data, "tui.select.up")) {
       this.move(rows, -1);
     } else if (!this.openId && kb.matches(data, "tui.select.down")) {
       this.move(rows, 1);
+    } else if (!this.openId && kb.matches(data, "tui.select.pageUp")) {
+      this.moveBy(rows, -page);
+    } else if (!this.openId && kb.matches(data, "tui.select.pageDown")) {
+      this.moveBy(rows, page);
+    } else if (!this.openId && matchesKey(data, "ctrl+u")) {
+      this.moveBy(rows, -half);
+    } else if (!this.openId && matchesKey(data, "ctrl+d")) {
+      this.moveBy(rows, half);
     } else if (kb.matches(data, "tui.select.confirm") && selected && !this.openId) {
-      this.openId = selected.id;
+      this.openDetail(selected.id);
     } else if (matchesKey(data, "/") && !this.openId) {
       this.startInput("search");
     } else if (matchesKey(data, "a") && !this.openId) {
@@ -280,6 +328,23 @@ export class MemoryView implements Component, Focusable {
     if (rows.length === 0) return;
     const index = rows.findIndex((record) => record.id === this.selected(rows)?.id);
     this.selectedId = rows[(index + step + rows.length) % rows.length]?.id;
+  }
+
+  /** Moves the cursor by a page, stopping at either end instead of wrapping around. */
+  private moveBy(rows: readonly MemoryRecord[], step: number): void {
+    if (rows.length === 0) return;
+    const index = rows.findIndex((record) => record.id === this.selected(rows)?.id);
+    this.selectedId = rows[Math.max(0, Math.min(index + step, rows.length - 1))]?.id;
+  }
+
+  /** Moves the detail window; the next render clamps it to the content. */
+  private scrollBy(lines: number): void {
+    this.scroll = Math.max(0, this.scroll + lines);
+  }
+
+  private openDetail(id: string | undefined): void {
+    this.openId = id;
+    this.scroll = 0;
   }
 
   private startInput(mode: "search" | "add"): void {
@@ -339,7 +404,7 @@ export class MemoryView implements Component, Focusable {
       : true;
     if (!confirmed) return;
     this.options.service.forget(record.id);
-    if (this.openId === record.id) this.openId = undefined;
+    if (this.openId === record.id) this.openDetail(undefined);
     this.selectedId = undefined;
     this.reload();
     this.options.requestRender();

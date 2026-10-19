@@ -116,26 +116,6 @@ describe("AI Providers Abort Tests", () => {
 });
 
 describe("AI Providers Abort Tests", () => {
-  describe.skipIf(
-    envValue("ANTHROPIC_OAUTH_TOKEN") === undefined || envValue("ANTHROPIC_OAUTH_TOKEN") === "",
-  )("Anthropic Provider Abort", () => {
-    const llm = getModel("anthropic", "claude-sonnet-4-6");
-
-    it("should abort mid-stream", { retry: 3 }, () =>
-      Effect.runPromise(
-        testAbortSignal(llm, { thinkingEnabled: true, thinkingBudgetTokens: 2048 }),
-      ),
-    );
-
-    it("should handle immediate abort", { retry: 3 }, () =>
-      Effect.runPromise(
-        testImmediateAbort(llm, { thinkingEnabled: true, thinkingBudgetTokens: 2048 }),
-      ),
-    );
-  });
-});
-
-describe("AI Providers Abort Tests", () => {
   describe("OpenAI Codex Provider Abort", () => {
     it.skipIf(openaiCodexToken === undefined || openaiCodexToken === "")(
       "should abort mid-stream",

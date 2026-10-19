@@ -13,8 +13,7 @@ import { resolveApiKey } from "./oauth.ts";
 
 const emptySchema = Type.Object({});
 
-const oauthTokens = await Promise.all([resolveApiKey("anthropic"), resolveApiKey("openai-codex")]);
-const [anthropicOAuthToken, openaiCodexToken] = oauthTokens;
+const openaiCodexToken = await resolveApiKey("openai-codex");
 
 async function testEmojiInToolResults<TApi extends Api>(
   llm: Model<TApi>,
@@ -318,7 +317,7 @@ describe("AI Providers Unicode Surrogate Pair Tests", () => {
   describe.skipIf(
     envValue("ANTHROPIC_API_KEY") === undefined || envValue("ANTHROPIC_API_KEY") === "",
   )("Anthropic Provider Unicode Handling", () => {
-    const llm = getModel("anthropic", "claude-haiku-4-5");
+    const llm = getModel("anthropic-api", "claude-haiku-4-5");
 
     it("should handle emoji in tool results", { retry: 3, timeout: 30000 }, () =>
       testEmojiInToolResults(llm),
@@ -334,30 +333,6 @@ describe("AI Providers Unicode Surrogate Pair Tests", () => {
       "should handle unpaired high surrogate (0xD83D) in tool results",
       { retry: 3, timeout: 30000 },
       () => testUnpairedHighSurrogate(llm),
-    );
-  });
-});
-
-describe("AI Providers Unicode Surrogate Pair Tests", () => {
-  describe("Anthropic OAuth Provider Unicode Handling", () => {
-    const llm = getModel("anthropic", "claude-haiku-4-5");
-
-    it.skipIf(anthropicOAuthToken === undefined || anthropicOAuthToken === "")(
-      "should handle emoji in tool results",
-      { retry: 3, timeout: 30000 },
-      () => testEmojiInToolResults(llm, { apiKey: anthropicOAuthToken }),
-    );
-
-    it.skipIf(anthropicOAuthToken === undefined || anthropicOAuthToken === "")(
-      "should handle real-world LinkedIn comment data with emoji",
-      { retry: 3, timeout: 30000 },
-      () => testRealWorldLinkedInData(llm, { apiKey: anthropicOAuthToken }),
-    );
-
-    it.skipIf(anthropicOAuthToken === undefined || anthropicOAuthToken === "")(
-      "should handle unpaired high surrogate (0xD83D) in tool results",
-      { retry: 3, timeout: 30000 },
-      () => testUnpairedHighSurrogate(llm, { apiKey: anthropicOAuthToken }),
     );
   });
 });

@@ -25,8 +25,7 @@ import { currentTimeMillis } from "../src/utils/clock.ts";
 import { StringEnum } from "../src/utils/typebox-helpers.ts";
 import { resolveApiKey } from "./oauth.ts";
 
-const oauthTokens = await Promise.all([resolveApiKey("anthropic"), resolveApiKey("openai-codex")]);
-const [anthropicOAuthToken, openaiCodexToken] = oauthTokens;
+const openaiCodexToken = await resolveApiKey("openai-codex");
 
 const calculatorSchema = Type.Object({
   a: Type.Number({ description: "First number" }),
@@ -436,7 +435,7 @@ describe("Generate E2E Tests", () => {
   describe.skipIf(
     envValue("ANTHROPIC_API_KEY") === undefined || envValue("ANTHROPIC_API_KEY") === "",
   )("Anthropic Provider (claude-haiku-4-5)", () => {
-    const model = getModel("anthropic", "claude-haiku-4-5");
+    const model = getModel("anthropic-api", "claude-haiku-4-5");
 
     it("should complete basic text generation", { retry: 3 }, () =>
       Effect.runPromise(basicTextGeneration(model, { thinkingEnabled: true })),
@@ -471,107 +470,6 @@ describe("Generate E2E Tests", () => {
     );
 
     it("should handle image input", { retry: 3 }, () => Effect.runPromise(handleImage(llm)));
-  });
-
-  describe("Anthropic OAuth Provider (claude-sonnet-4-6)", () => {
-    const model = getModel("anthropic", "claude-sonnet-4-6");
-
-    it.skipIf(anthropicOAuthToken === undefined || anthropicOAuthToken === "")(
-      "should complete basic text generation",
-      { retry: 3 },
-      () => Effect.runPromise(basicTextGeneration(model, { apiKey: anthropicOAuthToken })),
-    );
-
-    it.skipIf(anthropicOAuthToken === undefined || anthropicOAuthToken === "")(
-      "should handle tool calling",
-      { retry: 3 },
-      () => handleToolCall(model, { apiKey: anthropicOAuthToken }),
-    );
-
-    it.skipIf(anthropicOAuthToken === undefined || anthropicOAuthToken === "")(
-      "should handle streaming",
-      { retry: 3 },
-      () => handleStreaming(model, { apiKey: anthropicOAuthToken }),
-    );
-
-    it.skipIf(anthropicOAuthToken === undefined || anthropicOAuthToken === "")(
-      "should handle thinking",
-      { retry: 3 },
-      () => handleThinking(model, { apiKey: anthropicOAuthToken, thinkingEnabled: true }),
-    );
-
-    it.skipIf(anthropicOAuthToken === undefined || anthropicOAuthToken === "")(
-      "should handle multi-turn with thinking and tools",
-      { retry: 3 },
-      () => multiTurn(model, { apiKey: anthropicOAuthToken, thinkingEnabled: true }),
-    );
-
-    it.skipIf(anthropicOAuthToken === undefined || anthropicOAuthToken === "")(
-      "should handle image input",
-      { retry: 3 },
-      () => Effect.runPromise(handleImage(model, { apiKey: anthropicOAuthToken })),
-    );
-  });
-
-  describe("Anthropic OAuth Provider (claude-opus-4-6 with adaptive thinking)", () => {
-    const model = getModel("anthropic", "claude-opus-4-6");
-
-    it.skipIf(anthropicOAuthToken === undefined || anthropicOAuthToken === "")(
-      "should complete basic text generation",
-      { retry: 3 },
-      () => Effect.runPromise(basicTextGeneration(model, { apiKey: anthropicOAuthToken })),
-    );
-
-    it.skipIf(anthropicOAuthToken === undefined || anthropicOAuthToken === "")(
-      "should handle tool calling",
-      { retry: 3 },
-      () => handleToolCall(model, { apiKey: anthropicOAuthToken }),
-    );
-
-    it.skipIf(anthropicOAuthToken === undefined || anthropicOAuthToken === "")(
-      "should handle streaming",
-      { retry: 3 },
-      () => handleStreaming(model, { apiKey: anthropicOAuthToken }),
-    );
-
-    it.skipIf(anthropicOAuthToken === undefined || anthropicOAuthToken === "")(
-      "should handle adaptive thinking with effort high",
-      { retry: 3 },
-      () =>
-        handleThinking(model, {
-          apiKey: anthropicOAuthToken,
-          thinkingEnabled: true,
-          effort: "high",
-        }),
-    );
-
-    it.skipIf(anthropicOAuthToken === undefined || anthropicOAuthToken === "")(
-      "should handle adaptive thinking with effort medium",
-      { retry: 3 },
-      () =>
-        handleThinking(model, {
-          apiKey: anthropicOAuthToken,
-          thinkingEnabled: true,
-          effort: "medium",
-        }),
-    );
-
-    it.skipIf(anthropicOAuthToken === undefined || anthropicOAuthToken === "")(
-      "should handle multi-turn with adaptive thinking and tools",
-      { retry: 3 },
-      () =>
-        multiTurn(model, {
-          apiKey: anthropicOAuthToken,
-          thinkingEnabled: true,
-          effort: "high",
-        }),
-    );
-
-    it.skipIf(anthropicOAuthToken === undefined || anthropicOAuthToken === "")(
-      "should handle image input",
-      { retry: 3 },
-      () => Effect.runPromise(handleImage(model, { apiKey: anthropicOAuthToken })),
-    );
   });
 
   describe("OpenAI Codex Provider (gpt-5.5)", () => {

@@ -6,6 +6,7 @@
 import { execFileSync } from "node:child_process";
 import { basename } from "node:path";
 
+import { formatAge } from "../../utils/text.ts";
 import { EmbeddingClient } from "./embeddings.ts";
 import {
   MEMORY_KINDS,
@@ -110,17 +111,6 @@ function truncate(text: string, max = 160): string {
   return line.length > max ? `${line.slice(0, max)}…` : line;
 }
 
-/** How long ago `timestamp` was, in the largest unit that fits. */
-export function formatAge(timestamp: number, now = Date.now()): string {
-  const seconds = Math.max(0, Math.floor((now - timestamp) / 1000));
-  if (seconds < 60) return `${seconds}s ago`;
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.floor(hours / 24)}d ago`;
-}
-
 function scopeLabel(record: MemoryRecord): string {
   return record.scope === "project" ? `project:${record.project ?? "?"}` : "global";
 }
@@ -198,7 +188,7 @@ export class MemoryService {
 
   /** Load the embedding model in the background so the first recall does not wait for it. */
   warm(): void {
-    if (!this.recallEnabled) return;
+    if (!this.recallEnabled || this.storeIsEmpty()) return;
     void this.embedQuery("warmup")
       .then(() => this.reembedStale())
       .catch(() => undefined);
@@ -224,6 +214,14 @@ export class MemoryService {
   private ensureStore(): MemoryStore {
     this.store ??= new MemoryStore(this.settings.database);
     return this.store;
+  }
+
+  private storeIsEmpty(): boolean {
+    try {
+      return this.ensureStore().isEmpty();
+    } catch {
+      return true;
+    }
   }
 
   /** The embedding of `text`, or undefined while the endpoint is unavailable. */
@@ -258,7 +256,7 @@ export class MemoryService {
 
   /** Memories relevant to `query`, best first. Never throws; an unavailable store means no recall. */
   async recall(query: string, signal?: AbortSignal): Promise<MemoryRecord[]> {
-    if (!this.recallEnabled || !query.trim()) return [];
+    if (!this.recallEnabled || !query.trim() || this.storeIsEmpty()) return [];
     try {
       const embedding = await this.embedQuery(query, signal);
       const scores = this.ensureStore().search({
@@ -305,6 +303,7 @@ export class MemoryService {
   }
 
   async search(query: string, limit = 5): Promise<MemoryScore[]> {
+    if (this.ensureStore().isEmpty()) return [];
     const embedding = await this.embedQuery(query);
     return this.ensureStore().search({
       text: query,

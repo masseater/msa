@@ -1,56 +1,31 @@
-import { Clock, Effect } from "effect";
+import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { InMemoryCredentialStore } from "../src/auth/credential-store.ts";
-import { anthropicOAuth } from "../src/auth/oauth/anthropic.ts";
 import { openaiChatGPTOAuth } from "../src/auth/oauth/openai-chatgpt.ts";
 import { openaiCodexOAuth } from "../src/auth/oauth/openai-codex.ts";
 import { openRouterOAuth } from "../src/auth/oauth/openrouter.ts";
 import { createModels } from "../src/models.ts";
 import * as extensionOAuthCompatibility from "../src/oauth.ts";
-import { anthropicProvider } from "../src/providers/anthropic.ts";
 import { openaiProvider } from "../src/providers/openai.ts";
 import { currentTimeMillis } from "../src/utils/clock.ts";
 
 const neverAbortedSignal = new AbortController().signal;
-
-function jsonResponse(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { "Content-Type": "application/json" },
-  });
-}
 
 describe("OAuthAuth adapters", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
   });
   it("keeps the extension OAuth barrel free of built-in flow implementations", () => {
-    expect(extensionOAuthCompatibility).not.toHaveProperty("loginAnthropic");
-    expect(extensionOAuthCompatibility).not.toHaveProperty("anthropicOAuth");
+    expect(extensionOAuthCompatibility).not.toHaveProperty("openaiCodexOAuth");
   });
 
   it("identifies only subscription-backed OAuth flows as subscriptions", () => {
-    for (const oauth of [anthropicOAuth, openaiChatGPTOAuth, openaiCodexOAuth]) {
+    for (const oauth of [openaiChatGPTOAuth, openaiCodexOAuth]) {
       expect(oauth.isSubscription).toBe(true);
     }
     expect(openRouterOAuth.isSubscription).not.toBe(true);
   });
-
-  it("anthropic toAuth derives the api key from the access token", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const auth = yield* Effect.promise(() =>
-          anthropicOAuth.toAuth({
-            type: "oauth",
-            access: "token",
-            refresh: "r",
-            expires: 0,
-          }),
-        );
-        expect(auth).toEqual({ apiKey: "token" });
-      }),
-    ));
 
   it("OpenAI exposes ChatGPT OAuth alongside API-key auth", () => {
     const provider = openaiProvider();
@@ -101,47 +76,13 @@ describe("OAuthAuth adapters", () => {
     ));
 });
 
-describe("OAuthAuth adapters", () => {
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
-  it("anthropic refresh exchanges the refresh token and returns a typed credential", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        vi.stubGlobal(
-          "fetch",
-          vi.fn(() =>
-            Promise.resolve(
-              jsonResponse({
-                access_token: "new-access",
-                refresh_token: "new-refresh",
-                expires_in: 3600,
-              }),
-            ),
-          ),
-        );
-
-        const refreshed = yield* Effect.promise(() =>
-          anthropicOAuth.refresh(
-            { type: "oauth", access: "old", refresh: "old-r", expires: 0 },
-            neverAbortedSignal,
-          ),
-        );
-        expect(refreshed.type).toBe("oauth");
-        expect(refreshed.access).toBe("new-access");
-        expect(refreshed.refresh).toBe("new-refresh");
-        expect(refreshed.expires).toBeGreaterThan(yield* Clock.currentTimeMillis);
-      }),
-    ));
-});
-
 describe("OAuth through Models.getAuth (lazy load chain)", () => {
-  it("resolves stored anthropic oauth credentials via the lazy flow import", () =>
+  it("resolves stored ChatGPT oauth credentials via the lazy flow import", () =>
     Effect.runPromise(
       Effect.gen(function* () {
         const credentials = new InMemoryCredentialStore();
         yield* Effect.promise(() =>
-          credentials.modify("anthropic", () =>
+          credentials.modify("openai", () =>
             Promise.resolve({
               type: "oauth",
               access: "oauth-access-token",
@@ -151,9 +92,9 @@ describe("OAuth through Models.getAuth (lazy load chain)", () => {
           ),
         );
         const models = createModels({ credentials });
-        models.setProvider(anthropicProvider());
+        models.setProvider(openaiProvider());
 
-        const model = models.getModels("anthropic")[0];
+        const model = models.getModels("openai")[0];
 
         if (model === undefined) throw new Error("Expected a model");
         const result = yield* Effect.promise(() => models.getAuth(model.provider));

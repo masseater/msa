@@ -35,7 +35,7 @@ interface ProviderModelPair {
 }
 
 const PROVIDER_MODEL_PAIRS: ProviderModelPair[] = [
-  { provider: "anthropic", model: "claude-sonnet-4-5", label: "anthropic-claude-sonnet-4-5" },
+  { provider: "anthropic-api", model: "claude-sonnet-4-5", label: "anthropic-claude-sonnet-4-5" },
   {
     provider: "openai",
     model: "gpt-4o-mini",

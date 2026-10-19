@@ -123,17 +123,57 @@ const APP_KEYBINDINGS = {
     defaultKeys: "ctrl+backspace",
     description: "Delete session when query is empty",
   },
-  "app.orchestrator.start": {
+  "app.orchestrator.message": {
     defaultKeys: "n",
-    description: "Start a session for a task you type",
+    description: "Send a message to the selected task",
+  },
+  "app.orchestrator.note": {
+    defaultKeys: "b",
+    description: "Send a shared note to the selected task's round",
+  },
+  "app.orchestrator.toggleFinished": {
+    defaultKeys: "c",
+    description: "Show or hide finished tasks",
+  },
+  "app.orchestrator.rerun": {
+    defaultKeys: "r",
+    description: "Rerun the selected task in a new session",
   },
   "app.orchestrator.stop": {
     defaultKeys: "s",
-    description: "Stop the selected orchestrated session",
+    description: "Stop the selected task",
   },
   "app.orchestrator.model": {
     defaultKeys: "m",
-    description: "Switch the selected orchestrated session's model",
+    description: "Switch the selected task's model",
+  },
+  "app.orchestrator.depends": {
+    defaultKeys: "d",
+    description: "Change the dependencies of the selected task",
+  },
+  "app.orchestrator.currentState": {
+    defaultKeys: "w",
+    description: "Rewrite the current state of the selected task",
+  },
+  "app.orchestrator.goalState": {
+    defaultKeys: "g",
+    description: "Rewrite the goal state of the selected task",
+  },
+  "app.orchestrator.sessions": {
+    defaultKeys: "shift+right",
+    description: "Open the sessions view",
+  },
+  "app.orchestrator.back": {
+    defaultKeys: "shift+left",
+    description: "Leave the sessions view",
+  },
+  "app.orchestrator.paneWiden": {
+    defaultKeys: "ctrl+shift+left",
+    description: "Widen the sessions pane",
+  },
+  "app.orchestrator.paneNarrow": {
+    defaultKeys: "ctrl+shift+right",
+    description: "Narrow the sessions pane",
   },
   "app.models.save": {
     defaultKeys: "ctrl+s",
@@ -150,6 +190,10 @@ const APP_KEYBINDINGS = {
   "app.models.toggleProvider": {
     defaultKeys: "ctrl+p",
     description: "Toggle all models for provider",
+  },
+  "app.models.policy": {
+    defaultKeys: "ctrl+e",
+    description: "Deny or allow the selected model",
   },
   "app.models.reorderUp": {
     defaultKeys: "alt+up",

@@ -14,6 +14,7 @@ import type {
   SessionStartEvent,
 } from "./extensions/index.ts";
 import { emitSessionShutdownEvent } from "./extensions/runner.ts";
+import type { TelemetryHandle } from "./observability/telemetry.ts";
 import type { CreateAgentSessionResult } from "./sdk.ts";
 import { assertSessionCwdExists } from "./session-cwd.ts";
 import { SessionManager } from "./session-manager.ts";
@@ -86,6 +87,8 @@ export class AgentSessionRuntime {
   private readonly createRuntime: CreateAgentSessionRuntimeFactory;
   private _diagnostics: AgentSessionRuntimeDiagnostic[];
   private _modelFallbackMessage?: string | undefined;
+  /** Process-wide telemetry; flushed when the runtime is disposed. */
+  readonly telemetry: TelemetryHandle | undefined;
 
   constructor(
     _session: AgentSession,
@@ -93,7 +96,9 @@ export class AgentSessionRuntime {
     createRuntime: CreateAgentSessionRuntimeFactory,
     _diagnostics: AgentSessionRuntimeDiagnostic[] = [],
     _modelFallbackMessage?: string,
+    telemetry?: TelemetryHandle,
   ) {
+    this.telemetry = telemetry;
     this._session = _session;
     this._services = _services;
     this.createRuntime = createRuntime;
@@ -425,6 +430,7 @@ export class AgentSessionRuntime {
     });
     this.beforeSessionInvalidate?.();
     this.session.dispose();
+    await this.telemetry?.dispose();
   }
 }
 
@@ -441,6 +447,7 @@ export async function createAgentSessionRuntime(
     agentDir: string;
     sessionManager: SessionManager;
     sessionStartEvent?: SessionStartEvent;
+    telemetry?: TelemetryHandle;
   },
 ): Promise<AgentSessionRuntime> {
   assertSessionCwdExists(options.sessionManager, options.cwd);
@@ -451,6 +458,7 @@ export async function createAgentSessionRuntime(
     createRuntime,
     result.diagnostics,
     result.modelFallbackMessage,
+    options.telemetry,
   );
 }
 

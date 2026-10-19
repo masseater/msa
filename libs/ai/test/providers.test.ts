@@ -58,9 +58,9 @@ describe("builtin providers", () => {
     const models = builtinModels();
     const providers = models.getProviders();
     expect(providers.length).toBe(builtinProviders().length);
-    expect(providers.map((p) => p.id)).toContain("anthropic");
+    expect(providers.map((p) => p.id)).toContain("anthropic-api");
 
-    const anthropic = models.getModel("anthropic", "claude-haiku-4-5");
+    const anthropic = models.getModel("anthropic-api", "claude-haiku-4-5");
     expect(anthropic?.api).toBe("anthropic-messages");
 
     const all = models.getModels();
@@ -100,7 +100,9 @@ describe("builtin providers", () => {
       supportsStrictMode: true,
       supportsOpenAIGrammarTools: true,
     });
-    expect(getBuiltinModel("anthropic", "claude-haiku-4-5").compat?.supportsStrictTools).toBe(true);
+    expect(getBuiltinModel("anthropic-api", "claude-haiku-4-5").compat?.supportsStrictTools).toBe(
+      true,
+    );
   });
 });
 
@@ -116,13 +118,13 @@ describe("builtin providers", () => {
   });
 
   it("records known direct-provider image request limits", () => {
-    expect(getBuiltinModel("anthropic", "claude-haiku-4-5").inputLimits).toMatchObject({
+    expect(getBuiltinModel("anthropic-api", "claude-haiku-4-5").inputLimits).toMatchObject({
       maxRequestBytes: 32 * 1024 * 1024,
       images: { maxPerRequest: 100 },
     });
-    expect(getBuiltinModel("anthropic", "claude-opus-5").inputLimits?.images?.maxPerRequest).toBe(
-      600,
-    );
+    expect(
+      getBuiltinModel("anthropic-api", "claude-opus-5").inputLimits?.images?.maxPerRequest,
+    ).toBe(600);
     expect(getBuiltinModel("openai", "gpt-4o").inputLimits).toMatchObject({
       maxRequestBytes: 512 * 1024 * 1024,
       images: { maxPerRequest: 1500 },
@@ -155,7 +157,7 @@ describe("builtin providers", () => {
       ["openai", "gpt-5.5"],
       ["openai", "gpt-6-astra"],
       ["openai-codex", "gpt-5.5"],
-      ["anthropic", "claude-opus-5"],
+      ["anthropic-api", "claude-opus-5"],
       ["opencode", "gpt-5.4"],
       ["opencode", "gpt-5.6-terra"],
       ["opencode-go", "gpt-5.6-luna"],
@@ -168,7 +170,7 @@ describe("builtin providers", () => {
     const unsupported = [
       ["openai", "gpt-4.1"],
       ["openai", "gpt-5.2"],
-      ["anthropic", "claude-sonnet-4-5"],
+      ["anthropic-api", "claude-sonnet-4-5"],
       ["opencode", "gemini-3.1-pro"],
       ["opencode", "gpt-5.2"],
       ["opencode", "claude-sonnet-4-5"],
@@ -202,7 +204,7 @@ describe("builtin providers", () => {
     expect(models.getModel("opencode", "claude-opus-5")?.compat).not.toHaveProperty(
       "supportsMidConvoToolChanges",
     );
-    expect(models.getModel("anthropic", "claude-opus-5")?.compat).toMatchObject({
+    expect(models.getModel("anthropic-api", "claude-opus-5")?.compat).toMatchObject({
       supportsMidConvoToolChanges: true,
     });
     for (const provider of ["opencode", "opencode-go"] as const) {
@@ -226,33 +228,15 @@ describe("builtin providers", () => {
         const models = createModels({
           authContext: fakeAuthContext({
             ANTHROPIC_AUTH_TOKEN: "auth-token",
-            ANTHROPIC_OAUTH_TOKEN: "oauth-token",
             ANTHROPIC_API_KEY: "api-key",
           }),
         });
         models.setProvider(anthropicProvider());
 
-        expect(yield* Effect.promise(() => models.getAuth("anthropic"))).toEqual({
+        expect(yield* Effect.promise(() => models.getAuth("anthropic-api"))).toEqual({
           auth: { headers: { Authorization: "Bearer auth-token" } },
           source: "ANTHROPIC_AUTH_TOKEN",
         });
-      }),
-    ));
-
-  it("preserves Anthropic OAuth token precedence over the API key", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const models = createModels({
-          authContext: fakeAuthContext({
-            ANTHROPIC_API_KEY: "key",
-            ANTHROPIC_OAUTH_TOKEN: "oauth-token",
-          }),
-        });
-        models.setProvider(anthropicProvider());
-
-        const result = yield* Effect.promise(() => models.getAuth("anthropic"));
-        expect(result?.auth.apiKey).toBe("oauth-token");
-        expect(result?.source).toBe("ANTHROPIC_OAUTH_TOKEN");
       }),
     ));
 });

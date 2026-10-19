@@ -16,7 +16,7 @@ function createAssistantMessage(text: string): AssistantMessage {
     role: "assistant",
     content: [{ type: "text", text }],
     api: "anthropic-messages",
-    provider: "anthropic",
+    provider: "anthropic-api",
     model: "mock",
     usage: {
       input: 0,

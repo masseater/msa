@@ -9,8 +9,7 @@ type StreamOptionsWithExtras = StreamOptions & Record<string, unknown>;
 
 import { resolveApiKey } from "./oauth.ts";
 
-const oauthTokens = await Promise.all([resolveApiKey("anthropic"), resolveApiKey("openai-codex")]);
-const [anthropicOAuthToken, openaiCodexToken] = oauthTokens;
+const openaiCodexToken = await resolveApiKey("openai-codex");
 
 function testTokensOnAbort<TApi extends Api>(
   llm: Model<TApi>,
@@ -107,22 +106,10 @@ describe("Token Statistics on Abort", () => {
   describe.skipIf(
     envValue("ANTHROPIC_API_KEY") === undefined || envValue("ANTHROPIC_API_KEY") === "",
   )("Anthropic Provider", () => {
-    const llm = getModel("anthropic", "claude-sonnet-4-6");
+    const llm = getModel("anthropic-api", "claude-sonnet-4-6");
 
     it("should include token stats when aborted mid-stream", { retry: 3, timeout: 30000 }, () =>
       testTokensOnAbort(llm),
-    );
-  });
-});
-
-describe("Token Statistics on Abort", () => {
-  describe("Anthropic OAuth Provider", () => {
-    const llm = getModel("anthropic", "claude-sonnet-4-6");
-
-    it.skipIf(anthropicOAuthToken === undefined || anthropicOAuthToken === "")(
-      "should include token stats when aborted mid-stream",
-      { retry: 3, timeout: 30000 },
-      () => testTokensOnAbort(llm, { apiKey: anthropicOAuthToken }),
     );
   });
 });

@@ -1,4 +1,5 @@
 import { APP_NAME } from "../config.ts";
+import { ACCOUNTS_DESCRIPTION } from "./accounts.ts";
 import type { SourceInfo } from "./source-info.ts";
 
 export type SlashCommandSource = "extension" | "prompt" | "skill";
@@ -25,7 +26,7 @@ export const BUILTIN_SLASH_COMMANDS: ReadonlyArray<BuiltinSlashCommand> = [
   {
     name: "model",
     description: "Select model (opens selector UI)",
-    argumentHint: "<provider/model>",
+    argumentHint: "<provider/model>|upgrade",
   },
   {
     name: "effort",
@@ -35,6 +36,11 @@ export const BUILTIN_SLASH_COMMANDS: ReadonlyArray<BuiltinSlashCommand> = [
   { name: "scoped-models", description: "Enable/disable models for Ctrl+P cycling" },
   { name: "login", description: "Configure provider authentication", argumentHint: "<provider>" },
   { name: "logout", description: "Remove provider authentication" },
+  {
+    name: "accounts",
+    description: ACCOUNTS_DESCRIPTION,
+    argumentHint: "[<kind> <action> <name>]",
+  },
   { name: "clear", description: "Start a new session", aliases: ["new", "reset"] },
   { name: "resume", description: "Resume a different session", aliases: ["continue"] },
   {
@@ -67,6 +73,11 @@ export const BUILTIN_SLASH_COMMANDS: ReadonlyArray<BuiltinSlashCommand> = [
     description: "Keep working until a condition is met; no argument shows status",
     argumentHint: "<condition>|clear",
   },
+  {
+    name: "ask",
+    description: "Ask a question; the model can only answer, not change anything",
+    argumentHint: "<question>",
+  },
   { name: "init", description: "Write an AGENTS.md that describes this repository" },
   { name: "copy", description: "Copy last agent message to clipboard" },
   { name: "export", description: "Export session (HTML default, or specify path: .html/.jsonl)" },
@@ -84,7 +95,12 @@ export const BUILTIN_SLASH_COMMANDS: ReadonlyArray<BuiltinSlashCommand> = [
     description: "Open the memory view, or manage long-term memory with an argument",
     argumentHint: "[list|search <query>|forget <id>|stats]",
   },
-  { name: "sessions", description: "Show the sessions the orchestrator started" },
+  { name: "tasks", description: "Show the task DAG the orchestrator runs", aliases: ["sessions"] },
+  {
+    name: "handoff",
+    description: "Write the orchestrator's state to a file the next session resumes from",
+    argumentHint: "[path]",
+  },
   {
     name: "reload",
     description: "Reload keybindings, extensions, skills, prompts, themes, and context files",
@@ -117,6 +133,24 @@ export function canonicalizeBuiltinSlashCommand(text: string): string {
   if (typed === undefined) return text;
   const name = BUILTIN_NAMES.get(typed);
   return name === undefined ? text : `/${name}${text.slice(typed.length + 1)}`;
+}
+
+/** The path `/handoff` was typed with (empty for the default), or undefined when `text` is not `/handoff`. */
+export function parseHandoffCommand(text: string): { path: string } | undefined {
+  const match = /^\/handoff(?:\s+([\s\S]*))?$/u.exec(text.trim());
+  return match ? { path: (match[1] ?? "").trim() } : undefined;
+}
+
+/** What `/handoff` sends: the model writes the three sections, and the `handoff` tool does the rest. */
+export function handoffPrompt(path: string): string {
+  return [
+    "Hand this orchestrator over to the next msa session. Call the `handoff` tool once.",
+    "Write `premise` (what the next session must take as given), `goals` (the goal states in dependency order), and `donts` (what must not be started, and why) from this conversation. The tool fills in everything else.",
+    path === "" ? "" : `Pass path: ${JSON.stringify(path)}.`,
+    "When it returns, reply with its result exactly as returned and nothing else.",
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 /** What `/init` sends: the model writes the repository's AGENTS.md. */

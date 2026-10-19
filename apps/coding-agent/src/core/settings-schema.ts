@@ -260,6 +260,23 @@ const CodemodeSettingsSchema = Type.Object({
   ),
 });
 
+const PrWatchSettingsSchema = Type.Object({
+  intervalSeconds: Type.Optional(
+    Type.Number({
+      minimum: 5,
+      description: "Seconds between checks of a watched pull request.",
+      default: SETTINGS_DEFAULTS.prWatch.intervalSeconds,
+    }),
+  ),
+  statusIntervalSeconds: Type.Optional(
+    Type.Number({
+      minimum: 30,
+      description: "Seconds without a change before a watch reports its status again.",
+      default: SETTINGS_DEFAULTS.prWatch.statusIntervalSeconds,
+    }),
+  ),
+});
+
 const PackageSourceSchema = Type.Union(
   [
     Type.String({ description: "Load all resources from the package." }),
@@ -279,6 +296,27 @@ const PackageSourceSchema = Type.Union(
   {
     description:
       "Package source for npm or git packages. Use the string form to load all resources or the object form to filter resources.",
+  },
+);
+
+const ModelPolicySettingsSchema = Type.Object(
+  {
+    allow: Type.Optional(
+      Type.Array(Type.String(), {
+        description:
+          "Models that may be used, in the same format as the --models CLI flag. When set, models outside the list are unusable.",
+      }),
+    ),
+    deny: Type.Optional(
+      Type.Array(Type.String(), {
+        description:
+          "Models that may not be used, in the same format as the --models CLI flag. A deny pattern wins over any allow pattern.",
+      }),
+    ),
+  },
+  {
+    description:
+      "Models a session may use. Deny wins, and a non-empty allow list restricts use to the models it names. Separate from enabledModels, which only narrows startup selection and Ctrl+P cycling.",
   },
 );
 
@@ -346,10 +384,16 @@ export const SettingsSchema = Type.Object(
     ),
     orchestrator: Type.Optional(
       Type.Object({
+        database: Type.Optional(
+          Type.String({
+            description:
+              "SQLite file holding tasks, sessions, reports, and notes. Default: <agent dir>/orchestrator.db.",
+          }),
+        ),
         workerModel: Type.Optional(
           Type.String({
             description:
-              'Model of the sessions the orchestrator starts, as "provider/id", unless start_session names one. Default: the orchestrator\'s model.',
+              'Model of the sessions the orchestrator starts, as "provider/id", unless create_task names one. Default: the orchestrator\'s model.',
           }),
         ),
         workerThinkingLevel: Type.Optional(ModelThinkingLevelSchema),
@@ -474,11 +518,23 @@ export const SettingsSchema = Type.Object(
     terminal: Type.Optional(TerminalSettingsSchema),
     images: Type.Optional(ImageSettingsSchema),
     memory: Type.Optional(MemorySettingsSchema),
+    prWatch: Type.Optional(PrWatchSettingsSchema),
+    telemetry: Type.Optional(
+      Type.Object({
+        otlpEndpoint: Type.Optional(
+          Type.String({
+            description:
+              "OTLP/HTTP base URL that receives traces, metrics, and logs, such as http://collector:4318. MSA_OTLP_ENDPOINT takes precedence. Default: the msa-grafana-lgtm podman container.",
+          }),
+        ),
+      }),
+    ),
     enabledModels: Type.Optional(
       Type.Array(Type.String(), {
         description: "Model patterns for cycling, in the same format as the --models CLI flag.",
       }),
     ),
+    modelPolicy: Type.Optional(ModelPolicySettingsSchema),
     defaultTools: Type.Optional(
       Type.Array(Type.String(), {
         description:
@@ -618,11 +674,13 @@ export interface RetrySettings extends Omit<Static<typeof RetrySettingsSchema>, 
 export interface TerminalSettings extends Static<typeof TerminalSettingsSchema> {}
 export interface ImageSettings extends Static<typeof ImageSettingsSchema> {}
 export interface MemorySettings extends Static<typeof MemorySettingsSchema> {}
+export interface PrWatchSettings extends Static<typeof PrWatchSettingsSchema> {}
 export interface ThinkingBudgetsSettings extends Static<typeof ThinkingBudgetsSettingsSchema> {}
 export type MermaidRenderingMode = NonNullable<Static<typeof MarkdownSettingsSchema>["mermaid"]>;
 export interface MarkdownSettings extends Static<typeof MarkdownSettingsSchema> {}
 export type CodemodeMode = Static<typeof CodemodeModeSchema>;
 export interface CodemodeSettings extends Static<typeof CodemodeSettingsSchema> {}
+export interface ModelPolicySettings extends Static<typeof ModelPolicySettingsSchema> {}
 export type DefaultProjectTrust = NonNullable<SettingsInput["defaultProjectTrust"]>;
 export type QuietStartup = NonNullable<SettingsInput["quietStartup"]>;
 export type TransportSetting = NonNullable<SettingsInput["transport"]>;

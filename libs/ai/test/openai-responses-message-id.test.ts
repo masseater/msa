@@ -25,7 +25,7 @@ describe("OpenAI Responses message ID conversion", () => {
         { type: "text", text: "visible answer" },
       ],
       api: "anthropic-messages",
-      provider: "anthropic",
+      provider: "anthropic-api",
       model: "claude-opus-4-8",
       usage,
       stopReason: "stop",

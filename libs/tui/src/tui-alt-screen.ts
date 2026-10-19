@@ -151,7 +151,9 @@ export class TuiAltScreen extends AltScreenTuiBase {
       isSearchFocused: () => this.search.isFocused(),
       navigateSearch: (direction) => this.search.navigate(direction),
       closeSearch: () => this.search.close(),
-      shouldDeferToOverlay: () => this.isOverlayFocused() && !this.search.isFocused(),
+      shouldDeferToOverlay: () =>
+        (this.isOverlayFocused() && !this.search.isFocused()) ||
+        this.getFocusedComponent()?.wantsViewportKeys === true,
       viewportHeight: () => this.getPrimaryScrollView().viewportHeight,
       scrollBy: (lines) => this.scrollBy(lines),
       scrollToPrompt: (direction) => this.scrollToPrompt(direction),

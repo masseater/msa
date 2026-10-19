@@ -133,13 +133,13 @@ const assertSecondToolCallWithInterleavedThinking = Effect.fn(
   expect(secondResponse.content.some((block) => block.type === "text")).toBe(true);
 });
 
-const hasAnthropicCredentials = hasValue(getEnvApiKey("anthropic"));
+const hasAnthropicCredentials = hasValue(getEnvApiKey("anthropic-api"));
 
 describe.skipIf(!hasAnthropicCredentials)("Anthropic interleaved thinking", () => {
   it("should do interleaved thinking on Claude Opus 4.5", { retry: 3 }, () =>
     Effect.runPromise(
       Effect.gen(function* () {
-        const llm = getModel("anthropic", "claude-opus-4-5");
+        const llm = getModel("anthropic-api", "claude-opus-4-5");
         yield* assertSecondToolCallWithInterleavedThinking(llm, "high");
       }),
     ),
@@ -148,7 +148,7 @@ describe.skipIf(!hasAnthropicCredentials)("Anthropic interleaved thinking", () =
   it("should do interleaved thinking on Claude Opus 4.6", { retry: 3 }, () =>
     Effect.runPromise(
       Effect.gen(function* () {
-        const llm = getModel("anthropic", "claude-opus-4-6");
+        const llm = getModel("anthropic-api", "claude-opus-4-6");
         yield* assertSecondToolCallWithInterleavedThinking(llm, "high");
       }),
     ),

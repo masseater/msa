@@ -11,8 +11,7 @@ type StreamOptionsWithExtras = StreamOptions & Record<string, unknown>;
 
 import { resolveApiKey } from "./oauth.ts";
 
-const oauthTokens = await Promise.all([resolveApiKey("anthropic"), resolveApiKey("openai-codex")]);
-const [anthropicOAuthToken, openaiCodexToken] = oauthTokens;
+const openaiCodexToken = await resolveApiKey("openai-codex");
 
 const calculateSchema = Type.Object({
   expression: Type.String({ description: "The mathematical expression to evaluate" }),
@@ -113,7 +112,7 @@ describe("Tool Call Without Result Tests", () => {
   describe.skipIf(
     envValue("ANTHROPIC_API_KEY") === undefined || envValue("ANTHROPIC_API_KEY") === "",
   )("Anthropic Provider", () => {
-    const model = getModel("anthropic", "claude-haiku-4-5");
+    const model = getModel("anthropic-api", "claude-haiku-4-5");
 
     it(
       "should filter out tool calls without corresponding tool results",
@@ -124,16 +123,6 @@ describe("Tool Call Without Result Tests", () => {
 });
 
 describe("Tool Call Without Result Tests", () => {
-  describe("Anthropic OAuth Provider", () => {
-    const model = getModel("anthropic", "claude-haiku-4-5");
-
-    it.skipIf(anthropicOAuthToken === undefined || anthropicOAuthToken === "")(
-      "should filter out tool calls without corresponding tool results",
-      { retry: 3, timeout: 30000 },
-      () => Effect.runPromise(testToolCallWithoutResult(model, { apiKey: anthropicOAuthToken })),
-    );
-  });
-
   describe("OpenAI Codex Provider", () => {
     it.skipIf(openaiCodexToken === undefined || openaiCodexToken === "")(
       "gpt-5.5 - should filter out tool calls without corresponding tool results",

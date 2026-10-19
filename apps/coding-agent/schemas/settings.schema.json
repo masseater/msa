@@ -193,9 +193,13 @@
     "orchestrator": {
       "type": "object",
       "properties": {
+        "database": {
+          "type": "string",
+          "description": "SQLite file holding tasks, sessions, reports, and notes. Default: <agent dir>/orchestrator.db."
+        },
         "workerModel": {
           "type": "string",
-          "description": "Model of the sessions the orchestrator starts, as \"provider/id\", unless start_session names one. Default: the orchestrator's model."
+          "description": "Model of the sessions the orchestrator starts, as \"provider/id\", unless create_task names one. Default: the orchestrator's model."
         },
         "workerThinkingLevel": {
           "$ref": "#/$defs/ModelThinkingLevel"
@@ -561,12 +565,58 @@
         }
       }
     },
+    "prWatch": {
+      "type": "object",
+      "properties": {
+        "intervalSeconds": {
+          "type": "number",
+          "minimum": 5,
+          "description": "Seconds between checks of a watched pull request.",
+          "default": 45
+        },
+        "statusIntervalSeconds": {
+          "type": "number",
+          "minimum": 30,
+          "description": "Seconds without a change before a watch reports its status again.",
+          "default": 300
+        }
+      }
+    },
+    "telemetry": {
+      "type": "object",
+      "properties": {
+        "otlpEndpoint": {
+          "type": "string",
+          "description": "OTLP/HTTP base URL that receives traces, metrics, and logs, such as http://collector:4318. MSA_OTLP_ENDPOINT takes precedence. Default: the msa-grafana-lgtm podman container."
+        }
+      }
+    },
     "enabledModels": {
       "type": "array",
       "items": {
         "type": "string"
       },
       "description": "Model patterns for cycling, in the same format as the --models CLI flag."
+    },
+    "modelPolicy": {
+      "type": "object",
+      "properties": {
+        "allow": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Models that may be used, in the same format as the --models CLI flag. When set, models outside the list are unusable."
+        },
+        "deny": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Models that may not be used, in the same format as the --models CLI flag. A deny pattern wins over any allow pattern."
+        }
+      },
+      "description": "Models a session may use. Deny wins, and a non-empty allow list restricts use to the models it names. Separate from enabledModels, which only narrows startup selection and Ctrl+P cycling."
     },
     "defaultTools": {
       "type": "array",

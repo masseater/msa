@@ -10,6 +10,7 @@ import {
   createAgentSessionFromServices,
   createAgentSessionServices,
 } from "../src/core/agent-session-services.ts";
+import { ORCHESTRATOR_TOOL_NAMES } from "../src/core/orchestrator/tool-names.ts";
 import { DefaultResourceLoader } from "../src/core/resource-loader.ts";
 import {
   type CreateAgentSessionOptions,
@@ -61,7 +62,7 @@ describe("defaultTools setting", () => {
       await createAgentSession({
         cwd: tempDir,
         agentDir,
-        model: getModel("anthropic", "claude-sonnet-4-5")!,
+        model: getModel("anthropic-api", "claude-sonnet-4-5")!,
         settingsManager,
         sessionManager: SessionManager.inMemory(tempDir),
         resourceLoader,
@@ -78,7 +79,23 @@ describe("defaultTools setting", () => {
         .getAllTools()
         .map((tool) => tool.name)
         .sort(),
-    ).toEqual(["bash", "edit", "find", "grep", "ls", "memory", "powershell", "read", "write"]);
+    ).toEqual(
+      [
+        "bash",
+        "edit",
+        "find",
+        "grep",
+        "ls",
+        "memory",
+        "model_policy",
+        "model_upgrade",
+        "powershell",
+        "pr_watch",
+        "read",
+        "write",
+        ...ORCHESTRATOR_TOOL_NAMES,
+      ].sort(),
+    );
     expect(session.getActiveToolNames()).toEqual(["grep", "find"]);
     expect(session.systemPrompt).toContain("- grep:");
     expect(session.systemPrompt).not.toContain("- read:");
@@ -108,13 +125,19 @@ describe("defaultTools setting", () => {
       },
     ]);
 
-    expect(session.getActiveToolNames().sort()).toEqual([
-      "bash",
-      "edit",
-      "inactive_tool",
-      "memory",
-      "read",
-    ]);
+    expect(session.getActiveToolNames().sort()).toEqual(
+      [
+        "bash",
+        "edit",
+        "inactive_tool",
+        "memory",
+        "model_policy",
+        "model_upgrade",
+        "pr_watch",
+        "read",
+        ...ORCHESTRATOR_TOOL_NAMES,
+      ].sort(),
+    );
     session.dispose();
   });
 
@@ -204,15 +227,21 @@ describe("defaultTools setting", () => {
     const session = await createSession(["+grep"], { tools: ["+inactive_tool", "-write"] }, [
       inactiveTool,
     ]);
-    expect(session.getActiveToolNames().sort()).toEqual([
-      "active_tool",
-      "bash",
-      "edit",
-      "grep",
-      "inactive_tool",
-      "memory",
-      "read",
-    ]);
+    expect(session.getActiveToolNames().sort()).toEqual(
+      [
+        "active_tool",
+        "bash",
+        "edit",
+        "grep",
+        "inactive_tool",
+        "memory",
+        "model_policy",
+        "model_upgrade",
+        "pr_watch",
+        "read",
+        ...ORCHESTRATOR_TOOL_NAMES,
+      ].sort(),
+    );
     session.dispose();
 
     const toolLess = await createSession(["read"], { noTools: "all", tools: ["+inactive_tool"] }, [
@@ -259,7 +288,7 @@ describe("defaultTools setting", () => {
         await createAgentSession({
           cwd: tempDir,
           agentDir,
-          model: getModel("anthropic", "claude-sonnet-4-5")!,
+          model: getModel("anthropic-api", "claude-sonnet-4-5")!,
           settingsManager,
           sessionManager: SessionManager.inMemory(tempDir),
           resourceLoader,
@@ -271,7 +300,17 @@ describe("defaultTools setting", () => {
     // #10245
     it("activates only tools newly added to defaultTools", async () => {
       const session = await createFileSession();
-      expect(session.getActiveToolNames()).toEqual(["read", "bash", "edit", "write", "memory"]);
+      expect(session.getActiveToolNames()).toEqual([
+        "read",
+        "bash",
+        "edit",
+        "write",
+        "memory",
+        "pr_watch",
+        "model_policy",
+        "model_upgrade",
+        ...ORCHESTRATOR_TOOL_NAMES,
+      ]);
       session.setActiveToolsByName(["read", "edit", "write"]);
 
       writeSettings({ defaultTools: ["+inactive_tool", "+grep"] });
@@ -327,14 +366,20 @@ describe("defaultTools setting", () => {
       const excluded = await createFileSession({ excludeTools: ["grep"] });
       writeSettings({ defaultTools: ["+grep", "+inactive_tool"] });
       await excluded.reload();
-      expect(excluded.getActiveToolNames().sort()).toEqual([
-        "bash",
-        "edit",
-        "inactive_tool",
-        "memory",
-        "read",
-        "write",
-      ]);
+      expect(excluded.getActiveToolNames().sort()).toEqual(
+        [
+          "bash",
+          "edit",
+          "inactive_tool",
+          "memory",
+          "model_policy",
+          "model_upgrade",
+          "pr_watch",
+          "read",
+          "write",
+          ...ORCHESTRATOR_TOOL_NAMES,
+        ].sort(),
+      );
       excluded.dispose();
     });
   });
@@ -388,7 +433,7 @@ describe("defaultTools setting", () => {
         await createAgentSession({
           cwd: tempDir,
           agentDir,
-          model: getModel("anthropic", "claude-sonnet-4-5")!,
+          model: getModel("anthropic-api", "claude-sonnet-4-5")!,
           settingsManager,
           sessionManager,
           resourceLoader,
@@ -438,14 +483,20 @@ describe("defaultTools setting", () => {
       const sessionManager = SessionManager.inMemory(tempDir);
       sessionManager.appendMessage({ role: "user", content: "hi", timestamp: Date.now() });
       const session = await resume(sessionManager);
-      expect(session.getActiveToolNames().sort()).toEqual([
-        "active_tool",
-        "bash",
-        "edit",
-        "memory",
-        "read",
-        "write",
-      ]);
+      expect(session.getActiveToolNames().sort()).toEqual(
+        [
+          "active_tool",
+          "bash",
+          "edit",
+          "memory",
+          "model_policy",
+          "model_upgrade",
+          "pr_watch",
+          "read",
+          "write",
+          ...ORCHESTRATOR_TOOL_NAMES,
+        ].sort(),
+      );
       session.dispose();
     });
   });
@@ -456,7 +507,7 @@ describe("defaultTools setting", () => {
     const { session } = await createAgentSessionFromServices({
       services,
       sessionManager: SessionManager.inMemory(tempDir),
-      model: getModel("anthropic", "claude-sonnet-4-5")!,
+      model: getModel("anthropic-api", "claude-sonnet-4-5")!,
     });
 
     expect(
@@ -464,7 +515,23 @@ describe("defaultTools setting", () => {
         .getAllTools()
         .map((tool) => tool.name)
         .sort(),
-    ).toEqual(["bash", "edit", "find", "grep", "ls", "memory", "powershell", "read", "write"]);
+    ).toEqual(
+      [
+        "bash",
+        "edit",
+        "find",
+        "grep",
+        "ls",
+        "memory",
+        "model_policy",
+        "model_upgrade",
+        "powershell",
+        "pr_watch",
+        "read",
+        "write",
+        ...ORCHESTRATOR_TOOL_NAMES,
+      ].sort(),
+    );
     expect(session.getActiveToolNames()).toEqual(["ls"]);
     session.dispose();
   });

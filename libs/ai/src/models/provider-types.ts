@@ -89,6 +89,11 @@ export interface Provider<TApi extends Api = Api> {
     handle: DeferredHandle,
     options?: DeferredCancelOptions,
   ): Promise<void>;
+  countTokens?(
+    model: Model<TApi>,
+    context: TranscriptContext,
+    options?: SimpleStreamOptions,
+  ): Promise<number>;
 
   generateImages?(
     model: ImageModel<ImageApi>,

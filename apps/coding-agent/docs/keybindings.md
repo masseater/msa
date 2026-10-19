@@ -96,6 +96,8 @@ The dedicated history actions browse prompt history regardless of cursor positio
 | `tui.select.confirm`  | `enter`                 | Confirm selection   |
 | `tui.select.cancel`   | `escape`, `ctrl+c`      | Cancel selection    |
 
+Pressing the key bound to `tui.input.submit` three times in a row on an empty input, each press within one second of the previous one, sends every queued steering and follow-up message at the next turn boundary in the order they were entered. Nothing happens when no message is queued, and an Enter with text resets the count. This is a fixed gesture, not a named action.
+
 #### Fullscreen
 
 In fullscreen mode, these actions control the transcript and take precedence over editor actions using the same key.
@@ -132,21 +134,31 @@ On native Windows, `app.suspend` has no default because Windows terminals do not
 
 ### Sessions
 
-| Keybinding id                   | Default          | Description                                        |
-| ------------------------------- | ---------------- | -------------------------------------------------- |
-| `app.session.new`               | None             | Start a new session (`/clear`)                     |
-| `app.session.tree`              | None             | Open session tree navigator (`/rewind`)            |
-| `app.session.fork`              | None             | Fork current session (`/fork`)                     |
-| `app.session.resume`            | None             | Open session resume picker (`/resume`)             |
-| `app.session.togglePath`        | `ctrl+p`         | Toggle path display                                |
-| `app.session.toggleSort`        | `ctrl+s`         | Toggle sort mode                                   |
-| `app.session.toggleNamedFilter` | `ctrl+n`         | Toggle named-only filter                           |
-| `app.session.rename`            | `ctrl+r`         | Rename session                                     |
-| `app.session.delete`            | `ctrl+d`         | Delete session                                     |
-| `app.session.deleteNoninvasive` | `ctrl+backspace` | Delete session when query is empty                 |
-| `app.orchestrator.start`        | `n`              | Start a session for a task you type in `/sessions` |
-| `app.orchestrator.stop`         | `s`              | Stop the selected session in `/sessions`           |
-| `app.orchestrator.model`        | `m`              | Switch the selected session's model in `/sessions` |
+| Keybinding id                     | Default            | Description                                         |
+| --------------------------------- | ------------------ | --------------------------------------------------- |
+| `app.session.new`                 | None               | Start a new session (`/clear`)                      |
+| `app.session.tree`                | None               | Open session tree navigator (`/rewind`)             |
+| `app.session.fork`                | None               | Fork current session (`/fork`)                      |
+| `app.session.resume`              | None               | Open session resume picker (`/resume`)              |
+| `app.session.togglePath`          | `ctrl+p`           | Toggle path display                                 |
+| `app.session.toggleSort`          | `ctrl+s`           | Toggle sort mode                                    |
+| `app.session.toggleNamedFilter`   | `ctrl+n`           | Toggle named-only filter                            |
+| `app.session.rename`              | `ctrl+r`           | Rename session                                      |
+| `app.session.delete`              | `ctrl+d`           | Delete session                                      |
+| `app.session.deleteNoninvasive`   | `ctrl+backspace`   | Delete session when query is empty                  |
+| `app.orchestrator.message`        | `n`                | Send a message to the selected task in `/sessions`  |
+| `app.orchestrator.note`           | `b`                | Send a shared note to the selected task's round     |
+| `app.orchestrator.toggleFinished` | `c`                | Show or hide finished tasks                         |
+| `app.orchestrator.rerun`          | `r`                | Rerun the selected task in a new session            |
+| `app.orchestrator.stop`           | `s`                | Stop the selected task                              |
+| `app.orchestrator.model`          | `m`                | Switch the selected task's model                    |
+| `app.orchestrator.depends`        | `d`                | Change the selected task's dependencies             |
+| `app.orchestrator.currentState`   | `w`                | Rewrite the selected task's current state           |
+| `app.orchestrator.goalState`      | `g`                | Rewrite the selected task's goal state              |
+| `app.orchestrator.sessions`       | `shift+right`      | Open `/sessions` from the editor                    |
+| `app.orchestrator.back`           | `shift+left`       | Close `/sessions`                                   |
+| `app.orchestrator.paneWiden`      | `ctrl+shift+left`  | Widen the sessions pane                             |
+| `app.orchestrator.paneNarrow`     | `ctrl+shift+right` | Narrow the sessions pane; below 24 columns it hides |
 
 ### Models and Thinking
 
@@ -156,6 +168,7 @@ On native Windows, `app.suspend` has no default because Windows terminals do not
 | `app.model.cycleForward`  | `ctrl+p`                                    | Cycle to next model                                                       |
 | `app.model.cycleBackward` | `shift+ctrl+p` (`alt+p` on Windows and WSL) | Cycle to previous model                                                   |
 | `app.models.save`         | `ctrl+s`                                    | Save the selected default model or scoped model configuration to settings |
+| `app.models.policy`       | `ctrl+e`                                    | Deny the selected model, or allow it again                                |
 | `app.thinking.cycle`      | `shift+tab`                                 | Cycle thinking level                                                      |
 | `app.thinking.save`       | `ctrl+s`                                    | Save current thinking level to settings                                   |
 | `app.thinking.toggle`     | `ctrl+t`                                    | Collapse or expand thinking blocks                                        |
@@ -187,12 +200,13 @@ On native Windows, `app.suspend` has no default because Windows terminals do not
 
 ### Scoped Models Selector
 
-Used inside the scoped models selector (opened via `/scoped-models`).
+Used inside the scoped models selector (opened via `/scoped-models`) and the model selector (opened via `/model`).
 
 | Keybinding id               | Default    | Description                                            |
 | --------------------------- | ---------- | ------------------------------------------------------ |
 | `app.models.enableAll`      | `ctrl+a`   | Enable all models (or all matching the current search) |
 | `app.models.clearAll`       | `ctrl+x`   | Clear all models (or all matching the current search)  |
 | `app.models.toggleProvider` | `ctrl+p`   | Toggle all models for the current provider             |
+| `app.models.policy`         | `ctrl+e`   | Deny or allow the selected model                       |
 | `app.models.reorderUp`      | `alt+up`   | Move the selected model up in the cycle order          |
 | `app.models.reorderDown`    | `alt+down` | Move the selected model down in the cycle order        |

@@ -58,6 +58,7 @@ export function createWebSearchToolDefinition(
       "Use web_search for information that may have changed after your training data or that the workspace does not have, then read the few best results with web_fetch; cite the URLs you rely on.",
     ],
     parameters: webSearchSchema,
+    annotations: { readOnlyHint: true, openWorldHint: true },
     executionMode: "parallel",
     async execute(_toolCallId, params, signal) {
       const result = await callTreg(

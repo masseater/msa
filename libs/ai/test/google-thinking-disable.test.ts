@@ -111,7 +111,7 @@ describe.skipIf(
 )("Anthropic thinking disable E2E", () => {
   it("disables thinking for budget-based reasoning models", { retry: 2, timeout: 30000 }, () =>
     Effect.runPromise(
-      expectThinkingDisabledE2E(getModel("anthropic", "claude-sonnet-4-5"), {
+      expectThinkingDisabledE2E(getModel("anthropic-api", "claude-sonnet-4-5"), {
         requestOptions: { maxTokens: 320, temperature: 0 },
       }),
     ),
@@ -119,7 +119,7 @@ describe.skipIf(
 
   it("disables thinking for adaptive reasoning models", { retry: 2, timeout: 30000 }, () =>
     Effect.runPromise(
-      expectThinkingDisabledE2E(getModel("anthropic", "claude-sonnet-4-6"), {
+      expectThinkingDisabledE2E(getModel("anthropic-api", "claude-sonnet-4-6"), {
         requestOptions: { maxTokens: 320, temperature: 0 },
       }),
     ),

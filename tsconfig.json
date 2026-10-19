@@ -17,6 +17,7 @@
       "@msa/chord/progress": ["./libs/chord/src/progress.ts"],
       "@msa/chord/state": ["./libs/chord/src/state.ts"],
       "@msa/telemetry": ["./libs/telemetry/src/index.ts"],
+      "@msa/telemetry/otlp": ["./libs/telemetry/src/otlp.ts"],
       "@msa/telemetry/testing": ["./libs/telemetry/src/testing/index.ts"],
       "@msa/codemode": ["./libs/codemode/src/index.ts"],
       "@msa/codemode/cloudflare": ["./libs/codemode/src/cloudflare.ts"],

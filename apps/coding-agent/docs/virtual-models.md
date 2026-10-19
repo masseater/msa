@@ -10,7 +10,7 @@ A virtual model selects a model and a thinking level. A router maps that pair to
 
 ```
 selected (virtual model, virtual level)  ->  dispatched (physical model, physical level)
-jev/auto:low                             ->  anthropic/claude-sonnet-4-5:high
+jev/auto:low                             ->  anthropic-api/claude-sonnet-4-5:high
 ```
 
 The virtual thinking level is an input to the router. Its meaning is up to the router; it need not correspond to a reasoning budget.
@@ -46,7 +46,7 @@ export default function (msa: ExtensionAPI) {
         return { model: sticky.model, thinkingLevel: sticky.thinkingLevel ?? "medium" };
       }
       const id = request.thinkingLevel === "high" ? "claude-sonnet-4-5" : "claude-haiku-4-5";
-      return { model: ctx.modelRegistry.find("anthropic", id)!, thinkingLevel: "medium" };
+      return { model: ctx.modelRegistry.find("anthropic-api", id)!, thinkingLevel: "medium" };
     },
   });
 }
@@ -97,7 +97,7 @@ msa.registerVirtualModel<{ phase: "plan" | "build" }>({
   route(request, ctx) {
     const state = request.state ?? { phase: "plan" };
     const id = state.phase === "plan" ? "claude-opus-4-5" : "claude-haiku-4-5";
-    return { model: ctx.modelRegistry.find("anthropic", id)!, thinkingLevel: "medium", state };
+    return { model: ctx.modelRegistry.find("anthropic-api", id)!, thinkingLevel: "medium", state };
   },
 });
 ```

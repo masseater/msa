@@ -9,8 +9,7 @@ type StreamOptionsWithExtras = StreamOptions & Record<string, unknown>;
 
 import { resolveApiKey } from "./oauth.ts";
 
-const oauthTokens = await Promise.all([resolveApiKey("anthropic"), resolveApiKey("openai-codex")]);
-const [anthropicOAuthToken, openaiCodexToken] = oauthTokens;
+const openaiCodexToken = await resolveApiKey("openai-codex");
 
 const LONG_SYSTEM_PROMPT = `You are a helpful assistant. Be concise in your responses.
 
@@ -85,40 +84,11 @@ describe("totalTokens field", () => {
       () =>
         Effect.runPromise(
           Effect.gen(function* () {
-            const llm = getModel("anthropic", "claude-sonnet-4-5");
+            const llm = getModel("anthropic-api", "claude-sonnet-4-5");
 
             yield* Console.log(`\nAnthropic / ${llm.id}:`);
             const { first, second } = yield* testTotalTokensWithCache(llm, {
               apiKey: yield* readEnv("ANTHROPIC_API_KEY"),
-            });
-
-            logUsage("First request", first);
-            logUsage("Second request", second);
-
-            assertTotalTokensEqualsComponents(first);
-            assertTotalTokensEqualsComponents(second);
-
-            const hasCache = second.cacheRead > 0 || second.cacheWrite > 0 || first.cacheWrite > 0;
-            expect(hasCache).toBe(true);
-          }),
-        ),
-    );
-  });
-});
-
-describe("totalTokens field", () => {
-  describe("Anthropic (OAuth)", () => {
-    it.skipIf(anthropicOAuthToken === undefined || anthropicOAuthToken === "")(
-      "claude-sonnet-4 - should return totalTokens equal to sum of components",
-      { retry: 3, timeout: 60000 },
-      () =>
-        Effect.runPromise(
-          Effect.gen(function* () {
-            const llm = getModel("anthropic", "claude-sonnet-4-6");
-
-            yield* Console.log(`\nAnthropic OAuth / ${llm.id}:`);
-            const { first, second } = yield* testTotalTokensWithCache(llm, {
-              apiKey: anthropicOAuthToken,
             });
 
             logUsage("First request", first);

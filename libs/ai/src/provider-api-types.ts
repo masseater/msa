@@ -49,6 +49,11 @@ export interface ProviderStreams {
     handle: DeferredHandle,
     options?: DeferredCancelOptions,
   ): Promise<void>;
+  countTokens?(
+    model: Model<Api>,
+    context: TranscriptContext,
+    options?: SimpleStreamOptions,
+  ): Promise<number>;
 }
 
 export interface ProviderImages {

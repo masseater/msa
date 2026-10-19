@@ -33,6 +33,12 @@ With images:
 
 If the agent is streaming and no `streamingBehavior` is specified, the command returns an error.
 
+**Ask**: `"mode": "ask"` makes the turn answer only, as [`/ask`](slash-commands.md#ask-a-question) does: msa declares the read-only tools and no others, and the next prompt is a normal turn. A message that starts with `/ask ` is the same turn. An ask is not queued into a running turn, so the command returns an error while the agent is streaming.
+
+```json
+{ "type": "prompt", "message": "Why does the build fail?", "mode": "ask" }
+```
+
 **Extension commands**: If the message is an extension command (e.g., `/mycommand`), it executes immediately even during streaming. Extension commands manage their own LLM interaction via `msa.sendMessage()`.
 
 **Input expansion**: Skill commands (`/name`) and prompt templates (`/template`) are expanded before sending/queueing.
@@ -208,12 +214,26 @@ Response:
     "sessionName": "my-feature-work",
     "autoCompactionEnabled": true,
     "messageCount": 5,
-    "pendingMessageCount": 0
+    "pendingMessageCount": 0,
+    "contextUsage": {
+      "tokens": 60000,
+      "contextWindow": 200000,
+      "percent": 30,
+      "breakdown": {
+        "method": "estimated",
+        "tokens": 60000,
+        "entries": [
+          { "part": "system", "name": "project_context", "tokens": 6000 },
+          { "part": "tools", "name": "bash", "tokens": 900 },
+          { "part": "toolResults", "name": "read", "tokens": 41000 }
+        ]
+      }
+    }
   }
 }
 ```
 
-The `model` field is a full [Model](#model-object) object, or omitted when no model is selected. The `sessionName` field is the display name set via `set_session_name`, or omitted if not set.
+The `model` field is a full [Model](#model-object) object, or omitted when no model is selected. The `sessionName` field is the display name set via `set_session_name`, or omitted if not set. `contextUsage` is omitted when the model has no context window. Its `breakdown` lists every element of the next request; `part` is `system`, `tools`, `conversation`, `toolResults`, `compaction`, or `other`, and the entries sum to `tokens`. `method` is `exact` when the provider counted the request and `estimated` when the total comes from the latest response's usage.
 
 ### get_messages
 
@@ -243,7 +263,7 @@ Messages are `AgentMessage` objects (see [Message Types](message-types.md)).
 Switch to a specific model.
 
 ```json
-{ "type": "set_model", "provider": "anthropic", "modelId": "claude-sonnet-4-20250514" }
+{ "type": "set_model", "provider": "anthropic-api", "modelId": "claude-sonnet-4-20250514" }
 ```
 
 Response contains the full [Model](#model-object) object:
@@ -918,7 +938,7 @@ Model commands return the complete configured model definition. Costs are in US 
   "id": "claude-sonnet-4-20250514",
   "name": "Claude Sonnet 4",
   "api": "anthropic-messages",
-  "provider": "anthropic",
+  "provider": "anthropic-api",
   "baseUrl": "https://api.anthropic.com",
   "reasoning": true,
   "input": ["text", "image"],

@@ -84,32 +84,9 @@ describe("Context overflow error handling", () => {
       () =>
         Effect.runPromise(
           Effect.gen(function* () {
-            const model = getModel("anthropic", "claude-haiku-4-5");
+            const model = getModel("anthropic-api", "claude-haiku-4-5");
             const result = yield* Effect.promise(() =>
               testContextOverflow(model, envValue("ANTHROPIC_API_KEY")!),
-            );
-            logResult(result);
-
-            expect(result.stopReason).toBe("error");
-            expect(result.errorMessage).toMatch(/prompt is too long/iu);
-            expect(isContextOverflow(result.response, model.contextWindow)).toBe(true);
-          }),
-        ),
-      120000,
-    );
-  });
-
-  describe.skipIf(
-    envValue("ANTHROPIC_OAUTH_TOKEN") === undefined || envValue("ANTHROPIC_OAUTH_TOKEN") === "",
-  )("Anthropic (OAuth)", () => {
-    it(
-      "claude-sonnet-4 - should detect overflow via isContextOverflow",
-      () =>
-        Effect.runPromise(
-          Effect.gen(function* () {
-            const model = getModel("anthropic", "claude-sonnet-4-6");
-            const result = yield* Effect.promise(() =>
-              testContextOverflow(model, envValue("ANTHROPIC_OAUTH_TOKEN")!),
             );
             logResult(result);
 

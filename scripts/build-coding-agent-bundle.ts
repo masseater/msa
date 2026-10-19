@@ -112,7 +112,7 @@ const requireInputs = (host: HostShape, layout: Layout) =>
       host.join(layout.codingAgentDistDir, "rpc-entry.js"),
       host.join(layout.codingAgentDistDir, "utils", "image-resize-worker.js"),
       host.join(layout.codingAgentDistDir, "extensions", "codemode", "worker.js"),
-      host.join(layout.aiDistDir, "auth", "oauth", "anthropic.js"),
+      host.join(layout.aiDistDir, "auth", "oauth", "openai-chatgpt.js"),
     ],
     (entry) =>
       Effect.gen(function* () {
@@ -124,7 +124,6 @@ const requireInputs = (host: HostShape, layout: Layout) =>
   );
 
 const lazyEntryPointsOf = (host: HostShape, layout: Layout): Record<string, string> => ({
-  anthropic: host.join(layout.aiDistDir, "auth", "oauth", "anthropic.js"),
   "image-resize-worker": host.join(layout.codingAgentDistDir, "utils", "image-resize-worker.js"),
   "openai-chatgpt": host.join(layout.aiDistDir, "auth", "oauth", "openai-chatgpt.js"),
   "openai-codex": host.join(layout.aiDistDir, "auth", "oauth", "openai-codex.js"),

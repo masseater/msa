@@ -4,6 +4,10 @@ import type {
   SpanOptions,
   SpanStatus,
   TelemetryContext,
+  TelemetryLogRecord,
+  TelemetryLogSeverity,
+  TelemetryMetricKind,
+  TelemetryMetricRecord,
   TelemetrySpan,
 } from "./context.ts";
 import { NOOP_TELEMETRY_CONTEXT } from "./noop.ts";
@@ -22,6 +26,21 @@ export interface RecordedTelemetrySpan {
   readonly status: SpanStatus;
   readonly settled: boolean;
   readonly endSequence?: number;
+}
+
+export interface RecordedTelemetryLog {
+  readonly spanId: number | null;
+  readonly severity: TelemetryLogSeverity;
+  readonly body: string;
+  readonly attributes: Readonly<SpanAttributes>;
+}
+
+export interface RecordedTelemetryMetric {
+  readonly kind: TelemetryMetricKind;
+  readonly name: string;
+  readonly value: number;
+  readonly unit?: string;
+  readonly attributes: Readonly<SpanAttributes>;
 }
 
 interface MutableRecordedTelemetryEvent {
@@ -43,6 +62,8 @@ interface MutableRecordedTelemetrySpan {
 
 interface InMemoryTelemetryState {
   spans: MutableRecordedTelemetrySpan[];
+  logs: RecordedTelemetryLog[];
+  metrics: RecordedTelemetryMetric[];
   nextSpanId: number;
   nextEndSequence: number;
 }
@@ -127,6 +148,39 @@ function recordPassively(recordedSpan: MutableRecordedTelemetrySpan, record: () 
   }
 }
 
+function recordLog(
+  state: InMemoryTelemetryState,
+  spanId: number | null,
+  record: TelemetryLogRecord,
+): void {
+  try {
+    const log: RecordedTelemetryLog = {
+      spanId,
+      severity: record.severity,
+      body: record.body,
+      attributes: copyAttributes(record.attributes),
+    };
+    state.logs.push(log);
+  } catch {
+    // Telemetry never fails the work it describes.
+  }
+}
+
+function recordMetric(state: InMemoryTelemetryState, record: TelemetryMetricRecord): void {
+  try {
+    const metric: RecordedTelemetryMetric = {
+      kind: record.kind,
+      name: record.name,
+      value: record.value,
+      ...(record.unit === undefined ? {} : { unit: record.unit }),
+      attributes: copyAttributes(record.attributes),
+    };
+    state.metrics.push(metric);
+  } catch {
+    // Telemetry never fails the work it describes.
+  }
+}
+
 function createRecordingSpan(
   state: InMemoryTelemetryState,
   recordedSpan: MutableRecordedTelemetrySpan,
@@ -151,6 +205,12 @@ function createRecordingSpan(
         recordedSpan.status = copyStatus(status);
         recordedSpan.explicitStatus = true;
       });
+    },
+    log(record) {
+      if (!recordedSpan.settled) recordLog(state, recordedSpan.id, record);
+    },
+    recordMetric(record) {
+      if (!recordedSpan.settled) recordMetric(state, record);
     },
   };
 }
@@ -202,6 +262,8 @@ function startInMemorySpan<T>(
 export class InMemoryTelemetryContext implements TelemetryContext {
   private readonly state: InMemoryTelemetryState = {
     spans: [],
+    logs: [],
+    metrics: [],
     nextSpanId: 1,
     nextEndSequence: 1,
   };
@@ -211,6 +273,25 @@ export class InMemoryTelemetryContext implements TelemetryContext {
     callback: (span: TelemetrySpan) => T | Promise<T>,
   ): Promise<T> {
     return startInMemorySpan(this.state, undefined, options, callback);
+  }
+
+  log(record: TelemetryLogRecord): void {
+    recordLog(this.state, null, record);
+  }
+
+  recordMetric(record: TelemetryMetricRecord): void {
+    recordMetric(this.state, record);
+  }
+
+  getLogs(): readonly RecordedTelemetryLog[] {
+    return this.state.logs.map((log) => ({ ...log, attributes: copyAttributes(log.attributes) }));
+  }
+
+  getMetrics(): readonly RecordedTelemetryMetric[] {
+    return this.state.metrics.map((metric) => ({
+      ...metric,
+      attributes: copyAttributes(metric.attributes),
+    }));
   }
 
   getSpans(): readonly RecordedTelemetrySpan[] {

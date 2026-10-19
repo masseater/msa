@@ -315,17 +315,57 @@
       "$ref": "#/$defs/KeybindingValue",
       "description": "Delete session when query is empty"
     },
-    "app.orchestrator.start": {
+    "app.orchestrator.message": {
       "$ref": "#/$defs/KeybindingValue",
-      "description": "Start a session for a task you type"
+      "description": "Send a message to the selected task"
+    },
+    "app.orchestrator.note": {
+      "$ref": "#/$defs/KeybindingValue",
+      "description": "Send a shared note to the selected task's round"
+    },
+    "app.orchestrator.toggleFinished": {
+      "$ref": "#/$defs/KeybindingValue",
+      "description": "Show or hide finished tasks"
+    },
+    "app.orchestrator.rerun": {
+      "$ref": "#/$defs/KeybindingValue",
+      "description": "Rerun the selected task in a new session"
     },
     "app.orchestrator.stop": {
       "$ref": "#/$defs/KeybindingValue",
-      "description": "Stop the selected orchestrated session"
+      "description": "Stop the selected task"
     },
     "app.orchestrator.model": {
       "$ref": "#/$defs/KeybindingValue",
-      "description": "Switch the selected orchestrated session's model"
+      "description": "Switch the selected task's model"
+    },
+    "app.orchestrator.depends": {
+      "$ref": "#/$defs/KeybindingValue",
+      "description": "Change the dependencies of the selected task"
+    },
+    "app.orchestrator.currentState": {
+      "$ref": "#/$defs/KeybindingValue",
+      "description": "Rewrite the current state of the selected task"
+    },
+    "app.orchestrator.goalState": {
+      "$ref": "#/$defs/KeybindingValue",
+      "description": "Rewrite the goal state of the selected task"
+    },
+    "app.orchestrator.sessions": {
+      "$ref": "#/$defs/KeybindingValue",
+      "description": "Open the sessions view"
+    },
+    "app.orchestrator.back": {
+      "$ref": "#/$defs/KeybindingValue",
+      "description": "Leave the sessions view"
+    },
+    "app.orchestrator.paneWiden": {
+      "$ref": "#/$defs/KeybindingValue",
+      "description": "Widen the sessions pane"
+    },
+    "app.orchestrator.paneNarrow": {
+      "$ref": "#/$defs/KeybindingValue",
+      "description": "Narrow the sessions pane"
     },
     "app.models.save": {
       "$ref": "#/$defs/KeybindingValue",
@@ -342,6 +382,10 @@
     "app.models.toggleProvider": {
       "$ref": "#/$defs/KeybindingValue",
       "description": "Toggle all models for provider"
+    },
+    "app.models.policy": {
+      "$ref": "#/$defs/KeybindingValue",
+      "description": "Deny or allow the selected model"
     },
     "app.models.reorderUp": {
       "$ref": "#/$defs/KeybindingValue",
