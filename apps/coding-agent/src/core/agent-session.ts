@@ -2735,6 +2735,15 @@ export class AgentSession {
     return { steering, followUp };
   }
 
+  flushQueue(): number {
+    const count = this.agent.flushQueuedMessages();
+    if (count === 0) return 0;
+    this._steeringMessages = [...this._steeringMessages, ...this._followUpMessages];
+    this._followUpMessages = [];
+    this._emitQueueUpdate();
+    return count;
+  }
+
   /** Number of pending messages (includes both steering and follow-up) */
   get pendingMessageCount(): number {
     return this._steeringMessages.length + this._followUpMessages.length;
