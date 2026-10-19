@@ -48,7 +48,7 @@ afterEach(() => {
   for (const dir of tempDirs.splice(0)) rmSync(dir, { recursive: true, force: true });
 });
 
-async function setup() {
+async function setup(extraContent?: string) {
   const settings = settingsForView();
   const dir = tempDirs[tempDirs.length - 1] ?? "";
   const store = new MemoryStore(settings.database);
@@ -74,6 +74,15 @@ async function setup() {
     project: null,
     now: base + 3_000,
   });
+  if (extraContent !== undefined) {
+    store.save({
+      content: extraContent,
+      kind: "note",
+      scope: "project",
+      project: resolveProjectName(dir),
+      now: base + 4_000,
+    });
+  }
   store.close();
   const service = new MemoryService({ settings, cwd: dir });
   services.push(service);
@@ -118,6 +127,25 @@ describe("MemoryView", () => {
     expect(detail).toContain("none (keyword search only)");
     view.handleInput(ESC);
     expect(screen().join("\n")).toContain("Global");
+  });
+
+  it("scrolls a long memory and stops at both ends", async () => {
+    const long = Array.from({ length: 40 }, (_, index) => `line ${index + 1}`).join("\n");
+    const { view, screen } = await setup(long);
+    view.handleInput(ENTER);
+    const rows = () => screen().map((line) => line.trim());
+    expect(rows()).toContain("line 1");
+    expect(rows()).not.toContain("line 40");
+    expect(screen().join("\n")).toContain("↓");
+
+    for (let step = 0; step < 5; step++) view.handleInput("\x1b[6~");
+    expect(screen().join("\n")).toContain("embedding");
+    expect(screen().join("\n")).toContain("↑");
+    expect(screen().join("\n")).not.toContain("↓");
+
+    for (let step = 0; step < 5; step++) view.handleInput("\x1b[5~");
+    expect(rows()).toContain("line 1");
+    expect(screen().join("\n")).not.toContain("↑");
   });
 
   it("forgets the selected memory after a confirmation and closes on escape", async () => {

@@ -639,6 +639,7 @@ export class AgentSession {
     this._prWatch = new PrWatch({
       gh: makeGh({ cwd: this._cwd }),
       host: createPrWatchHost({
+        threadId: this.sessionManager.getSessionId(),
         sendMessage: (message, options) => {
           void this.sendCustomMessage(message, options);
         },

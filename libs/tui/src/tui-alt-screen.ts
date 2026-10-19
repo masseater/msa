@@ -801,6 +801,7 @@ export class TuiAltScreen extends TuiBase implements ViewportTUI {
       }
     }
     if (this.shouldDeferViewportInputToOverlay()) return undefined;
+    if (this.getFocusedComponent()?.wantsViewportKeys === true) return undefined;
     if (keybindings.matches(data, "tui.altScreen.pageUp")) {
       if (!isRelease) {
         this.scrollBy(

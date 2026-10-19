@@ -250,4 +250,26 @@ describe("TuiAltScreen", () => {
     assert.ok(terminal.getViewport().some((line) => line.includes("↑ ↓")));
     tui.stop();
   });
+
+  it("gives viewport keys to a focused component that claims them", async () => {
+    const terminal = new VirtualTerminal(20, 6);
+    const tui = new TuiAltScreen(terminal);
+    tui.addChild(
+      new Text(Array.from({ length: 12 }, (_, index) => `line ${index + 1}`).join("\n"), 0, 0),
+    );
+    const view = new InputOverlay();
+    view.wantsViewportKeys = true;
+    tui.setFocus(view);
+    tui.start();
+    await terminal.waitForRender();
+    const topBefore = tui.viewportTop;
+
+    const keys = ["\x1b[5~", "\x1b[6~", "\x1b[1;5A"];
+    for (const key of keys) terminal.sendInput(key);
+    await terminal.waitForRender();
+
+    assert.deepStrictEqual(view.inputs, keys);
+    assert.strictEqual(tui.viewportTop, topBefore);
+    tui.stop();
+  });
 });
