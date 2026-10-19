@@ -319,7 +319,7 @@ export type AgentSessionEvent =
   | { type: "goal_changed"; goal: GoalSnapshot | undefined }
   /** A watched pull request changed state, or the set of watches changed. */
   | { type: "pr_watch_changed"; prWatch: PrWatchSnapshot }
-  /** A session the orchestrator started changed state or streamed. */
+  /** A thread the orchestrator started changed state or streamed. */
   | { type: "orchestrator_changed" }
   /** `/goal` without arguments, or `/goal clear` without an active goal. */
   | { type: "goal_status"; goal: GoalSnapshot | undefined }
@@ -397,8 +397,8 @@ export interface AgentSessionConfig {
   /** Session start event metadata emitted when extensions bind to this runtime. */
   sessionStartEvent?: SessionStartEvent | undefined;
   /**
-   * Creates the sessions the orchestrator tools start. Without it the session has no orchestrator
-   * tools.
+   * Creates the session each orchestrator thread runs in. Without it the session has no
+   * orchestrator tools.
    */
   createWorkerSession?: ((options: CreateWorkerOptions) => Promise<WorkerSession>) | undefined;
   /** Where the session's spans, metrics, and logs go. Default: nowhere. */
@@ -3054,7 +3054,7 @@ export class AgentSession {
       reviewModel: this.settingsManager.getOrchestratorReviewModel() ?? currentReference,
       reviewThinkingLevel:
         this.settingsManager.getOrchestratorReviewThinkingLevel() ?? this.thinkingLevel,
-      maxConcurrentSessions: this.settingsManager.getOrchestratorMaxConcurrentSessions(),
+      maxConcurrentThreads: this.settingsManager.getOrchestratorMaxConcurrentThreads(),
     };
   }
 

@@ -6,9 +6,9 @@ import { KeybindingsManager } from "../src/core/keybindings.ts";
 import type { Orchestrator } from "../src/core/orchestrator/orchestrator.ts";
 import type { OrchestratorSnapshot, TaskSnapshot } from "../src/core/orchestrator/types.ts";
 import { CustomEditor } from "../src/modes/interactive/components/custom-editor.ts";
-import { SessionPane } from "../src/modes/interactive/components/session-pane.ts";
 import { viewHelpers } from "../src/modes/interactive/components/tasks-view-helpers.ts";
 import { TasksView } from "../src/modes/interactive/components/tasks-view.ts";
+import { ThreadPane } from "../src/modes/interactive/components/thread-pane.ts";
 import { EditorSlot } from "../src/modes/interactive/editor-slot.ts";
 import { OrchestratorPane } from "../src/modes/interactive/orchestrator-pane.ts";
 import { getEditorTheme, initTheme } from "../src/modes/interactive/theme/theme.ts";
@@ -32,7 +32,7 @@ beforeAll(() => {
 function orchestratorFor(tasks: readonly TaskSnapshot[]): Orchestrator {
   const snapshot: OrchestratorSnapshot = {
     tasks,
-    sessions: [],
+    threads: [],
     rounds: [...new Set(tasks.map((entry) => entry.round))].map((id) => ({
       id,
       title: id,
@@ -40,7 +40,7 @@ function orchestratorFor(tasks: readonly TaskSnapshot[]): Orchestrator {
       taskIds: tasks.filter((entry) => entry.round === id).map((entry) => entry.id),
     })),
     replans: [],
-    maxConcurrentSessions: 4,
+    maxConcurrentThreads: 4,
   };
   return { snapshot, refresh: async () => {} } as unknown as Orchestrator;
 }
@@ -57,7 +57,7 @@ function paneTasks(): TaskSnapshot[] {
         {
           id: "r1",
           taskId: FIRST,
-          sessionId: "s1",
+          threadId: "s1",
           role: "worker",
           status: "running",
           content: "the divider renders",
@@ -108,7 +108,7 @@ async function screen(options: { width?: number; orchestrator?: Orchestrator | u
         maxHeight: () => terminal.rows - 4,
         state,
       });
-      return { component: view, focus: view, dispose: pane.openSessions() };
+      return { component: view, focus: view, dispose: pane.openThreads() };
     }),
   );
   ui.setLayoutRoot(pane.layout(container));
@@ -144,14 +144,14 @@ describe("orchestrator pane layout", () => {
     const view = await screen();
     expect(view.divider()).toBe(69);
     expect(view.lines().every((line) => line[69] === "│")).toBe(true);
-    expect(view.lines()[0]).toContain("Sessions");
+    expect(view.lines()[0]).toContain("Threads");
   });
 
   it("moves the divider when it is dragged with the mouse", async () => {
     const view = await screen();
     await view.send(press(69), drag(55), drag(49), release(49));
     expect(view.divider()).toBe(49);
-    expect(view.lines()[0]!.slice(50)).toContain("Sessions");
+    expect(view.lines()[0]!.slice(50)).toContain("Threads");
   });
 
   it("moves the divider with ctrl+shift+arrows", async () => {
@@ -173,11 +173,11 @@ describe("orchestrator pane layout", () => {
     const view = await screen();
     await view.resize(79);
     expect(view.divider()).toBe(-1);
-    expect(view.lines().join("\n")).not.toContain("Sessions");
+    expect(view.lines().join("\n")).not.toContain("Threads");
 
     await view.resize(80);
     expect(view.divider()).toBe(55);
-    expect(view.lines()[0]).toContain("Sessions");
+    expect(view.lines()[0]).toContain("Threads");
   });
 
   it("hides a widened pane once the conversation would be narrower than 40 columns", async () => {
@@ -202,13 +202,13 @@ describe("orchestrator pane layout", () => {
     const view = await screen({ orchestrator: undefined });
     await view.send(SHIFT_RIGHT, CTRL_SHIFT_LEFT);
     expect(view.divider()).toBe(-1);
-    expect(view.lines().join("\n")).not.toContain("Sessions");
+    expect(view.lines().join("\n")).not.toContain("Threads");
     expect(view.ui.getFocusedComponent()).toBe(view.editor);
   });
 });
 
-describe("sessions view from the pane", () => {
-  it("opens /sessions full width with shift+right and returns with escape", async () => {
+describe("threads view from the pane", () => {
+  it("opens /threads full width with shift+right and returns with escape", async () => {
     const view = await screen();
     await view.send(SHIFT_RIGHT);
     expect(view.ui.getFocusedComponent()).toBeInstanceOf(TasksView);
@@ -227,7 +227,7 @@ describe("sessions view from the pane", () => {
     expect(view.divider()).toBe(69);
   });
 
-  it("keeps the selection made in /sessions in the pane", async () => {
+  it("keeps the selection made in /threads in the pane", async () => {
     const view = await screen();
     await view.send(SHIFT_RIGHT, DOWN, ESC);
     expect(view.state.selectedId).toBe("b");
@@ -245,7 +245,7 @@ describe("orchestrator pane contents", () => {
     const tasks = paneTasks();
     const orchestrator = orchestratorFor(tasks);
     const state = { showFinished: false, selectedId: FIRST };
-    const pane = new SessionPane({ orchestrator: () => orchestrator, state, height: () => 40 });
+    const pane = new ThreadPane({ orchestrator: () => orchestrator, state, height: () => 40 });
     const text = stripAnsi(pane.render(48).join("\n"));
     expect(text).toContain("› ● build the pane");
     expect(text).toContain("01a1518a · flash · 2m ago");
@@ -261,7 +261,7 @@ describe("orchestrator pane contents", () => {
   });
 
   it("fits its width and height", () => {
-    const pane = new SessionPane({
+    const pane = new ThreadPane({
       orchestrator: () => orchestratorFor(paneTasks()),
       state: viewHelpers.createTasksViewState(),
       height: () => 10,

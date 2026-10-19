@@ -26,7 +26,7 @@ export function exclusive<A>(
 
 export function release(runtime: Runtime): void {
   runtime.replanning = false;
-  for (const sessionId of [...runtime.wrapUps.keys()]) wrapping.cancel(runtime, sessionId);
+  for (const threadId of [...runtime.wrapUps.keys()]) wrapping.cancel(runtime, threadId);
 }
 
 export function ensured<A>(
@@ -43,18 +43,18 @@ export function ensured<A>(
   );
 }
 
-export function stopSessions(
+export function stopThreads(
   runtime: Runtime,
   memos: ReadonlyMap<string, Deferred.Deferred<string, string>>,
 ): Effect.Effect<StopOutcome> {
   return Effect.gen(function* () {
     const stopped = new Map<string, string>();
-    for (const [sessionId, memo] of memos) {
-      const result = yield* Effect.result(wrapping.awaitMemo(runtime, sessionId, memo));
+    for (const [threadId, memo] of memos) {
+      const result = yield* Effect.result(wrapping.awaitMemo(runtime, threadId, memo));
       if (Result.isFailure(result)) {
-        return { aborted: `${sessionId}: ${result.failure}`, memos: stopped };
+        return { aborted: `${threadId}: ${result.failure}`, memos: stopped };
       }
-      stopped.set(sessionId, result.success);
+      stopped.set(threadId, result.success);
     }
     return { aborted: null, memos: stopped };
   });

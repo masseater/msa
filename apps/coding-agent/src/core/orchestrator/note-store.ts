@@ -57,7 +57,7 @@ function unreadNotes(
   database: DatabaseSync,
   project: string,
   taskId: string,
-  sessionId: string,
+  threadId: string,
 ): Note[] {
   const rows = database
     .prepare(
@@ -69,29 +69,24 @@ function unreadNotes(
            OR EXISTS (SELECT 1 FROM note_targets t WHERE t.note_id = n.id AND t.task_id = ?)
          )
          AND NOT EXISTS (
-           SELECT 1 FROM note_reads r WHERE r.note_id = n.id AND r.session_id = ?
+           SELECT 1 FROM note_reads r WHERE r.note_id = n.id AND r.thread_id = ?
          )
        ORDER BY n.created_at, n.id`,
     )
-    .all(project, taskId, taskId, sessionId) as unknown as NoteRow[];
+    .all(project, taskId, taskId, threadId) as unknown as NoteRow[];
   return rows.map((row) => toNote(database, row));
 }
 
-function markNoteRead(
-  database: DatabaseSync,
-  noteId: string,
-  sessionId: string,
-  now: number,
-): void {
+function markNoteRead(database: DatabaseSync, noteId: string, threadId: string, now: number): void {
   database
-    .prepare("INSERT OR IGNORE INTO note_reads (note_id, session_id, read_at) VALUES (?, ?, ?)")
-    .run(noteId, sessionId, now);
+    .prepare("INSERT OR IGNORE INTO note_reads (note_id, thread_id, read_at) VALUES (?, ?, ?)")
+    .run(noteId, threadId, now);
 }
 
-function noteRead(database: DatabaseSync, noteId: string, sessionId: string): boolean {
+function noteRead(database: DatabaseSync, noteId: string, threadId: string): boolean {
   const row = database
-    .prepare("SELECT 1 AS found FROM note_reads WHERE note_id = ? AND session_id = ?")
-    .get(noteId, sessionId);
+    .prepare("SELECT 1 AS found FROM note_reads WHERE note_id = ? AND thread_id = ?")
+    .get(noteId, threadId);
   return row !== undefined;
 }
 

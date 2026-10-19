@@ -23,7 +23,7 @@ import type {
 
 interface Handoff {
   taskId: string;
-  sessionId: string;
+  threadId: string;
   title: string;
   memo: string;
   repo: RepoState;
@@ -39,12 +39,12 @@ function collect(runtime: Runtime, memos: ReadonlyMap<string, string>): Effect.E
   return Effect.gen(function* () {
     const database = runtime.database;
     const handoffs: Handoff[] = [];
-    for (const [sessionId, memo] of memos) {
-      for (const assignment of store.assignmentsOfSession(database, sessionId)) {
+    for (const [threadId, memo] of memos) {
+      for (const assignment of store.assignmentsOfThread(database, threadId)) {
         const task = store.getTask(database, assignment.taskId);
         if (task === undefined) continue;
         const repo = yield* repoStates.read(task.cwd);
-        handoffs.push({ taskId: task.id, sessionId, title: task.title, memo, repo });
+        handoffs.push({ taskId: task.id, threadId, title: task.title, memo, repo });
       }
     }
     return handoffs;
@@ -63,14 +63,14 @@ function memoBlock(replanId: string, reason: string, handoff: Handoff): string {
 function writeReport(
   runtime: Runtime,
   taskId: string,
-  sessionId: string,
+  threadId: string,
   content: string,
   now: number,
 ): void {
   store.insertReport(runtime.database, {
     id: newId("rep"),
     taskId,
-    sessionId,
+    threadId,
     role: "worker",
     status: "stopped",
     content,
@@ -221,12 +221,12 @@ function writeHandoffs(
 ): void {
   for (const handoff of handoffs) {
     const content = memoBlock(replanId, prepared.input.reason, handoff);
-    writeReport(runtime, handoff.taskId, handoff.sessionId, content, now);
+    writeReport(runtime, handoff.taskId, handoff.threadId, content, now);
     const targets = prepared.keep.includes(handoff.taskId)
       ? [handoff.taskId]
       : [...(inheritors.get(handoff.taskId) ?? [])];
     if (targets.length === 0) continue;
-    for (const target of targets) writeReport(runtime, target, handoff.sessionId, content, now);
+    for (const target of targets) writeReport(runtime, target, handoff.threadId, content, now);
     store.insertNote(runtime.database, {
       id: newId("note"),
       project: runtime.options.project,
@@ -253,15 +253,15 @@ function write(
     const creation = createTasks(runtime, prepared, now);
     const rewired = rewire(runtime, prepared, creation.byKey);
     keep(runtime, prepared, now);
-    if (prepared.input.maxConcurrentSessions !== undefined) {
-      store.storeMaxConcurrent(database, project, prepared.input.maxConcurrentSessions);
-      runtime.maxConcurrentSessions = prepared.input.maxConcurrentSessions;
+    if (prepared.input.maxConcurrentThreads !== undefined) {
+      store.storeMaxConcurrent(database, project, prepared.input.maxConcurrentThreads);
+      runtime.maxConcurrentThreads = prepared.input.maxConcurrentThreads;
     }
     writeHandoffs(runtime, prepared, handoffs, replanId, now, creation.inheritors);
     const stopped: ReplanStopped[] = handoffs.map((handoff) => ({
       taskId: handoff.taskId,
       title: handoff.title,
-      sessionId: handoff.sessionId,
+      threadId: handoff.threadId,
       memo: handoff.memo,
     }));
     const changes: ReplanChanges = {

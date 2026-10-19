@@ -236,7 +236,7 @@ it("rewires a kept task onto the tasks that replace another one", () =>
     }),
   ));
 
-it("keeps a task, resumes it in a new session, and puts the memo in the prompt", () =>
+it("keeps a task, resumes it in a new thread, and puts the memo in the prompt", () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const { orchestrator, workers } = setup();

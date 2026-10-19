@@ -137,7 +137,7 @@ const APP_KEYBINDINGS = {
   },
   "app.orchestrator.rerun": {
     defaultKeys: "r",
-    description: "Rerun the selected task in a new session",
+    description: "Rerun the selected task in a new thread",
   },
   "app.orchestrator.stop": {
     defaultKeys: "s",
@@ -159,21 +159,21 @@ const APP_KEYBINDINGS = {
     defaultKeys: "g",
     description: "Rewrite the goal state of the selected task",
   },
-  "app.orchestrator.sessions": {
+  "app.orchestrator.threads": {
     defaultKeys: "shift+right",
-    description: "Open the sessions view",
+    description: "Open the threads view",
   },
   "app.orchestrator.back": {
     defaultKeys: "shift+left",
-    description: "Leave the sessions view",
+    description: "Leave the threads view",
   },
   "app.orchestrator.paneWiden": {
     defaultKeys: "ctrl+shift+left",
-    description: "Widen the sessions pane",
+    description: "Widen the threads pane",
   },
   "app.orchestrator.paneNarrow": {
     defaultKeys: "ctrl+shift+right",
-    description: "Narrow the sessions pane",
+    description: "Narrow the threads pane",
   },
   "app.models.save": {
     defaultKeys: "ctrl+s",

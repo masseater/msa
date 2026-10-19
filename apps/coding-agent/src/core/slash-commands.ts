@@ -95,7 +95,7 @@ export const BUILTIN_SLASH_COMMANDS: ReadonlyArray<BuiltinSlashCommand> = [
     description: "Open the memory view, or manage long-term memory with an argument",
     argumentHint: "[list|search <query>|forget <id>|stats]",
   },
-  { name: "tasks", description: "Show the task DAG the orchestrator runs", aliases: ["sessions"] },
+  { name: "tasks", description: "Show the task DAG the orchestrator runs", aliases: ["threads"] },
   {
     name: "handoff",
     description: "Write the orchestrator's state to a file the next session resumes from",

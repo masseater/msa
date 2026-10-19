@@ -101,7 +101,7 @@ describe("the file /handoff writes", () => {
       }),
     ));
 
-  it("lists what waits and what runs, and leaves running sessions running", () =>
+  it("lists what waits and what runs, and leaves running threads running", () =>
     Effect.runPromise(
       Effect.gen(function* () {
         const { orchestrator, workers } = setup({ handoffDirectory: directory() });
@@ -137,7 +137,7 @@ describe("the file /handoff writes", () => {
       }),
     ));
 
-  it("says nothing about stopping when no session runs", () =>
+  it("says nothing about stopping when no thread runs", () =>
     Effect.runPromise(
       Effect.gen(function* () {
         const { orchestrator } = setup({ handoffDirectory: directory() });
@@ -245,7 +245,7 @@ describe("where the file goes", () => {
 });
 
 describe("the handoff tool", () => {
-  it("returns the line to paste, and the running notice only while sessions run", () =>
+  it("returns the line to paste, and the running notice only while threads run", () =>
     Effect.runPromise(
       Effect.gen(function* () {
         const handoffDirectory = directory();

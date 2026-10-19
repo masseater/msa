@@ -29,7 +29,7 @@ function reasonFor(
   if (task.kind === "review" && task.dependsOn.length === 0) {
     return { kind: "review", detail: "round has no work to review yet" };
   }
-  if (free <= 0) return { kind: "capacity", detail: "no free session slot" };
+  if (free <= 0) return { kind: "capacity", detail: "no free thread slot" };
   return { kind: "scheduling", detail: "about to start" };
 }
 
@@ -97,13 +97,13 @@ function handoffOf(task: TaskView): string | null {
 function buildSnapshot(
   database: DatabaseSync,
   project: string,
-  maxConcurrentSessions: number,
+  maxConcurrentThreads: number,
 ): OrchestratorSnapshot {
   const views = taskViews(database, project);
   const byId = new Map(views.map((task) => [task.id, task]));
-  const sessions = store.listSessions(database, project);
+  const threads = store.listThreads(database, project);
   const free =
-    maxConcurrentSessions - sessions.filter((session) => session.status === "running").length;
+    maxConcurrentThreads - threads.filter((thread) => thread.status === "running").length;
   const replans = replanStore.listReplans(database, project, 10);
   const byTask = taskMarks(replans[0]);
   const snapshots: TaskSnapshot[] = views.map((task) => ({
@@ -114,10 +114,10 @@ function buildSnapshot(
   }));
   return {
     tasks: snapshots,
-    sessions: store.sessionViews(database, project),
+    threads: store.threadViews(database, project),
     rounds: roundViews(database, project, views),
     replans,
-    maxConcurrentSessions,
+    maxConcurrentThreads,
   };
 }
 

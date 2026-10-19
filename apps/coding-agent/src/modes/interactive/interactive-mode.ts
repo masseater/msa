@@ -2579,7 +2579,7 @@ export class InteractiveMode {
       this.editor.setText("");
       return true;
     }
-    if (text === "/tasks" || text === "/sessions") {
+    if (text === "/tasks" || text === "/threads") {
       this.showTasksView();
       this.editor.setText("");
       return true;
@@ -5214,7 +5214,7 @@ export class InteractiveMode {
     void orchestrator.refresh();
     this.editorSlot.showSelector((done) => {
       const tick = setInterval(() => this.ui.requestRender(), 1000);
-      const closePane = this.orchestratorPane.openSessions();
+      const closePane = this.orchestratorPane.openThreads();
       const view = new TasksView(
         {
           orchestrator,

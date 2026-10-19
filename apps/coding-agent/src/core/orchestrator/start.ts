@@ -6,23 +6,23 @@ import { prompts } from "./prompts.ts";
 import { type Runtime, nowMillis } from "./runtime.ts";
 import { snapshots } from "./snapshot.ts";
 import { store } from "./store.ts";
-import type { Note, SessionRole, Task, TaskView } from "./types.ts";
+import type { Note, ThreadRole, Task, TaskView } from "./types.ts";
 import type { WorkerSession } from "./worker.ts";
 
-interface SessionPlan {
-  sessionId: string;
+interface ThreadPlan {
+  threadId: string;
   prompt: string;
   model: string;
   thinkingLevel: Task["thinkingLevel"];
   notes: readonly Note[];
 }
 
-function notesFor(runtime: Runtime, taskId: string, sessionId: string): Note[] {
-  return store.unreadNotes(runtime.database, runtime.options.project, taskId, sessionId);
+function notesFor(runtime: Runtime, taskId: string, threadId: string): Note[] {
+  return store.unreadNotes(runtime.database, runtime.options.project, taskId, threadId);
 }
 
-function markRead(runtime: Runtime, notes: readonly Note[], sessionId: string, now: number): void {
-  for (const note of notes) store.markNoteRead(runtime.database, note.id, sessionId, now);
+function markRead(runtime: Runtime, notes: readonly Note[], threadId: string, now: number): void {
+  for (const note of notes) store.markNoteRead(runtime.database, note.id, threadId, now);
 }
 
 function dependencyViews(runtime: Runtime, task: TaskView): TaskView[] {
@@ -57,7 +57,7 @@ function reviewerPrompt(
 function promptFor(
   runtime: Runtime,
   task: TaskView,
-  role: SessionRole,
+  role: ThreadRole,
   workerReport: string,
   notes: readonly Note[],
   extra: string,
@@ -69,53 +69,53 @@ function promptFor(
   return [base, extra].filter(Boolean).join("\n\n");
 }
 
-function planSession(
+function planThread(
   runtime: Runtime,
   task: Task,
-  role: SessionRole,
+  role: ThreadRole,
   workerReport: string,
   extra: string,
-): SessionPlan {
+): ThreadPlan {
   const defaults = runtime.options.defaults();
-  const sessionId = newId("s");
+  const threadId = newId("th");
   const view = snapshots
     .taskViews(runtime.database, runtime.options.project)
     .find((candidate) => candidate.id === task.id);
   if (view === undefined) throw new Error(`Unknown task: ${task.id}`);
-  const notes = notesFor(runtime, task.id, sessionId);
+  const notes = notesFor(runtime, task.id, threadId);
   const prompt = promptFor(runtime, view, role, workerReport, notes, extra);
   const model = role === "worker" ? (task.model ?? defaults.workerModel) : defaults.reviewModel;
   const thinkingLevel =
     role === "worker"
       ? (task.thinkingLevel ?? defaults.workerThinkingLevel)
       : defaults.reviewThinkingLevel;
-  return { sessionId, prompt, model, thinkingLevel, notes };
+  return { threadId, prompt, model, thinkingLevel, notes };
 }
 
-function failSession(
+function failThread(
   runtime: Runtime,
-  plan: SessionPlan,
+  plan: ThreadPlan,
   task: Task,
-  role: SessionRole,
+  role: ThreadRole,
   now: number,
   message: string,
 ): void {
-  store.updateSession(runtime.database, plan.sessionId, { status: "failed" }, now);
+  store.updateThread(runtime.database, plan.threadId, { status: "failed" }, now);
   store.setTaskStatus(runtime.database, task.id, "failed", now);
   runtime.publish();
   runtime.options.report(message, { taskId: task.id, role, status: "failed", started: [] });
 }
 
-function insertRunningSession(
+function insertRunningThread(
   runtime: Runtime,
-  plan: SessionPlan,
+  plan: ThreadPlan,
   task: Task,
-  role: SessionRole,
+  role: ThreadRole,
   now: number,
 ): void {
   const database = runtime.database;
-  store.insertSession(database, {
-    id: plan.sessionId,
+  store.insertThread(database, {
+    id: plan.threadId,
     project: runtime.options.project,
     model: plan.model,
     thinkingLevel: plan.thinkingLevel ?? runtime.options.defaults().workerThinkingLevel,
@@ -127,26 +127,26 @@ function insertRunningSession(
   });
   store.insertAssignment(database, {
     taskId: task.id,
-    sessionId: plan.sessionId,
+    threadId: plan.threadId,
     role,
     createdAt: now,
   });
   store.setTaskStatus(database, task.id, "running", now);
-  markRead(runtime, plan.notes, plan.sessionId, now);
+  markRead(runtime, plan.notes, plan.threadId, now);
 }
 
 function openWorker(
   runtime: Runtime,
-  plan: SessionPlan,
+  plan: ThreadPlan,
   task: Task,
-  role: SessionRole,
+  role: ThreadRole,
   now: number,
 ): Effect.Effect<WorkerSession | undefined, OrchestratorError> {
   return Effect.gen(function* () {
     const thinkingLevel = plan.thinkingLevel ?? runtime.options.defaults().workerThinkingLevel;
-    yield* Effect.sync(() => insertRunningSession(runtime, plan, task, role, now));
-    const telemetry = runtime.telemetry.sessionStarted(
-      { sessionId: plan.sessionId, role, model: plan.model, thinkingLevel },
+    yield* Effect.sync(() => insertRunningThread(runtime, plan, task, role, now));
+    const telemetry = runtime.telemetry.threadStarted(
+      { threadId: plan.threadId, role, model: plan.model, thinkingLevel },
       task,
     );
     const created = yield* Effect.result(
@@ -162,9 +162,7 @@ function openWorker(
       }),
     );
     if (Result.isFailure(created)) {
-      yield* Effect.sync(() =>
-        failSession(runtime, plan, task, role, now, created.failure.message),
-      );
+      yield* Effect.sync(() => failThread(runtime, plan, task, role, now, created.failure.message));
       return undefined;
     }
     return created.success;
@@ -173,41 +171,36 @@ function openWorker(
 
 function launch(
   runtime: Runtime,
-  sessionId: string,
+  threadId: string,
   worker: WorkerSession,
   prompt: string,
   now: number,
 ): void {
   const run = runtime.nextRun();
-  store.updateSession(
-    runtime.database,
-    sessionId,
-    { sessionFile: worker.sessionFile ?? null },
-    now,
-  );
-  runtime.workers.set(sessionId, worker);
+  store.updateThread(runtime.database, threadId, { sessionFile: worker.sessionFile ?? null }, now);
+  runtime.workers.set(threadId, worker);
   worker.subscribe(() => runtime.publish());
-  runtime.runs.set(sessionId, run);
-  runtime.runStartedAt.set(sessionId, performance.now());
+  runtime.runs.set(threadId, run);
+  runtime.runStartedAt.set(threadId, performance.now());
   void worker.prompt(prompt).then(
-    () => runtime.afterTurn(sessionId, run, worker),
-    (error: unknown) => runtime.settle(sessionId, run, worker, error),
+    () => runtime.afterTurn(threadId, run, worker),
+    (error: unknown) => runtime.settle(threadId, run, worker, error),
   );
 }
 
 function startTasks(
   runtime: Runtime,
   task: Task,
-  role: SessionRole,
+  role: ThreadRole,
   workerReport = "",
   extra = "",
 ): Effect.Effect<void, OrchestratorError> {
   return Effect.gen(function* () {
     const now = yield* nowMillis;
-    const plan = planSession(runtime, task, role, workerReport, extra);
+    const plan = planThread(runtime, task, role, workerReport, extra);
     const worker = yield* openWorker(runtime, plan, task, role, now);
     if (worker === undefined) return;
-    yield* Effect.sync(() => launch(runtime, plan.sessionId, worker, plan.prompt, now));
+    yield* Effect.sync(() => launch(runtime, plan.threadId, worker, plan.prompt, now));
   });
 }
 

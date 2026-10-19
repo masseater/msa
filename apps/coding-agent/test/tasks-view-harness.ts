@@ -6,7 +6,7 @@ import type { Orchestrator } from "../src/core/orchestrator/orchestrator.ts";
 import type {
   OrchestratorSnapshot,
   ReplanView,
-  SessionView,
+  ThreadView,
   TaskSnapshot,
 } from "../src/core/orchestrator/types.ts";
 import {
@@ -43,7 +43,7 @@ export function task(id: string, patch: Partial<TaskSnapshot> = {}): TaskSnapsho
   };
 }
 
-function session(id: string, patch: Partial<SessionView> = {}): SessionView {
+function thread(id: string, patch: Partial<ThreadView> = {}): ThreadView {
   return {
     id,
     project: "p",
@@ -62,7 +62,7 @@ function session(id: string, patch: Partial<SessionView> = {}): SessionView {
 export const TASKS = [
   task("a", {
     status: "running",
-    assignments: [{ taskId: "a", sessionId: "s-worker", role: "worker", createdAt: 0 }],
+    assignments: [{ taskId: "a", threadId: "th-worker", role: "worker", createdAt: 0 }],
   }),
   task("b", {
     dependsOn: ["a"],
@@ -73,14 +73,14 @@ export const TASKS = [
     status: "completed",
     dependsOn: ["a"],
     assignments: [
-      { taskId: "c", sessionId: "s-worker", role: "worker", createdAt: 0 },
-      { taskId: "c", sessionId: "s-review", role: "reviewer", createdAt: 1 },
+      { taskId: "c", threadId: "th-worker", role: "worker", createdAt: 0 },
+      { taskId: "c", threadId: "th-review", role: "reviewer", createdAt: 1 },
     ],
     reports: [
       {
         id: "r1",
         taskId: "c",
-        sessionId: "s-worker",
+        threadId: "th-worker",
         role: "worker",
         status: "completed",
         content: "c is done",
@@ -103,9 +103,9 @@ export const TASKS = [
   }),
 ];
 
-const SESSIONS = [
-  session("s-worker", { tasks: [{ taskId: "a", role: "worker" }] }),
-  session("s-review", {
+const THREADS = [
+  thread("th-worker", { tasks: [{ taskId: "a", role: "worker" }] }),
+  thread("th-review", {
     model: "sub/fable",
     thinkingLevel: "high",
     status: "completed",
@@ -135,24 +135,24 @@ export function setup(
   const tasks = options.tasks ?? TASKS;
   const snapshot: OrchestratorSnapshot = {
     tasks,
-    sessions: SESSIONS,
+    threads: THREADS,
     rounds: roundsOf(tasks),
     replans: options.replans ?? [
       {
         id: "rp-1",
         reason: "the api moved to v3",
         createdAt: 1,
-        stopped: [{ taskId: "d", title: "stopped-work", sessionId: "s-worker", memo: "memo d" }],
+        stopped: [{ taskId: "d", title: "stopped-work", threadId: "th-worker", memo: "memo d" }],
         created: [{ taskId: "a", title: "a", from: ["d"] }],
         dropped: [],
         kept: ["b"],
         rewired: [],
       },
     ],
-    maxConcurrentSessions: 4,
+    maxConcurrentThreads: 4,
   };
   const messages: Record<string, AgentMessage[]> = {
-    "s-worker": [fauxAssistantMessage("writing a.ts")],
+    "th-worker": [fauxAssistantMessage("writing a.ts")],
   };
   const orchestrator = {
     snapshot,
@@ -161,7 +161,7 @@ export function setup(
     progress: () => ({ startedAt: undefined, retrying: false }),
     stop: vi.fn(() => Promise.resolve(tasks[0])),
     sendMessage: vi.fn(() => Promise.resolve(tasks[1])),
-    sendNote: vi.fn(() => Promise.resolve({ noteId: "n", steeredSessions: [], waitingTasks: [] })),
+    sendNote: vi.fn(() => Promise.resolve({ noteId: "n", steeredThreads: [], waitingTasks: [] })),
     setDepends: vi.fn(() => Promise.resolve([tasks[1]])),
     setState: vi.fn(() => Promise.resolve(tasks[1])),
     rerun: vi.fn(() => Promise.resolve(tasks[2])),

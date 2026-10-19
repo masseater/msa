@@ -14,7 +14,7 @@ import { type TasksViewState, viewHelpers } from "./tasks-view-helpers.ts";
 const LABEL_WIDTH = 6;
 const ROW_LINES = 2;
 
-export interface SessionPaneOptions {
+export interface ThreadPaneOptions {
   orchestrator: () => Orchestrator | undefined;
   state: TasksViewState;
   height: () => number;
@@ -28,10 +28,10 @@ function wrap(text: string, width: number, limit: number): string[] {
   return shown;
 }
 
-export class SessionPane implements Component {
-  private readonly options: SessionPaneOptions;
+export class ThreadPane implements Component {
+  private readonly options: ThreadPaneOptions;
 
-  constructor(options: SessionPaneOptions) {
+  constructor(options: ThreadPaneOptions) {
     this.options = options;
   }
 
@@ -45,10 +45,10 @@ export class SessionPane implements Component {
     const tasks = taskList.shownTasks(orchestrator, this.options.state);
     const selected = taskList.selectedTask(orchestrator, this.options.state);
     const header = [
-      truncateToWidth(` ${theme.bold("Sessions")}`, safeWidth),
+      truncateToWidth(` ${theme.bold("Threads")}`, safeWidth),
       theme.fg("borderMuted", "─".repeat(safeWidth)),
     ];
-    const footer = [truncateToWidth(` ${keyHint("app.orchestrator.sessions", "open")}`, safeWidth)];
+    const footer = [truncateToWidth(` ${keyHint("app.orchestrator.threads", "open")}`, safeWidth)];
     const room = Math.max(0, height - header.length - footer.length);
     const listRoom = Math.min(tasks.length, Math.floor(room / 2 / ROW_LINES)) * ROW_LINES;
     const list = this.list(tasks, selected, safeWidth, listRoom);
