@@ -8,6 +8,7 @@
 
 import { type Static, Type } from "typebox";
 
+import { readOnlyVariantOf } from "../ask.ts";
 import type { ToolDefinition } from "../extensions/types.ts";
 import type { ModelRuntime } from "../model-runtime.ts";
 import {
@@ -25,6 +26,15 @@ const modelUpgradeSchema = Type.Object({
   action: Type.Union([Type.Literal("list"), Type.Literal("apply")], {
     description:
       "list: show the upgrades and the settings they would change, writing nothing; apply: write the confident upgrades to settings",
+  }),
+  model: Type.Optional(
+    Type.String({ description: "Limit to one model, as provider/model or a bare model id." }),
+  ),
+});
+
+const modelUpgradeReadSchema = Type.Object({
+  action: Type.Literal("list", {
+    description: "list: show the upgrades and the settings they would change, writing nothing",
   }),
   model: Type.Optional(
     Type.String({ description: "Limit to one model, as provider/model or a bare model id." }),
@@ -57,7 +67,7 @@ function formatChanges(
 export function createModelUpgradeToolDefinition(
   target: ModelUpgradeToolTarget,
 ): ToolDefinition<typeof modelUpgradeSchema, Record<string, unknown>> {
-  return {
+  const modelUpgrade: ToolDefinition<typeof modelUpgradeSchema, Record<string, unknown>> = {
     name: "model_upgrade",
     label: "model upgrade",
     description:
@@ -146,5 +156,15 @@ export function createModelUpgradeToolDefinition(
         },
       };
     },
+  };
+  return {
+    ...modelUpgrade,
+    readOnlyVariant: readOnlyVariantOf(modelUpgrade, {
+      actions: ["list"],
+      parameters: modelUpgradeReadSchema,
+      description:
+        "Find catalog models that a newer model of the same family and variant replaces, and the settings that would change. Applying the upgrades is not available here.",
+      promptSnippet: "Find catalog models a newer model replaces",
+    }),
   };
 }

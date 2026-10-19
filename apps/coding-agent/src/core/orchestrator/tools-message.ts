@@ -87,6 +87,7 @@ export function messageToolsC(orchestrator: Orchestrator): Record<string, ToolDe
       label: "search reports",
       description: "Full-text search across the reports of every task and session.",
       promptSnippet: "Search reports across tasks and sessions",
+      annotations: { readOnlyHint: true },
       parameters: searchSchema,
       run: ({ query, limit }) =>
         orchestrator

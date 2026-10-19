@@ -218,6 +218,15 @@ export class RpcClient {
   }
 
   /**
+   * Send a prompt as an `/ask` turn: the model can only answer, and the next prompt is back to the
+   * full set of tools.
+   */
+  async ask(message: string, images?: ImageContent[]): Promise<PromptDisposition> {
+    const response = await this.send({ type: "prompt", message, images, mode: "ask" });
+    return this.getData<{ disposition: PromptDisposition }>(response).disposition;
+  }
+
+  /**
    * Queue a steering message to interrupt the agent mid-run.
    */
   async steer(message: string, images?: ImageContent[]): Promise<QueuedInputDisposition> {

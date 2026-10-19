@@ -73,6 +73,11 @@ export const BUILTIN_SLASH_COMMANDS: ReadonlyArray<BuiltinSlashCommand> = [
     description: "Keep working until a condition is met; no argument shows status",
     argumentHint: "<condition>|clear",
   },
+  {
+    name: "ask",
+    description: "Ask a question; the model can only answer, not change anything",
+    argumentHint: "<question>",
+  },
   { name: "init", description: "Write an AGENTS.md that describes this repository" },
   { name: "copy", description: "Copy last agent message to clipboard" },
   { name: "export", description: "Export session (HTML default, or specify path: .html/.jsonl)" },

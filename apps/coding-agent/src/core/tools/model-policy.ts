@@ -8,6 +8,7 @@
 import type { Api, Model } from "@msa/ai";
 import { type Static, Type } from "typebox";
 
+import { readOnlyVariantOf } from "../ask.ts";
 import type { ToolDefinition } from "../extensions/types.ts";
 import {
   addModelPolicyPattern,
@@ -39,6 +40,12 @@ const modelPolicySchema = Type.Object({
         "Model pattern for deny, allow, and remove: provider/model, provider/*, or *. A :thinking suffix is ignored.",
     }),
   ),
+});
+
+const modelPolicyReadSchema = Type.Object({
+  action: Type.Literal("list", {
+    description: "list: show the policy and the models it hides",
+  }),
 });
 
 export type ModelPolicyToolInput = Static<typeof modelPolicySchema>;
@@ -81,7 +88,7 @@ function formatHidden(
 export function createModelPolicyToolDefinition(
   target: ModelPolicyToolTarget,
 ): ToolDefinition<typeof modelPolicySchema, Record<string, unknown>> {
-  return {
+  const modelPolicy: ToolDefinition<typeof modelPolicySchema, Record<string, unknown>> = {
     name: "model_policy",
     label: "model policy",
     description:
@@ -159,5 +166,15 @@ export function createModelPolicyToolDefinition(
         },
       };
     },
+  };
+  return {
+    ...modelPolicy,
+    readOnlyVariant: readOnlyVariantOf(modelPolicy, {
+      actions: ["list"],
+      parameters: modelPolicyReadSchema,
+      description:
+        "Show which models this session may use: the allow and deny patterns and the models they hide. Changing the policy is not available here.",
+      promptSnippet: "Show which models this session may use",
+    }),
   };
 }

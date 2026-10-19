@@ -34,6 +34,7 @@ export function createWebFetchToolDefinition(
     description: `Read a web page as Markdown. Output is truncated to ${DEFAULT_MAX_LINES} lines or ${DEFAULT_MAX_BYTES / 1024}KB (whichever is hit first).`,
     promptSnippet: "Read a web page as Markdown",
     parameters: webFetchSchema,
+    annotations: { readOnlyHint: true, openWorldHint: true },
     executionMode: "parallel",
     async execute(_toolCallId, params, signal) {
       const result = await callTreg(options, "treg.web.extract", { url: params.url }, signal);

@@ -1,6 +1,7 @@
 import { Effect } from "effect";
 import { type Static, Type } from "typebox";
 
+import { readOnlyVariantOf } from "../ask.ts";
 import type { AgentToolResult, ToolDefinition } from "../extensions/types.ts";
 import type { PrWatch } from "../pr-watch/service.ts";
 import type { PrWatchTarget } from "../pr-watch/snapshot.ts";
@@ -25,6 +26,12 @@ const prWatchSchema = Type.Object({
         "Seconds between checks (action: watch). Default: the prWatch.intervalSeconds setting",
     }),
   ),
+});
+
+const prWatchReadSchema = Type.Object({
+  action: Type.Literal("list", {
+    description: "list: show the watched pull requests and their last state",
+  }),
 });
 
 export type PrWatchToolInput = Static<typeof prWatchSchema>;
@@ -89,7 +96,7 @@ function describeList(service: PrWatch): string {
 export function createPrWatchToolDefinition(
   service: PrWatch,
 ): ToolDefinition<typeof prWatchSchema, PrWatchToolDetails> {
-  return {
+  const prWatch: ToolDefinition<typeof prWatchSchema, PrWatchToolDetails> = {
     name: "pr_watch",
     label: "pr_watch",
     description:
@@ -116,5 +123,15 @@ export function createPrWatchToolDefinition(
         }),
       );
     },
+  };
+  return {
+    ...prWatch,
+    readOnlyVariant: readOnlyVariantOf(prWatch, {
+      actions: ["list"],
+      parameters: prWatchReadSchema,
+      description:
+        "Show the pull requests this session watches and their last state. Starting or stopping a watch is not available here.",
+      promptSnippet: "List the pull requests this session watches",
+    }),
   };
 }

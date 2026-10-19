@@ -69,6 +69,7 @@ export function taskToolsA(orchestrator: Orchestrator): Record<string, ToolDefin
       label: "list tasks",
       description: "List tasks with status, round, dependencies, assignments, and conditions.",
       promptSnippet: "List the task DAG",
+      annotations: { readOnlyHint: true },
       parameters: Type.Object({}),
       run: () => orchestrator.list().then(prompts.formatTaskList),
     }),
@@ -78,6 +79,7 @@ export function taskToolsA(orchestrator: Orchestrator): Record<string, ToolDefin
       description:
         "Read a task's current state, goal state, reports, dependencies, dependents, and sessions.",
       promptSnippet: "Read a task's full state and reports",
+      annotations: { readOnlyHint: true },
       parameters: taskIdObject,
       run: ({ taskId }) =>
         orchestrator.read(taskId).then((task) =>
