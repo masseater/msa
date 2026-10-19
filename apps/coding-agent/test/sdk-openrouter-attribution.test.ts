@@ -151,8 +151,8 @@ describe("createAgentSession provider attribution headers", () => {
   it("adds default attribution headers for OpenRouter models", async () => {
     const headers = await captureHeaders(createModel("openrouter", "https://openrouter.ai/api/v1"));
 
-    expect(headers?.["HTTP-Referer"]).toBe("https://pi.dev");
-    expect(headers?.["X-OpenRouter-Title"]).toBe("pi");
+    expect(headers?.["HTTP-Referer"]).toBe("https://github.com/masseater/msa");
+    expect(headers?.["X-OpenRouter-Title"]).toBe("msa");
     expect(headers?.["X-OpenRouter-Categories"]).toBe("cli-agent");
   });
 
@@ -174,8 +174,8 @@ describe("createAgentSession provider attribution headers", () => {
       createModel("custom-openrouter", "https://openrouter.ai/api/v1"),
     );
 
-    expect(headers?.["HTTP-Referer"]).toBe("https://pi.dev");
-    expect(headers?.["X-OpenRouter-Title"]).toBe("pi");
+    expect(headers?.["HTTP-Referer"]).toBe("https://github.com/masseater/msa");
+    expect(headers?.["X-OpenRouter-Title"]).toBe("msa");
     expect(headers?.["X-OpenRouter-Categories"]).toBe("cli-agent");
   });
 
@@ -184,8 +184,8 @@ describe("createAgentSession provider attribution headers", () => {
       createModel("custom-openrouter", "not-a-url-openrouter.ai"),
     );
 
-    expect(headers?.["HTTP-Referer"]).toBe("https://pi.dev");
-    expect(headers?.["X-OpenRouter-Title"]).toBe("pi");
+    expect(headers?.["HTTP-Referer"]).toBe("https://github.com/masseater/msa");
+    expect(headers?.["X-OpenRouter-Title"]).toBe("msa");
     expect(headers?.["X-OpenRouter-Categories"]).toBe("cli-agent");
   });
 
@@ -214,7 +214,7 @@ describe("createAgentSession provider attribution headers", () => {
     });
 
     expect(headers?.["x-opencode-session"]).toBe("opencode-session");
-    expect(headers?.["x-opencode-client"]).toBe("pi");
+    expect(headers?.["x-opencode-client"]).toBe("msa");
   });
 
   it("lets configured OpenCode headers override the defaults", async () => {
