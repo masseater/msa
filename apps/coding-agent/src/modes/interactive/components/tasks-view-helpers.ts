@@ -11,6 +11,7 @@ import { theme } from "../theme/theme.ts";
 
 export interface TasksViewState {
   showFinished: boolean;
+  selectedId?: string | undefined;
 }
 
 function createTasksViewState(): TasksViewState {

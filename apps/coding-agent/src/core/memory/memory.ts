@@ -6,6 +6,7 @@
 import { execFileSync } from "node:child_process";
 import { basename } from "node:path";
 
+import { formatAge } from "../../utils/text.ts";
 import { EmbeddingClient } from "./embeddings.ts";
 import {
   MEMORY_KINDS,
@@ -108,17 +109,6 @@ export function isMemoryKind(value: string): value is MemoryKind {
 function truncate(text: string, max = 160): string {
   const line = text.replace(/\s+/g, " ").trim();
   return line.length > max ? `${line.slice(0, max)}…` : line;
-}
-
-/** How long ago `timestamp` was, in the largest unit that fits. */
-export function formatAge(timestamp: number, now = Date.now()): string {
-  const seconds = Math.max(0, Math.floor((now - timestamp) / 1000));
-  if (seconds < 60) return `${seconds}s ago`;
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.floor(hours / 24)}d ago`;
 }
 
 function scopeLabel(record: MemoryRecord): string {

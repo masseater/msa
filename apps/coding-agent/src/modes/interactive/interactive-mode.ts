@@ -239,6 +239,7 @@ import {
 } from "./login-flow.ts";
 import { refreshModelCatalogs } from "./model-catalog-refresh.ts";
 import { getModelSearchText } from "./model-search.ts";
+import { OrchestratorPane } from "./orchestrator-pane.ts";
 import { ProgramStatusReporter } from "./program-status-reporter.ts";
 import { formatSessionInfo, type SessionInfo } from "./session-info.ts";
 import { shareSession } from "./session-share.ts";
@@ -426,6 +427,13 @@ export class InteractiveMode {
   private editorContainer: Container;
   private readonly editorSlot: EditorSlot;
   private readonly tasksViewState = viewHelpers.createTasksViewState();
+  private readonly orchestratorPane = new OrchestratorPane({
+    orchestrator: () => this.session.orchestrator,
+    state: this.tasksViewState,
+    columns: () => this.ui.terminal.columns,
+    rows: () => Math.max(1, this.ui.terminal.rows),
+    requestRender: () => this.ui.requestRender(),
+  });
   private readonly loginFlow: LoginFlow;
   private footer: FooterComponent;
   private footerContainer: Container;
@@ -992,7 +1000,7 @@ export class InteractiveMode {
       scrollbarThumbStyle: (text) => theme.fg("scrollbarThumb", text),
     });
     this.transcriptScrollView = viewport.transcript;
-    this.fullscreenLayoutRoot = viewport.root;
+    this.fullscreenLayoutRoot = this.orchestratorPane.layout(viewport.root);
     this.mountInteractiveTui(this.renderer, [
       this.documentContainer,
       this.pendingMessagesContainer,
@@ -2317,6 +2325,7 @@ export class InteractiveMode {
     this.defaultEditor.onAction("app.session.tree", () => this.showTreeSelector());
     this.defaultEditor.onAction("app.session.fork", () => this.showUserMessageSelector());
     this.defaultEditor.onAction("app.session.resume", () => this.showSessionSelector());
+    this.orchestratorPane.bindKeys(this.defaultEditor, () => this.showTasksView());
 
     this.defaultEditor.onChange = (text: string) => {
       const wasBashMode = this.isBashMode;
@@ -5187,6 +5196,7 @@ export class InteractiveMode {
     void orchestrator.refresh();
     this.editorSlot.showSelector((done) => {
       const tick = setInterval(() => this.ui.requestRender(), 1000);
+      const closePane = this.orchestratorPane.openSessions();
       const view = new TasksView(
         {
           orchestrator,
@@ -5202,7 +5212,14 @@ export class InteractiveMode {
         },
         initialId,
       );
-      return { component: view, focus: view, dispose: () => clearInterval(tick) };
+      return {
+        component: view,
+        focus: view,
+        dispose: () => {
+          clearInterval(tick);
+          closePane();
+        },
+      };
     });
   }
 

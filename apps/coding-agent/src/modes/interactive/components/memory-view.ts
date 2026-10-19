@@ -14,9 +14,10 @@ import {
   wrapTextWithAnsi,
 } from "@msa/tui";
 
-import { formatAge, type MemoryService } from "../../../core/memory/memory.ts";
+import type { MemoryService } from "../../../core/memory/memory.ts";
 import type { MemoryKind, MemoryRecord } from "../../../core/memory/store.ts";
 import { toErrorMessage } from "../../../utils/errors.ts";
+import { formatAge } from "../../../utils/text.ts";
 import { theme } from "../theme/theme.ts";
 import { rawKeyHint } from "./keybinding-hints.ts";
 import { fitView, type ViewFrame } from "./scroll-window.ts";
