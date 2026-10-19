@@ -167,42 +167,6 @@ it("rewires a kept task onto the tasks that replace another one", () =>
     }),
   ));
 
-it("undoes a replan and puts the tasks and dependencies back", () =>
-  Effect.runPromise(
-    Effect.gen(function* () {
-      const { orchestrator, workers } = setup();
-      const a = yield* create(orchestrator, { title: "a", prompt: "do a" });
-
-      const pending = replan(orchestrator, {
-        reason: "split a",
-        tasks: [
-          { from: [a.id], title: "a1", prompt: "first half" },
-          { from: [a.id], title: "a2", prompt: "second half" },
-        ],
-      });
-      yield* stopAndWrapUp(orchestrator, [workers[0]!], "half of a is done");
-      const result = (yield* Effect.promise(() => pending)) as Awaited<
-        ReturnType<Orchestrator["replan"]>
-      >;
-      const created = result.created.map((item) => item.taskId);
-      yield* waitFor(() => workers.length === 3);
-
-      const undoing = orchestrator.undoReplan();
-      for (const worker of workers.slice(1)) worker.complete("first turn");
-      yield* waitFor(() => workers.slice(1).every((worker) => worker.prompts.length === 2));
-      for (const worker of workers.slice(1)) worker.complete("undoing");
-      const undone = yield* Effect.promise(() => undoing);
-
-      expect(undone.deletedTasks.toSorted()).toEqual(created.toSorted());
-      const ids = orchestrator.snapshot.tasks.map((task) => task.id);
-      for (const id of created) expect(ids).not.toContain(id);
-      expect(ids).toContain(a.id);
-      const restored = yield* read(orchestrator, a.id);
-      expect(restored.status).not.toBe("stopped");
-      expect(orchestrator.snapshot.replans[0]?.undoneAt).not.toBeNull();
-    }),
-  ));
-
 it("keeps a task, resumes it in a new session, and puts the memo in the prompt", () =>
   Effect.runPromise(
     Effect.gen(function* () {

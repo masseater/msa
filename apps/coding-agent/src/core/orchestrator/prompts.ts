@@ -1,4 +1,4 @@
-import type { Note, ReplanResult, ReplanUndoResult, Report, Task, TaskView } from "./types.ts";
+import type { Note, ReplanResult, Report, Task, TaskView } from "./types.ts";
 
 const REPORT_LIMIT = 6000;
 
@@ -186,19 +186,6 @@ function formatReplan(result: ReplanResult): string {
   return lines.join("\n");
 }
 
-function formatReplanUndo(result: ReplanUndoResult): string {
-  return [
-    `Undid replan ${result.replanId}: ${result.reason}.`,
-    `Restored ${result.restoredTasks.length} tasks, deleted ${result.deletedTasks.join(", ") || "none"}.`,
-    result.stoppedSessions.length > 0
-      ? `Stopped sessions: ${result.stoppedSessions.join(", ")}.`
-      : undefined,
-    result.started.length > 0 ? `Started: ${result.started.join(", ")}.` : "Nothing started.",
-  ]
-    .filter(Boolean)
-    .join("\n");
-}
-
 export const prompts = {
   notesBlock,
   dependencyBlock,
@@ -210,5 +197,4 @@ export const prompts = {
   formatTaskList,
   formatTaskDetail,
   formatReplan,
-  formatReplanUndo,
 };

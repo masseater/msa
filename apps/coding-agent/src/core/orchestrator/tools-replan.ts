@@ -101,14 +101,5 @@ export function replanTools(orchestrator: Orchestrator): Record<string, ToolDefi
       parameters: replanSchema,
       run: (params) => orchestrator.replan(params).then(prompts.formatReplan),
     }),
-    undo_replan: tool({
-      name: "undo_replan",
-      label: "undo replan",
-      description:
-        "Restore the tasks, dependencies, rounds, and concurrency from before the last replan. Sessions it started are stopped first, and tasks that were running go back to waiting.",
-      promptSnippet: "Restore the plan from before the last replan",
-      parameters: Type.Object({}),
-      run: () => orchestrator.undoReplan().then(prompts.formatReplanUndo),
-    }),
   };
 }

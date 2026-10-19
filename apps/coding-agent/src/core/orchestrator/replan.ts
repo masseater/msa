@@ -3,7 +3,6 @@ import { Effect } from "effect";
 
 import type { OrchestratorError } from "./errors.ts";
 import { applying } from "./replan-apply.ts";
-import { replanStore } from "./replan-store.ts";
 import { ensured, exclusive, fail, stopSessions, unique } from "./replan-support.ts";
 import type { Runtime } from "./runtime.ts";
 import { snapshots } from "./snapshot.ts";
@@ -11,12 +10,9 @@ import { store } from "./store.ts";
 import type {
   ReplanDropInput,
   ReplanInput,
-  ReplanRecord,
   ReplanResult,
   ReplanRewireInput,
-  ReplanState,
   ReplanTaskInput,
-  ReplanUndoResult,
   TaskView,
 } from "./types.ts";
 import { wrapping } from "./wrap-up.ts";
@@ -35,13 +31,6 @@ export interface Prepared {
   rewire: readonly ReplanRewireInput[];
   sources: readonly string[];
   views: ReadonlyMap<string, TaskView>;
-  memos: ReadonlyMap<string, Deferred.Deferred<string, string>>;
-  before: ReplanState;
-}
-
-export interface PreparedUndo {
-  record: ReplanRecord;
-  targets: readonly string[];
   memos: ReadonlyMap<string, Deferred.Deferred<string, string>>;
 }
 
@@ -188,41 +177,8 @@ function prepare(runtime: Runtime, input: ReplanInput): Effect.Effect<Prepared, 
         ]),
         views,
         memos: register(runtime, sessions),
-        before: replanStore.captureState(
-          runtime.database,
-          runtime.options.project,
-          runtime.maxConcurrentSessions,
-        ),
       };
     });
-  });
-}
-
-function prepareUndo(runtime: Runtime): Effect.Effect<PreparedUndo, OrchestratorError> {
-  return Effect.gen(function* () {
-    if (runtime.replanning) return yield* fail("A replan is already running");
-    const record = replanStore.latestOpen(runtime.database, runtime.options.project);
-    if (record === undefined) return yield* fail("No replan to undo");
-    const created = new Set(record.after.createdIds);
-    const resettable = new Set(
-      record.before.tasks
-        .filter((task) => task.status === "running" || task.status === "waiting")
-        .map((task) => task.id),
-    );
-    const known = new Set(record.before.sessions);
-    const database = runtime.database;
-    const targets = store
-      .listSessions(database, runtime.options.project)
-      .filter((session) => !known.has(session.id))
-      .filter((session) =>
-        store
-          .assignmentsOfSession(database, session.id)
-          .some(
-            (assignment) => created.has(assignment.taskId) || resettable.has(assignment.taskId),
-          ),
-      )
-      .map((session) => session.id);
-    return yield* Effect.sync(() => ({ record, targets, memos: register(runtime, targets) }));
   });
 }
 
@@ -248,22 +204,6 @@ export function replan(runtime: Runtime, input: ReplanInput): Promise<ReplanResu
         const stop = yield* stopSessions(runtime, prepared.memos);
         if (stop.aborted !== null) return abortedResult(stop.aborted);
         return yield* exclusive(runtime, applying.apply(runtime, prepared, stop.memos));
-      }),
-    ),
-  );
-}
-
-export function undoReplan(runtime: Runtime): Promise<ReplanUndoResult> {
-  return Effect.runPromise(
-    ensured(
-      runtime,
-      Effect.gen(function* () {
-        const prepared = yield* exclusive(runtime, prepareUndo(runtime));
-        const stop = yield* stopSessions(runtime, prepared.memos);
-        if (stop.aborted !== null) {
-          return yield* fail(`undo aborted: ${stop.aborted}`);
-        }
-        return yield* exclusive(runtime, applying.restore(runtime, prepared));
       }),
     ),
   );

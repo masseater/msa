@@ -112,8 +112,7 @@ function buildSnapshot(
     maxConcurrentSessions - sessions.filter((session) => session.status === "running").length;
   const runningKeys = scheduler.occupiedKeys(running);
   const replans = replanStore.listReplans(database, project, 10);
-  const latest = replans[0];
-  const byTask = taskMarks(latest?.undoneAt === null ? latest : undefined);
+  const byTask = taskMarks(replans[0]);
   const snapshots: TaskSnapshot[] = views.map((task) => ({
     ...task,
     waitingReason: task.status === "waiting" ? reasonFor(task, byId, free, runningKeys) : null,
@@ -137,7 +136,6 @@ export type {
   OrchestratorSnapshot,
   ReplanInput,
   ReplanResult,
-  ReplanUndoResult,
   ReplanView,
   ReportHit,
   SendNoteInput,

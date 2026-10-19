@@ -234,53 +234,26 @@ export interface ReplanMark {
 export interface ReplanChanges {
   stopped: readonly ReplanStopped[];
   created: readonly ReplanCreated[];
-  createdIds: readonly string[];
   dropped: readonly ReplanDropped[];
   kept: readonly string[];
   rewired: readonly ReplanRewired[];
-  notes: readonly string[];
-}
-
-export interface ReplanTaskState {
-  id: string;
-  status: TaskStatus;
-  dependsOn: readonly string[];
-}
-
-export interface ReplanState {
-  maxConcurrentSessions: number;
-  tasks: readonly ReplanTaskState[];
-  rounds: readonly { id: string; title: string }[];
-  sessions: readonly string[];
 }
 
 export interface ReplanRecord {
   id: string;
   project: string;
   reason: string;
-  before: ReplanState;
   after: ReplanChanges;
   createdAt: number;
-  undoneAt: number | null;
 }
 
 export interface ReplanView {
   id: string;
   reason: string;
   createdAt: number;
-  undoneAt: number | null;
   stopped: readonly ReplanStopped[];
   created: readonly ReplanCreated[];
   dropped: readonly ReplanDropped[];
   kept: readonly string[];
   rewired: readonly ReplanRewired[];
-}
-
-export interface ReplanUndoResult {
-  replanId: string;
-  reason: string;
-  restoredTasks: readonly string[];
-  deletedTasks: readonly string[];
-  stoppedSessions: readonly string[];
-  started: readonly string[];
 }

@@ -91,13 +91,31 @@ CREATE TABLE IF NOT EXISTS replans (
   id TEXT PRIMARY KEY,
   project TEXT NOT NULL,
   reason TEXT NOT NULL,
-  before_state TEXT NOT NULL,
   after_state TEXT NOT NULL,
-  created_at INTEGER NOT NULL,
-  undone_at INTEGER
+  created_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS replans_project ON replans(project, created_at);
 `;
+
+function dropReplanUndoColumns(database: DatabaseSync): void {
+  const columns = database.prepare("PRAGMA table_info(replans)").all() as { name: string }[];
+  if (!columns.some((column) => column.name === "before_state")) return;
+  transaction(database, () => {
+    database.exec("ALTER TABLE replans RENAME TO replans_with_undo");
+    database.exec(`CREATE TABLE replans (
+      id TEXT PRIMARY KEY,
+      project TEXT NOT NULL,
+      reason TEXT NOT NULL,
+      after_state TEXT NOT NULL,
+      created_at INTEGER NOT NULL
+    )`);
+    database.exec(
+      "INSERT INTO replans (id, project, reason, after_state, created_at) SELECT id, project, reason, after_state, created_at FROM replans_with_undo",
+    );
+    database.exec("DROP TABLE replans_with_undo");
+    database.exec("CREATE INDEX IF NOT EXISTS replans_project ON replans(project, created_at)");
+  });
+}
 
 function openDatabase(path: string): DatabaseSync {
   const database = new DatabaseSync(path, { timeout: 5_000 });
@@ -105,6 +123,7 @@ function openDatabase(path: string): DatabaseSync {
   database.exec("PRAGMA synchronous = NORMAL");
   database.exec("PRAGMA foreign_keys = OFF");
   database.exec(SCHEMA);
+  dropReplanUndoColumns(database);
   return database;
 }
 
