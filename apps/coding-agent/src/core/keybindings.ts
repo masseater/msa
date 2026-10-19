@@ -131,10 +131,6 @@ const APP_KEYBINDINGS = {
     defaultKeys: "b",
     description: "Send a shared note to the selected task's round",
   },
-  "app.orchestrator.priority": {
-    defaultKeys: "p",
-    description: "Change the selected task's priority",
-  },
   "app.orchestrator.toggleFinished": {
     defaultKeys: "c",
     description: "Show or hide finished tasks",
@@ -155,9 +151,13 @@ const APP_KEYBINDINGS = {
     defaultKeys: "d",
     description: "Change the dependencies of the selected task",
   },
-  "app.orchestrator.instruction": {
-    defaultKeys: "i",
-    description: "Rewrite the instruction of the selected task",
+  "app.orchestrator.currentState": {
+    defaultKeys: "w",
+    description: "Rewrite the current state of the selected task",
+  },
+  "app.orchestrator.goalState": {
+    defaultKeys: "g",
+    description: "Rewrite the goal state of the selected task",
   },
   "app.orchestrator.sessions": {
     defaultKeys: "shift+right",

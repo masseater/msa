@@ -15,14 +15,20 @@ const replanTaskSchema = Type.Object({
   from: Type.Optional(
     Type.Array(taskIdSchema, {
       description:
-        "Existing tasks this one replaces: one to rewrite or split off, several to merge. Their handoff memos and prompts come along, and they are closed.",
+        "Existing tasks this one replaces: one to rewrite or split off, several to merge. Their states and handoff memos come along, and they are closed.",
     }),
   ),
   title: Type.String({ description: "Short name of the work." }),
-  prompt: Type.Optional(
+  currentState: Type.Optional(
     Type.String({
       description:
-        "The remaining scope. Default: the prompt of the tasks it replaces. The handoff memo joins it in the session's prompt.",
+        "What is true now, including what the tasks it replaces finished and the handoff memo says. Default: the current states of those tasks.",
+    }),
+  ),
+  goalState: Type.Optional(
+    Type.String({
+      description:
+        "What should be true when it is done. Default: the goal states of the tasks it replaces.",
     }),
   ),
   dependsOn: Type.Optional(
@@ -34,11 +40,6 @@ const replanTaskSchema = Type.Object({
   round: Type.Optional(
     Type.String({ description: "Round id. Default: the round of the task it replaces, or main." }),
   ),
-  paths: Type.Optional(
-    Type.Array(Type.String(), { description: "Files or directories it changes." }),
-  ),
-  repos: Type.Optional(Type.Array(Type.String(), { description: "Repositories it changes." })),
-  priority: Type.Optional(Type.Integer({ description: "Higher runs first. Default: 0." })),
   model: Type.Optional(modelSchema),
   thinkingLevel: Type.Optional(ModelThinkingLevelSchema),
   cwd: Type.Optional(Type.String({ description: "Working directory." })),
@@ -91,12 +92,13 @@ export function replanTools(orchestrator: Orchestrator): Record<string, ToolDefi
       name: "replan",
       label: "replan",
       description:
-        "Stop the work at a turn boundary, collect each task's state, rewrite the task DAG, and start the new plan in one call. Running sessions commit and push, then write a handoff memo; the memo joins the prompt of whatever continues the work. Replacing a task with several splits it, replacing several with one merges them, dropping closes it with a reason. Cycles are rejected and nothing changes when a wrap-up fails.",
+        "Stop the work at a turn boundary, collect each task's state, rewrite the task DAG, and start the new plan in one call. Running sessions commit and push, then write a handoff memo; the memo reaches whatever continues the work as reference, not as steps. Replacing a task with several splits it, replacing several with one merges them, dropping closes it with a reason. Cycles are rejected and nothing changes when a wrap-up fails.",
       promptSnippet: "Stop the work, rewrite the task DAG, and resume it",
       promptGuidelines: [
         "Use replan when the plan itself is wrong, not to nudge one task: send_message and send_note steer work that stays as it is.",
         "Every running task must be kept, replaced by a task with from, or dropped. The call is rejected otherwise.",
-        "A task you replace keeps its round and dependencies unless you say otherwise.",
+        "A task you replace keeps its round, dependencies, and states unless you say otherwise.",
+        "Write each new task as a currentState and a goalState, never as a procedure. Use the handoff memo to say what is true now.",
       ],
       parameters: replanSchema,
       run: (params) => orchestrator.replan(params).then(prompts.formatReplan),

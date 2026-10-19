@@ -23,12 +23,10 @@ export function task(id: string, patch: Partial<TaskSnapshot> = {}): TaskSnapsho
     round: "main",
     kind: "work",
     title: id,
-    prompt: `do ${id}`,
+    currentState: `${id} is not written`,
+    goalState: `${id} works`,
     status: "waiting",
-    priority: 0,
     cwd: "/repo",
-    paths: [],
-    repos: [],
     condition: null,
     model: "fast/flash",
     thinkingLevel: "low",
@@ -65,7 +63,6 @@ export const TASKS = [
   task("a", {
     status: "running",
     assignments: [{ taskId: "a", sessionId: "s-worker", role: "worker", createdAt: 0 }],
-    paths: ["src/a.ts"],
   }),
   task("b", {
     dependsOn: ["a"],
@@ -100,7 +97,8 @@ export const TASKS = [
   task("rev-main", {
     kind: "review",
     title: "Review of main",
-    priority: -1000,
+    currentState: "Every task of round main has finished.",
+    goalState: "Round main is reviewed as a whole.",
     dependsOn: ["a", "b", "c", "d"],
   }),
 ];
@@ -164,9 +162,8 @@ export function setup(
     stop: vi.fn(() => Promise.resolve(tasks[0])),
     sendMessage: vi.fn(() => Promise.resolve(tasks[1])),
     sendNote: vi.fn(() => Promise.resolve({ noteId: "n", steeredSessions: [], waitingTasks: [] })),
-    setPriority: vi.fn(() => Promise.resolve(tasks[1])),
     setDepends: vi.fn(() => Promise.resolve([tasks[1]])),
-    setInstruction: vi.fn(() => Promise.resolve(tasks[1])),
+    setState: vi.fn(() => Promise.resolve(tasks[1])),
     rerun: vi.fn(() => Promise.resolve(tasks[2])),
   };
   const onClose = vi.fn();

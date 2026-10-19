@@ -323,10 +323,6 @@
       "$ref": "#/$defs/KeybindingValue",
       "description": "Send a shared note to the selected task's round"
     },
-    "app.orchestrator.priority": {
-      "$ref": "#/$defs/KeybindingValue",
-      "description": "Change the selected task's priority"
-    },
     "app.orchestrator.toggleFinished": {
       "$ref": "#/$defs/KeybindingValue",
       "description": "Show or hide finished tasks"
@@ -347,9 +343,13 @@
       "$ref": "#/$defs/KeybindingValue",
       "description": "Change the dependencies of the selected task"
     },
-    "app.orchestrator.instruction": {
+    "app.orchestrator.currentState": {
       "$ref": "#/$defs/KeybindingValue",
-      "description": "Rewrite the instruction of the selected task"
+      "description": "Rewrite the current state of the selected task"
+    },
+    "app.orchestrator.goalState": {
+      "$ref": "#/$defs/KeybindingValue",
+      "description": "Rewrite the goal state of the selected task"
     },
     "app.orchestrator.sessions": {
       "$ref": "#/$defs/KeybindingValue",

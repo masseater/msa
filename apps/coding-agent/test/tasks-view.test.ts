@@ -31,11 +31,14 @@ it("shows the round DAG, statuses, waiting reasons, and worker/reviewer sessions
   expect(screen().some((line) => line.includes("  ○ b"))).toBe(true);
 });
 
-it("opens a task and shows its prompt, reports, and sessions", () => {
+it("opens a task and shows its states, reports, and sessions", () => {
   const { view, screen } = setup({ initialId: "c", state: { showFinished: true } });
   view.handleInput(ENTER);
   const text = screen().join("\n");
-  expect(text).toContain("do c");
+  expect(text).toContain("Current state");
+  expect(text).toContain("c is not written");
+  expect(text).toContain("Goal state");
+  expect(text).toContain("c works");
   expect(text).toContain("c is done");
   expect(text).toContain("worker s-worker (flash/low) running");
   expect(text).toContain("reviewer s-review (fable/high) completed");
@@ -77,21 +80,32 @@ it("adds and drops dependencies of the selected task with + and -", () => {
   });
 });
 
-it("rewrites the instruction of the selected task", () => {
+it("rewrites the goal state of the selected task, starting from the current one", () => {
   const { view, orchestrator, screen } = setup({ initialId: "b" });
-  view.handleInput("i");
-  expect(screen().join("\n")).toContain("Instruction for b");
-  for (const key of "only the api part") view.handleInput(key);
+  view.handleInput("g");
+  expect(screen().join("\n")).toContain("Goal state of b");
+  expect(screen().join("\n")).toContain("b works");
+  for (const key of " behind the api") view.handleInput(key);
   view.handleInput(ENTER);
-  expect(orchestrator.setInstruction).toHaveBeenCalledWith("b", "only the api part");
+  expect(orchestrator.setState).toHaveBeenCalledWith({
+    taskId: "b",
+    goalState: "b works behind the api",
+  });
 });
 
-it("changes priority, stops, and reruns the selected task", () => {
+it("rewrites the current state of the selected task", () => {
   const { view, orchestrator } = setup({ initialId: "b" });
-  view.handleInput("p");
-  view.handleInput("5");
+  view.handleInput("w");
+  for (const key of ", a is merged") view.handleInput(key);
   view.handleInput(ENTER);
-  expect(orchestrator.setPriority).toHaveBeenCalledWith("b", 5);
+  expect(orchestrator.setState).toHaveBeenCalledWith({
+    taskId: "b",
+    currentState: "b is not written, a is merged",
+  });
+});
+
+it("stops and reruns the selected task", () => {
+  const { view, orchestrator } = setup({ initialId: "b" });
   view.handleInput("s");
   expect(orchestrator.stop).toHaveBeenCalledWith("b");
   const completed = setup({ initialId: "c", state: { showFinished: true } });
@@ -232,7 +246,6 @@ describe("TasksView scrolling", () => {
               createdAt: 0,
             },
           ],
-          prompt: "do the long task",
         }),
       ],
       maxHeight: 12,
@@ -250,7 +263,7 @@ describe("TasksView scrolling", () => {
     for (let step = 0; step < 5; step++) view.handleInput(PAGE_DOWN);
     const bottom = screen();
     expect(bottom.length).toBeLessThanOrEqual(12);
-    expect(bottom.join("\n")).toContain("do the long task");
+    expect(bottom.join("\n")).toContain("long works");
     expect(bottom.join("\n")).toContain("↑");
     expect(bottom.join("\n")).not.toContain("↓");
 
@@ -274,7 +287,6 @@ describe("TasksView scrolling", () => {
           createdAt: 0,
         },
       ],
-      prompt: "do the long task",
     });
     const { view, screen } = setup({
       tasks: [long],
@@ -295,6 +307,8 @@ describe("TasksView scrolling", () => {
   it("pulls the detail window back when the report shrinks", () => {
     const long = task("long", {
       status: "completed",
+      currentState: "",
+      goalState: "",
       reports: [
         {
           id: "r1",
@@ -306,7 +320,6 @@ describe("TasksView scrolling", () => {
           createdAt: 0,
         },
       ],
-      prompt: "do the long task",
     });
     const { view, screen } = setup({
       tasks: [long],

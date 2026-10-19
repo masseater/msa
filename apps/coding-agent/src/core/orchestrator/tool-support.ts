@@ -20,17 +20,18 @@ export const dependsSchema = Type.Object({
   remove: Type.Optional(Type.Array(taskIdSchema, { description: "Dependencies to drop." })),
 });
 
-export const instructionSchema = Type.Object({
+export const stateSchema = Type.Object({
   taskId: taskIdSchema,
-  prompt: Type.String({
-    description:
-      "The new instruction. It replaces the old one and reaches the session when it starts.",
-  }),
-});
-
-export const prioritySchema = Type.Object({
-  taskId: taskIdSchema,
-  priority: Type.Integer({ description: "Higher runs first." }),
+  currentState: Type.Optional(
+    Type.String({
+      description: "What is true now. Replaces the task's current state. Facts, not steps.",
+    }),
+  ),
+  goalState: Type.Optional(
+    Type.String({
+      description: "What should be true when the task is done. Replaces the task's goal state.",
+    }),
+  ),
 });
 
 export const modelChangeSchema = Type.Object({

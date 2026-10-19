@@ -110,12 +110,11 @@ function closeDropped(
   return dropped;
 }
 
-function inheritorCount(prepared: Prepared): Map<string, number> {
-  const counts = new Map<string, number>();
-  for (const entry of prepared.entries) {
-    for (const id of entry.from) counts.set(id, (counts.get(id) ?? 0) + 1);
-  }
-  return counts;
+function inherited(sources: readonly Task[], pick: (task: Task) => string): string {
+  return sources
+    .map(pick)
+    .filter((value) => value.trim() !== "")
+    .join("\n\n");
 }
 
 function roundFor(input: ReplanTaskInput, sources: readonly Task[]): string {
@@ -128,7 +127,6 @@ function newTask(
   runtime: Runtime,
   input: ReplanTaskInput,
   sources: readonly Task[],
-  single: boolean,
   now: number,
 ): Task {
   return {
@@ -137,12 +135,10 @@ function newTask(
     round: roundFor(input, sources),
     kind: "work",
     title: input.title,
-    prompt: input.prompt ?? sources.map((source) => source.prompt).join("\n\n"),
+    currentState: input.currentState ?? inherited(sources, (source) => source.currentState),
+    goalState: input.goalState ?? inherited(sources, (source) => source.goalState),
     status: "waiting",
-    priority: input.priority ?? Math.max(0, ...sources.map((source) => source.priority)),
     cwd: input.cwd ?? sources[0]?.cwd ?? runtime.options.cwd,
-    paths: input.paths ?? (single ? (sources[0]?.paths ?? []) : []),
-    repos: input.repos ?? (single ? (sources[0]?.repos ?? []) : []),
     condition: null,
     model: input.model ?? null,
     thinkingLevel: input.thinkingLevel ?? null,
@@ -151,12 +147,7 @@ function newTask(
   };
 }
 
-function createTasks(
-  runtime: Runtime,
-  prepared: Prepared,
-  counts: ReadonlyMap<string, number>,
-  now: number,
-): Creation {
+function createTasks(runtime: Runtime, prepared: Prepared, now: number): Creation {
   const database = runtime.database;
   const project = runtime.options.project;
   const closed = new Set(prepared.sources);
@@ -166,13 +157,7 @@ function createTasks(
   const pending: { taskId: string; refs: readonly string[]; explicit: boolean }[] = [];
   for (const entry of prepared.entries) {
     const sources = entry.from.flatMap((id) => prepared.views.get(id) ?? []);
-    const task = newTask(
-      runtime,
-      entry.input,
-      sources,
-      entry.from.length === 1 && counts.get(entry.from[0]!) === 1,
-      now,
-    );
+    const task = newTask(runtime, entry.input, sources, now);
     store.insertTask(database, task);
     const review = rounds.ensureReview(runtime, task.round, now);
     rounds.attachReview(runtime, review, task.id, now);
@@ -265,7 +250,7 @@ function write(
   const project = runtime.options.project;
   return store.transaction(database, () => {
     const dropped = closeDropped(runtime, prepared, replanId, now);
-    const creation = createTasks(runtime, prepared, inheritorCount(prepared), now);
+    const creation = createTasks(runtime, prepared, now);
     const rewired = rewire(runtime, prepared, creation.byKey);
     keep(runtime, prepared, now);
     if (prepared.input.maxConcurrentSessions !== undefined) {

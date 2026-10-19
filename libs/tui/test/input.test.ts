@@ -31,6 +31,16 @@ describe("Input component", () => {
 
     assert.strictEqual(input.getValue(), "\\x");
   });
+
+  it("continues typing after a value set in code, even one longer than before", () => {
+    const input = new Input();
+
+    typeText(input, "ab");
+    input.setValue("the client speaks v3");
+    typeText(input, " and v4");
+
+    assert.strictEqual(input.getValue(), "the client speaks v3 and v4");
+  });
 });
 
 describe("Input component", () => {

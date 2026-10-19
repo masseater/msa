@@ -16,6 +16,7 @@ import {
   type ReportHit,
   type SendNoteInput,
   type SetTaskDependsInput,
+  type SetTaskStateInput,
   type TaskView,
 } from "./snapshot.ts";
 import { store } from "./store.ts";
@@ -37,7 +38,7 @@ export type {
   ReplanResult,
   SendNoteInput,
   SetTaskDependsInput,
-  SetTaskInstructionInput,
+  SetTaskStateInput,
 } from "./types.ts";
 
 export const ORCHESTRATOR_REPORT_MESSAGE_TYPE = "msa.orchestrator.report";
@@ -157,12 +158,8 @@ export class Orchestrator implements Runtime {
     return this.exclusive(actions.setDepends(this, input));
   }
 
-  setInstruction(taskId: string, prompt: string): Promise<TaskView> {
-    return this.exclusive(actions.setInstruction(this, { taskId, prompt }));
-  }
-
-  setPriority(taskId: string, priority: number): Promise<TaskView> {
-    return this.exclusive(actions.setPriority(this, taskId, priority));
+  setState(input: SetTaskStateInput): Promise<TaskView> {
+    return this.exclusive(actions.setState(this, input));
   }
 
   setModel(

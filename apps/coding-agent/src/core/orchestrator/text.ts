@@ -21,3 +21,17 @@ export function firstLine(text: string | undefined): string {
   const line = (text ?? "").split("\n").find((candidate) => candidate.trim().length > 0);
   return line?.trim() ?? "";
 }
+
+export function requireStates(
+  label: string,
+  currentState: string | undefined,
+  goalState: string | undefined,
+): { currentState: string; goalState: string } {
+  if (currentState === undefined || currentState.trim() === "") {
+    throw new Error(`${label} needs a current state`);
+  }
+  if (goalState === undefined || goalState.trim() === "") {
+    throw new Error(`${label} needs a goal state`);
+  }
+  return { currentState, goalState };
+}
