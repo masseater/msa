@@ -1,8 +1,8 @@
+import { mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 
-import { NodeServices } from "@effect/platform-node";
 import { fauxAssistantMessage, registerFauxProvider } from "@msa/ai/compat";
-import { Effect, FileSystem, ManagedRuntime } from "effect";
+import { Effect } from "effect";
 import { afterAll, expect, it } from "vite-plus/test";
 
 import { AuthStorage } from "../src/core/auth-storage.ts";
@@ -13,13 +13,10 @@ import { harness } from "./orchestrator-harness.ts";
 
 const { waitFor } = harness;
 const tempDir = `${tmpdir()}/msa-orchestrator-sdk-${process.pid}`;
-const runtime = ManagedRuntime.make(NodeServices.layer);
 
-afterAll(() =>
-  runtime.runPromise(
-    FileSystem.FileSystem.use((fs) => fs.remove(tempDir, { recursive: true, force: true })),
-  ),
-);
+afterAll(() => {
+  rmSync(tempDir, { recursive: true, force: true });
+});
 
 function registerModel(
   modelRuntime: ModelRuntime,
@@ -46,11 +43,7 @@ function registerModel(
 
 function createHarness() {
   return Effect.gen(function* () {
-    yield* Effect.promise(() =>
-      runtime.runPromise(
-        FileSystem.FileSystem.use((fs) => fs.makeDirectory(tempDir, { recursive: true })),
-      ),
-    );
+    mkdirSync(tempDir, { recursive: true });
     const sessionDir = `${tempDir}/sessions`;
     const faux = registerFauxProvider();
     faux.setResponses(
