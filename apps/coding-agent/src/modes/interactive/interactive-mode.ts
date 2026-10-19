@@ -138,8 +138,10 @@ import {
   BUILTIN_SLASH_COMMANDS,
   canonicalizeBuiltinSlashCommand,
   formatHelpMarkdown,
+  handoffPrompt,
   INIT_PROMPT,
   isBuiltinSlashCommandName,
+  parseHandoffCommand,
   slashCommandName,
   withSkillCommands,
 } from "../../core/slash-commands.ts";
@@ -230,6 +232,7 @@ import {
 import { ExtensionDialogs } from "./extension-dialogs.ts";
 import { ExtensionWidgets } from "./extension-widgets.ts";
 import { editInExternalEditor } from "./external-editor.ts";
+import { offerHandoff } from "./handoff-resume.ts";
 import { formatHotkeysMarkdown } from "./hotkeys.ts";
 import { getStartupVisibility, renderLoadedResources } from "./loaded-resources.ts";
 import {
@@ -1244,6 +1247,12 @@ export class InteractiveMode {
       this.showWarning(
         `${APP_NAME} crashed on ${when} (${crash.message}). Run /bug to report it; the crash details are attached automatically.`,
       );
+    }
+
+    if (!initialMessage && !initialMessages?.length) {
+      await offerHandoff(this.session, this.extensionDialogs).catch((error: unknown) => {
+        this.showError(error instanceof Error ? error.message : "Unknown error occurred");
+      });
     }
 
     // Process initial messages
@@ -2600,8 +2609,16 @@ export class InteractiveMode {
       // A skill takes its exact name from a built-in command; the command keeps its aliases.
       if (text.startsWith("/") && !this.isSkillCommand(text)) {
         text = canonicalizeBuiltinSlashCommand(text);
+        const handoff = parseHandoffCommand(text);
         if (text === "/init") text = INIT_PROMPT;
-        else if (await this.handleBuiltinCommand(text)) return;
+        else if (handoff !== undefined) {
+          if (this.session.orchestrator === undefined) {
+            this.showWarning("/handoff needs the orchestrator, which this session does not have");
+            this.editor.setText("");
+            return;
+          }
+          text = handoffPrompt(handoff.path);
+        } else if (await this.handleBuiltinCommand(text)) return;
       }
 
       // Handle bash command (! for normal, !! for excluded from context)

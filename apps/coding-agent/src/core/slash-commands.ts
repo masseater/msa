@@ -97,6 +97,11 @@ export const BUILTIN_SLASH_COMMANDS: ReadonlyArray<BuiltinSlashCommand> = [
   },
   { name: "tasks", description: "Show the task DAG the orchestrator runs", aliases: ["sessions"] },
   {
+    name: "handoff",
+    description: "Write the orchestrator's state to a file the next session resumes from",
+    argumentHint: "[path]",
+  },
+  {
     name: "reload",
     description: "Reload keybindings, extensions, skills, prompts, themes, and context files",
     aliases: ["reload-skills", "reload-plugins"],
@@ -128,6 +133,24 @@ export function canonicalizeBuiltinSlashCommand(text: string): string {
   if (typed === undefined) return text;
   const name = BUILTIN_NAMES.get(typed);
   return name === undefined ? text : `/${name}${text.slice(typed.length + 1)}`;
+}
+
+/** The path `/handoff` was typed with (empty for the default), or undefined when `text` is not `/handoff`. */
+export function parseHandoffCommand(text: string): { path: string } | undefined {
+  const match = /^\/handoff(?:\s+([\s\S]*))?$/u.exec(text.trim());
+  return match ? { path: (match[1] ?? "").trim() } : undefined;
+}
+
+/** What `/handoff` sends: the model writes the three sections, and the `handoff` tool does the rest. */
+export function handoffPrompt(path: string): string {
+  return [
+    "Hand this orchestrator over to the next msa session. Call the `handoff` tool once.",
+    "Write `premise` (what the next session must take as given), `goals` (the goal states in dependency order), and `donts` (what must not be started, and why) from this conversation. The tool fills in everything else.",
+    path === "" ? "" : `Pass path: ${JSON.stringify(path)}.`,
+    "When it returns, reply with its result exactly as returned and nothing else.",
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 /** What `/init` sends: the model writes the repository's AGENTS.md. */

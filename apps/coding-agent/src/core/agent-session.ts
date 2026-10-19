@@ -62,6 +62,7 @@ import {
 import { NOOP_TELEMETRY_CONTEXT } from "@msa/telemetry";
 import { Effect } from "effect";
 
+import { VERSION } from "../config.ts";
 import { getThemeByName, theme } from "../modes/interactive/theme/theme.ts";
 import { toErrorMessage } from "../utils/errors.ts";
 import { stripFrontmatter } from "../utils/frontmatter.ts";
@@ -691,6 +692,8 @@ export class AgentSession {
           project: this.sessionManager.getSessionId(),
           cwd: this._cwd,
           databasePath: this.settingsManager.getOrchestratorDatabasePath(),
+          handoffDirectory: this.settingsManager.getHandoffDirectory(),
+          version: VERSION,
           createWorker: createWorkerSession,
           resolveModel: (reference) => this._resolveOrchestratorModel(reference),
           defaults: () => this._orchestratorDefaults(),

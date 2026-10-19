@@ -3,6 +3,8 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   canonicalizeBuiltinSlashCommand,
   formatHelpMarkdown,
+  handoffPrompt,
+  parseHandoffCommand,
   withSkillCommands,
 } from "../src/core/slash-commands.ts";
 
@@ -66,5 +68,23 @@ describe("built-in slash commands", () => {
       "| `/deploy` | Ship \\| release. |",
       "| `/writing` | 文章を書くときに読む。 |",
     ]);
+  });
+});
+
+describe("/handoff", () => {
+  it("is /handoff alone, or /handoff with the path to write to", () => {
+    expect(parseHandoffCommand("/handoff")).toEqual({ path: "" });
+    expect(parseHandoffCommand("/handoff  ~/notes/next.md ")).toEqual({ path: "~/notes/next.md" });
+  });
+
+  it.each(["/handoffs", "/handoff-now x", "handoff", "/init"])("does not take %j", (text) => {
+    expect(parseHandoffCommand(text)).toBeUndefined();
+  });
+
+  it("asks the model for the three sections through the handoff tool, and passes the path on", () => {
+    const prompt = handoffPrompt("");
+    for (const word of ["`handoff`", "premise", "goals", "donts"]) expect(prompt).toContain(word);
+    expect(prompt).not.toContain("path");
+    expect(handoffPrompt("~/notes/next.md")).toContain('Pass path: "~/notes/next.md".');
   });
 });

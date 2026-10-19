@@ -2,6 +2,7 @@ import type { AgentMessage } from "@msa/agent-core";
 import { Effect, Fiber } from "effect";
 
 import { actions } from "./actions.ts";
+import { type HandoffInput, type HandoffResult, handoffs } from "./handoff.ts";
 import { replan } from "./replan.ts";
 import { type Runtime, nowMillis } from "./runtime.ts";
 import { scheduling } from "./schedule.ts";
@@ -25,6 +26,7 @@ import { TranscriptCache } from "./transcripts.ts";
 import type { OrchestratorOptions, WorkerSession } from "./worker.ts";
 import type { WrapUp } from "./wrap-up.ts";
 
+export type { HandoffInput, HandoffResult } from "./handoff.ts";
 export type {
   CreateWorkerOptions,
   OrchestratorDefaults,
@@ -205,6 +207,10 @@ export class Orchestrator implements Runtime {
       this.telemetry.replanned(input, result);
       return result;
     });
+  }
+
+  handoff(input: HandoffInput): Promise<HandoffResult> {
+    return this.exclusive(handoffs.write(this, input));
   }
 
   searchReports(query: string, limit = 10): Promise<ReportHit[]> {
