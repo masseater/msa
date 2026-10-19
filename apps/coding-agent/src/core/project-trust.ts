@@ -1,4 +1,7 @@
+import * as Effect from "effect/Effect";
+
 import { APP_NAME, CONFIG_DIR_NAME } from "../config.ts";
+import { awaited, awaiting, performed } from "./awaiting.ts";
 import { emitProjectTrustEvent } from "./extensions/runner.ts";
 import type { LoadExtensionsResult, ProjectTrustContext } from "./extensions/types.ts";
 import { SETTINGS_DEFAULTS } from "./settings-defaults.ts";
@@ -26,16 +29,20 @@ function formatProjectTrustPrompt(cwd: string): string {
   return `Trust project folder?\n${cwd}\n\nThis allows ${APP_NAME} to load ${CONFIG_DIR_NAME} settings and resources, install missing project packages, and execute project extensions.`;
 }
 
-async function selectProjectTrustOption(
+function selectProjectTrustOption(
   cwd: string,
   ctx: ProjectTrustContext,
-): Promise<ProjectTrustOption | undefined> {
-  const options = getProjectTrustOptions(cwd, { includeSessionOnly: true });
-  const selected = await ctx.ui.select(
-    formatProjectTrustPrompt(cwd),
-    options.map((option) => option.label),
-  );
-  return options.find((option) => option.label === selected);
+): Effect.Effect<ProjectTrustOption | undefined> {
+  return awaiting(function* () {
+    const options = getProjectTrustOptions(cwd, { includeSessionOnly: true });
+    const selected = yield* awaited(
+      ctx.ui.select(
+        formatProjectTrustPrompt(cwd),
+        options.map((option) => option.label),
+      ),
+    );
+    return options.find((option) => option.label === selected);
+  });
 }
 
 function saveProjectTrustPromptResult(
@@ -47,58 +54,64 @@ function saveProjectTrustPromptResult(
   }
 }
 
-export async function resolveProjectTrusted(
-  options: ResolveProjectTrustedOptions,
-): Promise<boolean> {
-  if (options.trustOverride !== undefined) {
-    return options.trustOverride;
-  }
-  if (!hasTrustRequiringProjectResources(options.cwd)) {
-    return true;
-  }
-
-  if (options.extensionsResult) {
-    const { result, errors } = await emitProjectTrustEvent(
-      options.extensionsResult,
-      { type: "project_trust", cwd: options.cwd },
-      options.projectTrustContext,
-    );
-    for (const error of errors) {
-      options.onExtensionError?.(
-        `Extension "${error.extensionPath}" project_trust error: ${error.error}`,
-      );
-    }
-    if (result) {
-      const trusted = result.trusted === "yes";
-      if (result.remember === true) {
-        options.trustStore.set(options.cwd, trusted);
+export function resolveProjectTrusted(options: ResolveProjectTrustedOptions): Promise<boolean> {
+  return Effect.runPromise(
+    awaiting(function* () {
+      if (options.trustOverride !== undefined) {
+        return options.trustOverride;
       }
-      return trusted;
-    }
-  }
+      if (!hasTrustRequiringProjectResources(options.cwd)) {
+        return true;
+      }
 
-  const decision = options.trustStore.get(options.cwd);
-  if (decision !== null) {
-    return decision;
-  }
+      if (options.extensionsResult !== undefined) {
+        const { result, errors } = yield* awaited(
+          emitProjectTrustEvent(
+            options.extensionsResult,
+            { type: "project_trust", cwd: options.cwd },
+            options.projectTrustContext,
+          ),
+        );
+        for (const error of errors) {
+          options.onExtensionError?.(
+            `Extension "${error.extensionPath}" project_trust error: ${error.error}`,
+          );
+        }
+        if (result !== undefined) {
+          const trusted = result.trusted === "yes";
+          if (result.remember === true) {
+            options.trustStore.set(options.cwd, trusted);
+          }
+          return trusted;
+        }
+      }
 
-  switch (options.defaultProjectTrust ?? SETTINGS_DEFAULTS.defaultProjectTrust) {
-    case "always":
-      return true;
-    case "never":
+      const decision = options.trustStore.get(options.cwd);
+      if (decision !== null) {
+        return decision;
+      }
+
+      switch (options.defaultProjectTrust ?? SETTINGS_DEFAULTS.defaultProjectTrust) {
+        case "always":
+          return true;
+        case "never":
+          return false;
+        case "ask":
+          break;
+      }
+
+      if (!options.projectTrustContext.hasUI) {
+        return false;
+      }
+
+      const selected = yield* performed(
+        selectProjectTrustOption(options.cwd, options.projectTrustContext),
+      );
+      if (selected !== undefined) {
+        saveProjectTrustPromptResult(options.trustStore, selected);
+        return selected.trusted;
+      }
       return false;
-    case "ask":
-      break;
-  }
-
-  if (!options.projectTrustContext.hasUI) {
-    return false;
-  }
-
-  const selected = await selectProjectTrustOption(options.cwd, options.projectTrustContext);
-  if (selected !== undefined) {
-    saveProjectTrustPromptResult(options.trustStore, selected);
-    return selected.trusted;
-  }
-  return false;
+    }),
+  );
 }

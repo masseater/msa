@@ -28,7 +28,6 @@ export function addUsageToTotals(totals: UsageTotals, usage: Usage): void {
   totals.cost += usage.cost.total;
 }
 
-/** Sum of two usages, keeping the optional token splits when either side reports them. */
 export function combineUsage(first: Usage, second: Usage): Usage {
   return {
     input: first.input + second.input,
@@ -58,7 +57,6 @@ export interface UsageCostBreakdownEntry {
   tokens: number;
 }
 
-/** Group model-attributed usage by model and all other usage into a separate bucket. */
 export function getUsageCostBreakdown(entries: SessionEntry[]): UsageCostBreakdownEntry[] {
   const totalsByKey = new Map<string, UsageTotals>();
 
@@ -74,18 +72,21 @@ export function getUsageCostBreakdown(entries: SessionEntry[]): UsageCostBreakdo
     } else if (
       entry.type === "message" &&
       entry.message.role === "toolResult" &&
-      entry.message.usage
+      entry.message.usage !== undefined
     ) {
       key = "Tools/summaries";
       usage = entry.message.usage;
-    } else if ((entry.type === "branch_summary" || entry.type === "compaction") && entry.usage) {
+    } else if (
+      (entry.type === "branch_summary" || entry.type === "compaction") &&
+      entry.usage !== undefined
+    ) {
       key = "Tools/summaries";
       usage = entry.usage;
     }
-    if (!key || !usage) continue;
+    if (key === undefined || key === "" || usage === undefined) continue;
 
     let totals = totalsByKey.get(key);
-    if (!totals) {
+    if (totals === undefined) {
       totals = createUsageTotals();
       totalsByKey.set(key, totals);
     }

@@ -621,18 +621,18 @@ describe("AgentSession actionable boundaries", () => {
     harness.session.refreshContext();
     const runAutoCompaction = vi.spyOn(
       harness.session as unknown as {
-        _runAutoCompaction: (
+        runAutoCompaction: (
           reason: "overflow" | "threshold",
           willRetry: boolean,
         ) => Promise<boolean>;
       },
-      "_runAutoCompaction",
+      "runAutoCompaction",
     );
     const checkCompaction = (
       harness.session as unknown as {
-        _checkCompaction: (message: ReturnType<typeof fauxAssistantMessage>) => Promise<boolean>;
+        checkCompaction: (message: ReturnType<typeof fauxAssistantMessage>) => Promise<boolean>;
       }
-    )._checkCompaction.bind(harness.session);
+    ).checkCompaction.bind(harness.session);
     const error = fauxAssistantMessage("", {
       stopReason: "error",
       errorMessage: "invalid_api_key",

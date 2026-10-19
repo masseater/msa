@@ -1,5 +1,4 @@
 import { existsSync, readFileSync } from "fs";
-import { join } from "path";
 
 import {
   type Keybinding,
@@ -15,6 +14,7 @@ import { getAgentDir } from "../config.ts";
 import { stripBom } from "../utils/text.ts";
 import { KeybindingValueSchema } from "./key-id-schema.ts";
 import { envSnapshot } from "./process-env.ts";
+import { join } from "./platform-node.ts";
 
 export function useWindowsKeybindings(
   platform: NodeJS.Platform = process.platform,
@@ -405,7 +405,7 @@ export class KeybindingsManager extends TuiKeybindingsManager {
   }
 
   reload(): void {
-    if (!this.configPath) return;
+    if (this.configPath === undefined || this.configPath === "") return;
     this.setUserBindings(KeybindingsManager.loadFromFile(this.configPath));
   }
 
@@ -415,7 +415,7 @@ export class KeybindingsManager extends TuiKeybindingsManager {
 
   private static loadFromFile(path: string): KeybindingsConfig {
     const rawConfig = loadRawConfig(path);
-    if (!rawConfig) return {};
+    if (rawConfig === undefined) return {};
     return toKeybindingsConfig(migrateKeybindingsConfig(rawConfig).config);
   }
 }

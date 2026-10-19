@@ -1,12 +1,7 @@
-/**
- * Custom message types and transformers for the coding agent.
- *
- * Extends the base AgentMessage type with coding-agent specific message types,
- * and provides a transformer to convert them to LLM-compatible messages.
- */
-
 import type { AgentMessage } from "@msa/agent-core";
 import type { ImageContent, Message, TextContent } from "@msa/ai";
+
+import { toEpochMs } from "./platform.ts";
 
 export const COMPACTION_SUMMARY_PREFIX = `The conversation history before this point was compacted into the following summary:
 
@@ -23,9 +18,6 @@ export const BRANCH_SUMMARY_PREFIX = `The following is a summary of a branch tha
 
 export const BRANCH_SUMMARY_SUFFIX = `</summary>`;
 
-/**
- * Message type for bash executions via the ! command.
- */
 export interface BashExecutionMessage {
   role: "bashExecution";
   command: string;
@@ -35,14 +27,9 @@ export interface BashExecutionMessage {
   truncated: boolean;
   fullOutputPath?: string | undefined;
   timestamp: number;
-  /** If true, this message is excluded from LLM context (!! prefix) */
   excludeFromContext?: boolean | undefined;
 }
 
-/**
- * Message type for extension-injected messages via sendMessage().
- * These are custom messages that extensions can inject into the conversation.
- */
 export interface CustomMessage<T = unknown> {
   role: "custom";
   customType: string;
@@ -66,7 +53,6 @@ export interface CompactionSummaryMessage {
   timestamp: number;
 }
 
-// Extend CustomAgentMessages via declaration merging
 declare module "@msa/agent-core" {
   interface CustomAgentMessages {
     bashExecution: BashExecutionMessage;
@@ -76,22 +62,19 @@ declare module "@msa/agent-core" {
   }
 }
 
-/**
- * Convert a BashExecutionMessage to user message text for LLM context.
- */
 export function bashExecutionToText(msg: BashExecutionMessage): string {
   let text = `Ran \`${msg.command}\`\n`;
-  if (msg.output) {
-    text += `\`\`\`\n${msg.output}\n\`\`\``;
-  } else {
+  if (msg.output === "") {
     text += "(no output)";
+  } else {
+    text += `\`\`\`\n${msg.output}\n\`\`\``;
   }
   if (msg.cancelled) {
     text += "\n\n(command cancelled)";
   } else if (msg.exitCode !== null && msg.exitCode !== undefined && msg.exitCode !== 0) {
     text += `\n\nCommand exited with code ${msg.exitCode}`;
   }
-  if (msg.truncated && msg.fullOutputPath) {
+  if (msg.truncated && msg.fullOutputPath !== undefined && msg.fullOutputPath !== "") {
     text += `\n\n[Output truncated. Full output: ${msg.fullOutputPath}]`;
   }
   return text;
@@ -106,7 +89,7 @@ export function createBranchSummaryMessage(
     role: "branchSummary",
     summary,
     fromId,
-    timestamp: new Date(timestamp).getTime(),
+    timestamp: toEpochMs(timestamp),
   };
 }
 
@@ -119,11 +102,10 @@ export function createCompactionSummaryMessage(
     role: "compactionSummary",
     summary: summary,
     tokensBefore,
-    timestamp: new Date(timestamp).getTime(),
+    timestamp: toEpochMs(timestamp),
   };
 }
 
-/** Convert CustomMessageEntry to AgentMessage format */
 export function createCustomMessage(
   customType: string,
   content: string | (TextContent | ImageContent)[],
@@ -137,25 +119,16 @@ export function createCustomMessage(
     content,
     display,
     details,
-    timestamp: new Date(timestamp).getTime(),
+    timestamp: toEpochMs(timestamp),
   };
 }
 
-/**
- * Transform AgentMessages (including custom types) to LLM-compatible Messages.
- *
- * This is used by:
- * - Agent's transormToLlm option (for prompt calls and queued messages)
- * - Compaction's generateSummary (for summarization)
- * - Custom extensions and tools
- */
 export function convertToLlm(messages: AgentMessage[]): Message[] {
   return messages
     .map((m): Message | undefined => {
       switch (m.role) {
         case "bashExecution":
-          // Skip messages excluded from context (!! prefix)
-          if (m.excludeFromContext) {
+          if (m.excludeFromContext === true) {
             return undefined;
           }
           return {

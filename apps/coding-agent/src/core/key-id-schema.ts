@@ -4,7 +4,7 @@ import { type TSchemaOptions, Type } from "typebox";
 const modifiers = ["ctrl", "shift", "alt", "super"] as const;
 const baseKeyPattern = `(?:[a-z0-9]|${Object.values(Key)
   .flatMap((value) =>
-    typeof value === "string" ? [value.replace(/[\\^$.*+?()[\]{}|]/g, "\\$&")] : [],
+    typeof value === "string" ? [value.replace(/[\\^$.*+?()[\]{}|]/gu, "\\$&")] : [],
   )
   .join("|")})`;
 const duplicateModifierPattern = modifiers

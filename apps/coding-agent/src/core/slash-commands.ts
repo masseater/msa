@@ -15,11 +15,9 @@ export interface BuiltinSlashCommand {
   name: string;
   description: string;
   argumentHint?: string;
-  /** Other names that run this command. */
   aliases?: readonly string[];
 }
 
-/** Named, grouped, and aliased as in Claude Code. */
 export const BUILTIN_SLASH_COMMANDS: ReadonlyArray<BuiltinSlashCommand> = [
   { name: "help", description: "Show the available commands" },
   { name: "config", description: "Open settings", aliases: ["settings", "theme"] },
@@ -118,16 +116,10 @@ const BUILTIN_NAMES: ReadonlyMap<string, string> = new Map(
   ]),
 );
 
-/** Whether `name` (without the slash) is a built-in command or one of its aliases. */
 export function isBuiltinSlashCommandName(name: string): boolean {
   return BUILTIN_NAMES.has(name);
 }
 
-/**
- * Rewrites a built-in command typed by one of its aliases to the command's own name, keeping its
- * arguments: `/quit` becomes `/exit`, `/cost` becomes `/status`. Other text is
- * returned unchanged.
- */
 export function canonicalizeBuiltinSlashCommand(text: string): string {
   const typed = slashCommandName(text);
   if (typed === undefined) return text;
@@ -160,10 +152,6 @@ export const INIT_PROMPT =
   "Read package.json (or the equivalent), the build and test configuration, and AGENTS.md and " +
   "CLAUDE.md if they already exist. Keep it short and specific to this repository.";
 
-/**
- * The `/help` text: built-in commands with their aliases, then the commands resources added. A
- * built-in command whose name an added command (a skill) took is left out.
- */
 export function formatHelpMarkdown(
   added: ReadonlyArray<{ name: string; description?: string | undefined }>,
 ): string {
@@ -175,27 +163,26 @@ export function formatHelpMarkdown(
     if (taken.has(command.name)) continue;
     const aliases = command.aliases?.map((alias) => `\`/${alias}\``).join(", ");
     lines.push(
-      row(command.name, aliases ? `${command.description} (${aliases})` : command.description),
+      row(
+        command.name,
+        aliases !== undefined && aliases !== ""
+          ? `${command.description} (${aliases})`
+          : command.description,
+      ),
     );
   }
-  // Skill descriptions run to paragraphs; the first sentence is enough to pick one.
   for (const command of added) {
     lines.push(row(command.name, command.description?.split(/(?<=[.。])\s*|\n/u)[0]));
   }
   return lines.join("\n");
 }
 
-/** The command name at the start of `text` (`/name args` gives `name`), or undefined for other text. */
 export function slashCommandName(text: string): string | undefined {
   if (!text.startsWith("/")) return undefined;
   const end = text.search(/\s/u);
   return end === -1 ? text.slice(1) : text.slice(1, end);
 }
 
-/**
- * The commands `/name` runs: a skill takes its name from any extension command or prompt template
- * of the same name, as a Claude Code skill does from a command file.
- */
 export function withSkillCommands<T extends { name: string }>(
   commands: readonly T[],
   skills: readonly T[],

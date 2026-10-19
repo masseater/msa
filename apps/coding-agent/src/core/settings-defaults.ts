@@ -1,6 +1,5 @@
 import { DEFAULT_MAX_AGENT_RETRY_DELAY_MS } from "@msa/ai/utils/retry";
 
-/** Runtime defaults shared by settings accessors and the published JSON Schema. */
 export const SETTINGS_DEFAULTS = {
   transport: "auto",
   steeringMode: "one-at-a-time",

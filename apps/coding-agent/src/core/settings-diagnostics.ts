@@ -6,16 +6,13 @@ export function collectSettingsDiagnostics(
 ): AgentSessionRuntimeDiagnostic[] {
   return settingsManager.drainErrors().map(({ scope, path, error }) => ({
     type: "warning",
-    message: path
-      ? `Invalid settings file ${path}: ${error.message}`
-      : `Invalid ${scope} settings: ${error.message}`,
+    message:
+      path !== undefined && path !== ""
+        ? `Invalid settings file ${path}: ${error.message}`
+        : `Invalid ${scope} settings: ${error.message}`,
   }));
 }
 
-/**
- * Remove duplicate type/message diagnostics while preserving their first occurrence.
- * Startup and runtime settings managers can report the same file error.
- */
 export function deduplicateDiagnostics(
   diagnostics: readonly AgentSessionRuntimeDiagnostic[],
 ): AgentSessionRuntimeDiagnostic[] {

@@ -21,9 +21,8 @@ export function readMsaManifest(packageJsonPath: string): MsaManifest | null {
     if (!isObject(pkg)) {
       return null;
     }
-    // Read the msa field; packages written for pi declare the same resources under "pi".
     const section = isObject(pkg["msa"]) ? pkg["msa"] : isObject(pkg["pi"]) ? pkg["pi"] : null;
-    if (!section) {
+    if (section === null) {
       return null;
     }
 

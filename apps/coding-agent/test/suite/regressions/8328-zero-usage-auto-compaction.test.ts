@@ -4,8 +4,8 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { createHarness, type Harness } from "../harness.ts";
 
 type SessionWithCompactionInternals = {
-  _checkCompaction: (assistantMessage: AssistantMessage) => Promise<boolean>;
-  _runAutoCompaction: (reason: "overflow" | "threshold", willRetry: boolean) => Promise<boolean>;
+  checkCompaction: (assistantMessage: AssistantMessage) => Promise<boolean>;
+  runAutoCompaction: (reason: "overflow" | "threshold", willRetry: boolean) => Promise<boolean>;
 };
 
 function createZeroUsageAssistant(harness: Harness): AssistantMessage {
@@ -61,10 +61,10 @@ describe("issue #8328 zero-usage auto-compaction", () => {
     ];
     const sessionInternals = harness.session as unknown as SessionWithCompactionInternals;
     const runAutoCompactionSpy = vi
-      .spyOn(sessionInternals, "_runAutoCompaction")
+      .spyOn(sessionInternals, "runAutoCompaction")
       .mockResolvedValue(false);
 
-    await sessionInternals._checkCompaction(assistant);
+    await sessionInternals.checkCompaction(assistant);
 
     expect(runAutoCompactionSpy).toHaveBeenCalledOnce();
     expect(runAutoCompactionSpy).toHaveBeenCalledWith("threshold", false);
@@ -79,10 +79,10 @@ describe("issue #8328 zero-usage auto-compaction", () => {
     ];
     const sessionInternals = harness.session as unknown as SessionWithCompactionInternals;
     const runAutoCompactionSpy = vi
-      .spyOn(sessionInternals, "_runAutoCompaction")
+      .spyOn(sessionInternals, "runAutoCompaction")
       .mockResolvedValue(false);
 
-    await sessionInternals._checkCompaction(assistant);
+    await sessionInternals.checkCompaction(assistant);
 
     expect(runAutoCompactionSpy).not.toHaveBeenCalled();
   });

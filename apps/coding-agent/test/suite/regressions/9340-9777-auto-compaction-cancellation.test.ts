@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { createHarness, type Harness } from "../harness.ts";
 
 type SessionWithCompactionInternals = {
-  _runAutoCompaction: (reason: "overflow" | "threshold", willRetry: boolean) => Promise<boolean>;
+  runAutoCompaction: (reason: "overflow" | "threshold", willRetry: boolean) => Promise<boolean>;
 };
 
 function seedCompactableSession(harness: Harness): void {
@@ -33,7 +33,7 @@ function seedCompactableSession(harness: Harness): void {
 }
 
 function runAutoCompaction(harness: Harness): Promise<boolean> {
-  return (harness.session as unknown as SessionWithCompactionInternals)._runAutoCompaction(
+  return (harness.session as unknown as SessionWithCompactionInternals).runAutoCompaction(
     "threshold",
     false,
   );

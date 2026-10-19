@@ -455,7 +455,7 @@ describe("AgentSession concurrent prompt guard", () => {
 
     const snapshots: string[][] = [];
     const sessionWithRunner = session as unknown as {
-      _extensionRunner?: {
+      extensionRunnerInternal?: {
         hasHandlers: (eventType: string) => boolean;
         emit: (event: { type: string; message?: { role?: string } }) => Promise<void>;
         emitMessageEnd: (event: {
@@ -476,7 +476,7 @@ describe("AgentSession concurrent prompt guard", () => {
         invalidate: (message?: string) => void;
       };
     };
-    sessionWithRunner._extensionRunner = {
+    sessionWithRunner.extensionRunnerInternal = {
       hasHandlers: (eventType) => eventType === "tool_call",
       emit: async () => {},
       emitMessageEnd: async () => undefined,
@@ -605,7 +605,7 @@ describe("AgentSession concurrent prompt guard", () => {
     });
 
     const sessionWithRunner = session as unknown as {
-      _extensionRunner?: {
+      extensionRunnerInternal?: {
         hasHandlers: (eventType: string) => boolean;
         emit: (event: { type: string; message?: { role?: string } }) => Promise<void>;
         emitMessageEnd: (event: {
@@ -625,7 +625,7 @@ describe("AgentSession concurrent prompt guard", () => {
         invalidate: (message?: string) => void;
       };
     };
-    sessionWithRunner._extensionRunner = {
+    sessionWithRunner.extensionRunnerInternal = {
       hasHandlers: () => false,
       emit: async () => {},
       emitMessageEnd: async (event) => {

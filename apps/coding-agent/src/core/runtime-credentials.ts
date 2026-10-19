@@ -1,6 +1,8 @@
 import type { AuthOperationOptions, Credential, CredentialInfo, CredentialStore } from "@msa/ai";
+import * as Effect from "effect/Effect";
 
-/** Async credential store overlay for non-persistent runtime API keys. */
+import { awaited, awaitingWith } from "./awaiting.ts";
+
 export class RuntimeCredentials implements CredentialStore {
   private readonly store: CredentialStore;
   private readonly overrides = new Map<string, string>();
@@ -21,21 +23,33 @@ export class RuntimeCredentials implements CredentialStore {
     return this.overrides.has(providerId);
   }
 
-  async read(providerId: string, options?: AuthOperationOptions): Promise<Credential | undefined> {
-    options?.signal?.throwIfAborted();
-    const override = this.overrides.get(providerId);
-    return override ? { type: "api_key", key: override } : this.store.read(providerId, options);
+  read(providerId: string, options?: AuthOperationOptions): Promise<Credential | undefined> {
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        options?.signal?.throwIfAborted();
+        const override = this.overrides.get(providerId);
+        return yield* awaited(
+          override !== undefined && override !== ""
+            ? { type: "api_key", key: override }
+            : this.store.read(providerId, options),
+        );
+      }, this),
+    );
   }
 
-  async list(options?: AuthOperationOptions): Promise<readonly CredentialInfo[]> {
-    const entries = new Map(
-      (await this.store.list(options)).map((entry) => [entry.providerId, entry]),
+  list(options?: AuthOperationOptions): Promise<readonly CredentialInfo[]> {
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        const entries = new Map(
+          (yield* awaited(this.store.list(options))).map((entry) => [entry.providerId, entry]),
+        );
+        options?.signal?.throwIfAborted();
+        for (const providerId of this.overrides.keys()) {
+          entries.set(providerId, { providerId, type: "api_key" });
+        }
+        return [...entries.values()];
+      }, this),
     );
-    options?.signal?.throwIfAborted();
-    for (const providerId of this.overrides.keys()) {
-      entries.set(providerId, { providerId, type: "api_key" });
-    }
-    return [...entries.values()];
   }
 
   modify(
@@ -46,9 +60,13 @@ export class RuntimeCredentials implements CredentialStore {
     return this.store.modify(providerId, fn, options);
   }
 
-  async delete(providerId: string, options?: AuthOperationOptions): Promise<void> {
-    options?.signal?.throwIfAborted();
-    await this.store.delete(providerId, options);
-    this.overrides.delete(providerId);
+  delete(providerId: string, options?: AuthOperationOptions): Promise<void> {
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        options?.signal?.throwIfAborted();
+        yield* awaited(this.store.delete(providerId, options));
+        this.overrides.delete(providerId);
+      }, this),
+    );
   }
 }

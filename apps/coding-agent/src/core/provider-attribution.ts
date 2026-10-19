@@ -43,7 +43,7 @@ function getSessionHeaders(
   model: Model<Api>,
   sessionId: string | undefined,
 ): Record<string, string> | undefined {
-  if (!sessionId) return undefined;
+  if (sessionId === undefined || sessionId === "") return undefined;
   if (
     model.provider !== "opencode" &&
     model.provider !== "opencode-go" &&
@@ -66,7 +66,7 @@ export function mergeProviderAttributionHeaders(
   };
 
   for (const headers of headerSources) {
-    if (headers) {
+    if (headers !== undefined) {
       Object.assign(merged, headers);
     }
   }

@@ -1,17 +1,11 @@
-/**
- * Resolve configuration values that may be shell commands, environment variables, or literals.
- * Used by auth-storage.ts and model-registry.ts.
- */
-
 import { execSync, spawnSync } from "child_process";
 
 import { getShellConfig } from "../utils/shell.ts";
 import { readEnv } from "./process-env.ts";
 
-// Cache for shell command results (persists for process lifetime)
 const commandResultCache = new Map<string, string | undefined>();
-const ENV_VAR_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
-const ENV_VAR_NAME_PREFIX_RE = /^[A-Za-z_][A-Za-z0-9_]*/;
+const ENV_VAR_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*$/u;
+const ENV_VAR_NAME_PREFIX_RE = /^[A-Za-z_][A-Za-z0-9_]*/u;
 
 type TemplatePart = { type: "literal"; value: string } | { type: "env"; name: string };
 
@@ -20,7 +14,7 @@ type ConfigValueReference =
   | { type: "template"; parts: TemplatePart[] };
 
 function appendLiteral(parts: TemplatePart[], value: string): void {
-  if (!value) return;
+  if (value === "") return;
   const previousPart = parts[parts.length - 1];
   if (previousPart?.type === "literal") {
     previousPart.value += value;
@@ -68,7 +62,7 @@ function parseConfigValueTemplate(config: string): TemplatePart[] {
     }
 
     const match = config.slice(dollarIndex + 1).match(ENV_VAR_NAME_PREFIX_RE);
-    if (match) {
+    if (match !== null) {
       parts.push({ type: "env", name: match[0] });
       index = dollarIndex + 1 + match[0].length;
       continue;
@@ -146,13 +140,6 @@ export function isConfigValueConfigured(config: string, env?: Record<string, str
   return getMissingConfigValueEnvVarNames(config, env).length === 0;
 }
 
-/**
- * Resolve a config value (API key, header value, etc.) to an actual value.
- * - If starts with "!", executes the rest as a shell command and uses stdout (cached)
- * - Interpolates "$ENV_VAR" or "${ENV_VAR}" references with the named environment variable
- * - In non-command values, "$$" escapes a literal "$" and "$!" escapes a literal "!"
- * - Otherwise treats the value as a literal
- */
 export function resolveConfigValue(
   config: string,
   env?: Record<string, string>,
@@ -180,7 +167,7 @@ function executeWithConfiguredShell(command: string): {
       windowsHide: true,
     });
 
-    if (result.error) {
+    if (result.error !== undefined) {
       const error = result.error as NodeJS.ErrnoException;
       if (error.code === "ENOENT") {
         return { executed: false, value: undefined };
@@ -234,9 +221,6 @@ function executeCommand(commandConfig: string): string | undefined {
   return result;
 }
 
-/**
- * Resolve all header values using the same resolution logic as API keys.
- */
 export function resolveConfigValueUncached(
   config: string,
   env?: Record<string, string>,
@@ -282,18 +266,15 @@ export function resolveConfigValueOrThrow(
   throw new Error(`Failed to resolve ${description}`);
 }
 
-/**
- * Resolve all header values using the same resolution logic as API keys.
- */
 export function resolveHeaders(
   headers: Record<string, string> | undefined,
   env?: Record<string, string>,
 ): Record<string, string> | undefined {
-  if (!headers) return undefined;
+  if (headers === undefined) return undefined;
   const resolved: Record<string, string> = {};
   for (const [key, value] of Object.entries(headers)) {
     const resolvedValue = resolveConfigValue(value, env);
-    if (resolvedValue) {
+    if (resolvedValue !== undefined && resolvedValue !== "") {
       resolved[key] = resolvedValue;
     }
   }
@@ -305,7 +286,7 @@ export function resolveHeadersOrThrow(
   description: string,
   env?: Record<string, string>,
 ): Record<string, string> | undefined {
-  if (!headers) return undefined;
+  if (headers === undefined) return undefined;
   const resolved: Record<string, string> = {};
   for (const [key, value] of Object.entries(headers)) {
     resolved[key] = resolveConfigValueOrThrow(value, `${description} header "${key}"`, env);
@@ -313,7 +294,6 @@ export function resolveHeadersOrThrow(
   return Object.keys(resolved).length > 0 ? resolved : undefined;
 }
 
-/** Clear the config value command cache. Exported for testing. */
 export function clearConfigValueCache(): void {
   commandResultCache.clear();
 }
