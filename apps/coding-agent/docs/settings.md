@@ -139,6 +139,14 @@ See [Long-Term Memory](memory.md) for scopes, embeddings, and the `/memory` comm
 
 See [Watch Pull Requests](pr-watch.md) for the `pr_watch` actions and the messages it sends.
 
+## Telemetry
+
+| Setting                  | Type   | Default                                 | Description                                                                         |
+| ------------------------ | ------ | --------------------------------------- | ----------------------------------------------------------------------------------- |
+| `telemetry.otlpEndpoint` | string | The `msa-grafana-lgtm` podman container | OTLP/HTTP base URL for traces, metrics, and logs. `MSA_OTLP_ENDPOINT` overrides it. |
+
+See [Telemetry](telemetry.md) for what msa sends and how to read it.
+
 ## Terminal and display
 
 | Setting                         | Type                                     | Default        | Description                                                                                                                                                                                                                                                                                           |

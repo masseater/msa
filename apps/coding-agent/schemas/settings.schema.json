@@ -582,6 +582,15 @@
         }
       }
     },
+    "telemetry": {
+      "type": "object",
+      "properties": {
+        "otlpEndpoint": {
+          "type": "string",
+          "description": "OTLP/HTTP base URL that receives traces, metrics, and logs, such as http://collector:4318. MSA_OTLP_ENDPOINT takes precedence. Default: the msa-grafana-lgtm podman container."
+        }
+      }
+    },
     "enabledModels": {
       "type": "array",
       "items": {

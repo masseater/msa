@@ -519,6 +519,16 @@ export const SettingsSchema = Type.Object(
     images: Type.Optional(ImageSettingsSchema),
     memory: Type.Optional(MemorySettingsSchema),
     prWatch: Type.Optional(PrWatchSettingsSchema),
+    telemetry: Type.Optional(
+      Type.Object({
+        otlpEndpoint: Type.Optional(
+          Type.String({
+            description:
+              "OTLP/HTTP base URL that receives traces, metrics, and logs, such as http://collector:4318. MSA_OTLP_ENDPOINT takes precedence. Default: the msa-grafana-lgtm podman container.",
+          }),
+        ),
+      }),
+    ),
     enabledModels: Type.Optional(
       Type.Array(Type.String(), {
         description: "Model patterns for cycling, in the same format as the --models CLI flag.",

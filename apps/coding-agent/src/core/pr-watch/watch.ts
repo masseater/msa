@@ -9,6 +9,8 @@ export interface PrNotification {
   readonly label: string;
   readonly text: string;
   readonly wake: boolean;
+  /** Set when checks finished: how long they were pending and how they ended. */
+  readonly ci?: { readonly durationMs: number; readonly conclusion: "passed" | "failed" };
 }
 
 export interface PrWatchHost {
@@ -131,15 +133,27 @@ function applySnapshot(
   now: number,
 ): boolean {
   const previous = entry.snapshot;
+  const pendingSince = entry.pendingSince;
   trackTimers(entry, previous, current, now);
   entry.snapshot = current;
   if (previous === undefined) return false;
   const changes = describeChanges(previous, current);
   if (changes.length === 0) return false;
+  const checks = changes.find(
+    (change) => change.kind === "checks-passed" || change.kind === "checks-failed",
+  );
   const notification: PrNotification = {
     label: changes.map((change) => change.label).join(", "),
     text: describeChangeText(entry.label, changes),
     wake: true,
+    ...(checks === undefined || pendingSince === undefined
+      ? {}
+      : {
+          ci: {
+            durationMs: now - pendingSince,
+            conclusion: checks.kind === "checks-passed" ? "passed" : "failed",
+          },
+        }),
   };
   entry.lastNotification = notification;
   if (isTerminalChange(changes)) entry.status = "stopped";

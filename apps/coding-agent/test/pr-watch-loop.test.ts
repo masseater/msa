@@ -142,6 +142,17 @@ describe("pull request watch loop", () => {
     expect(result.notifications[0]?.wake).toBe(true);
   });
 
+  it("measures how long the checks were pending when CI finishes", async () => {
+    const result = await runPolls(scriptedGh([pendingChecks, pendingChecks, finishedChecks]), [
+      INTERVAL_MS,
+      INTERVAL_MS,
+    ]);
+
+    expect(result.notifications.map((notification) => notification.ci)).toEqual([
+      { durationMs: 2 * INTERVAL_MS, conclusion: "failed" },
+    ]);
+  });
+
   it("reports CI passing with the pass count", async () => {
     const result = await runPolls(scriptedGh([pendingChecks, passedChecks]), [INTERVAL_MS]);
 

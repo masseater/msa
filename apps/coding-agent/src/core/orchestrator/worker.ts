@@ -1,5 +1,8 @@
 import type { AgentMessage, ThinkingLevel } from "@msa/agent-core";
 import type { Model } from "@msa/ai/compat";
+import type { TelemetryContext } from "@msa/telemetry";
+
+import type { SessionTelemetryOptions } from "../observability/session-telemetry.ts";
 
 export interface WorkerSession {
   prompt(text: string): Promise<unknown>;
@@ -21,6 +24,7 @@ export interface CreateWorkerOptions {
   model: Model<any>;
   thinkingLevel: ThinkingLevel;
   sessionFile?: string | undefined;
+  telemetry: SessionTelemetryOptions;
 }
 
 export interface OrchestratorDefaults {
@@ -48,4 +52,6 @@ export interface OrchestratorOptions {
   report: (text: string, details: OrchestratorReport) => void;
   runCondition: (command: string, cwd: string) => Promise<boolean>;
   pollIntervalMs?: number | null;
+  /** Parent of the Task spans; each Session span sits under its first task. */
+  telemetry: TelemetryContext;
 }
