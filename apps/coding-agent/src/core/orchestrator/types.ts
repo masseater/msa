@@ -139,6 +139,17 @@ export interface CreateTaskInput {
   cwd?: string;
 }
 
+export interface SetTaskDependsInput {
+  taskIds: readonly string[];
+  add?: readonly string[];
+  remove?: readonly string[];
+}
+
+export interface SetTaskInstructionInput {
+  taskId: string;
+  prompt: string;
+}
+
 export interface SendNoteInput {
   content: string;
   audience: NoteAudience;

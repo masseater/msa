@@ -151,6 +151,14 @@ const APP_KEYBINDINGS = {
     defaultKeys: "m",
     description: "Switch the selected task's model",
   },
+  "app.orchestrator.depends": {
+    defaultKeys: "d",
+    description: "Change the dependencies of the selected task",
+  },
+  "app.orchestrator.instruction": {
+    defaultKeys: "i",
+    description: "Rewrite the instruction of the selected task",
+  },
   "app.models.save": {
     defaultKeys: "ctrl+s",
     description: "Save model selection",

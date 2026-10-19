@@ -64,6 +64,28 @@ it("sends a shared note to the selected task's round", () => {
   });
 });
 
+it("adds and drops dependencies of the selected task with + and -", () => {
+  const { view, orchestrator, screen } = setup({ initialId: "b" });
+  view.handleInput("d");
+  expect(screen().join("\n")).toContain("Dependencies of b");
+  for (const key of "+c -a") view.handleInput(key);
+  view.handleInput(ENTER);
+  expect(orchestrator.setDepends).toHaveBeenCalledWith({
+    taskIds: ["b"],
+    add: ["c"],
+    remove: ["a"],
+  });
+});
+
+it("rewrites the instruction of the selected task", () => {
+  const { view, orchestrator, screen } = setup({ initialId: "b" });
+  view.handleInput("i");
+  expect(screen().join("\n")).toContain("Instruction for b");
+  for (const key of "only the api part") view.handleInput(key);
+  view.handleInput(ENTER);
+  expect(orchestrator.setInstruction).toHaveBeenCalledWith("b", "only the api part");
+});
+
 it("changes priority, stops, and reruns the selected task", () => {
   const { view, orchestrator } = setup({ initialId: "b" });
   view.handleInput("p");

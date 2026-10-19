@@ -5,7 +5,8 @@ import type { ToolDefinition } from "../extensions/types.ts";
 import type { Orchestrator } from "./orchestrator.ts";
 import { prompts } from "./prompts.ts";
 import {
-  dependencySchema,
+  dependsSchema,
+  instructionSchema,
   modelChangeSchema,
   modelSchema,
   prioritySchema,
@@ -102,28 +103,36 @@ export function taskToolsA(orchestrator: Orchestrator): Record<string, ToolDefin
 
 export function taskToolsB(orchestrator: Orchestrator): Record<string, ToolDefinition> {
   return {
-    add_dependency: tool({
-      name: "add_dependency",
-      label: "add dependency",
+    set_task_depends: tool({
+      name: "set_task_depends",
+      label: "set task dependencies",
       description:
-        "Make a task wait for another task. Works while the task is waiting or running; a running task finishes its current session, then runs again once the new dependency completes. Cycles are rejected.",
-      promptSnippet: "Add a dependency to an existing task",
-      parameters: dependencySchema,
-      run: ({ taskId, dependsOn }) =>
+        "Add and drop the tasks one or more tasks wait for. A task that has not started changes freely; a running task only gains a dependency that already finished, because waiting for anything else means stopping it first. Cycles are rejected.",
+      promptSnippet: "Change what tasks wait for",
+      promptGuidelines: [
+        "Dependencies and instructions can change after creation: while a task has not started, set_task_depends and set_task_instruction rewrite them in place. Stop a running task before changing what it waits for or what it was told to do.",
+      ],
+      parameters: dependsSchema,
+      run: (params) =>
         orchestrator
-          .addDependency(taskId, dependsOn)
-          .then((task) => `Dependencies: ${task.dependsOn.join(", ") || "-"}.`),
+          .setDepends(params)
+          .then((tasks) =>
+            tasks
+              .map((task) => `${task.id} depends on ${task.dependsOn.join(", ") || "-"}.`)
+              .join("\n"),
+          ),
     }),
-    remove_dependency: tool({
-      name: "remove_dependency",
-      label: "remove dependency",
-      description: "Remove a dependency from a task, including one that is waiting or running.",
-      promptSnippet: "Remove a dependency from a task",
-      parameters: dependencySchema,
-      run: ({ taskId, dependsOn }) =>
+    set_task_instruction: tool({
+      name: "set_task_instruction",
+      label: "set task instruction",
+      description:
+        "Replace what a task that has not started is told to do. The session reads the new instruction when the scheduler starts it. A running task is rejected: stop it first, or steer it with send_message.",
+      promptSnippet: "Rewrite the instruction of a task that has not started",
+      parameters: instructionSchema,
+      run: ({ taskId, prompt }) =>
         orchestrator
-          .removeDependency(taskId, dependsOn)
-          .then((task) => `Dependencies: ${task.dependsOn.join(", ") || "-"}.`),
+          .setInstruction(taskId, prompt)
+          .then((task) => `${task.id} ${task.title} now starts with:\n\n${task.prompt}`),
     }),
     set_task_priority: tool({
       name: "set_task_priority",

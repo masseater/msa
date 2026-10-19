@@ -7,9 +7,25 @@ export const modelSchema = Type.String({ description: 'Model as "provider/id".' 
 export const taskIdSchema = Type.String({ description: "Task id." });
 export const taskIdObject = Type.Object({ taskId: taskIdSchema });
 
-export const dependencySchema = Type.Object({
+export const dependsSchema = Type.Object({
+  taskIds: Type.Array(taskIdSchema, {
+    description: "Tasks whose dependencies change.",
+  }),
+  add: Type.Optional(
+    Type.Array(taskIdSchema, {
+      description:
+        "Dependencies to add. Each must finish before the task starts, and its report joins the prompt.",
+    }),
+  ),
+  remove: Type.Optional(Type.Array(taskIdSchema, { description: "Dependencies to drop." })),
+});
+
+export const instructionSchema = Type.Object({
   taskId: taskIdSchema,
-  dependsOn: taskIdSchema,
+  prompt: Type.String({
+    description:
+      "The new instruction. It replaces the old one and reaches the session when it starts.",
+  }),
 });
 
 export const prioritySchema = Type.Object({

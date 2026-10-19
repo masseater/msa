@@ -9,7 +9,13 @@ import { type Runtime, nowMillis } from "./runtime.ts";
 import { scheduling } from "./schedule.ts";
 import { store } from "./store.ts";
 import { taskActions } from "./task-actions.ts";
-import type { CreateTaskInput, Task, TaskView } from "./types.ts";
+import type {
+  CreateTaskInput,
+  SetTaskDependsInput,
+  SetTaskInstructionInput,
+  Task,
+  TaskView,
+} from "./types.ts";
 
 function resolveRound(runtime: Runtime, input: CreateTaskInput): string {
   if (input.round !== undefined) return input.round;
@@ -73,31 +79,103 @@ function createTask(
   });
 }
 
-function addDependency(
+interface DependencyEdit {
+  taskIds: readonly string[];
+  add: readonly string[];
+  remove: readonly string[];
+}
+
+function uniqueIds(ids: readonly string[]): string[] {
+  return [...new Set(ids)];
+}
+
+function taskOf(runtime: Runtime, id: string, label: string): Task {
+  const task = store.getTask(runtime.database, id);
+  if (task === undefined || task.project !== runtime.options.project) {
+    throw new Error(`Unknown task in ${label}: ${id}`);
+  }
+  return task;
+}
+
+function dependencyEdit(runtime: Runtime, input: SetTaskDependsInput): DependencyEdit {
+  const taskIds = uniqueIds(input.taskIds);
+  const add = uniqueIds(input.add ?? []);
+  const remove = uniqueIds(input.remove ?? []);
+  if (taskIds.length === 0) throw new Error("Pass the tasks to change in taskIds");
+  if (add.length === 0 && remove.length === 0) {
+    throw new Error("Pass the dependencies to add or remove");
+  }
+  const tasks = taskIds.map((id) => taskOf(runtime, id, "taskIds"));
+  const dependencies = add.map((id) => taskOf(runtime, id, "add"));
+  for (const task of tasks) {
+    for (const dependency of dependencies) {
+      if (task.id === dependency.id) throw new Error(`${task.id} cannot depend on itself`);
+    }
+  }
+  const running = tasks.filter((task) => task.status === "running").map((task) => task.id);
+  if (running.length === 0) return { taskIds, add, remove };
+  if (remove.length > 0) {
+    throw new Error(
+      `${running.join(", ")} is running. Stop it with stop_task before dropping dependencies; send_message steers it while it runs.`,
+    );
+  }
+  const unfinished = dependencies
+    .filter((dependency) => dependency.status !== "completed")
+    .map((dependency) => dependency.id);
+  if (unfinished.length > 0) {
+    throw new Error(
+      `${running.join(", ")} is running, so it can only gain a dependency that already finished. Stop it with stop_task to wait for ${unfinished.join(", ")}.`,
+    );
+  }
+  return { taskIds, add, remove };
+}
+
+function setDepends(
   runtime: Runtime,
-  taskId: string,
-  dependsOn: string,
-): Effect.Effect<TaskView, OrchestratorError> {
+  input: SetTaskDependsInput,
+): Effect.Effect<TaskView[], OrchestratorError> {
   return Effect.gen(function* () {
+    const edit = yield* Effect.sync(() => dependencyEdit(runtime, input));
     yield* Effect.sync(() =>
-      store.addDependency(runtime.database, runtime.options.project, taskId, dependsOn),
+      store.transaction(runtime.database, () => {
+        for (const taskId of edit.taskIds) {
+          for (const dependsOn of edit.remove) {
+            store.removeDependency(runtime.database, taskId, dependsOn);
+          }
+        }
+        for (const taskId of edit.taskIds) {
+          for (const dependsOn of edit.add) {
+            store.addDependency(runtime.database, runtime.options.project, taskId, dependsOn);
+          }
+        }
+      }),
     );
     yield* scheduling.scheduleEffect(runtime);
     yield* Effect.sync(() => runtime.publish());
-    return actionHelpers.taskView(runtime, taskId);
+    return edit.taskIds.map((taskId) => actionHelpers.taskView(runtime, taskId));
   });
 }
 
-function removeDependency(
+function setInstruction(
   runtime: Runtime,
-  taskId: string,
-  dependsOn: string,
+  input: SetTaskInstructionInput,
 ): Effect.Effect<TaskView, OrchestratorError> {
   return Effect.gen(function* () {
-    yield* Effect.sync(() => store.removeDependency(runtime.database, taskId, dependsOn));
-    yield* scheduling.scheduleEffect(runtime);
+    const now = yield* nowMillis;
+    const prompt = input.prompt.trim();
+    if (prompt === "") throw new Error("The instruction cannot be empty");
+    const task = yield* Effect.sync(() => taskOf(runtime, input.taskId, "taskId"));
+    if (task.kind === "review") {
+      throw new Error(`${task.id} is a round review; its instruction comes from the round`);
+    }
+    if (task.status === "running") {
+      throw new Error(
+        `${task.id} is running. Stop it with stop_task before rewriting the instruction, or send_message to steer it now.`,
+      );
+    }
+    yield* Effect.sync(() => store.updateTask(runtime.database, task.id, { prompt }, now));
     yield* Effect.sync(() => runtime.publish());
-    return actionHelpers.taskView(runtime, taskId);
+    return actionHelpers.taskView(runtime, task.id);
   });
 }
 
@@ -147,8 +225,8 @@ function setModel(
 
 export const actions = {
   createTask,
-  addDependency,
-  removeDependency,
+  setDepends,
+  setInstruction,
   setPriority,
   setModel,
   ...taskActions,

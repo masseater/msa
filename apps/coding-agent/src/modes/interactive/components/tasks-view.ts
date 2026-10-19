@@ -26,7 +26,36 @@ const { describeReplan } = viewHelpers;
 type Composing =
   | { kind: "message"; taskId: string }
   | { kind: "note"; round: string }
-  | { kind: "priority"; taskId: string };
+  | { kind: "priority"; taskId: string }
+  | { kind: "depends"; taskId: string }
+  | { kind: "instruction"; taskId: string };
+
+function composerLabel(composing: Composing): string {
+  switch (composing.kind) {
+    case "message":
+      return "Message to this task";
+    case "note":
+      return `Shared note to round ${composing.round}`;
+    case "priority":
+      return "New priority";
+    case "depends":
+      return `Dependencies of ${composing.taskId}  +id  -id`;
+    case "instruction":
+      return `Instruction for ${composing.taskId}`;
+  }
+}
+
+function parseDepends(text: string): { add: string[]; remove: string[] } {
+  const add: string[] = [];
+  const remove: string[] = [];
+  for (const token of text.split(/[\s,]+/).filter(Boolean)) {
+    const id = token.replace(/^[+-]/, "");
+    if (id === "") continue;
+    if (token.startsWith("-")) remove.push(id);
+    else add.push(id);
+  }
+  return { add, remove };
+}
 
 export interface TasksViewOptions {
   orchestrator: Orchestrator;
@@ -246,16 +275,10 @@ export class TasksView implements Component, Focusable {
   private renderComposer(width: number): string[] {
     const composing = this.composing;
     if (composing === undefined) return [];
-    const label =
-      composing.kind === "message"
-        ? "Message to this task"
-        : composing.kind === "note"
-          ? `Shared note to round ${composing.round}`
-          : "New priority";
     return [
-      truncateToWidth(` ${theme.fg("accent", label)}`, width),
+      truncateToWidth(` ${theme.fg("accent", composerLabel(composing))}`, width),
       ...this.input.render(width),
-      ` ${keyHint("tui.input.submit", composing.kind === "priority" ? "set" : "send")}  ${keyHint("tui.select.cancel", "cancel")}`,
+      ` ${keyHint("tui.input.submit", composing.kind === "message" || composing.kind === "note" ? "send" : "set")}  ${keyHint("tui.select.cancel", "cancel")}`,
     ];
   }
 
@@ -307,6 +330,10 @@ export class TasksView implements Component, Focusable {
       this.startComposing({ kind: "note", round: selected.round });
     } else if (kb.matches(data, "app.orchestrator.priority") && selected !== undefined) {
       this.startComposing({ kind: "priority", taskId: selected.id });
+    } else if (kb.matches(data, "app.orchestrator.depends") && selected !== undefined) {
+      this.startComposing({ kind: "depends", taskId: selected.id });
+    } else if (kb.matches(data, "app.orchestrator.instruction") && selected !== undefined) {
+      this.startComposing({ kind: "instruction", taskId: selected.id });
     } else if (
       kb.matches(data, "app.orchestrator.stop") &&
       selected !== undefined &&
@@ -379,6 +406,16 @@ export class TasksView implements Component, Focusable {
       this.options.orchestrator
         .sendNote({ content: text, audience: "round", round: composing.round })
         .catch(failed);
+      return;
+    }
+    if (composing.kind === "depends") {
+      this.options.orchestrator
+        .setDepends({ taskIds: [composing.taskId], ...parseDepends(text) })
+        .catch(failed);
+      return;
+    }
+    if (composing.kind === "instruction") {
+      this.options.orchestrator.setInstruction(composing.taskId, text).catch(failed);
       return;
     }
     this.options.orchestrator.sendMessage(composing.taskId, text).catch(failed);
