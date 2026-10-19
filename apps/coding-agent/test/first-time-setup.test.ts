@@ -1,7 +1,4 @@
-import { mkdtempSync, writeFileSync } from "fs";
-import { tmpdir } from "os";
-
-import { joinPath, runTest, removePath } from "@msa/testing";
+import { joinPath, makeTempDir, removePath, runTest, writeTextFile } from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
@@ -19,8 +16,7 @@ describe("shouldRunFirstTimeSetup", () => {
   beforeEach(() =>
     runTest(
       Effect.gen(function* () {
-        yield* Effect.void;
-        tempDir = mkdtempSync(joinPath(tmpdir(), "msa-first-time-setup-"));
+        tempDir = yield* makeTempDir("msa-first-time-setup-");
         settingsPath = joinPath(tempDir, "settings.json");
         writeEnv("MSA_EXPERIMENTAL", "1");
         deleteEnv(ENV_AGENT_DIR);
@@ -62,11 +58,13 @@ describe("shouldRunFirstTimeSetup", () => {
     expect(shouldRunFirstTimeSetup(settingsPath)).toBe(false);
   });
 
-  it("returns false when settings.json already exists", () => {
-    writeFileSync(settingsPath, "{}", "utf-8");
-
-    expect(shouldRunFirstTimeSetup(settingsPath)).toBe(false);
-  });
+  it("returns false when settings.json already exists", () =>
+    runTest(
+      Effect.gen(function* () {
+        yield* writeTextFile(settingsPath, "{}");
+        expect(shouldRunFirstTimeSetup(settingsPath)).toBe(false);
+      }),
+    ));
 });
 
 describe("analytics settings", () => {
