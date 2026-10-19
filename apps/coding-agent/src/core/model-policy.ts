@@ -14,6 +14,13 @@ import { isValidThinkingLevel } from "../cli/args.ts";
 import type { ModelRuntime } from "./model-runtime.ts";
 import type { SettingsManager } from "./settings-manager.ts";
 
+/** The parts of a model a policy reads; an alias is judged by its own id and the id it resolves to. */
+export interface PolicyModel {
+  provider: string;
+  id: string;
+  resolvesTo?: string | undefined;
+}
+
 export interface ModelPolicy {
   allow: readonly string[];
   deny: readonly string[];
@@ -67,36 +74,38 @@ function patternText(pattern: string): string {
  * - `*` covers every model.
  * - `provider/*` and `provider/<glob>` cover that provider's models, including ids with a `/`.
  * - `<glob>` matches the model id.
+ * - An alias is covered by a pattern that covers the id it resolves to.
  * - Anything else is an exact `provider/model` or model id.
  */
-export function modelPolicyPatternMatches(
-  pattern: string,
-  model: { provider: string; id: string },
-): boolean {
+export function modelPolicyPatternMatches(pattern: string, model: PolicyModel): boolean {
+  return (
+    patternMatchesId(pattern, model.provider, model.id) ||
+    (model.resolvesTo !== undefined && patternMatchesId(pattern, model.provider, model.resolvesTo))
+  );
+}
+
+function patternMatchesId(pattern: string, modelProvider: string, modelId: string): boolean {
   const text = patternText(pattern);
   if (!text) return false;
   if (text === "*") return true;
   const slash = text.indexOf("/");
   if (slash > 0) {
     const provider = text.slice(0, slash);
-    if (provider.toLowerCase() !== model.provider.toLowerCase()) return false;
+    if (provider.toLowerCase() !== modelProvider.toLowerCase()) return false;
     const modelPattern = text.slice(slash + 1);
     if (!modelPattern) return false;
     if (modelPattern === "*") return true;
     return isGlob(modelPattern)
-      ? minimatch(model.id, modelPattern, { nocase: true })
-      : model.id.toLowerCase() === modelPattern.toLowerCase();
+      ? minimatch(modelId, modelPattern, { nocase: true })
+      : modelId.toLowerCase() === modelPattern.toLowerCase();
   }
   return isGlob(text)
-    ? minimatch(model.id, text, { nocase: true })
-    : model.id.toLowerCase() === text.toLowerCase();
+    ? minimatch(modelId, text, { nocase: true })
+    : modelId.toLowerCase() === text.toLowerCase();
 }
 
 /** The policy's decision for one model. Deny patterns are checked before allow patterns. */
-export function evaluateModelPolicy(
-  policy: ModelPolicy,
-  model: { provider: string; id: string },
-): ModelPolicyDecision {
+export function evaluateModelPolicy(policy: ModelPolicy, model: PolicyModel): ModelPolicyDecision {
   const deniedBy = policy.deny.find((pattern) => modelPolicyPatternMatches(pattern, model));
   if (deniedBy !== undefined) return { allowed: false, reason: "deny", pattern: deniedBy };
   if (policy.allow.length === 0) return { allowed: true, allowedBy: undefined };
@@ -105,17 +114,14 @@ export function evaluateModelPolicy(
   return { allowed: false, reason: "not-allowed", pattern: undefined };
 }
 
-export function isModelAllowed(
-  policy: ModelPolicy,
-  model: { provider: string; id: string },
-): boolean {
+export function isModelAllowed(policy: ModelPolicy, model: PolicyModel): boolean {
   return evaluateModelPolicy(policy, model).allowed;
 }
 
 /** A one-line reason a model is unusable, or undefined when the policy allows it. */
 export function describeModelPolicyDenial(
   policy: ModelPolicy,
-  model: { provider: string; id: string },
+  model: PolicyModel,
 ): string | undefined {
   const decision = evaluateModelPolicy(policy, model);
   if (decision.allowed) return undefined;
@@ -131,7 +137,7 @@ export interface PolicyHiddenModel<TModel> {
 }
 
 /** The models a policy hides, with the pattern that hides them. */
-export function hiddenModelsByPolicy<TModel extends { provider: string; id: string }>(
+export function hiddenModelsByPolicy<TModel extends PolicyModel>(
   policy: ModelPolicy,
   models: readonly TModel[],
 ): PolicyHiddenModel<TModel>[] {

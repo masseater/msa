@@ -40,7 +40,7 @@ import {
   type Account,
   type RunFailure,
 } from "./claude-accounts.ts";
-import { cliAgentProvider } from "./provider.ts";
+import { cliAgentProvider, type CliAgentModel } from "./provider.ts";
 import { createReply, type ReplyBuilder } from "./reply.ts";
 import { flattenTranscript, textFromContent } from "./transcript.ts";
 
@@ -51,11 +51,12 @@ const IDLE_CLOSE_MS = 30 * 60_000;
 /** Idle processes kept for conversations that may come back (other msa sessions, branches). */
 const MAX_IDLE_SESSIONS = 2;
 
+/** The models Claude Code accepts by full id, with the alias it currently resolves to that id. */
 const MODELS = [
-  { id: "fable", name: "Claude Fable" },
-  { id: "opus", name: "Claude Opus" },
-  { id: "sonnet", name: "Claude Sonnet" },
-  { id: "haiku", name: "Claude Haiku" },
+  { id: "claude-fable-5-1", alias: "fable", name: "Claude Fable 5.1" },
+  { id: "claude-opus-5-5", alias: "opus", name: "Claude Opus 5.5" },
+  { id: "claude-sonnet-5-5", alias: "sonnet", name: "Claude Sonnet 5.5" },
+  { id: "claude-haiku-5-5", alias: "haiku", name: "Claude Haiku 5.5" },
 ] as const;
 
 type Effort = "low" | "medium" | "high" | "xhigh" | "max";
@@ -546,7 +547,7 @@ const streamFor =
       accounts: fixed
         ? [fixed]
         : loadAccounts().filter((account) => account.auto !== false && !blockOf(account)),
-      model: model.id,
+      model: model.resolvesTo ?? model.id,
       effort: options?.reasoning ? EFFORT[options.reasoning] : undefined,
       systemPrompt: getCurrentSystemPrompt(messages),
       tools: getCurrentTools(messages),
@@ -626,18 +627,26 @@ const streamFor =
     return reply.stream;
   };
 
+const MODEL_LIMITS = {
+  reasoning: true,
+  input: ["text", "image"],
+  contextWindow: 1_000_000,
+  maxTokens: 128_000,
+} as const satisfies Omit<CliAgentModel, "id" | "name">;
+
 function provider(id: string, name: string, account?: Account): Provider {
   return cliAgentProvider({
     id,
     name,
-    models: MODELS.map((model) => ({
-      id: model.id,
-      name: model.name,
-      reasoning: true,
-      input: ["text", "image"],
-      contextWindow: 1_000_000,
-      maxTokens: 128_000,
-    })),
+    models: MODELS.flatMap((model) => [
+      { ...MODEL_LIMITS, id: model.id, name: model.name },
+      {
+        ...MODEL_LIMITS,
+        id: model.alias,
+        name: `${model.alias} → ${model.id}`,
+        resolvesTo: model.id,
+      },
+    ]),
     executable: claudeExecutable,
     streamSimple: streamFor(account),
   });

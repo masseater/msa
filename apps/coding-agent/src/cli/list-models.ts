@@ -66,7 +66,7 @@ export async function listModels(
   // Calculate column widths
   const rows = filteredModels.map((m) => ({
     provider: m.provider,
-    model: m.id,
+    model: m.resolvesTo ? `${m.id} → ${m.resolvesTo}` : m.id,
     context: formatTokenCount(m.contextWindow),
     maxOut: formatTokenCount(m.maxTokens),
     thinking: m.reasoning ? "yes" : "no",
