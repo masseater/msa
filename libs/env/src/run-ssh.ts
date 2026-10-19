@@ -1,9 +1,8 @@
-import { spawn } from "node:child_process";
-
-import { Effect } from "effect";
+import { Effect, Stream } from "effect";
 
 import { HostKeyChangedError } from "./host-key-changed-error.ts";
 import { HostKeyUnknownError } from "./host-key-unknown-error.ts";
+import { spawnProcess } from "./platform.ts";
 import { sshArguments, type SshTarget } from "./ssh-args.ts";
 import { SshError } from "./ssh-error.ts";
 
@@ -39,40 +38,37 @@ function exitFailure(target: SshTarget, code: number | null, diagnostics: string
   );
 }
 
+const collect = (target: SshTarget, run: SshRun, stderr: Uint8Array[]) =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const child = yield* spawnProcess({
+        command: target.ssh ?? "ssh",
+        args: [...(run.args ?? sshArguments(target)), run.command],
+        stdin: Stream.make(run.stdin ?? new Uint8Array(0)),
+      }).pipe(Effect.mapError((error) => new SshError(error.message, null, "")));
+      const [stdout, , code] = yield* Effect.all(
+        [
+          Stream.mkString(Stream.decodeText(child.stdout)),
+          Stream.runForEach(child.stderr, (chunk) =>
+            Effect.sync(() => {
+              stderr.push(chunk);
+            }),
+          ),
+          child.exitCode,
+        ],
+        { concurrency: "unbounded" },
+      );
+      if (code === 0) return stdout;
+      return yield* exitFailure(target, code, Buffer.concat(stderr).toString("utf8"));
+    }),
+  );
+
 export function runSsh(run: SshRun): Effect.Effect<string, SshFailure> {
   return Effect.suspend(() => {
     const { target } = run;
-    const stdout: Buffer[] = [];
-    const stderr: Buffer[] = [];
+    const stderr: Uint8Array[] = [];
     const timeoutMs = run.timeoutMs ?? SSH_TIMEOUT_MS;
-    const finished = Effect.callback<string, SshFailure>((resume) => {
-      const child = spawn(
-        target.ssh ?? "ssh",
-        [...(run.args ?? sshArguments(target)), run.command],
-        {
-          stdio: ["pipe", "pipe", "pipe"],
-        },
-      );
-      child.stdout.on("data", (chunk: Buffer) => stdout.push(chunk));
-      child.stderr.on("data", (chunk: Buffer) => stderr.push(chunk));
-      child.stdin.on("error", () => undefined);
-      child.on("error", (error) => {
-        resume(Effect.fail(new SshError(error.message, null, "")));
-      });
-      child.on("close", (code) => {
-        const diagnostics = Buffer.concat(stderr).toString("utf8");
-        resume(
-          code === 0
-            ? Effect.succeed(Buffer.concat(stdout).toString("utf8"))
-            : Effect.fail(exitFailure(target, code, diagnostics)),
-        );
-      });
-      child.stdin.end(run.stdin ?? new Uint8Array(0));
-      return Effect.sync(() => {
-        child.kill();
-      });
-    });
-    return Effect.timeoutOrElse(finished, {
+    return Effect.timeoutOrElse(collect(target, run, stderr), {
       duration: timeoutMs,
       orElse: () => {
         const diagnostics = Buffer.concat(stderr).toString("utf8");

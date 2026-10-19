@@ -1,6 +1,5 @@
-import { createServer, type Server, type ServerResponse } from "node:http";
-
 import { Deferred, Effect, type Fiber } from "effect";
+import { type Server, serve } from "srvx";
 
 import { foreign, type McpForeignError, toPromise } from "../foreign.ts";
 import { OAuthCallbackError } from "./errors.ts";
@@ -39,25 +38,34 @@ function plainText(page: OAuthCallbackPage): string {
 const nonEmpty = (value: string | null): value is string => value !== null && value !== "";
 
 const listenOn = (
-  server: Server,
   port: number,
-  host: string,
-): Effect.Effect<void, McpForeignError> =>
-  Effect.callback<void, McpForeignError>((resume) => {
-    const onError = (error: Error) => resume(Effect.fail(foreign(error)));
-    server.once("error", onError);
-    server.listen(port, host, () => {
-      server.off("error", onError);
-      resume(Effect.void);
-    });
+  hostname: string,
+  handle: (request: Request) => Response,
+): Effect.Effect<Server, McpForeignError> =>
+  Effect.tryPromise({
+    try: () => {
+      const server = serve({
+        fetch: handle,
+        port,
+        hostname,
+        manual: true,
+        silent: true,
+        gracefulShutdown: false,
+      });
+      return Promise.resolve(server.serve()).then(() => server);
+    },
+    catch: foreign,
   });
 
-const closeServer = (server: Server): Effect.Effect<void, McpForeignError> =>
-  Effect.callback<void, McpForeignError>((resume) => {
-    server.close((error) =>
-      resume(error === undefined ? Effect.void : Effect.fail(foreign(error))),
-    );
-  });
+const fromServer = (close: () => Promise<void>): Effect.Effect<void, McpForeignError> =>
+  Effect.tryPromise({ try: close, catch: foreign });
+
+const boundPort = (server: Server): number | undefined => {
+  const { url } = server;
+  if (url === undefined) return undefined;
+  const { port } = new URL(url);
+  return port === "" ? undefined : Number(port);
+};
 
 export class OAuthCallbackServer {
   readonly redirectUrl: string;
@@ -88,17 +96,18 @@ export class OAuthCallbackServer {
         const redirectHost = options.redirectHost ?? host;
         const path = options.path ?? "/callback";
         let instance: OAuthCallbackServer | undefined;
-        const server = createServer((request, response) =>
-          instance?.handle(request.url ?? "/", response),
+        const server = yield* listenOn(options.port ?? 0, host, (request) =>
+          instance === undefined
+            ? new Response(null, { status: 503 })
+            : instance.handle(new URL(request.url)),
         );
-        yield* listenOn(server, options.port ?? 0, host);
-        const address = server.address();
-        if (address === null || typeof address === "string")
+        const port = boundPort(server);
+        if (port === undefined)
           return yield* new OAuthCallbackError("OAuth callback server did not bind to TCP");
         const bracketed = redirectHost.includes(":") ? `[${redirectHost}]` : redirectHost;
         instance = new OAuthCallbackServer(
           server,
-          `http://${bracketed}:${address.port}${path}`,
+          `http://${bracketed}:${port}${path}`,
           [path, ...(options.extraPaths ?? [])],
           options.timeoutMs ?? 5 * 60_000,
           options.renderPage,
@@ -132,21 +141,20 @@ export class OAuthCallbackServer {
       );
     }
     this.pending.clear();
-    return toPromise(closeServer(this.server));
+    return toPromise(fromServer(() => this.server.close()));
   }
 
-  private reply(response: ServerResponse, status: number, page: OAuthCallbackPage): void {
+  private reply(status: number, page: OAuthCallbackPage): Response {
     if (this.renderPage === undefined) {
-      response
-        .writeHead(status, { "content-type": "text/plain; charset=utf-8" })
-        .end(plainText(page));
-      return;
+      return new Response(plainText(page), {
+        status,
+        headers: { "content-type": "text/plain; charset=utf-8" },
+      });
     }
-    response.writeHead(status, {
-      "content-type": "text/html; charset=utf-8",
-      "cache-control": "no-store",
+    return new Response(this.renderPage(page), {
+      status,
+      headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" },
     });
-    response.end(this.renderPage(page));
   }
 
   private settle(pending: PendingCallback, outcome: OAuthCallback | OAuthCallbackError): void {
@@ -156,47 +164,37 @@ export class OAuthCallbackServer {
     );
   }
 
-  private handle(rawUrl: string, response: ServerResponse): void {
-    const url = new URL(rawUrl, this.redirectUrl);
+  private handle(url: URL): Response {
     if (!this.paths.includes(url.pathname)) {
-      this.reply(response, 404, { ok: false, message: "Not found" });
-      return;
+      return this.reply(404, { ok: false, message: "Not found" });
     }
     const state = url.searchParams.get("state");
     const pending = nonEmpty(state) ? this.pending.get(state) : undefined;
     if (!nonEmpty(state) || pending === undefined) {
-      this.reply(response, 400, { ok: false, message: "Invalid or expired OAuth state" });
-      return;
+      return this.reply(400, { ok: false, message: "Invalid or expired OAuth state" });
     }
     pending.timer.interruptUnsafe();
     this.pending.delete(state);
-    this.complete(url, state, pending, response);
+    return this.complete(url, state, pending);
   }
 
-  private complete(
-    url: URL,
-    state: string,
-    pending: PendingCallback,
-    response: ServerResponse,
-  ): void {
+  private complete(url: URL, state: string, pending: PendingCallback): Response {
     if (pending.path !== undefined && url.pathname !== pending.path) {
       this.settle(
         pending,
         new OAuthCallbackError("The authorization response arrived on another redirect URI"),
       );
-      this.reply(response, 400, { ok: false, message: "Unexpected redirect URI" });
-      return;
+      return this.reply(400, { ok: false, message: "Unexpected redirect URI" });
     }
     const error = url.searchParams.get("error");
     if (nonEmpty(error)) {
       const description = url.searchParams.get("error_description") ?? error;
       this.settle(pending, new OAuthCallbackError(description));
-      this.reply(response, 200, {
+      return this.reply(200, {
         ok: false,
         message: "Authorization failed. You may close this window.",
         details: description,
       });
-      return;
     }
     const code = url.searchParams.get("code");
     if (!nonEmpty(code)) {
@@ -204,11 +202,10 @@ export class OAuthCallbackServer {
         pending,
         new OAuthCallbackError("OAuth callback did not include an authorization code"),
       );
-      this.reply(response, 400, { ok: false, message: "Missing authorization code" });
-      return;
+      return this.reply(400, { ok: false, message: "Missing authorization code" });
     }
     const iss = url.searchParams.get("iss");
     this.settle(pending, { code, state, ...(nonEmpty(iss) ? { iss } : {}) });
-    this.reply(response, 200, { ok: true });
+    return this.reply(200, { ok: true });
   }
 }

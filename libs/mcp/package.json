@@ -48,7 +48,8 @@
   },
   "dependencies": {
     "cross-spawn": "catalog:",
-    "effect": "catalog:stack"
+    "effect": "catalog:stack",
+    "srvx": "catalog:"
   },
   "devDependencies": {
     "@effect/platform-node": "catalog:",

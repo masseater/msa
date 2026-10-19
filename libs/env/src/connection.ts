@@ -1,8 +1,6 @@
-import { spawn } from "node:child_process";
-import { randomBytes } from "node:crypto";
-
 import { Clock, Deferred, Effect, Exit } from "effect";
 
+import { type Launched, launchDaemon } from "./daemon-process.ts";
 import {
   CANCEL,
   ERROR,
@@ -16,19 +14,16 @@ import {
 } from "./frame.ts";
 import { closed, errorMessage, type Json, lost, RemoteError, type Wire } from "./remote-error.ts";
 import type { ConnectionOptions, RemoteInfo, RequestOptions } from "./remote-info.ts";
-import { type Reply, Session } from "./session.ts";
+import type { Reply, Session } from "./session.ts";
 
 export { isConnectionLost, type Json, RemoteError } from "./remote-error.ts";
 export type { Reply } from "./session.ts";
 
-const PING_INTERVAL_MS = 5000;
 const SILENCE_LIMIT_MS = 30_000;
 const START_TIMEOUT_MS = 60_000;
 const SYNC_NOISE_LIMIT = 1024 * 1024;
 
 type Started = { info: RemoteInfo; session: Session };
-
-type Launched = { session: Session; failed: Deferred.Deferred<never, RemoteError> };
 
 const currentTime = (): number => Effect.runSync(Clock.currentTimeMillis);
 
@@ -128,7 +123,7 @@ export class Connection {
   }
 
   #write(session: Session, data: Buffer): void {
-    if (session.live) session.child.stdin.write(data);
+    if (session.live) session.write(data);
   }
 
   #start(): Effect.Effect<Started, Error> {
@@ -140,7 +135,7 @@ export class Connection {
         return yield* new RemoteError({ code: "spawn_error", message: "No daemon command" });
       }
       const startedAt = yield* Clock.currentTimeMillis;
-      return yield* this.#hello(this.#launch(program, args, startedAt));
+      return yield* this.#hello(yield* this.#launch(program, args, startedAt));
     });
   }
 
@@ -154,42 +149,33 @@ export class Connection {
     });
   }
 
-  #launch(program: string, args: readonly string[], startedAt: number): Launched {
-    const token = randomBytes(16).toString("hex");
-    const child = spawn(program, [...args, "serve", "--token", token], {
-      stdio: ["pipe", "pipe", "pipe"],
-    });
-    const session = new Session(++this.#sessions, child, token, startedAt);
-    this.#session = session;
-    const failed = Deferred.makeUnsafe<never, RemoteError>();
-    child.once("error", (error) => {
-      Deferred.doneUnsafe(
-        failed,
-        Exit.fail(new RemoteError({ code: "spawn_error", message: error.message, lost: true })),
-      );
-    });
-    child.once("exit", (code) => {
-      Deferred.doneUnsafe(
-        failed,
-        Exit.fail(lost(`msa-env exited with code ${code} before it was ready`)),
-      );
-    });
-    child.stdout.on("data", (chunk: Buffer) => {
-      this.#onData(session, chunk);
-    });
-    child.stderr.on("data", (chunk: Buffer) => this.#options.onLog?.(chunk.toString("utf8")));
-    child.on("error", () => {
-      this.#teardown(session, lost("msa-env connection lost"));
-    });
-    child.on("exit", () => {
-      this.#teardown(session, lost("msa-env connection lost"));
-    });
-    child.stdin.on("error", () => undefined);
-    session.timer = setInterval(() => {
-      this.#tick(session);
-    }, PING_INTERVAL_MS);
-    session.timer.unref();
-    return { session, failed };
+  #launch(
+    program: string,
+    args: readonly string[],
+    startedAt: number,
+  ): Effect.Effect<Launched, RemoteError> {
+    return launchDaemon({
+      program,
+      args,
+      id: ++this.#sessions,
+      startedAt,
+      onData: (session, chunk) => {
+        this.#onData(session, chunk);
+      },
+      onLog: (text) => this.#options.onLog?.(text),
+      onTick: (session) => {
+        this.#tick(session);
+      },
+      onLost: (session) => {
+        this.#teardown(session, lost("msa-env connection lost"));
+      },
+    }).pipe(
+      Effect.tap(({ session }) =>
+        Effect.sync(() => {
+          this.#session = session;
+        }),
+      ),
+    );
   }
 
   #hello({ session, failed }: Launched): Effect.Effect<Started, Error> {
@@ -223,13 +209,11 @@ export class Connection {
   #teardown(session: Session, error: Error): void {
     if (!session.live) return;
     session.live = false;
-    clearInterval(session.timer);
     if (this.#session === session) {
       this.#session = undefined;
       this.#ready = undefined;
     }
-    session.child.stdin.end();
-    session.child.kill();
+    session.end();
     const pending = [...session.pending.values()];
     session.pending.clear();
     for (const request of pending) request.reject(error);

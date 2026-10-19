@@ -314,6 +314,9 @@ catalogs:
     skills:
       specifier: 1.7.1
       version: 1.7.1
+    srvx:
+      specifier: 1.0.5
+      version: 1.0.5
     syncpack:
       specifier: 15.3.3
       version: 15.3.3
@@ -775,6 +778,9 @@ importers:
 
   libs/env:
     dependencies:
+      '@effect/platform-node':
+        specifier: 'catalog:'
+        version: 4.0.2(effect@4.0.2)(redis@6.3.0)
       '@msa/chord':
         specifier: workspace:*
         version: link:../chord
@@ -803,6 +809,9 @@ importers:
       effect:
         specifier: 4.0.2
         version: 4.0.2
+      srvx:
+        specifier: 'catalog:'
+        version: 1.0.5
     devDependencies:
       '@effect/platform-node':
         specifier: 'catalog:'
@@ -3775,6 +3784,11 @@ packages:
   source-map-js@1.2.2:
     resolution: {integrity: sha512-KGj/8Y43x35aZVDtt+J4mK1hoLGHULMYfSkODJNQjNDC3oW1PqPoxMwo0pLUsWM/UEGzON/NxeHywEfNXNP3Vw==}
     engines: {node: '>=0.10.0'}
+
+  srvx@1.0.5:
+    resolution: {integrity: sha512-KvSKRpgPG/oaq3cyT614OQ2bAa7DynuGamivCZeoZzIUULOdbQz6wUtnnVuC4+DCx2Zglzo8v5gBYmWIWYhDxA==}
+    engines: {node: '>=20.16.0'}
+    hasBin: true
 
   ssh2@1.17.0:
     resolution: {integrity: sha512-wPldCk3asibAjQ/kziWQQt1Wh3PgDFpC0XpwclzKcdT1vql6KeYxf5LIt4nlFkUeR8WuphYMKqUA56X4rjbfgQ==}
@@ -6773,6 +6787,8 @@ snapshots:
       yaml: 2.9.0
 
   source-map-js@1.2.2: {}
+
+  srvx@1.0.5: {}
 
   ssh2@1.17.0:
     dependencies:

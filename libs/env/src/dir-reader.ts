@@ -1,5 +1,3 @@
-import type { PlatformPath } from "node:path";
-
 import type { Context } from "@msa/chord";
 import { type DirReader, err, FileError, type FileInfo, ok, type Result } from "@msa/durable/env";
 import { Effect } from "effect";
@@ -7,6 +5,7 @@ import { Effect } from "effect";
 import { RemoteError } from "./connection.ts";
 import { abortResult, recoverFileError, toFileError } from "./errors.ts";
 import type { Handle } from "./handle.ts";
+import type { PathOps } from "./platform.ts";
 import { type RemoteDirEntry, remotePath, toInfo } from "./remote-path.ts";
 
 type Batch = { entries: FileInfo[]; done: boolean };
@@ -15,7 +14,7 @@ function collectEntries(
   entries: FileInfo[],
   batch: readonly RemoteDirEntry[],
   path: string,
-  paths: PlatformPath,
+  paths: PathOps,
 ): Result<Batch, FileError> | undefined {
   for (const entry of batch) {
     const entryPath = paths.resolve(path, entry.name);

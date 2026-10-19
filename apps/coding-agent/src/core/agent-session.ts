@@ -5130,10 +5130,10 @@ export class AgentSession {
     const transformContext = this.agent.transformContext;
     const transcript = this.agent.state.messages;
     const update = this._promptUpdate(this._nextTurnPromptOptions(), transcript);
-    const pending = declareToolChanges(
-      { messages: transcript, tools: this.agent.state.tools },
-      update ? [update] : [],
-    );
+    const pending = declareToolChanges({
+      context: { messages: transcript, tools: this.agent.state.tools },
+      messages: update ? [update] : [],
+    });
     return Effect.runPromise(
       measureContextBreakdown({
         messages: transcript,

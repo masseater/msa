@@ -4,6 +4,7 @@ import { Cause, Deferred, Effect, Exit } from "effect";
 
 import { type Connection, isConnectionLost, type Json } from "./connection.ts";
 import { toFileError } from "./errors.ts";
+import { unrefSleep } from "./unref-sleep.ts";
 
 export interface RemoteWatchOptions {
   mode?: "native" | "polling";
@@ -16,14 +17,6 @@ const RECONNECT_MAX_MS = 30_000;
 
 const asError = (error: unknown): Error =>
   error instanceof Error ? error : new Error(String(error));
-
-function unrefTimer(delay: number, fire: () => void): () => void {
-  const timer = setTimeout(fire, delay);
-  timer.unref();
-  return () => {
-    clearTimeout(timer);
-  };
-}
 
 export class RemoteWatcher implements FileWatcher {
   readonly #connection: Connection;
@@ -147,14 +140,12 @@ export class RemoteWatcher implements FileWatcher {
   }
 
   #sleep(delay: number): Effect.Effect<void> {
-    return Effect.callback<void>((resume) => {
-      const cancel = unrefTimer(delay, () => {
-        resume(Effect.void);
-      });
+    return Effect.suspend(() => {
+      const woken = Deferred.makeUnsafe<void>();
       this.#wake = () => {
-        cancel();
-        resume(Effect.void);
+        Deferred.doneUnsafe(woken, Exit.void);
       };
+      return Effect.raceFirst(Deferred.await(woken), unrefSleep(delay));
     });
   }
 

@@ -1,49 +1,59 @@
-import { mkdtempSync, realpathSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-
 import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 import type { ExecutionEnv, FileError } from "@msa/durable/env";
 import { NodeExecutionEnv } from "@msa/durable/env/node";
+import { Effect } from "effect";
 import { dual } from "effect/Function";
 
 import { Connection } from "../src/connection.ts";
 import { RemoteExecutionEnv } from "../src/remote-env.ts";
 import { daemon } from "./daemon.ts";
+import { makeTempDirectory, realPath, removePath } from "./platform.ts";
 
 export const context = BACKGROUND_CONTEXT;
+
+export interface Root {
+  readonly path: string;
+  readonly real: string;
+}
 
 export interface Pair {
   readonly local: ExecutionEnv;
   readonly remote: ExecutionEnv;
-  readonly roots: [string, string];
+  readonly roots: [Root, Root];
 }
 
 export interface Pairs {
-  readonly pair: () => Pair;
-  readonly close: () => void;
+  readonly pair: Effect.Effect<Pair>;
+  readonly close: () => Promise<void>;
 }
+
+const makeRoot = (prefix: string, dirs: string[]): Effect.Effect<Root> =>
+  Effect.gen(function* () {
+    const path = yield* makeTempDirectory(prefix);
+    dirs.push(path);
+    return { path, real: yield* realPath(path) };
+  });
 
 export function pairs(): Pairs {
   const connection = new Connection({ command: [daemon] });
   const dirs: string[] = [];
   return {
-    pair: () => {
-      const localRoot = mkdtempSync(join(tmpdir(), "msa-env-local-"));
-      const remoteRoot = mkdtempSync(join(tmpdir(), "msa-env-remote-"));
-      dirs.push(localRoot, remoteRoot);
+    pair: Effect.gen(function* () {
+      const localRoot = yield* makeRoot("msa-env-local-", dirs);
+      const remoteRoot = yield* makeRoot("msa-env-remote-", dirs);
       return {
-        local: new NodeExecutionEnv({ cwd: localRoot }),
-        remote: new RemoteExecutionEnv({ connection, id: "msa-env:test", cwd: remoteRoot }),
+        local: new NodeExecutionEnv({ cwd: localRoot.path }),
+        remote: new RemoteExecutionEnv({ connection, id: "msa-env:test", cwd: remoteRoot.path }),
         roots: [localRoot, remoteRoot],
       };
-    },
-    close: () => {
-      connection.close();
-      for (const dir of dirs) {
-        rmSync(dir, { recursive: true, force: true, maxRetries: 50, retryDelay: 100 });
-      }
-    },
+    }),
+    close: () =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          connection.close();
+          for (const dir of dirs) yield* removePath(dir);
+        }),
+      ),
   };
 }
 
@@ -69,17 +79,15 @@ function comparable(key: string, field: unknown): unknown {
 
 const escaped = (path: string): string => JSON.stringify(path).slice(1, -1);
 
-function normalizeIn(value: unknown, root: string): unknown {
+function normalizeIn(value: unknown, root: Root): unknown {
   const json = JSON.stringify(value, comparable);
   if (json === undefined) return undefined;
   return JSON.parse(
-    json
-      .replaceAll(escaped(realpathSync.native(root)), "<root>")
-      .replaceAll(escaped(root), "<root>"),
+    json.replaceAll(escaped(root.real), "<root>").replaceAll(escaped(root.path), "<root>"),
   );
 }
 
 export const normalize: {
-  (root: string): (value: unknown) => unknown;
-  (value: unknown, root: string): unknown;
+  (root: Root): (value: unknown) => unknown;
+  (value: unknown, root: Root): unknown;
 } = dual(2, normalizeIn);

@@ -1,7 +1,3 @@
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-
 import { DateTime, Effect, Schema } from "effect";
 
 import type { Connection } from "../src/connection.ts";
@@ -16,11 +12,12 @@ import {
 } from "../src/ssh.ts";
 import { daemon } from "./daemon.ts";
 import { optionalEnv } from "./environment.ts";
+import { localPath, makeTempDirectory, removePath } from "./platform.ts";
 
 export type Connected = { connection: Connection; remote: RemotePlatform };
 
 export const host = optionalEnv("MSA_ENV_SSH_HOST");
-const root = mkdtempSync(join(tmpdir(), "msa-env-ssh-external-"));
+const root = await Effect.runPromise(makeTempDirectory("msa-env-ssh-external-"));
 let connected: Promise<Connected> | undefined;
 
 function externalTarget(): SshTarget {
@@ -34,7 +31,7 @@ function externalTarget(): SshTarget {
     ...(port === undefined ? {} : { port: Number(port) }),
     ...(identityFile === undefined ? {} : { identityFile }),
     ...(ssh === undefined ? {} : { ssh }),
-    knownHostsFile: join(root, "known_hosts"),
+    knownHostsFile: localPath.join(root, "known_hosts"),
     hostKeyAlias: "msa-env-external",
   };
 }
@@ -79,6 +76,6 @@ export const closeExternal = (): Promise<void> =>
   Effect.runPromise(
     Effect.gen(function* () {
       if (connected !== undefined) (yield* Effect.promise(() => connected!)).connection.close();
-      rmSync(root, { recursive: true, force: true, maxRetries: 50, retryDelay: 100 });
+      yield* removePath(root);
     }),
   );

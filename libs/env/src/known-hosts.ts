@@ -1,12 +1,17 @@
-import { randomBytes } from "node:crypto";
-import { existsSync } from "node:fs";
-import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
-import { dirname } from "node:path";
-
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
 import { HostKeyChangedError } from "./host-key-changed-error.ts";
+import {
+  fileExists,
+  localPath,
+  makeDirectories,
+  randomHex,
+  readText,
+  removePath,
+  renamePath,
+  writeText,
+} from "./platform.ts";
 import type { SshTarget } from "./ssh-args.ts";
 
 const WHITESPACE_RUN = /\s+/u;
@@ -32,22 +37,20 @@ const rewriteKnownHosts = (
   change: (lines: string[]) => string[],
 ): Effect.Effect<void> =>
   Effect.gen(function* () {
-    yield* Effect.promise(() => mkdir(dirname(file), { recursive: true, mode: 0o700 }));
-    const existing = existsSync(file)
-      ? (yield* Effect.promise(() => readFile(file, "utf8")))
-          .split("\n")
-          .filter((line) => line !== "")
+    yield* makeDirectories({ path: localPath.dirname(file), mode: 0o700 });
+    const existing = (yield* fileExists(file))
+      ? (yield* readText(file)).split("\n").filter((line) => line !== "")
       : [];
     const lines = change(existing);
-    const temporary = `${file}.${randomBytes(6).toString("hex")}.tmp`;
-    yield* Effect.promise(() =>
-      writeFile(temporary, lines.length === 0 ? "" : `${lines.join("\n")}\n`, {
-        mode: 0o600,
-        flag: "wx",
-      }),
-    );
-    yield* Effect.promise(() => rename(temporary, file)).pipe(
-      Effect.onError(() => Effect.promise(() => rm(temporary, { force: true }))),
+    const temporary = `${file}.${yield* randomHex(6)}.tmp`;
+    yield* writeText({
+      path: temporary,
+      text: lines.length === 0 ? "" : `${lines.join("\n")}\n`,
+      mode: 0o600,
+      exclusive: true,
+    });
+    yield* renamePath({ from: temporary, to: file }).pipe(
+      Effect.onError(() => removePath(temporary)),
     );
   });
 

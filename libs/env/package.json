@@ -41,6 +41,7 @@
     "test": "vitest --run"
   },
   "dependencies": {
+    "@effect/platform-node": "catalog:",
     "@msa/chord": "workspace:*",
     "@msa/durable": "workspace:*",
     "effect": "catalog:stack"

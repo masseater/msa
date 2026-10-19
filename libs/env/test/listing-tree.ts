@@ -1,15 +1,17 @@
-import { mkdirSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { Effect } from "effect";
 
-export const makeTree = (home: string): void => {
-  const tree = join(home, "tree");
-  for (const file of ["a/b.txt", "a/c/d.txt", ".hidden", "out/x.js", "skip/y.txt", ".git/HEAD"]) {
-    mkdirSync(join(tree, file, ".."), { recursive: true });
-    writeFileSync(join(tree, file), "");
-  }
-  mkdirSync(join(tree, "empty"));
-  writeFileSync(join(tree, ".gitignore"), "out/\n");
-};
+import { localPath, makeDirectory, writeText } from "./platform.ts";
+
+export const makeTree = (home: string): Effect.Effect<void> =>
+  Effect.gen(function* () {
+    const tree = localPath.join(home, "tree");
+    for (const file of ["a/b.txt", "a/c/d.txt", ".hidden", "out/x.js", "skip/y.txt", ".git/HEAD"]) {
+      yield* makeDirectory(localPath.dirname(localPath.join(tree, file)));
+      yield* writeText({ path: localPath.join(tree, file), text: "" });
+    }
+    yield* makeDirectory(localPath.join(tree, "empty"));
+    yield* writeText({ path: localPath.join(tree, ".gitignore"), text: "out/\n" });
+  });
 
 export const expectedListing = {
   entries: [
