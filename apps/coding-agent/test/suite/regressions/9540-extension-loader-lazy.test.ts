@@ -1,3 +1,4 @@
+import { Effect } from "effect";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 const state = vi.hoisted(() => ({
@@ -5,7 +6,7 @@ const state = vi.hoisted(() => ({
   jitiStaticModuleLoads: 0,
   virtualModulesLoads: 0,
   createJiti: vi.fn((_id: unknown, _options: unknown) => ({
-    import: vi.fn(async () => () => {}),
+    import: vi.fn(() => Promise.resolve(() => {})),
   })),
 }));
 
@@ -33,28 +34,30 @@ interface JitiOptionsProbe {
   virtualModules?: Record<string, unknown>;
 }
 
+const defersOrdinaryJitiAndItsVirtual = Effect.gen(function* () {
+  expect(state.jitiModuleLoads).toBe(0);
+  expect(state.jitiStaticModuleLoads).toBe(0);
+  expect(state.virtualModulesLoads).toBe(0);
+
+  const result = yield* Effect.promise(() => loadExtensions(["/extension.ts"], "/"));
+
+  expect(result.errors).toEqual([]);
+  expect(result.extensions).toHaveLength(1);
+  expect(state.jitiModuleLoads).toBe(1);
+  expect(state.jitiStaticModuleLoads).toBe(0);
+  expect(state.virtualModulesLoads).toBe(1);
+  expect(state.createJiti).toHaveBeenCalledOnce();
+
+  const [call] = state.createJiti.mock.calls;
+  if (call === undefined) throw new Error("expected createJiti to be called");
+  const options = call[1] as JitiOptionsProbe;
+  expect(options.tryNative).toBeUndefined();
+  expect(options.tsconfigPaths).toBe(true);
+  expect(options.alias).toBeUndefined();
+  expect(options.virtualModules).toBeDefined();
+});
+
 describe("extension loader lazy imports", () => {
-  // Regression test for #9540.
-  it("defers ordinary jiti and its virtual modules until importing an extension", async () => {
-    expect(state.jitiModuleLoads).toBe(0);
-    expect(state.jitiStaticModuleLoads).toBe(0);
-    expect(state.virtualModulesLoads).toBe(0);
-
-    const result = await loadExtensions(["/extension.ts"], "/");
-
-    expect(result.errors).toEqual([]);
-    expect(result.extensions).toHaveLength(1);
-    expect(state.jitiModuleLoads).toBe(1);
-    expect(state.jitiStaticModuleLoads).toBe(0);
-    expect(state.virtualModulesLoads).toBe(1);
-    expect(state.createJiti).toHaveBeenCalledOnce();
-
-    const [call] = state.createJiti.mock.calls;
-    if (call === undefined) throw new Error("expected createJiti to be called");
-    const options = call[1] as JitiOptionsProbe;
-    expect(options.tryNative).toBeUndefined();
-    expect(options.tsconfigPaths).toBe(true);
-    expect(options.alias).toBeUndefined();
-    expect(options.virtualModules).toBeDefined();
-  });
+  it("defers ordinary jiti and its virtual modules until importing an extension", () =>
+    Effect.runPromise(defersOrdinaryJitiAndItsVirtual));
 });

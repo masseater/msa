@@ -1,6 +1,9 @@
 import { type AssistantMessage, fauxAssistantMessage } from "@msa/ai";
+import { currentTimeMillis } from "@msa/testing";
+import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
+import type { Model } from "../../../../../libs/ai/src/model-types.ts";
 import { createHarness, getUserTexts, type Harness } from "../harness.ts";
 
 function createUsage(totalTokens: number) {
@@ -14,42 +17,46 @@ function createUsage(totalTokens: number) {
   };
 }
 
-describe("pre-prompt compaction regression", () => {
-  const harnesses: Harness[] = [];
+const harnesses: Harness[] = [];
 
-  afterEach(() => {
-    vi.restoreAllMocks();
-    while (harnesses.length > 0) {
-      harnesses.pop()?.cleanup();
-    }
-  });
-
-  it("compacts length-stop overflow before a new prompt without continuing from an assistant message", async () => {
-    const harness = await createHarness({
+const compactsLengthStopOverflowBeforeA = Effect.gen(function* () {
+  const harness = yield* Effect.promise(() =>
+    createHarness({
       models: [{ id: "faux-1", contextWindow: 100, maxTokens: 100 }],
       settings: { compaction: { enabled: true, keepRecentTokens: 1, reserveTokens: 0 } },
       extensionFactories: [
         (msa) => {
-          msa.on("session_before_compact", async (event) => ({
-            compaction: {
-              summary: "pre-prompt summary",
-              firstKeptEntryId: event.preparation.firstKeptEntryId,
-              tokensBefore: event.preparation.tokensBefore,
-              details: {},
-            },
-          }));
+          msa.on("session_before_compact", (event) =>
+            Promise.resolve({
+              compaction: {
+                summary: "pre-prompt summary",
+                firstKeptEntryId: event.preparation.firstKeptEntryId,
+                tokensBefore: event.preparation.tokensBefore,
+                details: {},
+              },
+            }),
+          );
         },
       ],
-    });
-    harnesses.push(harness);
+    }),
+  );
+  harnesses.push(harness);
+  const now = currentTimeMillis();
+  const model = harness.getModel();
+  harness.sessionManager.appendMessage({
+    role: "user",
+    content: [{ type: "text", text: "previous prompt" }],
+    timestamp: now - 1000,
+  });
+  return yield* compactsLengthStopOverflowBeforeAPart2(harness, now, model);
+});
 
-    const now = Date.now();
-    const model = harness.getModel();
-    harness.sessionManager.appendMessage({
-      role: "user",
-      content: [{ type: "text", text: "previous prompt" }],
-      timestamp: now - 1000,
-    });
+const compactsLengthStopOverflowBeforeAPart2 = (
+  harness: Harness,
+  now: number,
+  model: Model<string>,
+) =>
+  Effect.gen(function* () {
     const lengthStopAssistant: AssistantMessage = {
       ...fauxAssistantMessage("length-stop assistant response", {
         stopReason: "length",
@@ -64,9 +71,9 @@ describe("pre-prompt compaction regression", () => {
     harness.session.agent.state.messages = harness.sessionManager.buildSessionContext().messages;
     harness.setResponses([fauxAssistantMessage("answered next prompt")]);
     const continueSpy = vi.spyOn(harness.session.agent, "continue");
-
-    await expect(harness.session.prompt("next prompt")).resolves.toBeUndefined();
-
+    yield* Effect.promise(() =>
+      expect(harness.session.prompt("next prompt")).resolves.toBeUndefined(),
+    );
     expect(continueSpy).not.toHaveBeenCalled();
     expect(harness.eventsOfType("compaction_end").at(-1)).toMatchObject({
       reason: "overflow",
@@ -76,4 +83,14 @@ describe("pre-prompt compaction regression", () => {
     expect(getUserTexts(harness)).toContain("next prompt");
     expect(harness.faux.state.callCount).toBe(1);
   });
+
+describe("pre-prompt compaction regression", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    while (harnesses.length > 0) {
+      harnesses.pop()?.cleanup();
+    }
+  });
+  it("compacts length-stop overflow before a new prompt without continuing from an assistant message", () =>
+    Effect.runPromise(compactsLengthStopOverflowBeforeA));
 });

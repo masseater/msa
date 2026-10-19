@@ -82,6 +82,7 @@
     "yaml": "catalog:"
   },
   "devDependencies": {
+    "@effect/platform-node": "catalog:",
     "@effect/vitest": "catalog:stack",
     "@msa/testing": "workspace:*",
     "@types/cross-spawn": "catalog:",

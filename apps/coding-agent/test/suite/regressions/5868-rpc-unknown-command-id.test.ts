@@ -1,10 +1,10 @@
+import { toJsonText } from "@msa/testing";
+import { Effect } from "effect";
 import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 
 import type { AgentSessionRuntime } from "../../../src/core/agent-session-runtime.ts";
 import { runRpcMode } from "../../../src/modes/rpc/rpc-mode.ts";
 import { createHarness, type Harness } from "../harness.ts";
-
-// Regression for https://github.com/earendil-works/pi/issues/5868
 
 const rpcIo = vi.hoisted(() => ({
   outputLines: [] as string[],
@@ -12,9 +12,9 @@ const rpcIo = vi.hoisted(() => ({
 }));
 
 vi.mock("../../../src/core/output-guard.js", () => ({
-  flushRawStdout: vi.fn(async () => {}),
+  flushRawStdout: vi.fn(() => Effect.runPromise(Effect.sync(() => {}))),
   takeOverStdout: vi.fn(),
-  waitForRawStdoutBackpressure: vi.fn(async () => {}),
+  waitForRawStdoutBackpressure: vi.fn(() => Effect.runPromise(Effect.sync(() => {}))),
   writeRawStdout: (line: string) => {
     rpcIo.outputLines.push(line);
   },
@@ -76,31 +76,26 @@ function parseOutputLines(): Array<Record<string, unknown>> {
 function createRuntimeHost(harness: Harness): AgentSessionRuntime {
   return {
     session: harness.session,
-    newSession: vi.fn(async () => ({ cancelled: true })),
-    switchSession: vi.fn(async () => ({ cancelled: true })),
-    fork: vi.fn(async () => ({ cancelled: true, selectedText: "" })),
-    dispose: vi.fn(async () => {}),
+    newSession: vi.fn(() => Promise.resolve({ cancelled: true })),
+    switchSession: vi.fn(() => Promise.resolve({ cancelled: true })),
+    fork: vi.fn(() => Promise.resolve({ cancelled: true, selectedText: "" })),
+    dispose: vi.fn(() => Effect.runPromise(Effect.sync(() => {}))),
     setRebindSession: vi.fn(),
   } as unknown as AgentSessionRuntime;
 }
 
-describe("RPC unknown command responses (#5868)", () => {
-  afterEach(() => {
-    rpcIo.outputLines = [];
-    rpcIo.lineHandler = undefined;
-  });
+const preservesTheRequestIdOnUnknown = Effect.gen(function* () {
+  const listenerSnapshot = takeListenerSnapshot();
+  const harness = yield* Effect.promise(() => createHarness());
 
-  test("preserves the request id on unknown command errors", async () => {
-    const listenerSnapshot = takeListenerSnapshot();
-    const harness = await createHarness();
+  try {
+    void runRpcMode(createRuntimeHost(harness));
+    yield* Effect.promise(() => vi.waitFor(() => expect(rpcIo.lineHandler).toBeDefined()));
 
-    try {
-      void runRpcMode(createRuntimeHost(harness));
-      await vi.waitFor(() => expect(rpcIo.lineHandler).toBeDefined());
+    rpcIo.lineHandler?.(yield* toJsonText({ id: "test", type: "foobar" }));
 
-      rpcIo.lineHandler?.(JSON.stringify({ id: "test", type: "foobar" }));
-
-      await vi.waitFor(() => {
+    yield* Effect.promise(() =>
+      vi.waitFor(() => {
         expect(parseOutputLines()).toContainEqual({
           id: "test",
           type: "response",
@@ -108,10 +103,19 @@ describe("RPC unknown command responses (#5868)", () => {
           success: false,
           error: "Unknown command: foobar",
         });
-      });
-    } finally {
-      harness.cleanup();
-      restoreListeners(listenerSnapshot);
-    }
+      }),
+    );
+  } finally {
+    harness.cleanup();
+    restoreListeners(listenerSnapshot);
+  }
+});
+
+describe("RPC unknown command responses (#5868)", () => {
+  afterEach(() => {
+    rpcIo.outputLines = [];
+    rpcIo.lineHandler = undefined;
   });
+  test("preserves the request id on unknown command errors", () =>
+    Effect.runPromise(preservesTheRequestIdOnUnknown));
 });

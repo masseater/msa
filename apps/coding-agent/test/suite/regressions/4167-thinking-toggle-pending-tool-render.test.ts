@@ -1,6 +1,8 @@
 import type { AgentMessage } from "@msa/agent-core";
 import type { AssistantMessage, ToolResultMessage, Usage } from "@msa/ai";
+import { currentTimeMillis, nowIso } from "@msa/testing";
 import { Container, Text, type TUI } from "@msa/tui";
+import { Effect } from "effect";
 import { beforeAll, describe, expect, test, vi } from "vite-plus/test";
 
 import type { AgentSessionEvent } from "../../../src/core/agent-session.ts";
@@ -114,7 +116,7 @@ function createAssistantToolCallMessage(): AssistantMessage {
     model: "test-model",
     usage: EMPTY_USAGE,
     stopReason: "toolUse",
-    timestamp: Date.now(),
+    timestamp: currentTimeMillis(),
   };
 }
 
@@ -125,7 +127,7 @@ function createToolResultMessage(text: string): ToolResultMessage {
     toolName: TOOL_NAME,
     content: [{ type: "text", text }],
     isError: false,
-    timestamp: Date.now(),
+    timestamp: currentTimeMillis(),
   };
 }
 
@@ -136,7 +138,7 @@ function createSessionEntries(messages: AgentMessage[]): SessionEntry[] {
       type: "message",
       id: `entry-${index}`,
       parentId,
-      timestamp: new Date().toISOString(),
+      timestamp: nowIso(),
       message,
     };
     parentId = entry.id;
@@ -148,50 +150,58 @@ function renderChat(container: Container): string {
   return stripAnsi(container.render(120).join("\n"));
 }
 
-describe("InteractiveMode.renderSessionEntries", () => {
-  beforeAll(() => {
-    initTheme("dark");
-  });
+const keepsUnresolvedRenderedToolCallsRegistered = Effect.gen(function* () {
+  const fakeThis = createFakeInteractiveModeThis();
+  const renderSessionEntries = (
+    InteractiveMode.prototype as unknown as { renderSessionEntries: RenderSessionEntries }
+  ).renderSessionEntries;
+  const handleEvent = (InteractiveMode.prototype as unknown as { handleEvent: HandleEvent })
+    .handleEvent;
 
-  test("keeps unresolved rendered tool calls registered for live completion events", async () => {
-    const fakeThis = createFakeInteractiveModeThis();
-    const renderSessionEntries = (
-      InteractiveMode.prototype as unknown as { renderSessionEntries: RenderSessionEntries }
-    ).renderSessionEntries;
-    const handleEvent = (InteractiveMode.prototype as unknown as { handleEvent: HandleEvent })
-      .handleEvent;
+  renderSessionEntries.call(fakeThis, createSessionEntries([createAssistantToolCallMessage()]));
 
-    renderSessionEntries.call(fakeThis, createSessionEntries([createAssistantToolCallMessage()]));
+  expect(fakeThis.pendingTools.has(TOOL_CALL_ID)).toBe(true);
 
-    expect(fakeThis.pendingTools.has(TOOL_CALL_ID)).toBe(true);
-
-    await handleEvent.call(fakeThis, {
+  yield* Effect.promise(() =>
+    handleEvent.call(fakeThis, {
       type: "tool_execution_end",
       toolCallId: TOOL_CALL_ID,
       toolName: TOOL_NAME,
       result: { content: [{ type: "text", text: "FINAL_RESULT" }], details: undefined },
       isError: false,
-    });
+    }),
+  );
 
-    expect(fakeThis.pendingTools.has(TOOL_CALL_ID)).toBe(false);
-    expect(renderChat(fakeThis.chatContainer)).toContain("FINAL_RESULT");
+  expect(fakeThis.pendingTools.has(TOOL_CALL_ID)).toBe(false);
+  expect(renderChat(fakeThis.chatContainer)).toContain("FINAL_RESULT");
+});
+
+const doesNotKeepCompletedHistoricalTool = () => {
+  const fakeThis = createFakeInteractiveModeThis();
+  const renderSessionEntries = (
+    InteractiveMode.prototype as unknown as { renderSessionEntries: RenderSessionEntries }
+  ).renderSessionEntries;
+
+  renderSessionEntries.call(
+    fakeThis,
+    createSessionEntries([
+      createAssistantToolCallMessage(),
+      createToolResultMessage("HISTORICAL_RESULT"),
+    ]),
+  );
+
+  expect(fakeThis.pendingTools.size).toBe(0);
+  expect(renderChat(fakeThis.chatContainer)).toContain("HISTORICAL_RESULT");
+};
+
+describe("InteractiveMode.renderSessionEntries", () => {
+  beforeAll(() => {
+    initTheme("dark");
   });
-
-  test("does not keep completed historical tool calls registered as pending", () => {
-    const fakeThis = createFakeInteractiveModeThis();
-    const renderSessionEntries = (
-      InteractiveMode.prototype as unknown as { renderSessionEntries: RenderSessionEntries }
-    ).renderSessionEntries;
-
-    renderSessionEntries.call(
-      fakeThis,
-      createSessionEntries([
-        createAssistantToolCallMessage(),
-        createToolResultMessage("HISTORICAL_RESULT"),
-      ]),
-    );
-
-    expect(fakeThis.pendingTools.size).toBe(0);
-    expect(renderChat(fakeThis.chatContainer)).toContain("HISTORICAL_RESULT");
-  });
+  test("keeps unresolved rendered tool calls registered for live completion events", () =>
+    Effect.runPromise(keepsUnresolvedRenderedToolCallsRegistered));
+  test(
+    "does not keep completed historical tool calls registered as pending",
+    doesNotKeepCompletedHistoricalTool,
+  );
 });

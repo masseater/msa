@@ -53,6 +53,7 @@
           "effect/encoding/Ndjson#encode",
           "effect/FileSystem#FileSystem",
           "effect/http/FetchHttpClient#Fetch",
+          "effect/http/FetchHttpClient#RequestInit",
           "effect/http/FetchHttpClient#layer",
           "effect/http/HttpBody#raw",
           "effect/http/HttpClient#execute",

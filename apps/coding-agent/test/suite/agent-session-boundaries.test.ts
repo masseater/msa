@@ -1,30 +1,25 @@
 import type { AgentTool } from "@msa/agent-core";
 import { fauxAssistantMessage, fauxToolCall } from "@msa/ai";
+import { currentTimeMillis, gate } from "@msa/testing";
+import { Effect } from "effect";
 import { Type } from "typebox";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { createHarness, getMessageText, type Harness } from "./harness.ts";
 
 function deferred(): { promise: Promise<void>; resolve: () => void } {
-  let resolve = () => {};
-  const promise = new Promise<void>((done) => {
-    resolve = done;
-  });
-  return { promise, resolve };
+  const promise = gate();
+  return { promise, resolve: () => promise.release() };
 }
 
-describe("AgentSession actionable boundaries", () => {
-  const harnesses: Harness[] = [];
+const harnesses: Harness[] = [];
 
-  afterEach(() => {
-    while (harnesses.length > 0) harnesses.pop()?.cleanup();
-  });
-
-  it("commits a retain-none turn_end compaction and explicitly continues once", async () => {
-    let handled = false;
-    const observedIds: string[] = [];
-    const requests: string[] = [];
-    const harness = await createHarness({
+const commitsARetainNoneTurnEnd = Effect.gen(function* () {
+  let handled = false;
+  const observedIds: string[] = [];
+  const requests: string[] = [];
+  const harness = yield* Effect.promise(() =>
+    createHarness({
       extensionFactories: [
         (msa) => {
           msa.on("turn_end", (event) => {
@@ -45,8 +40,18 @@ describe("AgentSession actionable boundaries", () => {
           });
         },
       ],
-    });
-    harnesses.push(harness);
+    }),
+  );
+  harnesses.push(harness);
+  return yield* commitsARetainNoneTurnEndPart2(observedIds, requests, harness);
+});
+
+const commitsARetainNoneTurnEndPart2 = (
+  observedIds: string[],
+  requests: string[],
+  harness: Harness,
+) =>
+  Effect.gen(function* () {
     harness.setResponses([
       fauxAssistantMessage("discarded response"),
       (context) => {
@@ -54,9 +59,7 @@ describe("AgentSession actionable boundaries", () => {
         return fauxAssistantMessage("continued from handoff");
       },
     ]);
-
-    await harness.session.prompt("discarded prompt");
-
+    yield* Effect.promise(() => harness.session.prompt("discarded prompt"));
     const compaction = harness.sessionManager
       .getEntries()
       .find((entry) => entry.type === "compaction");
@@ -71,68 +74,12 @@ describe("AgentSession actionable boundaries", () => {
     expect(harness.eventsOfType("agent_settled")).toHaveLength(1);
   });
 
-  it.each(["steering", "follow-up", "both"] as const)(
-    "preserves %s queue scheduling around a turn_end handoff",
-    async (queueKind) => {
-      let handled = false;
-      const requests: string[] = [];
-      const harness = await createHarness({
-        extensionFactories: [
-          (msa) => {
-            msa.on("turn_end", () => {
-              if (handled) return;
-              handled = true;
-              if (queueKind === "steering" || queueKind === "both") {
-                msa.sendUserMessage("queued steering", { deliverAs: "steer" });
-              }
-              if (queueKind === "follow-up" || queueKind === "both") {
-                msa.sendUserMessage("queued follow-up", { deliverAs: "followUp" });
-              }
-              return {
-                entries: [{ type: "compaction", summary: "exact handoff", firstKeptEntryId: null }],
-                continue: true,
-              };
-            });
-          },
-        ],
-      });
-      harnesses.push(harness);
-      harness.setResponses([
-        fauxAssistantMessage("first"),
-        (context) => {
-          requests.push(JSON.stringify(context.messages));
-          return fauxAssistantMessage("second");
-        },
-        (context) => {
-          requests.push(JSON.stringify(context.messages));
-          return fauxAssistantMessage("third");
-        },
-      ]);
-
-      await harness.session.prompt("start");
-
-      expect(requests[0]).toContain("exact handoff");
-      if (queueKind === "steering") {
-        expect(harness.faux.state.callCount).toBe(2);
-        expect(requests[0]).toContain("queued steering");
-        expect(requests[0]).not.toContain("queued follow-up");
-      } else if (queueKind === "follow-up") {
-        expect(harness.faux.state.callCount).toBe(2);
-        expect(requests[0]).toContain("queued follow-up");
-      } else {
-        expect(harness.faux.state.callCount).toBe(3);
-        expect(requests[0]).toContain("queued steering");
-        expect(requests[0]).not.toContain("queued follow-up");
-        expect(requests[1]).toContain("queued follow-up");
-      }
-    },
-  );
-
-  it("keeps a boundary replacement verbatim through threshold compaction", async () => {
-    let handled = false;
-    const requests: string[] = [];
-    const instruction = "EXACT-REPLACEMENT-INSTRUCTION ".repeat(100);
-    const harness = await createHarness({
+const keepsABoundaryReplacementVerbatimThrough = Effect.gen(function* () {
+  let handled = false;
+  const requests: string[] = [];
+  const instruction = "EXACT-REPLACEMENT-INSTRUCTION ".repeat(100);
+  const harness = yield* Effect.promise(() =>
+    createHarness({
       models: [{ id: "faux-1", contextWindow: 2_000, maxTokens: 100 }],
       settings: { compaction: { enabled: true, keepRecentTokens: 1, reserveTokens: 0 } },
       extensionFactories: [
@@ -143,10 +90,14 @@ describe("AgentSession actionable boundaries", () => {
             const user = [...ctx.sessionManager.getBranch()]
               .reverse()
               .find((entry) => entry.type === "message" && entry.message.role === "user");
-            if (!user) throw new Error("missing user entry");
+            if (user === undefined) throw new Error("missing user entry");
             return {
               entries: [
-                { type: "context_edit", targetId: user.id, replacement: { content: instruction } },
+                {
+                  type: "context_edit",
+                  targetId: user.id,
+                  replacement: { content: instruction },
+                },
                 { type: "context_edit", targetId: event.messageEntryId, replacement: null },
                 { type: "custom", customType: "bookkeeping", data: { source: "test" } },
               ],
@@ -162,37 +113,39 @@ describe("AgentSession actionable boundaries", () => {
           }));
         },
       ],
-    });
-    harnesses.push(harness);
-    harness.sessionManager.appendMessage({
-      role: "user",
-      content: "older input",
-      timestamp: Date.now() - 2,
-    });
-    harness.sessionManager.appendMessage(
-      fauxAssistantMessage("older answer", { timestamp: Date.now() - 1 }),
-    );
-    harness.session.refreshContext();
-    harness.setResponses([
-      fauxAssistantMessage("answered original input"),
-      (context) => {
-        requests.push(JSON.stringify(context.messages));
-        return fauxAssistantMessage("answered replacement");
-      },
-    ]);
-
-    await harness.session.prompt("original input");
-
-    expect(harness.eventsOfType("compaction_start").length).toBeGreaterThan(0);
-    expect(requests).toHaveLength(1);
-    expect(requests[0]).toContain("EXACT-REPLACEMENT-INSTRUCTION");
+    }),
+  );
+  harnesses.push(harness);
+  harness.sessionManager.appendMessage({
+    role: "user",
+    content: "older input",
+    timestamp: currentTimeMillis() - 2,
   });
+  harness.sessionManager.appendMessage(
+    fauxAssistantMessage("older answer", { timestamp: currentTimeMillis() - 1 }),
+  );
+  harness.session.refreshContext();
+  harness.setResponses([
+    fauxAssistantMessage("answered original input"),
+    (context) => {
+      requests.push(JSON.stringify(context.messages));
+      return fauxAssistantMessage("answered replacement");
+    },
+  ]);
 
-  it("keeps boundary input verbatim through threshold compaction when metadata follows it", async () => {
-    let handled = false;
-    const requests: string[] = [];
-    const instruction = "EXACT-UNSENT-INSTRUCTION ".repeat(100);
-    const harness = await createHarness({
+  yield* Effect.promise(() => harness.session.prompt("original input"));
+
+  expect(harness.eventsOfType("compaction_start").length).toBeGreaterThan(0);
+  expect(requests).toHaveLength(1);
+  expect(requests[0]).toContain("EXACT-REPLACEMENT-INSTRUCTION");
+});
+
+const keepsBoundaryInputVerbatimThroughThreshold = Effect.gen(function* () {
+  let handled = false;
+  const requests: string[] = [];
+  const instruction = "EXACT-UNSENT-INSTRUCTION ".repeat(100);
+  const harness = yield* Effect.promise(() =>
+    createHarness({
       models: [{ id: "faux-1", contextWindow: 2_000, maxTokens: 100 }],
       settings: { compaction: { enabled: true, keepRecentTokens: 1, reserveTokens: 0 } },
       extensionFactories: [
@@ -222,27 +175,29 @@ describe("AgentSession actionable boundaries", () => {
           }));
         },
       ],
-    });
-    harnesses.push(harness);
-    harness.setResponses([
-      fauxAssistantMessage("first"),
-      (context) => {
-        requests.push(JSON.stringify(context.messages));
-        return fauxAssistantMessage("second");
-      },
-    ]);
+    }),
+  );
+  harnesses.push(harness);
+  harness.setResponses([
+    fauxAssistantMessage("first"),
+    (context) => {
+      requests.push(JSON.stringify(context.messages));
+      return fauxAssistantMessage("second");
+    },
+  ]);
 
-    await harness.session.prompt("old input ".repeat(500));
+  yield* Effect.promise(() => harness.session.prompt("old input ".repeat(500)));
 
-    expect(harness.eventsOfType("compaction_start").length).toBeGreaterThan(0);
-    expect(requests).toHaveLength(1);
-    expect(requests[0]).toContain("EXACT-UNSENT-INSTRUCTION");
-  });
+  expect(harness.eventsOfType("compaction_start").length).toBeGreaterThan(0);
+  expect(requests).toHaveLength(1);
+  expect(requests[0]).toContain("EXACT-UNSENT-INSTRUCTION");
+});
 
-  it("refreshes canonical context before publishing boundary entry notifications", async () => {
-    let handled = false;
-    const snapshots: string[] = [];
-    const harness = await createHarness({
+const refreshesCanonicalContextBeforePublishingBoundary = Effect.gen(function* () {
+  let handled = false;
+  const snapshots: string[] = [];
+  const harness = yield* Effect.promise(() =>
+    createHarness({
       extensionFactories: [
         (msa) => {
           msa.on("turn_end", () => {
@@ -262,23 +217,25 @@ describe("AgentSession actionable boundaries", () => {
           });
         },
       ],
-    });
-    harnesses.push(harness);
-    harness.session.subscribe((event) => {
-      if (event.type === "entry_appended") snapshots.push(JSON.stringify(harness.session.messages));
-    });
-    harness.setResponses([fauxAssistantMessage("done")]);
-
-    await harness.session.prompt("start");
-
-    expect(snapshots).toHaveLength(2);
-    expect(snapshots.every((snapshot) => snapshot.includes("committed context"))).toBe(true);
+    }),
+  );
+  harnesses.push(harness);
+  harness.session.subscribe((event) => {
+    if (event.type === "entry_appended") snapshots.push(JSON.stringify(harness.session.messages));
   });
+  harness.setResponses([fauxAssistantMessage("done")]);
 
-  it("continues from an agent_before_settle custom message before final settlement", async () => {
-    let requested = false;
-    const requests: string[] = [];
-    const harness = await createHarness({
+  yield* Effect.promise(() => harness.session.prompt("start"));
+
+  expect(snapshots).toHaveLength(2);
+  expect(snapshots.every((snapshot) => snapshot.includes("committed context"))).toBe(true);
+});
+
+const continuesFromAnAgentBeforeSettle = Effect.gen(function* () {
+  let requested = false;
+  const requests: string[] = [];
+  const harness = yield* Effect.promise(() =>
+    createHarness({
       extensionFactories: [
         (msa) => {
           msa.on("agent_before_settle", () => {
@@ -298,8 +255,14 @@ describe("AgentSession actionable boundaries", () => {
           });
         },
       ],
-    });
-    harnesses.push(harness);
+    }),
+  );
+  harnesses.push(harness);
+  return yield* continuesFromAnAgentBeforeSettlePart2(requests, harness);
+});
+
+const continuesFromAnAgentBeforeSettlePart2 = (requests: string[], harness: Harness) =>
+  Effect.gen(function* () {
     harness.setResponses([
       fauxAssistantMessage("first"),
       (context) => {
@@ -307,9 +270,7 @@ describe("AgentSession actionable boundaries", () => {
         return fauxAssistantMessage("second");
       },
     ]);
-
-    await harness.session.prompt("start");
-
+    yield* Effect.promise(() => harness.session.prompt("start"));
     expect(requests[0]).toContain("continue now");
     expect(harness.sessionManager.getEntries()).toContainEqual(
       expect.objectContaining({
@@ -322,11 +283,12 @@ describe("AgentSession actionable boundaries", () => {
     expect(harness.eventsOfType("agent_settled")).toHaveLength(1);
   });
 
-  it("persists custom context queued by agent_end before pre-settlement continuation", async () => {
-    let firstRun = true;
-    let continued = false;
-    const requests: string[] = [];
-    const harness = await createHarness({
+const persistsCustomContextQueuedByAgent = Effect.gen(function* () {
+  let firstRun = true;
+  let continued = false;
+  const requests: string[] = [];
+  const harness = yield* Effect.promise(() =>
+    createHarness({
       extensionFactories: [
         (msa) => {
           msa.on("agent_end", () => {
@@ -354,28 +316,30 @@ describe("AgentSession actionable boundaries", () => {
           });
         },
       ],
-    });
-    harnesses.push(harness);
-    harness.setResponses([
-      fauxAssistantMessage("first"),
-      (context) => {
-        requests.push(JSON.stringify(context.messages));
-        return fauxAssistantMessage("second");
-      },
-    ]);
+    }),
+  );
+  harnesses.push(harness);
+  harness.setResponses([
+    fauxAssistantMessage("first"),
+    (context) => {
+      requests.push(JSON.stringify(context.messages));
+      return fauxAssistantMessage("second");
+    },
+  ]);
 
-    await harness.session.prompt("start");
+  yield* Effect.promise(() => harness.session.prompt("start"));
 
-    expect(requests[0]).toContain("queued after agent end");
-    expect(harness.sessionManager.getEntries()).toContainEqual(
-      expect.objectContaining({ type: "custom_message", customType: "agent-end-context" }),
-    );
-  });
+  expect(requests[0]).toContain("queued after agent end");
+  expect(harness.sessionManager.getEntries()).toContainEqual(
+    expect.objectContaining({ type: "custom_message", customType: "agent-end-context" }),
+  );
+});
 
-  it("keeps a pre-settlement follow-up deferred until the explicit continuation would stop", async () => {
-    let handled = false;
-    const requests: string[] = [];
-    const harness = await createHarness({
+const keepsAPreSettlementFollowUp = Effect.gen(function* () {
+  let handled = false;
+  const requests: string[] = [];
+  const harness = yield* Effect.promise(() =>
+    createHarness({
       extensionFactories: [
         (msa) => {
           msa.on("agent_before_settle", () => {
@@ -396,8 +360,14 @@ describe("AgentSession actionable boundaries", () => {
           });
         },
       ],
-    });
-    harnesses.push(harness);
+    }),
+  );
+  harnesses.push(harness);
+  return yield* keepsAPreSettlementFollowUpPart2(requests, harness);
+});
+
+const keepsAPreSettlementFollowUpPart2 = (requests: string[], harness: Harness) =>
+  Effect.gen(function* () {
     harness.setResponses([
       fauxAssistantMessage("first"),
       (context) => {
@@ -409,19 +379,18 @@ describe("AgentSession actionable boundaries", () => {
         return fauxAssistantMessage("follow-up response");
       },
     ]);
-
-    await harness.session.prompt("start");
-
+    yield* Effect.promise(() => harness.session.prompt("start"));
     expect(harness.faux.state.callCount).toBe(3);
     expect(requests[0]).toContain("boundary context");
     expect(requests[0]).not.toContain("queued follow-up");
     expect(requests[1]).toContain("queued follow-up");
   });
 
-  it("defers runs started by agent_settled handlers until every settled handler completes", async () => {
-    let triggered = false;
-    const lifecycle: string[] = [];
-    const harness = await createHarness({
+const defersRunsStartedByAgentSettled = Effect.gen(function* () {
+  let triggered = false;
+  const lifecycle: string[] = [];
+  const harness = yield* Effect.promise(() =>
+    createHarness({
       extensionFactories: [
         (msa) => {
           msa.on("agent_start", () => {
@@ -441,31 +410,33 @@ describe("AgentSession actionable boundaries", () => {
           });
         },
       ],
-    });
-    harnesses.push(harness);
-    harness.setResponses([fauxAssistantMessage("first"), fauxAssistantMessage("second")]);
+    }),
+  );
+  harnesses.push(harness);
+  harness.setResponses([fauxAssistantMessage("first"), fauxAssistantMessage("second")]);
 
-    await harness.session.prompt("start");
+  yield* Effect.promise(() => harness.session.prompt("start"));
 
-    expect(lifecycle).toEqual([
-      "start",
-      "settled-first:true",
-      "settled-second:true",
-      "start",
-      "settled-first:true",
-      "settled-second:true",
-    ]);
-  });
+  expect(lifecycle).toEqual([
+    "start",
+    "settled-first:true",
+    "settled-second:true",
+    "start",
+    "settled-first:true",
+    "settled-second:true",
+  ]);
+});
 
-  it("does not let an invalid explicit continuation suppress natural tool continuation", async () => {
-    const tool: AgentTool = {
-      name: "noop",
-      label: "Noop",
-      description: "Noop",
-      parameters: Type.Object({}),
-      execute: async () => ({ content: [{ type: "text", text: "done" }], details: {} }),
-    };
-    const harness = await createHarness({
+const doesNotLetAnInvalidExplicit = Effect.gen(function* () {
+  const tool: AgentTool = {
+    name: "noop",
+    label: "Noop",
+    description: "Noop",
+    parameters: Type.Object({}),
+    execute: () => Promise.resolve({ content: [{ type: "text", text: "done" }], details: {} }),
+  };
+  const harness = yield* Effect.promise(() =>
+    createHarness({
       tools: [tool],
       extensionFactories: [
         (msa) => {
@@ -473,7 +444,7 @@ describe("AgentSession actionable boundaries", () => {
             const user = [...ctx.sessionManager.getBranch()]
               .reverse()
               .find((entry) => entry.type === "message" && entry.message.role === "user");
-            if (!user) throw new Error("missing user entry");
+            if (user === undefined) throw new Error("missing user entry");
             return {
               entries: [user.id, event.messageEntryId, ...event.toolResultEntryIds].map(
                 (targetId) => ({
@@ -487,48 +458,54 @@ describe("AgentSession actionable boundaries", () => {
           });
         },
       ],
-    });
-    harnesses.push(harness);
-    harness.setResponses([
-      fauxAssistantMessage(fauxToolCall("noop", {}), { stopReason: "toolUse" }),
-      fauxAssistantMessage("must not run"),
-    ]);
+    }),
+  );
+  harnesses.push(harness);
+  harness.setResponses([
+    fauxAssistantMessage(fauxToolCall("noop", {}), { stopReason: "toolUse" }),
+    fauxAssistantMessage("must not run"),
+  ]);
 
-    await harness.session.prompt("start");
+  yield* Effect.promise(() => harness.session.prompt("start"));
 
-    expect(harness.faux.state.callCount).toBe(2);
-  });
+  expect(harness.faux.state.callCount).toBe(2);
+});
 
-  it("dispatches actionable turn_end for synthetic run failures", async () => {
-    let turnEnds = 0;
-    const harness = await createHarness({
+const dispatchesActionableTurnEndForSynthetic = Effect.gen(function* () {
+  let turnEnds = 0;
+  const harness = yield* Effect.promise(() =>
+    createHarness({
       extensionFactories: [
         (msa) => {
           msa.on("turn_end", (event) => {
             turnEnds++;
             expect(event.outcome).toBe("error");
-            return { entries: [{ type: "custom", customType: "failure-boundary", data: true }] };
+            return {
+              entries: [{ type: "custom", customType: "failure-boundary", data: true }],
+            };
           });
         },
       ],
-    });
-    harnesses.push(harness);
-    harness.session.agent.prepareRequest = () => {
-      throw new Error("request preparation failed");
-    };
+    }),
+  );
+  harnesses.push(harness);
+  harness.session.agent.prepareRequest = () => {
+    throw new Error("request preparation failed");
+  };
 
-    await harness.session.prompt("start");
+  yield* Effect.promise(() => harness.session.prompt("start"));
 
-    expect(turnEnds).toBe(1);
-    expect(harness.faux.state.callCount).toBe(0);
-    expect(harness.sessionManager.getEntries()).toContainEqual(
-      expect.objectContaining({ type: "custom", customType: "failure-boundary" }),
-    );
-  });
+  expect(turnEnds).toBe(1);
+  expect(harness.faux.state.callCount).toBe(0);
+  expect(harness.sessionManager.getEntries()).toContainEqual(
+    expect.objectContaining({ type: "custom", customType: "failure-boundary" }),
+  );
+});
 
-  it("does not compact from usage belonging to a boundary-omitted assistant", async () => {
-    let handled = false;
-    const harness = await createHarness({
+const doesNotCompactFromUsageBelonging = Effect.gen(function* () {
+  let handled = false;
+  const harness = yield* Effect.promise(() =>
+    createHarness({
       models: [{ id: "faux-1", contextWindow: 10_000, maxTokens: 100 }],
       settings: { compaction: { enabled: true, keepRecentTokens: 1, reserveTokens: 300 } },
       initialActiveToolNames: ["read"],
@@ -539,7 +516,12 @@ describe("AgentSession actionable boundaries", () => {
             return {
               message: {
                 ...event.message,
-                usage: { ...event.message.usage, input: 9_800, output: 1, totalTokens: 9_801 },
+                usage: {
+                  ...event.message.usage,
+                  input: 9_800,
+                  output: 1,
+                  totalTokens: 9_801,
+                },
               },
             };
           });
@@ -554,19 +536,21 @@ describe("AgentSession actionable boundaries", () => {
           });
         },
       ],
-    });
-    harnesses.push(harness);
-    harness.setResponses([fauxAssistantMessage("short response")]);
+    }),
+  );
+  harnesses.push(harness);
+  harness.setResponses([fauxAssistantMessage("short response")]);
 
-    await harness.session.prompt("small prompt");
+  yield* Effect.promise(() => harness.session.prompt("small prompt"));
 
-    expect(harness.eventsOfType("compaction_start")).toEqual([]);
-    expect(harness.session.getContextUsage()?.tokens).toBeLessThan(4_000);
-  });
+  expect(harness.eventsOfType("compaction_start")).toEqual([]);
+  expect(harness.session.getContextUsage()?.tokens).toBeLessThan(4_000);
+});
 
-  it("does not trigger successful-response overflow from usage captured before a boundary edit", async () => {
-    let handled = false;
-    const harness = await createHarness({
+const doesNotTriggerSuccessfulResponseOverflow = Effect.gen(function* () {
+  let handled = false;
+  const harness = yield* Effect.promise(() =>
+    createHarness({
       models: [{ id: "faux-1", contextWindow: 5_000, maxTokens: 100 }],
       settings: { compaction: { enabled: true, keepRecentTokens: 1, reserveTokens: 0 } },
       initialActiveToolNames: ["read"],
@@ -577,7 +561,12 @@ describe("AgentSession actionable boundaries", () => {
             return {
               message: {
                 ...event.message,
-                usage: { ...event.message.usage, input: 5_100, output: 1, totalTokens: 5_101 },
+                usage: {
+                  ...event.message.usage,
+                  input: 5_100,
+                  output: 1,
+                  totalTokens: 5_101,
+                },
               },
             };
           });
@@ -587,79 +576,85 @@ describe("AgentSession actionable boundaries", () => {
             const user = [...ctx.sessionManager.getBranch()]
               .reverse()
               .find((entry) => entry.type === "message" && entry.message.role === "user");
-            if (!user) throw new Error("missing user entry");
-            return { entries: [{ type: "context_edit", targetId: user.id, replacement: null }] };
+            if (user === undefined) throw new Error("missing user entry");
+            return {
+              entries: [{ type: "context_edit", targetId: user.id, replacement: null }],
+            };
           });
         },
       ],
-    });
-    harnesses.push(harness);
-    harness.setResponses([fauxAssistantMessage("done")]);
+    }),
+  );
+  harnesses.push(harness);
+  harness.setResponses([fauxAssistantMessage("done")]);
 
-    await harness.session.prompt("large input that is later omitted");
+  yield* Effect.promise(() => harness.session.prompt("large input that is later omitted"));
 
-    expect(harness.eventsOfType("compaction_start")).toEqual([]);
-    expect(harness.session.getContextUsage()?.tokens).toBeLessThan(3_000);
-  });
+  expect(harness.eventsOfType("compaction_start")).toEqual([]);
+  expect(harness.session.getContextUsage()?.tokens).toBeLessThan(3_000);
+});
 
-  it("does not trigger threshold compaction from post-edit usage captured before a later compaction", async () => {
-    const harness = await createHarness({
+const doesNotTriggerThresholdCompactionFrom = Effect.gen(function* () {
+  const harness = yield* Effect.promise(() =>
+    createHarness({
       models: [{ id: "faux-1", contextWindow: 10_000, maxTokens: 100 }],
       settings: { compaction: { enabled: true, keepRecentTokens: 1, reserveTokens: 0 } },
-    });
-    harnesses.push(harness);
-    const userId = harness.sessionManager.appendMessage({
-      role: "user",
-      content: "small input",
-      timestamp: Date.now() - 3,
-    });
-    harness.sessionManager.appendContextEdit(userId, { content: "edited input" });
-    const response = fauxAssistantMessage("answer", { timestamp: Date.now() - 2 });
-    response.usage = { ...response.usage, input: 50_000, output: 1, totalTokens: 50_001 };
-    harness.sessionManager.appendMessage(response);
-    harness.sessionManager.appendCompaction("small summary", userId, 50_001);
-    harness.session.refreshContext();
-    const runAutoCompaction = vi.spyOn(
-      harness.session as unknown as {
-        runAutoCompaction: (
-          reason: "overflow" | "threshold",
-          willRetry: boolean,
-        ) => Promise<boolean>;
-      },
-      "runAutoCompaction",
-    );
-    const checkCompaction = (
-      harness.session as unknown as {
-        checkCompaction: (message: ReturnType<typeof fauxAssistantMessage>) => Promise<boolean>;
-      }
-    ).checkCompaction.bind(harness.session);
-    const error = fauxAssistantMessage("", {
-      stopReason: "error",
-      errorMessage: "invalid_api_key",
-      timestamp: Date.now() + 1_000,
-    });
-
-    await checkCompaction(error);
-
-    expect(runAutoCompaction).not.toHaveBeenCalled();
+    }),
+  );
+  harnesses.push(harness);
+  const userId = harness.sessionManager.appendMessage({
+    role: "user",
+    content: "small input",
+    timestamp: currentTimeMillis() - 3,
+  });
+  harness.sessionManager.appendContextEdit(userId, { content: "edited input" });
+  const response = fauxAssistantMessage("answer", { timestamp: currentTimeMillis() - 2 });
+  response.usage = { ...response.usage, input: 50_000, output: 1, totalTokens: 50_001 };
+  harness.sessionManager.appendMessage(response);
+  harness.sessionManager.appendCompaction("small summary", userId, 50_001);
+  harness.session.refreshContext();
+  const runAutoCompaction = vi.spyOn(
+    harness.session as unknown as {
+      runAutoCompaction: (
+        reason: "overflow" | "threshold",
+        willRetry: boolean,
+      ) => Promise<boolean>;
+    },
+    "runAutoCompaction",
+  );
+  const checkCompaction = (
+    harness.session as unknown as {
+      checkCompaction: (message: ReturnType<typeof fauxAssistantMessage>) => Promise<boolean>;
+    }
+  )["checkCompaction"].bind(harness.session);
+  const error = fauxAssistantMessage("", {
+    stopReason: "error",
+    errorMessage: "invalid_api_key",
+    timestamp: currentTimeMillis() + 1_000,
   });
 
-  it("does not treat retained pre-compaction assistant usage as post-compaction usage", async () => {
-    const harness = await createHarness();
-    harnesses.push(harness);
-    const retained = fauxAssistantMessage("retained");
-    retained.usage = { ...retained.usage, input: 10_000, totalTokens: 10_001 };
-    const retainedId = harness.sessionManager.appendMessage(retained);
-    harness.sessionManager.appendCompaction("summary", retainedId, 10_001);
-    harness.session.refreshContext();
+  yield* Effect.promise(() => checkCompaction(error));
 
-    expect(harness.session.getContextUsage()?.tokens).toBeNull();
-  });
+  expect(runAutoCompaction).not.toHaveBeenCalled();
+});
 
-  it("persists custom context sent during pre-settlement before continuing", async () => {
-    let handled = false;
-    const requests: string[] = [];
-    const harness = await createHarness({
+const doesNotTreatRetainedPreCompaction = Effect.gen(function* () {
+  const harness = yield* Effect.promise(() => createHarness());
+  harnesses.push(harness);
+  const retained = fauxAssistantMessage("retained");
+  retained.usage = { ...retained.usage, input: 10_000, totalTokens: 10_001 };
+  const retainedId = harness.sessionManager.appendMessage(retained);
+  harness.sessionManager.appendCompaction("summary", retainedId, 10_001);
+  harness.session.refreshContext();
+
+  expect(harness.session.getContextUsage()?.tokens).toBeNull();
+});
+
+const persistsCustomContextSentDuringPre = Effect.gen(function* () {
+  let handled = false;
+  const requests: string[] = [];
+  const harness = yield* Effect.promise(() =>
+    createHarness({
       extensionFactories: [
         (msa) => {
           msa.on("agent_before_settle", () => {
@@ -677,28 +672,30 @@ describe("AgentSession actionable boundaries", () => {
           });
         },
       ],
-    });
-    harnesses.push(harness);
-    harness.setResponses([
-      fauxAssistantMessage("first"),
-      (context) => {
-        requests.push(JSON.stringify(context.messages));
-        return fauxAssistantMessage("second");
-      },
-    ]);
+    }),
+  );
+  harnesses.push(harness);
+  harness.setResponses([
+    fauxAssistantMessage("first"),
+    (context) => {
+      requests.push(JSON.stringify(context.messages));
+      return fauxAssistantMessage("second");
+    },
+  ]);
 
-    await harness.session.prompt("start");
+  yield* Effect.promise(() => harness.session.prompt("start"));
 
-    expect(harness.faux.state.callCount).toBe(2);
-    expect(requests[0]).toContain("persist before continue");
-    expect(harness.sessionManager.getEntries()).toContainEqual(
-      expect.objectContaining({ type: "custom_message", customType: "pending-boundary" }),
-    );
-  });
+  expect(harness.faux.state.callCount).toBe(2);
+  expect(requests[0]).toContain("persist before continue");
+  expect(harness.sessionManager.getEntries()).toContainEqual(
+    expect.objectContaining({ type: "custom_message", customType: "pending-boundary" }),
+  );
+});
 
-  it("does not consume queued input when pre-settlement drafts leave system-only context", async () => {
-    let handled = false;
-    const harness = await createHarness({
+const doesNotConsumeQueuedInputWhen = Effect.gen(function* () {
+  let handled = false;
+  const harness = yield* Effect.promise(() =>
+    createHarness({
       extensionFactories: [
         (msa) => {
           msa.on("agent_before_settle", (_event, ctx) => {
@@ -726,104 +723,216 @@ describe("AgentSession actionable boundaries", () => {
           });
         },
       ],
-    });
-    harnesses.push(harness);
-    harness.setResponses([fauxAssistantMessage("first"), fauxAssistantMessage("must not run")]);
+    }),
+  );
+  harnesses.push(harness);
+  harness.setResponses([fauxAssistantMessage("first"), fauxAssistantMessage("must not run")]);
 
-    await harness.session.prompt("start");
+  yield* Effect.promise(() => harness.session.prompt("start"));
 
-    expect(harness.faux.state.callCount).toBe(1);
-    expect(harness.session.pendingMessageCount).toBe(1);
-  });
-
-  it("commits pre-settlement drafts but suppresses continuation when aborted during the hook", async () => {
-    const started = deferred();
-    const release = deferred();
-    const harness = await createHarness({
-      extensionFactories: [
-        (msa) => {
-          msa.on("agent_before_settle", async () => {
-            started.resolve();
-            await release.promise;
-            return {
-              entries: [{ type: "custom", customType: "committed-after-abort", data: true }],
-              continue: true,
-            };
-          });
-        },
-      ],
-    });
-    harnesses.push(harness);
-    harness.setResponses([fauxAssistantMessage("first"), fauxAssistantMessage("must not run")]);
-
-    const prompt = harness.session.prompt("start");
-    await started.promise;
-    const abort = harness.session.abort();
-    release.resolve();
-    await Promise.all([prompt, abort]);
-
-    expect(harness.faux.state.callCount).toBe(1);
-    expect(harness.sessionManager.getEntries()).toContainEqual(
-      expect.objectContaining({ type: "custom", customType: "committed-after-abort", data: true }),
-    );
-    // #10607: settlement reports the abort although the last response succeeded.
-    expect(harness.eventsOfType("agent_settled")).toEqual([
-      { type: "agent_settled", aborted: true },
-    ]);
-  });
+  expect(harness.faux.state.callCount).toBe(1);
+  expect(harness.session.pendingMessageCount).toBe(1);
 });
 
-describe("durable length recovery", () => {
-  const harnesses: Harness[] = [];
+const commitsPreSettlementDraftsButSuppresses = Effect.gen(function* () {
+  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+  const started = deferred();
+  const release = deferred();
+  const harness = yield* Effect.promise(() =>
+    createHarness({
+      extensionFactories: [
+        (msa) => {
+          msa.on("agent_before_settle", () =>
+            runPromise(
+              Effect.gen(function* () {
+                started.resolve();
+                yield* Effect.promise(() => release.promise);
+                return {
+                  entries: [{ type: "custom", customType: "committed-after-abort", data: true }],
+                  continue: true,
+                };
+              }),
+            ),
+          );
+        },
+      ],
+    }),
+  );
+  harnesses.push(harness);
+  harness.setResponses([fauxAssistantMessage("first"), fauxAssistantMessage("must not run")]);
 
+  const prompt = harness.session.prompt("start");
+  yield* Effect.promise(() => started.promise);
+  const abort = harness.session.abort();
+  release.resolve();
+  yield* Effect.promise(() => Promise.all([prompt, abort]));
+
+  expect(harness.faux.state.callCount).toBe(1);
+  expect(harness.sessionManager.getEntries()).toContainEqual(
+    expect.objectContaining({
+      type: "custom",
+      customType: "committed-after-abort",
+      data: true,
+    }),
+  );
+
+  expect(harness.eventsOfType("agent_settled")).toEqual([{ type: "agent_settled", aborted: true }]);
+});
+
+describe("AgentSession actionable boundaries", () => {
   afterEach(() => {
     while (harnesses.length > 0) harnesses.pop()?.cleanup();
   });
+  it("commits a retain-none turn_end compaction and explicitly continues once", () =>
+    Effect.runPromise(commitsARetainNoneTurnEnd));
+  it.each(["steering", "follow-up", "both"] as const)(
+    "preserves %s queue scheduling around a turn_end handoff",
+    (queueKind) =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          let handled = false;
+          const requests: string[] = [];
+          const harness = yield* Effect.promise(() =>
+            createHarness({
+              extensionFactories: [
+                (msa) => {
+                  msa.on("turn_end", () => {
+                    if (handled) return;
+                    handled = true;
+                    if (queueKind === "steering" || queueKind === "both") {
+                      msa.sendUserMessage("queued steering", { deliverAs: "steer" });
+                    }
+                    if (queueKind === "follow-up" || queueKind === "both") {
+                      msa.sendUserMessage("queued follow-up", { deliverAs: "followUp" });
+                    }
+                    return {
+                      entries: [
+                        { type: "compaction", summary: "exact handoff", firstKeptEntryId: null },
+                      ],
+                      continue: true,
+                    };
+                  });
+                },
+              ],
+            }),
+          );
+          harnesses.push(harness);
+          harness.setResponses([
+            fauxAssistantMessage("first"),
+            (context) => {
+              requests.push(JSON.stringify(context.messages));
+              return fauxAssistantMessage("second");
+            },
+            (context) => {
+              requests.push(JSON.stringify(context.messages));
+              return fauxAssistantMessage("third");
+            },
+          ]);
 
-  it("keeps truncated tool attempts in context for the natural next turn", async () => {
-    let executed = false;
-    const requests: string[] = [];
-    const tool: AgentTool = {
-      name: "unsafe_truncated_tool",
-      label: "Unsafe truncated tool",
-      description: "Must not execute from a length response",
-      parameters: Type.Object({ value: Type.String() }),
-      execute: async () => {
-        executed = true;
-        return { content: [{ type: "text", text: "executed" }], details: {} };
-      },
-    };
-    const harness = await createHarness({ tools: [tool] });
-    harnesses.push(harness);
-    harness.setResponses([
-      fauxAssistantMessage(fauxToolCall("unsafe_truncated_tool", { value: "partial" }), {
-        stopReason: "length",
-      }),
-      (context) => {
-        requests.push(JSON.stringify(context.messages));
-        return fauxAssistantMessage("completed natural continuation");
-      },
-    ]);
+          yield* Effect.promise(() => harness.session.prompt("start"));
 
-    await harness.session.prompt("start");
+          expect(requests[0]).toContain("exact handoff");
+          if (queueKind === "steering") {
+            expect(harness.faux.state.callCount).toBe(2);
+            expect(requests[0]).toContain("queued steering");
+            expect(requests[0]).not.toContain("queued follow-up");
+          } else if (queueKind === "follow-up") {
+            expect(harness.faux.state.callCount).toBe(2);
+            expect(requests[0]).toContain("queued follow-up");
+          } else {
+            expect(harness.faux.state.callCount).toBe(3);
+            expect(requests[0]).toContain("queued steering");
+            expect(requests[0]).not.toContain("queued follow-up");
+            expect(requests[1]).toContain("queued follow-up");
+          }
+        }),
+      ),
+  );
+  it("keeps a boundary replacement verbatim through threshold compaction", () =>
+    Effect.runPromise(keepsABoundaryReplacementVerbatimThrough));
+  it("keeps boundary input verbatim through threshold compaction when metadata follows it", () =>
+    Effect.runPromise(keepsBoundaryInputVerbatimThroughThreshold));
+  it("refreshes canonical context before publishing boundary entry notifications", () =>
+    Effect.runPromise(refreshesCanonicalContextBeforePublishingBoundary));
+  it("continues from an agent_before_settle custom message before final settlement", () =>
+    Effect.runPromise(continuesFromAnAgentBeforeSettle));
+  it("persists custom context queued by agent_end before pre-settlement continuation", () =>
+    Effect.runPromise(persistsCustomContextQueuedByAgent));
+  it("keeps a pre-settlement follow-up deferred until the explicit continuation would stop", () =>
+    Effect.runPromise(keepsAPreSettlementFollowUp));
+  it("defers runs started by agent_settled handlers until every settled handler completes", () =>
+    Effect.runPromise(defersRunsStartedByAgentSettled));
+  it("does not let an invalid explicit continuation suppress natural tool continuation", () =>
+    Effect.runPromise(doesNotLetAnInvalidExplicit));
+  it("dispatches actionable turn_end for synthetic run failures", () =>
+    Effect.runPromise(dispatchesActionableTurnEndForSynthetic));
+  it("does not compact from usage belonging to a boundary-omitted assistant", () =>
+    Effect.runPromise(doesNotCompactFromUsageBelonging));
+  it("does not trigger successful-response overflow from usage captured before a boundary edit", () =>
+    Effect.runPromise(doesNotTriggerSuccessfulResponseOverflow));
+  it("does not trigger threshold compaction from post-edit usage captured before a later compaction", () =>
+    Effect.runPromise(doesNotTriggerThresholdCompactionFrom));
+  it("does not treat retained pre-compaction assistant usage as post-compaction usage", () =>
+    Effect.runPromise(doesNotTreatRetainedPreCompaction));
+  it("persists custom context sent during pre-settlement before continuing", () =>
+    Effect.runPromise(persistsCustomContextSentDuringPre));
+  it("does not consume queued input when pre-settlement drafts leave system-only context", () =>
+    Effect.runPromise(doesNotConsumeQueuedInputWhen));
+  it("commits pre-settlement drafts but suppresses continuation when aborted during the hook", () =>
+    Effect.runPromise(commitsPreSettlementDraftsButSuppresses));
+});
 
-    expect(executed).toBe(false);
-    expect(harness.faux.state.callCount).toBe(2);
-    expect(requests[0]).toContain("may be truncated");
-    expect(harness.sessionManager.getEntries().some((entry) => entry.type === "context_edit")).toBe(
-      false,
-    );
-  });
+const harnesses3: Harness[] = [];
 
-  it("resets length recovery after a successful intermediate assistant turn", async () => {
-    const tool: AgentTool = {
-      name: "noop",
-      label: "Noop",
-      description: "Noop",
-      parameters: Type.Object({}),
-      execute: async () => ({ content: [{ type: "text", text: "done" }], details: {} }),
-    };
-    const harness = await createHarness({
+const keepsTruncatedToolAttemptsInContext = Effect.gen(function* () {
+  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+  let executed = false;
+  const requests: string[] = [];
+  const tool: AgentTool = {
+    name: "unsafe_truncated_tool",
+    label: "Unsafe truncated tool",
+    description: "Must not execute from a length response",
+    parameters: Type.Object({ value: Type.String() }),
+    execute: () =>
+      runPromise(
+        Effect.sync(() => {
+          executed = true;
+          return { content: [{ type: "text", text: "executed" }], details: {} };
+        }),
+      ),
+  };
+  const harness = yield* Effect.promise(() => createHarness({ tools: [tool] }));
+  harnesses3.push(harness);
+  harness.setResponses([
+    fauxAssistantMessage(fauxToolCall("unsafe_truncated_tool", { value: "partial" }), {
+      stopReason: "length",
+    }),
+    (context) => {
+      requests.push(JSON.stringify(context.messages));
+      return fauxAssistantMessage("completed natural continuation");
+    },
+  ]);
+
+  yield* Effect.promise(() => harness.session.prompt("start"));
+
+  expect(executed).toBe(false);
+  expect(harness.faux.state.callCount).toBe(2);
+  expect(requests[0]).toContain("may be truncated");
+  expect(harness.sessionManager.getEntries().some((entry) => entry.type === "context_edit")).toBe(
+    false,
+  );
+});
+
+const resetsLengthRecoveryAfterASuccessful = Effect.gen(function* () {
+  const tool: AgentTool = {
+    name: "noop",
+    label: "Noop",
+    description: "Noop",
+    parameters: Type.Object({}),
+    execute: () => Promise.resolve({ content: [{ type: "text", text: "done" }], details: {} }),
+  };
+  const harness = yield* Effect.promise(() =>
+    createHarness({
       models: [{ id: "faux-1", contextWindow: 1000, maxTokens: 100 }],
       settings: { compaction: { keepRecentTokens: 1, reserveTokens: 0 } },
       tools: [tool],
@@ -838,21 +947,28 @@ describe("durable length recovery", () => {
           }));
         },
       ],
-    });
-    harnesses.push(harness);
+    }),
+  );
+  harnesses3.push(harness);
+  return yield* resetsLengthRecoveryAfterASuccessfulPart2(harness);
+});
+
+const resetsLengthRecoveryAfterASuccessfulPart2 = (harness: Harness) =>
+  Effect.gen(function* () {
     harness.setResponses([
       fauxAssistantMessage("first partial", { stopReason: "length" }),
       fauxAssistantMessage(fauxToolCall("noop", {}), { stopReason: "toolUse" }),
       () =>
         fauxAssistantMessage("second partial", {
           stopReason: "length",
-          timestamp: Date.now() + 1_000,
+          timestamp: currentTimeMillis() + 1_000,
         }),
-      () => fauxAssistantMessage("completed second recovery", { timestamp: Date.now() + 2_000 }),
+      () =>
+        fauxAssistantMessage("completed second recovery", {
+          timestamp: currentTimeMillis() + 2_000,
+        }),
     ]);
-
-    await harness.session.prompt("x".repeat(5000));
-
+    yield* Effect.promise(() => harness.session.prompt("x".repeat(5000)));
     const omittedIds = harness.sessionManager
       .getEntries()
       .filter((entry) => entry.type === "context_edit")
@@ -870,9 +986,10 @@ describe("durable length recovery", () => {
     expect(harness.faux.state.callCount).toBe(3);
   });
 
-  it("gives a distinct queued follow-up its own length-recovery budget", async () => {
-    let queued = false;
-    const harness = await createHarness({
+const givesADistinctQueuedFollowUp = Effect.gen(function* () {
+  let queued = false;
+  const harness = yield* Effect.promise(() =>
+    createHarness({
       models: [{ id: "faux-1", contextWindow: 1000, maxTokens: 100 }],
       settings: { compaction: { keepRecentTokens: 1, reserveTokens: 0 } },
       extensionFactories: [
@@ -895,21 +1012,25 @@ describe("durable length recovery", () => {
           });
         },
       ],
-    });
-    harnesses.push(harness);
+    }),
+  );
+  harnesses3.push(harness);
+  return yield* givesADistinctQueuedFollowUpPart2(harness);
+});
+
+const givesADistinctQueuedFollowUpPart2 = (harness: Harness) =>
+  Effect.gen(function* () {
     harness.setResponses([
       fauxAssistantMessage("first partial", { stopReason: "length" }),
       fauxAssistantMessage("first recovered"),
       () =>
         fauxAssistantMessage("follow-up partial", {
           stopReason: "length",
-          timestamp: Date.now() + 1_000,
+          timestamp: currentTimeMillis() + 1_000,
         }),
-      () => fauxAssistantMessage("follow-up recovered", { timestamp: Date.now() + 2_000 }),
+      () => fauxAssistantMessage("follow-up recovered", { timestamp: currentTimeMillis() + 2_000 }),
     ]);
-
-    await harness.session.prompt("x".repeat(5000));
-
+    yield* Effect.promise(() => harness.session.prompt("x".repeat(5000)));
     const lengthIds = harness.sessionManager
       .getEntries()
       .flatMap((entry) =>
@@ -927,26 +1048,29 @@ describe("durable length recovery", () => {
     expect(harness.faux.state.callCount).toBe(4);
   });
 
-  it("finishes retry bookkeeping when a retry receives a nonretryable error", async () => {
-    const harness = await createHarness({
+const finishesRetryBookkeepingWhenARetry = Effect.gen(function* () {
+  const harness = yield* Effect.promise(() =>
+    createHarness({
       settings: { retry: { enabled: true, maxRetries: 2, baseDelayMs: 1 } },
-    });
-    harnesses.push(harness);
-    harness.setResponses([
-      fauxAssistantMessage("", { stopReason: "error", errorMessage: "overloaded_error" }),
-      fauxAssistantMessage("", { stopReason: "error", errorMessage: "invalid_api_key" }),
-    ]);
+    }),
+  );
+  harnesses3.push(harness);
+  harness.setResponses([
+    fauxAssistantMessage("", { stopReason: "error", errorMessage: "overloaded_error" }),
+    fauxAssistantMessage("", { stopReason: "error", errorMessage: "invalid_api_key" }),
+  ]);
 
-    await harness.session.prompt("start");
+  yield* Effect.promise(() => harness.session.prompt("start"));
 
-    expect(harness.faux.state.callCount).toBe(2);
-    expect(harness.eventsOfType("auto_retry_end")).toContainEqual(
-      expect.objectContaining({ success: false, attempt: 1, finalError: "invalid_api_key" }),
-    );
-  });
+  expect(harness.faux.state.callCount).toBe(2);
+  expect(harness.eventsOfType("auto_retry_end")).toContainEqual(
+    expect.objectContaining({ success: false, attempt: 1, finalError: "invalid_api_key" }),
+  );
+});
 
-  it("omits a recoverable projected replacement by its source entry ID", async () => {
-    const harness = await createHarness({
+const omitsARecoverableProjectedReplacementBy = Effect.gen(function* () {
+  const harness = yield* Effect.promise(() =>
+    createHarness({
       models: [{ id: "faux-1", contextWindow: 1_000, maxTokens: 100 }],
       settings: { compaction: { enabled: true, keepRecentTokens: 1, reserveTokens: 0 } },
       extensionFactories: [
@@ -954,41 +1078,43 @@ describe("durable length recovery", () => {
           msa.on("session_before_compact", () => ({ cancel: true }));
         },
       ],
-    });
-    harnesses.push(harness);
-    harness.sessionManager.appendMessage({
-      role: "user",
-      content: "x".repeat(5_000),
-      timestamp: Date.now() - 2,
-    });
-    const partial = fauxAssistantMessage("original partial", {
-      stopReason: "length",
-      timestamp: Date.now() - 1,
-    });
-    const partialId = harness.sessionManager.appendMessage(partial);
-    harness.sessionManager.appendContextEdit(partialId, {
-      content: [{ type: "text", text: "edited partial" }],
-    });
-    harness.session.refreshContext();
-    harness.setResponses([fauxAssistantMessage("new answer")]);
-
-    await harness.session.prompt("next prompt");
-
-    const edits = harness.sessionManager
-      .getEntries()
-      .filter((entry) => entry.type === "context_edit");
-    expect(edits.filter((entry) => entry.targetId === partialId).at(-1)?.replacement).toBeNull();
-    expect(
-      harness.sessionManager
-        .buildSessionProjection()
-        .messages.some((message) => getMessageText(message) === "edited partial"),
-    ).toBe(false);
+    }),
+  );
+  harnesses3.push(harness);
+  harness.sessionManager.appendMessage({
+    role: "user",
+    content: "x".repeat(5_000),
+    timestamp: currentTimeMillis() - 2,
   });
+  const partial = fauxAssistantMessage("original partial", {
+    stopReason: "length",
+    timestamp: currentTimeMillis() - 1,
+  });
+  const partialId = harness.sessionManager.appendMessage(partial);
+  harness.sessionManager.appendContextEdit(partialId, {
+    content: [{ type: "text", text: "edited partial" }],
+  });
+  harness.session.refreshContext();
+  harness.setResponses([fauxAssistantMessage("new answer")]);
 
-  it("recovers an explicit overflow error after a retained boundary replacement", async () => {
-    let replaced = false;
-    let overflowId: string | undefined;
-    const harness = await createHarness({
+  yield* Effect.promise(() => harness.session.prompt("next prompt"));
+
+  const edits = harness.sessionManager
+    .getEntries()
+    .filter((entry) => entry.type === "context_edit");
+  expect(edits.filter((entry) => entry.targetId === partialId).at(-1)?.replacement).toBeNull();
+  expect(
+    harness.sessionManager
+      .buildSessionProjection()
+      .messages.some((message) => getMessageText(message) === "edited partial"),
+  ).toBe(false);
+});
+
+const recoversAnExplicitOverflowErrorAfter = Effect.gen(function* () {
+  let replaced = false;
+  let overflowId: string | undefined;
+  const harness = yield* Effect.promise(() =>
+    createHarness({
       models: [{ id: "faux-1", contextWindow: 1_000, maxTokens: 100 }],
       settings: { compaction: { enabled: true, keepRecentTokens: 1, reserveTokens: 0 } },
       extensionFactories: [
@@ -1016,31 +1142,33 @@ describe("durable length recovery", () => {
           }));
         },
       ],
-    });
-    harnesses.push(harness);
-    harness.setResponses([
-      fauxAssistantMessage("retained error", {
-        stopReason: "error",
-        errorMessage: "prompt is too long",
-      }),
-      fauxAssistantMessage("recovered"),
-    ]);
+    }),
+  );
+  harnesses3.push(harness);
+  harness.setResponses([
+    fauxAssistantMessage("retained error", {
+      stopReason: "error",
+      errorMessage: "prompt is too long",
+    }),
+    fauxAssistantMessage("recovered"),
+  ]);
 
-    await harness.session.prompt("x".repeat(5_000));
+  yield* Effect.promise(() => harness.session.prompt("x".repeat(5_000)));
 
-    expect(harness.faux.state.callCount).toBe(2);
-    expect(overflowId).toBeDefined();
-    const edits = harness.sessionManager
-      .getEntries()
-      .filter((entry) => entry.type === "context_edit");
-    expect(edits.filter((entry) => entry.targetId === overflowId).at(-1)?.replacement).toBeNull();
-  });
+  expect(harness.faux.state.callCount).toBe(2);
+  expect(overflowId).toBeDefined();
+  const edits = harness.sessionManager
+    .getEntries()
+    .filter((entry) => entry.type === "context_edit");
+  expect(edits.filter((entry) => entry.targetId === overflowId).at(-1)?.replacement).toBeNull();
+});
 
-  it("keeps follow-up work behind an automatic error retry", async () => {
-    let queued = false;
-    const requests: string[] = [];
-    const lifecycle: string[] = [];
-    const harness = await createHarness({
+const keepsFollowUpWorkBehindAn = Effect.gen(function* () {
+  let queued = false;
+  const requests: string[] = [];
+  const lifecycle: string[] = [];
+  const harness = yield* Effect.promise(() =>
+    createHarness({
       settings: { retry: { enabled: true, maxRetries: 2, baseDelayMs: 1 } },
       extensionFactories: [
         (msa) => {
@@ -1051,86 +1179,110 @@ describe("durable length recovery", () => {
           });
         },
       ],
-    });
-    harnesses.push(harness);
-    harness.session.subscribe((event) => {
-      if (event.type === "agent_end" || event.type === "auto_retry_start")
-        lifecycle.push(event.type);
-    });
-    harness.setResponses([
-      fauxAssistantMessage("", { stopReason: "error", errorMessage: "overloaded_error" }),
-      (context) => {
-        requests.push(JSON.stringify(context.messages));
-        return fauxAssistantMessage("retry recovered");
-      },
-      (context) => {
-        requests.push(JSON.stringify(context.messages));
-        return fauxAssistantMessage("follow-up completed");
-      },
-    ]);
-
-    await harness.session.prompt("start");
-
-    expect(harness.faux.state.callCount).toBe(3);
-    expect(requests[0]).not.toContain("queued follow-up");
-    expect(requests[1]).toContain("queued follow-up");
-    expect(lifecycle.slice(0, 2)).toEqual(["agent_end", "auto_retry_start"]);
+    }),
+  );
+  harnesses3.push(harness);
+  harness.session.subscribe((event) => {
+    if (event.type === "agent_end" || event.type === "auto_retry_start") lifecycle.push(event.type);
   });
+  harness.setResponses([
+    fauxAssistantMessage("", { stopReason: "error", errorMessage: "overloaded_error" }),
+    (context) => {
+      requests.push(JSON.stringify(context.messages));
+      return fauxAssistantMessage("retry recovered");
+    },
+    (context) => {
+      requests.push(JSON.stringify(context.messages));
+      return fauxAssistantMessage("follow-up completed");
+    },
+  ]);
 
-  it("marks the exhausted retry run as final", async () => {
-    const harness = await createHarness({
+  yield* Effect.promise(() => harness.session.prompt("start"));
+
+  expect(harness.faux.state.callCount).toBe(3);
+  expect(requests[0]).not.toContain("queued follow-up");
+  expect(requests[1]).toContain("queued follow-up");
+  expect(lifecycle.slice(0, 2)).toEqual(["agent_end", "auto_retry_start"]);
+});
+
+const marksTheExhaustedRetryRunAs = Effect.gen(function* () {
+  const harness = yield* Effect.promise(() =>
+    createHarness({
       settings: { retry: { enabled: true, maxRetries: 1, baseDelayMs: 1 } },
-    });
-    harnesses.push(harness);
-    harness.setResponses([
-      fauxAssistantMessage("", { stopReason: "error", errorMessage: "overloaded_error" }),
-      fauxAssistantMessage("", { stopReason: "error", errorMessage: "overloaded_error" }),
-    ]);
+    }),
+  );
+  harnesses3.push(harness);
+  harness.setResponses([
+    fauxAssistantMessage("", { stopReason: "error", errorMessage: "overloaded_error" }),
+    fauxAssistantMessage("", { stopReason: "error", errorMessage: "overloaded_error" }),
+  ]);
 
-    await harness.session.prompt("start");
+  yield* Effect.promise(() => harness.session.prompt("start"));
 
-    expect(harness.eventsOfType("agent_end").map((event) => event.willRetry)).toEqual([
-      true,
-      false,
-    ]);
-    expect(harness.eventsOfType("auto_retry_end")).toContainEqual(
-      expect.objectContaining({ success: false, attempt: 1 }),
-    );
-  });
+  expect(harness.eventsOfType("agent_end").map((event) => event.willRetry)).toEqual([true, false]);
+  expect(harness.eventsOfType("auto_retry_end")).toContainEqual(
+    expect.objectContaining({ success: false, attempt: 1 }),
+  );
+});
 
-  it("keeps omissions and does not retry when recovery compaction fails", async () => {
-    const harness = await createHarness({
+const keepsOmissionsAndDoesNotRetry = Effect.gen(function* () {
+  const harness = yield* Effect.promise(() =>
+    createHarness({
       models: [{ id: "faux-1", contextWindow: 1000, maxTokens: 100 }],
       settings: {
         compaction: { keepRecentTokens: 1, reserveTokens: 0 },
         retry: { enabled: false, maxRetries: 0, baseDelayMs: 1 },
       },
-    });
-    harnesses.push(harness);
-    harness.setResponses([
-      fauxAssistantMessage("partial response", { stopReason: "length" }),
-      fauxAssistantMessage("summary failed", {
-        stopReason: "error",
-        errorMessage: "summary failed",
-      }),
-      fauxAssistantMessage("must not retry"),
-    ]);
+    }),
+  );
+  harnesses3.push(harness);
+  harness.setResponses([
+    fauxAssistantMessage("partial response", { stopReason: "length" }),
+    fauxAssistantMessage("summary failed", {
+      stopReason: "error",
+      errorMessage: "summary failed",
+    }),
+    fauxAssistantMessage("must not retry"),
+  ]);
 
-    await harness.session.prompt("x".repeat(5000));
+  yield* Effect.promise(() => harness.session.prompt("x".repeat(5000)));
 
-    const entries = harness.sessionManager.getEntries();
-    expect(entries.some((entry) => entry.type === "context_edit")).toBe(true);
-    expect(entries.some((entry) => entry.type === "compaction")).toBe(false);
-    expect(
-      entries.some(
-        (entry) => entry.type === "message" && getMessageText(entry.message) === "partial response",
-      ),
-    ).toBe(true);
-    expect(
-      harness.sessionManager
-        .buildSessionProjection()
-        .messages.some((message) => getMessageText(message) === "partial response"),
-    ).toBe(false);
-    expect(harness.faux.state.callCount).toBe(2);
+  const entries = harness.sessionManager.getEntries();
+  expect(entries.some((entry) => entry.type === "context_edit")).toBe(true);
+  expect(entries.some((entry) => entry.type === "compaction")).toBe(false);
+  expect(
+    entries.some(
+      (entry) => entry.type === "message" && getMessageText(entry.message) === "partial response",
+    ),
+  ).toBe(true);
+  expect(
+    harness.sessionManager
+      .buildSessionProjection()
+      .messages.some((message) => getMessageText(message) === "partial response"),
+  ).toBe(false);
+  expect(harness.faux.state.callCount).toBe(2);
+});
+
+describe("durable length recovery", () => {
+  afterEach(() => {
+    while (harnesses3.length > 0) harnesses3.pop()?.cleanup();
   });
+  it("keeps truncated tool attempts in context for the natural next turn", () =>
+    Effect.runPromise(keepsTruncatedToolAttemptsInContext));
+  it("resets length recovery after a successful intermediate assistant turn", () =>
+    Effect.runPromise(resetsLengthRecoveryAfterASuccessful));
+  it("gives a distinct queued follow-up its own length-recovery budget", () =>
+    Effect.runPromise(givesADistinctQueuedFollowUp));
+  it("finishes retry bookkeeping when a retry receives a nonretryable error", () =>
+    Effect.runPromise(finishesRetryBookkeepingWhenARetry));
+  it("omits a recoverable projected replacement by its source entry ID", () =>
+    Effect.runPromise(omitsARecoverableProjectedReplacementBy));
+  it("recovers an explicit overflow error after a retained boundary replacement", () =>
+    Effect.runPromise(recoversAnExplicitOverflowErrorAfter));
+  it("keeps follow-up work behind an automatic error retry", () =>
+    Effect.runPromise(keepsFollowUpWorkBehindAn));
+  it("marks the exhausted retry run as final", () =>
+    Effect.runPromise(marksTheExhaustedRetryRunAs));
+  it("keeps omissions and does not retry when recovery compaction fails", () =>
+    Effect.runPromise(keepsOmissionsAndDoesNotRetry));
 });

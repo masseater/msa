@@ -1,4 +1,9 @@
 import { setKeybindings, type TUI } from "@msa/tui";
+const APC_SEQUENCE = new RegExp(
+  `${String.fromCharCode(27)}_[^${String.fromCharCode(7)}]*${String.fromCharCode(7)}`,
+  "gu",
+);
+import { Effect } from "effect";
 import { beforeAll, beforeEach, describe, expect, test, vi } from "vite-plus/test";
 
 import { KeybindingsManager } from "../../../src/core/keybindings.ts";
@@ -20,13 +25,7 @@ function createDialog(): LoginDialogComponent {
 }
 
 function renderDialog(dialog: LoginDialogComponent): string[] {
-  // stripAnsi keeps APC sequences, so drop the TUI's zero-width cursor markers (e.g. \x1b_pi:fc\x07) first
-  return stripAnsi(
-    dialog
-      .render(120)
-      .join("\n")
-      .replace(/\x1b_[^\x07]*\x07/g, ""),
-  )
+  return stripAnsi(dialog.render(120).join("\n").replace(APC_SEQUENCE, ""))
     .split("\n")
     .map((line) => line.trimEnd());
 }
@@ -35,92 +34,101 @@ function countRenderedValue(lines: string[], value: string): number {
   return lines.filter((line) => line.trim() === `> ${value}`).length;
 }
 
+const keepsPreviousPromptInputStableWhen = Effect.gen(function* () {
+  const dialog = createDialog();
+
+  const firstPrompt = dialog.showPrompt("First prompt:", "first-value");
+  dialog.handleInput("first-value");
+  dialog.handleInput("\n");
+  yield* Effect.promise(() => expect(firstPrompt).resolves.toBe("first-value"));
+
+  const secondPrompt = dialog.showPrompt("Second prompt:");
+  dialog.handleInput("second-secret-demo");
+
+  const lines = renderDialog(dialog);
+  expect(lines.join("\n")).toContain("First prompt:");
+  expect(lines.join("\n")).toContain("Second prompt:");
+  expect(countRenderedValue(lines, "first-value")).toBe(1);
+  expect(countRenderedValue(lines, "second-secret-demo")).toBe(1);
+
+  dialog.handleInput("\n");
+  yield* Effect.promise(() => expect(secondPrompt).resolves.toBe("second-secret-demo"));
+});
+
+const preservesAuthInstructionsWhenShowingA = () => {
+  const dialog = createDialog();
+
+  dialog.showAuth("https://example.invalid/login", "Authorize the extension");
+  dialog.showPrompt("First prompt:");
+
+  const output = renderDialog(dialog).join("\n");
+  expect(output).toContain("https://example.invalid/login");
+  expect(output).toContain("Authorize the extension");
+  expect(output).toContain("First prompt:");
+};
+
+const preservesNeutralInformationAndLinksWhen = () => {
+  const dialog = createDialog();
+
+  dialog.showInfo("Configure credentials outside msa.", [
+    { label: "Provider documentation", url: "https://example.invalid/docs" },
+  ]);
+  dialog.showPrompt("Press Enter to continue:");
+
+  const output = renderDialog(dialog).join("\n");
+  expect(output).toContain("Configure credentials outside msa.");
+  expect(output).toContain("Provider documentation: https://example.invalid/docs");
+  expect(output).toContain("Press Enter to continue:");
+};
+
+const preservesSetupDetailsWhenShowingA = () => {
+  const dialog = createDialog();
+
+  dialog.showDetails(["AWS credential setup:", "providers.md"]);
+  dialog.showPrompt("Enter API key:");
+
+  const output = renderDialog(dialog).join("\n");
+  expect(output).toContain("AWS credential setup:");
+  expect(output).toContain("providers.md");
+  expect(output).toContain("Enter API key:");
+};
+
+const keepsPreviousManualInputStableWhen = Effect.gen(function* () {
+  const dialog = createDialog();
+
+  const manualInput = dialog.showManualInput("Paste callback URL:");
+  dialog.handleInput("callback-value");
+  dialog.handleInput("\n");
+  yield* Effect.promise(() => expect(manualInput).resolves.toBe("callback-value"));
+
+  const prompt = dialog.showPrompt("Second prompt:");
+  dialog.handleInput("second-secret-demo");
+
+  const lines = renderDialog(dialog);
+  expect(lines.join("\n")).toContain("Paste callback URL:");
+  expect(lines.join("\n")).toContain("Second prompt:");
+  expect(countRenderedValue(lines, "callback-value")).toBe(1);
+  expect(countRenderedValue(lines, "second-secret-demo")).toBe(1);
+
+  dialog.handleInput("\n");
+  yield* Effect.promise(() => expect(prompt).resolves.toBe("second-secret-demo"));
+});
+
 describe("LoginDialogComponent OAuth prompts", () => {
   beforeAll(() => {
     initTheme("dark");
   });
-
   beforeEach(() => {
     setKeybindings(new KeybindingsManager());
   });
-
-  test("keeps previous prompt input stable when a later prompt is active", async () => {
-    const dialog = createDialog();
-
-    const firstPrompt = dialog.showPrompt("First prompt:", "first-value");
-    dialog.handleInput("first-value");
-    dialog.handleInput("\n");
-    await expect(firstPrompt).resolves.toBe("first-value");
-
-    const secondPrompt = dialog.showPrompt("Second prompt:");
-    dialog.handleInput("second-secret-demo");
-
-    const lines = renderDialog(dialog);
-    expect(lines.join("\n")).toContain("First prompt:");
-    expect(lines.join("\n")).toContain("Second prompt:");
-    expect(countRenderedValue(lines, "first-value")).toBe(1);
-    expect(countRenderedValue(lines, "second-secret-demo")).toBe(1);
-
-    dialog.handleInput("\n");
-    await expect(secondPrompt).resolves.toBe("second-secret-demo");
-  });
-
-  test("preserves auth instructions when showing a prompt", () => {
-    const dialog = createDialog();
-
-    dialog.showAuth("https://example.invalid/login", "Authorize the extension");
-    dialog.showPrompt("First prompt:");
-
-    const output = renderDialog(dialog).join("\n");
-    expect(output).toContain("https://example.invalid/login");
-    expect(output).toContain("Authorize the extension");
-    expect(output).toContain("First prompt:");
-  });
-
-  test("preserves neutral information and links when showing a prompt", () => {
-    const dialog = createDialog();
-
-    dialog.showInfo("Configure credentials outside msa.", [
-      { label: "Provider documentation", url: "https://example.invalid/docs" },
-    ]);
-    dialog.showPrompt("Press Enter to continue:");
-
-    const output = renderDialog(dialog).join("\n");
-    expect(output).toContain("Configure credentials outside msa.");
-    expect(output).toContain("Provider documentation: https://example.invalid/docs");
-    expect(output).toContain("Press Enter to continue:");
-  });
-
-  test("preserves setup details when showing a prompt", () => {
-    const dialog = createDialog();
-
-    dialog.showDetails(["AWS credential setup:", "providers.md"]);
-    dialog.showPrompt("Enter API key:");
-
-    const output = renderDialog(dialog).join("\n");
-    expect(output).toContain("AWS credential setup:");
-    expect(output).toContain("providers.md");
-    expect(output).toContain("Enter API key:");
-  });
-
-  test("keeps previous manual input stable when a later prompt is active", async () => {
-    const dialog = createDialog();
-
-    const manualInput = dialog.showManualInput("Paste callback URL:");
-    dialog.handleInput("callback-value");
-    dialog.handleInput("\n");
-    await expect(manualInput).resolves.toBe("callback-value");
-
-    const prompt = dialog.showPrompt("Second prompt:");
-    dialog.handleInput("second-secret-demo");
-
-    const lines = renderDialog(dialog);
-    expect(lines.join("\n")).toContain("Paste callback URL:");
-    expect(lines.join("\n")).toContain("Second prompt:");
-    expect(countRenderedValue(lines, "callback-value")).toBe(1);
-    expect(countRenderedValue(lines, "second-secret-demo")).toBe(1);
-
-    dialog.handleInput("\n");
-    await expect(prompt).resolves.toBe("second-secret-demo");
-  });
+  test("keeps previous prompt input stable when a later prompt is active", () =>
+    Effect.runPromise(keepsPreviousPromptInputStableWhen));
+  test("preserves auth instructions when showing a prompt", preservesAuthInstructionsWhenShowingA);
+  test(
+    "preserves neutral information and links when showing a prompt",
+    preservesNeutralInformationAndLinksWhen,
+  );
+  test("preserves setup details when showing a prompt", preservesSetupDetailsWhenShowingA);
+  test("keeps previous manual input stable when a later prompt is active", () =>
+    Effect.runPromise(keepsPreviousManualInputStableWhen));
 });

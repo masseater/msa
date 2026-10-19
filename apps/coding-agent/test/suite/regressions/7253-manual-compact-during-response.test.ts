@@ -1,5 +1,7 @@
 import type { AgentTool } from "@msa/agent-core";
 import { fauxAssistantMessage, fauxToolCall } from "@msa/ai";
+import { gate } from "@msa/testing";
+import { Effect } from "effect";
 import { Type } from "typebox";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
@@ -11,80 +13,82 @@ function createNoopTool(): AgentTool {
     label: "No-op",
     description: "Return immediately",
     parameters: Type.Object({}),
-    execute: async () => ({ content: [{ type: "text", text: "done" }], details: {} }),
+    execute: () => Promise.resolve({ content: [{ type: "text", text: "done" }], details: {} }),
   };
 }
 
-describe("issue #7253: manual compaction during an active response", () => {
-  const harnesses: Harness[] = [];
+const harnesses: Harness[] = [];
 
-  afterEach(() => {
-    while (harnesses.length > 0) {
-      harnesses.pop()?.cleanup();
-    }
-  });
+const persistsTheAbortedResponseBeforeRunning = Effect.gen(function* () {
+  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+  const secondResponseStarted = gate();
+  const secondResponseReleased = gate();
 
-  it("persists the aborted response before running the requested manual compaction", async () => {
-    let markSecondResponseStarted = () => {};
-    const secondResponseStarted = new Promise<void>((resolve) => {
-      markSecondResponseStarted = resolve;
-    });
-    let releaseSecondResponse = () => {};
-    const secondResponseReleased = new Promise<void>((resolve) => {
-      releaseSecondResponse = resolve;
-    });
-
-    const harness = await createHarness({
+  const harness = yield* Effect.promise(() =>
+    createHarness({
       models: [{ id: "faux-1", contextWindow: 1000, maxTokens: 1000 }],
       settings: { compaction: { enabled: true, reserveTokens: 200, keepRecentTokens: 2 } },
       tools: [createNoopTool()],
       extensionFactories: [
         (msa) => {
-          msa.on("session_before_compact", async (event) => ({
-            compaction: {
-              summary: `${event.reason} summary`,
-              firstKeptEntryId: event.preparation.firstKeptEntryId,
-              tokensBefore: event.preparation.tokensBefore,
-              details: {},
-            },
-          }));
+          msa.on("session_before_compact", (event) =>
+            Promise.resolve({
+              compaction: {
+                summary: `${event.reason} summary`,
+                firstKeptEntryId: event.preparation.firstKeptEntryId,
+                tokensBefore: event.preparation.tokensBefore,
+                details: {},
+              },
+            }),
+          );
         },
       ],
-    });
-    harnesses.push(harness);
-    harness.setResponses([
-      fauxAssistantMessage(fauxToolCall("noop", {}), { stopReason: "toolUse" }),
-      async () => {
-        markSecondResponseStarted();
-        await secondResponseReleased;
-        return fauxAssistantMessage(`second response:${"x".repeat(4000)}`);
-      },
-    ]);
+    }),
+  );
+  harnesses.push(harness);
+  harness.setResponses([
+    fauxAssistantMessage(fauxToolCall("noop", {}), { stopReason: "toolUse" }),
+    () =>
+      runPromise(
+        Effect.gen(function* () {
+          secondResponseStarted.release();
+          yield* Effect.promise(() => secondResponseReleased);
+          return fauxAssistantMessage(`second response:${"x".repeat(4000)}`);
+        }),
+      ),
+  ]);
 
-    const promptPromise = harness.session.prompt("Run the tool, then continue responding.");
-    await secondResponseStarted;
+  const promptPromise = harness.session.prompt("Run the tool, then continue responding.");
+  yield* Effect.promise(() => secondResponseStarted);
 
-    const compactPromise = harness.session.compact();
-    const compactExpectation = expect(compactPromise).resolves.toMatchObject({
-      summary: "manual summary",
-    });
-    releaseSecondResponse();
-    await Promise.all([promptPromise, compactExpectation]);
-
-    expect(harness.eventsOfType("compaction_start").map((event) => event.reason)).toEqual([
-      "manual",
-    ]);
-    expect(harness.eventsOfType("compaction_end").map((event) => event.reason)).toEqual(["manual"]);
-    const entries = harness.sessionManager.getEntries();
-    const abortedResponseIndex = entries.findIndex(
-      (entry) =>
-        entry.type === "message" &&
-        entry.message.role === "assistant" &&
-        entry.message.stopReason === "aborted",
-    );
-    const compactionIndex = entries.findIndex((entry) => entry.type === "compaction");
-    expect(abortedResponseIndex).toBeGreaterThan(-1);
-    expect(compactionIndex).toBeGreaterThan(abortedResponseIndex);
-    expect(entries.filter((entry) => entry.type === "compaction")).toHaveLength(1);
+  const compactPromise = harness.session.compact();
+  const compactExpectation = expect(compactPromise).resolves.toMatchObject({
+    summary: "manual summary",
   });
+  secondResponseReleased.release();
+  yield* Effect.promise(() => Promise.all([promptPromise, compactExpectation]));
+
+  expect(harness.eventsOfType("compaction_start").map((event) => event.reason)).toEqual(["manual"]);
+  expect(harness.eventsOfType("compaction_end").map((event) => event.reason)).toEqual(["manual"]);
+  const entries = harness.sessionManager.getEntries();
+  const abortedResponseIndex = entries.findIndex(
+    (entry) =>
+      entry.type === "message" &&
+      entry.message.role === "assistant" &&
+      entry.message.stopReason === "aborted",
+  );
+  const compactionIndex = entries.findIndex((entry) => entry.type === "compaction");
+  expect(abortedResponseIndex).toBeGreaterThan(-1);
+  expect(compactionIndex).toBeGreaterThan(abortedResponseIndex);
+  expect(entries.filter((entry) => entry.type === "compaction")).toHaveLength(1);
+});
+
+describe("issue #7253: manual compaction during an active response", () => {
+  afterEach(() => {
+    while (harnesses.length > 0) {
+      harnesses.pop()?.cleanup();
+    }
+  });
+  it("persists the aborted response before running the requested manual compaction", () =>
+    Effect.runPromise(persistsTheAbortedResponseBeforeRunning));
 });

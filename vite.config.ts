@@ -188,6 +188,12 @@ export default defineConfig({
         },
       },
       {
+        files: ["**/test/**", "**/*.test.ts", "**/*.spec.ts", "tools/checks/**"],
+        rules: {
+          "eslint/max-lines-per-function": "off",
+        },
+      },
+      {
         files: ["tools/**", "lint.config.ts", "syncpack.config.ts", "vite.config.ts"],
         rules: {
           "no-comments/disallowComments": [
