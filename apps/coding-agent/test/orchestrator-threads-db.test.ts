@@ -92,3 +92,45 @@ it("opens a migrated database again without changing it", () => {
   expect(store.listThreads(database, "p").map((thread) => thread.id)).toEqual(["s-1"]);
   database.close();
 });
+
+it("opens a migrated database that an older msa reopened and gave an empty sessions table", () => {
+  const path = legacyDatabase();
+  store.openDatabase(path).close();
+  const older = new DatabaseSync(path);
+  older.exec(`
+    PRAGMA user_version = 0;
+    CREATE TABLE sessions (
+      id TEXT PRIMARY KEY, project TEXT NOT NULL, model TEXT NOT NULL,
+      thinking_level TEXT NOT NULL, cwd TEXT NOT NULL, status TEXT NOT NULL,
+      session_file TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+    );
+    CREATE INDEX sessions_project_status ON sessions(project, status);
+    INSERT INTO sessions VALUES ('s-2', 'p', 'fast/flash', 'low', '/repo', 'running', NULL, 3, 3);
+  `);
+  older.close();
+
+  const database = store.openDatabase(path);
+
+  expect(store.listThreads(database, "p").map((thread) => thread.id)).toEqual(["s-1", "s-2"]);
+  const tables = database
+    .prepare("SELECT name FROM sqlite_master WHERE name LIKE '%session%'")
+    .all();
+  expect(tables).toEqual([]);
+  database.close();
+});
+
+it("refuses a database written by a newer msa and leaves it untouched", () => {
+  const path = legacyDatabase();
+  const newer = new DatabaseSync(path);
+  newer.exec("PRAGMA user_version = 99");
+  newer.close();
+
+  expect(() => store.openDatabase(path)).toThrow("Update msa");
+
+  const untouched = new DatabaseSync(path);
+  const tables = untouched
+    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'threads'")
+    .all();
+  expect(tables).toEqual([]);
+  untouched.close();
+});
