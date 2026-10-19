@@ -96,6 +96,8 @@ The dedicated history actions browse prompt history regardless of cursor positio
 | `tui.select.confirm`  | `enter`                 | Confirm selection   |
 | `tui.select.cancel`   | `escape`, `ctrl+c`      | Cancel selection    |
 
+Pressing the key bound to `tui.input.submit` three times in a row on an empty input, each press within one second of the previous one, sends every queued steering and follow-up message at the next turn boundary in the order they were entered. Nothing happens when no message is queued, and an Enter with text resets the count. This is a fixed gesture, not a named action.
+
 #### Fullscreen
 
 In fullscreen mode, these actions control the transcript and take precedence over editor actions using the same key.

@@ -155,36 +155,56 @@ export interface AgentOptions {
   toolExecution?: ToolExecutionMode;
 }
 
+type QueuedEntry = { readonly message: AgentMessage; readonly sequence: number };
+
 class PendingMessageQueue {
-  private messages: AgentMessage[] = [];
+  private entries: QueuedEntry[] = [];
+  private released = 0;
   public mode: QueueMode;
 
   constructor(mode: QueueMode) {
     this.mode = mode;
   }
 
-  enqueue(message: AgentMessage): void {
-    this.messages.push(message);
+  enqueue(message: AgentMessage, sequence: number): void {
+    this.entries.push({ message, sequence });
   }
 
   hasItems(): boolean {
-    return this.messages.length > 0;
+    return this.entries.length > 0;
   }
 
   peek(): AgentMessage[] {
-    if (this.mode === "all") return this.messages.slice();
-    const first = this.messages[0];
-    return first ? [first] : [];
+    return this.peekEntries().map((entry) => entry.message);
   }
 
   drain(): AgentMessage[] {
-    const drained = this.peek();
-    this.messages = this.messages.slice(drained.length);
-    return drained;
+    const drained = this.peekEntries();
+    this.entries = this.entries.slice(drained.length);
+    this.released = Math.max(0, this.released - drained.length);
+    return drained.map((entry) => entry.message);
+  }
+
+  releaseAll(): number {
+    this.released = this.entries.length;
+    return this.released;
+  }
+
+  takeAll(): QueuedEntry[] {
+    const taken = this.entries;
+    this.entries = [];
+    this.released = 0;
+    return taken;
   }
 
   clear(): void {
-    this.messages = [];
+    this.entries = [];
+    this.released = 0;
+  }
+
+  private peekEntries(): QueuedEntry[] {
+    const count = this.mode === "all" ? this.entries.length : Math.max(this.released, 1);
+    return this.entries.slice(0, count);
   }
 }
 
@@ -205,6 +225,7 @@ export class Agent {
   private readonly listeners = new Set<
     (event: AgentEvent, signal: AbortSignal) => Promise<void> | void
   >();
+  private queueSequence = 0;
   private readonly steeringQueue: PendingMessageQueue;
   private readonly followUpQueue: PendingMessageQueue;
 
@@ -328,12 +349,12 @@ export class Agent {
 
   /** Queue a message to be injected after the current assistant turn finishes. */
   steer(message: AgentMessage): void {
-    this.steeringQueue.enqueue(message);
+    this.steeringQueue.enqueue(message, this.queueSequence++);
   }
 
   /** Queue a message to run only after the agent would otherwise stop. */
   followUp(message: AgentMessage): void {
-    this.followUpQueue.enqueue(message);
+    this.followUpQueue.enqueue(message, this.queueSequence++);
   }
 
   /** Remove all queued steering messages. */
@@ -350,6 +371,16 @@ export class Agent {
   clearAllQueues(): void {
     this.clearSteeringQueue();
     this.clearFollowUpQueue();
+  }
+
+  flushQueuedMessages(): number {
+    const entries = [...this.steeringQueue.takeAll(), ...this.followUpQueue.takeAll()].sort(
+      (a, b) => a.sequence - b.sequence,
+    );
+    for (const entry of entries) {
+      this.steeringQueue.enqueue(entry.message, entry.sequence);
+    }
+    return this.steeringQueue.releaseAll();
   }
 
   /** Returns true when either queue still contains pending messages. */

@@ -221,6 +221,11 @@ import { TrustSelectorComponent } from "./components/trust-selector.ts";
 import { UserMessageSelectorComponent } from "./components/user-message-selector.ts";
 import { UserMessageComponent } from "./components/user-message.ts";
 import { EditorSlot } from "./editor-slot.ts";
+import {
+  EMPTY_ENTER_BURST_IDLE,
+  type EmptyEnterBurst,
+  registerEmptyEnter,
+} from "./empty-enter-burst.ts";
 import { ExtensionDialogs } from "./extension-dialogs.ts";
 import { ExtensionWidgets } from "./extension-widgets.ts";
 import { editInExternalEditor } from "./external-editor.ts";
@@ -410,6 +415,7 @@ export class InteractiveMode {
   private transcriptScrollView: TuiLayouts.ScrollView | undefined;
   private fullscreenLayoutRoot: Component | undefined;
   private pendingMessagesContainer: Container;
+  private emptyEnterBurst: EmptyEnterBurst = EMPTY_ENTER_BURST_IDLE;
   private statusContainer: Container;
   private defaultEditor: CustomEditor;
   private editor: ActiveEditor;
@@ -2575,7 +2581,11 @@ export class InteractiveMode {
   private setupEditorSubmitHandler(): void {
     this.defaultEditor.onSubmit = async (text: string) => {
       text = text.trim();
-      if (!text) return;
+      if (!text) {
+        this.handleEmptyEnter();
+        return;
+      }
+      this.emptyEnterBurst = EMPTY_ENTER_BURST_IDLE;
 
       // A skill takes its exact name from a built-in command; the command keeps its aliases.
       if (text.startsWith("/") && !this.isSkillCommand(text)) {
@@ -2636,6 +2646,15 @@ export class InteractiveMode {
       }
       this.editor.addToHistory?.(text);
     };
+  }
+
+  private handleEmptyEnter(): void {
+    const { burst, fire } = registerEmptyEnter(this.emptyEnterBurst, Date.now());
+    this.emptyEnterBurst = burst;
+    if (!fire) return;
+    const sent = this.session.flushQueue();
+    if (sent === 0) return;
+    this.showStatus(`Sent ${sent} queued message${sent > 1 ? "s" : ""}`);
   }
 
   private subscribeToAgent(): void {
