@@ -1,0 +1,117 @@
+import * as NodeServices from "@effect/platform-node/NodeServices";
+import { Cause, Clock, Effect, ManagedRuntime, Path, Predicate } from "effect";
+import { dual } from "effect/Function";
+
+import { ForeignError } from "./foreign-error.ts";
+import { ToolFailure } from "./tool-failure.ts";
+
+export { ForeignError } from "./foreign-error.ts";
+export { ToolFailure } from "./tool-failure.ts";
+
+export const platformRuntime = ManagedRuntime.make(NodeServices.layer);
+export interface PathOperations {
+  readonly join: (...segments: ReadonlyArray<string>) => string;
+  readonly resolve: (...segments: ReadonlyArray<string>) => string;
+  readonly dirname: (path: string) => string;
+  readonly basename: (path: string, suffix?: string) => string;
+  readonly extname: (path: string) => string;
+  readonly relative: (from: string, to: string) => string;
+  readonly isAbsolute: (path: string) => boolean;
+  readonly normalize: (path: string) => string;
+  readonly sep: string;
+}
+
+const servicePath = platformRuntime.runSync(Path.Path);
+
+export const pathOperations: PathOperations = {
+  join: (...segments) => servicePath.join(...segments),
+  resolve: (...segments) => servicePath.resolve(...segments),
+  dirname: (path) => servicePath.dirname(path),
+  basename: (path, suffix) => servicePath.basename(path, suffix),
+  extname: (path) => servicePath.extname(path),
+  relative: (from, to) => servicePath.relative(from, to),
+  isAbsolute: (path) => servicePath.isAbsolute(path),
+  normalize: (path) => servicePath.normalize(path),
+  sep: servicePath.sep,
+};
+
+export const currentTimeMillis = (): number => platformRuntime.runSync(Clock.currentTimeMillis);
+
+export const abortedBy =
+  (signal: AbortSignal | undefined) =>
+  <A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, E | ToolFailure, R> =>
+    signal === undefined
+      ? effect
+      : Effect.raceFirst(
+          effect,
+          Effect.callback<never, ToolFailure>((resume, abortSignal) => {
+            const fail = (): void =>
+              resume(Effect.fail(new ToolFailure({ message: "Operation aborted" })));
+            if (signal.aborted) fail();
+            else signal.addEventListener("abort", fail, { once: true, signal: abortSignal });
+          }),
+        );
+
+export const isMissingPath = (error: unknown): boolean => {
+  if (!Predicate.hasProperty(error, "reason")) return false;
+  const { reason } = error;
+  if (Predicate.isTagged(reason, "NotFound")) return true;
+  const cause = Predicate.hasProperty(reason, "cause") ? reason.cause : undefined;
+  return (
+    Predicate.hasProperty(cause, "code") && (cause.code === "ENOENT" || cause.code === "ENOTDIR")
+  );
+};
+
+export const rethrowCause = <A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, never, R> =>
+  effect.pipe(
+    Effect.catch((error) =>
+      Effect.die(
+        Predicate.hasProperty(error, "cause") && error.cause !== undefined ? error.cause : error,
+      ),
+    ),
+  );
+
+export const fromMaybePromise = <A>(evaluate: () => Promise<A> | A): Effect.Effect<A> =>
+  Effect.promise(() => Promise.resolve(evaluate()));
+
+export const nonEmptyOr: {
+  (fallback: string): (value: string | undefined) => string;
+  (value: string | undefined, fallback: string): string;
+} = dual(2, (value: string | undefined, fallback: string): string =>
+  value === undefined || value === "" ? fallback : value,
+);
+
+export const fromPromise = <A>(
+  evaluate: (signal: AbortSignal) => PromiseLike<A> | A,
+): Effect.Effect<A, ForeignError> =>
+  Effect.tryPromise({
+    try: (signal) => Promise.resolve(evaluate(signal)),
+    catch: (cause) =>
+      new ForeignError({ cause, message: cause instanceof Error ? cause.message : String(cause) }),
+  });
+
+export const unwrapForeign = <A, E, R>(
+  effect: Effect.Effect<A, E, R>,
+): Effect.Effect<A, Exclude<E, ForeignError>, R> =>
+  effect.pipe(
+    Effect.catch((error) =>
+      error instanceof ForeignError
+        ? Effect.die(error.cause)
+        : Effect.fail(error as Exclude<E, ForeignError>),
+    ),
+  );
+
+export const randomHex = (byteCount: number): string =>
+  Array.from(globalThis.crypto.getRandomValues(new Uint8Array(byteCount)), (byte) =>
+    byte.toString(16).padStart(2, "0"),
+  ).join("");
+
+export const errorFromCause = (cause: Cause.Cause<unknown>): unknown => {
+  const squashed = Cause.squash(cause);
+  return squashed instanceof ForeignError ? squashed.cause : squashed;
+};
+
+export const causeMessage = (cause: Cause.Cause<unknown>): string => {
+  const error = errorFromCause(cause);
+  return error instanceof Error ? error.message : String(error);
+};

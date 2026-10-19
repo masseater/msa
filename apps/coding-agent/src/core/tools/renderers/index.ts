@@ -1,13 +1,6 @@
-/**
- * Built-in tool renderers, without the tools themselves.
- *
- * A presentation displays tool calls and results; it does not execute them and does not need their
- * typebox parameter schemas. Importing this instead of `core/tools/index.ts` keeps ~17 MB of module
- * graph out of a process that only renders.
- */
+import { Function as Fn } from "effect";
 
 import type { ToolRenderers } from "../../extensions/types.ts";
-import type { ToolName } from "../index.ts";
 import { createShellRenderers } from "./bash.ts";
 import { editRenderers } from "./edit.ts";
 import { findRenderers } from "./find.ts";
@@ -19,7 +12,17 @@ import { writeRenderers } from "./write.ts";
 
 export type { ToolRenderers };
 
-type RenderedToolName = ToolName | "web_search" | "web_fetch";
+type RenderedToolName =
+  | "read"
+  | "bash"
+  | "powershell"
+  | "edit"
+  | "write"
+  | "grep"
+  | "find"
+  | "ls"
+  | "web_search"
+  | "web_fetch";
 
 export {
   createShellRenderers,
@@ -33,7 +36,6 @@ export {
   writeRenderers,
 };
 
-/** Renderers for every built-in tool, keyed by tool name. */
 export function createAllToolRenderers(): Record<RenderedToolName, ToolRenderers> {
   return {
     read: readRenderers,
@@ -49,22 +51,28 @@ export function createAllToolRenderers(): Record<RenderedToolName, ToolRenderers
   };
 }
 
-/**
- * Merge built-in renderers into a tool definition that does not supply its own.
- *
- * `ToolExecutionComponent` used to do this lookup itself, which forced every presentation to import
- * the tool implementations. Callers do it now, so a process that renders can import renderers alone.
- */
-export function withBuiltInRenderers<TDefinition extends ToolRenderers>(
+type WithBuiltIn = <TDefinition extends ToolRenderers>(
   toolName: string,
   definition: TDefinition | undefined,
-): TDefinition | ToolRenderers | undefined {
+) => TDefinition | ToolRenderers | undefined;
+
+const withBuiltInRenderersImpl: WithBuiltIn = (toolName, definition) => {
   const builtIn = createAllToolRenderers()[toolName as RenderedToolName];
-  if (!definition) return builtIn;
-  if (!builtIn) return definition;
+  if (definition === undefined) return builtIn;
+  if (builtIn === undefined) return definition;
   return {
     ...definition,
     renderCall: definition.renderCall ?? builtIn.renderCall,
     renderResult: definition.renderResult ?? builtIn.renderResult,
   };
-}
+};
+
+export const withBuiltInRenderers: {
+  <TDefinition extends ToolRenderers>(
+    definition: TDefinition | undefined,
+  ): (toolName: string) => TDefinition | ToolRenderers | undefined;
+  <TDefinition extends ToolRenderers>(
+    toolName: string,
+    definition: TDefinition | undefined,
+  ): TDefinition | ToolRenderers | undefined;
+} = Fn.dual(2, withBuiltInRenderersImpl);

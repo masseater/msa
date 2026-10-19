@@ -1,14 +1,20 @@
-import { mkdir as fsMkdir, writeFile as fsWriteFile } from "fs/promises";
-import { dirname } from "path";
-
 import type { AgentTool } from "@msa/agent-core";
+import { Effect, FileSystem } from "effect";
 import { type Static, Type } from "typebox";
 
 import type { ExtensionContext, ToolDefinition } from "../extensions/types.ts";
+import {
+  fromMaybePromise,
+  nonEmptyOr,
+  pathOperations,
+  platformRuntime,
+  rethrowCause,
+  ToolFailure,
+} from "../platform/index.ts";
 import { withFileMutationQueue } from "./file-mutation-queue.ts";
 import { resolveToCwd } from "./path-utils.ts";
 import { writeRenderers } from "./renderers/write.ts";
-import { wrapToolDefinition } from "./tool-definition-wrapper.ts";
+import { type CwdFactory, cwdFactory, wrapToolDefinition } from "./tool-definition-wrapper.ts";
 
 const writeSchema = Type.Object({
   path: Type.String({ description: "Path to the file to write (relative or absolute)" }),
@@ -22,31 +28,56 @@ export const writeToolSystemPromptContribution = {
 
 export type WriteToolInput = Static<typeof writeSchema>;
 
-/**
- * Pluggable operations for the write tool.
- * Override these to delegate file writing to remote systems (for example SSH).
- */
 export interface WriteOperations {
-  /** Write content to a file */
   writeFile: (absolutePath: string, content: string) => Promise<void>;
-  /** Create directory recursively */
   mkdir: (dir: string) => Promise<void>;
 }
 
 const defaultWriteOperations: WriteOperations = {
-  writeFile: (path, content) => fsWriteFile(path, content, "utf-8"),
-  mkdir: (dir) => fsMkdir(dir, { recursive: true }).then(() => {}),
+  writeFile: (path, content) =>
+    platformRuntime.runPromise(
+      rethrowCause(FileSystem.FileSystem.use((fs) => fs.writeFileString(path, content))),
+    ),
+  mkdir: (dir) =>
+    platformRuntime.runPromise(
+      rethrowCause(FileSystem.FileSystem.use((fs) => fs.makeDirectory(dir, { recursive: true }))),
+    ),
 };
 
 export interface WriteToolOptions {
-  /** Custom operations for file writing. Default: local filesystem */
   operations?: WriteOperations;
 }
 
-export function createWriteToolDefinition(
+const writeUnderQueue = (
+  ops: WriteOperations,
+  dir: string,
+  absolutePath: string,
+  content: string,
+  path: string,
+  signal: AbortSignal | undefined,
+) => {
+  const throwIfAborted = Effect.suspend(() =>
+    signal?.aborted === true
+      ? Effect.fail(new ToolFailure({ message: "Operation aborted" }))
+      : Effect.void,
+  );
+  return Effect.gen(function* () {
+    yield* throwIfAborted;
+    yield* fromMaybePromise(() => ops.mkdir(dir));
+    yield* throwIfAborted;
+    yield* fromMaybePromise(() => ops.writeFile(absolutePath, content));
+    yield* throwIfAborted;
+    return {
+      content: [{ type: "text" as const, text: `Successfully wrote to ${path}` }],
+      details: undefined,
+    };
+  });
+};
+
+const createWriteToolDefinitionImpl = (
   cwd: string,
   options?: WriteToolOptions,
-): ToolDefinition<typeof writeSchema, undefined> {
+): ToolDefinition<typeof writeSchema, undefined> => {
   const ops = options?.operations ?? defaultWriteOperations;
   return {
     name: "write",
@@ -57,46 +88,29 @@ export function createWriteToolDefinition(
     promptGuidelines: [...writeToolSystemPromptContribution.guidelines],
     parameters: writeSchema,
     constrainedSampling: { type: "json_schema", strict: "prefer" },
-    async execute(
+    execute: (
       _toolCallId,
       { path, content }: { path: string; content: string },
       signal?: AbortSignal,
       _onUpdate?,
       ctx?: ExtensionContext,
-    ) {
-      const absolutePath = resolveToCwd(path, ctx?.cwd || cwd);
-      const dir = dirname(absolutePath);
-      return withFileMutationQueue(absolutePath, async () => {
-        // Do not reject from an abort event listener here: that would release the
-        // mutation queue while an in-flight filesystem operation may still finish.
-        // Checking signal.aborted after each await observes the same aborts while
-        // keeping the queue locked until the current operation has settled.
-        const throwIfAborted = (): void => {
-          if (signal?.aborted) throw new Error("Operation aborted");
-        };
-
-        throwIfAborted();
-        // Create parent directories if needed.
-        await ops.mkdir(dir);
-        throwIfAborted();
-
-        // Write the file contents.
-        await ops.writeFile(absolutePath, content);
-        throwIfAborted();
-
-        return {
-          content: [{ type: "text", text: `Successfully wrote to ${path}` }],
-          details: undefined,
-        };
-      });
+    ) => {
+      const absolutePath = resolveToCwd(path, nonEmptyOr(ctx?.cwd, cwd));
+      const dir = pathOperations.dirname(absolutePath);
+      return withFileMutationQueue(absolutePath, () =>
+        platformRuntime.runPromise(writeUnderQueue(ops, dir, absolutePath, content, path, signal)),
+      );
     },
     ...writeRenderers,
   };
-}
+};
 
-export function createWriteTool(
-  cwd: string,
-  options?: WriteToolOptions,
-): AgentTool<typeof writeSchema> {
-  return wrapToolDefinition(createWriteToolDefinition(cwd, options));
-}
+export const createWriteToolDefinition: CwdFactory<
+  WriteToolOptions,
+  ToolDefinition<typeof writeSchema, undefined>
+> = cwdFactory(createWriteToolDefinitionImpl);
+
+export const createWriteTool: CwdFactory<
+  WriteToolOptions,
+  AgentTool<typeof writeSchema>
+> = cwdFactory((cwd, options) => wrapToolDefinition(createWriteToolDefinitionImpl(cwd, options)));

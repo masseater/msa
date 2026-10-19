@@ -1,11 +1,3 @@
-/**
- * Presentation for the find tool.
- *
- * Renderers live apart from the implementation so a process that only displays tool output does not
- * load the execution path or its typebox parameter schema. `find.ts` spreads these into its
- * definition, so the tool's public shape is unchanged.
- */
-
 import { Text } from "@msa/tui";
 
 import type { Theme } from "../../../modes/interactive/theme/theme.ts";
@@ -21,7 +13,7 @@ function formatFindCall(
 ): string {
   const pattern = str(args?.pattern);
   const rawPath = str(args?.path);
-  const path = rawPath !== null ? shortenPath(rawPath || ".") : null;
+  const path = rawPath === null ? null : shortenPath(rawPath || ".");
   const limit = args?.limit;
   const invalidArg = invalidArgText(theme);
   let text =
@@ -46,11 +38,11 @@ function formatFindResult(
   const resultLimit = result.details?.resultLimitReached;
   const truncation = result.details?.truncation;
   const warnings: string[] = [];
-  if (resultLimit) warnings.push(`${resultLimit} results limit`);
-  if (truncation?.truncated)
+  if (resultLimit !== undefined && resultLimit !== 0) warnings.push(`${resultLimit} results limit`);
+  if (truncation?.truncated === true)
     warnings.push(`${formatSize(truncation.maxBytes ?? DEFAULT_MAX_BYTES)} limit`);
   const output = getTextOutput(result, showImages).trim();
-  return formatListResult(output, warnings, options.expanded, "files", theme);
+  return formatListResult({ output, warnings, expanded: options.expanded, noun: "files", theme });
 }
 
 export const findRenderers: Pick<ToolDefinition<any, any>, "renderCall" | "renderResult"> = {

@@ -1,7 +1,4 @@
-/**
- * The `memory` tool: the model's way to save, search, list, and forget long-term memories.
- */
-
+import { Effect } from "effect";
 import { type Static, Type } from "typebox";
 
 import { readOnlyVariantOf } from "../ask.ts";
@@ -12,7 +9,14 @@ import {
   isMemoryKind,
   type MemoryService,
 } from "../memory/memory.ts";
-import { MEMORY_KINDS, type MemoryKind, type MemoryScope } from "../memory/store.ts";
+import { MEMORY_KINDS } from "../memory/store.ts";
+import {
+  type ForeignError,
+  fromPromise,
+  platformRuntime,
+  ToolFailure,
+  unwrapForeign,
+} from "../platform/index.ts";
 
 const memorySchema = Type.Object({
   action: Type.Union(
@@ -62,6 +66,132 @@ export const memoryToolSystemPromptContribution = {
   ],
 } as const;
 
+type MemoryParams = Static<typeof memorySchema>;
+
+interface MemoryToolResult {
+  content: Array<{ type: "text"; text: string }>;
+  details: Record<string, unknown>;
+}
+
+const textResult = (text: string, details: Record<string, unknown>): MemoryToolResult => ({
+  content: [{ type: "text", text }],
+  details,
+});
+
+const requireText = Effect.fn("requireText")(function* (
+  value: string | undefined,
+  action: string,
+  field: string,
+) {
+  const trimmed = value?.trim();
+  if (trimmed === undefined || trimmed === "") {
+    return yield* new ToolFailure({ message: `action ${action} requires ${field}` });
+  }
+  return trimmed;
+});
+
+const parseKind = Effect.fn("parseKind")(function* (raw: string | undefined) {
+  const rawKind = raw?.trim();
+  if (rawKind === undefined || rawKind === "") return undefined;
+  if (!isMemoryKind(rawKind)) {
+    return yield* new ToolFailure({
+      message: `Unknown memory kind "${rawKind}"; use one of ${MEMORY_KINDS.join(", ")}`,
+    });
+  }
+  return rawKind;
+});
+
+const parseScope = Effect.fn("parseScope")(function* (raw: string | undefined) {
+  const rawScope = raw?.trim();
+  if (rawScope === undefined || rawScope === "") return undefined;
+  if (rawScope !== "project" && rawScope !== "global") {
+    return yield* new ToolFailure({
+      message: `Unknown memory scope "${rawScope}"; use project or global`,
+    });
+  }
+  return rawScope;
+});
+
+const saveMemory = Effect.fn("memorySave")(function* (
+  service: MemoryService,
+  params: MemoryParams,
+) {
+  const content = yield* requireText(params.content, "save", "content");
+  const kind = yield* parseKind(params.kind);
+  const scope = yield* parseScope(params.scope);
+  const outcome = yield* fromPromise(() =>
+    service.save({
+      content,
+      ...(kind === undefined ? {} : { kind }),
+      ...(scope === undefined ? {} : { scope }),
+    }),
+  );
+  const { record } = outcome;
+  const where = record.scope === "global" ? "global" : `project:${record.project}`;
+  const lines = [
+    outcome.created
+      ? `Saved memory ${record.id} (${record.kind}, ${where}).`
+      : `Updated memory ${record.id} (${record.kind}).`,
+  ];
+  if (!outcome.embedded) {
+    const reason =
+      outcome.embeddingError !== undefined && outcome.embeddingError !== ""
+        ? `: ${outcome.embeddingError}`
+        : "";
+    lines.push(`Saved without an embedding${reason}; it stays searchable by keyword.`);
+  }
+  return textResult(lines.join("\n"), {
+    action: "save",
+    id: record.id,
+    created: outcome.created,
+    embedded: outcome.embedded,
+  });
+});
+
+const searchMemory = Effect.fn("memorySearch")(function* (
+  service: MemoryService,
+  params: MemoryParams,
+) {
+  const query = yield* requireText(params.query, "search", "query");
+  const scores = yield* fromPromise(() => service.search(query, params.limit ?? 5));
+  return textResult(formatSearchResults(scores), { action: "search", query, count: scores.length });
+});
+
+const forgetMemory = Effect.fn("memoryForget")(function* (
+  service: MemoryService,
+  params: MemoryParams,
+) {
+  const id = yield* requireText(params.id, "forget", "id");
+  const forgotten = service.forget(id);
+  return textResult(forgotten ? `Forgot memory ${id}.` : `No memory with id ${id}.`, {
+    action: "forget",
+    id,
+    forgotten,
+  });
+});
+
+const listMemory = (service: MemoryService, params: MemoryParams) =>
+  Effect.sync(() => {
+    const records = service.list(params.limit ?? 20);
+    return textResult(formatMemoryList(records), { action: "list", count: records.length });
+  });
+
+const runMemoryAction = (
+  service: MemoryService,
+  params: MemoryParams,
+): Effect.Effect<MemoryToolResult, ForeignError | ToolFailure> => {
+  switch (params.action) {
+    case "save":
+      return saveMemory(service, params);
+    case "search":
+      return searchMemory(service, params);
+    case "list":
+      return listMemory(service, params);
+    case "forget":
+      return forgetMemory(service, params);
+  }
+};
+
 export function createMemoryToolDefinition(
   service: MemoryService,
 ): ToolDefinition<typeof memorySchema, Record<string, unknown> | undefined> {
@@ -73,86 +203,8 @@ export function createMemoryToolDefinition(
     promptSnippet: memoryToolSystemPromptContribution.snippet,
     promptGuidelines: [...memoryToolSystemPromptContribution.guidelines],
     parameters: memorySchema,
-    async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
-      switch (params.action) {
-        case "save": {
-          const content = params.content?.trim();
-          if (!content) throw new Error("action save requires content");
-          let kind: MemoryKind | undefined;
-          const rawKind = params.kind?.trim();
-          if (rawKind) {
-            if (!isMemoryKind(rawKind)) {
-              throw new Error(
-                `Unknown memory kind "${rawKind}"; use one of ${MEMORY_KINDS.join(", ")}`,
-              );
-            }
-            kind = rawKind;
-          }
-          let scope: MemoryScope | undefined;
-          const rawScope = params.scope?.trim();
-          if (rawScope) {
-            if (rawScope !== "project" && rawScope !== "global") {
-              throw new Error(`Unknown memory scope "${rawScope}"; use project or global`);
-            }
-            scope = rawScope;
-          }
-          const outcome = await service.save({
-            content,
-            ...(kind ? { kind } : {}),
-            ...(scope ? { scope } : {}),
-          });
-          const lines = [
-            outcome.created
-              ? `Saved memory ${outcome.record.id} (${outcome.record.kind}, ${outcome.record.scope === "global" ? "global" : `project:${outcome.record.project}`}).`
-              : `Updated memory ${outcome.record.id} (${outcome.record.kind}).`,
-          ];
-          if (!outcome.embedded) {
-            lines.push(
-              `Saved without an embedding${outcome.embeddingError ? `: ${outcome.embeddingError}` : ""}; it stays searchable by keyword.`,
-            );
-          }
-          return {
-            content: [{ type: "text", text: lines.join("\n") }],
-            details: {
-              action: "save",
-              id: outcome.record.id,
-              created: outcome.created,
-              embedded: outcome.embedded,
-            },
-          };
-        }
-        case "search": {
-          const query = params.query?.trim();
-          if (!query) throw new Error("action search requires query");
-          const scores = await service.search(query, params.limit ?? 5);
-          return {
-            content: [{ type: "text", text: formatSearchResults(scores) }],
-            details: { action: "search", query, count: scores.length },
-          };
-        }
-        case "list": {
-          const records = service.list(params.limit ?? 20);
-          return {
-            content: [{ type: "text", text: formatMemoryList(records) }],
-            details: { action: "list", count: records.length },
-          };
-        }
-        case "forget": {
-          const id = params.id?.trim();
-          if (!id) throw new Error("action forget requires id");
-          const forgotten = service.forget(id);
-          return {
-            content: [
-              {
-                type: "text",
-                text: forgotten ? `Forgot memory ${id}.` : `No memory with id ${id}.`,
-              },
-            ],
-            details: { action: "forget", id, forgotten },
-          };
-        }
-      }
-    },
+    execute: (_toolCallId, params) =>
+      platformRuntime.runPromise(unwrapForeign(runMemoryAction(service, params))),
   };
   return {
     ...memory,

@@ -1,54 +1,88 @@
 import type { AgentTool } from "@msa/agent-core";
+import { dual } from "effect/Function";
 
 import type { ExtensionToolContext, ToolDefinition } from "../extensions/types.ts";
 
-/** Creates the context for one tool call. */
 export type ToolContextFactory = (
   toolCallId: string,
   signal: AbortSignal | undefined,
 ) => ExtensionToolContext;
 
-/** Wrap a ToolDefinition into an AgentTool for the core runtime. */
-export function wrapToolDefinition<TDetails = unknown>(
+const wrapToolDefinitionImpl = <TDetails = unknown>(
   definition: ToolDefinition<any, TDetails>,
   ctxFactory?: ToolContextFactory,
-): AgentTool<any, TDetails> {
-  return {
-    name: definition.name,
-    label: definition.label,
-    description: definition.description,
-    parameters: definition.parameters,
-    ...(definition.outputSchema ? { outputSchema: definition.outputSchema } : {}),
-    ...(definition.constrainedSampling !== undefined
-      ? { constrainedSampling: definition.constrainedSampling }
-      : {}),
-    ...(definition.prepareArguments ? { prepareArguments: definition.prepareArguments } : {}),
-    ...(definition.executionMode ? { executionMode: definition.executionMode } : {}),
-    execute: (toolCallId, params, signal, onUpdate, ctx?: ExtensionToolContext) =>
-      definition.execute(
-        toolCallId,
-        params,
-        signal,
-        onUpdate,
-        ctx ?? (ctxFactory?.(toolCallId, signal) as ExtensionToolContext),
-      ),
-  };
+): AgentTool<any, TDetails> => ({
+  name: definition.name,
+  label: definition.label,
+  description: definition.description,
+  parameters: definition.parameters,
+  ...(definition.outputSchema === undefined ? {} : { outputSchema: definition.outputSchema }),
+  ...(definition.constrainedSampling === undefined
+    ? {}
+    : { constrainedSampling: definition.constrainedSampling }),
+  ...(definition.prepareArguments === undefined
+    ? {}
+    : { prepareArguments: definition.prepareArguments }),
+  ...(definition.executionMode === undefined ? {} : { executionMode: definition.executionMode }),
+  execute: (toolCallId, params, signal, onUpdate, ctx?: ExtensionToolContext) =>
+    definition.execute(
+      toolCallId,
+      params,
+      signal,
+      onUpdate,
+      ctx ?? (ctxFactory?.(toolCallId, signal) as ExtensionToolContext),
+    ),
+});
+
+export interface CwdFactory<TOptions, TResult> {
+  (options?: TOptions): (cwd: string) => TResult;
+  (cwd: string, options?: TOptions): TResult;
 }
 
-/** Wrap multiple ToolDefinitions into AgentTools for the core runtime. */
-export function wrapToolDefinitions(
-  definitions: ToolDefinition<any, any>[],
-  ctxFactory?: ToolContextFactory,
-): AgentTool<any>[] {
-  return definitions.map((definition) => wrapToolDefinition(definition, ctxFactory));
+export const cwdFactory = <TOptions, TResult>(
+  make: (cwd: string, options?: TOptions) => TResult,
+): CwdFactory<TOptions, TResult> => dual((args) => typeof args[0] === "string", make);
+
+export interface ConfiguredFactory<TConfig, TOptions, TResult> {
+  (config: TConfig, options?: TOptions): (cwd: string) => TResult;
+  (cwd: string, config: TConfig, options?: TOptions): TResult;
 }
 
-/**
- * Synthesize a minimal ToolDefinition from an AgentTool.
- *
- * This keeps AgentSession's internal registry definition-first even when a caller
- * provides plain AgentTool overrides that do not include prompt metadata or renderers.
- */
+export const configuredFactory = <TConfig, TOptions, TResult>(
+  make: (cwd: string, config: TConfig, options?: TOptions) => TResult,
+): ConfiguredFactory<TConfig, TOptions, TResult> =>
+  dual((args) => typeof args[0] === "string", make);
+
+export interface NamedFactory<TName extends string, TOptions, TResult> {
+  (cwd: string, options?: TOptions): (name: TName) => TResult;
+  (name: TName, cwd: string, options?: TOptions): TResult;
+}
+
+export const namedFactory = <TName extends string, TOptions, TResult>(
+  make: (name: TName, cwd: string, options?: TOptions) => TResult,
+): NamedFactory<TName, TOptions, TResult> => dual((args) => typeof args[1] === "string", make);
+
+const isDefinitionFirst = (args: IArguments): boolean => typeof args[0] !== "function";
+
+export const wrapToolDefinition: {
+  <TDetails = unknown>(
+    ctxFactory?: ToolContextFactory,
+  ): (definition: ToolDefinition<any, TDetails>) => AgentTool<any, TDetails>;
+  <TDetails = unknown>(
+    definition: ToolDefinition<any, TDetails>,
+    ctxFactory?: ToolContextFactory,
+  ): AgentTool<any, TDetails>;
+} = dual(isDefinitionFirst, wrapToolDefinitionImpl);
+
+export const wrapToolDefinitions: {
+  (ctxFactory?: ToolContextFactory): (definitions: ToolDefinition<any, any>[]) => AgentTool<any>[];
+  (definitions: ToolDefinition<any, any>[], ctxFactory?: ToolContextFactory): AgentTool<any>[];
+} = dual(
+  (args) => Array.isArray(args[0]),
+  (definitions: ToolDefinition<any, any>[], ctxFactory?: ToolContextFactory): AgentTool<any>[] =>
+    definitions.map((definition) => wrapToolDefinitionImpl(definition, ctxFactory)),
+);
+
 export function createToolDefinitionFromAgentTool(
   tool: AgentTool<any>,
 ): ToolDefinition<any, unknown> {
@@ -61,7 +95,7 @@ export function createToolDefinitionFromAgentTool(
     constrainedSampling: tool.constrainedSampling,
     prepareArguments: tool.prepareArguments,
     executionMode: tool.executionMode,
-    execute: async (toolCallId, params, signal, onUpdate) =>
+    execute: (toolCallId, params, signal, onUpdate) =>
       tool.execute(toolCallId, params, signal, onUpdate),
   };
 }

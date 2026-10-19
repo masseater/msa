@@ -1,11 +1,3 @@
-/**
- * Presentation for the ls tool.
- *
- * Renderers live apart from the implementation so a process that only displays tool output does not
- * load the execution path or its typebox parameter schema. `ls.ts` spreads these into its
- * definition, so the tool's public shape is unchanged.
- */
-
 import { Text } from "@msa/tui";
 
 import type { Theme } from "../../../modes/interactive/theme/theme.ts";
@@ -40,11 +32,11 @@ function formatLsResult(
   const entryLimit = result.details?.entryLimitReached;
   const truncation = result.details?.truncation;
   const warnings: string[] = [];
-  if (entryLimit) warnings.push(`${entryLimit} entries limit`);
-  if (truncation?.truncated)
+  if (entryLimit !== undefined && entryLimit !== 0) warnings.push(`${entryLimit} entries limit`);
+  if (truncation?.truncated === true)
     warnings.push(`${formatSize(truncation.maxBytes ?? DEFAULT_MAX_BYTES)} limit`);
   const output = getTextOutput(result, showImages).trim();
-  return formatListResult(output, warnings, options.expanded, "entries", theme);
+  return formatListResult({ output, warnings, expanded: options.expanded, noun: "entries", theme });
 }
 
 export const lsRenderers: Pick<ToolDefinition<any, any>, "renderCall" | "renderResult"> = {

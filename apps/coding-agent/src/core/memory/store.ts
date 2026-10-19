@@ -1,180 +1,37 @@
-/**
- * SQLite-backed storage for long-term memories.
- *
- * One database file holds every memory. Search runs two retrievers and fuses their rankings with
- * Reciprocal Rank Fusion: cosine similarity over stored embeddings, and an FTS5 full-text index
- * ranked by bm25. Text is split into words with `Intl.Segmenter` before it reaches FTS5, because
- * FTS5's own tokenizers do not split Japanese into words and node:sqlite cannot register a custom
- * tokenizer.
- */
-
-import { randomBytes } from "node:crypto";
-import { mkdirSync } from "node:fs";
-import { dirname } from "node:path";
 import { DatabaseSync, type StatementSync } from "node:sqlite";
 
-export type MemoryKind = "fact" | "preference" | "decision" | "note";
-export type MemoryScope = "project" | "global";
+import { currentTimeMillis, randomHex } from "../platform/index.ts";
+import { type MemoryRow, toRecord } from "./store-row.ts";
+import {
+  type MemoryRecord,
+  type MemorySaveInput,
+  type MemorySaveResult,
+  type MemoryScore,
+  type MemoryStoreSearchOptions,
+  type MemoryStoreStats,
+} from "./store-types.ts";
+import {
+  cosineSimilarity,
+  encodeVector,
+  phrase,
+  reciprocalRankFusion,
+  segmentWords,
+} from "./store-vectors.ts";
 
-export const MEMORY_KINDS: readonly MemoryKind[] = ["fact", "preference", "decision", "note"];
+export {
+  MEMORY_KINDS,
+  type MemoryKind,
+  type MemoryRecord,
+  type MemorySaveInput,
+  type MemorySaveResult,
+  type MemoryScope,
+  type MemoryScore,
+  type MemoryStoreSearchOptions,
+  type MemoryStoreStats,
+  RRF_K,
+} from "./store-types.ts";
+export { cosineSimilarity, reciprocalRankFusion, segmentWords } from "./store-vectors.ts";
 
-export interface MemoryRecord {
-  id: string;
-  content: string;
-  kind: MemoryKind;
-  scope: MemoryScope;
-  /** Project name when `scope` is `project`, otherwise null. */
-  project: string | null;
-  createdAt: number;
-  updatedAt: number;
-  useCount: number;
-  lastUsedAt: number | null;
-  embedding: Float32Array | null;
-  embeddingModel: string | null;
-}
-
-export interface MemoryStoreSearchOptions {
-  /** Query text for the full-text retriever. */
-  text: string;
-  /** Query embedding for the vector retriever, when an embedding provider answered. */
-  embedding?: Float32Array;
-  /** Project scope to search next to global memories. */
-  project?: string;
-  limit: number;
-  /**
-   * Floor each retriever applies before fusion: the cosine similarity for the vector retriever,
-   * and the share of query words found for the full-text retriever.
-   */
-  minScore: number;
-}
-
-export interface MemoryScore {
-  record: MemoryRecord;
-  /** Reciprocal Rank Fusion score over the retrievers that returned this memory. */
-  score: number;
-  /** Share of the query words found in the memory, between 0 and 1. */
-  keyword: number;
-  /** Cosine similarity, when both the query and the memory carry an embedding. */
-  vector: number | undefined;
-}
-
-export interface MemorySaveInput {
-  content: string;
-  kind: MemoryKind;
-  scope: MemoryScope;
-  project: string | null;
-  embedding?: Float32Array;
-  embeddingModel?: string;
-  now?: number;
-}
-
-export interface MemorySaveResult {
-  record: MemoryRecord;
-  /** False when an identical memory in the same scope was refreshed instead. */
-  created: boolean;
-}
-
-export interface MemoryStoreStats {
-  total: number;
-  embedded: number;
-  projects: number;
-  byKind: Record<string, number>;
-}
-
-/** The rank constant of Reciprocal Rank Fusion (Cormack, Clarke and Büttcher, SIGIR 2009). */
-export const RRF_K = 60;
-
-const segmenter = new Intl.Segmenter("ja", { granularity: "word" });
-
-/** The words of `text` as `Intl.Segmenter` splits them, lowercased, without spaces or punctuation. */
-export function segmentWords(text: string): string[] {
-  const words: string[] = [];
-  for (const segment of segmenter.segment(text.toLowerCase())) {
-    if (segment.isWordLike) words.push(segment.segment);
-  }
-  return words;
-}
-
-/** An FTS5 query that matches `word` as one phrase, whatever characters it holds. */
-function phrase(word: string): string {
-  return `"${word.replaceAll('"', '""')}"`;
-}
-
-/** Cosine similarity, 0 when either vector is empty or the lengths differ. */
-export function cosineSimilarity(a: Float32Array, b: Float32Array): number {
-  if (a.length === 0 || a.length !== b.length) return 0;
-  let dot = 0;
-  let normA = 0;
-  let normB = 0;
-  for (let index = 0; index < a.length; index++) {
-    const left = a[index]!;
-    const right = b[index]!;
-    dot += left * right;
-    normA += left * left;
-    normB += right * right;
-  }
-  if (normA === 0 || normB === 0) return 0;
-  return dot / (Math.sqrt(normA) * Math.sqrt(normB));
-}
-
-/**
- * Fuse rankings with Reciprocal Rank Fusion: every list adds `1 / (k + rank)` to each id it holds,
- * with ranks counted from 1.
- */
-export function reciprocalRankFusion(
-  rankings: readonly (readonly string[])[],
-  k = RRF_K,
-): Map<string, number> {
-  const fused = new Map<string, number>();
-  for (const ranking of rankings) {
-    ranking.forEach((id, index) => {
-      fused.set(id, (fused.get(id) ?? 0) + 1 / (k + index + 1));
-    });
-  }
-  return fused;
-}
-
-function encodeVector(vector: Float32Array): Uint8Array {
-  return new Uint8Array(vector.buffer.slice(0), vector.byteOffset, vector.byteLength);
-}
-
-function decodeVector(bytes: Uint8Array): Float32Array {
-  // node:sqlite returns a view that may not be 4-byte aligned; copy before reading floats.
-  const copy = bytes.slice();
-  return new Float32Array(copy.buffer, 0, Math.floor(copy.byteLength / 4));
-}
-
-interface MemoryRow {
-  id: string;
-  content: string;
-  kind: string;
-  scope: string;
-  project: string | null;
-  created_at: number;
-  updated_at: number;
-  use_count: number;
-  last_used_at: number | null;
-  embedding: Uint8Array | null;
-  embedding_model: string | null;
-}
-
-function toRecord(row: MemoryRow): MemoryRecord {
-  return {
-    id: row.id,
-    content: row.content,
-    kind: row.kind as MemoryKind,
-    scope: row.scope as MemoryScope,
-    project: row.project,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-    useCount: row.use_count,
-    lastUsedAt: row.last_used_at,
-    embedding: row.embedding ? decodeVector(row.embedding) : null,
-    embeddingModel: row.embedding_model,
-  };
-}
-
-/** Long-term memory rows in one SQLite file. */
 export class MemoryStore {
   readonly databasePath: string;
   private readonly database: DatabaseSync;
@@ -183,7 +40,6 @@ export class MemoryStore {
 
   constructor(databasePath: string) {
     this.databasePath = databasePath;
-    if (databasePath !== ":memory:") mkdirSync(dirname(databasePath), { recursive: true });
     this.database = new DatabaseSync(databasePath, { timeout: 5_000 });
     this.database.exec("PRAGMA journal_mode = WAL");
     this.database.exec("PRAGMA synchronous = NORMAL");
@@ -208,8 +64,7 @@ export class MemoryStore {
       const indexed = this.database
         .prepare(`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'memories_fts'`)
         .get();
-      if (indexed) return;
-      // `terms` holds the content split into words by Intl.Segmenter, one space between words.
+      if (indexed !== undefined) return;
       this.database.exec(`CREATE VIRTUAL TABLE memories_fts USING fts5(id UNINDEXED, terms)`);
       const rows = this.database.prepare(`SELECT id, content FROM memories`).all() as unknown as {
         id: string;
@@ -221,7 +76,7 @@ export class MemoryStore {
 
   private statement(sql: string): StatementSync {
     let statement = this.statements.get(sql);
-    if (!statement) {
+    if (statement === undefined) {
       statement = this.database.prepare(sql);
       this.statements.set(sql, statement);
     }
@@ -247,14 +102,12 @@ export class MemoryStore {
     );
   }
 
-  /** Rows of the scopes a search may see: global memories and those of `project`. */
   private scoped(project: string | undefined): MemoryRow[] {
     return this.statement(
       `SELECT * FROM memories WHERE scope = 'global' OR (scope = 'project' AND project = ?)`,
     ).all(project ?? null) as unknown as MemoryRow[];
   }
 
-  /** Ids whose full-text index matches the FTS5 `query`, best bm25 first. */
   private matching(query: string): string[] {
     return (
       this.statement(
@@ -263,19 +116,15 @@ export class MemoryStore {
     ).map((row) => row.id);
   }
 
-  /**
-   * Save a memory. An identical content in the same scope refreshes the existing row instead of
-   * creating a duplicate, and the refreshed row keeps its creation time and use count.
-   */
   save(input: MemorySaveInput): MemorySaveResult {
-    const now = input.now ?? Date.now();
+    const now = input.now ?? currentTimeMillis();
     const content = input.content.trim();
     const project = input.scope === "project" ? input.project : null;
     const existing = this.statement(
       `SELECT * FROM memories WHERE content = ? AND scope = ? AND project IS ?`,
     ).get(content, input.scope, project) as unknown as MemoryRow | undefined;
-    const embedding = input.embedding ? encodeVector(input.embedding) : null;
-    if (existing) {
+    const embedding = input.embedding === undefined ? null : encodeVector(input.embedding);
+    if (existing !== undefined) {
       this.statement(
         `UPDATE memories SET updated_at = ?, embedding = COALESCE(?, embedding),
            embedding_model = COALESCE(?, embedding_model) WHERE id = ?`,
@@ -285,7 +134,7 @@ export class MemoryStore {
       ) as unknown as MemoryRow;
       return { record: toRecord(refreshed), created: false };
     }
-    const id = `mem_${now.toString(36)}_${randomBytes(4).toString("hex")}`;
+    const id = `mem_${now.toString(36)}_${randomHex(4)}`;
     this.transaction(() => {
       this.statement(
         `INSERT INTO memories
@@ -311,20 +160,14 @@ export class MemoryStore {
     return { record: toRecord(row), created: true };
   }
 
-  /**
-   * Memories of the visible scopes, best first. The vector retriever keeps memories whose cosine
-   * similarity reaches `minScore`; the full-text retriever keeps those holding at least that share
-   * of the query words, ordered by bm25. The two rankings are fused with Reciprocal Rank Fusion,
-   * and memories recalled more often, then the newer ones, win ties.
-   */
   search(options: MemoryStoreSearchOptions): MemoryScore[] {
     const records = new Map<string, MemoryRecord>();
     for (const row of this.scoped(options.project)) records.set(row.id, toRecord(row));
 
     const vectors = new Map<string, number>();
-    if (options.embedding) {
+    if (options.embedding !== undefined) {
       for (const record of records.values()) {
-        if (!record.embedding) continue;
+        if (record.embedding === null) continue;
         const similarity = cosineSimilarity(options.embedding, record.embedding);
         if (similarity >= options.minScore) vectors.set(record.id, similarity);
       }
@@ -363,7 +206,6 @@ export class MemoryStore {
     return scores.slice(0, options.limit);
   }
 
-  /** Newest first, optionally limited to one scope. */
   list(options: { project?: string; limit: number }): MemoryRecord[] {
     return this.scoped(options.project)
       .sort((left, right) => right.updated_at - left.updated_at)
@@ -379,10 +221,9 @@ export class MemoryStore {
     const row = this.statement(`SELECT * FROM memories WHERE id = ?`).get(id) as unknown as
       | MemoryRow
       | undefined;
-    return row ? toRecord(row) : undefined;
+    return row === undefined ? undefined : toRecord(row);
   }
 
-  /** Memories without a vector or with one from another model, newest first. */
   listStale(embeddingModel: string, limit: number): MemoryRecord[] {
     return (
       this.statement(
@@ -391,7 +232,6 @@ export class MemoryStore {
     ).map(toRecord);
   }
 
-  /** Replace the stored vector of a memory, for example after the embedding model changed. */
   setEmbedding(id: string, embedding: Float32Array, embeddingModel: string): void {
     this.statement(`UPDATE memories SET embedding = ?, embedding_model = ? WHERE id = ?`).run(
       encodeVector(embedding),
@@ -404,7 +244,7 @@ export class MemoryStore {
     const row = this.statement(`SELECT id FROM memories WHERE id = ?`).get(id) as unknown as
       | { id: string }
       | undefined;
-    if (!row) return false;
+    if (row === undefined) return false;
     this.transaction(() => {
       this.statement(`DELETE FROM memories WHERE id = ?`).run(id);
       this.statement(`DELETE FROM memories_fts WHERE id = ?`).run(id);
@@ -412,8 +252,7 @@ export class MemoryStore {
     return true;
   }
 
-  /** Bump the use counters of recalled memories, so frequently useful ones win ties later. */
-  markUsed(ids: readonly string[], now = Date.now()): void {
+  markUsed(ids: readonly string[], now = currentTimeMillis()): void {
     const statement = this.statement(
       `UPDATE memories SET use_count = use_count + 1, last_used_at = ? WHERE id = ?`,
     );

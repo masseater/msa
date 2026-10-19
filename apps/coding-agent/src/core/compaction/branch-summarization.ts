@@ -1,36 +1,34 @@
-/**
- * Branch summarization for tree navigation.
- *
- * When navigating to a different point in the session tree, this generates
- * a summary of the branch being left so context isn't lost.
- */
-
 import type { AgentMessage, StreamFn } from "@msa/agent-core";
 import type { RetryCallbacks, RetryPolicy } from "@msa/ai";
 import { contentText, normalizeContext } from "@msa/ai";
 import type { Model, SimpleStreamOptions, Usage } from "@msa/ai/compat";
+import { Effect, Function as Fn } from "effect";
 
+import { convertToLlm } from "../messages.ts";
 import {
-  convertToLlm,
-  createBranchSummaryMessage,
-  createCompactionSummaryMessage,
-  createCustomMessage,
-} from "../messages.ts";
-import type { ReadonlySessionManager, SessionEntry } from "../session-manager.ts";
-import { completeSummarization, estimateTokens, getSummarizationFailure } from "./compaction.ts";
+  currentTimeMillis,
+  fromPromise,
+  platformRuntime,
+  unwrapForeign,
+} from "../platform/index.ts";
+import type { SessionEntry } from "../session-manager.ts";
+import { prepareBranchEntries } from "./branch-entries.ts";
+import { completeSummarization, getSummarizationFailure } from "./compaction-summary.ts";
 import {
   computeFileLists,
-  createFileOps,
-  extractFileOpsFromMessage,
-  type FileOperations,
   formatFileOperations,
   SUMMARIZATION_SYSTEM_PROMPT,
   serializeConversation,
 } from "./utils.ts";
 
-// ============================================================================
-// Types
-// ============================================================================
+export {
+  type BranchPreparation,
+  type BranchSummaryDetails,
+  type CollectEntriesResult,
+  collectEntriesForBranchSummary,
+  prepareBranchEntries,
+} from "./branch-entries.ts";
+export type { FileOperations } from "./utils.ts";
 
 export interface BranchSummaryResult {
   summary?: string;
@@ -41,228 +39,19 @@ export interface BranchSummaryResult {
   error?: string;
 }
 
-/** Details stored in BranchSummaryEntry.details for file tracking */
-export interface BranchSummaryDetails {
-  readFiles: string[];
-  modifiedFiles: string[];
-}
-
-export type { FileOperations } from "./utils.ts";
-
-export interface BranchPreparation {
-  /** Messages extracted for summarization, in chronological order */
-  messages: AgentMessage[];
-  /** File operations extracted from tool calls */
-  fileOps: FileOperations;
-  /** Total estimated tokens in messages */
-  totalTokens: number;
-}
-
-export interface CollectEntriesResult {
-  /** Entries to summarize, in chronological order */
-  entries: SessionEntry[];
-  /** Common ancestor between old and new position, if any */
-  commonAncestorId: string | null;
-}
-
 export interface GenerateBranchSummaryOptions {
-  /** Model to use for summarization */
   model: Model<any>;
-  /** API key for the model */
   apiKey?: string | undefined;
-  /** Request headers for the model */
   headers?: Record<string, string> | undefined;
-  /** Provider-scoped environment values for the model */
   env?: Record<string, string> | undefined;
-  /** Abort signal for cancellation */
   signal: AbortSignal;
-  /** Optional custom instructions for summarization */
   customInstructions?: string | undefined;
-  /** If true, customInstructions replaces the default prompt instead of being appended */
   replaceInstructions?: boolean | undefined;
-  /** Tokens reserved when selecting branch history (default 16384) */
   reserveTokens?: number;
-  /** Optional session stream function. Used to preserve SDK request behavior without mutating agent state. */
   streamFn?: StreamFn;
-  /** Retry policy for transient summarization errors. Reuses coding-agent's `settings.retry`. */
   retry?: RetryPolicy;
-  /** Optional callbacks for retry reporting (e.g. TUI retry indicators). */
   callbacks?: RetryCallbacks;
 }
-
-// ============================================================================
-// Entry Collection
-// ============================================================================
-
-/**
- * Collect entries that should be summarized when navigating from one position to another.
- *
- * Walks from oldLeafId back to the common ancestor with targetId, collecting entries
- * along the way. Does NOT stop at compaction boundaries - those are included and their
- * summaries become context.
- *
- * @param session - Session manager (read-only access)
- * @param oldLeafId - Current position (where we're navigating from)
- * @param targetId - Target position (where we're navigating to)
- * @returns Entries to summarize and the common ancestor
- */
-export function collectEntriesForBranchSummary(
-  session: ReadonlySessionManager,
-  oldLeafId: string | null,
-  targetId: string,
-): CollectEntriesResult {
-  // If no old position, nothing to summarize
-  if (!oldLeafId) {
-    return { entries: [], commonAncestorId: null };
-  }
-
-  // Find common ancestor (deepest node that's on both paths)
-  const oldPath = new Set(session.getBranch(oldLeafId).map((e) => e.id));
-  const targetPath = session.getBranch(targetId);
-
-  // targetPath is root-first, so iterate backwards to find deepest common ancestor
-  let commonAncestorId: string | null = null;
-  for (let i = targetPath.length - 1; i >= 0; i--) {
-    const node = targetPath[i];
-    if (node !== undefined && oldPath.has(node.id)) {
-      commonAncestorId = node.id;
-      break;
-    }
-  }
-
-  // Collect entries from old leaf back to common ancestor
-  const entries: SessionEntry[] = [];
-  let current: string | null = oldLeafId;
-
-  while (current && current !== commonAncestorId) {
-    const entry = session.getEntry(current);
-    if (!entry) break;
-    entries.push(entry);
-    current = entry.parentId;
-  }
-
-  // Reverse to get chronological order
-  entries.reverse();
-
-  return { entries, commonAncestorId };
-}
-
-// ============================================================================
-// Entry to Message Conversion
-// ============================================================================
-
-/**
- * Extract AgentMessage from a session entry.
- * Similar to getMessageFromEntry in compaction.ts but also handles compaction entries.
- */
-function getMessageFromEntry(entry: SessionEntry): AgentMessage | undefined {
-  switch (entry.type) {
-    case "message":
-      // Skip tool results - context is in assistant's tool call
-      if (entry.message.role === "toolResult") return undefined;
-      return entry.message;
-
-    case "custom_message":
-      return createCustomMessage(
-        entry.customType,
-        entry.content,
-        entry.display,
-        entry.details,
-        entry.timestamp,
-      );
-
-    case "branch_summary":
-      return createBranchSummaryMessage(entry.summary, entry.fromId, entry.timestamp);
-
-    case "compaction":
-      return createCompactionSummaryMessage(entry.summary, entry.tokensBefore, entry.timestamp);
-
-    // These don't contribute to conversation content
-    case "thinking_level_change":
-    case "model_change":
-    case "custom":
-    case "label":
-    case "session_info":
-    case "context_edit":
-    case "usage":
-      return undefined;
-  }
-}
-
-/**
- * Prepare entries for summarization with token budget.
- *
- * Walks entries from NEWEST to OLDEST, adding messages until we hit the token budget.
- * This ensures we keep the most recent context when the branch is too long.
- *
- * Also collects file operations from:
- * - Tool calls in assistant messages
- * - Existing branch_summary entries' details (for cumulative tracking)
- *
- * @param entries - Entries in chronological order
- * @param tokenBudget - Maximum tokens to include (0 = no limit)
- */
-export function prepareBranchEntries(
-  entries: SessionEntry[],
-  tokenBudget: number = 0,
-): BranchPreparation {
-  const messages: AgentMessage[] = [];
-  const fileOps = createFileOps();
-  let totalTokens = 0;
-
-  // First pass: collect file ops from ALL entries (even if they don't fit in token budget)
-  // This ensures we capture cumulative file tracking from nested branch summaries
-  // Only extract from msa-generated summaries (fromHook !== true), not extension-generated ones
-  for (const entry of entries) {
-    if (entry.type === "branch_summary" && !entry.fromHook && entry.details) {
-      const details = entry.details as BranchSummaryDetails;
-      if (Array.isArray(details.readFiles)) {
-        for (const f of details.readFiles) fileOps.read.add(f);
-      }
-      if (Array.isArray(details.modifiedFiles)) {
-        // Modified files go into both edited and written for proper deduplication
-        for (const f of details.modifiedFiles) {
-          fileOps.edited.add(f);
-        }
-      }
-    }
-  }
-
-  // Second pass: walk from newest to oldest, adding messages until token budget
-  for (let i = entries.length - 1; i >= 0; i--) {
-    const entry = entries[i];
-    if (entry === undefined) continue;
-    const message = getMessageFromEntry(entry);
-    if (!message) continue;
-
-    // Extract file ops from assistant messages (tool calls)
-    extractFileOpsFromMessage(message, fileOps);
-
-    const tokens = estimateTokens(message);
-
-    // Check budget before adding
-    if (tokenBudget > 0 && totalTokens + tokens > tokenBudget) {
-      // If this is a summary entry, try to fit it anyway as it's important context
-      if (entry.type === "compaction" || entry.type === "branch_summary") {
-        if (totalTokens < tokenBudget * 0.9) {
-          messages.unshift(message);
-          totalTokens += tokens;
-        }
-      }
-      // Stop - we've hit the budget
-      break;
-    }
-
-    messages.unshift(message);
-    totalTokens += tokens;
-  }
-
-  return { messages, fileOps, totalTokens };
-}
-
-// ============================================================================
-// Summary Generation
-// ============================================================================
 
 const BRANCH_SUMMARY_PREAMBLE = `The user explored a different conversation branch before returning here.
 Summary of that exploration:
@@ -298,112 +87,82 @@ Use this EXACT format:
 
 Keep each section concise. Preserve exact file paths, function names, and error messages.`;
 
-/**
- * Generate a summary of abandoned branch entries.
- *
- * @param entries - Session entries to summarize (chronological order)
- * @param options - Generation options
- */
-export async function generateBranchSummary(
-  entries: SessionEntry[],
-  options: GenerateBranchSummaryOptions,
-): Promise<BranchSummaryResult> {
-  const {
-    model,
-    apiKey,
-    headers,
-    env,
-    signal,
-    customInstructions,
-    replaceInstructions,
-    reserveTokens = 16384,
-    streamFn,
-    retry,
-    callbacks,
-  } = options;
-
-  // Token budget = context window minus reserved space for prompt + response
-  const contextWindow = model.contextWindow || 128000;
-  const tokenBudget = contextWindow - reserveTokens;
-
-  const { messages, fileOps } = prepareBranchEntries(entries, tokenBudget);
-
-  if (messages.length === 0) {
-    return { summary: "No content to summarize" };
-  }
-
-  // Transform to LLM-compatible messages, then serialize to text
-  // Serialization prevents the model from treating it as a conversation to continue
-  const llmMessages = convertToLlm(messages);
-  const conversationText = serializeConversation(llmMessages);
-
-  // Build prompt
-  let instructions: string;
-  if (replaceInstructions && customInstructions) {
-    instructions = customInstructions;
-  } else if (customInstructions) {
-    instructions = `${BRANCH_SUMMARY_PROMPT}\n\nAdditional focus: ${customInstructions}`;
-  } else {
-    instructions = BRANCH_SUMMARY_PROMPT;
-  }
-  const promptText = `<conversation>\n${conversationText}\n</conversation>\n\n${instructions}`;
-
-  const summarizationMessages = [
-    {
-      role: "user" as const,
-      content: [{ type: "text" as const, text: promptText }],
-      timestamp: Date.now(),
-    },
-  ];
-
-  const maxTokens = Math.min(
-    4096,
-    model.maxTokens > 0 ? model.maxTokens : Number.POSITIVE_INFINITY,
-  );
-
-  // Call LLM for summarization. Prefer the session stream function so SDK
-  // request behavior (timeouts, retries, attribution headers) stays consistent
-  // without running through agent state/events. Retried via completeSummarization
-  // so transient stream drops reuse the configured retry policy.
-  const context = normalizeContext({
-    systemPrompt: SUMMARIZATION_SYSTEM_PROMPT,
-    messages: summarizationMessages,
-  });
-  const requestOptions: SimpleStreamOptions = { apiKey, headers, env, signal, maxTokens };
-  const response = await completeSummarization(
-    model,
-    context,
-    requestOptions,
-    streamFn,
-    retry,
-    callbacks,
-  );
-
-  // Check if aborted or errored
-  if (response.stopReason === "aborted") {
-    return { aborted: true };
-  }
-  const failure = getSummarizationFailure(response, "Branch summarization");
-  if (failure) {
-    return { error: failure };
-  }
-  if (response.content.some((block) => block.type === "toolCall")) {
-    return { error: "Branch summarization attempted to call a tool" };
-  }
-
-  let summary = contentText(response.content, "\n");
-
-  // Prepend preamble to provide context about the branch summary
-  summary = BRANCH_SUMMARY_PREAMBLE + summary;
-
-  // Compute file lists and append to summary
-  const { readFiles, modifiedFiles } = computeFileLists(fileOps);
-  summary += formatFileOperations(readFiles, modifiedFiles);
-
-  return {
-    summary: summary || "No summary generated",
-    usage: response.usage,
-    readFiles,
-    modifiedFiles,
-  };
+function branchInstructions(options: GenerateBranchSummaryOptions): string {
+  const { customInstructions, replaceInstructions } = options;
+  const hasCustom = customInstructions !== undefined && customInstructions !== "";
+  if (replaceInstructions === true && hasCustom) return customInstructions;
+  return hasCustom
+    ? `${BRANCH_SUMMARY_PROMPT}\n\nAdditional focus: ${customInstructions}`
+    : BRANCH_SUMMARY_PROMPT;
 }
+
+function branchContext(messages: AgentMessage[], options: GenerateBranchSummaryOptions) {
+  const conversationText = serializeConversation(convertToLlm(messages));
+  const promptText = `<conversation>\n${conversationText}\n</conversation>\n\n${branchInstructions(options)}`;
+  return normalizeContext({
+    systemPrompt: SUMMARIZATION_SYSTEM_PROMPT,
+    messages: [
+      {
+        role: "user" as const,
+        content: [{ type: "text" as const, text: promptText }],
+        timestamp: currentTimeMillis(),
+      },
+    ],
+  });
+}
+
+const branchSummary = (entries: SessionEntry[], options: GenerateBranchSummaryOptions) =>
+  Effect.gen(function* () {
+    const { model, apiKey, headers, env, signal, reserveTokens = 16384 } = options;
+    const contextWindow = model.contextWindow > 0 ? model.contextWindow : 128000;
+    const { messages, fileOps } = prepareBranchEntries(entries, contextWindow - reserveTokens);
+    if (messages.length === 0) {
+      return {
+        summary: "No content to summarize",
+      } satisfies BranchSummaryResult as BranchSummaryResult;
+    }
+    const context = branchContext(messages, options);
+    const maxTokens = Math.min(
+      4096,
+      model.maxTokens > 0 ? model.maxTokens : Number.POSITIVE_INFINITY,
+    );
+    const requestOptions: SimpleStreamOptions = { apiKey, headers, env, signal, maxTokens };
+    const response = yield* fromPromise(() =>
+      completeSummarization(
+        model,
+        context,
+        requestOptions,
+        options.streamFn,
+        options.retry,
+        options.callbacks,
+      ),
+    );
+    if (response.stopReason === "aborted") return { aborted: true } as BranchSummaryResult;
+    const failure = getSummarizationFailure(response, "Branch summarization");
+    if (failure !== undefined && failure !== "") return { error: failure } as BranchSummaryResult;
+    if (response.content.some((block) => block.type === "toolCall")) {
+      return { error: "Branch summarization attempted to call a tool" } as BranchSummaryResult;
+    }
+    const { readFiles, modifiedFiles } = computeFileLists(fileOps);
+    const summary =
+      BRANCH_SUMMARY_PREAMBLE +
+      contentText(response.content, "\n") +
+      formatFileOperations(readFiles, modifiedFiles);
+    return {
+      summary,
+      usage: response.usage,
+      readFiles,
+      modifiedFiles,
+    } as BranchSummaryResult;
+  });
+
+export const generateBranchSummary: {
+  (
+    options: GenerateBranchSummaryOptions,
+  ): (entries: SessionEntry[]) => Promise<BranchSummaryResult>;
+  (entries: SessionEntry[], options: GenerateBranchSummaryOptions): Promise<BranchSummaryResult>;
+} = Fn.dual(
+  2,
+  (entries: SessionEntry[], options: GenerateBranchSummaryOptions): Promise<BranchSummaryResult> =>
+    platformRuntime.runPromise(unwrapForeign(branchSummary(entries, options))),
+);

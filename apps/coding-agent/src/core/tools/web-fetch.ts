@@ -1,6 +1,8 @@
+import { Effect } from "effect";
 import { type Static, Type } from "typebox";
 
 import type { ToolDefinition } from "../extensions/types.ts";
+import { fromPromise, platformRuntime, ToolFailure, unwrapForeign } from "../platform/index.ts";
 import { callTreg, pickString, rows, type TregOptions } from "../treg.ts";
 import { webFetchRenderers } from "./renderers/web.ts";
 import {
@@ -25,6 +27,45 @@ export interface WebFetchToolDetails {
   truncation?: TruncationResult;
 }
 
+const fetchPage = Effect.fn("webFetch")(function* (
+  options: TregOptions,
+  url: string,
+  signal: AbortSignal | undefined,
+) {
+  const result = yield* fromPromise(() => callTreg(options, "treg.web.extract", { url }, signal));
+  const page = rows(result.output, "pages")[0];
+  const details: WebFetchToolDetails = {
+    url: pickString(page, "final_url", "url") ?? url,
+    ...(result.servedBy !== undefined && result.servedBy !== ""
+      ? { servedBy: result.servedBy }
+      : {}),
+    ...(result.costMicro === undefined ? {} : { costMicro: result.costMicro }),
+  };
+  const title = pickString(page, "title");
+  if (title !== undefined && title !== "") details.title = title;
+  const body = pickString(page, "text", "markdown", "content", "raw_content");
+  if (body === undefined || body === "") {
+    return yield* new ToolFailure({
+      message: `Could not read ${url}: no vendor returned its content.`,
+    });
+  }
+  const truncation = truncateHead(
+    [title !== undefined && title !== "" ? `# ${title}` : undefined, details.url, "", body]
+      .filter((line) => line !== undefined)
+      .join("\n"),
+  );
+  let text = truncation.content;
+  if (truncation.truncated) {
+    const limit =
+      truncation.truncatedBy === "lines"
+        ? `${DEFAULT_MAX_LINES} lines`
+        : formatSize(DEFAULT_MAX_BYTES);
+    text += `\n\n[Truncated at ${limit}]`;
+    details.truncation = truncation;
+  }
+  return { content: [{ type: "text" as const, text }], details };
+});
+
 export function createWebFetchToolDefinition(
   options: TregOptions,
 ): ToolDefinition<typeof webFetchSchema, WebFetchToolDetails> {
@@ -36,36 +77,8 @@ export function createWebFetchToolDefinition(
     parameters: webFetchSchema,
     annotations: { readOnlyHint: true, openWorldHint: true },
     executionMode: "parallel",
-    async execute(_toolCallId, params, signal) {
-      const result = await callTreg(options, "treg.web.extract", { url: params.url }, signal);
-      const page = rows(result.output, "pages")[0];
-      const details: WebFetchToolDetails = {
-        url: pickString(page, "final_url", "url") ?? params.url,
-        ...(result.servedBy ? { servedBy: result.servedBy } : {}),
-        ...(result.costMicro === undefined ? {} : { costMicro: result.costMicro }),
-      };
-      const title = pickString(page, "title");
-      if (title) details.title = title;
-      const body = pickString(page, "text", "markdown", "content", "raw_content");
-      if (!body) {
-        throw new Error(`Could not read ${params.url}: no vendor returned its content.`);
-      }
-      const truncation = truncateHead(
-        [title ? `# ${title}` : undefined, details.url, "", body]
-          .filter((line) => line !== undefined)
-          .join("\n"),
-      );
-      let text = truncation.content;
-      if (truncation.truncated) {
-        text += `\n\n[Truncated at ${
-          truncation.truncatedBy === "lines"
-            ? `${DEFAULT_MAX_LINES} lines`
-            : formatSize(DEFAULT_MAX_BYTES)
-        }]`;
-        details.truncation = truncation;
-      }
-      return { content: [{ type: "text", text }], details };
-    },
+    execute: (_toolCallId, params, signal) =>
+      platformRuntime.runPromise(unwrapForeign(fetchPage(options, params.url, signal))),
     ...webFetchRenderers,
   };
 }

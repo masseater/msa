@@ -1,13 +1,6 @@
-/**
- * Shared utilities for compaction and branch summarization.
- */
-
 import type { AgentMessage } from "@msa/agent-core";
 import { contentText, type Message } from "@msa/ai";
-
-// ============================================================================
-// File Operation Tracking
-// ============================================================================
+import { Function as Fn } from "effect";
 
 export interface FileOperations {
   read: Set<string>;
@@ -23,13 +16,8 @@ export function createFileOps(): FileOperations {
   };
 }
 
-/**
- * Extract file operations from tool calls in an assistant message, or from the nested calls
- * recorded on a tool result.
- */
-export function extractFileOpsFromMessage(message: AgentMessage, fileOps: FileOperations): void {
+const extractFileOpsFromMessageImpl = (message: AgentMessage, fileOps: FileOperations): void => {
   if (message.role === "toolResult") {
-    // Calls made from codemode scripts are recorded on the script's result.
     for (const call of message.nestedCalls?.calls ?? [])
       addFileOp(call.name, call.arguments, fileOps);
     return;
@@ -43,7 +31,12 @@ export function extractFileOpsFromMessage(message: AgentMessage, fileOps: FileOp
     if (!("arguments" in block) || !("name" in block)) continue;
     addFileOp(block.name, block.arguments as Record<string, unknown> | undefined, fileOps);
   }
-}
+};
+
+export const extractFileOpsFromMessage: {
+  (fileOps: FileOperations): (message: AgentMessage) => void;
+  (message: AgentMessage, fileOps: FileOperations): void;
+} = Fn.dual(2, extractFileOpsFromMessageImpl);
 
 function addFileOp(
   toolName: string,
@@ -51,7 +44,7 @@ function addFileOp(
   fileOps: FileOperations,
 ): void {
   const path = typeof args?.["path"] === "string" ? args["path"] : undefined;
-  if (!path) return;
+  if (path === undefined || path === "") return;
   switch (toolName) {
     case "read":
       fileOps.read.add(path);
@@ -65,10 +58,6 @@ function addFileOp(
   }
 }
 
-/**
- * Compute final file lists from file operations.
- * Returns readFiles (files only read, not modified) and modifiedFiles.
- */
 export function computeFileLists(fileOps: FileOperations): {
   readFiles: string[];
   modifiedFiles: string[];
@@ -79,10 +68,7 @@ export function computeFileLists(fileOps: FileOperations): {
   return { readFiles: readOnly, modifiedFiles };
 }
 
-/**
- * Format file operations as XML tags for summary.
- */
-export function formatFileOperations(readFiles: string[], modifiedFiles: string[]): string {
+const formatFileOperationsImpl = (readFiles: string[], modifiedFiles: string[]): string => {
   const sections: string[] = [];
   if (readFiles.length > 0) {
     sections.push(`<read-files>\n${readFiles.join("\n")}\n</read-files>`);
@@ -92,50 +78,32 @@ export function formatFileOperations(readFiles: string[], modifiedFiles: string[
   }
   if (sections.length === 0) return "";
   return `\n\n${sections.join("\n\n")}`;
-}
+};
 
-// ============================================================================
-// Message Serialization
-// ============================================================================
+export const formatFileOperations: {
+  (modifiedFiles: string[]): (readFiles: string[]) => string;
+  (readFiles: string[], modifiedFiles: string[]): string;
+} = Fn.dual(2, formatFileOperationsImpl);
 
-/** Maximum characters for a tool result in serialized summaries. */
 const TOOL_RESULT_MAX_CHARS = 2000;
 
-/**
- * Truncate text to a maximum character length for summarization.
- * Keeps the beginning and appends a truncation marker.
- */
 function truncateForSummary(text: string, maxChars: number): string {
   if (text.length <= maxChars) return text;
   const truncatedChars = text.length - maxChars;
   return `${text.slice(0, maxChars)}\n\n[... ${truncatedChars} more characters truncated]`;
 }
 
-/**
- * Serialize LLM messages to text for summarization.
- * This prevents the model from treating it as a conversation to continue.
- * Call convertToLlm() first to handle custom message types.
- *
- * Tool results are truncated to keep the summarization request within
- * reasonable token budgets. Full content is not needed for summarization.
- *
- * Thinking is omitted. Providers return summaries of the real reasoning, and
- * replayed thinking is often not part of the model's live context: for example,
- * a block that does not match its request is dropped. Including it can make the
- * summarization request larger than the context it summarizes. Visible text,
- * tool calls, and tool results record what happened.
- */
-export function serializeConversation(
+const serializeConversationImpl = (
   messages: Message[],
   truncateToolResult: (text: string) => string = (text) =>
     truncateForSummary(text, TOOL_RESULT_MAX_CHARS),
-): string {
+): string => {
   const parts: string[] = [];
 
   for (const msg of messages) {
     if (msg.role === "user") {
       const content = contentText(msg.content, "");
-      if (content) parts.push(`[User]: ${content}`);
+      if (content !== "") parts.push(`[User]: ${content}`);
     } else if (msg.role === "assistant") {
       const toolCalls: string[] = [];
 
@@ -157,18 +125,19 @@ export function serializeConversation(
       }
     } else if (msg.role === "toolResult") {
       const content = contentText(msg.content, "");
-      if (content) {
+      if (content !== "") {
         parts.push(`[Tool result]: ${truncateToolResult(content)}`);
       }
     }
   }
 
   return parts.join("\n\n");
-}
+};
 
-// ============================================================================
-// Summarization System Prompt
-// ============================================================================
+export const serializeConversation: {
+  (truncateToolResult?: (text: string) => string): (messages: Message[]) => string;
+  (messages: Message[], truncateToolResult?: (text: string) => string): string;
+} = Fn.dual((args) => Array.isArray(args[0]), serializeConversationImpl);
 
 export const SUMMARIZATION_SYSTEM_PROMPT = `You are a context summarization assistant. Your task is to read a conversation between a user and an AI assistant, then produce a structured summary following the exact format specified.
 
