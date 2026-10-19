@@ -1,4 +1,4 @@
-import { truncateToWidth } from "@msa/tui";
+import { truncateToWidth, wrapTextWithAnsi } from "@msa/tui";
 
 import type { Orchestrator } from "../../../core/orchestrator/orchestrator.ts";
 import { firstLine } from "../../../core/orchestrator/text.ts";
@@ -9,7 +9,7 @@ import { keyHint } from "./keybinding-hints.ts";
 import { viewHelpers } from "./tasks-view-helpers.ts";
 import { truncateToVisualLines } from "./visual-truncate.ts";
 
-const { activityLines, modelName, stoppable } = viewHelpers;
+const { activityLines, glyph, modelName, stoppable } = viewHelpers;
 
 function reasonLine(orchestrator: Orchestrator, task: TaskSnapshot): string {
   if (task.waitingReason !== null) return task.waitingReason.detail;
@@ -46,21 +46,31 @@ function sections(orchestrator: Orchestrator, task: TaskSnapshot, width: number)
     if (skippedCount > 0) lines.push(theme.fg("dim", `   … ${skippedCount} more lines`));
     lines.push(...visualLines.map((line) => `   ${line}`));
   };
+  const indented = (text: string) => {
+    for (const line of wrapTextWithAnsi(text, Math.max(1, width - 3))) lines.push(`   ${line}`);
+  };
   if (task.waitingReason !== null) {
     section("Waiting");
-    lines.push(`   ${task.waitingReason.detail}`);
+    indented(task.waitingReason.detail);
   }
   if (task.replan !== null) {
     section("Replan");
-    lines.push(truncateToWidth(`   ${task.replan.role} · ${task.replan.reason}`, width));
+    indented(`${task.replan.role} · ${task.replan.reason}`);
   }
+  const byId = new Map(orchestrator.snapshot.tasks.map((entry) => [entry.id, entry]));
+  const related = (ids: readonly string[]) => {
+    for (const id of ids) {
+      const entry = byId.get(id);
+      indented(entry === undefined ? id : `${glyph(entry)} ${entry.title}`);
+    }
+  };
   if (task.dependsOn.length > 0) {
     section("Depends on");
-    lines.push(`   ${task.dependsOn.join("   ")}`);
+    related(task.dependsOn);
   }
   if (task.dependents.length > 0) {
     section("Dependents");
-    lines.push(`   ${task.dependents.join("   ")}`);
+    related(task.dependents);
   }
   const sessions = sessionLines(orchestrator, task);
   if (sessions.length > 0) {

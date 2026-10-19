@@ -161,6 +161,12 @@ export interface Component {
   wantsKeyRelease?: boolean;
 
   /**
+   * If true, the alternate screen leaves its viewport keys (paging, half page, line, top, bottom)
+   * to this component while it has focus instead of scrolling the transcript behind it.
+   */
+  wantsViewportKeys?: boolean;
+
+  /**
    * Invalidate any cached rendering state.
    * Called when theme changes or when component needs to re-render from scratch.
    */

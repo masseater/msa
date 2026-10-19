@@ -3,6 +3,7 @@ import {
   type Focusable,
   getKeybindings,
   Input,
+  matchesKey,
   Spacer,
   truncateToWidth,
   visibleWidth,
@@ -14,6 +15,7 @@ import { toErrorMessage } from "../../../utils/errors.ts";
 import { theme } from "../theme/theme.ts";
 import { DynamicBorder } from "./dynamic-border.ts";
 import { keyHint } from "./keybinding-hints.ts";
+import { fitView, type ViewFrame } from "./scroll-window.ts";
 import { taskDetail } from "./tasks-view-detail.ts";
 import { type TasksViewState, viewHelpers } from "./tasks-view-helpers.ts";
 
@@ -36,12 +38,18 @@ export interface TasksViewOptions {
 }
 
 export class TasksView implements Component, Focusable {
+  /** The view owns the paging keys while it is open, so they scroll it and not the transcript. */
+  readonly wantsViewportKeys = true;
   private readonly options: TasksViewOptions;
   private selectedId: string | undefined;
   private openId: string | undefined;
   private readonly input = new Input({ prompt: "› " });
   private readonly state: TasksViewState;
   private composing: Composing | undefined;
+  /** First body line drawn; the list follows the cursor, the detail follows the scroll keys. */
+  private scroll = 0;
+  /** Body rows the last frame had room for. */
+  private room = 0;
   private isFocused = false;
 
   constructor(options: TasksViewOptions, initialId?: string) {
@@ -67,14 +75,18 @@ export class TasksView implements Component, Focusable {
     return this.options.orchestrator.snapshot.tasks;
   }
 
-  private visibleTasks(tasks: readonly TaskSnapshot[]): TaskSnapshot[] {
-    return tasks.filter((task) => this.state.showFinished || !finished(task));
+  /** The tasks the list draws, in the order it draws them: round by round, dependencies first. */
+  private shownTasks(): TaskSnapshot[] {
+    const tasks = this.tasks();
+    return this.options.orchestrator.snapshot.rounds.flatMap((round) =>
+      roundTasks(tasks, round.id).filter((task) => this.state.showFinished || !finished(task)),
+    );
   }
 
   private selected(): TaskSnapshot | undefined {
-    const visible = this.visibleTasks(this.tasks());
-    const current = visible.find((task) => task.id === this.selectedId);
-    return current ?? visible[0];
+    const shown = this.shownTasks();
+    const current = shown.find((task) => task.id === this.selectedId);
+    return current ?? shown[0];
   }
 
   private header(title: string, right: string, width: number): string[] {
@@ -99,20 +111,23 @@ export class TasksView implements Component, Focusable {
   render(width: number): string[] {
     const open =
       this.openId === undefined ? undefined : this.tasks().find((task) => task.id === this.openId);
-    const lines = open === undefined ? this.renderList(width) : this.renderDetail(open, width);
+    const frame = open === undefined ? this.renderList(width) : this.renderDetail(open, width);
     const max = Math.max(8, this.options.maxHeight());
-    const hints = lines.pop() ?? "";
-    return [...lines.slice(0, max - 1), hints];
+    const room = Math.max(0, max - frame.header.length - frame.footer.length);
+    this.room = Math.min(room, frame.body.length);
+    const fitted = fitView(frame, width, max, this.scroll);
+    this.scroll = fitted.offset;
+    return fitted.lines;
   }
 
   private renderRound(
     round: { id: string; title: string },
     selected: TaskSnapshot | undefined,
     width: number,
-  ): string[] {
+  ): { lines: string[]; cursor?: { start: number; end: number } | undefined } {
     const tasks = this.tasks();
     const inRound = roundTasks(tasks, round.id);
-    if (inRound.length === 0) return [];
+    if (inRound.length === 0) return { lines: [] };
     const review = inRound.find((task) => task.kind === "review");
     const lines = [
       theme.fg(
@@ -138,8 +153,13 @@ export class TasksView implements Component, Focusable {
         ),
       );
     }
+    // The round's own lines belong to its first task, so the window keeps the round title visible
+    // when the cursor sits on the top row of a round.
+    const cursorTop = shown[0]?.id === selected?.id ? 0 : undefined;
+    let cursor: { start: number; end: number } | undefined;
     for (const task of shown) {
       const depth = depthOf(task, byId);
+      const start = lines.length;
       lines.push(
         truncateToWidth(
           `${"  ".repeat(depth)}${this.rowLine(task, task.id === selected?.id, width - depth * 2)}`,
@@ -150,47 +170,72 @@ export class TasksView implements Component, Focusable {
       if (reason !== "") {
         lines.push(truncateToWidth(`${"  ".repeat(depth)}     ${theme.fg("dim", reason)}`, width));
       }
+      if (task.id === selected?.id) cursor = { start: cursorTop ?? start, end: lines.length - 1 };
     }
-    return lines;
+    return { lines, cursor };
   }
 
-  private renderList(width: number): string[] {
+  private renderList(width: number): ViewFrame {
     const tasks = this.tasks();
-    const lines = this.header("Tasks", viewHelpers.describeTaskCounts(tasks) ?? "", width);
+    const header = this.header("Tasks", viewHelpers.describeTaskCounts(tasks) ?? "", width);
     const replan = this.options.orchestrator.snapshot.replans[0];
     if (replan !== undefined) {
-      lines.push(truncateToWidth(` ${theme.fg("muted", describeReplan(replan))}`, width));
+      header.push(truncateToWidth(` ${theme.fg("muted", describeReplan(replan))}`, width));
     }
+    const borderIndex = header.length - 1 - (replan === undefined ? 0 : 1);
     if (tasks.length === 0) {
-      lines.push("", ` ${keyHint("tui.select.cancel", "close")}`);
-      return lines;
+      return {
+        header,
+        borderIndex,
+        body: [],
+        footer: ["", ` ${keyHint("tui.select.cancel", "close")}`],
+      };
     }
     const selected = this.selected();
+    const body: string[] = [];
+    let cursorLine: number | undefined;
+    let cursorEnd: number | undefined;
     for (const round of this.options.orchestrator.snapshot.rounds) {
-      lines.push(...this.renderRound(round, selected, width));
+      const drawn = this.renderRound(round, selected, width);
+      if (drawn.cursor !== undefined) {
+        cursorLine = body.length + drawn.cursor.start;
+        cursorEnd = body.length + drawn.cursor.end;
+      }
+      body.push(...drawn.lines);
     }
-    lines.push("");
-    if (this.composing === undefined) {
-      lines.push(taskDetail.listHints(this.state.showFinished, selected));
-      return lines;
+    if (this.composing !== undefined) {
+      return {
+        header,
+        borderIndex,
+        body,
+        cursorLine,
+        cursorEnd,
+        footer: ["", ...this.renderComposer(width)],
+      };
     }
-    lines.push(...this.renderComposer(width));
-    return lines;
+    return {
+      header,
+      borderIndex,
+      body,
+      cursorLine,
+      cursorEnd,
+      footer: ["", taskDetail.listHints(this.state.showFinished, selected)],
+    };
   }
 
-  private renderDetail(task: TaskSnapshot, width: number): string[] {
+  private renderDetail(task: TaskSnapshot, width: number): ViewFrame {
     const right = theme.fg(
       "dim",
       `${STATUS_LABEL[task.status].toLowerCase()} · ${task.round} · priority ${task.priority}`,
     );
-    const lines = [
-      ...this.header(`${glyph(task)} ${task.title}`, right, width),
-      ...taskDetail.sections(this.options.orchestrator, task, width),
-    ];
-    lines.push("");
-    if (this.composing === undefined) lines.push(taskDetail.hints(task));
-    else lines.push(...this.renderComposer(width));
-    return lines;
+    return {
+      header: this.header(`${glyph(task)} ${task.title}`, right, width),
+      body: taskDetail.sections(this.options.orchestrator, task, width),
+      footer: [
+        "",
+        ...(this.composing === undefined ? [taskDetail.hints(task)] : this.renderComposer(width)),
+      ],
+    };
   }
 
   private renderComposer(width: number): string[] {
@@ -216,19 +261,41 @@ export class TasksView implements Component, Focusable {
       return;
     }
     const kb = getKeybindings();
-    const visible = this.visibleTasks(this.tasks());
+    const shown = this.shownTasks();
     const selected = this.selected();
+    const page = Math.max(1, this.room - 1);
+    const half = Math.max(1, Math.floor(this.room / 2));
     if (kb.matches(data, "tui.select.cancel")) {
       if (this.openId === undefined) this.options.onClose();
-      else this.openId = undefined;
+      else this.openDetail(undefined);
+    } else if (this.openId !== undefined && kb.matches(data, "tui.select.up")) {
+      this.scrollBy(-1);
+    } else if (this.openId !== undefined && kb.matches(data, "tui.select.down")) {
+      this.scrollBy(1);
+    } else if (this.openId !== undefined && kb.matches(data, "tui.select.pageUp")) {
+      this.scrollBy(-page);
+    } else if (this.openId !== undefined && kb.matches(data, "tui.select.pageDown")) {
+      this.scrollBy(page);
+    } else if (this.openId !== undefined && matchesKey(data, "ctrl+u")) {
+      this.scrollBy(-half);
+    } else if (this.openId !== undefined && matchesKey(data, "ctrl+d")) {
+      this.scrollBy(half);
     } else if (this.openId === undefined && kb.matches(data, "tui.select.up")) {
-      this.move(visible, -1);
+      this.move(shown, -1);
     } else if (this.openId === undefined && kb.matches(data, "tui.select.down")) {
-      this.move(visible, 1);
+      this.move(shown, 1);
+    } else if (this.openId === undefined && kb.matches(data, "tui.select.pageUp")) {
+      this.moveBy(shown, -page);
+    } else if (this.openId === undefined && kb.matches(data, "tui.select.pageDown")) {
+      this.moveBy(shown, page);
+    } else if (this.openId === undefined && matchesKey(data, "ctrl+u")) {
+      this.moveBy(shown, -half);
+    } else if (this.openId === undefined && matchesKey(data, "ctrl+d")) {
+      this.moveBy(shown, half);
     } else if (kb.matches(data, "app.orchestrator.toggleFinished")) {
       this.state.showFinished = !this.state.showFinished;
     } else if (kb.matches(data, "tui.select.confirm") && selected !== undefined) {
-      this.openId = this.openId === undefined ? selected.id : undefined;
+      this.openDetail(this.openId === undefined ? selected.id : undefined);
     } else if (kb.matches(data, "app.orchestrator.message") && selected !== undefined) {
       this.startComposing({ kind: "message", taskId: selected.id });
     } else if (kb.matches(data, "app.orchestrator.note") && selected !== undefined) {
@@ -258,6 +325,23 @@ export class TasksView implements Component, Focusable {
     if (tasks.length === 0) return;
     const index = tasks.findIndex((task) => task.id === this.selected()?.id);
     this.selectedId = tasks[(index + step + tasks.length) % tasks.length]?.id;
+  }
+
+  /** Moves the cursor by a page, stopping at either end instead of wrapping around. */
+  private moveBy(tasks: readonly TaskSnapshot[], step: number): void {
+    if (tasks.length === 0) return;
+    const index = tasks.findIndex((task) => task.id === this.selected()?.id);
+    this.selectedId = tasks[Math.max(0, Math.min(index + step, tasks.length - 1))]?.id;
+  }
+
+  /** Moves the detail window; the next render clamps it to the content. */
+  private scrollBy(lines: number): void {
+    this.scroll = Math.max(0, this.scroll + lines);
+  }
+
+  private openDetail(id: string | undefined): void {
+    this.openId = id;
+    this.scroll = 0;
   }
 
   private startComposing(composing: Composing): void {
