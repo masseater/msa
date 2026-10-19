@@ -1,6 +1,7 @@
-import { Effect } from "effect";
+import { Effect, Result } from "effect";
 import { expect, it } from "vite-plus/test";
 
+import { orchestratorError } from "../src/core/orchestrator/errors.ts";
 import type { Orchestrator } from "../src/core/orchestrator/orchestrator.ts";
 import { harness } from "./orchestrator-harness.ts";
 
@@ -9,27 +10,42 @@ const { reviews, setup, taskStatus, waitFor } = harness;
 const create = (orchestrator: Orchestrator, input: Parameters<Orchestrator["createTask"]>[0]) =>
   Effect.promise(() => orchestrator.createTask(input));
 
-it("reruns a running task after a dependency added mid-run completes", () =>
+it("waits again for a dependency added after the task is stopped", () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const { orchestrator, workers } = setup();
       const a = yield* create(orchestrator, { title: "a", prompt: "do a" });
       const c = yield* create(orchestrator, { title: "c", prompt: "do c" });
-      yield* Effect.promise(() => orchestrator.addDependency(a.id, c.id));
+      const rejected = yield* Effect.result(
+        Effect.tryPromise({
+          try: () => orchestrator.setDepends({ taskIds: [a.id], add: [c.id] }),
+          catch: orchestratorError,
+        }),
+      );
+      expect(Result.isFailure(rejected)).toBe(true);
       expect(taskStatus(orchestrator, a.id)).toBe("running");
 
-      workers[0]?.complete("a first pass");
+      yield* Effect.promise(() => orchestrator.stop(a.id));
+      yield* Effect.promise(() => orchestrator.setDepends({ taskIds: [a.id], add: [c.id] }));
+      yield* Effect.promise(() => orchestrator.rerun(a.id));
+      workers[2]?.complete("a first pass");
       yield* waitFor(() => taskStatus(orchestrator, a.id) === "waiting");
       expect(
         orchestrator.snapshot.tasks.find((task) => task.id === a.id)?.waitingReason?.kind,
       ).toBe("dependencies");
 
       workers[1]?.complete("c done");
-      yield* waitFor(() => workers.length === 3);
-      workers[2]?.complete("c reviewed");
       yield* waitFor(() => workers.length === 4);
-      expect(workers[3]?.prompts[0]).toContain("do a");
-      expect(workers[3]?.prompts[0]).toContain("c reviewed");
+      workers[3]?.complete("c reviewed");
+      yield* waitFor(() =>
+        workers.some(
+          (worker) =>
+            worker.prompts[0]?.includes("do a") === true &&
+            worker.prompts[0]?.includes("c reviewed") === true,
+        ),
+      );
+      const again = workers.findLast((worker) => worker.prompts[0]?.includes("do a") === true);
+      expect(again?.prompts[0]).toContain("c reviewed");
     }),
   ));
 

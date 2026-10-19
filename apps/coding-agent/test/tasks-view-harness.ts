@@ -165,6 +165,8 @@ export function setup(
     sendMessage: vi.fn(() => Promise.resolve(tasks[1])),
     sendNote: vi.fn(() => Promise.resolve({ noteId: "n", steeredSessions: [], waitingTasks: [] })),
     setPriority: vi.fn(() => Promise.resolve(tasks[1])),
+    setDepends: vi.fn(() => Promise.resolve([tasks[1]])),
+    setInstruction: vi.fn(() => Promise.resolve(tasks[1])),
     rerun: vi.fn(() => Promise.resolve(tasks[2])),
   };
   const onClose = vi.fn();

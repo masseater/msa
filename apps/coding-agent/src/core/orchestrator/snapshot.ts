@@ -139,6 +139,8 @@ export type {
   ReplanView,
   ReportHit,
   SendNoteInput,
+  SetTaskDependsInput,
+  SetTaskInstructionInput,
   TaskSnapshot,
   TaskView,
 } from "./types.ts";

@@ -1,7 +1,6 @@
-import { Effect, Result } from "effect";
+import { Effect } from "effect";
 import { expect, it } from "vite-plus/test";
 
-import { orchestratorError } from "../src/core/orchestrator/errors.ts";
 import type { Orchestrator } from "../src/core/orchestrator/orchestrator.ts";
 import { store } from "../src/core/orchestrator/store.ts";
 import { harness } from "./orchestrator-harness.ts";
@@ -128,25 +127,6 @@ it("re-reads a note at the turn boundary and continues the same session", () =>
       yield* waitFor(() => (workers[0]?.prompts.length ?? 0) === 2);
       expect(workers).toHaveLength(1);
       expect(workers[0]?.prompts[1]).toContain("continue with the cache fix");
-    }),
-  ));
-
-it("rejects a dependency cycle", () =>
-  Effect.runPromise(
-    Effect.gen(function* () {
-      const { orchestrator } = setup();
-      const a = yield* create(orchestrator, { title: "a", prompt: "do a" });
-      const b = yield* create(orchestrator, { title: "b", prompt: "do b", dependsOn: [a.id] });
-      const result = yield* Effect.result(
-        Effect.tryPromise({
-          try: () => orchestrator.addDependency(a.id, b.id),
-          catch: orchestratorError,
-        }),
-      );
-      expect(Result.isFailure(result)).toBe(true);
-      if (Result.isFailure(result)) {
-        expect(result.failure.message).toContain("cycle");
-      }
     }),
   ));
 

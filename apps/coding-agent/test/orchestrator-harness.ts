@@ -102,6 +102,7 @@ export interface HarnessOptions {
   maxConcurrent?: number;
   pollIntervalMs?: number | null;
   runCondition?: (command: string, cwd: string) => Promise<boolean>;
+  databasePath?: string;
 }
 
 function setup(options: HarnessOptions = {}) {
@@ -110,7 +111,7 @@ function setup(options: HarnessOptions = {}) {
   const orchestrator = new Orchestrator({
     project: "project",
     cwd: "/repo",
-    databasePath: ":memory:",
+    databasePath: options.databasePath ?? ":memory:",
     pollIntervalMs: options.pollIntervalMs ?? null,
     runCondition: options.runCondition ?? (() => Promise.resolve(true)),
     createWorker: (workerOptions) => {

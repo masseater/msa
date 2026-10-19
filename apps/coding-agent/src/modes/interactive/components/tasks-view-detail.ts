@@ -108,6 +108,8 @@ function hints(task: TaskSnapshot): string {
     keyHint("app.orchestrator.note", "note to round"),
     stoppable(task) ? keyHint("app.orchestrator.stop", "stop") : undefined,
     keyHint("app.orchestrator.priority", "priority"),
+    keyHint("app.orchestrator.depends", "deps"),
+    keyHint("app.orchestrator.instruction", "instruction"),
     keyHint("app.orchestrator.model", "model"),
     keyHint("app.orchestrator.rerun", "rerun"),
     keyHint("tui.select.cancel", "back"),
@@ -125,6 +127,8 @@ function listHints(showFinished: boolean, selected: TaskSnapshot | undefined): s
       ? keyHint("app.orchestrator.stop", "stop")
       : undefined,
     selected === undefined ? undefined : keyHint("app.orchestrator.priority", "priority"),
+    selected === undefined ? undefined : keyHint("app.orchestrator.depends", "deps"),
+    selected === undefined ? undefined : keyHint("app.orchestrator.instruction", "instruction"),
     keyHint("app.orchestrator.model", "model"),
     keyHint("tui.select.cancel", "close"),
   ]

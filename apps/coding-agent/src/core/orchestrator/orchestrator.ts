@@ -15,6 +15,7 @@ import {
   type ReplanResult,
   type ReportHit,
   type SendNoteInput,
+  type SetTaskDependsInput,
   type TaskView,
 } from "./snapshot.ts";
 import { store } from "./store.ts";
@@ -35,6 +36,8 @@ export type {
   ReplanInput,
   ReplanResult,
   SendNoteInput,
+  SetTaskDependsInput,
+  SetTaskInstructionInput,
 } from "./types.ts";
 export {
   ORCHESTRATOR_TOOL_NAMES,
@@ -155,12 +158,12 @@ export class Orchestrator implements Runtime {
     return this.exclusive(actions.createTask(this, input));
   }
 
-  addDependency(taskId: string, dependsOn: string): Promise<TaskView> {
-    return this.exclusive(actions.addDependency(this, taskId, dependsOn));
+  setDepends(input: SetTaskDependsInput): Promise<TaskView[]> {
+    return this.exclusive(actions.setDepends(this, input));
   }
 
-  removeDependency(taskId: string, dependsOn: string): Promise<TaskView> {
-    return this.exclusive(actions.removeDependency(this, taskId, dependsOn));
+  setInstruction(taskId: string, prompt: string): Promise<TaskView> {
+    return this.exclusive(actions.setInstruction(this, { taskId, prompt }));
   }
 
   setPriority(taskId: string, priority: number): Promise<TaskView> {

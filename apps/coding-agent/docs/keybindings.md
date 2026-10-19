@@ -151,6 +151,8 @@ On native Windows, `app.suspend` has no default because Windows terminals do not
 | `app.orchestrator.rerun`          | `r`              | Rerun the selected task in a new session           |
 | `app.orchestrator.stop`           | `s`              | Stop the selected task                             |
 | `app.orchestrator.model`          | `m`              | Switch the selected task's model                   |
+| `app.orchestrator.depends`        | `d`              | Change the selected task's dependencies            |
+| `app.orchestrator.instruction`    | `i`              | Rewrite the selected task's instruction            |
 
 ### Models and Thinking
 

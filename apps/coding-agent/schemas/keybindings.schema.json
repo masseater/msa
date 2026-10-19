@@ -343,6 +343,14 @@
       "$ref": "#/$defs/KeybindingValue",
       "description": "Switch the selected task's model"
     },
+    "app.orchestrator.depends": {
+      "$ref": "#/$defs/KeybindingValue",
+      "description": "Change the dependencies of the selected task"
+    },
+    "app.orchestrator.instruction": {
+      "$ref": "#/$defs/KeybindingValue",
+      "description": "Rewrite the instruction of the selected task"
+    },
     "app.models.save": {
       "$ref": "#/$defs/KeybindingValue",
       "description": "Save model selection"
