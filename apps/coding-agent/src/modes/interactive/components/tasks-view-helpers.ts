@@ -100,7 +100,6 @@ function describeReplan(replan: ReplanView): string {
     replan.created.length > 0 ? `${replan.created.length} created` : undefined,
     replan.dropped.length > 0 ? `${replan.dropped.length} dropped` : undefined,
     replan.kept.length > 0 ? `${replan.kept.length} kept` : undefined,
-    replan.undoneAt === null ? undefined : "undone",
   ].filter(Boolean);
   return `↺ ${replan.reason}  ${counts.join(" · ")}`;
 }

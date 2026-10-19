@@ -4,7 +4,7 @@ import type { OrchestratorError } from "./errors.ts";
 import { newId } from "./ids.ts";
 import { replanStore } from "./replan-store.ts";
 import { fail, unique } from "./replan-support.ts";
-import type { Prepared, PreparedUndo } from "./replan.ts";
+import type { Prepared } from "./replan.ts";
 import { type RepoState, repoStates } from "./repo-state.ts";
 import { rounds } from "./rounds.ts";
 import { type Runtime, nowMillis } from "./runtime.ts";
@@ -18,7 +18,6 @@ import type {
   ReplanRewired,
   ReplanStopped,
   ReplanTaskInput,
-  ReplanUndoResult,
   Task,
 } from "./types.ts";
 
@@ -32,7 +31,6 @@ interface Handoff {
 
 interface Creation {
   created: ReplanCreated[];
-  ids: string[];
   inheritors: Map<string, string[]>;
   byKey: Map<string, string>;
 }
@@ -163,17 +161,11 @@ function createTasks(
   const project = runtime.options.project;
   const closed = new Set(prepared.sources);
   const created: ReplanCreated[] = [];
-  const ids: string[] = [];
   const inheritors = new Map<string, string[]>();
   const byKey = new Map<string, string>();
   const pending: { taskId: string; refs: readonly string[]; explicit: boolean }[] = [];
   for (const entry of prepared.entries) {
     const sources = entry.from.flatMap((id) => prepared.views.get(id) ?? []);
-    const existingReview = store.reviewTaskOfRound(
-      database,
-      project,
-      roundFor(entry.input, sources),
-    );
     const task = newTask(
       runtime,
       entry.input,
@@ -183,11 +175,9 @@ function createTasks(
     );
     store.insertTask(database, task);
     const review = rounds.ensureReview(runtime, task.round, now);
-    if (existingReview === undefined) ids.push(review.id);
     rounds.attachReview(runtime, review, task.id, now);
     if (entry.key !== null) byKey.set(entry.key, task.id);
     created.push({ taskId: task.id, title: task.title, from: entry.from });
-    ids.push(task.id);
     for (const source of entry.from) {
       inheritors.set(source, [...(inheritors.get(source) ?? []), task.id]);
     }
@@ -207,7 +197,7 @@ function createTasks(
       store.addDependency(database, project, item.taskId, id);
     }
   }
-  return { created, ids, inheritors, byKey };
+  return { created, inheritors, byKey };
 }
 
 function rewire(
@@ -243,8 +233,7 @@ function writeHandoffs(
   replanId: string,
   now: number,
   inheritors: ReadonlyMap<string, readonly string[]>,
-): string[] {
-  const noteIds: string[] = [];
+): void {
   for (const handoff of handoffs) {
     const content = memoBlock(replanId, prepared.input.reason, handoff);
     writeReport(runtime, handoff.taskId, handoff.sessionId, content, now);
@@ -253,9 +242,8 @@ function writeHandoffs(
       : [...(inheritors.get(handoff.taskId) ?? [])];
     if (targets.length === 0) continue;
     for (const target of targets) writeReport(runtime, target, handoff.sessionId, content, now);
-    const noteId = newId("note");
     store.insertNote(runtime.database, {
-      id: noteId,
+      id: newId("note"),
       project: runtime.options.project,
       round: null,
       taskIds: targets,
@@ -263,9 +251,7 @@ function writeHandoffs(
       author: "replan",
       createdAt: now,
     });
-    noteIds.push(noteId);
   }
-  return noteIds;
 }
 
 function write(
@@ -286,7 +272,7 @@ function write(
       store.storeMaxConcurrent(database, project, prepared.input.maxConcurrentSessions);
       runtime.maxConcurrentSessions = prepared.input.maxConcurrentSessions;
     }
-    const notes = writeHandoffs(runtime, prepared, handoffs, replanId, now, creation.inheritors);
+    writeHandoffs(runtime, prepared, handoffs, replanId, now, creation.inheritors);
     const stopped: ReplanStopped[] = handoffs.map((handoff) => ({
       taskId: handoff.taskId,
       title: handoff.title,
@@ -296,20 +282,16 @@ function write(
     const changes: ReplanChanges = {
       stopped,
       created: creation.created,
-      createdIds: creation.ids,
       dropped,
       kept: prepared.keep,
       rewired,
-      notes,
     };
     replanStore.insertReplan(database, {
       id: replanId,
       project,
       reason: prepared.input.reason,
-      before: prepared.before,
       after: changes,
       createdAt: now,
-      undoneAt: null,
     });
     return changes;
   });
@@ -343,65 +325,4 @@ function apply(
   });
 }
 
-function stopSessions(runtime: Runtime, ids: readonly string[], now: number): string[] {
-  const database = runtime.database;
-  for (const sessionId of ids) {
-    runtime.runs.delete(sessionId);
-    void runtime.workers
-      .get(sessionId)
-      ?.abort()
-      .catch(() => undefined);
-    store.updateSession(database, sessionId, { status: "stopped" }, now);
-    store.deleteAssignmentsOfSession(database, sessionId);
-  }
-  return [...ids];
-}
-
-function restoreState(runtime: Runtime, record: PreparedUndo["record"], now: number): string[] {
-  const database = runtime.database;
-  const project = runtime.options.project;
-  for (const id of record.after.createdIds) store.deleteTask(database, id);
-  for (const noteId of record.after.notes) store.deleteNote(database, noteId);
-  for (const task of record.before.tasks) {
-    const status = task.status === "running" ? "waiting" : task.status;
-    store.setTaskStatus(database, task.id, status, now);
-    store.clearDependencies(database, task.id);
-    for (const dependency of task.dependsOn) {
-      store.addDependency(database, project, task.id, dependency);
-    }
-  }
-  for (const round of record.before.rounds) {
-    store.insertRound(database, project, round.id, round.title, now);
-  }
-  store.storeMaxConcurrent(database, project, record.before.maxConcurrentSessions);
-  runtime.maxConcurrentSessions = record.before.maxConcurrentSessions;
-  replanStore.markUndone(database, record.id, now);
-  return [...record.after.createdIds];
-}
-
-function restore(
-  runtime: Runtime,
-  prepared: PreparedUndo,
-): Effect.Effect<ReplanUndoResult, OrchestratorError> {
-  return Effect.gen(function* () {
-    const now = yield* nowMillis;
-    const stoppedSessions = yield* Effect.sync(() => stopSessions(runtime, prepared.targets, now));
-    const deletedTasks = yield* Effect.sync(() =>
-      store.transaction(runtime.database, () => restoreState(runtime, prepared.record, now)),
-    );
-    runtime.replanning = false;
-    yield* Effect.sync(() => runtime.publish());
-    const started = yield* scheduling.scheduleEffect(runtime);
-    yield* Effect.sync(() => runtime.publish());
-    return {
-      replanId: prepared.record.id,
-      reason: prepared.record.reason,
-      restoredTasks: prepared.record.before.tasks.map((task) => task.id),
-      deletedTasks,
-      stoppedSessions,
-      started,
-    };
-  });
-}
-
-export const applying = { apply, restore };
+export const applying = { apply };

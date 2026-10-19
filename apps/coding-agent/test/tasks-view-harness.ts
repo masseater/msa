@@ -127,7 +127,6 @@ export function setup(options: { initialId?: string; state?: TasksViewState } = 
         id: "rp-1",
         reason: "the api moved to v3",
         createdAt: 1,
-        undoneAt: null,
         stopped: [{ taskId: "d", title: "stopped-work", sessionId: "s-worker", memo: "memo d" }],
         created: [{ taskId: "a", title: "a", from: ["d"] }],
         dropped: [],

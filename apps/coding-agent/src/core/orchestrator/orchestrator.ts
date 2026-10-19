@@ -2,7 +2,7 @@ import type { AgentMessage } from "@msa/agent-core";
 import { Effect, Fiber } from "effect";
 
 import { actions } from "./actions.ts";
-import { replan, undoReplan } from "./replan.ts";
+import { replan } from "./replan.ts";
 import { type Runtime, nowMillis } from "./runtime.ts";
 import { scheduling } from "./schedule.ts";
 import { settling } from "./settle.ts";
@@ -13,7 +13,6 @@ import {
   type OrchestratorSnapshot,
   type ReplanInput,
   type ReplanResult,
-  type ReplanUndoResult,
   type ReportHit,
   type SendNoteInput,
   type TaskView,
@@ -35,7 +34,6 @@ export type {
   NoteDelivery,
   ReplanInput,
   ReplanResult,
-  ReplanUndoResult,
   SendNoteInput,
 } from "./types.ts";
 export {
@@ -199,10 +197,6 @@ export class Orchestrator implements Runtime {
 
   replan(input: ReplanInput): Promise<ReplanResult> {
     return replan(this, input);
-  }
-
-  undoReplan(): Promise<ReplanUndoResult> {
-    return undoReplan(this);
   }
 
   searchReports(query: string, limit = 10): Promise<ReportHit[]> {
