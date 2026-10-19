@@ -271,6 +271,12 @@ export interface ProviderStreams {
     handle: DeferredHandle,
     options?: DeferredCancelOptions,
   ): Promise<void>;
+  /** Input tokens of the request `streamSimple` would send, counted by the provider. */
+  countTokens?(
+    model: Model<Api>,
+    context: TranscriptContext,
+    options?: SimpleStreamOptions,
+  ): Promise<number>;
 }
 
 /**

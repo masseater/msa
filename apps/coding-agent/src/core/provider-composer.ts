@@ -722,6 +722,16 @@ export function composeModelProvider(
   if (cancelDeferred) {
     provider.cancelDeferred = (model, handle, options) => cancelDeferred(model, handle, options);
   }
+  const countTokens = base?.countTokens;
+  if (countTokens) {
+    // Only the stream that sends the request can count it.
+    provider.countTokens = (model, context, options) => {
+      if ((extension?.streamSimple && model.api === extension.api) || !supportsBaseApi(model)) {
+        throw new Error(`Provider ${providerId} cannot count tokens for "${model.api}"`);
+      }
+      return countTokens(model, context, options);
+    };
+  }
   const extensionImages = extension?.images;
   const generateImages = base?.generateImages;
   if (generateImages || Object.keys(extensionImages ?? {}).length > 0) {

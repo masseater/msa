@@ -584,29 +584,9 @@ export const stream: StreamFunction<"anthropic-messages", AnthropicOptions> = (
     };
 
     try {
-      let client: Anthropic;
+      const client = createRequestClient(model, options);
       let usageModel = model;
       let inputTransformations: BetaInputTransformation[] | undefined;
-
-      if (options?.client) {
-        client = options.client;
-      } else {
-        const apiKey = options?.apiKey;
-        const federation = getAnthropicFederation(model, apiKey, options?.headers, options?.env);
-        if (!federation) assertRequestAuth(model.provider, apiKey, options?.headers);
-
-        const cacheRetention = resolveCacheRetention(options?.cacheRetention, options?.env);
-        const cacheSessionId = cacheRetention === "none" ? undefined : options?.sessionId;
-
-        client = createClient(
-          model,
-          apiKey,
-          options?.headers,
-          options?.fetch,
-          cacheSessionId,
-          federation,
-        );
-      }
       const requestOptions = {
         ...(options?.signal ? { signal: options.signal } : {}),
         ...(options?.timeoutMs === undefined ? {} : { timeout: options.timeoutMs }),
@@ -975,11 +955,67 @@ function mapThinkingLevelToEffort(
   }
 }
 
+function createRequestClient(
+  model: Model<"anthropic-messages">,
+  options: AnthropicOptions | undefined,
+): Anthropic {
+  if (options?.client) return options.client;
+  const apiKey = options?.apiKey;
+  const federation = getAnthropicFederation(model, apiKey, options?.headers, options?.env);
+  if (!federation) assertRequestAuth(model.provider, apiKey, options?.headers);
+  const cacheRetention = resolveCacheRetention(options?.cacheRetention, options?.env);
+  const cacheSessionId = cacheRetention === "none" ? undefined : options?.sessionId;
+  return createClient(model, apiKey, options?.headers, options?.fetch, cacheSessionId, federation);
+}
+
 export const streamSimple: StreamFunction<"anthropic-messages", SimpleStreamOptions> = (
   model: Model<"anthropic-messages">,
   context: TranscriptContext,
   options?: SimpleStreamOptions,
-): AssistantMessageEventStream => {
+): AssistantMessageEventStream =>
+  stream(model, context, toAnthropicOptions(model, context, options));
+
+/**
+ * Count the input tokens of the request `streamSimple` would send, with Anthropic's
+ * `count_tokens` endpoint. The request is built by the same `buildParams`, so the count
+ * covers the system prompt, tool definitions, and every message exactly as sent.
+ */
+export async function countTokens(
+  model: Model<"anthropic-messages">,
+  context: TranscriptContext,
+  options?: SimpleStreamOptions,
+): Promise<number> {
+  const anthropicOptions = toAnthropicOptions(model, context, options);
+  const client = createRequestClient(model, anthropicOptions);
+  const normalizedContext = resolveTranscript(
+    context,
+    getAnthropicCompat(model).supportsMidConvoSystemMessages,
+  );
+  const { params } = buildParams(model, normalizedContext, anthropicOptions);
+  const counted = await client.beta.messages.countTokens(
+    {
+      model: params.model,
+      messages: params.messages,
+      ...(params.system === undefined ? {} : { system: params.system }),
+      ...(params.tools === undefined ? {} : { tools: params.tools }),
+      ...(params.thinking === undefined ? {} : { thinking: params.thinking }),
+      ...(params.tool_choice === undefined ? {} : { tool_choice: params.tool_choice }),
+      ...(params.output_config === undefined ? {} : { output_config: params.output_config }),
+      ...(params.context_management == null
+        ? {}
+        : { context_management: params.context_management }),
+      ...(params.betas === undefined ? {} : { betas: params.betas }),
+    },
+    { ...(options?.signal ? { signal: options.signal } : {}), maxRetries: 0 },
+  );
+  return counted.input_tokens;
+}
+
+function toAnthropicOptions(
+  model: Model<"anthropic-messages">,
+  context: TranscriptContext,
+  options: SimpleStreamOptions | undefined,
+): AnthropicOptions {
   if (!getAnthropicFederation(model, options?.apiKey, options?.headers, options?.env)) {
     assertRequestAuth(model.provider, options?.apiKey, options?.headers);
   }
@@ -989,21 +1025,14 @@ export const streamSimple: StreamFunction<"anthropic-messages", SimpleStreamOpti
     toolChoice: options?.toolChoice,
   } satisfies AnthropicOptions;
   if (!options?.reasoning) {
-    return stream(model, context, {
-      ...base,
-      thinkingEnabled: false,
-    } satisfies AnthropicOptions);
+    return { ...base, thinkingEnabled: false } satisfies AnthropicOptions;
   }
 
   // For models with adaptive thinking: use an effort level.
   // For older models: use budget-based thinking.
   if (model.compat?.forceAdaptiveThinking === true) {
     const effort = mapThinkingLevelToEffort(model, options.reasoning);
-    return stream(model, context, {
-      ...base,
-      thinkingEnabled: true,
-      effort,
-    } satisfies AnthropicOptions);
+    return { ...base, thinkingEnabled: true, effort } satisfies AnthropicOptions;
   }
 
   // Undefined means the caller did not request an output cap; let the helper use the model cap.
@@ -1017,13 +1046,13 @@ export const streamSimple: StreamFunction<"anthropic-messages", SimpleStreamOpti
 
   const maxTokens = clampMaxTokensToContext(model, context, adjusted.maxTokens);
 
-  return stream(model, context, {
+  return {
     ...base,
     maxTokens,
     thinkingEnabled: true,
     thinkingBudgetTokens: Math.min(adjusted.thinkingBudget, Math.max(0, maxTokens - 1024)),
-  } satisfies AnthropicOptions);
-};
+  } satisfies AnthropicOptions;
+}
 
 function createClient(
   model: Model<"anthropic-messages">,

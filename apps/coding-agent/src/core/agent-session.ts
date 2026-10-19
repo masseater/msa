@@ -30,6 +30,7 @@ import {
   type AgentToolCallOutcome,
   type BeforeToolCallContext,
   type BeforeToolCallResult,
+  declareToolChanges,
   type PrepareNextTurnContext,
   runToolCall,
   type ThinkingLevel,
@@ -58,6 +59,7 @@ import {
   resetApiProviders,
   streamSimple,
 } from "@msa/ai/compat";
+import { Effect } from "effect";
 
 import { getThemeByName, theme } from "../modes/interactive/theme/theme.ts";
 import { toErrorMessage } from "../utils/errors.ts";
@@ -68,6 +70,7 @@ import { formatNoApiKeyFoundMessage, formatNoModelSelectedMessage } from "./auth
 import { type BashResult, executeBashWithOperations } from "./bash-executor.ts";
 import { generateBugReportSummary } from "./bug-report.ts";
 import type { CacheWarmer, CacheWarmingStatus } from "./cache-warmer.ts";
+import { isCliAgentProvider } from "./cli-agents/index.ts";
 import {
   type CompactionPreparation,
   type CompactionResult,
@@ -82,6 +85,7 @@ import {
   prepareCompaction,
   shouldCompact,
 } from "./compaction/index.ts";
+import { type ContextBreakdown, measureContextBreakdown } from "./context-breakdown.ts";
 import { DEFAULT_THINKING_LEVEL, THINKING_LEVEL_OPTIONS } from "./defaults.ts";
 import { exportSessionToHtml, type ToolHtmlRenderer } from "./export-html/index.ts";
 import { createToolHtmlRenderer } from "./export-html/tool-renderer.ts";
@@ -1105,16 +1109,7 @@ export class AgentSession {
         signal,
       );
       const nextContext = previousSnapshot?.context ?? context;
-      const runOptions = this._runSystemPromptOptions ?? this._baseSystemPromptOptions;
-      const options = normalizeBuildSystemPromptOptions({
-        ...runOptions,
-        selectedTools: this.getActiveToolNames(),
-        toolSnippets: { ...this._baseSystemPromptOptions.toolSnippets, ...runOptions.toolSnippets },
-        toolGuidelines: {
-          ...this._baseSystemPromptOptions.toolGuidelines,
-          ...runOptions.toolGuidelines,
-        },
-      });
+      const options = this._nextTurnPromptOptions();
       const updateMessage = this._preparePromptAndToolLoadout(options, nextContext.messages);
       // Keep session.systemPrompt and ctx.getSystemPrompt() in step with what the provider sees.
       this._runSystemPromptOptions = options;
@@ -1988,6 +1983,31 @@ export class AgentSession {
     messages: AgentMessage[] = this.agent.state.messages,
   ): SystemMessage | undefined {
     options.selectedTools = this._applyToolLoadout(options.selectedTools).map((tool) => tool.name);
+    return this._promptUpdate(options, messages);
+  }
+
+  /** Prompt options for the next turn: the run's prompt with the current active tools. */
+  private _nextTurnPromptOptions(): NormalizedBuildSystemPromptOptions {
+    const runOptions = this._runSystemPromptOptions ?? this._baseSystemPromptOptions;
+    return normalizeBuildSystemPromptOptions({
+      ...runOptions,
+      selectedTools: this.getActiveToolNames(),
+      toolSnippets: { ...this._baseSystemPromptOptions.toolSnippets, ...runOptions.toolSnippets },
+      toolGuidelines: {
+        ...this._baseSystemPromptOptions.toolGuidelines,
+        ...runOptions.toolGuidelines,
+      },
+    });
+  }
+
+  /**
+   * The system message patching the prompt sections the model has (replayed from `messages`)
+   * to `options`, or undefined when the prompt is unchanged.
+   */
+  private _promptUpdate(
+    options: NormalizedBuildSystemPromptOptions,
+    messages: AgentMessage[],
+  ): SystemMessage | undefined {
     // The tool list and rules must match the declarations the request carries.
     options.hiddenTools = [...this._hiddenDeclarations];
     const sections = diffSystemPromptSections(
@@ -4970,6 +4990,45 @@ export class AgentSession {
       contextWindow,
       percent,
     };
+  }
+
+  /**
+   * The request the next turn would send, split into its elements. Built by the agent loop's
+   * own transform and conversion, counted by the provider when it can, and otherwise
+   * apportioned to the context usage.
+   */
+  async getContextBreakdown(): Promise<ContextBreakdown> {
+    // Under a virtual selection, the physical model that served the latest response.
+    const model = this._limitsModel();
+    const thinkingLevel = this.routedModel?.thinkingLevel ?? this.thinkingLevel;
+    const transformContext = this.agent.transformContext;
+    const transcript = this.agent.state.messages;
+    const update = this._promptUpdate(this._nextTurnPromptOptions(), transcript);
+    const pending = declareToolChanges(
+      { messages: transcript, tools: this.agent.state.tools },
+      update ? [update] : [],
+    );
+    return Effect.runPromise(
+      measureContextBreakdown({
+        messages: transcript,
+        pending,
+        transformContext: transformContext ? (messages) => transformContext(messages) : undefined,
+        convertToLlm: (messages) => this.agent.convertToLlm(messages),
+        countTokens: async (messages) =>
+          model
+            ? this._modelRuntime.countTokens(
+                model,
+                { messages },
+                {
+                  sessionId: this.sessionId,
+                  ...(thinkingLevel === "off" ? {} : { reasoning: thinkingLevel }),
+                },
+              )
+            : undefined,
+        usageTokens: this.getContextUsage()?.tokens ?? null,
+        addingProvider: model && isCliAgentProvider(model.provider) ? model.provider : undefined,
+      }),
+    );
   }
 
   /**

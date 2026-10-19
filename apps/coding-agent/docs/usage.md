@@ -59,7 +59,7 @@ msa saves sessions automatically unless session persistence is disabled.
 - `/clear` starts a new session.
 - `/resume` opens another saved session.
 - `/rename` gives the current session a recognizable name.
-- `/status` shows its file, ID, message count, token usage, and cost.
+- `/status` shows its file, ID, message count, token usage, cost, and what the context holds: each prompt section, tool definition, message kind, and tool's results.
 
 Use `/rewind`, `/fork`, or `/branch` when you want to explore another approach without losing existing work. Use `/compact` to reduce the conversation history sent to the model. See [Sessions and Context](sessions.md) for these workflows.
 

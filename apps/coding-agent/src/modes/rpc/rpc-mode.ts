@@ -473,6 +473,8 @@ export async function runRpcMode(runtimeHost: AgentSessionRuntime): Promise<neve
       // =================================================================
 
       case "get_state": {
+        const usage = session.getContextUsage();
+        const breakdown = usage ? await session.getContextBreakdown() : undefined;
         const state: RpcSessionState = {
           model: session.model,
           thinkingLevel: session.thinkingLevel,
@@ -486,6 +488,16 @@ export async function runRpcMode(runtimeHost: AgentSessionRuntime): Promise<neve
           autoCompactionEnabled: session.autoCompactionEnabled,
           messageCount: session.messages.length,
           pendingMessageCount: session.pendingMessageCount,
+          ...(usage && breakdown
+            ? {
+                contextUsage: {
+                  tokens: breakdown.tokens,
+                  contextWindow: usage.contextWindow,
+                  percent: (breakdown.tokens / usage.contextWindow) * 100,
+                  breakdown,
+                },
+              }
+            : {}),
         };
         return success(id, "get_state", state);
       }

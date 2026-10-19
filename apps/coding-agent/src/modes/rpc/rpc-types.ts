@@ -15,6 +15,8 @@ import type {
 } from "../../core/agent-session.ts";
 import type { BashResult } from "../../core/bash-executor.ts";
 import type { CompactionResult } from "../../core/compaction/index.ts";
+import type { ContextBreakdown } from "../../core/context-breakdown.ts";
+import type { ContextUsage } from "../../core/extensions/types.ts";
 import type { SessionEntry, SessionTreeNode } from "../../core/session-manager.ts";
 import type { SourceInfo } from "../../core/source-info.ts";
 
@@ -127,6 +129,8 @@ export interface RpcSessionState {
   autoCompactionEnabled: boolean;
   messageCount: number;
   pendingMessageCount: number;
+  /** Size of the next request, with `tokens` equal to the breakdown's total. */
+  contextUsage?: (ContextUsage & { breakdown: ContextBreakdown }) | undefined;
 }
 
 // ============================================================================

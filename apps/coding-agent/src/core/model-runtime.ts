@@ -927,6 +927,22 @@ export class ModelRuntime implements Models {
     );
   }
 
+  async countTokens(
+    model: Model<Api>,
+    context: Context,
+    options?: ModelsSimpleStreamOptions,
+  ): Promise<number | undefined> {
+    if (isVirtualModel(model)) return undefined;
+    assertChatModel(model);
+    const prepared = await this.prepareRequest(model, options);
+    if (!prepared.provider.countTokens) return undefined;
+    return prepared.provider.countTokens(
+      prepared.model,
+      normalizeContext(context),
+      prepared.options as SimpleStreamOptions,
+    );
+  }
+
   async generateImages(
     model: ImageModel<ImageApi>,
     context: ImagesContext,

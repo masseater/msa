@@ -2477,8 +2477,8 @@ export class InteractiveMode {
       return true;
     }
     if (text === "/status") {
-      this.handleSessionCommand();
       this.editor.setText("");
+      await this.handleSessionCommand();
       return true;
     }
     if (text === "/release-notes") {
@@ -5623,9 +5623,10 @@ export class InteractiveMode {
     this.ui.requestRender();
   }
 
-  private handleSessionCommand(): void {
+  private async handleSessionCommand(): Promise<void> {
     const entries = this.sessionManager.getEntries();
     const model = this.session.model;
+    const contextBreakdown = await this.session.getContextBreakdown();
     const info: SessionInfo = {
       stats: this.session.getSessionStats(),
       sessionName: this.sessionManager.getSessionName(),
@@ -5634,6 +5635,8 @@ export class InteractiveMode {
       cacheWarmingMode: this.settingsManager.getCacheWarmingMode(),
       cacheWarmingStatus: this.session.cacheWarmingStatus,
       selectedModelKey: `${model?.provider}/${model?.id}`,
+      contextBreakdown,
+      contextWindow: this.session.getContextUsage()?.contextWindow ?? model?.contextWindow,
     };
     this.chatContainer.addChild(new Spacer(1));
     this.chatContainer.addChild(new ThemedText(() => formatSessionInfo(info), 1, 0));

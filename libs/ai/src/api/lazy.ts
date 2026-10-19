@@ -86,6 +86,7 @@ export function lazyStream(
 export interface LazyApiCapabilities {
   fetchDeferred?: boolean;
   cancelDeferred?: boolean;
+  countTokens?: boolean;
 }
 
 export function lazyApi(
@@ -113,6 +114,13 @@ export function lazyApi(
       const implementation = await load();
       if (!implementation.cancelDeferred) throw new Error("API cannot cancel deferred responses");
       await implementation.cancelDeferred(model, handle, options);
+    };
+  }
+  if (capabilities?.countTokens) {
+    api.countTokens = async (model, context, options) => {
+      const implementation = await load();
+      if (!implementation.countTokens) throw new Error("API cannot count tokens");
+      return implementation.countTokens(model, context, options);
     };
   }
 
