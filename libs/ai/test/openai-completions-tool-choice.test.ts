@@ -2,7 +2,7 @@ import { Type } from "typebox";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { convertMessages } from "../src/api/openai-completions.ts";
-import { getModel, normalizeContext, streamSimple } from "../src/compat.ts";
+import { getModel, getModels, normalizeContext, streamSimple } from "../src/compat.ts";
 import type { Model, SimpleStreamOptions, Tool } from "../src/types.ts";
 
 const mockState = vi.hoisted(() => ({
@@ -1260,7 +1260,16 @@ describe("openai-completions tool_choice", () => {
   });
 
   it("uses OpenRouter reasoning object instead of reasoning_effort", async () => {
-    const model = getModel("openrouter", "deepseek/deepseek-r1")!;
+    const model = getModels("openrouter")
+      .filter((candidate): candidate is Model<"openai-completions"> => {
+        return candidate.api === "openai-completions";
+      })
+      .find(
+        (candidate) =>
+          candidate.reasoning &&
+          candidate.compat?.thinkingFormat === "openrouter" &&
+          candidate.thinkingLevelMap?.high === "high",
+      )!;
     let payload: unknown;
 
     await streamSimple(
