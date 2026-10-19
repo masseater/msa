@@ -12,6 +12,7 @@ export const ORCHESTRATOR_TOOL_NAMES = [
   "rerun_task",
   "set_max_concurrent_sessions",
   "replan",
+  "handoff",
 ] as const;
 
 export function isOrchestratorTool(name: string): boolean {

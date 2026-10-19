@@ -1,3 +1,6 @@
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 import type { AgentMessage, ThinkingLevel } from "@msa/agent-core";
 import { type Api, fauxAssistantMessage, type Model } from "@msa/ai";
 import { InMemoryTelemetryContext } from "@msa/telemetry";
@@ -106,6 +109,8 @@ export interface HarnessOptions {
   pollIntervalMs?: number | null;
   runCondition?: (command: string, cwd: string) => Promise<boolean>;
   databasePath?: string;
+  handoffDirectory?: string;
+  cwd?: string;
 }
 
 function setup(options: HarnessOptions = {}) {
@@ -115,8 +120,10 @@ function setup(options: HarnessOptions = {}) {
   const orchestrator = new Orchestrator({
     telemetry,
     project: "project",
-    cwd: "/repo",
+    cwd: options.cwd ?? "/repo",
     databasePath: options.databasePath ?? ":memory:",
+    handoffDirectory: options.handoffDirectory ?? join(tmpdir(), "msa-orchestrator-handoffs"),
+    version: "0.0.0-test",
     pollIntervalMs: options.pollIntervalMs ?? null,
     runCondition: options.runCondition ?? (() => Promise.resolve(true)),
     createWorker: (workerOptions) => {

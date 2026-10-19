@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- `/handoff [path]` writes the orchestrator's state to one Markdown file under `<agent dir>/handoffs/` and prints the line to paste into the next session. The tool fills in the tasks, notes, replans, running and waiting sessions, and open PRs and issues; the model writes the premise, the goals in dependency order, and what not to start. A fresh interactive session asks once whether to resume from a handoff it has not offered before ([docs](docs/slash-commands.md#hand-over-to-the-next-session))
+
 ## [0.0.4] - 2026-10-19
 
 ### Added

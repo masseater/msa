@@ -1,14 +1,17 @@
-import { mkdirSync, rmSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 
-import { fauxAssistantMessage, registerFauxProvider } from "@msa/ai/compat";
+import { fauxAssistantMessage, fauxToolCall, registerFauxProvider } from "@msa/ai/compat";
 import { Effect } from "effect";
 import { afterAll, expect, it } from "vite-plus/test";
 
+import { VERSION } from "../src/config.ts";
 import { AuthStorage } from "../src/core/auth-storage.ts";
 import { ModelRuntime } from "../src/core/model-runtime.ts";
+import { pendingHandoffs } from "../src/core/orchestrator/handoff-files.ts";
 import { createAgentSession } from "../src/core/sdk.ts";
 import { SessionManager } from "../src/core/session-manager.ts";
+import { handoffPrompt } from "../src/core/slash-commands.ts";
 import { harness } from "./orchestrator-harness.ts";
 
 const { waitFor } = harness;
@@ -72,7 +75,7 @@ function createHarness(options?: { isWorker?: boolean }) {
       }),
     );
     sessionManager.appendMessage({ role: "user", content: "start", timestamp: 1 });
-    return { session, sessionManager, sessionDir };
+    return { session, sessionManager, sessionDir, faux };
   });
 }
 
@@ -81,9 +84,54 @@ it("starts with the orchestrator tools active", () =>
     Effect.gen(function* () {
       const { session } = yield* createHarness();
       expect(session.getActiveToolNames()).toEqual(
-        expect.arrayContaining(["create_task", "list_tasks", "replan", "stop_task"]),
+        expect.arrayContaining(["create_task", "list_tasks", "replan", "stop_task", "handoff"]),
       );
       expect(session.systemPrompt).toContain("You work as an orchestrator");
+      session.dispose();
+    }),
+  ));
+
+it("saves the three sections the model passes to the handoff tool and answers with the line to paste", () =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const { session, faux } = yield* createHarness();
+      faux.setResponses([
+        fauxAssistantMessage(
+          [
+            fauxToolCall("handoff", {
+              premise: "premise from the conversation",
+              goals: "goals from the conversation",
+              donts: "none",
+            }),
+          ],
+          { stopReason: "toolUse" },
+        ),
+        fauxAssistantMessage("done"),
+      ]);
+
+      yield* Effect.promise(() => session.prompt(handoffPrompt("")));
+
+      const result = session.messages.find((message) => message.role === "toolResult");
+      const [saved] = yield* Effect.promise(() => pendingHandoffs(`${tempDir}/handoffs`));
+      expect(result?.content).toEqual([{ type: "text", text: `${saved?.path} を読んで再開して` }]);
+      expect(readFileSync(saved?.path ?? "", "utf8")).toContain("premise from the conversation");
+      session.dispose();
+    }),
+  ));
+
+it("writes a handoff under the agent dir, recording the running msa version", () =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const { session } = yield* createHarness();
+      const orchestrator = session.orchestrator;
+      if (orchestrator === undefined) throw new Error("orchestrator missing");
+
+      const result = yield* Effect.promise(() =>
+        orchestrator.handoff({ premise: "p", goals: "g", donts: "d" }),
+      );
+
+      expect(result.path.startsWith(`${tempDir}/handoffs/`)).toBe(true);
+      expect(readFileSync(result.path, "utf8")).toContain(`- msa: ${VERSION}`);
       session.dispose();
     }),
   ));

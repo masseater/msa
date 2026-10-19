@@ -1011,6 +1011,11 @@ export class SettingsManager {
     return configured ? resolvePath(configured, agentDir) : join(agentDir, "orchestrator.db");
   }
 
+  getHandoffDirectory(): string {
+    const agentDir = this.settingsPaths.global ? dirname(this.settingsPaths.global) : getAgentDir();
+    return join(agentDir, "handoffs");
+  }
+
   getRetryEnabled(): boolean {
     return this.settings.retry?.enabled ?? SETTINGS_DEFAULTS.retry.enabled;
   }
