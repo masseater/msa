@@ -16,6 +16,8 @@ const noopTelemetrySpan: TelemetrySpan = {
   addEvent: () => {},
   setAttributes: () => {},
   setStatus: () => {},
+  log: () => {},
+  recordMetric: () => {},
 };
 Object.freeze(noopTelemetrySpan);
 

@@ -1,3 +1,4 @@
+import { InMemoryTelemetryContext, NOOP_TELEMETRY_CONTEXT } from "@msa/telemetry";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -190,6 +191,7 @@ describe("pr_watch delivery", () => {
         sent.push({ message, options });
       },
       changed: () => undefined,
+      telemetry: NOOP_TELEMETRY_CONTEXT,
     });
 
     host.notify({
@@ -210,6 +212,45 @@ describe("pr_watch delivery", () => {
     ]);
   });
 
+  it("logs each notification and records how long CI waited", () => {
+    const telemetry = new InMemoryTelemetryContext();
+    const host = createPrWatchHost({
+      threadId: "",
+      sendMessage: () => undefined,
+      changed: () => undefined,
+      telemetry,
+    });
+
+    host.notify({
+      label: "CI passed",
+      text: "#12: CI finished: 2 passed.",
+      wake: true,
+      ci: { durationMs: 90_000, conclusion: "passed" },
+    });
+
+    expect(telemetry.getLogs()).toEqual([
+      {
+        spanId: null,
+        severity: "info",
+        body: "msa.pr_watch.notification",
+        attributes: {
+          "msa.pr_watch.label": "CI passed",
+          "msa.pr_watch.text": "#12: CI finished: 2 passed.",
+          "msa.pr_watch.wake": true,
+        },
+      },
+    ]);
+    expect(telemetry.getMetrics()).toEqual([
+      {
+        kind: "histogram",
+        name: "msa.pr_watch.ci.duration",
+        value: 90,
+        unit: "s",
+        attributes: { "msa.ci.conclusion": "passed" },
+      },
+    ]);
+  });
+
   it("sends a status report without starting a turn", () => {
     const sent: Array<{ message: unknown; options: unknown }> = [];
     const host = createPrWatchHost({
@@ -218,6 +259,7 @@ describe("pr_watch delivery", () => {
         sent.push({ message, options });
       },
       changed: () => undefined,
+      telemetry: NOOP_TELEMETRY_CONTEXT,
     });
 
     host.notify({ label: "status", text: "#12: checks running (verify), mergeable", wake: false });
@@ -243,6 +285,7 @@ describe("pr_watch delivery", () => {
           sent.push({ message });
         },
         changed: () => undefined,
+        telemetry: NOOP_TELEMETRY_CONTEXT,
       }).notify({ label: "status", text: "#12: checks running", wake: false });
       return sent[0]?.message.content;
     };

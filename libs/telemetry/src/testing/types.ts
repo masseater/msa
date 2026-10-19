@@ -1,9 +1,15 @@
 import type { TelemetryContext } from "../context.ts";
-import type { RecordedTelemetrySpan } from "../memory.ts";
+import type {
+  RecordedTelemetryLog,
+  RecordedTelemetryMetric,
+  RecordedTelemetrySpan,
+} from "../memory.ts";
 
 export interface TelemetryAdapterFixture extends AsyncDisposable {
   readonly context: TelemetryContext;
   getSpans(): Promise<readonly RecordedTelemetrySpan[]>;
+  getLogs(): Promise<readonly RecordedTelemetryLog[]>;
+  getMetrics(): Promise<readonly RecordedTelemetryMetric[]>;
 }
 
 export type TelemetryAdapterFixtureFactory = () => Promise<TelemetryAdapterFixture>;

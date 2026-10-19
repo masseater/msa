@@ -4,13 +4,14 @@ Vendor-neutral telemetry contracts and typed schema utilities for msa packages.
 
 This package provides:
 
-- an explicit, callback-based `TelemetryContext` / `TelemetrySpan` contract;
+- an explicit, callback-based `TelemetryContext` / `TelemetrySpan` contract for spans, logs, and metrics;
 - a shared `NOOP_TELEMETRY_CONTEXT`;
 - a reference `InMemoryTelemetryContext` implementation;
+- `@msa/telemetry/otlp`, which exports the contract over OTLP/HTTP through Effect's tracer, metrics, and logger;
 - serializable schema definitions with inferred TypeScript types;
-- no exporter, global current-span state, or dependency on a telemetry backend.
+- no global current-span state.
 
-Applications can use the in-memory reference or provide an adapter for OpenTelemetry, Sentry, logs, or another backend. msa packages pass telemetry contexts explicitly and define their domain schemas separately.
+msa packages pass telemetry contexts explicitly and define their domain schemas separately.
 
 ## Table of Contents
 
@@ -97,6 +98,20 @@ return telemetryContext.startSpan({ name: "example.parent" }, async (parentSpan)
 });
 ```
 
+A context also records structured logs and metric values. Logs written through a span belong to it; metrics carry no span:
+
+```typescript
+span.log({ severity: "warn", body: "example.retry", attributes: { attempt: 2 } });
+telemetryContext.recordMetric({
+  kind: "histogram",
+  name: "example.duration",
+  value: 1.5,
+  unit: "s",
+});
+```
+
+Metric kinds are `counter`, `histogram`, and `gauge`. Backends that key series by strings receive metric attributes as strings.
+
 There is no public `end()` method. `startSpan()` owns settlement and keeps the span open until the callback's value or promise settles. For an expected failure represented by a normal return value, set the status explicitly:
 
 ```typescript
@@ -122,8 +137,8 @@ An adapter implements `TelemetryContext` and bridges the generic API to its back
 - treat normal completion as `ok` and throws/rejections as errors unless an explicit status was set;
 - make repeated `setStatus()` calls last-write-wins;
 - merge `setAttributes()` calls, with later defined values replacing earlier values and `undefined` ignored;
-- make recording methods synchronous, passive, and non-throwing;
-- ignore calls made after settlement;
+- make recording methods, `log()`, and `recordMetric()` synchronous, passive, and non-throwing;
+- ignore calls made after settlement, including logs and metrics recorded through a settled span;
 - ignore a failed recording call atomically, suppress backend failures, and still execute the business callback exactly once.
 
 Adapters may activate backend-native ambient context internally for automatic instrumentation, but msa code always propagates the parent through `TelemetryContext` arguments. Exporter buffering, flushing, sampling, backend IDs, and backend-specific context objects belong to the adapter. Use the [adapter conformance suite](#adapter-conformance) to check these observable semantics.
@@ -167,13 +182,13 @@ await telemetry.startSpan(
 console.log(telemetry.getSpans());
 ```
 
-`getSpans()` returns detached snapshots in span-start order. Each `RecordedTelemetrySpan` contains a deterministic numeric ID, parent ID, merged attributes, ordered events, final status, settlement state, and deterministic end sequence. It records no timestamps.
+`getLogs()` and `getMetrics()` return each recorded log and metric value in order. `getSpans()` returns detached snapshots in span-start order. Each `RecordedTelemetrySpan` contains a deterministic numeric ID, parent ID, merged attributes, ordered events, final status, settlement state, and deterministic end sequence. It records no timestamps.
 
 The adapter is safe to use as an ordinary `TelemetryContext`, but storage is unbounded and process-local. Create a fresh instance to isolate tests or recording scopes, and do not capture sensitive attributes unless the caller's data policy allows them.
 
 ## Adapter Conformance
 
-`@msa/telemetry/testing` exports a runner-independent conformance suite modeled as grouped cases. A fixture supplies a fresh context and converts its backend's finished spans into normalized `RecordedTelemetrySpan` snapshots:
+`@msa/telemetry/testing` exports a runner-independent conformance suite modeled as grouped cases. A fixture supplies a fresh context and converts its backend's finished spans, logs, and metrics into normalized `RecordedTelemetrySpan`, `RecordedTelemetryLog`, and `RecordedTelemetryMetric` snapshots:
 
 ```typescript
 import {
@@ -187,6 +202,8 @@ const conformance = createTelemetryAdapterConformance(async () => {
   return {
     context: adapter.context,
     getSpans: async () => adapter.normalizedSpans(),
+    getLogs: async () => adapter.normalizedLogs(),
+    getMetrics: async () => adapter.normalizedMetrics(),
     async [Symbol.asyncDispose]() {
       await adapter.close();
     },
@@ -202,7 +219,7 @@ for (const group of new Set(conformance.map((testCase) => testCase.group))) {
 }
 ```
 
-The suite checks synchronous single admission, result and rejection identity, automatic and explicit status, attribute merging, event ordering, inert post-settlement calls, nested and concurrent parentage, and suppression of unreadable telemetry payload failures. `getSpans()` may flush an asynchronous exporter before returning. The testing subpath uses Node's assertion APIs; the root telemetry package remains runtime-neutral.
+The suite checks synchronous single admission, result and rejection identity, automatic and explicit status, attribute merging, event ordering, inert post-settlement calls, nested and concurrent parentage, log parentage, metric values, and suppression of unreadable telemetry payload failures. `test/otlp.test.ts` runs it against `@msa/telemetry/otlp` with a real OTLP/HTTP receiver. `getSpans()` may flush an asynchronous exporter before returning. The testing subpath uses Node's assertion APIs; the root telemetry package remains runtime-neutral.
 
 ## Typed Schemas
 
@@ -380,10 +397,22 @@ The package does not use `AsyncLocalStorage` or another runtime-specific ambient
 | `SpanOptions`                       | Span name and optional start attributes                              |
 | `SpanAttributes` / `AttributeValue` | Open adapter-level attribute bag and supported values                |
 | `SpanStatus`                        | Explicit `ok` or `error` status                                      |
+| `TelemetryLogRecord`                | Log severity, body, and attributes                                   |
+| `TelemetryMetricRecord`             | Counter, histogram, or gauge value with unit and attributes          |
 | `NOOP_TELEMETRY_CONTEXT`            | Shared passive context for disabled telemetry                        |
 | `InMemoryTelemetryContext`          | Reference adapter with deterministic process-local recording         |
 | `RecordedTelemetrySpan`             | Normalized captured span snapshot                                    |
 | `RecordedTelemetryEvent`            | Normalized captured event snapshot                                   |
+| `RecordedTelemetryLog`              | Normalized captured log with its span ID                             |
+| `RecordedTelemetryMetric`           | Normalized captured metric value                                     |
+
+### OTLP subpath
+
+| Export                 | Purpose                                                                  |
+| ---------------------- | ------------------------------------------------------------------------ |
+| `layer(options)`       | Provides `OtlpTelemetry`, exporting to `options.endpoint` over OTLP/HTTP |
+| `OtlpTelemetry`        | The exporting `context` and a `flush` effect                             |
+| `OtlpTelemetryOptions` | Endpoint, service name, and service version                              |
 
 ### Schema definitions and inference
 

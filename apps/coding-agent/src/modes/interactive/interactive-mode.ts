@@ -122,6 +122,7 @@ import {
   planModelUpgrades,
   rewriteModelReferencesInSettings,
 } from "../../core/model-upgrade.ts";
+import { describeTelemetry } from "../../core/observability/telemetry.ts";
 import { ORCHESTRATOR_REPORT_MESSAGE_TYPE } from "../../core/orchestrator/orchestrator.ts";
 import { DefaultPackageManager } from "../../core/package-manager.ts";
 import type { ResourceDiagnostic } from "../../core/resource-loader.ts";
@@ -5637,6 +5638,8 @@ export class InteractiveMode {
       selectedModelKey: `${model?.provider}/${model?.id}`,
       contextBreakdown,
       contextWindow: this.session.getContextUsage()?.contextWindow ?? model?.contextWindow,
+      telemetry:
+        this.runtimeHost.telemetry && describeTelemetry(this.runtimeHost.telemetry.status()),
     };
     this.chatContainer.addChild(new Spacer(1));
     this.chatContainer.addChild(new ThemedText(() => formatSessionInfo(info), 1, 0));

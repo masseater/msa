@@ -20,6 +20,7 @@ import {
   type TaskView,
 } from "./snapshot.ts";
 import { store } from "./store.ts";
+import { OrchestratorTelemetry } from "./telemetry.ts";
 import { TranscriptCache } from "./transcripts.ts";
 import type { OrchestratorOptions, WorkerSession } from "./worker.ts";
 import type { WrapUp } from "./wrap-up.ts";
@@ -54,6 +55,7 @@ const EMPTY: OrchestratorSnapshot = {
 export class Orchestrator implements Runtime {
   readonly database: ReturnType<typeof store.openDatabase>;
   readonly options: OrchestratorOptions;
+  readonly telemetry: OrchestratorTelemetry;
   readonly workers = new Map<string, WorkerSession>();
   readonly runs = new Map<string, number>();
   readonly runStartedAt = new Map<string, number>();
@@ -68,7 +70,14 @@ export class Orchestrator implements Runtime {
   private poller: Fiber.Fiber<never, never> | undefined;
 
   constructor(options: OrchestratorOptions) {
-    this.options = options;
+    this.telemetry = new OrchestratorTelemetry(options.telemetry);
+    this.options = {
+      ...options,
+      report: (text, details) => {
+        this.telemetry.reported(text, details);
+        options.report(text, details);
+      },
+    };
     this.database = store.openDatabase(options.databasePath);
     store.recoverRunning(this.database, options.project, Effect.runSync(nowMillis));
     this.maxConcurrentSessions =
@@ -100,6 +109,7 @@ export class Orchestrator implements Runtime {
       this.options.project,
       this.maxConcurrentSessions,
     );
+    this.telemetry.published(this.snapshot, this.runs.size);
     for (const listener of this.listeners) listener();
   }
 
@@ -191,7 +201,10 @@ export class Orchestrator implements Runtime {
   }
 
   replan(input: ReplanInput): Promise<ReplanResult> {
-    return replan(this, input);
+    return replan(this, input).then((result) => {
+      this.telemetry.replanned(input, result);
+      return result;
+    });
   }
 
   searchReports(query: string, limit = 10): Promise<ReportHit[]> {
@@ -203,6 +216,7 @@ export class Orchestrator implements Runtime {
   dispose(): Promise<void> {
     const poller = this.poller;
     this.poller = undefined;
+    this.telemetry.close();
     const self = this;
     return Effect.runPromise(
       Effect.gen(function* () {

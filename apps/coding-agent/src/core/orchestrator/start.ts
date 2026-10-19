@@ -143,14 +143,20 @@ function openWorker(
   now: number,
 ): Effect.Effect<WorkerSession | undefined, OrchestratorError> {
   return Effect.gen(function* () {
+    const thinkingLevel = plan.thinkingLevel ?? runtime.options.defaults().workerThinkingLevel;
     yield* Effect.sync(() => insertRunningSession(runtime, plan, task, role, now));
+    const telemetry = runtime.telemetry.sessionStarted(
+      { sessionId: plan.sessionId, role, model: plan.model, thinkingLevel },
+      task,
+    );
     const created = yield* Effect.result(
       Effect.tryPromise({
         try: () =>
           runtime.options.createWorker({
             cwd: task.cwd,
             model: runtime.options.resolveModel(plan.model),
-            thinkingLevel: plan.thinkingLevel ?? runtime.options.defaults().workerThinkingLevel,
+            thinkingLevel,
+            telemetry,
           }),
         catch: orchestratorError,
       }),

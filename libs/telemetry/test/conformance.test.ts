@@ -12,6 +12,8 @@ const conformance = createTelemetryAdapterConformance(() => {
   return Promise.resolve<TelemetryAdapterFixture>({
     context,
     getSpans: () => Promise.resolve(context.getSpans()),
+    getLogs: () => Promise.resolve(context.getLogs()),
+    getMetrics: () => Promise.resolve(context.getMetrics()),
     [Symbol.asyncDispose]: () => Promise.resolve(),
   });
 });

@@ -438,6 +438,9 @@ importers:
       '@msa/mcp':
         specifier: workspace:*
         version: link:../../libs/mcp
+      '@msa/telemetry':
+        specifier: workspace:*
+        version: link:../../libs/telemetry
       '@msa/tui':
         specifier: workspace:*
         version: link:../../libs/tui

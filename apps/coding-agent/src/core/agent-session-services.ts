@@ -8,6 +8,7 @@ import { toErrorMessage } from "../utils/errors.ts";
 import { resolvePath } from "../utils/paths.ts";
 import type { SessionStartEvent, ToolDefinition } from "./extensions/index.ts";
 import { ModelRuntime } from "./model-runtime.ts";
+import type { SessionTelemetryOptions } from "./observability/session-telemetry.ts";
 import {
   DefaultResourceLoader,
   type DefaultResourceLoaderOptions,
@@ -74,6 +75,7 @@ export interface CreateAgentSessionFromServicesOptions {
   excludeTools?: CreateAgentSessionOptions["excludeTools"] | undefined;
   noTools?: CreateAgentSessionOptions["noTools"] | undefined;
   customTools?: ToolDefinition[] | undefined;
+  telemetry?: SessionTelemetryOptions | undefined;
 }
 
 /**
@@ -245,5 +247,6 @@ export async function createAgentSessionFromServices(
     noTools: options.noTools,
     customTools: options.customTools,
     sessionStartEvent: options.sessionStartEvent,
+    telemetry: options.telemetry,
   });
 }
