@@ -1,10 +1,14 @@
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "fs";
-import { tmpdir } from "os";
-import { delimiter, join } from "path";
-
-import { readEnv } from "../src/core/process-env.ts";
-afterEach(() => vi.unstubAllEnvs());
-
+import {
+  changeMode,
+  joinPath,
+  makeDirectory,
+  makeTempDir,
+  pathDelimiter,
+  removePath,
+  runTest,
+  writeTextFile,
+} from "@msa/testing";
+import { Effect } from "effect";
 import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 
 import {
@@ -12,6 +16,7 @@ import {
   getSelfUpdateCommand,
   getSelfUpdateUnavailableInstruction,
 } from "../src/config.ts";
+import { readEnv } from "../src/core/process-env.ts";
 
 const execPathDescriptor = Object.getOwnPropertyDescriptor(process, "execPath");
 const originalPath = readEnv("PATH");
@@ -26,64 +31,59 @@ function setExecPath(value: string): void {
   });
 }
 
-afterEach(() => {
-  if (execPathDescriptor !== undefined) {
-    Object.defineProperty(process, "execPath", execPathDescriptor);
-  }
-  if (originalPath === undefined) {
-    vi.stubEnv("PATH", undefined);
-  } else {
-    vi.stubEnv("PATH", originalPath);
-  }
-  if (originalMsaPackageDir === undefined) {
-    vi.stubEnv("MSA_PACKAGE_DIR", undefined);
-  } else {
-    vi.stubEnv("MSA_PACKAGE_DIR", originalMsaPackageDir);
-  }
-  if (originalArgv1 === undefined) {
-    process.argv.splice(1, 1);
-  } else {
-    process.argv[1] = originalArgv1;
-  }
-  if (tempDir !== undefined && tempDir.length > 0) {
-    chmodSync(tempDir, 0o700);
-    rmSync(tempDir, { recursive: true, force: true });
-    tempDir = undefined;
-  }
-});
+afterEach(() =>
+  runTest(
+    Effect.gen(function* () {
+      vi.unstubAllEnvs();
+      if (execPathDescriptor !== undefined) {
+        Object.defineProperty(process, "execPath", execPathDescriptor);
+      }
+      if (originalPath === undefined) vi.stubEnv("PATH", undefined);
+      else vi.stubEnv("PATH", originalPath);
+      if (originalMsaPackageDir === undefined) vi.stubEnv("MSA_PACKAGE_DIR", undefined);
+      else vi.stubEnv("MSA_PACKAGE_DIR", originalMsaPackageDir);
+      if (originalArgv1 === undefined) process.argv.splice(1, 1);
+      else process.argv[1] = originalArgv1;
+      if (tempDir !== undefined && tempDir.length > 0) {
+        yield* removePath(tempDir);
+        tempDir = undefined;
+      }
+    }),
+  ),
+);
 
-function createNpmPrefixInstall(template = "msa-prefix-"): { prefix: string; packageDir: string } {
-  const prefix = mkdtempSync(join(tmpdir(), template));
-  const root = join(prefix, "lib", "node_modules");
-  const scopeDir = join(root, "@msa");
-  const packageDir = join(scopeDir, "coding-agent");
-  mkdirSync(packageDir, { recursive: true });
+const createNpmPrefixInstall = Effect.fn("createNpmPrefixInstall")(function* (
+  template = "msa-prefix-",
+) {
+  const prefix = yield* makeTempDir(template);
+  const root = joinPath(prefix, "lib", "node_modules");
+  const scopeDir = joinPath(root, "@msa");
+  const packageDir = joinPath(scopeDir, "coding-agent");
+  yield* makeDirectory(packageDir);
   tempDir = prefix;
   vi.stubEnv("MSA_PACKAGE_DIR", packageDir);
-  setExecPath(join(packageDir, "dist", "cli.js"));
+  setExecPath(joinPath(packageDir, "dist", "cli.js"));
   return { prefix, packageDir };
-}
+});
 
-function createBunGlobalInstall(): { packageDir: string } {
-  const temp = mkdtempSync(join(tmpdir(), "msa-bun-"));
-  const prefix = join(temp, ".bun");
-  const bunBin = join(prefix, "bin");
-  const root = join(prefix, "install", "global", "node_modules");
-  const scopeDir = join(root, "@msa");
-  const packageDir = join(scopeDir, "coding-agent");
-  mkdirSync(packageDir, { recursive: true });
-  mkdirSync(bunBin, { recursive: true });
-  writeFileSync(
-    join(bunBin, process.platform === "win32" ? "bun.cmd" : "bun"),
-    createFakeBunScript(bunBin),
-  );
-  chmodSync(join(bunBin, process.platform === "win32" ? "bun.cmd" : "bun"), 0o755);
+const createBunGlobalInstall = Effect.fn("createBunGlobalInstall")(function* () {
+  const temp = yield* makeTempDir("msa-bun-");
+  const prefix = joinPath(temp, ".bun");
+  const bunBin = joinPath(prefix, "bin");
+  const root = joinPath(prefix, "install", "global", "node_modules");
+  const scopeDir = joinPath(root, "@msa");
+  const packageDir = joinPath(scopeDir, "coding-agent");
+  yield* makeDirectory(packageDir);
+  yield* makeDirectory(bunBin);
+  const bunPath = joinPath(bunBin, process.platform === "win32" ? "bun.cmd" : "bun");
+  yield* writeTextFile(bunPath, createFakeBunScript(bunBin));
+  yield* changeMode(bunPath, 0o755);
   tempDir = temp;
-  vi.stubEnv("PATH", `${bunBin}${delimiter}${originalPath ?? ""}`);
+  vi.stubEnv("PATH", `${bunBin}${pathDelimiter}${originalPath ?? ""}`);
   vi.stubEnv("MSA_PACKAGE_DIR", packageDir);
-  setExecPath(join(packageDir, "dist", "cli.js"));
+  setExecPath(joinPath(packageDir, "dist", "cli.js"));
   return { packageDir };
-}
+});
 
 function createFakeBunScript(bunBin: string): string {
   if (process.platform === "win32") {
@@ -94,42 +94,51 @@ function createFakeBunScript(bunBin: string): string {
 }
 
 describe("detectInstallMethod 2", () => {
-  test("self-updates renamed bun global installs by removing the old package first", () => {
-    createBunGlobalInstall();
-
-    const command = getSelfUpdateCommand(
-      "@mariozechner/pi-coding-agent",
-      undefined,
-      "@new-scope/msa",
-    );
-
-    expect(detectInstallMethod()).toBe("bun");
-    expect(command).toEqual({
-      command: "bun",
-      args: ["install", "-g", "--ignore-scripts", "--minimum-release-age=0", "@new-scope/msa"],
-      display:
-        "bun uninstall -g @mariozechner/pi-coding-agent && bun install -g --ignore-scripts --minimum-release-age=0 @new-scope/msa",
-      steps: [
-        {
-          command: "bun",
-          args: ["uninstall", "-g", "@mariozechner/pi-coding-agent"],
-          display: "bun uninstall -g @mariozechner/pi-coding-agent",
-        },
-        {
+  test("self-updates renamed bun global installs by removing the old package first", () =>
+    runTest(
+      Effect.gen(function* () {
+        yield* createBunGlobalInstall();
+        const command = getSelfUpdateCommand(
+          "@mariozechner/pi-coding-agent",
+          undefined,
+          "@new-scope/msa",
+        );
+        expect(detectInstallMethod()).toBe("bun");
+        expect(command).toEqual({
           command: "bun",
           args: ["install", "-g", "--ignore-scripts", "--minimum-release-age=0", "@new-scope/msa"],
-          display: "bun install -g --ignore-scripts --minimum-release-age=0 @new-scope/msa",
-        },
-      ],
-    });
-  });
-  test("does not self-update when npm install path is not writable", () => {
-    const { packageDir } = createNpmPrefixInstall();
-    chmodSync(packageDir, 0o500);
-
-    expect(getSelfUpdateCommand("@msa/coding-agent")).toBeUndefined();
-    expect(getSelfUpdateUnavailableInstruction("@msa/coding-agent")).toContain(
-      "the install path is not writable",
-    );
-  });
+          display:
+            "bun uninstall -g @mariozechner/pi-coding-agent && bun install -g --ignore-scripts --minimum-release-age=0 @new-scope/msa",
+          steps: [
+            {
+              command: "bun",
+              args: ["uninstall", "-g", "@mariozechner/pi-coding-agent"],
+              display: "bun uninstall -g @mariozechner/pi-coding-agent",
+            },
+            {
+              command: "bun",
+              args: [
+                "install",
+                "-g",
+                "--ignore-scripts",
+                "--minimum-release-age=0",
+                "@new-scope/msa",
+              ],
+              display: "bun install -g --ignore-scripts --minimum-release-age=0 @new-scope/msa",
+            },
+          ],
+        });
+      }),
+    ));
+  test("does not self-update when npm install path is not writable", () =>
+    runTest(
+      Effect.gen(function* () {
+        const { packageDir } = yield* createNpmPrefixInstall();
+        yield* changeMode(packageDir, 0o500);
+        expect(getSelfUpdateCommand("@msa/coding-agent")).toBeUndefined();
+        expect(getSelfUpdateUnavailableInstruction("@msa/coding-agent")).toContain(
+          "the install path is not writable",
+        );
+      }),
+    ));
 });
