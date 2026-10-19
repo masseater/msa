@@ -185,6 +185,7 @@ describe("pr_watch delivery", () => {
   it("sends a change as a message that starts a turn when the session is idle", () => {
     const sent: Array<{ message: unknown; options: unknown }> = [];
     const host = createPrWatchHost({
+      threadId: "01a1518a-ff46-75e6-90be-7024913caa86",
       sendMessage: (message, options) => {
         sent.push({ message, options });
       },
@@ -201,7 +202,7 @@ describe("pr_watch delivery", () => {
       {
         message: {
           customType: PR_WATCH_MESSAGE_TYPE,
-          content: "#12: CI finished: 1 failed. Fix the failing checks.",
+          content: "#12: CI finished: 1 failed. Fix the failing checks. [01a1518a]",
           display: true,
         },
         options: { triggerTurn: true, deliverAs: "steer" },
@@ -212,6 +213,7 @@ describe("pr_watch delivery", () => {
   it("sends a status report without starting a turn", () => {
     const sent: Array<{ message: unknown; options: unknown }> = [];
     const host = createPrWatchHost({
+      threadId: "01a1518a-ff46-75e6-90be-7024913caa86",
       sendMessage: (message, options) => {
         sent.push({ message, options });
       },
@@ -224,11 +226,28 @@ describe("pr_watch delivery", () => {
       {
         message: {
           customType: PR_WATCH_MESSAGE_TYPE,
-          content: "#12: checks running (verify), mergeable",
+          content: "#12: checks running (verify), mergeable [01a1518a]",
           display: true,
         },
         options: { triggerTurn: false, deliverAs: "steer" },
       },
     ]);
+  });
+
+  it("tags the same text from two threads with their own id", () => {
+    const content = (threadId: string) => {
+      const sent: Array<{ message: { content: string } }> = [];
+      createPrWatchHost({
+        threadId,
+        sendMessage: (message) => {
+          sent.push({ message });
+        },
+        changed: () => undefined,
+      }).notify({ label: "status", text: "#12: checks running", wake: false });
+      return sent[0]?.message.content;
+    };
+
+    expect(content("aaaaaaaa-0000-0000-0000-000000000001")).toBe("#12: checks running [aaaaaaaa]");
+    expect(content("bbbbbbbb-0000-0000-0000-000000000002")).toBe("#12: checks running [bbbbbbbb]");
   });
 });

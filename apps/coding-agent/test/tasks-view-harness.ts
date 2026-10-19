@@ -5,6 +5,7 @@ import { vi } from "vite-plus/test";
 import type { Orchestrator } from "../src/core/orchestrator/orchestrator.ts";
 import type {
   OrchestratorSnapshot,
+  ReplanView,
   SessionView,
   TaskSnapshot,
 } from "../src/core/orchestrator/types.ts";
@@ -15,7 +16,7 @@ import {
 import { TasksView } from "../src/modes/interactive/components/tasks-view.ts";
 import { stripAnsi } from "../src/utils/ansi.ts";
 
-function task(id: string, patch: Partial<TaskSnapshot> = {}): TaskSnapshot {
+export function task(id: string, patch: Partial<TaskSnapshot> = {}): TaskSnapshot {
   return {
     id,
     project: "p",
@@ -114,15 +115,31 @@ const SESSIONS = [
   }),
 ];
 
-export function setup(options: { initialId?: string; state?: TasksViewState } = {}) {
+function roundsOf(tasks: readonly TaskSnapshot[]) {
+  return [...new Set(tasks.map((task) => task.round))].map((id) => ({
+    id,
+    title: id,
+    reviewTaskId: tasks.find((task) => task.round === id && task.kind === "review")?.id ?? null,
+    taskIds: tasks.filter((task) => task.round === id).map((task) => task.id),
+  }));
+}
+
+export function setup(
+  options: {
+    initialId?: string;
+    state?: TasksViewState;
+    tasks?: readonly TaskSnapshot[];
+    maxHeight?: number;
+    replans?: readonly ReplanView[];
+  } = {},
+) {
   const state = options.state ?? viewHelpers.createTasksViewState();
+  const tasks = options.tasks ?? TASKS;
   const snapshot: OrchestratorSnapshot = {
-    tasks: TASKS,
+    tasks,
     sessions: SESSIONS,
-    rounds: [
-      { id: "main", title: "main", reviewTaskId: "rev-main", taskIds: TASKS.map((t) => t.id) },
-    ],
-    replans: [
+    rounds: roundsOf(tasks),
+    replans: options.replans ?? [
       {
         id: "rp-1",
         reason: "the api moved to v3",
@@ -141,14 +158,14 @@ export function setup(options: { initialId?: string; state?: TasksViewState } = 
   };
   const orchestrator = {
     snapshot,
-    tasks: TASKS,
+    tasks,
     messages: (id: string) => messages[id] ?? [],
     progress: () => ({ startedAt: undefined, retrying: false }),
-    stop: vi.fn(() => Promise.resolve(TASKS[0])),
-    sendMessage: vi.fn(() => Promise.resolve(TASKS[1])),
+    stop: vi.fn(() => Promise.resolve(tasks[0])),
+    sendMessage: vi.fn(() => Promise.resolve(tasks[1])),
     sendNote: vi.fn(() => Promise.resolve({ noteId: "n", steeredSessions: [], waitingTasks: [] })),
-    setPriority: vi.fn(() => Promise.resolve(TASKS[1])),
-    rerun: vi.fn(() => Promise.resolve(TASKS[2])),
+    setPriority: vi.fn(() => Promise.resolve(tasks[1])),
+    rerun: vi.fn(() => Promise.resolve(tasks[2])),
   };
   const onClose = vi.fn();
   const onPickModel = vi.fn();
@@ -159,7 +176,7 @@ export function setup(options: { initialId?: string; state?: TasksViewState } = 
       onPickModel,
       onError: () => {},
       requestRender: () => {},
-      maxHeight: () => 40,
+      maxHeight: () => options.maxHeight ?? 40,
       state,
     },
     options.initialId,
