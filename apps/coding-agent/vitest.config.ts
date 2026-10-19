@@ -1,6 +1,11 @@
 import { defineConfig, mergeConfig } from "vite-plus";
 
-import { onGitHubActions, testBaseConfig, workspaceSourcePaths } from "../../vite.config.ts";
+import {
+  isolatedHomeSetup,
+  onGitHubActions,
+  testBaseConfig,
+  workspaceSourcePaths,
+} from "../../vite.config.ts";
 
 export default mergeConfig(
   testBaseConfig,
@@ -16,6 +21,7 @@ export default mergeConfig(
         OPENCODE_BIN: "/nonexistent/opencode",
       },
       unstubEnvs: true,
+      setupFiles: [isolatedHomeSetup],
       reporters: onGitHubActions ? ["dot", "github-actions"] : ["dot"],
       silent: "passed-only",
       server: {

@@ -67,6 +67,10 @@ export const workspaceSourcePaths = {
   tuiIndex: fileURLToPath(new URL("./libs/tui/src/index.ts", import.meta.url)),
 } as const;
 
+export const isolatedHomeSetup = fileURLToPath(
+  new URL("./apps/coding-agent/test/isolated-home-setup.ts", import.meta.url),
+);
+
 export const onGitHubActions = Effect.runSync(
   Config.withDefault(Config.Boolean("GITHUB_ACTIONS"), false),
 );

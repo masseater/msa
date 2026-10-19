@@ -1,12 +1,13 @@
 import { defineConfig, mergeConfig } from "vite-plus";
 
-import { testBaseConfig, workspaceSourcePaths } from "../../vite.config.ts";
+import { isolatedHomeSetup, testBaseConfig, workspaceSourcePaths } from "../../vite.config.ts";
 
 export default mergeConfig(
   testBaseConfig,
   defineConfig({
     test: {
       include: ["test/**/*.test.ts"],
+      setupFiles: [isolatedHomeSetup],
     },
     resolve: {
       alias: [
