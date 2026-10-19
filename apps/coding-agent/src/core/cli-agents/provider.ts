@@ -20,6 +20,8 @@ export interface CliAgentModel {
   input: ("text" | "image")[];
   contextWindow: number;
   maxTokens: number;
+  /** Set on an alias: the id of the model it currently stands for. */
+  resolvesTo?: string;
 }
 
 export function cliAgentProvider(input: {

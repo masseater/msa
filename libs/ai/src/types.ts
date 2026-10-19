@@ -824,6 +824,8 @@ export interface BaseModel<TApi extends string> {
   inputLimits?: ModelInputLimits;
   cost: ModelCost;
   headers?: Record<string, string>;
+  /** For an alias entry, the id of the model it currently stands for; the request is served by that model. */
+  resolvesTo?: string;
 }
 
 /** Chat model: usable with `stream()` and friends. */

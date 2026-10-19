@@ -32,7 +32,9 @@ import {
 } from "../src/core/cli-agents/claude-accounts.ts";
 import { claudeCodeService } from "../src/core/cli-agents/claude-service.ts";
 import { openCodeProvider } from "../src/core/cli-agents/opencode.ts";
+import { evaluateModelPolicy, hiddenModelsByPolicy } from "../src/core/model-policy.ts";
 import { ModelRuntime } from "../src/core/model-runtime.ts";
+import { findModelUpgrades } from "../src/core/model-upgrade.ts";
 
 let dir: string;
 const savedEnv = { ...process.env };
@@ -139,6 +141,58 @@ describe("Claude subscription providers", () => {
     process.env["CLAUDE_BIN"] = join(dir, "missing-claude");
     await runtime.refresh({ allowNetwork: false });
     expect(providers()).toEqual([]);
+  });
+});
+
+describe("Claude subscription model ids", () => {
+  async function claudeModels() {
+    process.env["CLAUDE_BIN"] = process.execPath;
+    const runtime = await ModelRuntime.create({
+      credentials: AuthStorage.inMemory(),
+      modelsPath: null,
+      modelsStore: new InMemoryModelsStore(),
+      allowModelNetwork: false,
+    });
+    return runtime.getAvailableSnapshot().filter((model) => model.provider === "claude-subs");
+  }
+
+  it("lists full ids and shows which id each alias resolves to", async () => {
+    const models = await claudeModels();
+    const ids = models.map((model) => model.id);
+    expect(ids).toEqual(
+      expect.arrayContaining(["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"]),
+    );
+    for (const alias of models.filter((model) => model.resolvesTo !== undefined)) {
+      expect(ids).toContain(alias.resolvesTo);
+      expect(alias.name).toBe(`${alias.id} \u2192 ${alias.resolvesTo}`);
+    }
+    expect(models.find((model) => model.id === "opus")?.resolvesTo).toBe("claude-opus-5-5");
+  });
+
+  it("applies a model policy to a full id and to the alias that resolves to it", async () => {
+    const models = await claudeModels();
+    const deny = { allow: [], deny: ["claude-subs/claude-opus-5-5"] };
+    const hidden = hiddenModelsByPolicy(deny, models).map((entry) => entry.model.id);
+    expect(hidden.sort()).toEqual(["claude-opus-5-5", "opus"]);
+    const sonnet = models.find((model) => model.id === "sonnet")!;
+    expect(evaluateModelPolicy(deny, sonnet).allowed).toBe(true);
+    expect(
+      evaluateModelPolicy({ allow: ["claude-subs/claude-sonnet-5-5"], deny: [] }, sonnet).allowed,
+    ).toBe(true);
+  });
+
+  it("lets model upgrades read a version from the full ids", async () => {
+    const models = await claudeModels();
+    const older = {
+      ...models.find((model) => model.id === "claude-sonnet-5-5")!,
+      id: "claude-sonnet-5",
+    };
+    const upgrades = findModelUpgrades([older, ...models]).filter(
+      (candidate) => candidate.confident,
+    );
+    expect(upgrades.map((candidate) => [candidate.from.id, candidate.to.id])).toEqual([
+      ["claude-sonnet-5", "claude-sonnet-5-5"],
+    ]);
   });
 });
 
