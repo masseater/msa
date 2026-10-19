@@ -20,6 +20,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+const evalSetOf = (file: string): string => {
+  const base = file.split("/").at(-1) ?? file;
+  return base.replace(/\.docs\.eval\.ts$/u, "");
+};
+
 export function parseDiscoveredCases(value: unknown): DiscoveredEvalCase[] {
   if (!Array.isArray(value)) throw new TypeError("Discovered eval cases must be an array.");
   const identities = new Set<string>();
@@ -27,21 +32,14 @@ export function parseDiscoveredCases(value: unknown): DiscoveredEvalCase[] {
     if (!isRecord(item) || typeof item["name"] !== "string" || typeof item["file"] !== "string") {
       throw new TypeError("Discovered eval case is invalid.");
     }
-    const [evalSet, caseId, ...extra] = item["name"].split(" > ");
-    if (
-      evalSet === undefined ||
-      evalSet.trim() === "" ||
-      caseId === undefined ||
-      caseId.trim() === "" ||
-      extra.length > 0
-    ) {
-      throw new TypeError(`Documentation eval must use "<eval set> > <case>": ${item["name"]}`);
-    }
+    const caseId = item["name"];
+    if (caseId.trim() === "") throw new TypeError("Discovered eval case has an empty name.");
+    const evalSet = evalSetOf(item["file"]);
     const identity = JSON.stringify([evalSet, caseId]);
     if (identities.has(identity))
       throw new TypeError(`Duplicate eval case identity: ${item["name"]}`);
     identities.add(identity);
-    return { file: item["file"], fullName: item["name"], evalSet, caseId };
+    return { file: item["file"], fullName: caseId, evalSet, caseId };
   });
 }
 

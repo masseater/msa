@@ -178,8 +178,7 @@ export const runTask = ({
       "tasks",
       yield* taskDirectoryName(task),
     );
-    const testName = `${task.evalSet} ${task.caseId}`;
-    const exactName = `^${testName.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")}$`;
+    const exactName = `(?:^| )${task.caseId.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")}$`;
     const args = yield* dockerArgs({
       context,
       variant: task.variant,

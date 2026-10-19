@@ -11,25 +11,12 @@ import {
 import { Effect } from "effect";
 import type { JsonValue } from "vitest-evals/harness";
 
-import { files, pathOperations, readEnv, unsetEnv } from "./platform.ts";
+import { files, pathOperations } from "./platform.ts";
 import type { HostSelection, Options, RunPaths, RunState } from "./run-types.ts";
 import { seedWorkspace } from "./workspace.ts";
 
-const CREDENTIAL_SOURCE = /^[A-Z][A-Z0-9_]*$/u;
-
 export const throwIfAborted = (signal: AbortSignal | undefined): Effect.Effect<void> =>
   Effect.sync(() => signal?.throwIfAborted());
-
-const hideCredentialEnvironment = (auth: {
-  source?: string | undefined;
-}): { name: string; value: string } | undefined => {
-  const name = auth.source;
-  if (name === undefined || !CREDENTIAL_SOURCE.test(name)) return undefined;
-  const value = readEnv(name);
-  if (value === undefined || value === "") return undefined;
-  unsetEnv(name);
-  return { name, value };
-};
 
 const authenticate = (
   modelRuntime: ModelRuntime,
@@ -55,16 +42,14 @@ const authenticate = (
     if (storedCredential === undefined && apiKey !== undefined && apiKey !== "") {
       yield* Effect.promise(() => modelRuntime.setRuntimeApiKey(selection.provider, apiKey));
     }
-    return { model, auth };
+    return model;
   });
 
 export const prepareModel = <TOutput extends JsonValue>({
-  state,
   options,
   paths,
   host,
 }: {
-  state: RunState<TOutput>;
   options: Options<TOutput>;
   paths: RunPaths;
   host: HostSelection;
@@ -78,14 +63,17 @@ export const prepareModel = <TOutput extends JsonValue>({
         credentials.modify(selection.provider, () => Promise.resolve(storedCredential)),
       );
     }
-    const modelRuntime = yield* Effect.promise(() => ModelRuntime.create({ credentials }));
     yield* Effect.all([files.makeDirectory(paths.workspace), files.makeDirectory(paths.agentDir)]);
+    const modelRuntime = yield* Effect.promise(() =>
+      ModelRuntime.create({
+        credentials,
+        modelsPath: pathOperations.join(paths.agentDir, "models.json"),
+        modelsStorePath: pathOperations.join(paths.agentDir, "models-store.json"),
+      }),
+    );
     yield* seedWorkspace(paths.workspace, options.workspaceFiles);
-    const { model, auth } = yield* authenticate(modelRuntime, selection, storedCredential);
-    if (sandboxIdentity !== undefined) {
-      yield* files.remove(authPath);
-      state.hiddenCredential = hideCredentialEnvironment(auth);
-    }
+    const model = yield* authenticate(modelRuntime, selection, storedCredential);
+    if (sandboxIdentity !== undefined) yield* files.remove(authPath);
     return { model, modelRuntime };
   });
 
@@ -109,6 +97,7 @@ export const openSession = <TOutput extends JsonValue>({
   Effect.gen(function* () {
     const services = yield* Effect.promise(() =>
       createAgentSessionServices({
+        agentDir: paths.agentDir,
         cwd: paths.workspace,
         modelRuntime: prepared.modelRuntime,
         resourceLoaderOptions: { extensionFactories },

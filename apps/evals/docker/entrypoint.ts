@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import { Data, Effect, Runtime } from "effect";
 
-import { files, pathOperations, readEnv, runCommand, setEnv } from "../src/platform.ts";
+import { files, pathOperations, readEnv, runCommand } from "../src/platform.ts";
 import { chownTree } from "../src/sandbox.ts";
 
 class ChildExit extends Data.TaggedError("ChildExit")<{ readonly status: number }> {
@@ -17,6 +17,13 @@ const codingAgentDir = "/repo/node_modules/@msa/coding-agent";
 const internalScope = "/repo/node_modules/@msa";
 const authSource = "/run/msa-eval-secrets/auth.json";
 const agentDir = "/tmp/msa-eval-host-agent";
+const bootstrapHome = "/tmp/msa-eval-bootstrap";
+const childEnvironment = {
+  HOME: bootstrapHome,
+  MSA_CODING_AGENT_DIR: agentDir,
+  MSA_EVAL_CONTAINER: "1",
+  USERPROFILE: bootstrapHome,
+};
 const VISIBLE_DIRECTORIES = ["docs", "examples", "src", "test", "tests"];
 const VISIBLE_FILES = /^(?:readme|changelog)(?:\..+)?$/iu;
 
@@ -172,7 +179,11 @@ const vitestArguments = (
 
 const runVitest = (args: readonly string[]) =>
   Effect.map(
-    runCommand(process.execPath, args, { cwd: packageRoot, output: "inherit" }),
+    runCommand(process.execPath, args, {
+      cwd: packageRoot,
+      env: childEnvironment,
+      output: "inherit",
+    }),
     ({ status }) => status,
   );
 
@@ -186,10 +197,6 @@ const program = Effect.gen(function* () {
     return yield* die(`Eval does not resolve @msa/coding-agent from dist: ${codingAgentEntry}`);
   }
   yield* prepareAgentDirectory({ uid: sandboxUid, gid: sandboxGid });
-  setEnv("HOME", "/tmp/msa-eval-bootstrap");
-  setEnv("USERPROFILE", "/tmp/msa-eval-bootstrap");
-  setEnv("MSA_CODING_AGENT_DIR", agentDir);
-  setEnv("MSA_EVAL_CONTAINER", "1");
   process.umask(0o022);
 
   const vitestCli = pathOperations.resolve(

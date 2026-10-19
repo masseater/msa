@@ -27,7 +27,7 @@ export const executeAgentRun = <TOutput extends JsonValue>({
   Effect.gen(function* () {
     const { input, signal, setArtifact, options } = request;
     const { host, paths, extensionFactories } = context;
-    const prepared = yield* prepareModel({ state, options, paths, host });
+    const prepared = yield* prepareModel({ options, paths, host });
     const { session, sessionManager } = yield* openSession({
       state,
       options,

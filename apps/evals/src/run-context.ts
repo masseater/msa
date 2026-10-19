@@ -37,15 +37,11 @@ const resolveHost = <TOutput extends JsonValue>(options: Options<TOutput>): Host
   sandboxIdentity: resolveSandboxIdentity(),
 });
 
-const pathsUnder = (root: string): RunPaths => {
-  const isolatedHome = pathOperations.join(root, "home");
-  return {
-    root,
-    workspace: pathOperations.join(root, "workspace"),
-    isolatedHome,
-    agentDir: pathOperations.join(isolatedHome, ".msa", "agent"),
-  };
-};
+const pathsUnder = (root: string): RunPaths => ({
+  root,
+  workspace: pathOperations.join(root, "workspace"),
+  agentDir: pathOperations.join(root, "agent"),
+});
 
 export const createRunContext = <TOutput extends JsonValue>(options: Options<TOutput>) =>
   Effect.gen(function* () {
@@ -57,7 +53,6 @@ export const createRunContext = <TOutput extends JsonValue>(options: Options<TOu
       session: undefined,
       result: undefined,
       diagnostics: undefined,
-      hiddenCredential: undefined,
     };
     const extensionFactories = systemPromptTransform(options, (prompt) => {
       state.forcedSystemPrompt = prompt;

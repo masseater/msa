@@ -4,7 +4,6 @@ import type { HarnessContext, JsonValue, SimpleHarnessResult } from "vitest-eval
 import { executeAgentRun } from "./agent-run.ts";
 import { throwIfAborted } from "./agent-session.ts";
 import type { MsaCodingAgentInput } from "./harness-types.ts";
-import { applyIsolatedEnvironment } from "./isolation.ts";
 import { cleanup, combineFailures, failRun } from "./run-cleanup.ts";
 import { createRunContext } from "./run-context.ts";
 import type { Options } from "./run-types.ts";
@@ -23,14 +22,12 @@ export const runMsaCodingAgent = <TOutput extends JsonValue>(
     const startedAt = performance.now();
     yield* throwIfAborted(request.signal);
     const { host, paths, state, extensionFactories } = yield* createRunContext(request.options);
-    const restoreEnvironment = applyIsolatedEnvironment(paths.isolatedHome, paths.agentDir);
     const exit = yield* Effect.exit(
       executeAgentRun({ state, request, context: { host, paths, extensionFactories } }),
     );
     const cleanupErrors = yield* cleanup({
       state,
       root: paths.root,
-      restoreEnvironment,
       setArtifact: request.setArtifact,
     });
     const failure = combineFailures({

@@ -1,5 +1,3 @@
-import { env } from "node:process";
-
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import {
   Config,
@@ -143,7 +141,11 @@ const STDOUT_MODES = { inherit: "inherit", capture: "pipe", ignore: "ignore" } a
 
 export type CommandOutputMode = "inherit" | "capture" | "ignore";
 
-type CommandOptions = { readonly cwd: string; readonly output: CommandOutputMode };
+type CommandOptions = {
+  readonly cwd: string;
+  readonly output: CommandOutputMode;
+  readonly env?: Record<string, string | undefined> | undefined;
+};
 
 export const runCommand: {
   (
@@ -169,6 +171,8 @@ export const runCommand: {
           const handle = yield* spawner.spawn(
             ChildProcess.make(command, [...args], {
               cwd: options.cwd,
+              env: options.env,
+              extendEnv: true,
               stdin: options.output === "inherit" ? "inherit" : "ignore",
               stdout: STDOUT_MODES[options.output],
               stderr: options.output === "ignore" ? "ignore" : "inherit",
@@ -195,16 +199,3 @@ export const readEnv = (name: string): string | undefined =>
       .parse(ConfigProvider.fromEnv({ preserveEmptyStrings: true }))
       .pipe(Effect.map(Option.getOrUndefined)),
   );
-
-export const environmentNames = (): string[] => Object.keys(env);
-
-export const setEnv: {
-  (value: string): (name: string) => void;
-  (name: string, value: string): void;
-} = dual(2, (name: string, value: string): void => {
-  env[name] = value;
-});
-
-export const unsetEnv = (name: string): void => {
-  delete env[name];
-};
