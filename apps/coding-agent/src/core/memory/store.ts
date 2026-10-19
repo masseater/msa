@@ -371,6 +371,10 @@ export class MemoryStore {
       .map(toRecord);
   }
 
+  isEmpty(): boolean {
+    return this.statement(`SELECT 1 FROM memories LIMIT 1`).get() === undefined;
+  }
+
   get(id: string): MemoryRecord | undefined {
     const row = this.statement(`SELECT * FROM memories WHERE id = ?`).get(id) as unknown as
       | MemoryRow

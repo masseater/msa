@@ -188,7 +188,7 @@ export class MemoryService {
 
   /** Load the embedding model in the background so the first recall does not wait for it. */
   warm(): void {
-    if (!this.recallEnabled) return;
+    if (!this.recallEnabled || this.storeIsEmpty()) return;
     void this.embedQuery("warmup")
       .then(() => this.reembedStale())
       .catch(() => undefined);
@@ -214,6 +214,14 @@ export class MemoryService {
   private ensureStore(): MemoryStore {
     this.store ??= new MemoryStore(this.settings.database);
     return this.store;
+  }
+
+  private storeIsEmpty(): boolean {
+    try {
+      return this.ensureStore().isEmpty();
+    } catch {
+      return true;
+    }
   }
 
   /** The embedding of `text`, or undefined while the endpoint is unavailable. */
@@ -248,7 +256,7 @@ export class MemoryService {
 
   /** Memories relevant to `query`, best first. Never throws; an unavailable store means no recall. */
   async recall(query: string, signal?: AbortSignal): Promise<MemoryRecord[]> {
-    if (!this.recallEnabled || !query.trim()) return [];
+    if (!this.recallEnabled || !query.trim() || this.storeIsEmpty()) return [];
     try {
       const embedding = await this.embedQuery(query, signal);
       const scores = this.ensureStore().search({
@@ -295,6 +303,7 @@ export class MemoryService {
   }
 
   async search(query: string, limit = 5): Promise<MemoryScore[]> {
+    if (this.ensureStore().isEmpty()) return [];
     const embedding = await this.embedQuery(query);
     return this.ensureStore().search({
       text: query,
