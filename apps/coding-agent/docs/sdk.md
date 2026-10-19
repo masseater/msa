@@ -61,6 +61,8 @@ After a runtime replacement, subscriptions belong to the old `AgentSession` and 
 
 A prompt sent while the session is already streaming must specify whether it should steer the current run or follow it. Calling `prompt()` without that choice rejects rather than guessing.
 
+`prompt(text, { mode: "ask" })` runs the prompt as an [`/ask`](slash-commands.md#ask-a-question) turn, and `prompt("/ask <question>")` is the same turn: the model is given only the read-only tools and a system prompt section that says to answer without starting work, and the next prompt is a normal turn. It rejects while the session is streaming.
+
 A steering message enters after the current assistant turn and its tool calls. A follow-up enters after the current run finishes its pending work. `steer()` and `followUp()` expose those behaviors directly and return `"queued"` if the input was queued (including after an extension transformed it), or `"handled"` if an extension consumed it.
 
 `abort()` stops the active operation and waits for the session to become idle. `waitForIdle()` waits without aborting it.

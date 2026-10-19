@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- `/ask <question>` runs a turn in which the model can only answer: only tools marked `readOnlyHint` are declared (`memory`, `pr_watch`, `model_policy`, and `model_upgrade` keep their read actions), the system prompt says to answer without starting work, and the next turn is back to every tool. RPC `prompt` takes `"mode": "ask"` and the SDK `prompt(text, { mode: "ask" })` ([docs](docs/slash-commands.md#ask-a-question))
+
 ### Changed
 
 - The `anthropic` provider is now `anthropic-api` and `claude-code` is now `claude-subs`, so the pay-per-token API and Claude subscriptions read apart; credentials, `models.json` and settings move to the new ids on startup

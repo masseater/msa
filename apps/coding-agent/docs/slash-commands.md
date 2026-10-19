@@ -32,6 +32,7 @@ Extensions, prompt templates, and skills can add commands. The command menu in m
 | `/branch`                                            |                                         | Duplicate the current session at its current position                                                                                                             |
 | `/compact [instructions]`                            |                                         | Compact the current context, optionally with custom instructions                                                                                                  |
 | `/goal [condition\|clear]`                           |                                         | Keep working across turns until an evaluator model judges the condition met; without an argument, show the goal's elapsed time, turns, tokens, and latest verdict |
+| `/ask <question>`                                    |                                         | Send a question for this turn only; the model can answer, and nothing it is given can change anything. See [Ask a question](#ask-a-question)                      |
 | `/init`                                              |                                         | Ask the model to write an `AGENTS.md` that describes the repository                                                                                               |
 | `/import <path>`                                     |                                         | Import and resume a JSONL session                                                                                                                                 |
 | `/memory [list\|search <query>\|forget <id>\|stats]` |                                         | Open the memory view, or manage long-term memories; see [Long-Term Memory](memory.md)                                                                             |
@@ -58,6 +59,14 @@ Review a session before exporting or sharing it. Sessions can contain prompts, t
 | `/keybindings`   |                                     | Show active keyboard shortcuts                                               |
 | `/release-notes` |                                     | Show changelog entries                                                       |
 | `/exit`          | `/quit`                             | Exit msa                                                                     |
+
+## Ask a question
+
+`/ask <question>` sends the question as an ordinary user message, and only for that turn the model has nothing that works. msa declares the tools that carry `annotations.readOnlyHint: true` and leaves out every other tool, so a tool an extension or MCP server adds without the mark is left out too. The system prompt gains one section that says to answer, and to propose work without starting it. The next turn declares every tool again and drops the section.
+
+These stay: `read`, `grep`, `find`, `ls`, `web_search`, `web_fetch`, `list_tasks`, `read_task`, `search_reports`, and the read-only MCP tools. `memory` keeps `search` and `list`, and `pr_watch`, `model_policy`, and `model_upgrade` keep `list`. `bash`, `powershell`, `edit`, `write`, the task and message tools that change anything, `codemode`, and `tool_search` are left out.
+
+The same turn is available from [RPC](rpc-commands.md#prompt) with `"mode": "ask"`, and from the SDK with `session.prompt(question, { mode: "ask" })`. An extension author marks a tool with `annotations: { readOnlyHint: true }`, and gives a tool that reads and writes through one `action` a `readOnlyVariant` ([Tool exposure](extensions.md#tool-exposure)).
 
 ## Commands added by resources
 

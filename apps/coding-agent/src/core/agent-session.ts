@@ -66,6 +66,13 @@ import { toErrorMessage } from "../utils/errors.ts";
 import { stripFrontmatter } from "../utils/frontmatter.ts";
 import { processImage } from "../utils/image-process.ts";
 import { normalizeToolResultImages } from "../utils/tool-result-images.ts";
+import {
+  ASK_SECTION_NAME,
+  ASK_SECTION_TEXT,
+  askDefinition,
+  parseAskCommand,
+  type PromptMode,
+} from "./ask.ts";
 import { formatNoApiKeyFoundMessage, formatNoModelSelectedMessage } from "./auth-guidance.ts";
 import { type BashResult, executeBashWithOperations } from "./bash-executor.ts";
 import { generateBugReportSummary } from "./bug-report.ts";
@@ -412,6 +419,12 @@ export interface PromptOptions {
   streamingBehavior?: "steer" | "followUp" | undefined;
   /** Source of input for extension input event handlers. Defaults to "interactive". */
   source?: InputSource;
+  /**
+   * `"ask"` makes this turn answer only: the read-only tools are declared and the rest are not, the
+   * system prompt says to answer without starting work, and the next turn is back to the full
+   * loadout. `prompt("/ask <question>")` is the same turn.
+   */
+  mode?: PromptMode | undefined;
   /** Internal hook used by RPC mode to observe how an accepted prompt was dispatched. Not called if the prompt is rejected. */
   preflightResult?: (disposition: PromptDisposition) => void;
 }
@@ -541,6 +554,12 @@ export class AgentSession {
    * `setActiveToolsByName()` deactivates a tool or the next agent run starts.
    */
   private _pendingToolNames = new Set<string>();
+  /** Whether the running turn is an `/ask` turn, which declares only the read-only tools. */
+  private _askRun = false;
+  /** The loadout an ask turn replaced, which the next turn goes back to. */
+  private _loadoutBeforeAsk: string[] = [];
+  /** The read-only variants of tools that also write, by tool name. */
+  private _askVariants: Map<string, { tool: AgentTool; definition: ToolDefinition }> = new Map();
   private _usesDefaultTools: boolean;
   private _defaultToolModifiers: string[];
   /** Matches the `--tools` entries: tool names or patterns. */
@@ -1707,8 +1726,15 @@ export class AgentSession {
   /**
    * Get the names of currently active tools, which are the tools declared to the model.
    * Tools with `codemode` or `deferred` exposure are callable from other tools without being active.
+   * In an `/ask` turn they are the loadout the turn replaces, not the fewer tools it declares, so
+   * an extension that adds a tool to what it reads does not carry the turn's selection into the next.
    */
   getActiveToolNames(): string[] {
+    return this._askRun ? [...this._loadoutBeforeAsk] : this._declaredToolNames();
+  }
+
+  /** The names of the tools the next request declares. */
+  private _declaredToolNames(): string[] {
     return this.agent.state.tools.map((t) => t.name);
   }
 
@@ -1789,7 +1815,7 @@ export class AgentSession {
    * `codemode` or `deferred` tool.
    */
   private _getCallableTools(
-    active: ReadonlySet<string> = new Set(this.getActiveToolNames()),
+    active: ReadonlySet<string> = new Set(this._declaredToolNames()),
   ): AgentTool[] {
     return [...this._toolRegistry.values()].filter((tool) => {
       const exposure = this._getToolExposure(tool.name);
@@ -1808,11 +1834,12 @@ export class AgentSession {
    * requests (see {@link _installHiddenDeclarationsProjection}).
    */
   private _applyToolLoadout(toolNames: string[]): AgentTool[] {
+    if (this._askRun) this._loadoutBeforeAsk = [...new Set(toolNames)];
     const tools = [...new Set(toolNames)].flatMap((name) => {
       const tool = this._toolRegistry.get(name);
-      return tool && this._getToolExposure(name) !== "hidden" && this._isActivatable(name)
-        ? [tool]
-        : [];
+      if (!tool || this._getToolExposure(name) === "hidden" || !this._isActivatable(name))
+        return [];
+      return this._askRun ? this._askTool(name, tool) : [tool];
     });
     const hooks = tools.flatMap((tool) => {
       const entry = this._toolDefinitions.get(tool.name);
@@ -1854,6 +1881,36 @@ export class AgentSession {
     this._hiddenDeclarations = hidden;
     this.agent.state.tools = declared;
     return declared;
+  }
+
+  /**
+   * What an ask turn declares for the registered tool `name`: the tool when it is read-only, its
+   * read-only variant when it has one, and nothing otherwise.
+   */
+  private _askTool(name: string, tool: AgentTool): AgentTool[] {
+    const definition = this._toolDefinitions.get(name)?.definition;
+    const asked = definition ? askDefinition(definition) : undefined;
+    if (!asked) return [];
+    if (asked === definition) return [tool];
+    const variant = this._askVariants.get(name)?.tool;
+    return variant ? [variant] : [];
+  }
+
+  /**
+   * Make the run an ask turn's: add the ask section to its system prompt, and describe the
+   * variants in place of the tools they narrow.
+   */
+  private _applyAskPrompt(options: NormalizedBuildSystemPromptOptions): void {
+    options.sections[ASK_SECTION_NAME] = ASK_SECTION_TEXT;
+    if (options.forceSystemPrompt !== undefined) {
+      options.forceSystemPrompt = `${options.forceSystemPrompt}\n\n${ASK_SECTION_TEXT}`;
+    }
+    for (const [name, { definition }] of this._askVariants) {
+      // Empty values, not deletions: the run's options are laid over the base options on every
+      // turn of the run, so a deleted entry would bring the full tool's text back.
+      options.toolSnippets[name] = this._normalizePromptSnippet(definition.promptSnippet) ?? "";
+      options.toolGuidelines[name] = this._normalizePromptGuidelines(definition.promptGuidelines);
+    }
   }
 
   /** Whether compaction or branch summarization is currently running */
@@ -2102,13 +2159,22 @@ export class AgentSession {
    * starting another, and an abort requested meanwhile aborts the run as soon as it exists.
    * @param onStarted Called once the run's messages are prepared, before the first request.
    */
-  private async _startRun(trigger: BeforeAgentStartTrigger, onStarted?: () => void): Promise<void> {
+  private async _startRun(
+    trigger: BeforeAgentStartTrigger,
+    onStarted?: () => void,
+    mode?: PromptMode,
+  ): Promise<void> {
     this._isAgentRunActive = true;
     this._agentRunAbortRequested = false;
+    if (mode === "ask") {
+      this._loadoutBeforeAsk = this._declaredToolNames();
+      this._askRun = true;
+    }
     let messages: AgentMessage[];
     try {
       messages = await this._prepareRun(trigger);
     } catch (error) {
+      this._endAskRun();
       this._isAgentRunActive = false;
       this._flushPendingBashMessages();
       this._flushPendingCustomMessages();
@@ -2147,10 +2213,19 @@ export class AgentSession {
       if (this._agentRunAbortRequested) this._finishCancelledRetry();
       this._failedResponse = undefined;
       this._runSystemPromptOptions = undefined;
+      this._endAskRun();
       this._flushPendingBashMessages();
       this._flushPendingCustomMessages();
       await this._emitAgentSettled();
     }
+  }
+
+  /** Go back to the loadout an ask turn replaced, so the next turn is a normal one. */
+  private _endAskRun(): void {
+    if (!this._askRun) return;
+    this._askRun = false;
+    this._setActiveTools(this._loadoutBeforeAsk);
+    this._loadoutBeforeAsk = [];
   }
 
   /**
@@ -2225,6 +2300,7 @@ export class AgentSession {
         timestamp: Date.now(),
       });
     }
+    if (this._askRun) this._applyAskPrompt(result.systemPromptOptions);
     const updateMessage = this._preparePromptAndToolLoadout(result.systemPromptOptions);
     this._runSystemPromptOptions = result.systemPromptOptions;
     if (updateMessage) messages.unshift(updateMessage);
@@ -2364,6 +2440,16 @@ export class AgentSession {
       await this._runGoalCommand(goalCommand, options);
       return;
     }
+    const askCommand = expandPromptTemplates ? parseAskCommand(text) : undefined;
+    if (askCommand) {
+      if (!askCommand.question) throw new Error("Usage: /ask <question>");
+      await this.prompt(askCommand.question, {
+        ...options,
+        expandPromptTemplates: false,
+        mode: "ask",
+      });
+      return;
+    }
     const memoryCommand = expandPromptTemplates ? parseMemoryCommand(text) : undefined;
     if (memoryCommand) {
       await this._runMemoryCommand(memoryCommand, options);
@@ -2408,6 +2494,9 @@ export class AgentSession {
 
     // If streaming, queue via steer() or followUp() based on option
     if (this.isStreaming) {
+      if (options?.mode === "ask") {
+        throw new Error("Cannot ask while the agent is running. Wait for the turn to finish.");
+      }
       if (!options?.streamingBehavior) {
         throw new Error(
           "Agent is already processing. Specify streamingBehavior ('steer' or 'followUp') to queue the message.",
@@ -2442,8 +2531,10 @@ export class AgentSession {
       throw new Error(formatNoApiKeyFoundMessage(this.model.provider));
     }
 
-    await this._startRun({ messageType: "user", prompt: expandedText, images: currentImages }, () =>
-      preflightResult?.("started"),
+    await this._startRun(
+      { messageType: "user", prompt: expandedText, images: currentImages },
+      () => preflightResult?.("started"),
+      options?.mode,
     );
   }
 
@@ -4174,6 +4265,14 @@ export class AgentSession {
       toolRegistry.set(tool.name, tool);
     }
     this._toolRegistry = toolRegistry;
+    this._askVariants = new Map(
+      Array.from(definitionRegistry.values()).flatMap(({ definition, sourceInfo }) => {
+        const variant = definition.readOnlyVariant;
+        if (!variant || variant.annotations?.readOnlyHint !== true) return [];
+        const [tool] = wrapRegisteredTools([{ definition: variant, sourceInfo }], runner);
+        return tool ? [[definition.name, { tool, definition: variant }] as const] : [];
+      }),
+    );
 
     const nextActiveToolNames = (
       options?.activeToolNames ? [...options.activeToolNames] : [...previousActiveToolNames]

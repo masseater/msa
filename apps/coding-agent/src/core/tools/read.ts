@@ -112,6 +112,7 @@ export function createReadToolDefinition(
     promptSnippet: readToolSystemPromptContribution.snippet,
     promptGuidelines: [...readToolSystemPromptContribution.guidelines],
     parameters: readSchema,
+    annotations: { readOnlyHint: true },
     outputSchema: readOutputSchema,
     constrainedSampling: { type: "json_schema", strict: "prefer" },
     async execute(

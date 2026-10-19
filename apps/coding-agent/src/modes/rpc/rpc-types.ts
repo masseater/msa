@@ -13,6 +13,7 @@ import type {
   QueuedInputDisposition,
   SessionStats,
 } from "../../core/agent-session.ts";
+import type { PromptMode } from "../../core/ask.ts";
 import type { BashResult } from "../../core/bash-executor.ts";
 import type { CompactionResult } from "../../core/compaction/index.ts";
 import type { ContextBreakdown } from "../../core/context-breakdown.ts";
@@ -32,6 +33,8 @@ export type RpcCommand =
       message: string;
       images?: ImageContent[] | undefined;
       streamingBehavior?: "steer" | "followUp" | undefined;
+      /** `"ask"`: the turn can only answer, as `/ask` does. */
+      mode?: PromptMode | undefined;
     }
   | { id?: string | undefined; type: "steer"; message: string; images?: ImageContent[] | undefined }
   | {

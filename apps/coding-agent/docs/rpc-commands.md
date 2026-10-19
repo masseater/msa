@@ -33,6 +33,12 @@ With images:
 
 If the agent is streaming and no `streamingBehavior` is specified, the command returns an error.
 
+**Ask**: `"mode": "ask"` makes the turn answer only, as [`/ask`](slash-commands.md#ask-a-question) does: msa declares the read-only tools and no others, and the next prompt is a normal turn. A message that starts with `/ask ` is the same turn. An ask is not queued into a running turn, so the command returns an error while the agent is streaming.
+
+```json
+{ "type": "prompt", "message": "Why does the build fail?", "mode": "ask" }
+```
+
 **Extension commands**: If the message is an extension command (e.g., `/mycommand`), it executes immediately even during streaming. Extension commands manage their own LLM interaction via `msa.sendMessage()`.
 
 **Input expansion**: Skill commands (`/name`) and prompt templates (`/template`) are expanded before sending/queueing.

@@ -18,6 +18,8 @@ The active branch supplies conversation history. msa converts its session entrie
 
 msa builds the system prompt from its base instructions and discovered context files. The request also carries tool definitions and skill descriptions.
 
+A turn started with [`/ask`](slash-commands.md#ask-a-question) changes both for that turn: the request carries only the read-only tools, and the system prompt has an extra `ask` section that says to answer without starting work.
+
 Full skill instructions are loaded on demand. Extensions can add instructions or transform context.
 
 Prompt templates expand editor input before it becomes a user message. Selected files, images, pasted text, and shell output can become message content.
