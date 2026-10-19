@@ -73,6 +73,11 @@ release. Add a tool name to select part of the graph. For example, run
 - ライブラリが export する型・スキーマ・enum・定数を書き写さない。
 - 外部 API のクライアントは手で包まず、Effect 公式のパッケージ、distilled.cloud、公開 OpenAPI から `@effect/openapi-generator` で生成、の順に選ぶ。
 
+## エージェント向けの機能
+
+- エージェント（モデル）が使う機能は、内部の組み込みツールとして実装する。CLI のサブコマンドを足して、シェルから引数で叩く形にしない（モデルに教える面が増え、失敗の扱いもその場で書くことになる）。
+- 人間が端末から同じことをしたい場合も、ツールを CLI から呼べるようにするのではなく、TUI の画面か、必要なときだけ薄い入口を用意する。
+
 ## 一括の書き換え
 
 - 同じ形の書き換えを多くのファイルに当てるときは、使い捨てのスクリプト（python・node の一時スクリプト、sed、perl の一行置換）を書かない。msa の組み込みの codemod ツールを使う（issue #95 で作る）。
