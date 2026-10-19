@@ -4,6 +4,7 @@ import { Effect } from "effect";
 import { actionHelpers } from "./action-helpers.ts";
 import { type OrchestratorError, orchestratorError } from "./errors.ts";
 import { newId } from "./ids.ts";
+import { rounds } from "./rounds.ts";
 import { type Runtime, nowMillis } from "./runtime.ts";
 import { scheduling } from "./schedule.ts";
 import { store } from "./store.ts";
@@ -14,43 +15,16 @@ function resolveRound(runtime: Runtime, input: CreateTaskInput): string {
   if (input.round !== undefined) return input.round;
   const dependencies = input.dependsOn ?? [];
   if (dependencies.length === 0) return "main";
-  const rounds = new Set<string>();
+  const dependencyRounds = new Set<string>();
   for (const id of dependencies) {
     const task = store.getTask(runtime.database, id);
     if (task === undefined) throw new Error(`Unknown task: ${id}`);
-    rounds.add(task.round);
+    dependencyRounds.add(task.round);
   }
-  if (rounds.size !== 1) {
+  if (dependencyRounds.size !== 1) {
     throw new Error("Dependencies belong to different rounds; pass round explicitly.");
   }
-  return [...rounds][0]!;
-}
-
-function ensureReview(runtime: Runtime, round: string, now: number): Task {
-  const database = runtime.database;
-  const project = runtime.options.project;
-  const existing = store.reviewTaskOfRound(database, project, round);
-  if (existing !== undefined) return existing;
-  const review: Task = {
-    id: newId("rev"),
-    project,
-    round,
-    kind: "review",
-    title: `Review of ${round}`,
-    prompt: "",
-    status: "waiting",
-    priority: -1000,
-    cwd: runtime.options.cwd,
-    paths: [],
-    repos: [],
-    condition: null,
-    model: null,
-    thinkingLevel: null,
-    createdAt: now,
-    updatedAt: now,
-  };
-  store.insertTask(database, review);
-  return review;
+  return [...dependencyRounds][0]!;
 }
 
 function createTask(
@@ -85,15 +59,12 @@ function createTask(
     yield* Effect.sync(() => {
       store.transaction(database, () => {
         store.insertRound(database, project, round, round, now);
-        const review = ensureReview(runtime, round, now);
+        const review = rounds.ensureReview(runtime, round, now);
         store.insertTask(database, task);
         for (const dependency of input.dependsOn ?? []) {
           store.addDependency(database, project, id, dependency);
         }
-        store.addDependency(database, project, review.id, id);
-        if (review.status !== "waiting" && review.status !== "running") {
-          store.setTaskStatus(database, review.id, "waiting", now);
-        }
+        rounds.attachReview(runtime, review, id, now);
       });
     });
     yield* scheduling.scheduleEffect(runtime);

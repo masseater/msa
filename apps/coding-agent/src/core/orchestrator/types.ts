@@ -107,12 +107,15 @@ export interface WaitingReason {
 
 export interface TaskSnapshot extends TaskView {
   waitingReason: WaitingReason | null;
+  handoff: string | null;
+  replan: ReplanMark | null;
 }
 
 export interface OrchestratorSnapshot {
   tasks: readonly TaskSnapshot[];
   sessions: readonly SessionView[];
   rounds: readonly RoundView[];
+  replans: readonly ReplanView[];
   maxConcurrentSessions: number;
 }
 
@@ -147,4 +150,137 @@ export interface NoteDelivery {
   noteId: string;
   steeredSessions: readonly string[];
   waitingTasks: readonly string[];
+}
+
+export interface ReplanTaskInput {
+  key?: string;
+  from?: readonly string[];
+  title: string;
+  prompt?: string;
+  dependsOn?: readonly string[];
+  round?: string;
+  paths?: readonly string[];
+  repos?: readonly string[];
+  priority?: number;
+  model?: string;
+  thinkingLevel?: ThinkingLevel;
+  cwd?: string;
+}
+
+export interface ReplanDropInput {
+  taskId: string;
+  reason: string;
+}
+
+export interface ReplanRewireInput {
+  taskId: string;
+  dependsOn: readonly string[];
+}
+
+export interface ReplanInput {
+  reason: string;
+  tasks?: readonly ReplanTaskInput[];
+  keep?: readonly string[];
+  drop?: readonly ReplanDropInput[];
+  rewire?: readonly ReplanRewireInput[];
+  maxConcurrentSessions?: number;
+  stop?: boolean;
+  resume?: boolean;
+}
+
+export interface ReplanStopped {
+  taskId: string;
+  title: string;
+  sessionId: string;
+  memo: string;
+}
+
+export interface ReplanCreated {
+  taskId: string;
+  title: string;
+  from: readonly string[];
+}
+
+export interface ReplanDropped {
+  taskId: string;
+  title: string;
+  reason: string;
+}
+
+export interface ReplanRewired {
+  taskId: string;
+  dependsOn: readonly string[];
+}
+
+export interface ReplanResult {
+  replanId: string | null;
+  aborted: string | null;
+  stopped: readonly ReplanStopped[];
+  created: readonly ReplanCreated[];
+  dropped: readonly ReplanDropped[];
+  kept: readonly string[];
+  rewired: readonly ReplanRewired[];
+  started: readonly string[];
+}
+
+export type ReplanRole = "stopped" | "created" | "dropped" | "kept";
+
+export interface ReplanMark {
+  id: string;
+  reason: string;
+  role: ReplanRole;
+}
+
+export interface ReplanChanges {
+  stopped: readonly ReplanStopped[];
+  created: readonly ReplanCreated[];
+  createdIds: readonly string[];
+  dropped: readonly ReplanDropped[];
+  kept: readonly string[];
+  rewired: readonly ReplanRewired[];
+  notes: readonly string[];
+}
+
+export interface ReplanTaskState {
+  id: string;
+  status: TaskStatus;
+  dependsOn: readonly string[];
+}
+
+export interface ReplanState {
+  maxConcurrentSessions: number;
+  tasks: readonly ReplanTaskState[];
+  rounds: readonly { id: string; title: string }[];
+  sessions: readonly string[];
+}
+
+export interface ReplanRecord {
+  id: string;
+  project: string;
+  reason: string;
+  before: ReplanState;
+  after: ReplanChanges;
+  createdAt: number;
+  undoneAt: number | null;
+}
+
+export interface ReplanView {
+  id: string;
+  reason: string;
+  createdAt: number;
+  undoneAt: number | null;
+  stopped: readonly ReplanStopped[];
+  created: readonly ReplanCreated[];
+  dropped: readonly ReplanDropped[];
+  kept: readonly string[];
+  rewired: readonly ReplanRewired[];
+}
+
+export interface ReplanUndoResult {
+  replanId: string;
+  reason: string;
+  restoredTasks: readonly string[];
+  deletedTasks: readonly string[];
+  stoppedSessions: readonly string[];
+  started: readonly string[];
 }

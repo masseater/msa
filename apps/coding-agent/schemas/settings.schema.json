@@ -565,6 +565,23 @@
         }
       }
     },
+    "prWatch": {
+      "type": "object",
+      "properties": {
+        "intervalSeconds": {
+          "type": "number",
+          "minimum": 5,
+          "description": "Seconds between checks of a watched pull request.",
+          "default": 45
+        },
+        "statusIntervalSeconds": {
+          "type": "number",
+          "minimum": 30,
+          "description": "Seconds without a change before a watch reports its status again.",
+          "default": 300
+        }
+      }
+    },
     "enabledModels": {
       "type": "array",
       "items": {

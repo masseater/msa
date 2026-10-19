@@ -99,3 +99,19 @@ it("counts tasks by status for the footer", () => {
   expect(counts).toContain("1 done");
   expect(counts).toContain("1 stopped");
 });
+
+it("shows the latest replan in the list and its handoff in the task", () => {
+  const list = setup({ state: { showFinished: true } });
+  const listText = list.screen().join("\n");
+  expect(listText).toContain("↺ the api moved to v3");
+  expect(listText).toContain("1 stopped · 1 created · 1 kept");
+  expect(list.screen().some((line) => line.includes("stopped-work ↺"))).toBe(true);
+
+  const { view, screen } = setup({ initialId: "d", state: { showFinished: true } });
+  view.handleInput(ENTER);
+  const text = screen().join("\n");
+  expect(text).toContain("Replan");
+  expect(text).toContain("stopped · the api moved to v3");
+  expect(text).toContain("Handoff");
+  expect(text).toContain("two checks still failing");
+});

@@ -2,6 +2,7 @@ import type { AgentMessage } from "@msa/agent-core";
 import { Effect, Fiber } from "effect";
 
 import { actions } from "./actions.ts";
+import { replan, undoReplan } from "./replan.ts";
 import { type Runtime, nowMillis } from "./runtime.ts";
 import { scheduling } from "./schedule.ts";
 import { settling } from "./settle.ts";
@@ -10,6 +11,9 @@ import {
   type CreateTaskInput,
   type NoteDelivery,
   type OrchestratorSnapshot,
+  type ReplanInput,
+  type ReplanResult,
+  type ReplanUndoResult,
   type ReportHit,
   type SendNoteInput,
   type TaskView,
@@ -17,6 +21,7 @@ import {
 import { store } from "./store.ts";
 import { TranscriptCache } from "./transcripts.ts";
 import type { OrchestratorOptions, WorkerSession } from "./worker.ts";
+import type { WrapUp } from "./wrap-up.ts";
 
 export type {
   CreateWorkerOptions,
@@ -25,7 +30,14 @@ export type {
   OrchestratorReport,
   WorkerSession,
 } from "./worker.ts";
-export type { CreateTaskInput, NoteDelivery, SendNoteInput } from "./types.ts";
+export type {
+  CreateTaskInput,
+  NoteDelivery,
+  ReplanInput,
+  ReplanResult,
+  ReplanUndoResult,
+  SendNoteInput,
+} from "./types.ts";
 export {
   ORCHESTRATOR_TOOL_NAMES,
   createOrchestratorToolDefinitions,
@@ -38,6 +50,7 @@ const EMPTY: OrchestratorSnapshot = {
   tasks: [],
   sessions: [],
   rounds: [],
+  replans: [],
   maxConcurrentSessions: 4,
 };
 
@@ -47,7 +60,9 @@ export class Orchestrator implements Runtime {
   readonly workers = new Map<string, WorkerSession>();
   readonly runs = new Map<string, number>();
   readonly runStartedAt = new Map<string, number>();
+  readonly wrapUps = new Map<string, WrapUp>();
   readonly listeners = new Set<() => void>();
+  replanning = false;
   snapshot: OrchestratorSnapshot = EMPTY;
   maxConcurrentSessions: number;
   private readonly transcripts = new TranscriptCache();
@@ -180,6 +195,14 @@ export class Orchestrator implements Runtime {
 
   setMaxConcurrentSessions(value: number): Promise<number> {
     return this.exclusive(actions.setMaxConcurrent(this, value));
+  }
+
+  replan(input: ReplanInput): Promise<ReplanResult> {
+    return replan(this, input);
+  }
+
+  undoReplan(): Promise<ReplanUndoResult> {
+    return undoReplan(this);
   }
 
   searchReports(query: string, limit = 10): Promise<ReportHit[]> {

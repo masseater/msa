@@ -260,6 +260,23 @@ const CodemodeSettingsSchema = Type.Object({
   ),
 });
 
+const PrWatchSettingsSchema = Type.Object({
+  intervalSeconds: Type.Optional(
+    Type.Number({
+      minimum: 5,
+      description: "Seconds between checks of a watched pull request.",
+      default: SETTINGS_DEFAULTS.prWatch.intervalSeconds,
+    }),
+  ),
+  statusIntervalSeconds: Type.Optional(
+    Type.Number({
+      minimum: 30,
+      description: "Seconds without a change before a watch reports its status again.",
+      default: SETTINGS_DEFAULTS.prWatch.statusIntervalSeconds,
+    }),
+  ),
+});
+
 const PackageSourceSchema = Type.Union(
   [
     Type.String({ description: "Load all resources from the package." }),
@@ -480,6 +497,7 @@ export const SettingsSchema = Type.Object(
     terminal: Type.Optional(TerminalSettingsSchema),
     images: Type.Optional(ImageSettingsSchema),
     memory: Type.Optional(MemorySettingsSchema),
+    prWatch: Type.Optional(PrWatchSettingsSchema),
     enabledModels: Type.Optional(
       Type.Array(Type.String(), {
         description: "Model patterns for cycling, in the same format as the --models CLI flag.",
@@ -624,6 +642,7 @@ export interface RetrySettings extends Omit<Static<typeof RetrySettingsSchema>, 
 export interface TerminalSettings extends Static<typeof TerminalSettingsSchema> {}
 export interface ImageSettings extends Static<typeof ImageSettingsSchema> {}
 export interface MemorySettings extends Static<typeof MemorySettingsSchema> {}
+export interface PrWatchSettings extends Static<typeof PrWatchSettingsSchema> {}
 export interface ThinkingBudgetsSettings extends Static<typeof ThinkingBudgetsSettingsSchema> {}
 export type MermaidRenderingMode = NonNullable<Static<typeof MarkdownSettingsSchema>["mermaid"]>;
 export interface MarkdownSettings extends Static<typeof MarkdownSettingsSchema> {}

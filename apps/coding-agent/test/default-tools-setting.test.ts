@@ -78,7 +78,18 @@ describe("defaultTools setting", () => {
         .getAllTools()
         .map((tool) => tool.name)
         .sort(),
-    ).toEqual(["bash", "edit", "find", "grep", "ls", "memory", "powershell", "read", "write"]);
+    ).toEqual([
+      "bash",
+      "edit",
+      "find",
+      "grep",
+      "ls",
+      "memory",
+      "powershell",
+      "pr_watch",
+      "read",
+      "write",
+    ]);
     expect(session.getActiveToolNames()).toEqual(["grep", "find"]);
     expect(session.systemPrompt).toContain("- grep:");
     expect(session.systemPrompt).not.toContain("- read:");
@@ -113,6 +124,7 @@ describe("defaultTools setting", () => {
       "edit",
       "inactive_tool",
       "memory",
+      "pr_watch",
       "read",
     ]);
     session.dispose();
@@ -211,6 +223,7 @@ describe("defaultTools setting", () => {
       "grep",
       "inactive_tool",
       "memory",
+      "pr_watch",
       "read",
     ]);
     session.dispose();
@@ -271,7 +284,14 @@ describe("defaultTools setting", () => {
     // #10245
     it("activates only tools newly added to defaultTools", async () => {
       const session = await createFileSession();
-      expect(session.getActiveToolNames()).toEqual(["read", "bash", "edit", "write", "memory"]);
+      expect(session.getActiveToolNames()).toEqual([
+        "read",
+        "bash",
+        "edit",
+        "write",
+        "memory",
+        "pr_watch",
+      ]);
       session.setActiveToolsByName(["read", "edit", "write"]);
 
       writeSettings({ defaultTools: ["+inactive_tool", "+grep"] });
@@ -332,6 +352,7 @@ describe("defaultTools setting", () => {
         "edit",
         "inactive_tool",
         "memory",
+        "pr_watch",
         "read",
         "write",
       ]);
@@ -443,6 +464,7 @@ describe("defaultTools setting", () => {
         "bash",
         "edit",
         "memory",
+        "pr_watch",
         "read",
         "write",
       ]);
@@ -464,7 +486,18 @@ describe("defaultTools setting", () => {
         .getAllTools()
         .map((tool) => tool.name)
         .sort(),
-    ).toEqual(["bash", "edit", "find", "grep", "ls", "memory", "powershell", "read", "write"]);
+    ).toEqual([
+      "bash",
+      "edit",
+      "find",
+      "grep",
+      "ls",
+      "memory",
+      "powershell",
+      "pr_watch",
+      "read",
+      "write",
+    ]);
     expect(session.getActiveToolNames()).toEqual(["ls"]);
     session.dispose();
   });

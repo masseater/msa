@@ -91,4 +91,4 @@ function reportText(
     .join("\n\n");
 }
 
-export const outcomes = { outcomeOf, applyOutcome, reportText };
+export const outcomes = { outcomeOf, applyOutcome, reportText, errorText };

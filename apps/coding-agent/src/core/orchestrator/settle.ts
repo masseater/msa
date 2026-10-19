@@ -8,6 +8,7 @@ import { scheduling } from "./schedule.ts";
 import { starting } from "./start.ts";
 import { store } from "./store.ts";
 import type { WorkerSession } from "./worker.ts";
+import { wrapping } from "./wrap-up.ts";
 
 function settleEffect(
   runtime: Runtime,
@@ -25,6 +26,9 @@ function settleEffect(
     runtime.runs.delete(sessionId);
     runtime.runStartedAt.delete(sessionId);
     const outcome = outcomes.outcomeOf(worker, error);
+    if (outcome.status !== "completed") {
+      wrapping.fail(runtime, sessionId, `wrap-up failed: ${outcome.content}`);
+    }
     const review = yield* Effect.sync(() => {
       store.updateSession(runtime.database, sessionId, { status: outcome.status }, now);
       return outcomes.applyOutcome(runtime, assignments, outcome, now);
@@ -56,6 +60,11 @@ function settle(
 
 function afterTurn(runtime: Runtime, sessionId: string, run: number, worker: WorkerSession): void {
   if (runtime.runs.get(sessionId) !== run) return;
+  const handled = wrapping.takeOver(runtime, sessionId, worker, {
+    turn: () => afterTurn(runtime, sessionId, run, worker),
+    settle: (error: unknown) => void settle(runtime, sessionId, run, worker, error),
+  });
+  if (handled) return;
   const assignments = store.assignmentsOfSession(runtime.database, sessionId);
   const taskIds = assignments.map((assignment) => assignment.taskId);
   const notes = taskIds.flatMap((taskId) =>

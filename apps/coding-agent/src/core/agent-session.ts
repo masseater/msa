@@ -154,6 +154,9 @@ import {
   type WorkerSession,
 } from "./orchestrator/orchestrator.ts";
 import { createOrchestratorToolDefinitions } from "./orchestrator/tools.ts";
+import { makeGh } from "./pr-watch/gh.ts";
+import { PrWatch, type PrWatchSnapshot } from "./pr-watch/service.ts";
+import { createPrWatchHost } from "./pr-watch/session-host.ts";
 import { expandPromptTemplate, type PromptTemplate } from "./prompt-templates.ts";
 import type { ResourceExtensionPaths, ResourceLoader } from "./resource-loader.ts";
 import { exportSessionToJsonl } from "./session-export.ts";
@@ -189,6 +192,7 @@ import {
 import { type BashOperations, createLocalBashOperations } from "./tools/bash.ts";
 import { createAllToolDefinitions } from "./tools/index.ts";
 import { createMemoryToolDefinition } from "./tools/memory.ts";
+import { createPrWatchToolDefinition } from "./tools/pr-watch.ts";
 import { createToolDefinitionFromAgentTool } from "./tools/tool-definition-wrapper.ts";
 import { addUsageToTotals, combineUsage, createUsageTotals } from "./usage-totals.ts";
 import {
@@ -294,6 +298,8 @@ export type AgentSessionEvent =
   | { type: "bash_execution_update"; id?: string | undefined; delta: string }
   /** The active `/goal` changed: set, evaluated, ended, or started or finished evaluating. */
   | { type: "goal_changed"; goal: GoalSnapshot | undefined }
+  /** A watched pull request changed state, or the set of watches changed. */
+  | { type: "pr_watch_changed"; prWatch: PrWatchSnapshot }
   /** A session the orchestrator started changed state or streamed. */
   | { type: "orchestrator_changed" }
   /** `/goal` without arguments, or `/goal clear` without an active goal. */
@@ -509,6 +515,7 @@ export class AgentSession {
   private _lastAssistantToolResults: AgentMessage[] = [];
   private _lastActivityOutcome: AgentActivityOutcome = "completed";
   private readonly _goal: GoalLoop;
+  private readonly _prWatch: PrWatch;
   private readonly _orchestrator: Orchestrator | undefined;
   private _totalTokensCache: { entryCount: number; total: number } | undefined;
   private _isBeforeSettle = false;
@@ -625,6 +632,18 @@ export class AgentSession {
       },
       findActiveGoalCondition(this.sessionManager.getBranch()),
     );
+
+    this._prWatch = new PrWatch({
+      gh: makeGh({ cwd: this._cwd }),
+      host: createPrWatchHost({
+        sendMessage: (message, options) => {
+          void this.sendCustomMessage(message, options);
+        },
+        changed: () => this._emit({ type: "pr_watch_changed", prWatch: this._prWatch.snapshot() }),
+      }),
+      defaultIntervalMs: () => this.settingsManager.getPrWatchIntervalMs(),
+      statusIntervalMs: () => this.settingsManager.getPrWatchStatusIntervalMs(),
+    });
 
     const createWorkerSession = config.createWorkerSession;
     this._orchestrator = createWorkerSession
@@ -1607,6 +1626,7 @@ export class AgentSession {
       // Dispose must succeed even if an abort hook throws.
     }
     void this._orchestrator?.dispose().catch(() => undefined);
+    void this._prWatch.dispose();
     this._memory?.close();
     this._memory = undefined;
 
@@ -2766,6 +2786,11 @@ export class AgentSession {
   /** Long-term memory for this session; undefined when memory is disabled. */
   get memory(): MemoryService | undefined {
     return this._memory;
+  }
+
+  /** The pull requests this session watches in the background. */
+  get prWatch(): PrWatchSnapshot {
+    return this._prWatch.snapshot();
   }
 
   get goal(): GoalSnapshot | undefined {
@@ -4190,6 +4215,7 @@ export class AgentSession {
             bash: { commandPrefix: shellCommandPrefix, shellPath },
           }),
           ...(this._memory ? { memory: createMemoryToolDefinition(this._memory) } : {}),
+          pr_watch: createPrWatchToolDefinition(this._prWatch),
         };
 
     this._baseToolDefinitions = new Map(
