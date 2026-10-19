@@ -10,6 +10,10 @@
 
 - What the orchestrator runs for a task is a thread, so a session is only a saved conversation: `set_max_concurrent_sessions` is `set_max_concurrent_threads`, `/sessions` is `/threads`, `orchestrator.maxConcurrentSessions` is `orchestrator.maxConcurrentThreads`, `app.orchestrator.sessions` is `app.orchestrator.threads`, and the `msa.session` span, its `msa.session.*` attributes, and `msa_orchestrator_sessions_active` are `msa.thread`, `msa.thread.*`, and `msa_orchestrator_threads_active`. An existing `orchestrator.db` moves its `sessions` table to `threads` on open ([docs](docs/cli.md#tools))
 
+### Fixed
+
+- msa starts again after 0.0.4 opened an `orchestrator.db` that a newer msa had already moved to `threads`: the empty `sessions` table 0.0.4 left behind is merged into `threads` and dropped. `orchestrator.db` now records its schema version, and an msa older than the database stops with "Update msa" instead of changing it
+
 ## [0.0.4] - 2026-10-19
 
 ### Added

@@ -145,16 +145,28 @@ function migrateTasks(database: DatabaseSync): void {
 }
 
 const THREAD_ID_TABLES = ["assignments", "reports", "note_reads"] as const;
+const THREAD_COLUMNS =
+  "id, project, model, thinking_level, cwd, status, session_file, created_at, updated_at";
 
 function renameSessionsToThreads(database: DatabaseSync): void {
   const sessions = database
     .prepare("SELECT 1 AS found FROM sqlite_master WHERE type = 'table' AND name = 'sessions'")
     .get();
   if (sessions === undefined) return;
+  const threads = database
+    .prepare("SELECT 1 AS found FROM sqlite_master WHERE type = 'table' AND name = 'threads'")
+    .get();
   transaction(database, () => {
     database.exec("DROP INDEX IF EXISTS sessions_project_status");
     database.exec("DROP INDEX IF EXISTS assignments_session");
-    database.exec("ALTER TABLE sessions RENAME TO threads");
+    if (threads === undefined) {
+      database.exec("ALTER TABLE sessions RENAME TO threads");
+    } else {
+      database.exec(
+        `INSERT OR IGNORE INTO threads (${THREAD_COLUMNS}) SELECT ${THREAD_COLUMNS} FROM sessions`,
+      );
+      database.exec("DROP TABLE sessions");
+    }
     for (const table of THREAD_ID_TABLES) {
       if (columnNames(database, table).includes("session_id")) {
         database.exec(`ALTER TABLE ${table} RENAME COLUMN session_id TO thread_id`);
@@ -168,9 +180,23 @@ function renameSessionsToThreads(database: DatabaseSync): void {
   });
 }
 
+const SCHEMA_VERSION = 1;
+
+function rejectNewerSchema(database: DatabaseSync, path: string): void {
+  const { user_version: version } = database.prepare("PRAGMA user_version").get() as {
+    user_version: number;
+  };
+  if (version <= SCHEMA_VERSION) return;
+  database.close();
+  throw new Error(
+    `${path} uses orchestrator schema ${version}, but this msa only knows schema ${SCHEMA_VERSION}. Update msa.`,
+  );
+}
+
 function openDatabase(path: string): DatabaseSync {
   mkdirSync(dirname(path), { recursive: true });
   const database = new DatabaseSync(path, { timeout: 5_000 });
+  rejectNewerSchema(database, path);
   database.exec("PRAGMA journal_mode = WAL");
   database.exec("PRAGMA synchronous = NORMAL");
   database.exec("PRAGMA foreign_keys = OFF");
@@ -178,6 +204,7 @@ function openDatabase(path: string): DatabaseSync {
   database.exec(SCHEMA);
   dropReplanUndoColumns(database);
   migrateTasks(database);
+  database.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);
   return database;
 }
 
