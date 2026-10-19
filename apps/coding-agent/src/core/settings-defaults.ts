@@ -24,7 +24,7 @@ export const SETTINGS_DEFAULTS = {
     },
   },
   orchestrator: {
-    maxConcurrentSessions: 4,
+    maxConcurrentThreads: 4,
   },
   hideThinkingBlock: true,
   showCacheMissNotices: false,

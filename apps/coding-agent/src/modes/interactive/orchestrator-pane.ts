@@ -3,8 +3,8 @@ import { type Component, SplitPane, splitPaneWidths } from "@msa/tui";
 import type { Orchestrator } from "../../core/orchestrator/orchestrator.ts";
 import type { CustomEditor } from "./components/custom-editor.ts";
 import { PaneResizer } from "./components/pane-resizer.ts";
-import { SessionPane } from "./components/session-pane.ts";
 import type { TasksViewState } from "./components/tasks-view-helpers.ts";
+import { ThreadPane } from "./components/thread-pane.ts";
 
 export const ORCHESTRATOR_PANE = {
   share: 0.3,
@@ -55,7 +55,7 @@ export interface OrchestratorPaneOptions {
 export class OrchestratorPane {
   readonly width = new PaneWidth();
   private readonly options: OrchestratorPaneOptions;
-  private sessionsOpen = false;
+  private threadsOpen = false;
 
   constructor(options: OrchestratorPaneOptions) {
     this.options = options;
@@ -65,7 +65,7 @@ export class OrchestratorPane {
     const { orchestrator, state, rows, columns, requestRender } = this.options;
     return new SplitPane({
       left,
-      right: new SessionPane({ orchestrator, state, height: rows }),
+      right: new ThreadPane({ orchestrator, state, height: rows }),
       divider: new PaneResizer({
         height: rows,
         onDrag: (screenX) => {
@@ -75,29 +75,29 @@ export class OrchestratorPane {
       rightShare: () => this.width.share,
       minRightWidth: ORCHESTRATOR_PANE.minRightWidth,
       minLeftWidth: ORCHESTRATOR_PANE.minLeftWidth,
-      visible: () => !this.sessionsOpen && orchestrator() !== undefined,
+      visible: () => !this.threadsOpen && orchestrator() !== undefined,
     });
   }
 
-  bindKeys(editor: CustomEditor, openSessions: () => void): void {
+  bindKeys(editor: CustomEditor, openThreads: () => void): void {
     const active = () => this.options.orchestrator() !== undefined;
     const resize = (columns: number) => {
       if (active() && this.width.nudge(columns, this.options.columns())) {
         this.options.requestRender();
       }
     };
-    editor.onAction("app.orchestrator.sessions", () => {
-      if (active()) openSessions();
+    editor.onAction("app.orchestrator.threads", () => {
+      if (active()) openThreads();
     });
     editor.onAction("app.orchestrator.paneWiden", () => resize(ORCHESTRATOR_PANE.stepColumns));
     editor.onAction("app.orchestrator.paneNarrow", () => resize(-ORCHESTRATOR_PANE.stepColumns));
   }
 
-  openSessions(): () => void {
-    this.sessionsOpen = true;
+  openThreads(): () => void {
+    this.threadsOpen = true;
     this.options.requestRender();
     return () => {
-      this.sessionsOpen = false;
+      this.threadsOpen = false;
       this.options.requestRender();
     };
   }

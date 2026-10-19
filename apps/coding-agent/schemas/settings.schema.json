@@ -195,23 +195,23 @@
       "properties": {
         "database": {
           "type": "string",
-          "description": "SQLite file holding tasks, sessions, reports, and notes. Default: <agent dir>/orchestrator.db."
+          "description": "SQLite file holding tasks, threads, reports, and notes. Default: <agent dir>/orchestrator.db."
         },
         "workerModel": {
           "type": "string",
-          "description": "Model of the sessions the orchestrator starts, as \"provider/id\", unless create_task names one. Default: the orchestrator's model."
+          "description": "Model of the threads the orchestrator starts, as \"provider/id\", unless create_task names one. Default: the orchestrator's model."
         },
         "workerThinkingLevel": {
           "$ref": "#/$defs/ModelThinkingLevel"
         },
         "reviewModel": {
           "type": "string",
-          "description": "Model of the review session that closes each round, as \"provider/id\". Default: the orchestrator's model."
+          "description": "Model of the review thread that closes each round, as \"provider/id\". Default: the orchestrator's model."
         },
         "reviewThinkingLevel": {
           "$ref": "#/$defs/ModelThinkingLevel"
         },
-        "maxConcurrentSessions": {
+        "maxConcurrentThreads": {
           "type": "integer",
           "minimum": 1,
           "default": 4

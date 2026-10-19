@@ -3,7 +3,7 @@ import { Effect } from "effect";
 
 import type { OrchestratorError } from "./errors.ts";
 import { applying } from "./replan-apply.ts";
-import { ensured, exclusive, fail, stopSessions, unique } from "./replan-support.ts";
+import { ensured, exclusive, fail, stopThreads, unique } from "./replan-support.ts";
 import type { Runtime } from "./runtime.ts";
 import { snapshots } from "./snapshot.ts";
 import { store } from "./store.ts";
@@ -144,14 +144,14 @@ function validateStop(
 
 function register(
   runtime: Runtime,
-  sessions: readonly string[],
+  threads: readonly string[],
 ): Map<string, Deferred.Deferred<string, string>> {
   const memos = new Map<string, Deferred.Deferred<string, string>>();
-  for (const sessionId of sessions) {
-    if (!runtime.workers.has(sessionId)) {
-      throw fail(`Session ${sessionId} is running without a worker; cannot wrap it up`);
+  for (const threadId of threads) {
+    if (!runtime.workers.has(threadId)) {
+      throw fail(`Thread ${threadId} is running without a worker; cannot wrap it up`);
     }
-    memos.set(sessionId, Effect.runSync(wrapping.begin(runtime, sessionId)));
+    memos.set(threadId, Effect.runSync(wrapping.begin(runtime, threadId)));
   }
   runtime.replanning = memos.size > 0;
   return memos;
@@ -175,12 +175,12 @@ function prepare(runtime: Runtime, input: ReplanInput): Effect.Effect<Prepared, 
       validateEntries(runtime, entries, views);
       validateHandling(input, entries, views);
       validateStop(input, entries, views);
-      const sessions =
+      const threads =
         input.stop === false
           ? []
           : store
-              .runningSessions(runtime.database, runtime.options.project)
-              .map((session) => session.id);
+              .runningThreads(runtime.database, runtime.options.project)
+              .map((thread) => thread.id);
       return {
         input,
         entries,
@@ -192,7 +192,7 @@ function prepare(runtime: Runtime, input: ReplanInput): Effect.Effect<Prepared, 
           ...(input.drop ?? []).map((item) => item.taskId),
         ]),
         views,
-        memos: register(runtime, sessions),
+        memos: register(runtime, threads),
       };
     });
   });
@@ -217,7 +217,7 @@ export function replan(runtime: Runtime, input: ReplanInput): Promise<ReplanResu
       runtime,
       Effect.gen(function* () {
         const prepared = yield* exclusive(runtime, prepare(runtime, input));
-        const stop = yield* stopSessions(runtime, prepared.memos);
+        const stop = yield* stopThreads(runtime, prepared.memos);
         if (stop.aborted !== null) return abortedResult(stop.aborted);
         return yield* exclusive(runtime, applying.apply(runtime, prepared, stop.memos));
       }),

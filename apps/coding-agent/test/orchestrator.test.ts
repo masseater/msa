@@ -133,7 +133,7 @@ it("rejects a task without a current state or a goal state", () =>
     }),
   ));
 
-it("runs a worker, then a separate reviewer session with the review model", () =>
+it("runs a worker, then a separate reviewer thread with the review model", () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const { orchestrator, workers } = setup();
@@ -152,14 +152,14 @@ it("runs a worker, then a separate reviewer session with the review model", () =
       expect(workers[1]?.model.id).toBe("fable");
       expect(workers[1]?.thinkingLevel).toBe("high");
       expect(workers[1]?.prompts[0]).toContain("did a");
-      expect(workers[1]?.prompts[0]).toContain("reviewing work another session");
+      expect(workers[1]?.prompts[0]).toContain("reviewing work another thread");
 
       workers[1]?.complete("looks good");
       yield* waitFor(() => taskStatus(orchestrator, task.id) === "completed");
       const view = yield* read(orchestrator, task.id);
       expect(view.reports.map((report) => report.role)).toEqual(["worker", "reviewer"]);
       expect(view.assignments.map((assignment) => assignment.role)).toEqual(["worker", "reviewer"]);
-      expect(view.assignments[0]?.sessionId).not.toBe(view.assignments[1]?.sessionId);
+      expect(view.assignments[0]?.threadId).not.toBe(view.assignments[1]?.threadId);
     }),
   ));
 
@@ -219,7 +219,7 @@ it("keeps a message to a waiting task and adds it to the prompt at start", () =>
     }),
   ));
 
-it("steers running sessions with a shared note and delivers it to waiting tasks", () =>
+it("steers running threads with a shared note and delivers it to waiting tasks", () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const { orchestrator, workers } = setup();
@@ -237,7 +237,7 @@ it("steers running sessions with a shared note and delivers it to waiting tasks"
       const delivery = yield* Effect.promise(() =>
         orchestrator.sendNote({ content: "never touch x.ts", audience: "all" }),
       );
-      expect(delivery.steeredSessions).toHaveLength(1);
+      expect(delivery.steeredThreads).toHaveLength(1);
       expect(workers[0]?.steered).toEqual(["never touch x.ts"]);
 
       workers[0]?.complete("a done");
@@ -249,7 +249,7 @@ it("steers running sessions with a shared note and delivers it to waiting tasks"
     }),
   ));
 
-it("re-reads a note at the turn boundary and continues the same session", () =>
+it("re-reads a note at the turn boundary and continues the same thread", () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const { orchestrator, workers } = setup();
@@ -274,7 +274,7 @@ it("re-reads a note at the turn boundary and continues the same session", () =>
     }),
   ));
 
-it("searches reports across tasks and sessions", () =>
+it("searches reports across tasks and threads", () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const { orchestrator, workers } = setup();

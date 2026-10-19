@@ -6,8 +6,8 @@ import type {
   OrchestratorSnapshot,
   ReplanInput,
   ReplanResult,
-  SessionRole,
-  SessionStatus,
+  ThreadRole,
+  ThreadStatus,
   Task,
   TaskStatus,
 } from "./types.ts";
@@ -15,15 +15,15 @@ import type { OrchestratorReport } from "./worker.ts";
 
 const FINISHED_TASK: ReadonlySet<TaskStatus> = new Set(["completed", "failed", "stopped"]);
 
-export interface SessionPlanTelemetry {
-  readonly sessionId: string;
-  readonly role: SessionRole;
+export interface ThreadPlanTelemetry {
+  readonly threadId: string;
+  readonly role: ThreadRole;
   readonly model: string;
   readonly thinkingLevel: string;
 }
 
 function endStatus(
-  status: SessionStatus | TaskStatus,
+  status: ThreadStatus | TaskStatus,
   name: string,
 ): Parameters<OpenSpan["end"]>[0] {
   if (status === "completed") return undefined;
@@ -31,20 +31,20 @@ function endStatus(
 }
 
 /**
- * Keeps the Task → Session spans of one orchestrator. A Task span stays open from its first
- * session until the task finishes; each Session span lives from launch until the session settles.
+ * Keeps the Task → Thread spans of one orchestrator. A Task span stays open from its first
+ * thread until the task finishes; each Thread span lives from launch until the thread settles.
  * Both end when a published snapshot shows them finished, whichever action finished them.
  */
 export class OrchestratorTelemetry {
   readonly context: TelemetryContext;
   readonly #tasks = new Map<string, OpenSpan>();
-  readonly #sessions = new Map<string, OpenSpan>();
+  readonly #threads = new Map<string, OpenSpan>();
 
   constructor(context: TelemetryContext) {
     this.context = context;
   }
 
-  sessionStarted(plan: SessionPlanTelemetry, task: Task): SessionTelemetryOptions {
+  threadStarted(plan: ThreadPlanTelemetry, task: Task): SessionTelemetryOptions {
     const taskSpan =
       this.#tasks.get(task.id) ??
       openSpan(this.context, {
@@ -57,28 +57,28 @@ export class OrchestratorTelemetry {
         },
       });
     this.#tasks.set(task.id, taskSpan);
-    this.#sessions.get(plan.sessionId)?.end();
-    const session = openSpan(taskSpan.span, {
-      name: "msa.session",
+    this.#threads.get(plan.threadId)?.end();
+    const thread = openSpan(taskSpan.span, {
+      name: "msa.thread",
       attributes: {
-        "msa.session.id": plan.sessionId,
-        "msa.session.role": plan.role,
+        "msa.thread.id": plan.threadId,
+        "msa.thread.role": plan.role,
         "msa.task.id": task.id,
         "gen_ai.request.model": plan.model,
         "msa.thinking_level": plan.thinkingLevel,
       },
     });
-    this.#sessions.set(plan.sessionId, session);
-    return { context: session.span, role: plan.role };
+    this.#threads.set(plan.threadId, thread);
+    return { context: thread.span, role: plan.role };
   }
 
-  published(snapshot: OrchestratorSnapshot, activeSessions: number): void {
-    for (const session of snapshot.sessions) {
-      const span = this.#sessions.get(session.id);
-      if (span === undefined || session.status === "running") continue;
-      span.span.setAttributes({ "msa.session.status": session.status });
-      span.end(endStatus(session.status, "SessionFailed"));
-      this.#sessions.delete(session.id);
+  published(snapshot: OrchestratorSnapshot, activeThreads: number): void {
+    for (const thread of snapshot.threads) {
+      const span = this.#threads.get(thread.id);
+      if (span === undefined || thread.status === "running") continue;
+      span.span.setAttributes({ "msa.thread.status": thread.status });
+      span.end(endStatus(thread.status, "ThreadFailed"));
+      this.#threads.delete(thread.id);
     }
     for (const task of snapshot.tasks) {
       const span = this.#tasks.get(task.id);
@@ -89,17 +89,17 @@ export class OrchestratorTelemetry {
     }
     this.context.recordMetric({
       kind: "gauge",
-      name: "msa.orchestrator.sessions.active",
-      value: activeSessions,
-      unit: "{session}",
-      description: "Orchestrator sessions running now",
+      name: "msa.orchestrator.threads.active",
+      value: activeThreads,
+      unit: "{thread}",
+      description: "Orchestrator threads running now",
     });
   }
 
   reported(text: string, details: OrchestratorReport): void {
     const attributes: SpanAttributes = {
       "msa.task.id": details.taskId,
-      "msa.session.role": details.role,
+      "msa.thread.role": details.role,
       "msa.report.status": details.status,
       "msa.report.started": [...details.started],
       "msa.report.text": text,
@@ -130,11 +130,11 @@ export class OrchestratorTelemetry {
 
   /** Ends whatever is still open; msa is shutting down. */
   close(): void {
-    for (const span of [...this.#sessions.values(), ...this.#tasks.values()]) {
+    for (const span of [...this.#threads.values(), ...this.#tasks.values()]) {
       span.span.setAttributes({ "msa.unfinished": true });
       span.end();
     }
-    this.#sessions.clear();
+    this.#threads.clear();
     this.#tasks.clear();
   }
 }

@@ -16,8 +16,8 @@ function reasonLine(orchestrator: Orchestrator, task: TaskSnapshot): string {
   if (task.status === "running") {
     const active = task.assignments.at(-1);
     if (active !== undefined) {
-      const { startedAt, retrying } = orchestrator.progress(active.sessionId);
-      const doing = activityLines(orchestrator.messages(active.sessionId)).at(-1);
+      const { startedAt, retrying } = orchestrator.progress(active.threadId);
+      const doing = activityLines(orchestrator.messages(active.threadId)).at(-1);
       const elapsed =
         startedAt === undefined ? "" : ` ${formatToolDuration(performance.now() - startedAt)}`;
       return `${active.role}${elapsed} ${retrying ? "retrying" : (doing ?? "")}`.trim();
@@ -27,14 +27,13 @@ function reasonLine(orchestrator: Orchestrator, task: TaskSnapshot): string {
   return last === undefined ? "" : `${last.role}: ${firstLine(last.content)}`;
 }
 
-function sessionLines(orchestrator: Orchestrator, task: TaskSnapshot): string[] {
+function threadLines(orchestrator: Orchestrator, task: TaskSnapshot): string[] {
   return task.assignments.map((assignment) => {
-    const session = orchestrator.snapshot.sessions.find(
-      (candidate) => candidate.id === assignment.sessionId,
+    const thread = orchestrator.snapshot.threads.find(
+      (candidate) => candidate.id === assignment.threadId,
     );
-    const model =
-      session === undefined ? "?" : `${modelName(session.model)}/${session.thinkingLevel}`;
-    return `${assignment.role} ${assignment.sessionId} (${model}) ${session?.status ?? "?"}`;
+    const model = thread === undefined ? "?" : `${modelName(thread.model)}/${thread.thinkingLevel}`;
+    return `${assignment.role} ${assignment.threadId} (${model}) ${thread?.status ?? "?"}`;
   });
 }
 
@@ -73,14 +72,14 @@ function sections(orchestrator: Orchestrator, task: TaskSnapshot, width: number)
     section("Dependents");
     related(task.dependents);
   }
-  const sessions = sessionLines(orchestrator, task);
-  if (sessions.length > 0) {
-    section("Sessions");
-    for (const line of sessions) lines.push(truncateToWidth(`   ${line}`, width));
+  const threads = threadLines(orchestrator, task);
+  if (threads.length > 0) {
+    section("Threads");
+    for (const line of threads) lines.push(truncateToWidth(`   ${line}`, width));
   }
   const active = task.assignments.at(-1);
   if (active !== undefined) {
-    const activity = activityLines(orchestrator.messages(active.sessionId));
+    const activity = activityLines(orchestrator.messages(active.threadId));
     if (activity.length > 0) {
       section("Activity");
       for (const line of activity.slice(-8)) lines.push(truncateToWidth(`   ${line}`, width));
@@ -140,4 +139,4 @@ function listHints(showFinished: boolean, selected: TaskSnapshot | undefined): s
     .join("  ")}`;
 }
 
-export const taskDetail = { reasonLine, sessionLines, sections, hints, listHints };
+export const taskDetail = { reasonLine, threadLines, sections, hints, listHints };

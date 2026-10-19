@@ -12,25 +12,25 @@ import { wrapping } from "./wrap-up.ts";
 
 function settleEffect(
   runtime: Runtime,
-  sessionId: string,
+  threadId: string,
   run: number,
   worker: WorkerSession,
   error: unknown,
 ): Effect.Effect<void, OrchestratorError> {
   return Effect.gen(function* () {
-    if (runtime.runs.get(sessionId) !== run) return;
+    if (runtime.runs.get(threadId) !== run) return;
     const now = yield* nowMillis;
-    const session = store.getSession(runtime.database, sessionId);
-    if (session === undefined) return;
-    const assignments = store.assignmentsOfSession(runtime.database, sessionId);
-    runtime.runs.delete(sessionId);
-    runtime.runStartedAt.delete(sessionId);
+    const thread = store.getThread(runtime.database, threadId);
+    if (thread === undefined) return;
+    const assignments = store.assignmentsOfThread(runtime.database, threadId);
+    runtime.runs.delete(threadId);
+    runtime.runStartedAt.delete(threadId);
     const outcome = outcomes.outcomeOf(worker, error);
     if (outcome.status !== "completed") {
-      wrapping.fail(runtime, sessionId, `wrap-up failed: ${outcome.content}`);
+      wrapping.fail(runtime, threadId, `wrap-up failed: ${outcome.content}`);
     }
     const review = yield* Effect.sync(() => {
-      store.updateSession(runtime.database, sessionId, { status: outcome.status }, now);
+      store.updateThread(runtime.database, threadId, { status: outcome.status }, now);
       return outcomes.applyOutcome(runtime, assignments, outcome, now);
     });
     for (const task of review) {
@@ -41,7 +41,7 @@ function settleEffect(
       runtime.publish();
       const first = assignments[0];
       runtime.options.report(outcomes.reportText(runtime, assignments, outcome, started), {
-        taskId: first?.taskId ?? sessionId,
+        taskId: first?.taskId ?? threadId,
         role: first?.role ?? "worker",
         status: outcome.status === "completed" ? "completed" : "failed",
         started,
@@ -52,36 +52,36 @@ function settleEffect(
 
 function settle(
   runtime: Runtime,
-  sessionId: string,
+  threadId: string,
   run: number,
   worker: WorkerSession,
   error: unknown,
 ): Promise<void> {
-  return runtime.exclusive(settleEffect(runtime, sessionId, run, worker, error));
+  return runtime.exclusive(settleEffect(runtime, threadId, run, worker, error));
 }
 
-function afterTurn(runtime: Runtime, sessionId: string, run: number, worker: WorkerSession): void {
-  if (runtime.runs.get(sessionId) !== run) return;
-  const handled = wrapping.takeOver(runtime, sessionId, worker, {
-    turn: () => afterTurn(runtime, sessionId, run, worker),
-    settle: (error: unknown) => void settle(runtime, sessionId, run, worker, error),
+function afterTurn(runtime: Runtime, threadId: string, run: number, worker: WorkerSession): void {
+  if (runtime.runs.get(threadId) !== run) return;
+  const handled = wrapping.takeOver(runtime, threadId, worker, {
+    turn: () => afterTurn(runtime, threadId, run, worker),
+    settle: (error: unknown) => void settle(runtime, threadId, run, worker, error),
   });
   if (handled) return;
-  const assignments = store.assignmentsOfSession(runtime.database, sessionId);
+  const assignments = store.assignmentsOfThread(runtime.database, threadId);
   const taskIds = assignments.map((assignment) => assignment.taskId);
   const notes = taskIds.flatMap((taskId) =>
-    store.unreadNotes(runtime.database, runtime.options.project, taskId, sessionId),
+    store.unreadNotes(runtime.database, runtime.options.project, taskId, threadId),
   );
   const pending = [...new Map(notes.map((note) => [note.id, note])).values()];
   if (pending.length === 0) {
-    void settle(runtime, sessionId, run, worker, undefined);
+    void settle(runtime, threadId, run, worker, undefined);
     return;
   }
   const now = Effect.runSync(nowMillis);
-  for (const note of pending) store.markNoteRead(runtime.database, note.id, sessionId, now);
+  for (const note of pending) store.markNoteRead(runtime.database, note.id, threadId, now);
   void worker.prompt(prompts.notesBlock(pending)).then(
-    () => afterTurn(runtime, sessionId, run, worker),
-    (error: unknown) => settle(runtime, sessionId, run, worker, error),
+    () => afterTurn(runtime, threadId, run, worker),
+    (error: unknown) => settle(runtime, threadId, run, worker, error),
   );
 }
 
