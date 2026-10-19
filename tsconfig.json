@@ -11,6 +11,7 @@
       "@msa/chord/node": ["./libs/chord/src/node.ts"],
       "@msa/chord/output": ["./libs/chord/src/output.ts"],
       "@msa/telemetry": ["./libs/telemetry/src/index.ts"],
+      "@msa/telemetry/otlp": ["./libs/telemetry/src/otlp.ts"],
       "@msa/telemetry/testing": ["./libs/telemetry/src/testing/index.ts"],
       "@msa/codemode": ["./libs/codemode/src/index.ts"],
       "@msa/codemode/cloudflare": ["./libs/codemode/src/cloudflare.ts"],

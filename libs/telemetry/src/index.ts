@@ -4,6 +4,10 @@ export type {
   SpanOptions,
   SpanStatus,
   TelemetryContext,
+  TelemetryLogRecord,
+  TelemetryLogSeverity,
+  TelemetryMetricKind,
+  TelemetryMetricRecord,
   TelemetrySpan,
 } from "./context.ts";
 export { NOOP_TELEMETRY_CONTEXT } from "./noop.ts";
@@ -35,5 +39,10 @@ export type {
 } from "./schema-inference.ts";
 export type { TypedSpanStarter } from "./typed-span-starter.ts";
 export { createTypedSpanStarter } from "./typed-span-starter.ts";
-export type { RecordedTelemetryEvent, RecordedTelemetrySpan } from "./memory.ts";
+export type {
+  RecordedTelemetryEvent,
+  RecordedTelemetryLog,
+  RecordedTelemetryMetric,
+  RecordedTelemetrySpan,
+} from "./memory.ts";
 export { InMemoryTelemetryContext } from "./memory.ts";

@@ -63,6 +63,7 @@ import type { InlineExtension } from "./core/extensions/types.ts";
 import { applyHttpProxySettings, configureHttpDispatcher } from "./core/http-dispatcher.ts";
 import { resolveCliModel, resolveModelScope, type ScopedModel } from "./core/model-resolver.ts";
 import { ModelRuntime } from "./core/model-runtime.ts";
+import { describeTelemetry, startTelemetry } from "./core/observability/telemetry.ts";
 import { restoreStdout, takeOverStdout } from "./core/output-guard.ts";
 import { type AppMode, resolveProjectTrusted } from "./core/project-trust.ts";
 import type { CreateAgentSessionOptions } from "./core/sdk.ts";
@@ -750,6 +751,17 @@ export async function main(args: string[], options?: MainOptions) {
     startupSettingsManager.applyOverrides({ theme: parsed.useTheme });
   }
 
+  const telemetry =
+    parsed.help || parsed.listModels !== undefined
+      ? undefined
+      : await startTelemetry({
+          envEndpoint: process.env["MSA_OTLP_ENDPOINT"],
+          settingsEndpoint: startupSettingsManager.getOtlpEndpoint(),
+          path: process.env["PATH"],
+          version: VERSION,
+        });
+  time("startTelemetry");
+
   // Decide the final runtime cwd before creating cwd-bound runtime services.
   // --session and --resume may select a session from another project, so project-local
   // settings, resources, provider registrations, and models must be resolved only after
@@ -933,6 +945,7 @@ export async function main(args: string[], options?: MainOptions) {
       excludeTools: sessionOptions.excludeTools,
       noTools: sessionOptions.noTools,
       customTools: sessionOptions.customTools,
+      telemetry: telemetry && { context: telemetry.context, role: "main" },
     });
     const cliThinkingOverride = parsed.thinking !== undefined || cliThinkingFromModel;
     if (created.session.model && cliThinkingOverride) {
@@ -950,6 +963,7 @@ export async function main(args: string[], options?: MainOptions) {
     cwd: sessionManager.getCwd(),
     agentDir,
     sessionManager,
+    ...(telemetry ? { telemetry } : {}),
   });
   time("createAgentSessionRuntime");
   const { services, session, modelFallbackMessage } = runtime;
@@ -998,6 +1012,9 @@ export async function main(args: string[], options?: MainOptions) {
   const startupDiagnostics = deduplicateDiagnostics([
     ...startupSettingsDiagnostics,
     ...runtime.diagnostics,
+    ...(telemetry
+      ? [{ type: "info" as const, message: describeTelemetry(telemetry.status()) }]
+      : []),
   ]);
   const hasRuntimeErrors = runtime.diagnostics.some((diagnostic) => diagnostic.type === "error");
   if (appMode !== "interactive" || hasRuntimeErrors) {

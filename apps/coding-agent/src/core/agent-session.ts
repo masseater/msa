@@ -59,6 +59,7 @@ import {
   resetApiProviders,
   streamSimple,
 } from "@msa/ai/compat";
+import { NOOP_TELEMETRY_CONTEXT } from "@msa/telemetry";
 import { Effect } from "effect";
 
 import { getThemeByName, theme } from "../modes/interactive/theme/theme.ts";
@@ -150,6 +151,10 @@ import { ModelRegistry } from "./model-registry.ts";
 import { resolveModelReference } from "./model-resolver.ts";
 import type { ModelRuntime } from "./model-runtime.ts";
 import { NestedToolCallRunner } from "./nested-tool-calls.ts";
+import {
+  SessionTelemetry,
+  type SessionTelemetryOptions,
+} from "./observability/session-telemetry.ts";
 import {
   type CreateWorkerOptions,
   ORCHESTRATOR_REPORT_MESSAGE_TYPE,
@@ -388,6 +393,8 @@ export interface AgentSessionConfig {
    * tools.
    */
   createWorkerSession?: ((options: CreateWorkerOptions) => Promise<WorkerSession>) | undefined;
+  /** Where the session's spans, metrics, and logs go. Default: nowhere. */
+  telemetry?: SessionTelemetryOptions | undefined;
 }
 
 export interface ExtensionBindings {
@@ -523,6 +530,7 @@ export class AgentSession {
   private readonly _goal: GoalLoop;
   private readonly _prWatch: PrWatch;
   private readonly _orchestrator: Orchestrator | undefined;
+  private readonly _telemetry: SessionTelemetry;
   private _totalTokensCache: { entryCount: number; total: number } | undefined;
   private _isBeforeSettle = false;
   private _abortDuringBeforeSettle = false;
@@ -640,9 +648,14 @@ export class AgentSession {
       findActiveGoalCondition(this.sessionManager.getBranch()),
     );
 
+    const telemetry = config.telemetry ?? { context: NOOP_TELEMETRY_CONTEXT, role: "main" };
+    this._telemetry = new SessionTelemetry(telemetry.context, telemetry.role);
+    this.subscribe((event) => this._telemetry.handle(event));
+
     this._prWatch = new PrWatch({
       gh: makeGh({ cwd: this._cwd }),
       host: createPrWatchHost({
+        telemetry: telemetry.context,
         threadId: this.sessionManager.getSessionId(),
         sendMessage: (message, options) => {
           void this.sendCustomMessage(message, options);
@@ -663,6 +676,7 @@ export class AgentSession {
           resolveModel: (reference) => this._resolveOrchestratorModel(reference),
           defaults: () => this._orchestratorDefaults(),
           runCondition: (command, cwd) => this._runCondition(command, cwd),
+          telemetry: telemetry.context,
           report: (text, details) =>
             void this.sendCustomMessage(
               {
@@ -1633,6 +1647,7 @@ export class AgentSession {
       "This extension ctx is stale after session replacement or reload. Do not use a captured msa or command ctx after ctx.newSession(), ctx.fork(), ctx.switchSession(), or ctx.reload(). For newSession, fork, and switchSession, move post-replacement work into withSession and use the ctx passed to withSession. For reload, do not use the old ctx after await ctx.reload().",
     );
     this._disconnectFromAgent();
+    this._telemetry.close();
     this._eventListeners = [];
     if (this._cacheWarmer) {
       this._cacheWarmer.onWarmed = undefined;

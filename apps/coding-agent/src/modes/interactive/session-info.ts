@@ -19,6 +19,8 @@ export type SessionInfo = {
   selectedModelKey: string;
   contextBreakdown: ContextBreakdown;
   contextWindow: number | undefined;
+  /** Where traces, metrics, and logs go, from `describeTelemetry`. */
+  telemetry: string | undefined;
 };
 
 const label = (text: string): string => theme.fg("dim", text);
@@ -122,6 +124,7 @@ export function formatSessionInfo(info: SessionInfo): string {
     lines.push(`${label("Cache miss penalty:")} $${decision.missCost.toFixed(3)}`);
     lines.push(`${label("Refresh cost:")} $${decision.warmCost.toFixed(3)}`);
   }
+  if (info.telemetry !== undefined) lines.push("", theme.bold("Telemetry"), info.telemetry);
 
   if (stats.cost > 0 || cacheWaste.missedTokens > 0) {
     lines.push("", theme.bold("Cost"), `${label("Total:")} $${stats.cost.toFixed(3)}`);

@@ -1,5 +1,6 @@
 import type { AgentMessage, ThinkingLevel } from "@msa/agent-core";
 import { type Api, fauxAssistantMessage, type Model } from "@msa/ai";
+import { InMemoryTelemetryContext } from "@msa/telemetry";
 import { Effect } from "effect";
 
 import {
@@ -34,6 +35,7 @@ export class FakeWorker implements WorkerSession {
   steered: string[] = [];
   model: Model<any>;
   thinkingLevel: ThinkingLevel;
+  telemetry: CreateWorkerOptions["telemetry"];
   isRetrying = false;
   state: { streamingMessage?: AgentMessage } = {};
   private readonly pending: Array<{
@@ -44,6 +46,7 @@ export class FakeWorker implements WorkerSession {
   constructor(options: CreateWorkerOptions, index: number) {
     this.model = options.model;
     this.thinkingLevel = options.thinkingLevel;
+    this.telemetry = options.telemetry;
     this.sessionFile = `/sessions/${index}.jsonl`;
   }
 
@@ -108,7 +111,9 @@ export interface HarnessOptions {
 function setup(options: HarnessOptions = {}) {
   const workers: FakeWorker[] = [];
   const reports: Array<{ text: string; details: OrchestratorReport }> = [];
+  const telemetry = new InMemoryTelemetryContext();
   const orchestrator = new Orchestrator({
+    telemetry,
     project: "project",
     cwd: "/repo",
     databasePath: options.databasePath ?? ":memory:",
@@ -135,7 +140,7 @@ function setup(options: HarnessOptions = {}) {
     }),
     report: (text, details) => reports.push({ text, details }),
   });
-  return { orchestrator, workers, reports };
+  return { orchestrator, workers, reports, telemetry };
 }
 
 function waitFor(predicate: () => boolean, attempts = 10_000): Effect.Effect<void> {

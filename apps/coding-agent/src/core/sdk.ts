@@ -20,6 +20,7 @@ import { createToolNameMatcher } from "./mcp-servers.ts";
 import { convertToLlm } from "./messages.ts";
 import { findInitialModel } from "./model-resolver.ts";
 import { ModelRuntime } from "./model-runtime.ts";
+import type { SessionTelemetryOptions } from "./observability/session-telemetry.ts";
 import { isOrchestratorTool, ORCHESTRATOR_TOOL_NAMES } from "./orchestrator/tool-names.ts";
 import { mergeProviderAttributionHeaders } from "./provider-attribution.ts";
 import type { ResourceLoader } from "./resource-loader.ts";
@@ -114,6 +115,8 @@ export interface CreateAgentSessionOptions {
   /** Session start event metadata for extension runtime startup. */
   sessionStartEvent?: SessionStartEvent | undefined;
   isWorker?: boolean | undefined;
+  /** Where the session's turn, LLM request, and tool call spans go. Default: nowhere. */
+  telemetry?: SessionTelemetryOptions | undefined;
 }
 
 /** Result from createAgentSession */
@@ -509,6 +512,7 @@ export async function createAgentSession(
     excludedToolNames,
     extensionRunnerRef,
     sessionStartEvent: options.sessionStartEvent,
+    telemetry: options.telemetry,
     // Workers get the orchestrator's settings, project trust, resources, and tool selection, minus
     // the orchestrator tools; the worker cwd only moves their tools and transcripts.
     createWorkerSession:
@@ -534,6 +538,7 @@ export async function createAgentSession(
               model: worker.model,
               thinkingLevel: worker.thinkingLevel,
               isWorker: true,
+              telemetry: worker.telemetry,
               // An emptied allowlist still means no tools; emptied +/- entries mean the defaults.
               ...(workerTools && !(workerTools.length === 0 && toolModifiers)
                 ? { tools: workerTools }

@@ -1452,6 +1452,11 @@ export class SettingsManager {
   }
 
   /** Seconds between checks of a watched pull request, as milliseconds. */
+  getOtlpEndpoint(): string | undefined {
+    const endpoint = this.settings.telemetry?.otlpEndpoint?.trim();
+    return endpoint ? endpoint : undefined;
+  }
+
   getPrWatchIntervalMs(): number {
     const seconds = this.settings.prWatch?.intervalSeconds;
     const value =

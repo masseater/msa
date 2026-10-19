@@ -20,6 +20,7 @@ import { AgentSession, type AgentSessionEvent } from "../../src/core/agent-sessi
 import { AuthStorage } from "../../src/core/auth-storage.ts";
 import type { ExtensionRunner, ExtensionUIContext } from "../../src/core/extensions/index.ts";
 import { convertToLlm } from "../../src/core/messages.ts";
+import type { SessionTelemetryOptions } from "../../src/core/observability/session-telemetry.ts";
 import { SessionManager } from "../../src/core/session-manager.ts";
 import type { Settings } from "../../src/core/settings-manager.ts";
 import { SettingsManager } from "../../src/core/settings-manager.ts";
@@ -130,6 +131,7 @@ export interface HarnessOptions {
   modelsJson?: Record<string, unknown>;
   /** Session to continue, for example to test a resume. Default: a new in-memory session. */
   sessionManager?: SessionManager | undefined;
+  telemetry?: SessionTelemetryOptions | undefined;
 }
 
 export interface Harness {
@@ -265,6 +267,7 @@ export async function createHarness(options: HarnessOptions = {}): Promise<Harne
       ? { excludedToolNames: options.excludedToolNames }
       : {}),
     extensionRunnerRef,
+    telemetry: options.telemetry,
   });
 
   const events: AgentSessionEvent[] = [];

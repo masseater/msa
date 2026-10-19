@@ -44,6 +44,10 @@
               "path": "pr-watch.md"
             },
             {
+              "title": "Read Telemetry",
+              "path": "telemetry.md"
+            },
+            {
               "title": "Run msa Safely",
               "path": "security.md"
             },

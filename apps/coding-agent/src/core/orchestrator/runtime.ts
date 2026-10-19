@@ -2,12 +2,14 @@ import type { DatabaseSync } from "node:sqlite";
 
 import { DateTime, Effect } from "effect";
 
+import type { OrchestratorTelemetry } from "./telemetry.ts";
 import type { OrchestratorOptions, WorkerSession } from "./worker.ts";
 import type { WrapUp } from "./wrap-up.ts";
 
 export interface Runtime {
   database: DatabaseSync;
   options: OrchestratorOptions;
+  telemetry: OrchestratorTelemetry;
   workers: Map<string, WorkerSession>;
   runs: Map<string, number>;
   runStartedAt: Map<string, number>;

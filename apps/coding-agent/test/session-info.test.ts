@@ -29,6 +29,7 @@ function info(overrides: Partial<SessionInfo> = {}): SessionInfo {
     selectedModelKey: "faux/one",
     contextBreakdown: { method: "estimated", tokens: 0, entries: [] },
     contextWindow: 200_000,
+    telemetry: undefined,
     ...overrides,
   };
 }

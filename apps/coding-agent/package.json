@@ -59,6 +59,7 @@
     "@msa/ai": "workspace:*",
     "@msa/codemode": "workspace:*",
     "@msa/mcp": "workspace:*",
+    "@msa/telemetry": "workspace:*",
     "@msa/tui": "workspace:*",
     "@silvia-odwyer/photon-node": "catalog:",
     "brace-expansion": "catalog:",
