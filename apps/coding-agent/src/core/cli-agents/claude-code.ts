@@ -51,12 +51,12 @@ const IDLE_CLOSE_MS = 30 * 60_000;
 /** Idle processes kept for conversations that may come back (other msa sessions, branches). */
 const MAX_IDLE_SESSIONS = 2;
 
-/** The models Claude Code accepts by full id, with the alias it currently resolves to that id. */
+/** The models Claude Code accepts, by full versioned id only. */
 const MODELS = [
-  { id: "claude-fable-5-1", alias: "fable", name: "Claude Fable 5.1" },
-  { id: "claude-opus-5-5", alias: "opus", name: "Claude Opus 5.5" },
-  { id: "claude-sonnet-5-5", alias: "sonnet", name: "Claude Sonnet 5.5" },
-  { id: "claude-haiku-5-5", alias: "haiku", name: "Claude Haiku 5.5" },
+  { id: "claude-fable-5-1", name: "Claude Fable 5.1" },
+  { id: "claude-opus-5-5", name: "Claude Opus 5.5" },
+  { id: "claude-sonnet-5-5", name: "Claude Sonnet 5.5" },
+  { id: "claude-haiku-5-5", name: "Claude Haiku 5.5" },
 ] as const;
 
 type Effort = "low" | "medium" | "high" | "xhigh" | "max";
@@ -547,7 +547,7 @@ const streamFor =
       accounts: fixed
         ? [fixed]
         : loadAccounts().filter((account) => account.auto !== false && !blockOf(account)),
-      model: model.resolvesTo ?? model.id,
+      model: model.id,
       effort: options?.reasoning ? EFFORT[options.reasoning] : undefined,
       systemPrompt: getCurrentSystemPrompt(messages),
       tools: getCurrentTools(messages),
@@ -638,15 +638,7 @@ function provider(id: string, name: string, account?: Account): Provider {
   return cliAgentProvider({
     id,
     name,
-    models: MODELS.flatMap((model) => [
-      { ...MODEL_LIMITS, id: model.id, name: model.name },
-      {
-        ...MODEL_LIMITS,
-        id: model.alias,
-        name: `${model.alias} → ${model.id}`,
-        resolvesTo: model.id,
-      },
-    ]),
+    models: MODELS.map((model) => ({ ...MODEL_LIMITS, id: model.id, name: model.name })),
     executable: claudeExecutable,
     streamSimple: streamFor(account),
   });

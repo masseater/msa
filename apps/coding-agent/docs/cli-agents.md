@@ -9,7 +9,6 @@ msa can use another coding agent's subscription as a model. `claude-subs` runs o
 
 ```bash
 msa --model claude-subs/claude-opus-5-5
-msa --model claude-subs/opus   # alias; the list shows the id it resolves to
 msa --model opencode-free/glm-5.3-flash-free
 ```
 

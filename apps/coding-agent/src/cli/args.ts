@@ -421,7 +421,7 @@ ${chalk.bold("Examples:")}
   ${APP_NAME} --model openai/gpt-4o "Help me refactor this code"
 
   # Use model with thinking level shorthand
-  ${APP_NAME} --model sonnet:high "Solve this complex problem"
+  ${APP_NAME} --model claude-sonnet-5-5:high "Solve this complex problem"
 
   # Limit model cycling to specific models
   ${APP_NAME} --models claude-sonnet,claude-haiku,gpt-4o
@@ -430,7 +430,7 @@ ${chalk.bold("Examples:")}
   ${APP_NAME} --models "openai/*"
 
   # Cycle models with fixed thinking levels
-  ${APP_NAME} --models sonnet:high,haiku:low
+  ${APP_NAME} --models claude-sonnet-5-5:high,claude-haiku-5-5:low
 
   # Start with a specific thinking level
   ${APP_NAME} --thinking high "Solve this complex problem"
