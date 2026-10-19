@@ -39,11 +39,6 @@ export type {
   SetTaskDependsInput,
   SetTaskInstructionInput,
 } from "./types.ts";
-export {
-  ORCHESTRATOR_TOOL_NAMES,
-  createOrchestratorToolDefinitions,
-  isOrchestratorTool,
-} from "./tools.ts";
 
 export const ORCHESTRATOR_REPORT_MESSAGE_TYPE = "msa.orchestrator.report";
 

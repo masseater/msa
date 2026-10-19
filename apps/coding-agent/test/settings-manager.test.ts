@@ -5,6 +5,7 @@ import { join } from "path";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
 import { DEFAULT_HTTP_IDLE_TIMEOUT_MS } from "../src/core/http-dispatcher.ts";
+import { ORCHESTRATOR_TOOL_NAMES } from "../src/core/orchestrator/tool-names.ts";
 import { type Settings, SettingsManager } from "../src/core/settings-manager.ts";
 
 describe("SettingsManager", () => {
@@ -715,6 +716,7 @@ describe("SettingsManager", () => {
         "pr_watch",
         "model_policy",
         "model_upgrade",
+        ...ORCHESTRATOR_TOOL_NAMES,
         "web_search",
         "web_fetch",
         "codemode",
@@ -756,6 +758,7 @@ describe("SettingsManager", () => {
         "pr_watch",
         "model_policy",
         "model_upgrade",
+        ...ORCHESTRATOR_TOOL_NAMES,
         "web_search",
         "web_fetch",
         "codemode",

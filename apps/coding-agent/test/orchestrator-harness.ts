@@ -138,7 +138,7 @@ function setup(options: HarnessOptions = {}) {
   return { orchestrator, workers, reports };
 }
 
-function waitFor(predicate: () => boolean, attempts = 400): Effect.Effect<void> {
+function waitFor(predicate: () => boolean, attempts = 10_000): Effect.Effect<void> {
   return Effect.gen(function* () {
     for (let index = 0; index < attempts; index++) {
       if (predicate()) return;

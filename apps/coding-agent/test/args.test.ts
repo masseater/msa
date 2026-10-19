@@ -469,6 +469,18 @@ describe("parseArgs", () => {
       expect(result.noBuiltinTools).toBe(true);
     });
 
+    test("rejects the removed --orchestrator flag", () => {
+      const result = parseArgs(["--orchestrator"]);
+      expect(result.tools).toBeUndefined();
+      expect(result.diagnostics).toEqual([
+        {
+          type: "error",
+          message:
+            "--orchestrator is the default: the orchestrator tools are always enabled. Remove the flag.",
+        },
+      ]);
+    });
+
     test("parses --tools flag", () => {
       const result = parseArgs(["--tools", "read,bash"]);
       expect(result.tools).toEqual(["read", "bash"]);

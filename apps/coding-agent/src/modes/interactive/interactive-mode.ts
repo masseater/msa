@@ -1511,9 +1511,7 @@ export class InteractiveMode {
     }
     this.footer.setSession(this.session);
     this.updateGoalTicker();
-    if (this.session.getActiveToolNames().includes("create_task")) {
-      void this.session.orchestrator?.refresh();
-    }
+    void this.session.orchestrator?.refresh();
     this.footer.setAutoCompactEnabled(this.session.autoCompactionEnabled);
     this.footerDataProvider.setCwd(this.sessionManager.getCwd());
     this.hideThinkingBlock = this.settingsManager.getHideThinkingBlock();
@@ -5163,8 +5161,8 @@ export class InteractiveMode {
 
   private showTasksView(initialId?: string): void {
     const orchestrator = this.session.orchestrator;
-    if (!orchestrator || !this.session.getActiveToolNames().includes("create_task")) {
-      this.showStatus(`Requires ${APP_NAME} --orchestrator`);
+    if (!orchestrator) {
+      this.showStatus("The orchestrator is unavailable in this session");
       return;
     }
     void orchestrator.refresh();
