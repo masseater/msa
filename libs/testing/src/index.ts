@@ -1,16 +1,21 @@
 export {
   abortController,
   awaited,
+  currentDate,
   currentTimeMillis,
+  dateFromMillis,
   type DeferredPromise,
   deferredPromise,
   failure,
   gate,
   type Gate,
+  isoFromMillis,
   neverPromise,
   nowIso,
   pollUntil,
   randomSuffix,
+  randomSuffixSync,
+  sleep,
 } from "./effect-support.ts";
 export {
   appendTextFile,

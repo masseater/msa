@@ -1,6 +1,7 @@
 import { existsSync, globSync, readFileSync, statSync } from "node:fs";
 import { dirname, isAbsolute, posix, relative, resolve, sep } from "node:path";
 
+import {} from "@msa/testing";
 import { lexer, type Token, type Tokens, walkTokens } from "marked";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -16,7 +17,11 @@ interface NavigationGroup {
 const docsRoot = resolve(import.meta.dirname, "../docs");
 
 function requireObject(value: unknown, location: string): Record<string, unknown> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
+  if (
+    !(value !== null && value !== undefined) ||
+    typeof value !== "object" ||
+    Array.isArray(value)
+  ) {
     throw new Error(`${location} must be an object`);
   }
   return value as Record<string, unknown>;
@@ -43,7 +48,7 @@ function requireDocumentationPath(value: unknown, location: string): string {
   const normalizedPath = posix.normalize(path);
   const escapesDocsRoot = normalizedPath === ".." || normalizedPath.startsWith("../");
   const hasUrlSyntax = path.includes("?") || path.includes("#");
-  const hasWindowsSyntax = path.includes("\\") || /^[a-z]:/i.test(path);
+  const hasWindowsSyntax = path.includes("\\") || /^[a-z]:/iu.test(path);
 
   if (
     path !== path.trim() ||
@@ -78,7 +83,8 @@ function readNavigationItem(rawItem: unknown, location: string): NavigationItem 
     );
   }
 
-  if (path !== undefined) return items ? { title, path, items } : { title, path };
+  if (path !== undefined)
+    return items !== undefined && items.length > 0 ? { title, path, items } : { title, path };
   if (items !== undefined) return { title, items };
   throw new Error(`${location} must have a path or items`);
 }
@@ -114,7 +120,7 @@ function navigationPaths(groups: NavigationGroup[]): string[] {
   const visit = (items: NavigationItem[]): void => {
     for (const item of items) {
       if ("path" in item) paths.push(item.path);
-      if (item.items) visit(item.items);
+      if (item.items !== undefined && item.items.length > 0) visit(item.items);
     }
   };
   for (const group of groups) visit(group.items);
@@ -194,9 +200,9 @@ describe("coding-agent documentation", () => {
       reachable.add(source);
 
       for (const href of markdownLinks(readFileSync(resolve(docsRoot, source), "utf8"))) {
-        if (/^[a-z][a-z\d+.-]*:/i.test(href) || href.startsWith("//") || href.startsWith("/"))
+        if (/^[a-z][a-z\d+.-]*:/iu.test(href) || href.startsWith("//") || href.startsWith("/"))
           continue;
-        const linkedPath = href.split(/[?#]/, 1)[0] ?? "";
+        const linkedPath = href.split(/[?#]/u, 1)[0] ?? "";
         const fragment = fragmentOf(href);
         if (linkedPath === "" && fragment !== "") {
           if (!markdownAnchors(readFileSync(resolve(docsRoot, source), "utf8")).has(fragment))

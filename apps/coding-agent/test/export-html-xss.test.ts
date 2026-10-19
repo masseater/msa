@@ -1,73 +1,104 @@
-import { readFileSync } from "fs";
+import { fileURLToPath } from "node:url";
 
+import { readTextFile, runTest } from "@msa/testing";
+import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 describe("export HTML markdown link sanitization", () => {
-  const templateJs = readFileSync(
-    new URL("../src/core/export-html/template.js", import.meta.url),
-    "utf-8",
+  const readTemplate = readTextFile(
+    fileURLToPath(new URL("../src/core/export-html/template.js", import.meta.url)),
   );
 
-  it("overrides the marked link renderer to use scheme allow-list sanitization", () => {
-    expect(templateJs).toMatch(/link\s*\(\s*token\s*\)/);
-    expect(templateJs).toMatch(/sanitizeMarkdownUrl\(token\.href\)/);
-    expect(templateJs).toMatch(/\^\(https\?\|mailto\|tel\|ftp\)/);
-  });
+  it("overrides the marked link renderer to use scheme allow-list sanitization", () =>
+    runTest(
+      Effect.gen(function* () {
+        const templateJs = yield* readTemplate;
+        expect(templateJs).toMatch(/link\s*\(\s*token\s*\)/u);
+        expect(templateJs).toMatch(/sanitizeMarkdownUrl\(token\.href\)/u);
+        expect(templateJs).toMatch(/\^\(https\?\|mailto\|tel\|ftp\)/u);
+      }),
+    ));
 
-  it("overrides the marked image renderer to use scheme allow-list sanitization", () => {
-    expect(templateJs).toMatch(/image\s*\(\s*token\s*\)/);
-    expect(templateJs).toMatch(/sanitizeMarkdownUrl\(token\.href\)/);
-  });
+  it("overrides the marked image renderer to use scheme allow-list sanitization", () =>
+    runTest(
+      Effect.gen(function* () {
+        const templateJs = yield* readTemplate;
+        expect(templateJs).toMatch(/image\s*\(\s*token\s*\)/u);
+        expect(templateJs).toMatch(/sanitizeMarkdownUrl\(token\.href\)/u);
+      }),
+    ));
 
-  it("strips C0 controls before checking and emitting markdown URLs", () => {
-    expect(templateJs).toContain("replace(/[\\x00-\\x1f\\x7f]/g, '')");
-    expect(templateJs).not.toMatch(/\^\\s\*\(javascript\|vbscript\|data\):/i);
-  });
+  it("strips C0 controls before checking and emitting markdown URLs", () =>
+    runTest(
+      Effect.gen(function* () {
+        const templateJs = yield* readTemplate;
+        expect(templateJs).toContain("replace(/[\\x00-\\x1f\\x7f]/g, '')");
+        expect(templateJs).not.toMatch(/\^\\s\*\(javascript\|vbscript\|data\):/iu);
+      }),
+    ));
 
-  it("escapes href attributes in the custom link renderer", () => {
-    // The link renderer must escape href values to prevent attribute breakout
-    expect(templateJs).toMatch(/escapeHtml\(href\)/);
-  });
+  it("escapes href attributes in the custom link renderer", () =>
+    runTest(
+      Effect.gen(function* () {
+        const templateJs = yield* readTemplate;
+        expect(templateJs).toMatch(/escapeHtml\(href\)/u);
+      }),
+    ));
 
-  it("escapes image mimeType attributes", () => {
-    // Image mimeType must be escaped to prevent attribute breakout
-    expect(templateJs).not.toMatch(/\$\{img\.mimeType\}/);
-    expect(templateJs).toMatch(/escapeHtml\(img\.mimeType/);
-  });
+  it("escapes image mimeType attributes", () =>
+    runTest(
+      Effect.gen(function* () {
+        const templateJs = yield* readTemplate;
+        expect(templateJs).not.toMatch(/\$\{img\.mimeType\}/u);
+        expect(templateJs).toMatch(/escapeHtml\(img\.mimeType/u);
+      }),
+    ));
 
-  it("escapes image data attributes", () => {
-    // Image data is embedded in src attributes and must not allow attribute breakout.
-    expect(templateJs).not.toMatch(/;base64,\$\{img\.data\}"/);
-    expect(templateJs).toMatch(/;base64,\$\{escapeHtml\(img\.data \|\| (?:''|"")\)\}"/);
-  });
+  it("escapes image data attributes", () =>
+    runTest(
+      Effect.gen(function* () {
+        const templateJs = yield* readTemplate;
+        expect(templateJs).not.toMatch(/;base64,\$\{img\.data\}"/u);
+        expect(templateJs).toMatch(/;base64,\$\{escapeHtml\(img\.data \|\| (?:''|"")\)\}"/u);
+      }),
+    ));
 
-  it("escapes entry IDs before inserting them into attributes", () => {
-    // Session entry IDs are embedded in id and data-entry-id attributes.
-    expect(templateJs).not.toMatch(/id="\$\{entryId\}"/);
-    expect(templateJs).not.toMatch(/data-entry-id="\$\{entryId\}"/);
-    expect(templateJs).toMatch(/entry-\$\{escapeHtml\(entry\.id\)\}/);
-    expect(templateJs).toMatch(/data-entry-id="\$\{escapeHtml\(entryId\)\}"/);
-  });
+  it("escapes entry IDs before inserting them into attributes", () =>
+    runTest(
+      Effect.gen(function* () {
+        const templateJs = yield* readTemplate;
+        expect(templateJs).not.toMatch(/id="\$\{entryId\}"/u);
+        expect(templateJs).not.toMatch(/data-entry-id="\$\{entryId\}"/u);
+        expect(templateJs).toMatch(/entry-\$\{escapeHtml\(entry\.id\)\}/u);
+        expect(templateJs).toMatch(/data-entry-id="\$\{escapeHtml\(entryId\)\}"/u);
+      }),
+    ));
 
-  it("escapes tree metadata rendered from session fields", () => {
-    // The tree renders session metadata via innerHTML, so dynamic fields must be escaped.
-    expect(templateJs).not.toMatch(/\[\$\{msg\.toolName \|\| 'tool'\}\]/);
-    expect(templateJs).not.toMatch(/\[\$\{msg\.role\}\]/);
-    expect(templateJs).not.toMatch(/\[model: \$\{entry\.modelId\}\]/);
-    expect(templateJs).not.toMatch(/\[thinking: \$\{entry\.thinkingLevel\}\]/);
-    expect(templateJs).not.toMatch(/\[\$\{entry\.type\}\]/);
-    expect(templateJs).toMatch(/\$\{escapeHtml\(msg\.toolName \|\| 'tool'\)\}/);
-    expect(templateJs).toMatch(/\$\{escapeHtml\(msg\.role\)\}/);
-    expect(templateJs).toMatch(/\$\{escapeHtml\(entry\.modelId\)\}/);
-    expect(templateJs).toMatch(/\$\{escapeHtml\(entry\.thinkingLevel\)\}/);
-    expect(templateJs).toMatch(/\$\{escapeHtml\(entry\.type\)\}/);
-  });
+  it("escapes tree metadata rendered from session fields", () =>
+    runTest(
+      Effect.gen(function* () {
+        const templateJs = yield* readTemplate;
+        expect(templateJs).not.toMatch(/\[\$\{msg\.toolName \|\| 'tool'\}\]/u);
+        expect(templateJs).not.toMatch(/\[\$\{msg\.role\}\]/u);
+        expect(templateJs).not.toMatch(/\[model: \$\{entry\.modelId\}\]/u);
+        expect(templateJs).not.toMatch(/\[thinking: \$\{entry\.thinkingLevel\}\]/u);
+        expect(templateJs).not.toMatch(/\[\$\{entry\.type\}\]/u);
+        expect(templateJs).toMatch(/\$\{escapeHtml\(msg\.toolName \|\| 'tool'\)\}/u);
+        expect(templateJs).toMatch(/\$\{escapeHtml\(msg\.role\)\}/u);
+        expect(templateJs).toMatch(/\$\{escapeHtml\(entry\.modelId\)\}/u);
+        expect(templateJs).toMatch(/\$\{escapeHtml\(entry\.thinkingLevel\)\}/u);
+        expect(templateJs).toMatch(/\$\{escapeHtml\(entry\.type\)\}/u);
+      }),
+    ));
 
-  it("escapes model names in the exported header", () => {
-    // Assistant message provider/model values are collected from the session and rendered with innerHTML.
-    expect(templateJs).not.toMatch(/\$\{globalStats\.models\.join\(', '\) \|\| 'unknown'\}/);
-    expect(templateJs).toMatch(
-      /\$\{escapeHtml\(globalStats\.models\.join\(', '\) \|\| 'unknown'\)\}/,
-    );
-  });
+  it("escapes model names in the exported header", () =>
+    runTest(
+      Effect.gen(function* () {
+        const templateJs = yield* readTemplate;
+        expect(templateJs).not.toMatch(/\$\{globalStats\.models\.join\(', '\) \|\| 'unknown'\}/u);
+        expect(templateJs).toMatch(
+          /\$\{escapeHtml\(globalStats\.models\.join\(', '\) \|\| 'unknown'\)\}/u,
+        );
+      }),
+    ));
 });

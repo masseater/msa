@@ -1,3 +1,4 @@
+import { dateFromMillis } from "@msa/testing";
 import { describe, expect, it } from "vite-plus/test";
 
 import type { SessionInfo } from "../src/core/session-manager.ts";
@@ -10,8 +11,8 @@ function makeSession(
     path: `/tmp/${overrides.id}.jsonl`,
     id: overrides.id,
     cwd: overrides.cwd ?? "",
-    ...(overrides.name !== undefined ? { name: overrides.name } : {}),
-    created: overrides.created ?? new Date(0),
+    ...(overrides.name === undefined ? {} : { name: overrides.name }),
+    created: overrides.created ?? dateFromMillis(0),
     modified: overrides.modified,
     messageCount: overrides.messageCount ?? 1,
     firstMessage: overrides.firstMessage ?? "(no messages)",
@@ -24,12 +25,12 @@ describe("session selector search", () => {
     const sessions: SessionInfo[] = [
       makeSession({
         id: "a",
-        modified: new Date("2026-01-01T00:00:00.000Z"),
+        modified: dateFromMillis("2026-01-01T00:00:00.000Z"),
         allMessagesText: "node\n\n   cve was discussed",
       }),
       makeSession({
         id: "b",
-        modified: new Date("2026-01-02T00:00:00.000Z"),
+        modified: dateFromMillis("2026-01-02T00:00:00.000Z"),
         allMessagesText: "node something else",
       }),
     ];
@@ -42,12 +43,12 @@ describe("session selector search", () => {
     const sessions: SessionInfo[] = [
       makeSession({
         id: "a",
-        modified: new Date("2026-01-02T00:00:00.000Z"),
+        modified: dateFromMillis("2026-01-02T00:00:00.000Z"),
         allMessagesText: "Brave is great",
       }),
       makeSession({
         id: "b",
-        modified: new Date("2026-01-03T00:00:00.000Z"),
+        modified: dateFromMillis("2026-01-03T00:00:00.000Z"),
         allMessagesText: "bravery is not the same",
       }),
     ];
@@ -60,17 +61,17 @@ describe("session selector search", () => {
     const sessions: SessionInfo[] = [
       makeSession({
         id: "newer",
-        modified: new Date("2026-01-03T00:00:00.000Z"),
+        modified: dateFromMillis("2026-01-03T00:00:00.000Z"),
         allMessagesText: "brave",
       }),
       makeSession({
         id: "older",
-        modified: new Date("2026-01-01T00:00:00.000Z"),
+        modified: dateFromMillis("2026-01-01T00:00:00.000Z"),
         allMessagesText: "brave",
       }),
       makeSession({
         id: "nomatch",
-        modified: new Date("2026-01-04T00:00:00.000Z"),
+        modified: dateFromMillis("2026-01-04T00:00:00.000Z"),
         allMessagesText: "something else",
       }),
     ];
@@ -83,12 +84,12 @@ describe("session selector search", () => {
     const sessions: SessionInfo[] = [
       makeSession({
         id: "late",
-        modified: new Date("2026-01-03T00:00:00.000Z"),
+        modified: dateFromMillis("2026-01-03T00:00:00.000Z"),
         allMessagesText: "xxxx brave",
       }),
       makeSession({
         id: "early",
-        modified: new Date("2026-01-01T00:00:00.000Z"),
+        modified: dateFromMillis("2026-01-01T00:00:00.000Z"),
         allMessagesText: "brave xxxx",
       }),
     ];
@@ -99,12 +100,12 @@ describe("session selector search", () => {
     const tieSessions: SessionInfo[] = [
       makeSession({
         id: "newer",
-        modified: new Date("2026-01-03T00:00:00.000Z"),
+        modified: dateFromMillis("2026-01-03T00:00:00.000Z"),
         allMessagesText: "brave",
       }),
       makeSession({
         id: "older",
-        modified: new Date("2026-01-01T00:00:00.000Z"),
+        modified: dateFromMillis("2026-01-01T00:00:00.000Z"),
         allMessagesText: "brave",
       }),
     ];
@@ -117,7 +118,7 @@ describe("session selector search", () => {
     const sessions: SessionInfo[] = [
       makeSession({
         id: "a",
-        modified: new Date("2026-01-01T00:00:00.000Z"),
+        modified: dateFromMillis("2026-01-01T00:00:00.000Z"),
         allMessagesText: "brave",
       }),
     ];
@@ -131,23 +132,23 @@ describe("session selector search", () => {
       makeSession({
         id: "named1",
         name: "My Project",
-        modified: new Date("2026-01-03T00:00:00.000Z"),
+        modified: dateFromMillis("2026-01-03T00:00:00.000Z"),
         allMessagesText: "blueberry",
       }),
       makeSession({
         id: "named2",
         name: "Another Named",
-        modified: new Date("2026-01-02T00:00:00.000Z"),
+        modified: dateFromMillis("2026-01-02T00:00:00.000Z"),
         allMessagesText: "blueberry",
       }),
       makeSession({
         id: "other1",
-        modified: new Date("2026-01-04T00:00:00.000Z"),
+        modified: dateFromMillis("2026-01-04T00:00:00.000Z"),
         allMessagesText: "blueberry",
       }),
       makeSession({
         id: "other2",
-        modified: new Date("2026-01-01T00:00:00.000Z"),
+        modified: dateFromMillis("2026-01-01T00:00:00.000Z"),
         allMessagesText: "blueberry",
       }),
     ];
@@ -172,19 +173,19 @@ describe("session selector search", () => {
         makeSession({
           id: "whitespace",
           name: "   ",
-          modified: new Date("2026-01-01T00:00:00.000Z"),
+          modified: dateFromMillis("2026-01-01T00:00:00.000Z"),
           allMessagesText: "test",
         }),
         makeSession({
           id: "empty",
           name: "",
-          modified: new Date("2026-01-02T00:00:00.000Z"),
+          modified: dateFromMillis("2026-01-02T00:00:00.000Z"),
           allMessagesText: "test",
         }),
         makeSession({
           id: "named",
           name: "Real Name",
-          modified: new Date("2026-01-03T00:00:00.000Z"),
+          modified: dateFromMillis("2026-01-03T00:00:00.000Z"),
           allMessagesText: "test",
         }),
       ];

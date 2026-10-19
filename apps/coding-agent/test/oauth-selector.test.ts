@@ -1,3 +1,4 @@
+import { awaited, runTest } from "@msa/testing";
 import { setKeybindings } from "@msa/tui";
 import { beforeAll, beforeEach, describe, expect, it } from "vite-plus/test";
 
@@ -22,8 +23,8 @@ describe("OAuthSelectorComponent", () => {
         id: "anthropic",
         name: "Anthropic",
         auth: {
-          oauth: { name: "Anthropic (Claude Pro/Max)", login: async () => ({}) },
-          apiKey: { name: "Anthropic API key", login: async () => ({}) },
+          oauth: { name: "Anthropic (Claude Pro/Max)", login: () => runTest(awaited({})) },
+          apiKey: { name: "Anthropic API key", login: () => runTest(awaited({})) },
         },
       },
       {

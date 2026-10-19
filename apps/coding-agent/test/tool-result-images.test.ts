@@ -1,5 +1,7 @@
 import { crc32, deflateSync } from "node:zlib";
 
+import { awaited, runTest } from "@msa/testing";
+import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import type { ToolResultContent } from "../src/utils/tool-result-images.ts";
@@ -17,13 +19,12 @@ function pngChunk(type: string, body: Buffer): Buffer {
   return Buffer.concat([header, body, checksum]);
 }
 
-/** Build an 8-bit grayscale PNG of arbitrary dimensions without pulling in an encoder. */
 function createPng(width: number, height: number): Buffer {
   const ihdr = Buffer.alloc(13);
   ihdr.writeUInt32BE(width, 0);
   ihdr.writeUInt32BE(height, 4);
-  ihdr[8] = 8; // bit depth
-  ihdr[9] = 0; // color type: grayscale
+  ihdr[8] = 8;
+  ihdr[9] = 0;
   const raw = Buffer.alloc((width + 1) * height);
   for (let row = 0; row < height; row++) {
     raw.fill(row % 256, row * (width + 1) + 1, (row + 1) * (width + 1));
@@ -62,80 +63,105 @@ function imageBlock(bytes: Buffer, mimeType: string): ToolResultContent {
 }
 
 describe("normalizeToolResultImages", () => {
-  it("returns the original array when there are no image blocks", async () => {
-    const content: ToolResultContent[] = [{ type: "text", text: "no images here" }];
+  it("returns the original array when there are no image blocks", () =>
+    runTest(
+      Effect.gen(function* () {
+        const content: ToolResultContent[] = [{ type: "text", text: "no images here" }];
 
-    expect(await normalizeToolResultImages(content)).toBe(content);
-  });
+        expect(yield* awaited(normalizeToolResultImages(content))).toBe(content);
+      }),
+    ));
 
-  it("returns the original array when images are already within limits", async () => {
-    const content: ToolResultContent[] = [
-      { type: "text", text: "screenshot" },
-      { type: "image", data: TINY_PNG_BASE64, mimeType: "image/png" },
-    ];
+  it("returns the original array when images are already within limits", () =>
+    runTest(
+      Effect.gen(function* () {
+        const content: ToolResultContent[] = [
+          { type: "text", text: "screenshot" },
+          { type: "image", data: TINY_PNG_BASE64, mimeType: "image/png" },
+        ];
 
-    expect(await normalizeToolResultImages(content)).toBe(content);
-  });
+        expect(yield* awaited(normalizeToolResultImages(content))).toBe(content);
+      }),
+    ));
 
-  it("resizes oversized images and reports the original dimensions", async () => {
-    const content: ToolResultContent[] = [imageBlock(createPng(2400, 4800), "image/png")];
+  it("resizes oversized images and reports the original dimensions", () =>
+    runTest(
+      Effect.gen(function* () {
+        const content: ToolResultContent[] = [imageBlock(createPng(2400, 4800), "image/png")];
 
-    const normalized = await normalizeToolResultImages(content);
+        const normalized = yield* awaited(normalizeToolResultImages(content));
 
-    expect(normalized).not.toBe(content);
-    expect(normalized).toHaveLength(2);
-    const image = normalized[0];
-    expect(image?.type).toBe("image");
-    if (image?.type !== "image") return;
-    const { width, height } = readPngDimensions(image.data);
-    expect(width).toBeLessThanOrEqual(2000);
-    expect(height).toBeLessThanOrEqual(2000);
-    const note = normalized[1];
-    expect(note?.type).toBe("text");
-    if (note?.type !== "text") return;
-    expect(note.text).toContain("original 2400x4800");
-  });
+        expect(normalized).not.toBe(content);
+        expect(normalized).toHaveLength(2);
+        const image = normalized[0];
+        expect(image?.type).toBe("image");
+        if (image?.type !== "image") return;
+        const { width, height } = readPngDimensions(image.data);
+        expect(width).toBeLessThanOrEqual(2000);
+        expect(height).toBeLessThanOrEqual(2000);
+        const note = normalized[1];
+        expect(note?.type).toBe("text");
+        if (note?.type !== "text") return;
+        expect(note.text).toContain("original 2400x4800");
+      }),
+    ));
 
-  it("leaves oversized images alone when auto-resize is disabled", async () => {
-    const content: ToolResultContent[] = [imageBlock(createPng(2400, 4800), "image/png")];
+  it("leaves oversized images alone when auto-resize is disabled", () =>
+    runTest(
+      Effect.gen(function* () {
+        const content: ToolResultContent[] = [imageBlock(createPng(2400, 4800), "image/png")];
 
-    const normalized = await normalizeToolResultImages(content, { autoResizeImages: false });
+        const normalized = yield* awaited(
+          normalizeToolResultImages(content, { autoResizeImages: false }),
+        );
 
-    expect(normalized).toBe(content);
-  });
+        expect(normalized).toBe(content);
+      }),
+    ));
 
-  it("converts unsupported image formats even when auto-resize is disabled", async () => {
-    const content: ToolResultContent[] = [imageBlock(createTinyBmp1x1Red24bpp(), "image/bmp")];
+  it("converts unsupported image formats even when auto-resize is disabled", () =>
+    runTest(
+      Effect.gen(function* () {
+        const content: ToolResultContent[] = [imageBlock(createTinyBmp1x1Red24bpp(), "image/bmp")];
 
-    const normalized = await normalizeToolResultImages(content, { autoResizeImages: false });
+        const normalized = yield* awaited(
+          normalizeToolResultImages(content, { autoResizeImages: false }),
+        );
 
-    expect(normalized).not.toBe(content);
-    expect(normalized[0]).toMatchObject({ type: "image", mimeType: "image/png" });
-    expect(normalized[1]).toMatchObject({
-      type: "text",
-      text: "[Image converted from image/bmp to image/png.]",
-    });
-  });
+        expect(normalized).not.toBe(content);
+        expect(normalized[0]).toMatchObject({ type: "image", mimeType: "image/png" });
+        expect(normalized[1]).toMatchObject({
+          type: "text",
+          text: "[Image converted from image/bmp to image/png.]",
+        });
+      }),
+    ));
 
-  it("keeps undecodable images instead of dropping tool output", async () => {
-    const content: ToolResultContent[] = [
-      { type: "image", data: "bm90LWFuLWltYWdl", mimeType: "image/png" },
-    ];
+  it("keeps undecodable images instead of dropping tool output", () =>
+    runTest(
+      Effect.gen(function* () {
+        const content: ToolResultContent[] = [
+          { type: "image", data: "bm90LWFuLWltYWdl", mimeType: "image/png" },
+        ];
 
-    expect(await normalizeToolResultImages(content)).toBe(content);
-  });
+        expect(yield* awaited(normalizeToolResultImages(content))).toBe(content);
+      }),
+    ));
 
-  it("preserves surrounding text blocks and their order", async () => {
-    const content: ToolResultContent[] = [
-      { type: "text", text: "before" },
-      imageBlock(createPng(2400, 100), "image/png"),
-      { type: "text", text: "after" },
-    ];
+  it("preserves surrounding text blocks and their order", () =>
+    runTest(
+      Effect.gen(function* () {
+        const content: ToolResultContent[] = [
+          { type: "text", text: "before" },
+          imageBlock(createPng(2400, 100), "image/png"),
+          { type: "text", text: "after" },
+        ];
 
-    const normalized = await normalizeToolResultImages(content);
+        const normalized = yield* awaited(normalizeToolResultImages(content));
 
-    expect(normalized.map((block) => block.type)).toEqual(["text", "image", "text", "text"]);
-    expect(normalized[0]).toEqual({ type: "text", text: "before" });
-    expect(normalized[3]).toEqual({ type: "text", text: "after" });
-  });
+        expect(normalized.map((block) => block.type)).toEqual(["text", "image", "text", "text"]);
+        expect(normalized[0]).toEqual({ type: "text", text: "before" });
+        expect(normalized[3]).toEqual({ type: "text", text: "after" });
+      }),
+    ));
 });

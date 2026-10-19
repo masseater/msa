@@ -82,7 +82,7 @@ describe("pickEvaluatorModel", () => {
     expect(pickEvaluatorModel(gemini, [gemini, model("openai", "gpt-5-mini", 0.25, 2)])).toBe(
       gemini,
     );
-    // "gemini" is not a small-tier name, and pricier models are never picked.
+
     expect(pickEvaluatorModel(gemini, [model("opencode", "gemini-ultra-lite", 9, 90)])).toBe(
       gemini,
     );

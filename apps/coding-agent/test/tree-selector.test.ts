@@ -1,5 +1,6 @@
 import { stripVTControlCharacters } from "node:util";
 
+import { currentTimeMillis, currentDate, dateFromMillis } from "@msa/testing";
 import { setKeybindings, visibleWidth } from "@msa/tui";
 import { beforeAll, beforeEach, describe, expect, test } from "vite-plus/test";
 
@@ -18,32 +19,29 @@ beforeAll(() => {
 });
 
 beforeEach(() => {
-  // Ensure test isolation: keybindings are a global singleton
   setKeybindings(new KeybindingsManager());
 });
 
-// Helper to create a user message entry
 function userMessage(id: string, parentId: string | null, content: string): SessionMessageEntry {
   return {
-    type: "message",
+    type: "message" as const,
     id,
     parentId,
-    timestamp: new Date().toISOString(),
-    message: { role: "user", content, timestamp: Date.now() },
+    timestamp: currentDate().toISOString(),
+    message: { role: "user", content, timestamp: currentTimeMillis() },
   };
 }
 
-// Helper to create an assistant message entry
 function assistantMessage(id: string, parentId: string | null, text: string): SessionMessageEntry {
   return {
-    type: "message",
+    type: "message" as const,
     id,
     parentId,
-    timestamp: new Date().toISOString(),
+    timestamp: currentDate().toISOString(),
     message: {
       role: "assistant",
-      content: [{ type: "text", text }],
-      api: "anthropic-messages",
+      content: [{ type: "text" as const, text }],
+      api: "anthropic-messages" as const,
       provider: "anthropic-api",
       model: "claude-sonnet-4",
       usage: {
@@ -55,22 +53,23 @@ function assistantMessage(id: string, parentId: string | null, text: string): Se
         cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
       },
       stopReason: "stop",
-      timestamp: Date.now(),
+      timestamp: currentTimeMillis(),
     },
   };
 }
 
-// Helper to create a tool-call-only assistant message (filtered out in default mode)
 function toolCallOnlyAssistant(id: string, parentId: string | null): SessionMessageEntry {
   return {
-    type: "message",
+    type: "message" as const,
     id,
     parentId,
-    timestamp: new Date().toISOString(),
+    timestamp: currentDate().toISOString(),
     message: {
       role: "assistant",
-      content: [{ type: "toolCall", id: `tc-${id}`, name: "read", arguments: { path: "test.ts" } }],
-      api: "anthropic-messages",
+      content: [
+        { type: "toolCall" as const, id: `tc-${id}`, name: "read", arguments: { path: "test.ts" } },
+      ],
+      api: "anthropic-messages" as const,
       provider: "anthropic-api",
       model: "claude-sonnet-4",
       usage: {
@@ -82,24 +81,22 @@ function toolCallOnlyAssistant(id: string, parentId: string | null): SessionMess
         cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
       },
       stopReason: "toolUse",
-      timestamp: Date.now(),
+      timestamp: currentTimeMillis(),
     },
   };
 }
 
-// Helper to create a model_change entry
 function modelChange(id: string, parentId: string | null): ModelChangeEntry {
   return {
-    type: "model_change",
+    type: "model_change" as const,
     id,
     parentId,
-    timestamp: new Date().toISOString(),
+    timestamp: currentDate().toISOString(),
     provider: "anthropic-api",
     modelId: "claude-sonnet-4",
   };
 }
 
-// Helper to build a tree from entries using parentId relationships
 function buildTree(entries: Array<SessionEntry>): SessionTreeNode[] {
   if (entries.length === 0) return [];
 
@@ -119,7 +116,7 @@ function buildTree(entries: Array<SessionEntry>): SessionTreeNode[] {
       roots.push(node);
     } else {
       const parent = byId.get(node.entry.parentId);
-      if (parent) {
+      if (parent !== undefined) {
         parent.children.push(node);
       }
     }
@@ -130,31 +127,25 @@ function buildTree(entries: Array<SessionEntry>): SessionTreeNode[] {
 describe("TreeSelectorComponent", () => {
   describe("initial selection with metadata entries", () => {
     test("focuses nearest visible ancestor when currentLeafId is a model_change with sibling branch", () => {
-      // Tree structure:
-      // user-1
-      // └── asst-1
-      //     ├── user-2 (active branch)
-      //     │   └── model-1 (model_change, CURRENT LEAF)
-      //     └── user-3 (sibling branch, added later chronologically)
       const entries = [
         userMessage("user-1", null, "hello"),
         assistantMessage("asst-1", "user-1", "hi"),
-        userMessage("user-2", "asst-1", "active branch"), // Active branch
-        modelChange("model-1", "user-2"), // Current leaf (metadata)
-        userMessage("user-3", "asst-1", "sibling branch"), // Sibling branch
+        userMessage("user-2", "asst-1", "active branch"),
+        modelChange("model-1", "user-2"),
+        userMessage("user-3", "asst-1", "sibling branch"),
       ];
       const tree = buildTree(entries);
 
       const selector = new TreeSelectorComponent(
         tree,
-        "model-1", // currentLeafId is the model_change entry
+        "model-1",
         24,
         () => {},
         () => {},
       );
 
       const list = selector.getTreeList();
-      // Should focus on user-2 (parent of model-1), not user-3 (last item)
+
       expect(list.getSelectedNode()?.entry.id).toBe("user-2");
     });
 
@@ -163,10 +154,10 @@ describe("TreeSelectorComponent", () => {
         userMessage("user-1", null, "hello"),
         assistantMessage("asst-1", "user-1", "hi"),
         {
-          type: "context_edit",
+          type: "context_edit" as const,
           id: "edit-1",
           parentId: "asst-1",
-          timestamp: new Date().toISOString(),
+          timestamp: currentDate().toISOString(),
           targetId: "asst-1",
           replacement: null,
         },
@@ -200,7 +191,6 @@ describe("TreeSelectorComponent", () => {
     });
 
     test("focuses nearest visible ancestor when currentLeafId is a thinking_level_change entry", () => {
-      // Similar structure with thinking_level_change instead of model_change
       const entries = [
         userMessage("user-1", null, "hello"),
         assistantMessage("asst-1", "user-1", "hi"),
@@ -209,7 +199,7 @@ describe("TreeSelectorComponent", () => {
           type: "thinking_level_change" as const,
           id: "thinking-1",
           parentId: "user-2",
-          timestamp: new Date().toISOString(),
+          timestamp: currentDate().toISOString(),
           thinkingLevel: "high",
         },
         userMessage("user-3", "asst-1", "sibling branch"),
@@ -231,7 +221,6 @@ describe("TreeSelectorComponent", () => {
 
   describe("filter switching with parent traversal", () => {
     test("switches to nearest visible user message when changing to user-only filter", () => {
-      // In user-only filter: [user-1, user-2, user-3]
       const entries = [
         userMessage("user-1", null, "hello"),
         assistantMessage("asst-1", "user-1", "hi"),
@@ -252,15 +241,12 @@ describe("TreeSelectorComponent", () => {
       const list = selector.getTreeList();
       expect(list.getSelectedNode()?.entry.id).toBe("asst-2");
 
-      // Simulate Ctrl+U (user-only filter)
       selector.handleInput("\x15");
 
-      // Should now be on user-2 (the parent user message), not user-3
       expect(list.getSelectedNode()?.entry.id).toBe("user-2");
     });
 
     test("returns to nearest visible ancestor when switching back to default filter", () => {
-      // Same branching structure
       const entries = [
         userMessage("user-1", null, "hello"),
         assistantMessage("asst-1", "user-1", "hi"),
@@ -281,13 +267,10 @@ describe("TreeSelectorComponent", () => {
       const list = selector.getTreeList();
       expect(list.getSelectedNode()?.entry.id).toBe("asst-2");
 
-      // Switch to user-only
-      selector.handleInput("\x15"); // Ctrl+U
+      selector.handleInput("\x15");
       expect(list.getSelectedNode()?.entry.id).toBe("user-2");
 
-      // Switch back to default - should stay on user-2
-      // (since that's what we navigated to via parent traversal)
-      selector.handleInput("\x04"); // Ctrl+D
+      selector.handleInput("\x04");
       expect(list.getSelectedNode()?.entry.id).toBe("user-2");
     });
   });
@@ -351,7 +334,7 @@ describe("TreeSelectorComponent", () => {
         assistantMessage("asst-1", "user-1", "hi"),
       ];
       const tree = buildTree(entries);
-      const labelDate = new Date(2026, 2, 28, 14, 32, 0);
+      const labelDate = dateFromMillis(Date.parse("2026-03-28T14:32:00"));
       tree[0]!.label = "checkpoint";
       tree[0]!.labelTimestamp = labelDate.toISOString();
 
@@ -379,7 +362,6 @@ describe("TreeSelectorComponent", () => {
 
   describe("empty filter preservation", () => {
     test("preserves selection when switching to empty labeled filter and back", () => {
-      // Tree with no labels
       const entries = [
         userMessage("user-1", null, "hello"),
         assistantMessage("asst-1", "user-1", "hi"),
@@ -399,16 +381,12 @@ describe("TreeSelectorComponent", () => {
       const list = selector.getTreeList();
       expect(list.getSelectedNode()?.entry.id).toBe("asst-2");
 
-      // Switch to labeled-only filter (no labels exist, so empty result)
-      selector.handleInput("\x0c"); // Ctrl+L
+      selector.handleInput("\x0c");
 
-      // The list should be empty, getSelectedNode returns undefined
       expect(list.getSelectedNode()).toBeUndefined();
 
-      // Switch back to default filter
-      selector.handleInput("\x04"); // Ctrl+D
+      selector.handleInput("\x04");
 
-      // Should restore to asst-2 (the selection before we switched to empty filter)
       expect(list.getSelectedNode()?.entry.id).toBe("asst-2");
     });
 
@@ -430,25 +408,21 @@ describe("TreeSelectorComponent", () => {
       const list = selector.getTreeList();
       expect(list.getSelectedNode()?.entry.id).toBe("asst-1");
 
-      // Switch to labeled-only (empty) - Ctrl+L toggles labeled ↔ default
-      selector.handleInput("\x0c"); // Ctrl+L -> labeled-only
+      selector.handleInput("\x0c");
       expect(list.getSelectedNode()).toBeUndefined();
 
-      // Switch to default, then back to labeled-only
-      selector.handleInput("\x0c"); // Ctrl+L -> default (toggle back)
+      selector.handleInput("\x0c");
       expect(list.getSelectedNode()?.entry.id).toBe("asst-1");
 
-      selector.handleInput("\x0c"); // Ctrl+L -> labeled-only again
+      selector.handleInput("\x0c");
       expect(list.getSelectedNode()).toBeUndefined();
 
-      // Switch back to default with Ctrl+D
-      selector.handleInput("\x04"); // Ctrl+D
+      selector.handleInput("\x04");
       expect(list.getSelectedNode()?.entry.id).toBe("asst-1");
     });
   });
 
   describe("branch navigation and folding with ctrl+arrow keys", () => {
-    // Key escape sequences
     const UP = "\x1b[A";
     const DOWN = "\x1b[B";
     const CTRL_LEFT = "\x1b[1;5D";
@@ -456,34 +430,18 @@ describe("TreeSelectorComponent", () => {
     const ALT_LEFT = "\x1b[1;3D";
     const ALT_RIGHT = "\x1b[1;3C";
 
-    // Tree structure:
-    //
-    // user-1
-    // asst-1
-    // user-2
-    // asst-2          ← branch point (has 2 children)
-    // ├─ user-3a      ← branch A (active: leaf is asst-4a)
-    // │  asst-3a
-    // │  user-4a
-    // │  asst-4a
-    // └─ user-3b      ← branch B
-    //    asst-3b
-    //    user-4b
-    //
-    // Foldable nodes: user-1 (root), user-3a (segment start), user-3b (segment start)
-
     function buildBranchingTree() {
       const entries: SessionEntry[] = [
         userMessage("user-1", null, "first message"),
         assistantMessage("asst-1", "user-1", "response 1"),
         userMessage("user-2", "asst-1", "second message"),
         assistantMessage("asst-2", "user-2", "response 2"),
-        // Branch A (active)
+
         userMessage("user-3a", "asst-2", "branch A start"),
         assistantMessage("asst-3a", "user-3a", "branch A response"),
         userMessage("user-4a", "asst-3a", "branch A deep"),
         assistantMessage("asst-4a", "user-4a", "branch A leaf"),
-        // Branch B
+
         userMessage("user-3b", "asst-2", "branch B start"),
         assistantMessage("asst-3b", "user-3b", "branch B response"),
         userMessage("user-4b", "asst-3b", "branch B deep"),
@@ -502,28 +460,28 @@ describe("TreeSelectorComponent", () => {
       );
       const list = selector.getTreeList();
 
-      selector.handleInput(CTRL_LEFT); // asst-4a → user-3a
+      selector.handleInput(CTRL_LEFT);
       expect(list.getSelectedNode()?.entry.id).toBe("user-3a");
 
-      selector.handleInput(CTRL_LEFT); // fold user-3a
+      selector.handleInput(CTRL_LEFT);
       expect(list.getSelectedNode()?.entry.id).toBe("user-3a");
 
-      selector.handleInput(DOWN); // user-3a → user-3b (children hidden)
+      selector.handleInput(DOWN);
       expect(list.getSelectedNode()?.entry.id).toBe("user-3b");
 
-      selector.handleInput(UP); // user-3b → user-3a
+      selector.handleInput(UP);
       expect(list.getSelectedNode()?.entry.id).toBe("user-3a");
 
-      selector.handleInput(CTRL_RIGHT); // unfold user-3a
+      selector.handleInput(CTRL_RIGHT);
       expect(list.getSelectedNode()?.entry.id).toBe("user-3a");
 
-      selector.handleInput(DOWN); // user-3a → asst-3a (children restored)
+      selector.handleInput(DOWN);
       expect(list.getSelectedNode()?.entry.id).toBe("asst-3a");
 
-      selector.handleInput(CTRL_LEFT); // asst-3a → user-3a
+      selector.handleInput(CTRL_LEFT);
       expect(list.getSelectedNode()?.entry.id).toBe("user-3a");
 
-      selector.handleInput(CTRL_RIGHT); // user-3a → asst-4a (segment jump to leaf)
+      selector.handleInput(CTRL_RIGHT);
       expect(list.getSelectedNode()?.entry.id).toBe("asst-4a");
     });
 
@@ -538,16 +496,16 @@ describe("TreeSelectorComponent", () => {
       );
       const list = selector.getTreeList();
 
-      selector.handleInput(ALT_LEFT); // asst-4a → user-3a
+      selector.handleInput(ALT_LEFT);
       expect(list.getSelectedNode()?.entry.id).toBe("user-3a");
 
-      selector.handleInput(ALT_LEFT); // fold user-3a
+      selector.handleInput(ALT_LEFT);
       expect(list.getSelectedNode()?.entry.id).toBe("user-3a");
 
-      selector.handleInput(ALT_RIGHT); // unfold user-3a
+      selector.handleInput(ALT_RIGHT);
       expect(list.getSelectedNode()?.entry.id).toBe("user-3a");
 
-      selector.handleInput(ALT_RIGHT); // user-3a → asst-4a
+      selector.handleInput(ALT_RIGHT);
       expect(list.getSelectedNode()?.entry.id).toBe("asst-4a");
     });
 
@@ -562,28 +520,28 @@ describe("TreeSelectorComponent", () => {
       );
       const list = selector.getTreeList();
 
-      selector.handleInput(CTRL_LEFT); // asst-4a → user-3a
+      selector.handleInput(CTRL_LEFT);
       expect(list.getSelectedNode()?.entry.id).toBe("user-3a");
 
-      selector.handleInput(CTRL_LEFT); // fold user-3a
+      selector.handleInput(CTRL_LEFT);
       expect(list.getSelectedNode()?.entry.id).toBe("user-3a");
 
-      selector.handleInput(CTRL_LEFT); // user-3a (folded) → user-1
+      selector.handleInput(CTRL_LEFT);
       expect(list.getSelectedNode()?.entry.id).toBe("user-1");
 
-      selector.handleInput(CTRL_LEFT); // fold user-1
+      selector.handleInput(CTRL_LEFT);
       expect(list.getSelectedNode()?.entry.id).toBe("user-1");
 
-      selector.handleInput(DOWN); // wrap (only visible node)
+      selector.handleInput(DOWN);
       expect(list.getSelectedNode()?.entry.id).toBe("user-1");
 
-      selector.handleInput(CTRL_RIGHT); // unfold user-1
+      selector.handleInput(CTRL_RIGHT);
       expect(list.getSelectedNode()?.entry.id).toBe("user-1");
 
-      selector.handleInput(CTRL_RIGHT); // user-1 → user-3a (segment jump, user-3a still folded)
+      selector.handleInput(CTRL_RIGHT);
       expect(list.getSelectedNode()?.entry.id).toBe("user-3a");
 
-      selector.handleInput(DOWN); // user-3a → user-3b (user-3a still folded)
+      selector.handleInput(DOWN);
       expect(list.getSelectedNode()?.entry.id).toBe("user-3b");
     });
 
@@ -598,7 +556,6 @@ describe("TreeSelectorComponent", () => {
       );
       const list = selector.getTreeList();
 
-      // Navigate down to user-3b (branch B)
       let found = false;
       for (let i = 0; i < 20; i++) {
         selector.handleInput(DOWN);
@@ -609,16 +566,16 @@ describe("TreeSelectorComponent", () => {
       }
       expect(found).toBe(true);
 
-      selector.handleInput(CTRL_RIGHT); // user-3b → user-4b (segment jump to leaf)
+      selector.handleInput(CTRL_RIGHT);
       expect(list.getSelectedNode()?.entry.id).toBe("user-4b");
 
-      selector.handleInput(CTRL_LEFT); // user-4b → user-3b
+      selector.handleInput(CTRL_LEFT);
       expect(list.getSelectedNode()?.entry.id).toBe("user-3b");
 
-      selector.handleInput(CTRL_LEFT); // fold user-3b
+      selector.handleInput(CTRL_LEFT);
       expect(list.getSelectedNode()?.entry.id).toBe("user-3b");
 
-      selector.handleInput(CTRL_LEFT); // user-3b (folded) → user-1
+      selector.handleInput(CTRL_LEFT);
       expect(list.getSelectedNode()?.entry.id).toBe("user-1");
     });
 
@@ -641,30 +598,29 @@ describe("TreeSelectorComponent", () => {
 
       expect(list.getSelectedNode()?.entry.id).toBe("asst-1");
 
-      selector.handleInput(CTRL_LEFT); // asst-1 → user-1
+      selector.handleInput(CTRL_LEFT);
       expect(list.getSelectedNode()?.entry.id).toBe("user-1");
 
-      selector.handleInput(CTRL_LEFT); // fold user-1
+      selector.handleInput(CTRL_LEFT);
       expect(list.getSelectedNode()?.entry.id).toBe("user-1");
 
-      selector.handleInput(DOWN); // user-1 → user-2 (children hidden)
+      selector.handleInput(DOWN);
       expect(list.getSelectedNode()?.entry.id).toBe("user-2");
 
-      selector.handleInput(CTRL_RIGHT); // user-2 → asst-2 (segment jump to leaf)
+      selector.handleInput(CTRL_RIGHT);
       expect(list.getSelectedNode()?.entry.id).toBe("asst-2");
 
-      selector.handleInput(CTRL_LEFT); // asst-2 → user-2
+      selector.handleInput(CTRL_LEFT);
       expect(list.getSelectedNode()?.entry.id).toBe("user-2");
 
-      selector.handleInput(CTRL_LEFT); // fold user-2
+      selector.handleInput(CTRL_LEFT);
       expect(list.getSelectedNode()?.entry.id).toBe("user-2");
 
-      selector.handleInput(CTRL_LEFT); // user-2 (folded, root) → stays on user-2
+      selector.handleInput(CTRL_LEFT);
       expect(list.getSelectedNode()?.entry.id).toBe("user-2");
     });
 
     test("folding root hides descendants even when intermediate nodes are filtered out", () => {
-      // user-1 → toolCallOnly-1 (filtered out) → user-2 → asst-2
       const entries: SessionEntry[] = [
         userMessage("user-1", null, "hello"),
         toolCallOnlyAssistant("tool-asst-1", "user-1"),
@@ -681,13 +637,13 @@ describe("TreeSelectorComponent", () => {
       );
       const list = selector.getTreeList();
 
-      selector.handleInput(CTRL_LEFT); // asst-2 → user-1
+      selector.handleInput(CTRL_LEFT);
       expect(list.getSelectedNode()?.entry.id).toBe("user-1");
 
-      selector.handleInput(CTRL_LEFT); // fold user-1
+      selector.handleInput(CTRL_LEFT);
       expect(list.getSelectedNode()?.entry.id).toBe("user-1");
 
-      selector.handleInput(DOWN); // wrap (only visible node)
+      selector.handleInput(DOWN);
       expect(list.getSelectedNode()?.entry.id).toBe("user-1");
     });
 
@@ -702,16 +658,15 @@ describe("TreeSelectorComponent", () => {
       );
       const list = selector.getTreeList();
 
-      selector.handleInput(CTRL_LEFT); // asst-4a → user-3a
-      selector.handleInput(CTRL_LEFT); // fold user-3a
+      selector.handleInput(CTRL_LEFT);
+      selector.handleInput(CTRL_LEFT);
 
-      selector.handleInput(DOWN); // user-3a → user-3b (children hidden)
+      selector.handleInput(DOWN);
       expect(list.getSelectedNode()?.entry.id).toBe("user-3b");
 
-      selector.handleInput("b"); // search resets folds
-      selector.handleInput("\x1b"); // clear search
+      selector.handleInput("b");
+      selector.handleInput("\x1b");
 
-      // Navigate to user-3a to verify fold was reset
       let currentId = "";
       for (let i = 0; i < 20; i++) {
         selector.handleInput(DOWN);
@@ -720,7 +675,7 @@ describe("TreeSelectorComponent", () => {
       }
       expect(currentId).toBe("user-3a");
 
-      selector.handleInput(DOWN); // user-3a → asst-3a (not user-3b)
+      selector.handleInput(DOWN);
       expect(list.getSelectedNode()?.entry.id).toBe("asst-3a");
     });
 
@@ -735,13 +690,12 @@ describe("TreeSelectorComponent", () => {
       );
       const list = selector.getTreeList();
 
-      selector.handleInput(CTRL_LEFT); // asst-4a → user-3a
-      selector.handleInput(CTRL_LEFT); // fold user-3a
+      selector.handleInput(CTRL_LEFT);
+      selector.handleInput(CTRL_LEFT);
 
-      selector.handleInput("\x15"); // ctrl+u: user-only filter resets folds
-      selector.handleInput("\x04"); // ctrl+d: back to default
+      selector.handleInput("\x15");
+      selector.handleInput("\x04");
 
-      // Navigate to user-3a to verify fold was reset
       let currentId = "";
       for (let i = 0; i < 20; i++) {
         selector.handleInput(DOWN);
@@ -750,7 +704,7 @@ describe("TreeSelectorComponent", () => {
       }
       expect(currentId).toBe("user-3a");
 
-      selector.handleInput(DOWN); // user-3a → asst-3a (not user-3b)
+      selector.handleInput(DOWN);
       expect(list.getSelectedNode()?.entry.id).toBe("asst-3a");
     });
   });

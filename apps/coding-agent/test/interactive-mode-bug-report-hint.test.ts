@@ -16,8 +16,8 @@ const maybeSuggestBugReport = Reflect.get(InteractiveMode.prototype, "maybeSugge
   message: AssistantMessage,
 ) => void;
 
-function errorMessage(errorMessage: string): AssistantMessage {
-  return fauxAssistantMessage("", { stopReason: "error", errorMessage });
+function errorMessage(message: string): AssistantMessage {
+  return fauxAssistantMessage("", { stopReason: "error", errorMessage: message });
 }
 
 describe("InteractiveMode bug report hints", () => {

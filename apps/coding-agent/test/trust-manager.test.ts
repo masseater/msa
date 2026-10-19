@@ -1,9 +1,18 @@
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
 
+import {
+  currentTimeMillis,
+  randomSuffixSync,
+  joinPath,
+  runTest,
+  makeDirectory,
+  removePath,
+} from "@msa/testing";
+import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
+import { deleteEnv, readEnv, writeEnv } from "../src/core/process-env.ts";
 import { hasTrustRequiringProjectResources, ProjectTrustStore } from "../src/core/trust-manager.ts";
 
 describe("ProjectTrustStore", () => {
@@ -11,22 +20,24 @@ describe("ProjectTrustStore", () => {
   let agentDir: string;
   let cwd: string;
 
-  beforeEach(() => {
-    tempDir = join(tmpdir(), `trust-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
-    agentDir = join(tempDir, "agent");
-    cwd = join(tempDir, "project");
-    mkdirSync(agentDir, { recursive: true });
-    mkdirSync(cwd, { recursive: true });
-  });
+  beforeEach(() =>
+    runTest(
+      Effect.gen(function* () {
+        tempDir = joinPath(tmpdir(), `trust-test-${currentTimeMillis()}-${randomSuffixSync()}`);
+        agentDir = joinPath(tempDir, "agent");
+        cwd = joinPath(tempDir, "project");
+        yield* makeDirectory(agentDir);
+        yield* makeDirectory(cwd);
+      }),
+    ),
+  );
 
-  afterEach(() => {
-    rmSync(tempDir, { recursive: true, force: true });
-  });
+  afterEach(() => runTest(removePath(tempDir)));
 
   it("stores decisions and inherits from parent directories", () => {
     const store = new ProjectTrustStore(agentDir);
-    const parentDir = join(tempDir, "trusted-parent");
-    const childDir = join(parentDir, "project");
+    const parentDir = joinPath(tempDir, "trusted-parent");
+    const childDir = joinPath(parentDir, "project");
     mkdirSync(childDir, { recursive: true });
 
     expect(store.get(childDir)).toBeNull();
@@ -39,30 +50,30 @@ describe("ProjectTrustStore", () => {
   });
 
   it("detects trust-requiring project resources", () => {
-    const originalHome = process.env["HOME"];
-    process.env["HOME"] = tempDir;
+    const originalHome = readEnv("HOME");
+    writeEnv("HOME", tempDir);
     try {
-      mkdirSync(join(tempDir, ".msa", "agent"), { recursive: true });
-      mkdirSync(join(tempDir, ".agents", "skills"), { recursive: true });
+      mkdirSync(joinPath(tempDir, ".msa", "agent"), { recursive: true });
+      mkdirSync(joinPath(tempDir, ".agents", "skills"), { recursive: true });
       expect(hasTrustRequiringProjectResources(tempDir)).toBe(false);
       expect(hasTrustRequiringProjectResources(cwd)).toBe(false);
 
-      writeFileSync(join(tempDir, ".msa", "settings.json"), "{}");
+      writeFileSync(joinPath(tempDir, ".msa", "settings.json"), "{}");
       expect(hasTrustRequiringProjectResources(tempDir)).toBe(true);
-      rmSync(join(tempDir, ".msa", "settings.json"), { force: true });
+      rmSync(joinPath(tempDir, ".msa", "settings.json"), { force: true });
 
-      mkdirSync(join(cwd, ".msa"), { recursive: true });
-      writeFileSync(join(cwd, ".msa", "settings.json"), "{}");
+      mkdirSync(joinPath(cwd, ".msa"), { recursive: true });
+      writeFileSync(joinPath(cwd, ".msa", "settings.json"), "{}");
       expect(hasTrustRequiringProjectResources(cwd)).toBe(true);
 
-      rmSync(join(cwd, ".msa"), { recursive: true, force: true });
-      mkdirSync(join(cwd, ".agents", "skills"), { recursive: true });
+      rmSync(joinPath(cwd, ".msa"), { recursive: true, force: true });
+      mkdirSync(joinPath(cwd, ".agents", "skills"), { recursive: true });
       expect(hasTrustRequiringProjectResources(cwd)).toBe(true);
     } finally {
       if (originalHome === undefined) {
-        delete process.env["HOME"];
+        deleteEnv("HOME");
       } else {
-        process.env["HOME"] = originalHome;
+        writeEnv("HOME", originalHome);
       }
     }
   });

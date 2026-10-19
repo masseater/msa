@@ -17,9 +17,9 @@ describe("detectColorFgBgTheme", () => {
   it("classifies the last field by palette index like Vim", () => {
     expect(detectColorFgBgTheme({ COLORFGBG: "15;0" })).toBe("dark");
     expect(detectColorFgBgTheme({ COLORFGBG: "0;7;15" })).toBe("light");
-    // Solarized Dark's background is bright black.
+
     expect(detectColorFgBgTheme({ COLORFGBG: "12;8" })).toBe("dark");
-    // rxvt writes "default" when the background is not a palette color.
+
     expect(detectColorFgBgTheme({ COLORFGBG: "15;default" })).toBeUndefined();
     expect(detectColorFgBgTheme({})).toBeUndefined();
   });
@@ -40,7 +40,7 @@ describe("detectTerminalTheme", () => {
     expect(detectTerminalTheme({ background, foreground: { r: 255, g: 255, b: 255 } })).toBe(
       "dark",
     );
-    // White text cannot reach 4.5:1 on mid-gray.
+
     const midGray = { r: 128, g: 128, b: 128 };
     expect(
       detectTerminalTheme({ background: midGray, foreground: { r: 255, g: 255, b: 255 } }),
@@ -52,15 +52,15 @@ describe("theme color mode", () => {
   it("uses terminal capabilities", () => {
     setCapabilities({ images: null, trueColor: false, hyperlinks: false });
     const ansi256Theme = getThemeByName("dark");
-    if (!ansi256Theme) throw new Error("dark theme not found");
+    if (!(ansi256Theme !== undefined)) throw new Error("dark theme not found");
     expect(ansi256Theme.getColorMode()).toBe("256color");
-    expect(ansi256Theme.getFgAnsi("accent")).toMatch(/^\x1b\[38;5;\d+m$/);
+    expect(ansi256Theme.getFgAnsi("accent")).toMatch(/^\x1b\[38;5;\d+m$/u);
 
     setCapabilities({ images: null, trueColor: true, hyperlinks: false });
     const truecolorTheme = getThemeByName("dark");
-    if (!truecolorTheme) throw new Error("dark theme not found");
+    if (!(truecolorTheme !== undefined)) throw new Error("dark theme not found");
     expect(truecolorTheme.getColorMode()).toBe("truecolor");
-    expect(truecolorTheme.getFgAnsi("accent")).toMatch(/^\x1b\[38;2;\d+;\d+;\d+m$/);
+    expect(truecolorTheme.getFgAnsi("accent")).toMatch(/^\x1b\[38;2;\d+;\d+;\d+m$/u);
   });
 });
 

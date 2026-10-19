@@ -1,7 +1,6 @@
 import { execFile, spawnSync } from "child_process";
-import { existsSync, type FSWatcher, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "fs";
+import { type FSWatcher, mkdirSync, mkdtempSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
-import { join } from "path";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
@@ -19,8 +18,8 @@ vi.mock("child_process", () => ({
         setTimeout(
           () =>
             callback(
-              resolvedBranch ? null : new Error("detached"),
-              resolvedBranch ? `${resolvedBranch}\n` : "",
+              resolvedBranch.length > 0 ? null : new Error("detached"),
+              resolvedBranch.length > 0 ? `${resolvedBranch}\n` : "",
               "",
             ),
           0,
@@ -33,14 +32,24 @@ vi.mock("child_process", () => ({
   spawnSync: vi.fn((_command: string, args: readonly string[]) => {
     if (args[1] === "symbolic-ref") {
       return {
-        status: resolvedBranch ? 0 : 1,
-        stdout: resolvedBranch ? `${resolvedBranch}\n` : "",
+        status: resolvedBranch.length > 0 ? 0 : 1,
+        stdout: resolvedBranch.length > 0 ? `${resolvedBranch}\n` : "",
         stderr: "",
       };
     }
     return { status: 1, stdout: "", stderr: "" };
   }),
 }));
+
+import {
+  awaited,
+  runTest,
+  currentTimeMillis,
+  joinPath,
+  pathExists,
+  removePath,
+} from "@msa/testing";
+import { Effect } from "effect";
 
 import { FooterDataProvider } from "../src/core/footer-data-provider.ts";
 
@@ -50,34 +59,34 @@ type WorktreeFixture = {
 };
 
 function createPlainReftableRepo(tempDir: string): string {
-  const repoDir = join(tempDir, "repo");
-  mkdirSync(join(repoDir, ".git", "reftable"), { recursive: true });
-  writeFileSync(join(repoDir, ".git", "HEAD"), "ref: refs/heads/.invalid\n");
+  const repoDir = joinPath(tempDir, "repo");
+  mkdirSync(joinPath(repoDir, ".git", "reftable"), { recursive: true });
+  writeFileSync(joinPath(repoDir, ".git", "HEAD"), "ref: refs/heads/.invalid\n");
   return repoDir;
 }
 
 function createPlainRepo(tempDir: string): string {
-  const repoDir = join(tempDir, "repo");
-  mkdirSync(join(repoDir, ".git"), { recursive: true });
-  writeFileSync(join(repoDir, ".git", "HEAD"), "ref: refs/heads/main\n");
+  const repoDir = joinPath(tempDir, "repo");
+  mkdirSync(joinPath(repoDir, ".git"), { recursive: true });
+  writeFileSync(joinPath(repoDir, ".git", "HEAD"), "ref: refs/heads/main\n");
   return repoDir;
 }
 
 function createReftableWorktree(tempDir: string): WorktreeFixture {
-  const repoDir = join(tempDir, "repo");
-  const commonGitDir = join(repoDir, ".git");
-  const gitDir = join(commonGitDir, "worktrees", "src");
-  const worktreeDir = join(tempDir, "worktree");
-  const reftableDir = join(commonGitDir, "reftable");
+  const repoDir = joinPath(tempDir, "repo");
+  const commonGitDir = joinPath(repoDir, ".git");
+  const gitDir = joinPath(commonGitDir, "worktrees", "src");
+  const worktreeDir = joinPath(tempDir, "worktree");
+  const reftableDir = joinPath(commonGitDir, "reftable");
 
   mkdirSync(gitDir, { recursive: true });
   mkdirSync(reftableDir, { recursive: true });
   mkdirSync(worktreeDir, { recursive: true });
 
-  writeFileSync(join(worktreeDir, ".git"), `gitdir: ${gitDir}\n`);
-  writeFileSync(join(gitDir, "HEAD"), "ref: refs/heads/.invalid\n");
-  writeFileSync(join(gitDir, "commondir"), "../..\n");
-  writeFileSync(join(reftableDir, "tables.list"), "0\n");
+  writeFileSync(joinPath(worktreeDir, ".git"), `gitdir: ${gitDir}\n`);
+  writeFileSync(joinPath(gitDir, "HEAD"), "ref: refs/heads/.invalid\n");
+  writeFileSync(joinPath(gitDir, "commondir"), "../..\n");
+  writeFileSync(joinPath(reftableDir, "tables.list"), "0\n");
 
   return { worktreeDir, reftableDir };
 }
@@ -88,38 +97,51 @@ function emitReftableChange(provider: FooterDataProvider): void {
   reftableWatcher?.emit("change", "change", "tables.list");
 }
 
-async function waitFor(condition: () => boolean, timeoutMs = 3000): Promise<void> {
-  const startedAt = Date.now();
-  while (!condition()) {
-    if (Date.now() - startedAt > timeoutMs) {
-      throw new Error("Timed out waiting for condition");
-    }
-    await new Promise((resolve) => setTimeout(resolve, 10));
-  }
+function waitFor(condition: () => boolean, timeoutMs = 3000): Promise<void> {
+  return runTest(
+    Effect.gen(function* () {
+      const startedAt = currentTimeMillis();
+      while (!condition()) {
+        if (currentTimeMillis() - startedAt > timeoutMs) {
+          throw new Error("Timed out waiting for condition");
+        }
+        yield* Effect.sleep(10);
+      }
+    }),
+  );
 }
 
 describe("FooterDataProvider reftable branch detection", () => {
   let originalCwd: string;
   let tempDir: string;
 
-  beforeEach(() => {
-    originalCwd = process.cwd();
-    tempDir = mkdtempSync(join(tmpdir(), "footer-data-provider-"));
-    resolvedBranch = "main";
-    vi.mocked(spawnSync).mockClear();
-    vi.mocked(execFile).mockClear();
-  });
+  beforeEach(() =>
+    runTest(
+      Effect.gen(function* () {
+        yield* Effect.void;
+        originalCwd = process.cwd();
+        tempDir = mkdtempSync(joinPath(tmpdir(), "footer-data-provider-"));
+        resolvedBranch = "main";
+        vi.mocked(spawnSync).mockClear();
+        vi.mocked(execFile).mockClear();
+      }),
+    ),
+  );
 
-  afterEach(() => {
-    process.chdir(originalCwd);
-    if (tempDir && existsSync(tempDir)) {
-      rmSync(tempDir, { recursive: true, force: true });
-    }
-  });
+  afterEach(() =>
+    runTest(
+      Effect.gen(function* () {
+        process.chdir(originalCwd);
+        if (tempDir.length > 0 && (yield* pathExists(tempDir))) {
+          yield* removePath(tempDir);
+        }
+      }),
+    ),
+  );
 
   it("uses HEAD directly in a regular repo from a nested directory", () => {
     const repoDir = createPlainRepo(tempDir);
-    const nestedDir = join(repoDir, "src", "nested");
+    const nestedDir = joinPath(repoDir, "src", "nested");
     mkdirSync(nestedDir, { recursive: true });
     process.chdir(nestedDir);
 
@@ -143,7 +165,7 @@ describe("FooterDataProvider reftable branch detection", () => {
         "git",
         ["--no-optional-locks", "symbolic-ref", "--quiet", "--short", "HEAD"],
         expect.objectContaining({
-          cwd: expect.stringMatching(/repo$/),
+          cwd: expect.stringMatching(/repo$/u),
           encoding: "utf8",
           stdio: ["ignore", "pipe", "ignore"],
         }),
@@ -178,112 +200,123 @@ describe("FooterDataProvider reftable branch detection", () => {
     }
   });
 
-  // Drive debounce behavior explicitly; native fs.watch delivery can race watcher startup.
-  it("does not notify listeners when reftable updates keep the same branch", async () => {
-    vi.useFakeTimers();
-    const { worktreeDir } = createReftableWorktree(tempDir);
-    process.chdir(worktreeDir);
+  it("does not notify listeners when reftable updates keep the same branch", () =>
+    runTest(
+      Effect.gen(function* () {
+        vi.useFakeTimers();
+        const { worktreeDir } = createReftableWorktree(tempDir);
+        process.chdir(worktreeDir);
 
-    const provider = new FooterDataProvider(worktreeDir);
-    try {
-      expect(provider.getGitBranch()).toBe("main");
-      vi.mocked(spawnSync).mockClear();
-      const onBranchChange = vi.fn();
-      provider.onBranchChange(onBranchChange);
+        const provider = new FooterDataProvider(worktreeDir);
+        try {
+          expect(provider.getGitBranch()).toBe("main");
+          vi.mocked(spawnSync).mockClear();
+          const onBranchChange = vi.fn();
+          provider.onBranchChange(onBranchChange);
 
-      emitReftableChange(provider);
-      await vi.advanceTimersByTimeAsync(501);
+          emitReftableChange(provider);
+          yield* awaited(vi.advanceTimersByTimeAsync(501));
 
-      expect(vi.mocked(execFile)).toHaveBeenCalledTimes(1);
-      expect(vi.mocked(spawnSync)).not.toHaveBeenCalled();
-      expect(provider.getGitBranch()).toBe("main");
-      expect(onBranchChange).not.toHaveBeenCalled();
-    } finally {
-      provider.dispose();
-      vi.useRealTimers();
-    }
-  });
+          expect(vi.mocked(execFile)).toHaveBeenCalledTimes(1);
+          expect(vi.mocked(spawnSync)).not.toHaveBeenCalled();
+          expect(provider.getGitBranch()).toBe("main");
+          expect(onBranchChange).not.toHaveBeenCalled();
+        } finally {
+          provider.dispose();
+          vi.useRealTimers();
+        }
+      }),
+    ));
 
-  it("debounces rapid reftable updates into a single async refresh", async () => {
-    vi.useFakeTimers();
-    const { worktreeDir } = createReftableWorktree(tempDir);
-    process.chdir(worktreeDir);
+  it("debounces rapid reftable updates into a single async refresh", () =>
+    runTest(
+      Effect.gen(function* () {
+        vi.useFakeTimers();
+        const { worktreeDir } = createReftableWorktree(tempDir);
+        process.chdir(worktreeDir);
 
-    const provider = new FooterDataProvider(worktreeDir);
-    try {
-      expect(provider.getGitBranch()).toBe("main");
-      vi.mocked(execFile).mockClear();
+        const provider = new FooterDataProvider(worktreeDir);
+        try {
+          expect(provider.getGitBranch()).toBe("main");
+          vi.mocked(execFile).mockClear();
 
-      emitReftableChange(provider);
-      emitReftableChange(provider);
-      emitReftableChange(provider);
-      await vi.advanceTimersByTimeAsync(499);
-      expect(vi.mocked(execFile)).not.toHaveBeenCalled();
-      await vi.advanceTimersByTimeAsync(2);
-      expect(vi.mocked(execFile)).toHaveBeenCalledTimes(1);
-      await vi.advanceTimersByTimeAsync(650);
-      expect(vi.mocked(execFile)).toHaveBeenCalledTimes(1);
-    } finally {
-      provider.dispose();
-      vi.useRealTimers();
-    }
-  });
+          emitReftableChange(provider);
+          emitReftableChange(provider);
+          emitReftableChange(provider);
+          yield* awaited(vi.advanceTimersByTimeAsync(499));
+          expect(vi.mocked(execFile)).not.toHaveBeenCalled();
+          yield* awaited(vi.advanceTimersByTimeAsync(2));
+          expect(vi.mocked(execFile)).toHaveBeenCalledTimes(1);
+          yield* awaited(vi.advanceTimersByTimeAsync(650));
+          expect(vi.mocked(execFile)).toHaveBeenCalledTimes(1);
+        } finally {
+          provider.dispose();
+          vi.useRealTimers();
+        }
+      }),
+    ));
 
-  it("updates the cached branch when the reftable directory changes", async () => {
-    const { worktreeDir, reftableDir } = createReftableWorktree(tempDir);
-    process.chdir(worktreeDir);
+  it("updates the cached branch when the reftable directory changes", () =>
+    runTest(
+      Effect.gen(function* () {
+        const { worktreeDir, reftableDir } = createReftableWorktree(tempDir);
+        process.chdir(worktreeDir);
 
-    const provider = new FooterDataProvider(worktreeDir);
-    try {
-      expect(provider.getGitBranch()).toBe("main");
-      resolvedBranch = "foo";
-      const onBranchChange = vi.fn();
-      provider.onBranchChange(onBranchChange);
+        const provider = new FooterDataProvider(worktreeDir);
+        try {
+          expect(provider.getGitBranch()).toBe("main");
+          resolvedBranch = "foo";
+          const onBranchChange = vi.fn();
+          provider.onBranchChange(onBranchChange);
 
-      // FSEvents can drop a change made right after the watcher starts, so keep changing the
-      // directory until the watcher reacts.
-      let generation = 0;
-      await waitFor(() => {
-        if (vi.mocked(execFile).mock.calls.length > 0) return true;
-        generation += 1;
-        writeFileSync(join(reftableDir, "tables.list"), `${generation}\n`);
-        return false;
-      }, 10_000);
-      await waitFor(() => provider.getGitBranch() === "foo", 10_000);
+          let generation = 0;
+          yield* awaited(
+            waitFor(() => {
+              if (vi.mocked(execFile).mock.calls.length > 0) return true;
+              generation += 1;
+              writeFileSync(joinPath(reftableDir, "tables.list"), `${generation}\n`);
+              return false;
+            }, 10_000),
+          );
+          yield* awaited(waitFor(() => provider.getGitBranch() === "foo", 10_000));
 
-      expect(provider.getGitBranch()).toBe("foo");
-      expect(onBranchChange).toHaveBeenCalledTimes(1);
-    } finally {
-      provider.dispose();
-    }
-  });
+          expect(provider.getGitBranch()).toBe("foo");
+          expect(onBranchChange).toHaveBeenCalledTimes(1);
+        } finally {
+          provider.dispose();
+        }
+      }),
+    ));
 
-  it("retries git watchers 5 seconds after an async fs.watch error", async () => {
-    vi.useFakeTimers();
-    const repoDir = createPlainRepo(tempDir);
-    process.chdir(repoDir);
+  it("retries git watchers 5 seconds after an async fs.watch error", () =>
+    runTest(
+      Effect.gen(function* () {
+        vi.useFakeTimers();
+        const repoDir = createPlainRepo(tempDir);
+        process.chdir(repoDir);
 
-    const provider = new FooterDataProvider(repoDir);
-    try {
-      const providerWithInternals = provider as unknown as {
-        headWatcher: FSWatcher | null;
-      };
-      const originalWatcher = providerWithInternals.headWatcher;
-      expect(originalWatcher).not.toBeNull();
-      expect(originalWatcher?.listenerCount("error")).toBeGreaterThan(0);
+        const provider = new FooterDataProvider(repoDir);
+        try {
+          const providerWithInternals = provider as unknown as {
+            headWatcher: FSWatcher | null;
+          };
+          const originalWatcher = providerWithInternals.headWatcher;
+          expect(originalWatcher).not.toBeNull();
+          expect(originalWatcher?.listenerCount("error")).toBeGreaterThan(0);
 
-      originalWatcher?.emit("error", new Error("simulated EMFILE"));
-      expect(providerWithInternals.headWatcher).toBeNull();
+          originalWatcher?.emit("error", new Error("simulated EMFILE"));
+          expect(providerWithInternals.headWatcher).toBeNull();
 
-      await vi.advanceTimersByTimeAsync(4999);
-      expect(providerWithInternals.headWatcher).toBeNull();
+          yield* awaited(vi.advanceTimersByTimeAsync(4999));
+          expect(providerWithInternals.headWatcher).toBeNull();
 
-      await vi.advanceTimersByTimeAsync(1);
-      expect(providerWithInternals.headWatcher).not.toBeNull();
-      expect(providerWithInternals.headWatcher).not.toBe(originalWatcher);
-    } finally {
-      provider.dispose();
-      vi.useRealTimers();
-    }
-  });
+          yield* awaited(vi.advanceTimersByTimeAsync(1));
+          expect(providerWithInternals.headWatcher).not.toBeNull();
+          expect(providerWithInternals.headWatcher).not.toBe(originalWatcher);
+        } finally {
+          provider.dispose();
+          vi.useRealTimers();
+        }
+      }),
+    ));
 });

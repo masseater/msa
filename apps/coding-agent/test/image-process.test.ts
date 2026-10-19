@@ -1,3 +1,5 @@
+import { awaited, runTest } from "@msa/testing";
+import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { processImage } from "../src/utils/image-process.ts";
@@ -36,25 +38,33 @@ describe("image processing pipeline", () => {
     expect(detectSupportedImageMimeType(createTinyBmp1x1Red24bpp())).toBe("image/bmp");
   });
 
-  it("converts BMP files to PNG attachments when auto-resize is disabled", async () => {
-    const result = await processImage(createTinyBmp1x1Red24bpp(), "image/bmp", {
-      autoResizeImages: false,
-    });
+  it("converts BMP files to PNG attachments when auto-resize is disabled", () =>
+    runTest(
+      Effect.gen(function* () {
+        const result = yield* awaited(
+          processImage(createTinyBmp1x1Red24bpp(), "image/bmp", {
+            autoResizeImages: false,
+          }),
+        );
 
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.mimeType).toBe("image/png");
-    expect(result.hints).toContain("[Image converted from image/bmp to image/png.]");
-    expectPngMagic(result.data);
-  });
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        expect(result.mimeType).toBe("image/png");
+        expect(result.hints).toContain("[Image converted from image/bmp to image/png.]");
+        expectPngMagic(result.data);
+      }),
+    ));
 
-  it("converts BMP files before auto-resizing", async () => {
-    const result = await processImage(createTinyBmp1x1Red24bpp(), "image/bmp");
+  it("converts BMP files before auto-resizing", () =>
+    runTest(
+      Effect.gen(function* () {
+        const result = yield* awaited(processImage(createTinyBmp1x1Red24bpp(), "image/bmp"));
 
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.mimeType).toBe("image/png");
-    expect(result.hints).toContain("[Image converted from image/bmp to image/png.]");
-    expectPngMagic(result.data);
-  });
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        expect(result.mimeType).toBe("image/png");
+        expect(result.hints).toContain("[Image converted from image/bmp to image/png.]");
+        expectPngMagic(result.data);
+      }),
+    ));
 });

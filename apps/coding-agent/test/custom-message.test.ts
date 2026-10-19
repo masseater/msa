@@ -1,3 +1,4 @@
+import { currentTimeMillis } from "@msa/testing";
 import { Text } from "@msa/tui";
 import { describe, expect, test } from "vite-plus/test";
 
@@ -20,7 +21,7 @@ describe("CustomMessageComponent", () => {
       customType: "test",
       content: "custom",
       display: true,
-      timestamp: Date.now(),
+      timestamp: currentTimeMillis(),
     };
     const component = new CustomMessageComponent(message, renderer, undefined, 1);
 

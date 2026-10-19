@@ -1,14 +1,22 @@
-import { mkdirSync, rmSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
-import { join } from "path";
 
+import {
+  awaited,
+  runTest,
+  currentTimeMillis,
+  writeBytesFile,
+  writeTextFile,
+  joinPath,
+  makeDirectory,
+  removePath,
+} from "@msa/testing";
+import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
 import { processFileArguments } from "../src/cli/file-processor.ts";
 import { SettingsManager } from "../src/core/settings-manager.ts";
 import { createReadTool } from "../src/core/tools/read.ts";
 
-// 1x1 red PNG image as base64 (smallest valid PNG)
 const TINY_PNG_BASE64 =
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==";
 
@@ -63,88 +71,102 @@ describe("blockImages setting", () => {
   describe("Read tool", () => {
     let testDir: string;
 
-    beforeEach(() => {
-      testDir = join(tmpdir(), `block-images-test-${Date.now()}`);
-      mkdirSync(testDir, { recursive: true });
-    });
+    beforeEach(() =>
+      runTest(
+        Effect.gen(function* () {
+          testDir = joinPath(tmpdir(), `block-images-test-${currentTimeMillis()}`);
+          yield* makeDirectory(testDir);
+        }),
+      ),
+    );
 
-    afterEach(() => {
-      rmSync(testDir, { recursive: true, force: true });
-    });
+    afterEach(() => runTest(removePath(testDir)));
 
-    it("should always read images (filtering happens at convertToLlm layer)", async () => {
-      // Create test image
-      const imagePath = join(testDir, "test.png");
-      writeFileSync(imagePath, Buffer.from(TINY_PNG_BASE64, "base64"));
+    it("should always read images (filtering happens at convertToLlm layer)", () =>
+      runTest(
+        Effect.gen(function* () {
+          const imagePath = joinPath(testDir, "test.png");
+          yield* writeBytesFile(imagePath, Buffer.from(TINY_PNG_BASE64, "base64"));
 
-      const tool = createReadTool(testDir);
-      const result = await tool.execute("test-1", { path: imagePath });
+          const tool = createReadTool(testDir);
+          const result = yield* awaited(tool.execute("test-1", { path: imagePath }));
 
-      // Should have text note + image content
-      expect(result.content.length).toBeGreaterThanOrEqual(1);
-      const hasImage = result.content.some((c) => c.type === "image");
-      expect(hasImage).toBe(true);
-    });
+          expect(result.content.length).toBeGreaterThanOrEqual(1);
+          const hasImage = result.content.some((c) => c.type === "image");
+          expect(hasImage).toBe(true);
+        }),
+      ));
 
-    it("should read text files normally", async () => {
-      // Create test text file
-      const textPath = join(testDir, "test.txt");
-      writeFileSync(textPath, "Hello, world!");
+    it("should read text files normally", () =>
+      runTest(
+        Effect.gen(function* () {
+          const textPath = joinPath(testDir, "test.txt");
+          yield* writeTextFile(textPath, "Hello, world!");
 
-      const tool = createReadTool(testDir);
-      const result = await tool.execute("test-2", { path: textPath });
+          const tool = createReadTool(testDir);
+          const result = yield* awaited(tool.execute("test-2", { path: textPath }));
 
-      expect(result.content).toHaveLength(1);
-      expect(result.content[0]?.type).toBe("text");
-      const textContent = result.content[0] as { type: "text"; text: string };
-      expect(textContent.text).toContain("Hello, world!");
-    });
+          expect(result.content).toHaveLength(1);
+          expect(result.content[0]?.type).toBe("text");
+          const textContent = result.content[0] as { type: "text"; text: string };
+          expect(textContent.text).toContain("Hello, world!");
+        }),
+      ));
   });
 
   describe("processFileArguments", () => {
     let testDir: string;
 
-    beforeEach(() => {
-      testDir = join(tmpdir(), `block-images-process-test-${Date.now()}`);
-      mkdirSync(testDir, { recursive: true });
-    });
+    beforeEach(() =>
+      runTest(
+        Effect.gen(function* () {
+          testDir = joinPath(tmpdir(), `block-images-process-test-${currentTimeMillis()}`);
+          yield* makeDirectory(testDir);
+        }),
+      ),
+    );
 
-    afterEach(() => {
-      rmSync(testDir, { recursive: true, force: true });
-    });
+    afterEach(() => runTest(removePath(testDir)));
 
-    it("should always process images (filtering happens at convertToLlm layer)", async () => {
-      // Create test image
-      const imagePath = join(testDir, "test.png");
-      writeFileSync(imagePath, Buffer.from(TINY_PNG_BASE64, "base64"));
+    it("should always process images (filtering happens at convertToLlm layer)", () =>
+      runTest(
+        Effect.gen(function* () {
+          const imagePath = joinPath(testDir, "test.png");
+          yield* writeBytesFile(imagePath, Buffer.from(TINY_PNG_BASE64, "base64"));
 
-      const result = await processFileArguments([imagePath]);
+          const result = yield* awaited(processFileArguments([imagePath]));
 
-      expect(result.images).toHaveLength(1);
-      expect(result.images[0]?.type).toBe("image");
-    });
+          expect(result.images).toHaveLength(1);
+          expect(result.images[0]?.type).toBe("image");
+        }),
+      ));
 
-    it("should process BMP images from disk as PNG attachments", async () => {
-      const imagePath = join(testDir, "test.bmp");
-      writeFileSync(imagePath, createTinyBmp1x1Red24bpp());
+    it("should process BMP images from disk as PNG attachments", () =>
+      runTest(
+        Effect.gen(function* () {
+          const imagePath = joinPath(testDir, "test.bmp");
+          yield* writeBytesFile(imagePath, createTinyBmp1x1Red24bpp());
 
-      const result = await processFileArguments([imagePath]);
+          const result = yield* awaited(processFileArguments([imagePath]));
 
-      expect(result.images).toHaveLength(1);
-      expect(result.images[0]?.type).toBe("image");
-      expect(result.images[0]?.mimeType).toBe("image/png");
-      expect(result.text).toContain("[Image converted from image/bmp to image/png.]");
-    });
+          expect(result.images).toHaveLength(1);
+          expect(result.images[0]?.type).toBe("image");
+          expect(result.images[0]?.mimeType).toBe("image/png");
+          expect(result.text).toContain("[Image converted from image/bmp to image/png.]");
+        }),
+      ));
 
-    it("should process text files normally", async () => {
-      // Create test text file
-      const textPath = join(testDir, "test.txt");
-      writeFileSync(textPath, "Hello, world!");
+    it("should process text files normally", () =>
+      runTest(
+        Effect.gen(function* () {
+          const textPath = joinPath(testDir, "test.txt");
+          yield* writeTextFile(textPath, "Hello, world!");
 
-      const result = await processFileArguments([textPath]);
+          const result = yield* awaited(processFileArguments([textPath]));
 
-      expect(result.images).toHaveLength(0);
-      expect(result.text).toContain("Hello, world!");
-    });
+          expect(result.images).toHaveLength(0);
+          expect(result.text).toContain("Hello, world!");
+        }),
+      ));
   });
 });

@@ -1,61 +1,70 @@
-import { mkdtempSync, rmSync, writeFileSync } from "fs";
-import { tmpdir } from "os";
-import { join } from "path";
-
+import { joinPath, makeTempDir, removePath, runTest, writeTextFile } from "@msa/testing";
+import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
 import { shouldRunFirstTimeSetup } from "../src/cli/startup-ui.ts";
 import { ENV_AGENT_DIR } from "../src/config.ts";
+import { readEnv, writeEnv, deleteEnv } from "../src/core/process-env.ts";
 import { SettingsManager } from "../src/core/settings-manager.ts";
 
 describe("shouldRunFirstTimeSetup", () => {
-  const originalMsaExperimental = process.env["MSA_EXPERIMENTAL"];
-  const originalAgentDir = process.env[ENV_AGENT_DIR];
+  const originalMsaExperimental = readEnv("MSA_EXPERIMENTAL");
+  const originalAgentDir = readEnv(ENV_AGENT_DIR);
   let tempDir: string;
   let settingsPath: string;
 
-  beforeEach(() => {
-    tempDir = mkdtempSync(join(tmpdir(), "msa-first-time-setup-"));
-    settingsPath = join(tempDir, "settings.json");
-    process.env["MSA_EXPERIMENTAL"] = "1";
-    delete process.env[ENV_AGENT_DIR];
-  });
+  beforeEach(() =>
+    runTest(
+      Effect.gen(function* () {
+        tempDir = yield* makeTempDir("msa-first-time-setup-");
+        settingsPath = joinPath(tempDir, "settings.json");
+        writeEnv("MSA_EXPERIMENTAL", "1");
+        deleteEnv(ENV_AGENT_DIR);
+      }),
+    ),
+  );
 
-  afterEach(() => {
-    rmSync(tempDir, { recursive: true, force: true });
-    if (originalMsaExperimental === undefined) {
-      delete process.env["MSA_EXPERIMENTAL"];
-    } else {
-      process.env["MSA_EXPERIMENTAL"] = originalMsaExperimental;
-    }
-    if (originalAgentDir === undefined) {
-      delete process.env[ENV_AGENT_DIR];
-    } else {
-      process.env[ENV_AGENT_DIR] = originalAgentDir;
-    }
-  });
+  afterEach(() =>
+    runTest(
+      Effect.gen(function* () {
+        yield* removePath(tempDir);
+        if (originalMsaExperimental === undefined) {
+          deleteEnv("MSA_EXPERIMENTAL");
+        } else {
+          writeEnv("MSA_EXPERIMENTAL", originalMsaExperimental);
+        }
+        if (originalAgentDir === undefined) {
+          deleteEnv(ENV_AGENT_DIR);
+        } else {
+          writeEnv(ENV_AGENT_DIR, originalAgentDir);
+        }
+      }),
+    ),
+  );
 
   it("returns true when experimental, default agent dir, and no settings.json", () => {
     expect(shouldRunFirstTimeSetup(settingsPath)).toBe(true);
   });
 
   it("returns false when experimental features are disabled", () => {
-    delete process.env["MSA_EXPERIMENTAL"];
+    deleteEnv("MSA_EXPERIMENTAL");
 
     expect(shouldRunFirstTimeSetup(settingsPath)).toBe(false);
   });
 
   it("returns false when a custom agent dir is set", () => {
-    process.env[ENV_AGENT_DIR] = tempDir;
+    writeEnv(ENV_AGENT_DIR, tempDir);
 
     expect(shouldRunFirstTimeSetup(settingsPath)).toBe(false);
   });
 
-  it("returns false when settings.json already exists", () => {
-    writeFileSync(settingsPath, "{}", "utf-8");
-
-    expect(shouldRunFirstTimeSetup(settingsPath)).toBe(false);
-  });
+  it("returns false when settings.json already exists", () =>
+    runTest(
+      Effect.gen(function* () {
+        yield* writeTextFile(settingsPath, "{}");
+        expect(shouldRunFirstTimeSetup(settingsPath)).toBe(false);
+      }),
+    ));
 });
 
 describe("analytics settings", () => {
@@ -72,7 +81,7 @@ describe("analytics settings", () => {
     manager.setEnableAnalytics(true);
 
     expect(manager.getEnableAnalytics()).toBe(true);
-    expect(manager.getTrackingId()).toMatch(/^[0-9a-f-]{36}$/);
+    expect(manager.getTrackingId()).toMatch(/^[0-9a-f-]{36}$/u);
   });
 
   it("does not generate a tracking identifier on opt-out", () => {

@@ -50,7 +50,7 @@ describe("InteractiveMode.handleCtrlZ", () => {
     try {
       callHandleCtrlZ(context);
     } finally {
-      if (platformDescriptor) {
+      if (platformDescriptor !== undefined) {
         Object.defineProperty(process, "platform", platformDescriptor);
       }
     }
@@ -70,8 +70,7 @@ describe("InteractiveMode.handleCtrlZ", () => {
       requestRender: vi.fn(),
     };
     const context: HandleCtrlZThis = { ui };
-    const keepAliveHandle = setTimeout(() => undefined, 0);
-    clearTimeout(keepAliveHandle);
+    const keepAliveHandle = {} as ReturnType<typeof setInterval>;
 
     let sigintHandler: ProcessSignalHandler | undefined;
     let sigcontHandler: ProcessSignalHandler | undefined;
@@ -130,8 +129,7 @@ describe("InteractiveMode.handleCtrlZ", () => {
       requestRender: vi.fn(),
     };
     const context: HandleCtrlZThis = { ui };
-    const keepAliveHandle = setTimeout(() => undefined, 0);
-    clearTimeout(keepAliveHandle);
+    const keepAliveHandle = {} as ReturnType<typeof setInterval>;
     const suspendError = new Error("suspend failed");
 
     const setIntervalSpy = vi.spyOn(globalThis, "setInterval").mockReturnValue(keepAliveHandle);

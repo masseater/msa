@@ -1,3 +1,5 @@
+import { awaited, runTest } from "@msa/testing";
+import { Effect } from "effect";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import { RpcClient } from "../src/modes/rpc/rpc-client.ts";
@@ -8,26 +10,33 @@ type RpcClientPrivate = {
 };
 
 describe("RpcClient clearQueue", () => {
-  it("sends the clear_queue RPC command", async () => {
-    const client = new RpcClient();
-    const privateClient = client as unknown as RpcClientPrivate;
-    const send = vi.fn(async () => ({
-      type: "response",
-      command: "clear_queue",
-      success: true,
-      data: { steering: ["Change direction"], followUp: ["Summarize when finished"] },
-    }));
-    privateClient.send = send;
-    privateClient.getData = <T>(response: unknown): T => {
-      return (response as { data: T }).data;
-    };
+  it("sends the clear_queue RPC command", () =>
+    runTest(
+      Effect.gen(function* () {
+        const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-    const result = await client.clearQueue();
+        const client = new RpcClient();
+        const privateClient = client as unknown as RpcClientPrivate;
+        const send = vi.fn(() =>
+          effectRunPromise(
+            awaited({
+              type: "response",
+              command: "clear_queue",
+              success: true,
+              data: { steering: ["Change direction"], followUp: ["Summarize when finished"] },
+            }),
+          ),
+        );
+        privateClient.send = send;
+        privateClient.getData = <T>(response: unknown): T => (response as { data: T }).data;
 
-    expect(send).toHaveBeenCalledWith({ type: "clear_queue" });
-    expect(result).toEqual({
-      steering: ["Change direction"],
-      followUp: ["Summarize when finished"],
-    });
-  });
+        const result = yield* awaited(client.clearQueue());
+
+        expect(send).toHaveBeenCalledWith({ type: "clear_queue" });
+        expect(result).toEqual({
+          steering: ["Change direction"],
+          followUp: ["Summarize when finished"],
+        });
+      }),
+    ));
 });

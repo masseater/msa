@@ -49,10 +49,9 @@ const compactionEnd = (
   result: undefined,
   aborted: options.aborted ?? false,
   willRetry: false,
-  ...(options.errorMessage !== undefined ? { errorMessage: options.errorMessage } : {}),
+  ...(options.errorMessage === undefined ? {} : { errorMessage: options.errorMessage }),
 });
 
-// #10607
 describe("ProgramStatusReporter", () => {
   it("reports idle, working during a run, and done once it settles", () => {
     const { reporter, reports, send, last } = setup("Fix login");
@@ -89,7 +88,6 @@ describe("ProgramStatusReporter", () => {
     });
     expect(last()).toEqual({ state: "idle" });
 
-    // Aborted after a successful response, for example in an agent_before_settle hook or a retry delay.
     send({ type: "agent_start" }, assistantEnd("stop"), { type: "agent_settled", aborted: true });
     expect(last()).toEqual({ state: "idle" });
   });
@@ -144,12 +142,10 @@ describe("ProgramStatusReporter", () => {
     reporter.setBlocked("login", { kind: "auth", message: "Log in to Anthropic" });
     expect(last()).toEqual({ state: "blocked", kind: "auth", message: "Log in to Anthropic" });
 
-    // The run settles while the selector is still open.
     reporter.setBlocked("login", undefined);
     send(assistantEnd("stop"), settled);
     expect(last()).toEqual({ state: "blocked", kind: "permission", message: "Allow bash?" });
 
-    // Reopening a source replaces its dialog instead of stacking a second one.
     reporter.setBlocked("extension-selector", { kind: "question", message: "Pick one" });
     expect(last()).toEqual({ state: "blocked", kind: "question", message: "Pick one" });
     reporter.setBlocked("extension-selector", undefined);

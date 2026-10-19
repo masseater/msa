@@ -18,6 +18,14 @@ export const currentTimeMillis = (): number => clock.currentTimeMillisUnsafe();
 
 export const nowIso = (): string => DateTime.formatIso(DateTime.makeUnsafe(currentTimeMillis()));
 
+export const currentDate = (): Date => DateTime.toDate(DateTime.makeUnsafe(currentTimeMillis()));
+
+export const dateFromMillis = (value: string | number | Date): Date =>
+  DateTime.toDate(DateTime.makeUnsafe(value));
+
+export const isoFromMillis = (value: string | number | Date): string =>
+  DateTime.formatIso(DateTime.makeUnsafe(value));
+
 export const awaited = <A>(value: A | PromiseLike<A>): Effect.Effect<A> =>
   Effect.promise(() => Promise.resolve(value));
 
@@ -31,6 +39,29 @@ export const failure = <A, E>(effect: Effect.Effect<A, E>): Effect.Effect<unknow
   );
 
 export const abortController = (): AbortController => new AbortController();
+
+export interface DeferredPromise<A> {
+  readonly promise: Promise<A>;
+  readonly resolve: (value: A) => void;
+  readonly reject: (error: unknown) => void;
+}
+
+export const deferredPromise = <A>(): DeferredPromise<A> => {
+  const deferred = Deferred.makeUnsafe<A>();
+  return {
+    promise: Deferred.await(deferred).pipe(Effect.runPromise),
+    resolve: (value) => {
+      Deferred.doneUnsafe(deferred, Effect.succeed(value));
+    },
+    reject: (error) => {
+      Deferred.doneUnsafe(deferred, Effect.die(error));
+    },
+  };
+};
+
+export const neverPromise = <A = never>(): Promise<A> => Effect.runPromise(Effect.never);
+
+export const sleep = (duration: Duration.Input): Effect.Effect<void> => Effect.sleep(duration);
 
 export const pollUntil = Effect.fn("pollUntil")(function* (
   check: Effect.Effect<boolean>,
@@ -62,19 +93,4 @@ export const gate = (): Gate => {
   });
 };
 
-export interface DeferredPromise<A> {
-  readonly promise: Promise<A>;
-  readonly resolve: (value: A) => void;
-  readonly reject: (error: unknown) => void;
-}
-
-export const deferredPromise = <A>(): DeferredPromise<A> => {
-  const deferred = Deferred.makeUnsafe<A, never>();
-  return {
-    promise: testRuntime.runPromise(Deferred.await(deferred)),
-    resolve: (value) => Deferred.doneUnsafe(deferred, Effect.succeed(value)),
-    reject: (error) => Deferred.doneUnsafe(deferred, Effect.die(error)),
-  };
-};
-
-export const neverPromise = <A>(): Promise<A> => testRuntime.runPromise(Effect.never);
+export const randomSuffixSync = (): string => testRuntime.runSync(randomSuffix);

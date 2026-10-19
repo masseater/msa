@@ -1,3 +1,5 @@
+import { awaited, runTest } from "@msa/testing";
+import { Effect } from "effect";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import { InteractiveMode } from "../src/modes/interactive/interactive-mode.ts";
@@ -48,7 +50,7 @@ function createSubmitContext(): SubmitContext {
       isCompacting: false,
       isStreaming: false,
       isBashRunning: false,
-      prompt: vi.fn(async () => {}),
+      prompt: vi.fn(() => runTest(Effect.sync(() => {}))),
     },
     flushPendingBashComponents: vi.fn(),
     pendingUserInputs: [],
@@ -68,26 +70,34 @@ describe("InteractiveMode startup input", () => {
     expect(context.showStatus).toHaveBeenCalledWith("Startup is still in progress");
   });
 
-  it("queues a normal prompt submitted before the input callback is installed", async () => {
-    const context = createSubmitContext();
-    interactiveModePrototype.setupEditorSubmitHandler.call(context);
+  it("queues a normal prompt submitted before the input callback is installed", () =>
+    runTest(
+      Effect.gen(function* () {
+        const context = createSubmitContext();
+        interactiveModePrototype.setupEditorSubmitHandler.call(context);
 
-    await context.defaultEditor.onSubmit?.(" early prompt ");
+        yield* awaited(context.defaultEditor.onSubmit?.(" early prompt "));
 
-    expect(context.pendingUserInputs).toEqual(["early prompt"]);
-    expect(context.flushPendingBashComponents).toHaveBeenCalledTimes(1);
-    expect(context.editor.addToHistory).toHaveBeenCalledWith("early prompt");
-  });
+        expect(context.pendingUserInputs).toEqual(["early prompt"]);
+        expect(context.flushPendingBashComponents).toHaveBeenCalledTimes(1);
+        expect(context.editor.addToHistory).toHaveBeenCalledWith("early prompt");
+      }),
+    ));
 
-  it("returns queued startup input before installing a new input callback", async () => {
-    const context: InputContext = {
-      pendingUserInputs: ["queued prompt"],
-    };
+  it("returns queued startup input before installing a new input callback", () =>
+    runTest(
+      Effect.gen(function* () {
+        const context: InputContext = {
+          pendingUserInputs: ["queued prompt"],
+        };
 
-    await expect(interactiveModePrototype.getUserInput.call(context)).resolves.toBe(
-      "queued prompt",
-    );
-    expect(context.onInputCallback).toBeUndefined();
-    expect(context.pendingUserInputs).toEqual([]);
-  });
+        yield* awaited(
+          expect(interactiveModePrototype.getUserInput.call(context)).resolves.toBe(
+            "queued prompt",
+          ),
+        );
+        expect(context.onInputCallback).toBeUndefined();
+        expect(context.pendingUserInputs).toEqual([]);
+      }),
+    ));
 });

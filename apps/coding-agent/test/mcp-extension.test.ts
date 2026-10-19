@@ -36,8 +36,6 @@ import {
   createMcpToolName,
 } from "../src/extensions/mcp/tools.ts";
 
-// Config values are resolved at connect time, so the literal reference must survive loading.
-// biome-ignore lint/suspicious/noTemplateCurlyInString: literal config value reference
 const TOKEN_HEADER = "Bearer ${TOKEN}";
 
 describe("MCP config", () => {
@@ -75,7 +73,7 @@ describe("MCP config", () => {
     );
 
     const trusted = loadMcpConfig({ ...paths, projectTrusted: true });
-    // Disabled servers are kept so /mcp can enable them again.
+
     expect(trusted.servers.map((server) => [server.name, server.scope, server.config])).toEqual([
       ["shared", "project", { command: "project-cmd", exposure: "direct" }],
       [
@@ -91,18 +89,16 @@ describe("MCP config", () => {
     expect(trusted.errors[2]).toContain('server "badUrl": url must be an http or https URL');
     expect(trusted.errors[3]).toContain('invalid server name "bad name"');
 
-    // Untrusted projects cannot add or override servers, since stdio servers run commands.
     const untrusted = loadMcpConfig({ ...paths, projectTrusted: false });
     expect(untrusted.servers.find((server) => server.name === "shared")?.config).toEqual({
       command: "global-cmd",
     });
   });
 
-  // #10277
   it("lets project entries override enabled and exposure of global servers", () => {
     const paths = setup(
       { mcpServers: { tools: { command: "x", env: { TOKEN: "secret" } } } },
-      // An override cannot change the command, which would run with the global env.
+
       { mcpServers: { tools: { enabled: false, args: ["y"] }, missing: { enabled: false } } },
     );
     const project = join(paths.cwd, ".msa", "mcp.json");
@@ -126,12 +122,10 @@ describe("MCP config", () => {
       { command: "x", env: { TOKEN: "secret" }, enabled: false },
     ]);
 
-    // Overrides keep `enabled: true`, since it replaces the global value.
     updateMcpServerConfig(project, "tools", { enabled: true });
     expect(JSON.parse(readFileSync(project, "utf8")).mcpServers.tools).toEqual({ enabled: true });
   });
 
-  // Regression: #10239.
   it("rejects server names that differ only in - and _", () => {
     const paths = setup(
       { mcpServers: { "work-files": { command: "a" }, work_files: { command: "b" } } },
@@ -150,7 +144,7 @@ describe("MCP config", () => {
         autoEnableCodemode: false,
         mcpServers: {
           later: { command: "x", exposure: "deferred" },
-          // `codemode-deferred` is an alias for `codemode`.
+
           scripts: {
             command: "x",
             exposure: "codemode-deferred",
@@ -222,7 +216,7 @@ describe("MCP config", () => {
             url: "https://a.example/mcp",
             oauth: { authServerMetadataUrl: "http://idp.example/m" },
           },
-          // #10302
+
           cimd: {
             url: "https://a.example/mcp",
             oauth: { clientRegistration: "cimd", callbackUrl: "http://localhost/callback" },
@@ -304,7 +298,7 @@ describe("MCP config", () => {
     expect(getMcpToolExposure(config, "get_delete_hint")).toBe("codemode");
     expect(getMcpToolExposure(config, "delete_repo")).toBe("hidden");
     expect(getMcpToolExposure(config, "list_issues")).toBe("deferred");
-    // Only `*` is special.
+
     expect(
       getMcpToolExposure({ command: "x", toolExposure: { "get_file.*": "direct" } }, "get_file_x"),
     ).toBe("codemode");
@@ -327,7 +321,7 @@ describe("MCP config", () => {
       },
     );
     const { servers, errors } = loadMcpConfig({ ...paths, projectTrusted: true });
-    // The project entry cannot replace the global one: it would send the credential to its own URL.
+
     expect(
       servers.map((server) => [
         server.name,
@@ -354,7 +348,7 @@ describe("MCP tools", () => {
     expect(long).toHaveLength(64);
     expect(long).toMatch(/^mcp__server__x+_[0-9a-f]{8}$/);
     expect(createMcpToolName("server", `${"x".repeat(100)}y`)).not.toBe(long);
-    // Names that sanitize to one already taken by another tool get a hash suffix.
+
     const taken = createMcpToolName("s", "a_b");
     const second = createMcpToolName("s", "a-b", (name) => name === taken);
     expect(second).toMatch(/^mcp__s__a_b_[0-9a-f]{8}$/);
@@ -363,7 +357,7 @@ describe("MCP tools", () => {
   it("declares the CallToolResult scripts receive, keeping references in the server's output schema", () => {
     const content =
       'content: Array<{ data?: string; mimeType?: string; text?: string; type: "text" | "image" | "audio" | "resource_link" | "resource"; [key: string]: unknown; }>; isError?: boolean;';
-    // #10416: without an output schema, structured content may be any JSON value.
+
     expect(renderToolOutputType(createMcpResultSchema(undefined) as never)).toBe(
       `{ ${content} structuredContent?: unknown; [key: string]: unknown; }`,
     );
@@ -375,7 +369,7 @@ describe("MCP tools", () => {
         hits: { type: "array", items: { $ref: "#/$defs/Hit~1v1" } },
         again: { $ref: "#/properties/hits" },
         children: { type: "array", items: { $ref: "#" } },
-        // A property named like a keyword whose value is data.
+
         default: { $ref: "#/definitions/Hit" },
         remote: { $ref: "https://example.com/schema.json" },
       },
@@ -385,7 +379,7 @@ describe("MCP tools", () => {
     }) as unknown as {
       properties: { structuredContent: { $defs: Record<string, { default: unknown }> } };
     };
-    // Data that looks like a reference is kept as is.
+
     expect(schema.properties.structuredContent.$defs["Hit/v1"]?.default).toEqual({
       $ref: "#/stays",
     });
@@ -413,13 +407,13 @@ describe("MCP tools", () => {
         { type: "text", text: "[audio audio/wav omitted]" },
       ],
       details: { server: "docs", tool: "t" },
-      // Scripts get the server's blocks as sent, without `_meta`.
+
       structuredContent: { content: blocks, structuredContent: { ok: true } },
     });
     expect(
       (await convertMcpResult("docs", "t", { content: [], structuredContent: { n: 1 } })).content,
     ).toEqual([{ type: "text", text: '{\n  "n": 1\n}' }]);
-    // #10416: array structured content reaches the model as JSON and scripts as sent.
+
     expect(
       await convertMcpResult("docs", "t", { content: [], structuredContent: [{ id: 1 }] }),
     ).toEqual({
@@ -506,7 +500,7 @@ describe("MCP tools", () => {
     const converted = await convertMcpResult("docs", "snapshot", result, { saveOutput });
     expect(converted.content).toHaveLength(2);
     const text = (converted.content[0] as { text: string }).text;
-    // Codex's format: a header, the start and end of the text, then the file with the full text.
+
     expect(text).toMatch(
       new RegExp(
         `^Warning: truncated output \\(original token count: ${Math.ceil(full.length / 4)}\\)\nTotal output lines: 3000\n\nline 1\nline 2\n`,
@@ -526,7 +520,6 @@ describe("MCP tools", () => {
     expect(saved).toEqual([full]);
     expect(converted.structuredContent).toEqual(result);
 
-    // Text within the limit is not saved.
     await convertMcpResult(
       "docs",
       "small",
@@ -555,7 +548,6 @@ describe("MCP tools", () => {
 describe("MCP connections", () => {
   const servers: InMemoryTransport[] = [];
 
-  /** In-memory server that answers initialize, tools/list, and tools/call with "ok". */
   function createTransport(
     options: {
       expireFirstCall?: boolean;
@@ -577,14 +569,14 @@ describe("MCP connections", () => {
               result: {
                 protocolVersion: LATEST_PROTOCOL_VERSION,
                 capabilities: {
-                  ...(options.noTools ? { prompts: {} } : { tools: {} }),
-                  ...(options.resources ? { resources: {} } : {}),
+                  ...(options.noTools === true ? { prompts: {} } : { tools: {} }),
+                  ...(options.resources === true ? { resources: {} } : {}),
                 },
                 serverInfo: { name: "fake", version: "1.0.0" },
               },
             }
           : message.method === "tools/list"
-            ? options.noTools
+            ? options.noTools === true
               ? {
                   jsonrpc: "2.0",
                   id: message.id,
@@ -605,9 +597,9 @@ describe("MCP connections", () => {
       queueMicrotask(() => void pair.server.send(response));
     });
     void pair.server.start();
-    if (options.expireFirstCall) {
+    if (options.expireFirstCall === true) {
       const send = pair.client.send.bind(pair.client);
-      // Simulates the HTTP transport's 404 for a session the server no longer knows.
+
       pair.client.send = async (message: JsonRpcMessage) => {
         if ("method" in message && message.method === "tools/call")
           throw new McpSessionExpiredError("gone");
@@ -632,7 +624,7 @@ describe("MCP connections", () => {
         return transport();
       },
       credentials: new McpOAuthCredentialStore(new InMemoryAuthStorageBackend()),
-      ...(log !== undefined ? { log } : {}),
+      ...(log === undefined ? {} : { log }),
       onTools: () => {},
     });
     return { connection, opened: () => opened };
@@ -662,7 +654,7 @@ describe("MCP connections", () => {
       const previousHome = process.env["HOME"];
       process.env["HOME"] = home;
       mkdirSync(join(home, "work"));
-      // Answers every tool call with its working directory.
+
       writeFileSync(
         join(home, "server.mjs"),
         `import { createInterface } from "node:readline";
@@ -776,10 +768,9 @@ for await (const line of createInterface({ input: process.stdin })) {
     expect(failing.opened()).toBe(1);
   });
 
-  // #10249
   it("closes a connection that is still initializing before close returns", async () => {
     const pair = createInMemoryTransportPair();
-    // The server receives initialize but never answers it.
+
     const initializing = new Promise<void>((resolve) => {
       pair.server.onMessage(() => resolve());
     });
@@ -802,7 +793,6 @@ for await (const line of createInterface({ input: process.stdin })) {
     expect(String(failure)).toContain("failed to connect");
   });
 
-  // #10249
   it("stops waiting to retry a connection when closed", async () => {
     const { connection } = connect(
       {
@@ -824,7 +814,7 @@ for await (const line of createInterface({ input: process.stdin })) {
     void connection.getClient().catch((error) => {
       failure = error;
     });
-    // The first attempt failed; the retry is 250ms away.
+
     await new Promise((resolve) => setTimeout(resolve, 10));
     await connection.close();
     expect(String(failure)).toContain("status 503");
@@ -834,7 +824,7 @@ for await (const line of createInterface({ input: process.stdin })) {
     const transport = createTransport();
     const send = transport.send.bind(transport);
     const failed = new Set<string>();
-    // The first read and the first call fail with 502.
+
     transport.send = async (message) => {
       const method = "method" in message ? message.method : "";
       if ((method === "resources/read" || method === "tools/call") && !failed.has(method)) {
@@ -954,7 +944,6 @@ for await (const line of createInterface({ input: process.stdin })) {
     await connection.close();
   });
 
-  // #10526: listing every resource can take long (a large drive), so connecting must not wait for it.
   it("connects to servers with resources without listing them", async () => {
     const methods: string[] = [];
     const { connection } = connect(
@@ -979,8 +968,8 @@ describe("MCP servers section", () => {
       name,
       config: {
         command: "x",
-        ...(description ? { description } : {}),
-        ...(exposure ? { exposure } : {}),
+        ...(description !== undefined && description.length > 0 ? { description } : {}),
+        ...(exposure !== undefined && exposure.length > 0 ? { exposure } : {}),
       },
       source: "test",
     },

@@ -1,3 +1,4 @@
+import { awaited, runTest } from "@msa/testing";
 import {
   Container,
   Editor,
@@ -6,6 +7,7 @@ import {
   stripTerminalSequences,
   TuiMainScreen,
 } from "@msa/tui";
+import { Effect } from "effect";
 import { beforeAll, describe, expect, it, vi } from "vite-plus/test";
 
 import { VirtualTerminal } from "../../../libs/tui/test/virtual-terminal.ts";
@@ -21,82 +23,93 @@ import { getEditorTheme, initTheme } from "../src/modes/interactive/theme/theme.
 beforeAll(() => initTheme("dark"));
 
 describe("bug report prompt", () => {
-  it("preserves line breaks in pasted descriptions", async () => {
-    const previousKeybindings = getKeybindings();
-    const keybindings = new KeybindingsManager();
-    setKeybindings(keybindings);
-    try {
-      const ui = new TuiMainScreen(new VirtualTerminal());
-      const editorContainer = new Container();
-      const editor = new Editor(ui, getEditorTheme());
-      const session = {
-        model: undefined,
-        settingsManager: { getExternalEditorCommand: () => "nano" },
-      } as unknown as AgentSession;
-      const showStatus = vi.fn();
+  it("preserves line breaks in pasted descriptions", () =>
+    runTest(
+      Effect.gen(function* () {
+        const previousKeybindings = getKeybindings();
+        const keybindings = new KeybindingsManager();
+        setKeybindings(keybindings);
+        try {
+          const ui = new TuiMainScreen(new VirtualTerminal());
+          const editorContainer = new Container();
+          const editor = new Editor(ui, getEditorTheme());
+          const session = {
+            model: undefined,
+            settingsManager: { getExternalEditorCommand: () => "nano" },
+          } as unknown as AgentSession;
+          const showStatus = vi.fn();
 
-      const report = reportBug({
-        session,
-        ui,
-        editorSlot: new EditorSlot(editorContainer, ui, () => editor),
-        keybindings,
-        showStatus,
-        showError: vi.fn(),
-      });
+          const report = reportBug({
+            session,
+            ui,
+            editorSlot: new EditorSlot(editorContainer, ui, () => editor),
+            keybindings,
+            showStatus,
+            showError: vi.fn(),
+          });
 
-      const descriptionEditor = editorContainer.children[0];
-      expect(descriptionEditor).toBeInstanceOf(ExtensionEditorComponent);
-      if (!(descriptionEditor instanceof ExtensionEditorComponent))
-        throw new Error("Missing description editor");
-      descriptionEditor.handleInput(
-        "\x1b[200~Request failed\r\n  ↳ msa exiting...\r\nstack trace\x1b[201~",
-      );
-      descriptionEditor.handleInput("\r");
-      expect(editorContainer.children[0]).toBe(editor);
+          const descriptionEditor = editorContainer.children[0];
+          expect(descriptionEditor).toBeInstanceOf(ExtensionEditorComponent);
+          if (!(descriptionEditor instanceof ExtensionEditorComponent))
+            throw new Error("Missing description editor");
+          descriptionEditor.handleInput(
+            "\x1b[200~Request failed\r\n  ↳ msa exiting...\r\nstack trace\x1b[201~",
+          );
+          descriptionEditor.handleInput("\r");
+          expect(editorContainer.children[0]).toBe(editor);
 
-      await vi.waitFor(() =>
-        expect(editorContainer.children[0]).toBeInstanceOf(ExtensionSelectorComponent),
-      );
-      const transcriptSelector = editorContainer.children[0];
-      if (!(transcriptSelector instanceof ExtensionSelectorComponent))
-        throw new Error("Missing transcript selector");
-      expect(transcriptSelector.render(120).join("\n")).toContain(
-        "Include the session transcript?",
-      );
-      transcriptSelector.handleInput("j");
-      transcriptSelector.handleInput("\r");
-      expect(editorContainer.children[0]).toBe(editor);
+          yield* awaited(
+            vi.waitFor(() =>
+              expect(editorContainer.children[0]).toBeInstanceOf(ExtensionSelectorComponent),
+            ),
+          );
+          const transcriptSelector = editorContainer.children[0];
+          if (!(transcriptSelector instanceof ExtensionSelectorComponent))
+            throw new Error("Missing transcript selector");
+          expect(transcriptSelector.render(120).join("\n")).toContain(
+            "Include the session transcript?",
+          );
+          transcriptSelector.handleInput("j");
+          transcriptSelector.handleInput("\r");
+          expect(editorContainer.children[0]).toBe(editor);
 
-      await vi.waitFor(() =>
-        expect(editorContainer.children[0]).toBeInstanceOf(ExtensionSelectorComponent),
-      );
-      const summarySelector = editorContainer.children[0];
-      if (!(summarySelector instanceof ExtensionSelectorComponent))
-        throw new Error("Missing summary selector");
-      expect(summarySelector.render(120).join("\n")).toContain("Attach a summary written by");
-      summarySelector.handleInput("j");
-      summarySelector.handleInput("\r");
-      expect(editorContainer.children[0]).toBe(editor);
+          yield* awaited(
+            vi.waitFor(() =>
+              expect(editorContainer.children[0]).toBeInstanceOf(ExtensionSelectorComponent),
+            ),
+          );
+          const summarySelector = editorContainer.children[0];
+          if (!(summarySelector instanceof ExtensionSelectorComponent))
+            throw new Error("Missing summary selector");
+          expect(summarySelector.render(120).join("\n")).toContain("Attach a summary written by");
+          summarySelector.handleInput("j");
+          summarySelector.handleInput("\r");
+          expect(editorContainer.children[0]).toBe(editor);
 
-      await vi.waitFor(() =>
-        expect(editorContainer.children[0]).toBeInstanceOf(ExtensionSelectorComponent),
-      );
-      const deliverySelector = editorContainer.children[0];
-      if (!(deliverySelector instanceof ExtensionSelectorComponent))
-        throw new Error("Missing delivery selector");
-      const deliveryLines = deliverySelector.render(120).map(stripTerminalSequences);
-      expect(deliveryLines.some((line) => line.includes("Description: Request failed"))).toBe(true);
-      expect(deliveryLines.some((line) => line.includes("↳ msa exiting..."))).toBe(true);
-      expect(deliveryLines.some((line) => line.includes("stack trace"))).toBe(true);
+          yield* awaited(
+            vi.waitFor(() =>
+              expect(editorContainer.children[0]).toBeInstanceOf(ExtensionSelectorComponent),
+            ),
+          );
+          const deliverySelector = editorContainer.children[0];
+          if (!(deliverySelector instanceof ExtensionSelectorComponent))
+            throw new Error("Missing delivery selector");
+          const deliveryLines = deliverySelector.render(120).map(stripTerminalSequences);
+          expect(deliveryLines.some((line) => line.includes("Description: Request failed"))).toBe(
+            true,
+          );
+          expect(deliveryLines.some((line) => line.includes("↳ msa exiting..."))).toBe(true);
+          expect(deliveryLines.some((line) => line.includes("stack trace"))).toBe(true);
 
-      deliverySelector.handleInput("j");
-      deliverySelector.handleInput("\r");
-      await report;
-      expect(showStatus).toHaveBeenCalledWith("Bug report cancelled");
-    } finally {
-      setKeybindings(previousKeybindings);
-    }
-  });
+          deliverySelector.handleInput("j");
+          deliverySelector.handleInput("\r");
+          yield* awaited(report);
+          expect(showStatus).toHaveBeenCalledWith("Bug report cancelled");
+        } finally {
+          setKeybindings(previousKeybindings);
+        }
+      }),
+    ));
 });
 
 describe("bug report redaction", () => {

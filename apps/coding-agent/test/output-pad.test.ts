@@ -1,3 +1,4 @@
+import { awaited, runTest } from "@msa/testing";
 import { type Component, TuiMainScreen } from "@msa/tui";
 import { Type } from "typebox";
 import { afterAll, beforeAll, describe, expect, test } from "vite-plus/test";
@@ -18,17 +19,17 @@ const tool: ToolDefinition = {
   label: "custom_tool",
   description: "custom tool",
   parameters: Type.Any(),
-  execute: async () => ({ content: [{ type: "text", text: "ok" }], details: {} }),
+  execute: () =>
+    runTest(awaited({ content: [{ type: "text" as const, text: "ok" }], details: {} })),
 };
 
 type OutputPaddedComponent = Component & { setOutputPad(outputPad: number): void };
 
-/** Text lines without ANSI codes or trailing fill. Blank lines and full-width borders are skipped. */
 function renderLines(component: Component): string[] {
   return component
     .render(60)
     .map((line) => stripAnsi(line).trimEnd())
-    .filter((line) => /[\w$(]/.test(line));
+    .filter((line) => /[\w$(]/u.test(line));
 }
 
 function createTool(
@@ -44,7 +45,7 @@ function createTool(
     ui,
     "/",
   );
-  component.updateResult({ content: [{ type: "text", text: "ok" }], isError: false });
+  component.updateResult({ content: [{ type: "text" as const, text: "ok" }], isError: false });
   return component;
 }
 
@@ -76,7 +77,7 @@ const components: Array<{ name: string; create: (outputPad: number) => OutputPad
         "/",
       );
       component.updateResult({
-        content: [{ type: "text", text: "Could not find old text" }],
+        content: [{ type: "text" as const, text: "Could not find old text" }],
         isError: true,
       });
       return component;

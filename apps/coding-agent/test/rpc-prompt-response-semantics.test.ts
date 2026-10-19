@@ -99,7 +99,7 @@ async function createRuntimeHost(options: {
     `msa-rpc-prompt-${Date.now()}-${Math.random().toString(36).slice(2)}`,
   );
   mkdirSync(tempDir, { recursive: true });
-  // Memory stays out of these tests: recall would add a real embedding request and timing noise.
+
   writeFileSync(join(tempDir, "settings.json"), JSON.stringify({ memory: { enabled: false } }));
 
   const model = options.model ?? getModel("anthropic-api", "claude-sonnet-4-5");
@@ -141,7 +141,7 @@ async function createRuntimeHost(options: {
     cwd: tempDir,
     modelRuntime: getModelRuntime(modelRegistry),
     resourceLoader: createTestResourceLoader(
-      options.extensionsResult !== undefined ? { extensionsResult: options.extensionsResult } : {},
+      options.extensionsResult === undefined ? {} : { extensionsResult: options.extensionsResult },
     ),
   });
 
@@ -159,9 +159,7 @@ async function createRuntimeHost(options: {
     cleanup: async () => {
       try {
         await session.abort();
-      } catch {
-        // ignore test cleanup failures
-      }
+      } catch {}
       session.dispose();
       if (existsSync(tempDir)) {
         rmSync(tempDir, { recursive: true });
@@ -229,7 +227,6 @@ describe("RPC prompt response semantics", () => {
     }
   });
 
-  // #9098: a successful prompt may start an agent run or be consumed by an extension.
   it("emits one started response when prompt preflight succeeds", async () => {
     const { lineHandler, cleanup } = await startRpcMode({ withAuth: true, responseDelayMs: 0 });
 
@@ -330,7 +327,6 @@ describe("RPC prompt response semantics", () => {
     }
   });
 
-  // #9803: a handler can consume A while independently queueing B; report A's outcome.
   it.each(["steer", "follow_up"] as const)(
     "reports %s as handled even when an extension queues another message",
     async (type) => {

@@ -1,4 +1,6 @@
+import { awaited, runTest, abortController } from "@msa/testing";
 import { Container, Editor, setKeybindings, TuiMainScreen } from "@msa/tui";
+import { Effect } from "effect";
 import { beforeAll, describe, expect, it, vi } from "vite-plus/test";
 
 import { VirtualTerminal } from "../../../libs/tui/test/virtual-terminal.ts";
@@ -33,46 +35,55 @@ function createDialogs() {
 }
 
 describe("ExtensionDialogs", () => {
-  it("answers a select and puts the editor back", async () => {
-    const { dialogs, container, editor, setBlocked } = createDialogs();
-    const answer = dialogs.select("Pick", ["a", "b"]);
-    const selector = container.children[0];
-    expect(selector).toBeInstanceOf(ExtensionSelectorComponent);
-    expect(setBlocked).toHaveBeenLastCalledWith("extension-dialog", {
-      kind: "question",
-      message: "Pick",
-    });
+  it("answers a select and puts the editor back", () =>
+    runTest(
+      Effect.gen(function* () {
+        const { dialogs, container, editor, setBlocked } = createDialogs();
+        const answer = dialogs.select("Pick", ["a", "b"]);
+        const selector = container.children[0];
+        expect(selector).toBeInstanceOf(ExtensionSelectorComponent);
+        expect(setBlocked).toHaveBeenLastCalledWith("extension-dialog", {
+          kind: "question" as const,
+          message: "Pick",
+        });
 
-    selector!.handleInput!("j");
-    selector!.handleInput!("\r");
+        selector!.handleInput!("j");
+        selector!.handleInput!("\r");
 
-    await expect(answer).resolves.toBe("b");
-    expect(container.children).toEqual([editor]);
-    expect(setBlocked).toHaveBeenLastCalledWith("extension-dialog", undefined);
-  });
+        yield* awaited(expect(answer).resolves.toBe("b"));
+        expect(container.children).toEqual([editor]);
+        expect(setBlocked).toHaveBeenLastCalledWith("extension-dialog", undefined);
+      }),
+    ));
 
-  it("resolves undefined when the extension aborts the dialog", async () => {
-    const { dialogs, container, editor } = createDialogs();
-    const controller = new AbortController();
-    const answer = dialogs.input("Name", undefined, { signal: controller.signal });
-    expect(container.children[0]).toBeInstanceOf(ExtensionInputComponent);
+  it("resolves undefined when the extension aborts the dialog", () =>
+    runTest(
+      Effect.gen(function* () {
+        const { dialogs, container, editor } = createDialogs();
+        const controller = abortController();
+        const answer = dialogs.input("Name", undefined, { signal: controller.signal });
+        expect(container.children[0]).toBeInstanceOf(ExtensionInputComponent);
 
-    controller.abort();
+        controller.abort();
 
-    await expect(answer).resolves.toBeUndefined();
-    expect(container.children).toEqual([editor]);
-  });
+        yield* awaited(expect(answer).resolves.toBeUndefined());
+        expect(container.children).toEqual([editor]);
+      }),
+    ));
 
-  it("keeps a newer dialog open when a displaced one is aborted", async () => {
-    const { dialogs, container } = createDialogs();
-    const controller = new AbortController();
-    const displaced = dialogs.select("First", ["a"], { signal: controller.signal });
-    void dialogs.input("Second");
-    const current = container.children[0];
+  it("keeps a newer dialog open when a displaced one is aborted", () =>
+    runTest(
+      Effect.gen(function* () {
+        const { dialogs, container } = createDialogs();
+        const controller = abortController();
+        const displaced = dialogs.select("First", ["a"], { signal: controller.signal });
+        void dialogs.input("Second");
+        const current = container.children[0];
 
-    controller.abort();
+        controller.abort();
 
-    await expect(displaced).resolves.toBeUndefined();
-    expect(container.children).toEqual([current]);
-  });
+        yield* awaited(expect(displaced).resolves.toBeUndefined());
+        expect(container.children).toEqual([current]);
+      }),
+    ));
 });

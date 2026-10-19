@@ -1,18 +1,24 @@
-import { existsSync, mkdirSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-
 import type { Provider } from "@msa/ai";
 import { getModel } from "@msa/ai/compat";
+import {
+  awaited,
+  runTest,
+  currentTimeMillis,
+  randomSuffixSync,
+  joinPath,
+  pathExists,
+  makeDirectory,
+  removePath,
+  tempRoot,
+} from "@msa/testing";
+import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
 import { AuthStorage } from "../src/core/auth-storage.ts";
-import { ModelRuntime } from "../src/core/model-runtime.ts";
-import { DefaultResourceLoader } from "../src/core/resource-loader.ts";
 import type { ExtensionFactory } from "../src/core/sdk.ts";
-import { createAgentSession } from "../src/core/sdk.ts";
 import { SessionManager } from "../src/core/session-manager.ts";
 import { SettingsManager } from "../src/core/settings-manager.ts";
+import { createAgentSession, DefaultResourceLoader, ModelRuntime } from "../src/index.ts";
 
 function nativeAnthropicProvider(baseUrl: string): Provider {
   const model = { ...getModel("anthropic-api", "claude-sonnet-4-5")!, baseUrl };
@@ -23,7 +29,7 @@ function nativeAnthropicProvider(baseUrl: string): Provider {
     auth: {
       apiKey: {
         name: "Test API key",
-        resolve: async () => ({ auth: { apiKey: "test-key" }, source: "test" }),
+        resolve: () => runTest(awaited({ auth: { apiKey: "test-key" }, source: "test" })),
       },
     },
     getModels: () => [model],
@@ -40,145 +46,227 @@ describe("AgentSession dynamic provider registration", () => {
   let tempDir: string;
   let agentDir: string;
 
-  beforeEach(() => {
-    tempDir = join(
-      tmpdir(),
-      `msa-dynamic-provider-test-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+  beforeEach(() =>
+    runTest(
+      Effect.gen(function* () {
+        tempDir = joinPath(
+          tempRoot(),
+          `msa-dynamic-provider-test-${currentTimeMillis()}-${randomSuffixSync()}`,
+        );
+        agentDir = joinPath(tempDir, "agent");
+        yield* makeDirectory(agentDir);
+      }),
+    ),
+  );
+
+  afterEach(() =>
+    runTest(
+      Effect.gen(function* () {
+        if (tempDir.length > 0 && (yield* pathExists(tempDir))) {
+          yield* removePath(tempDir);
+        }
+      }),
+    ),
+  );
+
+  function createSession(extensionFactories: ExtensionFactory[]) {
+    return runTest(
+      Effect.gen(function* () {
+        const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
+        const settingsManager = SettingsManager.create(tempDir, agentDir);
+        const sessionManager = SessionManager.inMemory();
+        const authStorage = AuthStorage.create(joinPath(agentDir, "auth.json"));
+        yield* awaited(
+          authStorage.modify("anthropic-api", () =>
+            effectRunPromise(awaited({ type: "api_key" as const, key: "test-key" })),
+          ),
+        );
+        const modelRuntime = yield* awaited(
+          ModelRuntime.create({
+            credentials: authStorage,
+            modelsPath: joinPath(agentDir, "models.json"),
+          }),
+        );
+        const resourceLoader = new DefaultResourceLoader({
+          cwd: tempDir,
+          agentDir,
+          settingsManager,
+          extensionFactories,
+        });
+        yield* awaited(resourceLoader.reload());
+
+        const { session } = yield* awaited(
+          createAgentSession({
+            cwd: tempDir,
+            agentDir,
+            model: getModel("anthropic-api", "claude-sonnet-4-5")!,
+            settingsManager,
+            sessionManager,
+            modelRuntime,
+            resourceLoader,
+          }),
+        );
+
+        return yield* awaited(session);
+      }),
     );
-    agentDir = join(tempDir, "agent");
-    mkdirSync(agentDir, { recursive: true });
-  });
-
-  afterEach(() => {
-    if (tempDir && existsSync(tempDir)) {
-      rmSync(tempDir, { recursive: true, force: true });
-    }
-  });
-
-  async function createSession(extensionFactories: ExtensionFactory[]) {
-    const settingsManager = SettingsManager.create(tempDir, agentDir);
-    const sessionManager = SessionManager.inMemory();
-    const authStorage = AuthStorage.create(join(agentDir, "auth.json"));
-    await authStorage.modify("anthropic-api", async () => ({ type: "api_key", key: "test-key" }));
-    const modelRuntime = await ModelRuntime.create({
-      credentials: authStorage,
-      modelsPath: join(agentDir, "models.json"),
-    });
-    const resourceLoader = new DefaultResourceLoader({
-      cwd: tempDir,
-      agentDir,
-      settingsManager,
-      extensionFactories,
-    });
-    await resourceLoader.reload();
-
-    const { session } = await createAgentSession({
-      cwd: tempDir,
-      agentDir,
-      model: getModel("anthropic-api", "claude-sonnet-4-5")!,
-      settingsManager,
-      sessionManager,
-      modelRuntime,
-      resourceLoader,
-    });
-
-    return session;
   }
 
-  async function capturePromptBaseUrl(
+  function capturePromptBaseUrl(
     session: Awaited<ReturnType<typeof createSession>>,
   ): Promise<string | undefined> {
-    let baseUrl: string | undefined;
-    session.agent.streamFunction = async (model) => {
-      baseUrl = model.baseUrl;
-      throw new Error("stop");
-    };
-    await session.prompt("hello");
-    return baseUrl;
+    return runTest(
+      Effect.gen(function* () {
+        const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
+        let baseUrl: string | undefined;
+        session.agent.streamFunction = (model) =>
+          effectRunPromise(
+            Effect.sync(() => {
+              baseUrl = model.baseUrl;
+              throw new Error("stop");
+            }),
+          );
+        yield* awaited(session.prompt("hello"));
+        return yield* awaited(baseUrl);
+      }),
+    );
   }
 
-  it("applies top-level registerProvider overrides to the active model", async () => {
-    const session = await createSession([
-      (msa) => {
-        msa.registerProvider("anthropic-api", { baseUrl: "http://localhost:8080/top-level" });
-      },
-    ]);
+  it("applies top-level registerProvider overrides to the active model", () =>
+    runTest(
+      Effect.gen(function* () {
+        const session = yield* awaited(
+          createSession([
+            (msa) => {
+              msa.registerProvider("anthropic-api", { baseUrl: "http://localhost:8080/top-level" });
+            },
+          ]),
+        );
 
-    expect(session.model?.baseUrl).toBe("http://localhost:8080/top-level");
-    expect(await capturePromptBaseUrl(session)).toBe("http://localhost:8080/top-level");
+        expect(session.model?.baseUrl).toBe("http://localhost:8080/top-level");
+        expect(yield* awaited(capturePromptBaseUrl(session))).toBe(
+          "http://localhost:8080/top-level",
+        );
 
-    session.dispose();
-  });
+        session.dispose();
+      }),
+    ));
 
-  it("applies session_start registerProvider overrides to the active model", async () => {
-    const session = await createSession([
-      (msa) => {
-        msa.on("session_start", () => {
-          msa.registerProvider("anthropic-api", { baseUrl: "http://localhost:8080/session-start" });
-        });
-      },
-    ]);
+  it("applies session_start registerProvider overrides to the active model", () =>
+    runTest(
+      Effect.gen(function* () {
+        const session = yield* awaited(
+          createSession([
+            (msa) => {
+              msa.on("session_start", () => {
+                msa.registerProvider("anthropic-api", {
+                  baseUrl: "http://localhost:8080/session-start",
+                });
+              });
+            },
+          ]),
+        );
 
-    await session.bindExtensions({});
+        yield* awaited(session.bindExtensions({}));
 
-    expect(session.model?.baseUrl).toBe("http://localhost:8080/session-start");
-    expect(await capturePromptBaseUrl(session)).toBe("http://localhost:8080/session-start");
+        expect(session.model?.baseUrl).toBe("http://localhost:8080/session-start");
+        expect(yield* awaited(capturePromptBaseUrl(session))).toBe(
+          "http://localhost:8080/session-start",
+        );
 
-    session.dispose();
-  });
+        session.dispose();
+      }),
+    ));
 
-  it("registers native msa-ai providers during extension loading", async () => {
-    const session = await createSession([
-      (msa) => {
-        msa.registerProvider(nativeAnthropicProvider("http://localhost:8080/native-top-level"));
-      },
-    ]);
+  it("registers native msa-ai providers during extension loading", () =>
+    runTest(
+      Effect.gen(function* () {
+        const session = yield* awaited(
+          createSession([
+            (msa) => {
+              msa.registerProvider(
+                nativeAnthropicProvider("http://localhost:8080/native-top-level"),
+              );
+            },
+          ]),
+        );
 
-    expect(session.model?.baseUrl).toBe("http://localhost:8080/native-top-level");
-    expect(await capturePromptBaseUrl(session)).toBe("http://localhost:8080/native-top-level");
+        expect(session.model?.baseUrl).toBe("http://localhost:8080/native-top-level");
+        expect(yield* awaited(capturePromptBaseUrl(session))).toBe(
+          "http://localhost:8080/native-top-level",
+        );
 
-    session.dispose();
-  });
+        session.dispose();
+      }),
+    ));
 
-  it("applies command-time registerProvider overrides without reload", async () => {
-    const session = await createSession([
-      (msa) => {
-        msa.registerCommand("use-proxy", {
-          description: "Use proxy",
-          handler: async () => {
-            msa.registerProvider("anthropic-api", { baseUrl: "http://localhost:8080/command" });
-          },
-        });
-      },
-    ]);
+  it("applies command-time registerProvider overrides without reload", () =>
+    runTest(
+      Effect.gen(function* () {
+        const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-    await session.bindExtensions({});
-    await session.prompt("/use-proxy");
+        const session = yield* awaited(
+          createSession([
+            (msa) => {
+              msa.registerCommand("use-proxy", {
+                description: "Use proxy",
+                handler: () =>
+                  effectRunPromise(
+                    Effect.sync(() => {
+                      msa.registerProvider("anthropic-api", {
+                        baseUrl: "http://localhost:8080/command",
+                      });
+                    }),
+                  ),
+              });
+            },
+          ]),
+        );
 
-    expect(session.model?.baseUrl).toBe("http://localhost:8080/command");
-    expect(await capturePromptBaseUrl(session)).toBe("http://localhost:8080/command");
+        yield* awaited(session.bindExtensions({}));
+        yield* awaited(session.prompt("/use-proxy"));
 
-    session.dispose();
-  });
+        expect(session.model?.baseUrl).toBe("http://localhost:8080/command");
+        expect(yield* awaited(capturePromptBaseUrl(session))).toBe("http://localhost:8080/command");
 
-  it("registers native msa-ai providers at command time", async () => {
-    const session = await createSession([
-      (msa) => {
-        msa.registerCommand("use-native", {
-          description: "Use native provider",
-          handler: async () => {
-            msa.registerProvider(nativeAnthropicProvider("http://localhost:8080/native-command"));
-          },
-        });
-      },
-    ]);
+        session.dispose();
+      }),
+    ));
 
-    await session.bindExtensions({});
-    await session.prompt("/use-native");
+  it("registers native msa-ai providers at command time", () =>
+    runTest(
+      Effect.gen(function* () {
+        const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-    expect(session.model?.baseUrl).toBe("http://localhost:8080/native-command");
-    expect(await capturePromptBaseUrl(session)).toBe("http://localhost:8080/native-command");
+        const session = yield* awaited(
+          createSession([
+            (msa) => {
+              msa.registerCommand("use-native", {
+                description: "Use native provider",
+                handler: () =>
+                  effectRunPromise(
+                    Effect.sync(() => {
+                      msa.registerProvider(
+                        nativeAnthropicProvider("http://localhost:8080/native-command"),
+                      );
+                    }),
+                  ),
+              });
+            },
+          ]),
+        );
 
-    session.dispose();
-  });
+        yield* awaited(session.bindExtensions({}));
+        yield* awaited(session.prompt("/use-native"));
+
+        expect(session.model?.baseUrl).toBe("http://localhost:8080/native-command");
+        expect(yield* awaited(capturePromptBaseUrl(session))).toBe(
+          "http://localhost:8080/native-command",
+        );
+
+        session.dispose();
+      }),
+    ));
 });

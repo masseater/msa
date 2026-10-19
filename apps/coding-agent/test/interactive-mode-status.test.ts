@@ -1,7 +1,8 @@
 import { homedir } from "node:os";
-import * as path from "node:path";
 
+import { awaited, runTest, abortController, joinPath } from "@msa/testing";
 import { type AutocompleteProvider, CombinedAutocompleteProvider } from "@msa/tui";
+import { Effect } from "effect";
 import { beforeAll, describe, expect, test, vi } from "vite-plus/test";
 
 import { type Component, Container, type Focusable } from "../../../libs/tui/src/tui-component.ts";
@@ -19,7 +20,7 @@ import { initTheme } from "../src/modes/interactive/theme/theme.ts";
 
 function renderLastLine(container: Container, width = 120): string {
   const last = container.children[container.children.length - 1];
-  if (!last) return "";
+  if (!(last !== undefined)) return "";
   return last.render(width).join("\n");
 }
 
@@ -56,18 +57,22 @@ class TestFocusableComponent implements Component, Focusable {
   invalidate(): void {}
 }
 
-async function flushTui(tui: TUI, terminal: VirtualTerminal): Promise<void> {
-  tui.requestRender(true);
-  await Promise.resolve();
-  await terminal.waitForRender();
+function flushTui(tui: TUI, terminal: VirtualTerminal): Promise<void> {
+  return runTest(
+    Effect.gen(function* () {
+      tui.requestRender(true);
+      yield* awaited(Promise.resolve());
+      yield* awaited(terminal.waitForRender());
+    }),
+  );
 }
 
 function normalizeRenderedOutput(container: Container, width = 220): string {
   return renderAll(container, width)
-    .replace(/\u001b\[[0-9;]*m/g, "")
-    .replace(/\\/g, "/")
+    .replace(/\u001b\[[0-9;]*m/gu, "")
+    .replace(/\\/gu, "/")
     .split("\n")
-    .map((line) => line.replace(/\s+$/g, ""))
+    .map((line) => line.replace(/\s+$/gu, ""))
     .join("\n")
     .trim();
 }
@@ -79,7 +84,6 @@ type ExtensionFixture = {
 
 describe("InteractiveMode.showStatus", () => {
   beforeAll(() => {
-    // showStatus uses the global theme instance
     initTheme("dark");
   });
 
@@ -96,7 +100,7 @@ describe("InteractiveMode.showStatus", () => {
     expect(renderLastLine(fakeThis.chatContainer)).toContain("STATUS_ONE");
 
     (InteractiveMode as any).prototype.showStatus.call(fakeThis, "STATUS_TWO");
-    // second status updates the previous line instead of appending
+
     expect(fakeThis.chatContainer.children).toHaveLength(2);
     expect(renderLastLine(fakeThis.chatContainer)).toContain("STATUS_TWO");
     expect(renderLastLine(fakeThis.chatContainer)).not.toContain("STATUS_ONE");
@@ -113,12 +117,11 @@ describe("InteractiveMode.showStatus", () => {
     (InteractiveMode as any).prototype.showStatus.call(fakeThis, "STATUS_ONE");
     expect(fakeThis.chatContainer.children).toHaveLength(2);
 
-    // Something else gets added to the chat in between status updates
     fakeThis.chatContainer.addChild({ render: () => ["OTHER"], invalidate: () => {} });
     expect(fakeThis.chatContainer.children).toHaveLength(3);
 
     (InteractiveMode as any).prototype.showStatus.call(fakeThis, "STATUS_TWO");
-    // adds spacer + text
+
     expect(fakeThis.chatContainer.children).toHaveLength(5);
     expect(renderLastLine(fakeThis.chatContainer)).toContain("STATUS_TWO");
   });
@@ -137,9 +140,9 @@ describe("InteractiveMode.showManagedToolStatus", () => {
     };
     const showManagedToolStatus = (InteractiveMode as any).prototype.showManagedToolStatus;
 
-    showManagedToolStatus.call(fakeThis, { type: "info", message: "fd downloading" });
-    showManagedToolStatus.call(fakeThis, { type: "info", message: "rg downloading" });
-    showManagedToolStatus.call(fakeThis, { type: "warning", message: "rg failed" });
+    showManagedToolStatus.call(fakeThis, { type: "info" as const, message: "fd downloading" });
+    showManagedToolStatus.call(fakeThis, { type: "info" as const, message: "rg downloading" });
+    showManagedToolStatus.call(fakeThis, { type: "warning" as const, message: "rg failed" });
 
     expect(fakeThis.chatContainer.children).toHaveLength(4);
     expect(normalizeRenderedOutput(fakeThis.chatContainer)).toBe(
@@ -239,80 +242,85 @@ describe("InteractiveMode.showExtensionCustom", () => {
     initTheme("dark");
   });
 
-  test("overlay custom UI reclaims input after non-overlay custom UI closes", async () => {
-    const terminal = new VirtualTerminal(80, 24);
-    const ui: TUI = new TuiMainScreen(terminal);
-    const editorContainer = new Container();
-    const editor = new TestFocusableComponent("EDITOR");
-    const palette = new TestFocusableComponent("PALETTE");
-    const overlay = new TestFocusableComponent("OVERLAY");
-    const replacement = new TestFocusableComponent("REPLACEMENT");
-    let closeOverlay: (value: string) => void = () => {
-      throw new Error("closeOverlay was not initialized");
-    };
-    let closeReplacement: (value: string) => void = () => {
-      throw new Error("closeReplacement was not initialized");
-    };
-    const fakeThis = {
-      editor,
-      editorSlot: new EditorSlot(editorContainer, ui, () => editor),
-      keybindings: {},
-      ui,
-    };
-    const showExtensionCustom = <T>(
-      factory: (
-        tui: TUI,
-        theme: unknown,
-        keybindings: unknown,
-        done: (result: T) => void,
-      ) => Component,
-      options?: { overlay?: boolean },
-    ): Promise<T> =>
-      (InteractiveMode as any).prototype.showExtensionCustom.call(
-        fakeThis,
-        factory,
-        options,
-      ) as Promise<T>;
+  test("overlay custom UI reclaims input after non-overlay custom UI closes", () =>
+    runTest(
+      Effect.gen(function* () {
+        const terminal = new VirtualTerminal(80, 24);
+        const ui: TUI = new TuiMainScreen(terminal);
+        const editorContainer = new Container();
+        const editor = new TestFocusableComponent("EDITOR");
+        const palette = new TestFocusableComponent("PALETTE");
+        const overlay = new TestFocusableComponent("OVERLAY");
+        const replacement = new TestFocusableComponent("REPLACEMENT");
+        let closeOverlay: (value: string) => void = () => {
+          throw new Error("closeOverlay was not initialized");
+        };
+        let closeReplacement: (value: string) => void = () => {
+          throw new Error("closeReplacement was not initialized");
+        };
+        const fakeThis = {
+          editor,
+          editorSlot: new EditorSlot(editorContainer, ui, () => editor),
+          keybindings: {},
+          ui,
+        };
+        const showExtensionCustom = <T>(
+          factory: (
+            tui: TUI,
+            theme: unknown,
+            keybindings: unknown,
+            done: (result: T) => void,
+          ) => Component,
+          options?: { overlay?: boolean },
+        ): Promise<T> =>
+          (InteractiveMode as any).prototype.showExtensionCustom.call(
+            fakeThis,
+            factory,
+            options,
+          ) as Promise<T>;
 
-    editorContainer.addChild(editor);
-    ui.addChild(editorContainer);
-    ui.addChild(palette);
-    ui.setFocus(palette);
-    ui.start();
-    try {
-      const overlayPromise = showExtensionCustom<string>(
-        (_tui, _theme, _keybindings, done) => {
-          closeOverlay = done;
-          return overlay;
-        },
-        { overlay: true },
-      );
-      await flushTui(ui, terminal);
-      expect(overlay.focused).toBe(true);
+        editorContainer.addChild(editor);
+        ui.addChild(editorContainer);
+        ui.addChild(palette);
+        ui.setFocus(palette);
+        ui.start();
+        try {
+          const overlayPromise = showExtensionCustom<string>(
+            (_tui, _theme, _keybindings, done) => {
+              closeOverlay = done;
+              return overlay;
+            },
+            { overlay: true },
+          );
+          yield* awaited(flushTui(ui, terminal));
+          expect(overlay.focused).toBe(true);
 
-      const replacementPromise = showExtensionCustom<string>((_tui, _theme, _keybindings, done) => {
-        closeReplacement = done;
-        return replacement;
-      });
-      await flushTui(ui, terminal);
-      expect(replacement.focused).toBe(true);
+          const replacementPromise = showExtensionCustom<string>(
+            (_tui, _theme, _keybindings, done) => {
+              closeReplacement = done;
+              return replacement;
+            },
+          );
+          yield* awaited(flushTui(ui, terminal));
+          expect(replacement.focused).toBe(true);
 
-      closeReplacement("done");
-      await replacementPromise;
-      await flushTui(ui, terminal);
-      terminal.sendInput("x");
-      await flushTui(ui, terminal);
+          closeReplacement("done");
+          yield* awaited(replacementPromise);
+          yield* awaited(flushTui(ui, terminal));
+          terminal.sendInput("x");
+          yield* awaited(flushTui(ui, terminal));
 
-      expect(overlay.inputs).toEqual(["x"]);
-      expect(editor.inputs).toEqual([]);
-      expect(overlay.focused).toBe(true);
+          expect(overlay.inputs).toEqual(["x"]);
+          expect(editor.inputs).toEqual([]);
+          expect(overlay.focused).toBe(true);
 
-      closeOverlay("closed");
-      await overlayPromise;
-    } finally {
-      ui.stop();
-    }
-  });
+          closeOverlay("closed");
+          yield* awaited(overlayPromise);
+        } finally {
+          ui.stop();
+        }
+      }),
+    ));
 });
 
 describe("InteractiveMode.createExtensionUIContext addAutocompleteProvider", () => {
@@ -338,9 +346,13 @@ describe("InteractiveMode.setupAutocompleteProvider", () => {
     const calls: string[] = [];
 
     const wrap1: AutocompleteProviderFactory = (current): AutocompleteProvider => ({
-      async getSuggestions(lines, cursorLine, cursorCol, options) {
-        calls.push("getSuggestions:wrap1");
-        return current.getSuggestions(lines, cursorLine, cursorCol, options);
+      getSuggestions(lines, cursorLine, cursorCol, options) {
+        return runTest(
+          Effect.gen(function* () {
+            calls.push("getSuggestions:wrap1");
+            return yield* awaited(current.getSuggestions(lines, cursorLine, cursorCol, options));
+          }),
+        );
       },
       applyCompletion(lines, cursorLine, cursorCol, item, prefix) {
         calls.push("applyCompletion:wrap1");
@@ -352,9 +364,13 @@ describe("InteractiveMode.setupAutocompleteProvider", () => {
       },
     });
     const wrap2: AutocompleteProviderFactory = (current): AutocompleteProvider => ({
-      async getSuggestions(lines, cursorLine, cursorCol, options) {
-        calls.push("getSuggestions:wrap2");
-        return current.getSuggestions(lines, cursorLine, cursorCol, options);
+      getSuggestions(lines, cursorLine, cursorCol, options) {
+        return runTest(
+          Effect.gen(function* () {
+            calls.push("getSuggestions:wrap2");
+            return yield* awaited(current.getSuggestions(lines, cursorLine, cursorCol, options));
+          }),
+        );
       },
       applyCompletion(lines, cursorLine, cursorCol, item, prefix) {
         calls.push("applyCompletion:wrap2");
@@ -419,134 +435,142 @@ describe("InteractiveMode.setupAutocompleteProvider", () => {
 });
 
 describe("InteractiveMode.createBaseAutocompleteProvider", () => {
-  test("matches model command arguments across provider/model order", async () => {
-    type TestModel = { id: string; provider: string; name: string };
-    type FakeInteractiveMode = {
-      session: {
-        scopedModels: Array<{ model: TestModel }>;
-        modelRuntime: { getAvailableSnapshot: () => TestModel[] };
-        promptTemplates: [];
-        extensionRunner: { getRegisteredCommands: () => [] };
-        resourceLoader: { getSkills: () => { skills: [] } };
-        getExternalServices: () => [];
-      };
-      settingsManager: { getEnableSkillCommands: () => boolean };
-      skillCommands: Map<string, string>;
-      sessionManager: { getCwd: () => string };
-      fdPath: null;
-    };
-
-    const createBaseAutocompleteProvider = (
-      InteractiveMode as unknown as {
-        prototype: {
-          createBaseAutocompleteProvider(this: FakeInteractiveMode): AutocompleteProvider;
+  test("matches model command arguments across provider/model order", () =>
+    runTest(
+      Effect.gen(function* () {
+        type TestModel = { id: string; provider: string; name: string };
+        type FakeInteractiveMode = {
+          session: {
+            scopedModels: Array<{ model: TestModel }>;
+            modelRuntime: { getAvailableSnapshot: () => TestModel[] };
+            promptTemplates: [];
+            extensionRunner: { getRegisteredCommands: () => [] };
+            resourceLoader: { getSkills: () => { skills: [] } };
+            getExternalServices: () => [];
+          };
+          settingsManager: { getEnableSkillCommands: () => boolean };
+          skillCommands: Map<string, string>;
+          sessionManager: { getCwd: () => string };
+          fdPath: null;
         };
-      }
-    ).prototype.createBaseAutocompleteProvider;
-    const models = [
-      { id: "openai/gpt-5.2-codex", provider: "openrouter", name: "GPT-5.2 Codex" },
-      { id: "gpt-5.5", provider: "openai-codex", name: "GPT-5.5" },
-    ];
-    const fakeThis: FakeInteractiveMode = {
-      session: {
-        scopedModels: [],
-        modelRuntime: { getAvailableSnapshot: () => models },
-        promptTemplates: [],
-        extensionRunner: { getRegisteredCommands: () => [] },
-        resourceLoader: { getSkills: () => ({ skills: [] }) },
-        getExternalServices: () => [],
-      },
-      settingsManager: { getEnableSkillCommands: () => false },
-      skillCommands: new Map(),
-      sessionManager: { getCwd: () => "/tmp" },
-      fdPath: null,
-    };
 
-    const provider = createBaseAutocompleteProvider.call(fakeThis);
-    const line = "/model codexgpt";
-    const suggestions = await provider.getSuggestions([line], 0, line.length, {
-      signal: new AbortController().signal,
-    });
-
-    expect(suggestions?.items.map((item) => item.value)).toEqual([
-      "openai-codex/gpt-5.5",
-      "openrouter/openai/gpt-5.2-codex",
-    ]);
-  });
-
-  test("matches login command arguments by provider id and name", async () => {
-    type FakeInteractiveMode = {
-      session: {
-        scopedModels: [];
-        modelRuntime: { getAvailableSnapshot: () => [] };
-        promptTemplates: [];
-        extensionRunner: { getRegisteredCommands: () => [] };
-        resourceLoader: { getSkills: () => { skills: [] } };
-        getExternalServices: () => [];
-      };
-      settingsManager: { getEnableSkillCommands: () => boolean };
-      skillCommands: Map<string, string>;
-      sessionManager: { getCwd: () => string };
-      fdPath: null;
-      loginFlow: { getProviderOptions: () => AuthSelectorProvider[] };
-    };
-
-    const createBaseAutocompleteProvider = (
-      InteractiveMode as unknown as {
-        prototype: {
-          createBaseAutocompleteProvider(this: FakeInteractiveMode): AutocompleteProvider;
+        const createBaseAutocompleteProvider = (
+          InteractiveMode as unknown as {
+            prototype: {
+              createBaseAutocompleteProvider(this: FakeInteractiveMode): AutocompleteProvider;
+            };
+          }
+        ).prototype.createBaseAutocompleteProvider;
+        const models = [
+          { id: "openai/gpt-5.2-codex", provider: "openrouter", name: "GPT-5.2 Codex" },
+          { id: "gpt-5.5", provider: "openai-codex", name: "GPT-5.5" },
+        ];
+        const fakeThis: FakeInteractiveMode = {
+          session: {
+            scopedModels: [],
+            modelRuntime: { getAvailableSnapshot: () => models },
+            promptTemplates: [],
+            extensionRunner: { getRegisteredCommands: () => [] },
+            resourceLoader: { getSkills: () => ({ skills: [] }) },
+            getExternalServices: () => [],
+          },
+          settingsManager: { getEnableSkillCommands: () => false },
+          skillCommands: new Map(),
+          sessionManager: { getCwd: () => "/tmp" },
+          fdPath: null,
         };
-      }
-    ).prototype.createBaseAutocompleteProvider;
-    const fakeThis: FakeInteractiveMode = {
-      session: {
-        scopedModels: [],
-        modelRuntime: { getAvailableSnapshot: () => [] },
-        promptTemplates: [],
-        extensionRunner: { getRegisteredCommands: () => [] },
-        resourceLoader: { getSkills: () => ({ skills: [] }) },
-        getExternalServices: () => [],
-      },
-      settingsManager: { getEnableSkillCommands: () => false },
-      skillCommands: new Map(),
-      sessionManager: { getCwd: () => "/tmp" },
-      fdPath: null,
-      loginFlow: {
-        getProviderOptions: () => [
-          { id: "anthropic", name: "Anthropic", authType: "oauth", subscription: true },
-          { id: "anthropic", name: "Anthropic", authType: "api_key", subscription: true },
-          { id: "openai", name: "OpenAI", authType: "api_key" },
-          { id: "openrouter", name: "OpenRouter", authType: "oauth", subscription: false },
-        ],
-      },
-    };
 
-    const provider = createBaseAutocompleteProvider.call(fakeThis);
-    const line = "/login subscription anthrop";
-    const suggestions = await provider.getSuggestions([line], 0, line.length, {
-      signal: new AbortController().signal,
-    });
+        const provider = createBaseAutocompleteProvider.call(fakeThis);
+        const line = "/model codexgpt";
+        const suggestions = yield* awaited(
+          provider.getSuggestions([line], 0, line.length, {
+            signal: abortController().signal,
+          }),
+        );
 
-    expect(suggestions?.items).toEqual([
-      {
-        value: "anthropic",
-        label: "anthropic",
-        description: "Anthropic · subscription/API key",
-      },
-    ]);
+        expect(suggestions?.items.map((item) => item.value)).toEqual([
+          "openai-codex/gpt-5.5",
+          "openrouter/openai/gpt-5.2-codex",
+        ]);
+      }),
+    ));
 
-    // OAuth sign-in without a subscription, such as OpenRouter, is an account.
-    const openRouterLine = "/login openrouter";
-    const openRouterSuggestions = await provider.getSuggestions(
-      [openRouterLine],
-      0,
-      openRouterLine.length,
-      { signal: new AbortController().signal },
-    );
-    expect(openRouterSuggestions?.items).toEqual([
-      { value: "openrouter", label: "openrouter", description: "OpenRouter · account" },
-    ]);
-  });
+  test("matches login command arguments by provider id and name", () =>
+    runTest(
+      Effect.gen(function* () {
+        type FakeInteractiveMode = {
+          session: {
+            scopedModels: [];
+            modelRuntime: { getAvailableSnapshot: () => [] };
+            promptTemplates: [];
+            extensionRunner: { getRegisteredCommands: () => [] };
+            resourceLoader: { getSkills: () => { skills: [] } };
+            getExternalServices: () => [];
+          };
+          settingsManager: { getEnableSkillCommands: () => boolean };
+          skillCommands: Map<string, string>;
+          sessionManager: { getCwd: () => string };
+          fdPath: null;
+          loginFlow: { getProviderOptions: () => AuthSelectorProvider[] };
+        };
+
+        const createBaseAutocompleteProvider = (
+          InteractiveMode as unknown as {
+            prototype: {
+              createBaseAutocompleteProvider(this: FakeInteractiveMode): AutocompleteProvider;
+            };
+          }
+        ).prototype.createBaseAutocompleteProvider;
+        const fakeThis: FakeInteractiveMode = {
+          session: {
+            scopedModels: [],
+            modelRuntime: { getAvailableSnapshot: () => [] },
+            promptTemplates: [],
+            extensionRunner: { getRegisteredCommands: () => [] },
+            resourceLoader: { getSkills: () => ({ skills: [] }) },
+            getExternalServices: () => [],
+          },
+          settingsManager: { getEnableSkillCommands: () => false },
+          skillCommands: new Map(),
+          sessionManager: { getCwd: () => "/tmp" },
+          fdPath: null,
+          loginFlow: {
+            getProviderOptions: () => [
+              { id: "anthropic", name: "Anthropic", authType: "oauth", subscription: true },
+              { id: "anthropic", name: "Anthropic", authType: "api_key", subscription: true },
+              { id: "openai", name: "OpenAI", authType: "api_key" },
+              { id: "openrouter", name: "OpenRouter", authType: "oauth", subscription: false },
+            ],
+          },
+        };
+
+        const provider = createBaseAutocompleteProvider.call(fakeThis);
+        const line = "/login subscription anthrop";
+        const suggestions = yield* awaited(
+          provider.getSuggestions([line], 0, line.length, {
+            signal: abortController().signal,
+          }),
+        );
+
+        expect(suggestions?.items).toEqual([
+          {
+            value: "anthropic",
+            label: "anthropic",
+            description: "Anthropic · subscription/API key",
+          },
+        ]);
+
+        const openRouterLine = "/login openrouter";
+        const openRouterSuggestions = yield* awaited(
+          provider.getSuggestions([openRouterLine], 0, openRouterLine.length, {
+            signal: abortController().signal,
+          }),
+        );
+        expect(openRouterSuggestions?.items).toEqual([
+          { value: "openrouter", label: "openrouter", description: "OpenRouter · account" },
+        ]);
+      }),
+    ));
 });
 describe("InteractiveMode.showLoadedResources", () => {
   beforeAll(() => {
@@ -619,7 +643,7 @@ describe("InteractiveMode.showLoadedResources", () => {
       source: options.source,
       scope: options.scope,
       origin: options.origin,
-      ...(options.baseDir !== undefined ? { baseDir: options.baseDir } : {}),
+      ...(options.baseDir === undefined ? {} : { baseDir: options.baseDir }),
     };
   }
 
@@ -1170,13 +1194,13 @@ describe("InteractiveMode.showLoadedResources", () => {
 
   test("shows context paths relative to cwd while preserving full external paths", () => {
     const home = homedir();
-    const cwd = path.join(home, "Development", "msa-mono");
+    const cwd = joinPath(home, "Development", "msa-mono");
     const fakeThis = createShowLoadedResourcesThis({
       quietStartup: false,
       cwd,
       contextFiles: [
-        { path: path.join(home, ".msa", "agent", "AGENTS.md") },
-        { path: path.join(cwd, "AGENTS.md") },
+        { path: joinPath(home, ".msa", "agent", "AGENTS.md") },
+        { path: joinPath(cwd, "AGENTS.md") },
       ],
     });
 
@@ -1184,10 +1208,10 @@ describe("InteractiveMode.showLoadedResources", () => {
       force: false,
     });
 
-    const output = renderAll(fakeThis.loadedResourcesContainer).replace(/\\/g, "/");
+    const output = renderAll(fakeThis.loadedResourcesContainer).replace(/\\/gu, "/");
     expect(output).toContain("[Context]");
     expect(output).toContain("~/.msa/agent/AGENTS.md, AGENTS.md");
-    expect(output).not.toContain(`${cwd.replace(/\\/g, "/")}/AGENTS.md`);
+    expect(output).not.toContain(`${cwd.replace(/\\/gu, "/")}/AGENTS.md`);
   });
 
   test("shows system prompt context paths before project context files", () => {
@@ -1195,30 +1219,30 @@ describe("InteractiveMode.showLoadedResources", () => {
     const fakeThis = createShowLoadedResourcesThis({
       quietStartup: false,
       cwd,
-      systemPromptSource: { path: path.join(cwd, ".msa", "SYSTEM.md") },
-      appendSystemPromptSources: [{ path: path.join(cwd, ".msa", "APPEND_SYSTEM.md") }],
-      contextFiles: [{ path: path.join(cwd, "AGENTS.md") }],
+      systemPromptSource: { path: joinPath(cwd, ".msa", "SYSTEM.md") },
+      appendSystemPromptSources: [{ path: joinPath(cwd, ".msa", "APPEND_SYSTEM.md") }],
+      contextFiles: [{ path: joinPath(cwd, "AGENTS.md") }],
     });
 
     (InteractiveMode as any).prototype.showLoadedResources.call(fakeThis, {
       force: false,
     });
 
-    const output = renderAll(fakeThis.loadedResourcesContainer).replace(/\\/g, "/");
+    const output = renderAll(fakeThis.loadedResourcesContainer).replace(/\\/gu, "/");
     expect(output).toContain("[Context]");
     expect(output).toContain(".msa/SYSTEM.md, .msa/APPEND_SYSTEM.md, AGENTS.md");
   });
 
   test("shows full context paths when expanded", () => {
     const home = homedir();
-    const cwd = path.join(home, "Development", "msa-mono");
+    const cwd = joinPath(home, "Development", "msa-mono");
     const fakeThis = createShowLoadedResourcesThis({
       quietStartup: false,
       toolOutputExpanded: true,
       cwd,
       contextFiles: [
-        { path: path.join(home, ".msa", "agent", "AGENTS.md") },
-        { path: path.join(cwd, "AGENTS.md") },
+        { path: joinPath(home, ".msa", "agent", "AGENTS.md") },
+        { path: joinPath(cwd, "AGENTS.md") },
       ],
     });
 
@@ -1226,7 +1250,7 @@ describe("InteractiveMode.showLoadedResources", () => {
       force: false,
     });
 
-    const output = renderAll(fakeThis.loadedResourcesContainer).replace(/\\/g, "/");
+    const output = renderAll(fakeThis.loadedResourcesContainer).replace(/\\/gu, "/");
     expect(output).toContain("[Context]");
     expect(output).toContain("~/.msa/agent/AGENTS.md");
     expect(output).toContain("~/Development/msa-mono/AGENTS.md");
@@ -1271,7 +1295,7 @@ describe("InteractiveMode.showLoadedResources", () => {
     const fakeThis = createShowLoadedResourcesThis({
       quietStartup: true,
       skills: [{ filePath: "/tmp/skill/SKILL.md", name: "commit" }],
-      skillDiagnostics: [{ type: "warning", message: "duplicate skill name" }],
+      skillDiagnostics: [{ type: "warning" as const, message: "duplicate skill name" }],
     });
 
     (InteractiveMode as any).prototype.showLoadedResources.call(fakeThis, {

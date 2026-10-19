@@ -1,4 +1,6 @@
+import { awaited, runTest, abortController } from "@msa/testing";
 import { setKeybindings, type TUI } from "@msa/tui";
+import { Effect } from "effect";
 import { beforeAll, beforeEach, describe, expect, test, vi } from "vite-plus/test";
 
 import { KeybindingsManager } from "../src/core/keybindings.ts";
@@ -8,7 +10,7 @@ import { initTheme, theme } from "../src/modes/interactive/theme/theme.ts";
 import { stripAnsi } from "../src/utils/ansi.ts";
 
 const { copyToClipboard } = vi.hoisted(() => ({
-  copyToClipboard: vi.fn(async (_text: string) => {}),
+  copyToClipboard: vi.fn((_text: string) => runTest(Effect.sync(() => {}))),
 }));
 
 vi.mock("../src/utils/clipboard.ts", () => ({ copyToClipboard }));
@@ -33,16 +35,21 @@ describe("sign-in URL copy key", () => {
     copyToClipboard.mockClear();
   });
 
-  test("login dialog copies the auth URL instead of typing into the code input", async () => {
-    const dialog = new LoginDialogComponent(tui, "test", () => {});
-    dialog.showAuth(URL);
-    void dialog.showManualInput("Paste the code:");
-    expect(rendered(dialog)).toContain("ctrl+x to copy");
+  test("login dialog copies the auth URL instead of typing into the code input", () =>
+    runTest(
+      Effect.gen(function* () {
+        const dialog = new LoginDialogComponent(tui, "test", () => {});
+        dialog.showAuth(URL);
+        void dialog.showManualInput("Paste the code:");
+        expect(rendered(dialog)).toContain("ctrl+x to copy");
 
-    dialog.handleInput(CTRL_X);
-    await vi.waitFor(() => expect(rendered(dialog)).toContain("Copied URL to clipboard"));
-    expect(copyToClipboard).toHaveBeenCalledWith(URL);
-  });
+        dialog.handleInput(CTRL_X);
+        yield* awaited(
+          vi.waitFor(() => expect(rendered(dialog)).toContain("Copied URL to clipboard")),
+        );
+        expect(copyToClipboard).toHaveBeenCalledWith(URL);
+      }),
+    ));
 
   test("login dialog ignores the copy key without an auth URL", () => {
     const dialog = new LoginDialogComponent(tui, "test", () => {});
@@ -51,13 +58,18 @@ describe("sign-in URL copy key", () => {
     expect(copyToClipboard).not.toHaveBeenCalled();
   });
 
-  test("MCP sign-in screen copies the authorization URL", async () => {
-    const view = new McpManagerView(tui, theme, new KeybindingsManager());
-    void view.redirectUrl("Sign in to issues", URL, new AbortController().signal);
-    expect(rendered(view)).toContain("ctrl+x to copy");
+  test("MCP sign-in screen copies the authorization URL", () =>
+    runTest(
+      Effect.gen(function* () {
+        const view = new McpManagerView(tui, theme, new KeybindingsManager());
+        void view.redirectUrl("Sign in to issues", URL, abortController().signal);
+        expect(rendered(view)).toContain("ctrl+x to copy");
 
-    view.handleInput(CTRL_X);
-    await vi.waitFor(() => expect(rendered(view)).toContain("Copied URL to clipboard"));
-    expect(copyToClipboard).toHaveBeenCalledWith(URL);
-  });
+        view.handleInput(CTRL_X);
+        yield* awaited(
+          vi.waitFor(() => expect(rendered(view)).toContain("Copied URL to clipboard")),
+        );
+        expect(copyToClipboard).toHaveBeenCalledWith(URL);
+      }),
+    ));
 });

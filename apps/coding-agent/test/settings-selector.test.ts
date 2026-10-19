@@ -1,4 +1,6 @@
+import { awaited, runTest } from "@msa/testing";
 import { setKeybindings } from "@msa/tui";
+import { Effect } from "effect";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vite-plus/test";
 
 import { KeybindingsManager } from "../src/core/keybindings.ts";
@@ -58,7 +60,7 @@ describe("SettingsSelectorComponent", () => {
     expect(onScrollbarChange.mock.calls.flat()).toEqual(["always", "hidden", "auto"]);
     cycle("Fullscreen copy on select", 2);
     expect(onCopyOnSelectChange.mock.calls.flat()).toEqual([false, true]);
-    // #9758: custom values from settings.json stay in the cycle.
+
     cycle("Fullscreen wheel scrolling", 3);
     expect(onWheelScrollLinesChange.mock.calls.flat()).toEqual([10, "auto", 1]);
   });
@@ -82,7 +84,7 @@ describe("SettingsSelectorComponent", () => {
     list.handleInput("\r");
     let output = stripAnsi(list.render(120).join("\n"));
     expect(output).toMatch(
-      / {4}system +Theme created from your terminal's colors\n {4}automatic +Use separate themes/,
+      / {4}system +Theme created from your terminal's colors\n {4}automatic +Use separate themes/u,
     );
     expect(output).toContain("→ ✓ dark");
 
@@ -119,32 +121,37 @@ describe("SettingsSelectorComponent", () => {
     expect(output).toContain("→   other");
   });
 
-  it("keeps the configured per-model thinking level marked while browsing", async () => {
-    harness = await createHarness({
-      models: [{ id: "thinking-model", reasoning: true }],
-    });
-    const model = harness.getModel("thinking-model")!;
-    const modelKey = `${model.provider}/${model.id}`;
-    const config = {
-      defaultModel: modelKey,
-      availableDefaultModels: [model],
-      thinkingLevel: "high",
-      modelThinkingLevels: { [modelKey]: "medium" },
-    } as unknown as SettingsConfig;
-    const callbacks = { onCancel: () => {} } as unknown as SettingsCallbacks;
-    const list = new SettingsSelectorComponent(config, callbacks).getSettingsList();
+  it("keeps the configured per-model thinking level marked while browsing", () =>
+    runTest(
+      Effect.gen(function* () {
+        harness = yield* awaited(
+          createHarness({
+            models: [{ id: "thinking-model", reasoning: true }],
+          }),
+        );
+        const model = harness.getModel("thinking-model")!;
+        const modelKey = `${model.provider}/${model.id}`;
+        const config = {
+          defaultModel: modelKey,
+          availableDefaultModels: [model],
+          thinkingLevel: "high",
+          modelThinkingLevels: { [modelKey]: "medium" },
+        } as unknown as SettingsConfig;
+        const callbacks = { onCancel: () => {} } as unknown as SettingsCallbacks;
+        const list = new SettingsSelectorComponent(config, callbacks).getSettingsList();
 
-    list.selectItem("model-thinking");
-    list.handleInput("\r");
-    list.handleInput("\r");
+        list.selectItem("model-thinking");
+        list.handleInput("\r");
+        list.handleInput("\r");
 
-    let output = stripAnsi(list.render(120).join("\n"));
-    expect(output).toContain("→ ✓ medium");
-    expect(output).toContain("    (clear override)");
+        let output = stripAnsi(list.render(120).join("\n"));
+        expect(output).toContain("→ ✓ medium");
+        expect(output).toContain("    (clear override)");
 
-    list.handleInput("\x1b[B");
-    output = stripAnsi(list.render(120).join("\n"));
-    expect(output).toContain("  ✓ medium");
-    expect(output).toContain("→   high");
-  });
+        list.handleInput("\x1b[B");
+        output = stripAnsi(list.render(120).join("\n"));
+        expect(output).toContain("  ✓ medium");
+        expect(output).toContain("→   high");
+      }),
+    ));
 });

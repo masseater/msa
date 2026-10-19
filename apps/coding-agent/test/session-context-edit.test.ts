@@ -1,4 +1,5 @@
 import type { AssistantMessage, ToolResultMessage } from "@msa/ai";
+import { currentTimeMillis } from "@msa/testing";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
@@ -11,8 +12,8 @@ import { SessionManager } from "../src/core/session-manager.ts";
 function assistant(text: string): AssistantMessage {
   return {
     role: "assistant",
-    content: [{ type: "text", text }],
-    api: "faux",
+    content: [{ type: "text" as const, text }],
+    api: "faux" as const,
     provider: "faux",
     model: "faux",
     usage: {
@@ -24,7 +25,7 @@ function assistant(text: string): AssistantMessage {
       cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
     },
     stopReason: "stop",
-    timestamp: Date.now(),
+    timestamp: currentTimeMillis(),
   };
 }
 
@@ -37,16 +38,16 @@ function text(message: { content: string | Array<{ type: string; text?: string }
 describe("session context edits", () => {
   it("omits a target only from model projection", () => {
     const session = SessionManager.inMemory();
-    session.appendMessage({ role: "user", content: "request", timestamp: Date.now() });
+    session.appendMessage({ role: "user", content: "request", timestamp: currentTimeMillis() });
     const assistantId = session.appendMessage(assistant("partial"));
     const result: ToolResultMessage = {
       role: "toolResult",
       toolCallId: "call-1",
       toolName: "read",
-      content: [{ type: "text", text: "raw output" }],
+      content: [{ type: "text" as const, text: "raw output" }],
       details: { path: "large.txt" },
       isError: true,
-      timestamp: Date.now(),
+      timestamp: currentTimeMillis(),
     };
     const resultId = session.appendMessage(result);
     session.appendContextEdit(assistantId, null);
@@ -62,9 +63,9 @@ describe("session context edits", () => {
   it("replaces only content and lets the latest edit win", () => {
     const session = SessionManager.inMemory();
     const targetId = session.appendMessage(assistant("original"));
-    session.appendContextEdit(targetId, { content: [{ type: "text", text: "first" }] });
+    session.appendContextEdit(targetId, { content: [{ type: "text" as const, text: "first" }] });
     session.appendContextEdit(targetId, null);
-    session.appendContextEdit(targetId, { content: [{ type: "text", text: "restored" }] });
+    session.appendContextEdit(targetId, { content: [{ type: "text" as const, text: "restored" }] });
 
     const projected = session.buildSessionProjection().messages[0];
     expect(projected?.role).toBe("assistant");
@@ -83,9 +84,9 @@ describe("session context edits", () => {
       role: "toolResult",
       toolCallId: "call-1",
       toolName: "read",
-      content: [{ type: "text", text: "original result" }],
+      content: [{ type: "text" as const, text: "original result" }],
       isError: false,
-      timestamp: Date.now(),
+      timestamp: currentTimeMillis(),
     });
     const assistantEditId = session.appendContextEdit(assistantId, {
       content: "assistant replacement",
@@ -93,19 +94,19 @@ describe("session context edits", () => {
     const resultEditId = session.appendContextEdit(resultId, { content: "result replacement" });
 
     expect(session.getEntry(assistantEditId)).toMatchObject({
-      replacement: { content: [{ type: "text", text: "assistant replacement" }] },
+      replacement: { content: [{ type: "text" as const, text: "assistant replacement" }] },
     });
     expect(session.getEntry(resultEditId)).toMatchObject({
-      replacement: { content: [{ type: "text", text: "result replacement" }] },
+      replacement: { content: [{ type: "text" as const, text: "result replacement" }] },
     });
     const projected = session.buildSessionProjection().messages;
     expect(projected[0]).toMatchObject({
       role: "assistant",
-      content: [{ type: "text", text: "assistant replacement" }],
+      content: [{ type: "text" as const, text: "assistant replacement" }],
     });
     expect(projected[1]).toMatchObject({
       role: "toolResult",
-      content: [{ type: "text", text: "result replacement" }],
+      content: [{ type: "text" as const, text: "result replacement" }],
     });
   });
 
@@ -119,7 +120,7 @@ describe("session context edits", () => {
 
     expect(session.buildSessionProjection().messages[0]).toMatchObject({
       role: "assistant",
-      content: [{ type: "text", text: "imported replacement" }],
+      content: [{ type: "text" as const, text: "imported replacement" }],
     });
   });
 
@@ -128,7 +129,7 @@ describe("session context edits", () => {
     const targetId = session.appendMessage({
       role: "user",
       content: "original",
-      timestamp: Date.now(),
+      timestamp: currentTimeMillis(),
     });
     session.appendContextEdit(targetId, { content: "edited" });
     expect(text(session.buildSessionProjection().messages[0] as { content: string })).toBe(
@@ -143,12 +144,15 @@ describe("session context edits", () => {
 
   it("uses a self-referencing compaction to retain no preceding entries", () => {
     const session = SessionManager.inMemory();
-    session.appendMessage({ role: "user", content: "discarded", timestamp: Date.now() });
+    session.appendMessage({ role: "user", content: "discarded", timestamp: currentTimeMillis() });
     const compactionId = session.appendCompaction("exact handoff", null, 100);
-    session.appendMessage({ role: "user", content: "after", timestamp: Date.now() });
+    session.appendMessage({ role: "user", content: "after", timestamp: currentTimeMillis() });
 
     const compaction = session.getEntry(compactionId);
-    expect(compaction).toMatchObject({ type: "compaction", firstKeptEntryId: compactionId });
+    expect(compaction).toMatchObject({
+      type: "compaction" as const,
+      firstKeptEntryId: compactionId,
+    });
     expect(session.buildSessionProjection().messages.map((message) => message.role)).toEqual([
       "compactionSummary",
       "user",
@@ -164,11 +168,11 @@ describe("session context edits", () => {
 
   it("applies post-compaction edits to retained pre-compaction entries", () => {
     const session = SessionManager.inMemory();
-    session.appendMessage({ role: "user", content: "summarized", timestamp: Date.now() });
+    session.appendMessage({ role: "user", content: "summarized", timestamp: currentTimeMillis() });
     const retainedId = session.appendMessage({
       role: "user",
       content: "original retained",
-      timestamp: Date.now(),
+      timestamp: currentTimeMillis(),
     });
     session.appendCompaction("summary", retainedId, 100);
     session.appendContextEdit(retainedId, { content: "edited retained" });
@@ -184,11 +188,15 @@ describe("session context edits", () => {
 
   it("uses only the newest summary when a repeated compaction retains entries before the older compaction", () => {
     const session = SessionManager.inMemory();
-    session.appendMessage({ role: "user", content: "summarized first", timestamp: Date.now() });
+    session.appendMessage({
+      role: "user",
+      content: "summarized first",
+      timestamp: currentTimeMillis(),
+    });
     const retainedId = session.appendMessage({
       role: "user",
       content: "retained",
-      timestamp: Date.now(),
+      timestamp: currentTimeMillis(),
     });
     session.appendCompaction("first summary", retainedId, 100);
     session.appendMessage(assistant("after first compaction"));
@@ -196,7 +204,7 @@ describe("session context edits", () => {
     session.appendMessage({
       role: "user",
       content: "new tail ".repeat(100),
-      timestamp: Date.now(),
+      timestamp: currentTimeMillis(),
     });
 
     const summaries = session
@@ -212,9 +220,13 @@ describe("session context edits", () => {
 
   it("supports repeated retain-none compactions", () => {
     const session = SessionManager.inMemory();
-    session.appendMessage({ role: "user", content: "discarded", timestamp: Date.now() });
+    session.appendMessage({ role: "user", content: "discarded", timestamp: currentTimeMillis() });
     session.appendCompaction("first handoff", null, 100);
-    session.appendMessage({ role: "user", content: "also discarded", timestamp: Date.now() });
+    session.appendMessage({
+      role: "user",
+      content: "also discarded",
+      timestamp: currentTimeMillis(),
+    });
     const secondId = session.appendCompaction("second handoff", null, 50);
 
     expect(session.getEntry(secondId)).toMatchObject({ firstKeptEntryId: secondId });
@@ -230,7 +242,7 @@ describe("session context edits", () => {
     const largeUserId = session.appendMessage({
       role: "user",
       content: "discarded input ".repeat(2_000),
-      timestamp: Date.now(),
+      timestamp: currentTimeMillis(),
     });
     const response = assistant("small answer");
     response.usage = { ...response.usage, input: 10_000, totalTokens: 10_001 };
@@ -255,13 +267,13 @@ describe("session context edits", () => {
     const userId = session.appendMessage({
       role: "user",
       content: "original",
-      timestamp: Date.now(),
+      timestamp: currentTimeMillis(),
     });
     session.appendContextEdit(userId, { content: "edited" });
     const response = assistant("answer");
     response.usage = { ...response.usage, input: 4_000, output: 100, totalTokens: 4_100 };
     session.appendMessage(response);
-    session.appendMessage({ role: "user", content: "next", timestamp: Date.now() });
+    session.appendMessage({ role: "user", content: "next", timestamp: currentTimeMillis() });
 
     const estimate = estimateProjectedContextTokens(
       session.buildSessionProjection(),
@@ -277,7 +289,7 @@ describe("session context edits", () => {
     const userId = session.appendMessage({
       role: "user",
       content: "small input",
-      timestamp: Date.now(),
+      timestamp: currentTimeMillis(),
     });
     session.appendContextEdit(userId, { content: "edited input" });
     const response = assistant("answer");
@@ -302,12 +314,16 @@ describe("session context edits", () => {
         {
           name: "example",
           description: "tool declaration ".repeat(100),
-          parameters: { type: "object", properties: {} },
+          parameters: { type: "object" as const, properties: {} },
         },
       ],
-      timestamp: Date.now(),
+      timestamp: currentTimeMillis(),
     });
-    const userId = session.appendMessage({ role: "user", content: "ask", timestamp: Date.now() });
+    const userId = session.appendMessage({
+      role: "user",
+      content: "ask",
+      timestamp: currentTimeMillis(),
+    });
     session.appendMessage(assistant("done"));
     session.appendContextEdit(userId, { content: "ask" });
 
@@ -318,12 +334,12 @@ describe("session context edits", () => {
 
   it("does not advance past a boundary replacement of the candidate input", () => {
     const session = SessionManager.inMemory();
-    session.appendMessage({ role: "user", content: "old request", timestamp: Date.now() });
+    session.appendMessage({ role: "user", content: "old request", timestamp: currentTimeMillis() });
     session.appendMessage(assistant("old answer"));
     const replacedUserId = session.appendMessage({
       role: "user",
       content: "original input",
-      timestamp: Date.now(),
+      timestamp: currentTimeMillis(),
     });
     const assistantId = session.appendMessage(assistant("answered original input"));
     session.appendContextEdit(replacedUserId, { content: "NEW-INSTRUCTION ".repeat(100) });
@@ -341,7 +357,7 @@ describe("session context edits", () => {
 
   it("does not let metadata move the cut past unsent boundary input", () => {
     const session = SessionManager.inMemory();
-    session.appendMessage({ role: "user", content: "old request", timestamp: Date.now() });
+    session.appendMessage({ role: "user", content: "old request", timestamp: currentTimeMillis() });
     session.appendMessage(assistant("old answer"));
     const instructionId = session.appendCustomMessageEntry(
       "next-work",
@@ -364,7 +380,7 @@ describe("session context edits", () => {
     session.appendMessage({
       role: "user",
       content: "unanswered input ".repeat(100),
-      timestamp: Date.now(),
+      timestamp: currentTimeMillis(),
     });
     const customId = session.appendCustomMessageEntry("temporary", "temporary context", false);
     session.appendContextEdit(customId, null);
@@ -381,7 +397,7 @@ describe("session context edits", () => {
     const userId = session.appendMessage({
       role: "user",
       content: "recovery input ".repeat(100),
-      timestamp: Date.now(),
+      timestamp: currentTimeMillis(),
     });
     const attemptId = session.appendMessage(assistant("failed attempt"));
     session.appendContextEdit(attemptId, null);
@@ -406,11 +422,11 @@ describe("session context edits", () => {
     const omittedId = session.appendMessage({
       role: "user",
       content: "OMIT-ME ".repeat(100),
-      timestamp: Date.now(),
+      timestamp: currentTimeMillis(),
     });
     session.appendMessage(assistant("old answer ".repeat(100)));
     session.appendContextEdit(omittedId, null);
-    session.appendMessage({ role: "user", content: "keep", timestamp: Date.now() });
+    session.appendMessage({ role: "user", content: "keep", timestamp: currentTimeMillis() });
     session.appendMessage(assistant("suffix"));
 
     const preparation = prepareCompaction(session.getBranch(), {

@@ -1,4 +1,6 @@
+import { awaited, runTest } from "@msa/testing";
 import { resetCapabilitiesCache, setCapabilities } from "@msa/tui";
+import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
 import {
@@ -40,12 +42,15 @@ const eagerLanguagesLoadedAtStartup = eagerLanguages.every(supportsLanguage);
 const uncommonLanguageLoadedAtStartup = supportsLanguage("ada");
 
 describe("syntax highlight renderer", () => {
-  it("loads the twenty most common languages at startup and defers the rest", async () => {
-    expect(eagerLanguagesLoadedAtStartup).toBe(true);
-    expect(uncommonLanguageLoadedAtStartup).toBe(false);
-    await loadAllHighlightLanguages();
-    expect(supportsLanguage("ada")).toBe(true);
-  });
+  it("loads the twenty most common languages at startup and defers the rest", () =>
+    runTest(
+      Effect.gen(function* () {
+        expect(eagerLanguagesLoadedAtStartup).toBe(true);
+        expect(uncommonLanguageLoadedAtStartup).toBe(false);
+        yield* awaited(loadAllHighlightLanguages());
+        expect(supportsLanguage("ada")).toBe(true);
+      }),
+    ));
 
   it("renders highlighted spans with the provided theme", () => {
     const rendered = renderHighlightedHtml('<span class="hljs-keyword">const</span> value', {
@@ -107,7 +112,6 @@ describe("theme syntax highlighting", () => {
     resetCapabilitiesCache();
   });
 
-  // #10143
   it("colors each line of Python docstrings independently", () => {
     const code = '"""\nline one\n\nline two\n"""\nafter';
     const ansi = theme.getFgAnsi("syntaxString");
