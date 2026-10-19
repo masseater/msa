@@ -12,11 +12,14 @@ import {
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
-import { AgentSession, type AgentSessionEvent } from "../src/core/agent-session.ts";
 import { AuthStorage } from "../src/core/auth-storage.ts";
-import { SessionManager } from "../src/core/session-manager.ts";
-import { SettingsManager } from "../src/core/settings-manager.ts";
-import { createCodingTools } from "../src/index.ts";
+import {
+  AgentSession,
+  type AgentSessionEvent,
+  createCodingTools,
+  SessionManager,
+  SettingsManager,
+} from "../src/index.ts";
 import { createModelRegistry, getModelRuntime } from "./model-runtime-test-utils.ts";
 import { API_KEY, createTestResourceLoader } from "./utilities.ts";
 
