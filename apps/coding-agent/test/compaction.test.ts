@@ -1,9 +1,14 @@
-import { readFileSync } from "fs";
-
 import type { AgentMessage } from "@msa/agent-core";
 import type { AssistantMessage, Usage } from "@msa/ai/compat";
 import { getModel } from "@msa/ai/compat";
-import { awaited, runTest, currentTimeMillis, currentDate, joinPath } from "@msa/testing";
+import {
+  awaited,
+  currentDate,
+  currentTimeMillis,
+  joinPath,
+  readTextFile,
+  runTest,
+} from "@msa/testing";
 import { Effect } from "effect";
 import { beforeEach, describe, expect, it } from "vite-plus/test";
 
@@ -31,13 +36,13 @@ import {
   type ThinkingLevelChangeEntry,
 } from "../src/core/session-manager.ts";
 
-function loadLargeSessionEntries(): SessionEntry[] {
+const loadLargeSessionEntries: Effect.Effect<SessionEntry[]> = Effect.gen(function* () {
   const sessionPath = joinPath(__dirname, "fixtures/large-session.jsonl");
-  const content = readFileSync(sessionPath, "utf-8");
+  const content = yield* readTextFile(sessionPath);
   const entries = parseSessionEntries(content);
   migrateSessionEntries(entries);
   return entries.filter((e): e is SessionEntry => e.type !== "session");
-}
+});
 
 function createMockUsage(input: number, output: number, cacheRead = 0, cacheWrite = 0): Usage {
   return {
@@ -570,35 +575,41 @@ describe("prepareCompaction with previous compaction", () => {
 });
 
 describe("Large session fixture", () => {
-  it("should parse the large session", () => {
-    const entries = loadLargeSessionEntries();
-    expect(entries.length).toBeGreaterThan(100);
+  it("should parse the large session", () =>
+    runTest(
+      Effect.gen(function* () {
+        const entries = yield* loadLargeSessionEntries;
+        expect(entries.length).toBeGreaterThan(100);
+        const messageCount = entries.filter((e) => e.type === "message").length;
+        expect(messageCount).toBeGreaterThan(100);
+      }),
+    ));
 
-    const messageCount = entries.filter((e) => e.type === "message").length;
-    expect(messageCount).toBeGreaterThan(100);
-  });
+  it("should find cut point in large session", () =>
+    runTest(
+      Effect.gen(function* () {
+        const entries = yield* loadLargeSessionEntries;
+        const result = findCutPoint(
+          entries,
+          0,
+          entries.length,
+          DEFAULT_COMPACTION_SETTINGS.keepRecentTokens,
+        );
+        expect(entries[result.firstKeptEntryIndex]?.type).toBe("message");
+        const role = (entries[result.firstKeptEntryIndex] as SessionMessageEntry).message.role;
+        expect(role === "user" || role === "assistant").toBe(true);
+      }),
+    ));
 
-  it("should find cut point in large session", () => {
-    const entries = loadLargeSessionEntries();
-    const result = findCutPoint(
-      entries,
-      0,
-      entries.length,
-      DEFAULT_COMPACTION_SETTINGS.keepRecentTokens,
-    );
-
-    expect(entries[result.firstKeptEntryIndex]?.type).toBe("message");
-    const role = (entries[result.firstKeptEntryIndex] as SessionMessageEntry).message.role;
-    expect(role === "user" || role === "assistant").toBe(true);
-  });
-
-  it("should load session correctly", () => {
-    const entries = loadLargeSessionEntries();
-    const loaded = buildSessionContext(entries);
-
-    expect(loaded.messages.length).toBeGreaterThan(100);
-    expect(loaded.model).not.toBeNull();
-  });
+  it("should load session correctly", () =>
+    runTest(
+      Effect.gen(function* () {
+        const entries = yield* loadLargeSessionEntries;
+        const loaded = buildSessionContext(entries);
+        expect(loaded.messages.length).toBeGreaterThan(100);
+        expect(loaded.model).not.toBeNull();
+      }),
+    ));
 });
 
 describe.skipIf((readEnv("ANTHROPIC_OAUTH_TOKEN")?.length ?? 0) === 0)("LLM summarization", () => {
@@ -607,7 +618,7 @@ describe.skipIf((readEnv("ANTHROPIC_OAUTH_TOKEN")?.length ?? 0) === 0)("LLM summ
     () =>
       runTest(
         Effect.gen(function* () {
-          const entries = loadLargeSessionEntries();
+          const entries = yield* loadLargeSessionEntries;
           const model = getModel("anthropic", "claude-sonnet-4-5")!;
 
           const preparation = prepareCompaction(entries, DEFAULT_COMPACTION_SETTINGS);
@@ -636,7 +647,7 @@ describe.skipIf((readEnv("ANTHROPIC_OAUTH_TOKEN")?.length ?? 0) === 0)("LLM summ
     () =>
       runTest(
         Effect.gen(function* () {
-          const entries = loadLargeSessionEntries();
+          const entries = yield* loadLargeSessionEntries;
           const loaded = buildSessionContext(entries);
           const model = getModel("anthropic", "claude-sonnet-4-5")!;
 
