@@ -65,6 +65,7 @@ export const workspaceSourcePaths = {
   codemodeSource: fileURLToPath(new URL("./libs/codemode/src/source.ts", import.meta.url)),
   codingAgentIndex: fileURLToPath(new URL("./apps/coding-agent/src/index.ts", import.meta.url)),
   tuiIndex: fileURLToPath(new URL("./libs/tui/src/index.ts", import.meta.url)),
+  testingIndex: fileURLToPath(new URL("./libs/testing/src/index.ts", import.meta.url)),
 } as const;
 
 export const onGitHubActions = Effect.runSync(
@@ -119,6 +120,7 @@ export const testBaseConfig = {
         replacement: workspaceSourcePaths.codemodeSource,
       },
       { find: /^@msa\/tui$/u, replacement: workspaceSourcePaths.tuiIndex },
+      { find: /^@msa\/testing$/u, replacement: workspaceSourcePaths.testingIndex },
     ],
   },
 };

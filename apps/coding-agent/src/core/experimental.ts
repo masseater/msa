@@ -1,3 +1,5 @@
+import { readEnv } from "./process-env.ts";
+
 export function areExperimentalFeaturesEnabled(): boolean {
-  return process.env["MSA_EXPERIMENTAL"] === "1";
+  return readEnv("MSA_EXPERIMENTAL") === "1";
 }

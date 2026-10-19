@@ -8,6 +8,7 @@ import { CONFIG_DIR_NAME } from "../config.ts";
 import { toErrorMessage } from "../utils/errors.ts";
 import { canonicalizePath, resolvePath } from "../utils/paths.ts";
 import { stripBom } from "../utils/text.ts";
+import { readEnv } from "./process-env.ts";
 
 export type ProjectTrustDecision = boolean | null;
 
@@ -197,7 +198,7 @@ function withTrustFileLock<T>(path: string, fn: () => T): T {
  * trusted user resource and is ignored here, even when cwd is $HOME.
  */
 export function hasTrustRequiringProjectResources(cwd: string): boolean {
-  const homeDir = canonicalizePath(resolvePath(process.env["HOME"] || homedir()));
+  const homeDir = canonicalizePath(resolvePath(readEnv("HOME") || homedir()));
   const userAgentsSkillsDir = join(homeDir, ".agents", "skills");
   let currentDir = canonicalizePath(resolvePath(cwd));
 

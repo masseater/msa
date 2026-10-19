@@ -11,6 +11,7 @@ import { join } from "node:path";
 import type { Provider } from "@msa/ai";
 import { getBuiltinModels } from "@msa/ai/providers/all";
 
+import { envSnapshot, readEnv } from "../process-env.ts";
 import { cliAgentProvider } from "./provider.ts";
 import { streamViaCli, type CliBackend } from "./run.ts";
 import { flattenTranscript } from "./transcript.ts";
@@ -18,7 +19,7 @@ import { flattenTranscript } from "./transcript.ts";
 const PROVIDER_ID = "opencode-free";
 
 function openCodeExecutable(): string {
-  return process.env["OPENCODE_BIN"]?.trim() || join(homedir(), ".opencode", "bin", "opencode");
+  return readEnv("OPENCODE_BIN")?.trim() || join(homedir(), ".opencode", "bin", "opencode");
 }
 
 /** OpenCode Zen's zero-cost chat models from the bundled models.dev catalog. */
@@ -85,9 +86,9 @@ const backend: CliBackend<OpenCodeEvent> = {
       ],
       stdin: buildPrompt(context.messages, cwd),
       env: {
-        ...process.env,
+        ...envSnapshot(),
         XDG_DATA_HOME:
-          process.env["OPENCODE_FREE_DATA_HOME"]?.trim() ||
+          readEnv("OPENCODE_FREE_DATA_HOME")?.trim() ||
           join(homedir(), ".local", "share", "msa-opencode-free"),
       },
     };

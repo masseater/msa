@@ -5,6 +5,7 @@ import { join } from "path";
 
 import { getNativeClipboard } from "@msa/tui";
 
+import { envSnapshot } from "../core/process-env.ts";
 import { runClipboardCommand } from "./clipboard-command.ts";
 import { detectSupportedImageMimeType } from "./mime.ts";
 import { loadPhoton } from "./photon.ts";
@@ -21,7 +22,7 @@ const DEFAULT_LIST_TIMEOUT_MS = 1000;
 const DEFAULT_POWERSHELL_TIMEOUT_MS = 5000;
 const IMAGE_COMMAND_TIMEOUT_MS = 20_000;
 
-export function isWaylandSession(env: NodeJS.ProcessEnv = process.env): boolean {
+export function isWaylandSession(env: NodeJS.ProcessEnv = envSnapshot()): boolean {
   return Boolean(env["WAYLAND_DISPLAY"]) || env["XDG_SESSION_TYPE"] === "wayland";
 }
 
@@ -244,7 +245,7 @@ export async function readClipboardImage(options?: {
   env?: NodeJS.ProcessEnv;
   platform?: NodeJS.Platform;
 }): Promise<ClipboardImage | null> {
-  const env = options?.env ?? process.env;
+  const env = options?.env ?? envSnapshot();
   const platform = options?.platform ?? process.platform;
 
   if (env["TERMUX_VERSION"]) {

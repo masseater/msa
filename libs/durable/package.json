@@ -162,6 +162,7 @@
   },
   "devDependencies": {
     "@effect/vitest": "catalog:stack",
+    "@msa/testing": "workspace:*",
     "shx": "catalog:",
     "vitest": "catalog:"
   },

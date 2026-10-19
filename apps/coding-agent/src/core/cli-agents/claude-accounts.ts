@@ -26,6 +26,7 @@ import { promisify } from "node:util";
 import type { SDKAssistantMessageError } from "@anthropic-ai/claude-agent-sdk";
 
 import { expandTildePath, getAgentDir } from "../../config.ts";
+import { envSnapshot, readEnv } from "../../core/process-env.ts";
 import { spawnProcess, waitForChildProcess } from "../../utils/child-process.ts";
 import { findExecutableOnPath } from "../../utils/shell.ts";
 
@@ -139,7 +140,7 @@ export function setAutoRotation(name: string, auto: boolean): void {
  * carries; without `claude` the SDK's own lookup is the only option left.
  */
 export function claudeExecutable(): string | undefined {
-  return process.env["CLAUDE_BIN"]?.trim() || findExecutableOnPath("claude") || undefined;
+  return readEnv("CLAUDE_BIN")?.trim() || findExecutableOnPath("claude") || undefined;
 }
 
 const tokens = new Map<string, Promise<string>>();
@@ -147,7 +148,7 @@ const tokens = new Map<string, Promise<string>>();
 async function runTokenCommand(command: string): Promise<string> {
   let stdout: string;
   try {
-    ({ stdout } = await promisify(execFile)(process.env["SHELL"] || "/bin/sh", ["-c", command]));
+    ({ stdout } = await promisify(execFile)(readEnv("SHELL") || "/bin/sh", ["-c", command]));
   } catch (error) {
     const stderr = String((error as { stderr?: unknown }).stderr ?? "").trim();
     throw new Error(`tokenCommand ${command}: ${stderr.split("\n").at(-1) || "failed"}`, {
@@ -161,7 +162,7 @@ async function runTokenCommand(command: string): Promise<string> {
 
 /** Environment for this account's Claude Code process. */
 export async function accountEnv(account: Account): Promise<Record<string, string>> {
-  const env = { ...process.env } as Record<string, string>;
+  const env = { ...envSnapshot() } as Record<string, string>;
   delete env["CLAUDECODE"];
   if (account.configDir || account.tokenCommand) delete env["CLAUDE_CODE_OAUTH_TOKEN"];
   if (account.configDir) env["CLAUDE_CONFIG_DIR"] = account.configDir;

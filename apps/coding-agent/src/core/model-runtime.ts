@@ -76,6 +76,7 @@ import { cliAgentProviders } from "./cli-agents/index.ts";
 import { ModelConfig } from "./model-config.ts";
 import { EMPTY_MODEL_POLICY, type ModelPolicy, withModelPolicy } from "./model-policy.ts";
 import { FileModelsStore, InMemoryCodingAgentModelsStore } from "./models-store.ts";
+import { readEnv } from "./process-env.ts";
 import {
   type AuthStatus,
   type CompatibilityRequestConfig,
@@ -264,7 +265,7 @@ export class ModelRuntime implements Models {
       modelsPath,
       modelsStore,
       providers,
-      process.env["MSA_OFFLINE"] === undefined,
+      readEnv("MSA_OFFLINE") === undefined,
     );
     runtime.rebuildProviders();
     const refreshFromNetwork = runtime.modelNetworkEnabled && options.allowModelNetwork === true;

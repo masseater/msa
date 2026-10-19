@@ -41,6 +41,7 @@
         "./libs/durable/src/*"
       ],
       "@msa/env": ["./libs/env/src/index.ts"],
+      "@msa/testing": ["./libs/testing/src/index.ts"],
       "@msa/agent-core": ["./libs/agent/src/index.ts"],
       "@msa/coding-agent": ["./apps/coding-agent/src/index.ts"],
       "@msa/coding-agent/hooks": ["./apps/coding-agent/src/core/hooks/index.ts"],

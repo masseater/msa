@@ -3,6 +3,8 @@ import type { OxlintConfig } from "vite-plus/lint";
 const EFFECT_ONLY_UTILS = "検証、日時、ログ、関数型ユーティリティは Effect だけで扱う";
 const EFFECT_ONLY_HTTP = "HTTP クライアントは Effect だけで扱う";
 const EFFECT_ONLY_TRACING = "計装は Effect のトレーシングだけで扱う";
+const ENV_ONLY_VIA_PROCESS_ENV =
+  "環境変数は core/process-env.ts の readEnv・writeEnv・envSnapshot だけで扱う";
 
 const requiredStack: Readonly<Record<string, readonly string[]>> = {
   [EFFECT_ONLY_UTILS]: [
@@ -51,8 +53,17 @@ const requiredStackPatterns: readonly Readonly<{ group: readonly string[]; messa
     return { group: [`${module}/**`], message };
   });
 
+const envImportPaths: readonly Readonly<{
+  name: string;
+  importNames: readonly string[];
+  message: string;
+}>[] = [
+  { name: "node:process", importNames: ["env"], message: ENV_ONLY_VIA_PROCESS_ENV },
+  { name: "process", importNames: ["env"], message: ENV_ONLY_VIA_PROCESS_ENV },
+];
+
 const restrictedImports = {
-  paths: [...requiredStackPaths],
+  paths: [...requiredStackPaths, ...envImportPaths],
   patterns: [...requiredStackPatterns],
 };
 

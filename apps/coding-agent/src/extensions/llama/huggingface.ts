@@ -2,6 +2,8 @@ import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
+import { envSnapshot } from "../../core/process-env.ts";
+
 const DEFAULT_HUGGING_FACE_URL = "https://huggingface.co";
 const QUANTIZATION_PATTERN =
   /(?:^|[-_.])((?:UD-)?(?:IQ\d(?:_[A-Z0-9]+)+|Q\d(?:_[A-Z0-9]+)+|BF16|F16|F32|MXFP\d(?:_[A-Z0-9]+)*))$/iu;
@@ -44,7 +46,7 @@ async function readToken(path: string): Promise<string | undefined> {
 }
 
 export async function findHuggingFaceToken(
-  env: NodeJS.ProcessEnv = process.env,
+  env: NodeJS.ProcessEnv = envSnapshot(),
 ): Promise<string | undefined> {
   const fromEnvironment = env["HF_TOKEN"]?.trim();
   if (fromEnvironment) return fromEnvironment;
