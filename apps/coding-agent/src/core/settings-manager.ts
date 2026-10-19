@@ -161,7 +161,6 @@ function deepMergeSettings(base: Settings, overrides: Settings): Settings {
   return defaultTools === undefined ? merged : { ...merged, defaultTools };
 }
 
-/** One settings layer's model policy, ignoring a malformed value written by hand. */
 function readModelPolicy(settings: Settings): ModelPolicy {
   const policy = settings.modelPolicy;
   if (!policy || typeof policy !== "object") return EMPTY_MODEL_POLICY;
@@ -1427,7 +1426,6 @@ export class SettingsManager {
     };
   }
 
-  /** Seconds between checks of a watched pull request, as milliseconds. */
   getOtlpEndpoint(): string | undefined {
     const endpoint = this.settings.telemetry?.otlpEndpoint?.trim();
     return endpoint ? endpoint : undefined;
@@ -1442,7 +1440,6 @@ export class SettingsManager {
     return Math.round(value * 1000);
   }
 
-  /** Seconds without a change before a watch reports its status, as milliseconds. */
   getPrWatchStatusIntervalMs(): number {
     const seconds = this.settings.prWatch?.statusIntervalSeconds;
     const value =
@@ -1468,10 +1465,6 @@ export class SettingsManager {
     this.setGlobalSetting("enabledModels", patterns);
   }
 
-  /**
-   * The effective model policy. Both layers are combined instead of overriding, so a project cannot
-   * lift a deny pattern set for the machine.
-   */
   getModelPolicy(): ModelPolicy {
     return mergeModelPolicies(
       readModelPolicy(this.globalSettings),
@@ -1479,7 +1472,6 @@ export class SettingsManager {
     );
   }
 
-  /** Replace the agent-directory model policy. */
   setModelPolicy(policy: ModelPolicy): void {
     const allow = policy.allow.map((pattern) => pattern.trim()).filter(Boolean);
     const deny = policy.deny.map((pattern) => pattern.trim()).filter(Boolean);
@@ -1490,10 +1482,6 @@ export class SettingsManager {
     );
   }
 
-  /**
-   * Rewrite the settings that name a model, in the agent-directory and project layers. `rewrite`
-   * edits one layer in place and returns the changes it made, which are returned per layer.
-   */
   rewriteModelReferences<TChange>(rewrite: (settings: Settings) => TChange[]): {
     global: TChange[];
     project: TChange[];

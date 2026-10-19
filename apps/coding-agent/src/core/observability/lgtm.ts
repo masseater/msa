@@ -10,7 +10,6 @@ export const LGTM_IMAGE = "docker.io/grafana/otel-lgtm:latest";
 export const LGTM_OTLP_ENDPOINT = "http://localhost:4318";
 export const GRAFANA_URL = "http://localhost:3000";
 
-/** Ports published on localhost: Grafana, OTLP/HTTP, Tempo, Loki, and Prometheus. */
 const PUBLISHED_PORTS = [3000, 4318, 3200, 3100, 9090] as const;
 
 export class PodmanError extends Data.TaggedError("PodmanError")<{
@@ -19,7 +18,6 @@ export class PodmanError extends Data.TaggedError("PodmanError")<{
 
 export type ContainerState = "missing" | "running" | "stopped";
 
-/** What to do with the existing container: use it, start it, or create it. */
 export type LgtmAction = "reuse" | "start" | "run";
 
 export function lgtmAction(state: ContainerState): LgtmAction {
@@ -56,7 +54,6 @@ function podman(binary: string, args: readonly string[]): Effect.Effect<string, 
   );
 }
 
-/** Reads the state of `name` from `podman ps`. */
 export function containerState(
   binary: string,
   name: string,
@@ -77,7 +74,6 @@ export function containerState(
   );
 }
 
-/** `podman ps` fails when the podman machine (macOS, Windows) is not running. */
 function reachablePodman(binary: string): Effect.Effect<ContainerState, PodmanError> {
   return containerState(binary, LGTM_CONTAINER).pipe(
     Effect.catch(() =>
@@ -105,7 +101,6 @@ function runArgs(): string[] {
   ];
 }
 
-/** Starts or creates the `msa-grafana-lgtm` container, reusing it when it already runs. */
 export function ensureLgtm(binary: string): Effect.Effect<LgtmAction, PodmanError> {
   return Effect.gen(function* () {
     const action = lgtmAction(yield* reachablePodman(binary));

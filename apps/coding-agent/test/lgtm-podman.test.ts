@@ -9,10 +9,6 @@ import { containerState, findPodman, lgtmAction } from "../src/core/observabilit
 const podman = findPodman(process.env["PATH"]);
 const podmanRuns = podman !== undefined && spawnSync(podman, ["ps"]).status === 0;
 
-/**
- * Reads real `podman ps` output. A pod's infra container gives a named container in each state
- * without pulling an image. Machines without a working podman, where `podman ps` fails, skip them.
- */
 describe.skipIf(!podmanRuns)("msa-grafana-lgtm reuse decision against real podman", () => {
   const pods: string[] = [];
 

@@ -8,7 +8,6 @@ import { type OpenSpan, openSpan } from "./open-span.ts";
 
 export type SessionTelemetryRole = "main" | "worker" | "reviewer";
 
-/** Where a session's spans go and which role its metrics are counted under. */
 export interface SessionTelemetryOptions {
   readonly context: TelemetryContext;
   readonly role: SessionTelemetryRole;
@@ -43,10 +42,6 @@ interface PendingRequest {
   readonly startedAt: number;
 }
 
-/**
- * Turns one session's agent events into the turn → LLM request / tool call spans,
- * the token, cost, and tool metrics, and structured logs for tool failures.
- */
 export class SessionTelemetry {
   readonly #context: TelemetryContext;
   readonly #role: SessionTelemetryRole;
@@ -115,7 +110,6 @@ export class SessionTelemetry {
     }
   }
 
-  /** Ends every open span; the session is going away. */
   close(): void {
     for (const span of this.#tools.values()) span.end();
     this.#tools.clear();

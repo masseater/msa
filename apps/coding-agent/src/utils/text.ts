@@ -8,12 +8,10 @@ export function stripBom(content: string): string {
   return splitBom(content).text;
 }
 
-/** An id as a list row or a message tag shows it: short ids whole, long ones cut to eight characters. */
 export function shortId(id: string): string {
   return id.length <= 16 ? id : id.slice(0, 8);
 }
 
-/** How long ago `timestamp` was, in the largest unit that fits. */
 export function formatAge(timestamp: number, now = Date.now()): string {
   const seconds = Math.max(0, Math.floor((now - timestamp) / 1000));
   if (seconds < 60) return `${seconds}s ago`;

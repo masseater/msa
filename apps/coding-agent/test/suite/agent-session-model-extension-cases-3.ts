@@ -1,9 +1,10 @@
 import { fauxAssistantMessage, getCurrentSystemPrompt } from "@msa/ai";
 import { Effect } from "effect";
 import { expect } from "vite-plus/test";
+
 import type { BuildSystemPromptOptions, ExtensionAPI } from "../../src/index.ts";
-import { createHarness } from "./harness.ts";
 import { harnesses } from "./agent-session-model-extension-cases-1.ts";
+import { createHarness } from "./harness.ts";
 
 export const allowsExtensionInputHandlersToTransform = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());

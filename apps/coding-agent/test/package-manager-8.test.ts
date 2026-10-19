@@ -1,11 +1,20 @@
+import {
+  awaited,
+  joinPath,
+  makeDirectory,
+  makeTempDir,
+  removePath,
+  runTest,
+  toJsonText,
+  writeTextFile,
+} from "@msa/testing";
+import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { DefaultPackageManager, type ProgressEvent } from "../src/core/package-manager.ts";
+import { readEnv } from "../src/core/process-env.ts";
 import { SettingsManager } from "../src/core/settings-manager.ts";
 import { nodeFs, type PackageManagerInternals } from "./package-manager-support.ts";
-import { Effect } from "effect";
-import { awaited, joinPath, makeDirectory, makeTempDir, removePath, runTest, toJsonText, writeTextFile } from "@msa/testing";
-import { readEnv } from "../src/core/process-env.ts";
 
 describe("DefaultPackageManager", () => {
   let tempDir: string;
@@ -45,58 +54,63 @@ describe("DefaultPackageManager", () => {
   });
 
   describe("npmCommand", () => {
-    it("should load legacy pnpm global package paths from pnpm list output", () => runTest(
-Effect.gen(function* () {
+    it("should load legacy pnpm global package paths from pnpm list output", () =>
+      runTest(
+        Effect.gen(function* () {
+          settingsManager = SettingsManager.inMemory({
+            npmCommand: ["pnpm"],
+            packages: ["npm:pnpm-pkg"],
+          });
+          packageManager = new DefaultPackageManager({
+            cwd: tempDir,
+            agentDir,
+            settingsManager,
+          });
 
-      settingsManager = SettingsManager.inMemory({
-        npmCommand: ["pnpm"],
-        packages: ["npm:pnpm-pkg"],
-      });
-      packageManager = new DefaultPackageManager({
-        cwd: tempDir,
-        agentDir,
-        settingsManager,
-      });
+          const pnpmRoot = joinPath(tempDir, "pnpm", "global", "v11");
+          const packagePath = joinPath(pnpmRoot, "20-hash", "node_modules", "pnpm-pkg");
+          yield* makeDirectory(joinPath(packagePath, "extensions"));
+          yield* writeTextFile(
+            joinPath(packagePath, "package.json"),
+            yield* toJsonText({ name: "pnpm-pkg", version: "1.0.0" }),
+          );
+          yield* writeTextFile(
+            joinPath(packagePath, "extensions", "index.ts"),
+            "export default function() {};",
+          );
 
-      const pnpmRoot = joinPath(tempDir, "pnpm", "global", "v11");
-      const packagePath = joinPath(pnpmRoot, "20-hash", "node_modules", "pnpm-pkg");
-      (yield* makeDirectory(joinPath(packagePath, "extensions")));
-      (yield* writeTextFile(joinPath(packagePath, "package.json"), (yield* toJsonText({ name: "pnpm-pkg", version: "1.0.0" }))));
-      (yield* writeTextFile(joinPath(packagePath, "extensions", "index.ts"), "export default function() {};"));
+          vi.spyOn(packageManager as any, "runCommandSync").mockImplementation(
+            (...callArgs: unknown[]) => {
+              const [command, args] = callArgs as [string, string[]];
+              if (command !== "pnpm") {
+                throw new Error(`unexpected command ${command}`);
+              }
+              if (args.join(" ") === "list -g --depth 0 --json") {
+                return JSON.stringify([
+                  {
+                    path: pnpmRoot,
+                    dependencies: { "pnpm-pkg": { version: "1.0.0", path: packagePath } },
+                  },
+                ]);
+              }
+              throw new Error(`unexpected args ${args.join(" ")}`);
+            },
+          );
+          const runCommandSpy = vi
+            .spyOn(packageManager as any, "runCommand")
+            .mockResolvedValue(undefined);
 
-      vi.spyOn(packageManager as any, "runCommandSync").mockImplementation(
-        (...callArgs: unknown[]) => {
-          const [command, args] = callArgs as [string, string[]];
-          if (command !== "pnpm") {
-            throw new Error(`unexpected command ${command}`);
-          }
-          if (args.join(" ") === "list -g --depth 0 --json") {
-            return JSON.stringify([
-              {
-                path: pnpmRoot,
-                dependencies: { "pnpm-pkg": { version: "1.0.0", path: packagePath } },
-              },
-            ]);
-          }
-          throw new Error(`unexpected args ${args.join(" ")}`);
-        },
-      );
-      const runCommandSpy = vi
-        .spyOn(packageManager as any, "runCommand")
-        .mockResolvedValue(undefined);
+          const result = yield* awaited(packageManager.resolve());
 
-      const result = (yield* awaited(packageManager.resolve()));
-
-      expect(
-        result.extensions.some(
-          (r) => r.path === joinPath(packagePath, "extensions", "index.ts") && r.enabled,
-        ),
-      ).toBe(true);
-      expect(runCommandSpy).not.toHaveBeenCalled();
-      expect(packageManager.getInstalledPath("npm:pnpm-pkg", "user")).toBe(packagePath);
-    
-}),
-));
+          expect(
+            result.extensions.some(
+              (r) => r.path === joinPath(packagePath, "extensions", "index.ts") && r.enabled,
+            ),
+          ).toBe(true);
+          expect(runCommandSpy).not.toHaveBeenCalled();
+          expect(packageManager.getInstalledPath("npm:pnpm-pkg", "user")).toBe(packagePath);
+        }),
+      ));
 
     it("should resolve wrapped pnpm global package paths from pnpm list output", () => {
       settingsManager = SettingsManager.inMemory({
@@ -145,43 +159,45 @@ Effect.gen(function* () {
   });
 
   describe("source parsing", () => {
-    it("should emit progress events on install attempt", () => runTest(
-Effect.gen(function* () {
+    it("should emit progress events on install attempt", () =>
+      runTest(
+        Effect.gen(function* () {
+          const events: ProgressEvent[] = [];
+          packageManager.setProgressCallback((event) => events.push(event));
+          vi.spyOn(
+            packageManager as unknown as PackageManagerInternals,
+            "runCommand",
+          ).mockRejectedValue(new Error("simulated npm install failure"));
 
-      const events: ProgressEvent[] = [];
-      packageManager.setProgressCallback((event) => events.push(event));
-      vi.spyOn(
-        packageManager as unknown as PackageManagerInternals,
-        "runCommand",
-      ).mockRejectedValue(new Error("simulated npm install failure"));
+          yield* awaited(
+            expect(packageManager.install("npm:nonexistent-package@1.0.0")).rejects.toThrow(
+              "simulated npm install failure",
+            ),
+          );
 
-      (yield* awaited(expect(packageManager.install("npm:nonexistent-package@1.0.0")).rejects.toThrow(
-        "simulated npm install failure",
-      )));
+          expect(events.some((e) => e.type === "start" && e.action === "install")).toBe(true);
+          expect(events.some((e) => e.type === "error")).toBe(true);
+        }),
+      ));
 
-      expect(events.some((e) => e.type === "start" && e.action === "install")).toBe(true);
-      expect(events.some((e) => e.type === "error")).toBe(true);
-    
-}),
-));
+    it("should recognize github URLs without git: prefix", () =>
+      runTest(
+        Effect.gen(function* () {
+          const events: ProgressEvent[] = [];
+          packageManager.setProgressCallback((event) => events.push(event));
+          const runCommand = vi
+            .spyOn(packageManager as unknown as PackageManagerInternals, "runCommand")
+            .mockRejectedValue(new Error("simulated git clone failure"));
+          const source = "https://github.com/nonexistent/repo";
 
-    it("should recognize github URLs without git: prefix", () => runTest(
-Effect.gen(function* () {
+          yield* awaited(
+            expect(packageManager.install(source)).rejects.toThrow("simulated git clone failure"),
+          );
 
-      const events: ProgressEvent[] = [];
-      packageManager.setProgressCallback((event) => events.push(event));
-      const runCommand = vi
-        .spyOn(packageManager as unknown as PackageManagerInternals, "runCommand")
-        .mockRejectedValue(new Error("simulated git clone failure"));
-      const source = "https://github.com/nonexistent/repo";
-
-      (yield* awaited(expect(packageManager.install(source)).rejects.toThrow("simulated git clone failure")));
-
-      expect(runCommand).toHaveBeenCalledWith("git", ["clone", source, expect.any(String)]);
-      expect(events.some((e) => e.type === "start" && e.action === "install")).toBe(true);
-    
-}),
-));
+          expect(runCommand).toHaveBeenCalledWith("git", ["clone", source, expect.any(String)]);
+          expect(events.some((e) => e.type === "start" && e.action === "install")).toBe(true);
+        }),
+      ));
 
     it("should parse package source types from docs examples", () => {
       const parseNpm = (source: string) => {

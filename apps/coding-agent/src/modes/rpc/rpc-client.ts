@@ -192,7 +192,9 @@ export class RpcClient {
   ask(message: string, images?: ImageContent[]): Promise<PromptDisposition> {
     return Effect.runPromise(
       awaitingWith(function* () {
-        const response = yield* awaited(this.send({ type: "prompt", message, images, mode: "ask" }));
+        const response = yield* awaited(
+          this.send({ type: "prompt", message, images, mode: "ask" }),
+        );
         return this.getData<{ disposition: PromptDisposition }>(response).disposition;
       }, this),
     );

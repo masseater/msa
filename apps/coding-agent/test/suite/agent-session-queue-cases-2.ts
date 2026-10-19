@@ -2,8 +2,9 @@ import { fauxAssistantMessage, fauxToolCall } from "@msa/ai";
 import type { ExtensionAPI, InputEvent } from "@msa/coding-agent";
 import { Effect } from "effect";
 import { expect } from "vite-plus/test";
-import { createHarness, getAssistantTexts, getMessageText, getUserTexts } from "./harness.ts";
+
 import { createWaitingHarness, harnesses } from "./agent-session-queue-cases-1.ts";
+import { createHarness, getAssistantTexts, getMessageText, getUserTexts } from "./harness.ts";
 
 export const dispatchesExtensionCommandsImmediatelyWhenPrompted = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());

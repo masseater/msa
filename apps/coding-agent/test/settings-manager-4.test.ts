@@ -4,9 +4,9 @@ import { awaited, joinPath, runTest, writeJsonFile } from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
+import { ORCHESTRATOR_TOOL_NAMES } from "../src/core/orchestrator/tool-names.ts";
 import { SettingsManager } from "../src/core/settings-manager.ts";
 import { readSettings, removeSettingsDirs, withSettings } from "./settings-manager-support.ts";
-import { ORCHESTRATOR_TOOL_NAMES } from "../src/core/orchestrator/tool-names.ts";
 
 afterEach(() => runTest(removeSettingsDirs));
 

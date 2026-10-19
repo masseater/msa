@@ -20,13 +20,11 @@ const UPGRADE_SELECT_LIST_LAYOUT: SelectListLayoutOptions = {
 };
 
 export interface ModelUpgradeCallbacks {
-  /** Apply one upgrade and return what it changed, for the status line. */
   onApply(candidate: ModelUpgradeCandidate): Promise<string>;
   onCancel: () => void;
   requestRender: () => void;
 }
 
-/** Lists the models a newer catalog model replaces, and applies the selected one. */
 export class ModelUpgradeSelectorComponent extends Container implements Focusable {
   private selectList: SelectList;
   private selectListChildIndex: number;

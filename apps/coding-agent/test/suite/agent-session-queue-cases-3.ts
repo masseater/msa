@@ -1,8 +1,9 @@
 import { fauxAssistantMessage, fauxToolCall } from "@msa/ai";
 import { Effect } from "effect";
 import { expect } from "vite-plus/test";
-import { createHarness, getAssistantTexts, getMessageText } from "./harness.ts";
+
 import { createWaitingHarness, harnesses } from "./agent-session-queue-cases-1.ts";
+import { createHarness, getAssistantTexts, getMessageText } from "./harness.ts";
 
 export const deliversAllFollowUpMessagesIn = Effect.gen(function* () {
   const waiting = yield* Effect.promise(() => createWaitingHarness());

@@ -1,11 +1,3 @@
-/**
- * The `model_upgrade` tool: the model's way to find catalog models a newer model replaces, and to
- * apply those upgrades to settings.
- *
- * It shares the detection and the rewrite with `/model upgrade`, so the TUI and a tool call report
- * and write the same thing. Applying needs `action: "apply"`; `list` writes nothing.
- */
-
 import { type Static, Type } from "typebox";
 
 import { readOnlyVariantOf } from "../ask.ts";

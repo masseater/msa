@@ -16,9 +16,9 @@ export interface HandoffResult {
   path: string;
   tasks: number;
   running: number;
-  /** The line a person pastes into the next session. */
+
   line: string;
-  /** Said after `line` while threads still run. */
+
   notice: string | undefined;
 }
 

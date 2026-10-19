@@ -13,7 +13,6 @@ import { estimateTokens } from "./compaction/compaction.ts";
 import { MEMORY_RECALL_MESSAGE_TYPE } from "./memory/memory.ts";
 import { ORCHESTRATOR_PREAMBLE } from "./system-prompt.ts";
 
-/** Where an element of the request sits. */
 export type ContextPart =
   | "system"
   | "tools"
@@ -28,40 +27,29 @@ export interface ContextBreakdownEntry {
   tokens: number;
 }
 
-/**
- * The request the model would receive next, split into its elements. `tokens` is the whole
- * request; entries sum to it. `exact` when the provider counted the request, otherwise the
- * total is the context usage and entries are shares of it.
- */
 export interface ContextBreakdown {
   method: "exact" | "estimated";
   tokens: number;
   entries: ContextBreakdownEntry[];
 }
 
-/** One element with its approximate size, before apportioning to the total. */
 export interface ContextElement {
   part: ContextPart;
   name: string;
   estimate: number;
 }
 
-/** The pipeline the agent loop sends a request through, and the counts known for it. */
 export interface ContextBreakdownSource {
-  /** The transcript the latest response's usage covers, plus messages appended since. */
   messages: AgentMessage[];
-  /** Messages the next request adds before it is sent: prompt updates and tool declarations. */
+
   pending: AgentMessage[];
   transformContext: ((messages: AgentMessage[]) => Promise<AgentMessage[]>) | undefined;
   convertToLlm: (messages: AgentMessage[]) => Message[] | Promise<Message[]>;
-  /** Provider count of the converted request, or undefined when the provider cannot count. */
+
   countTokens: (messages: Message[]) => Promise<number | undefined>;
-  /** Context usage from the latest response, or null when unknown. */
+
   usageTokens: number | null;
-  /**
-   * The provider when it runs another agent that adds its own prompt and tools to the request,
-   * so its usage holds context msa does not send.
-   */
+
   addingProvider: string | undefined;
 }
 
@@ -108,11 +96,6 @@ function conversationElement(source: AgentMessage, sent: Message): ContextElemen
   }
 }
 
-/**
- * Split a request into elements. `sent` is each transformed message converted for the
- * provider (empty when the conversion drops it). The leading system message splits into its
- * prompt sections and the tools it declares; later system messages count as prompt updates.
- */
 function splitContext(
   transformed: readonly AgentMessage[],
   sent: readonly (readonly Message[])[],
@@ -156,10 +139,6 @@ function mergeElements(elements: readonly ContextElement[]): ContextElement[] {
   return [...merged.values()];
 }
 
-/**
- * Apportion `total` across elements by their estimates, rounding with the largest remainders
- * so the integer shares sum to `total` exactly.
- */
 export function apportion(
   elements: readonly ContextElement[],
   total: number,
@@ -180,7 +159,6 @@ export function apportion(
   return elements.map(({ part, name }, index) => ({ part, name, tokens: tokens[index] ?? 0 }));
 }
 
-/** Build the breakdown of the request the agent loop would send for `source.messages`. */
 export const measureContextBreakdown = (
   source: ContextBreakdownSource,
 ): Effect.Effect<ContextBreakdown> =>

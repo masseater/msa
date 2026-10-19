@@ -68,16 +68,15 @@ export interface TasksViewOptions {
 }
 
 export class TasksView implements Component, Focusable {
-  /** The view owns the paging keys while it is open, so they scroll it and not the transcript. */
   readonly wantsViewportKeys = true;
   private readonly options: TasksViewOptions;
   private openId: string | undefined;
   private readonly input = new Input({ prompt: "› " });
   private readonly state: TasksViewState;
   private composing: Composing | undefined;
-  /** First body line drawn; the list follows the cursor, the detail follows the scroll keys. */
+
   private scroll = 0;
-  /** Body rows the last frame had room for. */
+
   private room = 0;
   private isFocused = false;
 
@@ -175,8 +174,7 @@ export class TasksView implements Component, Focusable {
         ),
       );
     }
-    // The round's own lines belong to its first task, so the window keeps the round title visible
-    // when the cursor sits on the top row of a round.
+
     const cursorTop = shown[0]?.id === selected?.id ? 0 : undefined;
     let cursor: { start: number; end: number } | undefined;
     for (const task of shown) {
@@ -354,7 +352,6 @@ export class TasksView implements Component, Focusable {
     taskList.moveSelectionBy(this.state, tasks, step);
   }
 
-  /** Moves the detail window; the next render clamps it to the content. */
   private scrollBy(lines: number): void {
     this.scroll = Math.max(0, this.scroll + lines);
   }

@@ -1,36 +1,21 @@
-/**
- * Model upgrades: which catalog models a newer model clearly replaces.
- *
- * The catalog carries no release dates, so a version is read from the model id. A model is only
- * upgraded when the id names the same family and the same variant with a higher version, or the
- * same version with a later dated variant. Anything that needs a guess, such as a different
- * variant, is reported as a candidate and left alone.
- */
-
 import type { Api, Model } from "@msa/ai";
 
 import type { Settings } from "./settings-schema.ts";
 
 export interface ModelIdVersion {
-  /** Text before the version, such as `claude-sonnet` or `deepseek`. */
   family: string;
-  /** Version components, such as `[4, 5]` for `claude-sonnet-4-5`. */
+
   version: number[];
-  /** Text after the version without a trailing date, such as `flash`. */
+
   variant: string;
-  /** Trailing date variant digits, such as `1017` in `deepseek-v4.1-flash-1017`. */
+
   date: string | undefined;
 }
 
-/**
- * A version starts a token: `-4-5`, `-v4.1`, `.5`. A component is one or two digits, so the date
- * variant of `claude-sonnet-4-5-20250929` stays out of the version.
- */
 const VERSION_PATTERN = /(?<![A-Za-z0-9.])v?(\d{1,2}(?![0-9])(?:[.-]\d{1,2}(?![0-9]))*)/;
 const DATE_PATTERN = /^\d{4,8}$/;
 const TOKEN_SEPARATOR = /[-_.\s]+/;
 
-/** The family, version, variant, and date of a model id, or undefined when it names no version. */
 export function parseModelIdVersion(id: string): ModelIdVersion | undefined {
   const match = VERSION_PATTERN.exec(id);
   if (!match) return undefined;
@@ -54,7 +39,6 @@ export function parseModelIdVersion(id: string): ModelIdVersion | undefined {
   };
 }
 
-/** Negative when `a` is older than `b`, positive when newer, zero when equal. */
 export function compareModelVersions(a: readonly number[], b: readonly number[]): number {
   for (let index = 0; index < Math.max(a.length, b.length); index++) {
     const left = a[index] ?? 0;
@@ -66,7 +50,7 @@ export function compareModelVersions(a: readonly number[], b: readonly number[])
 
 function compareDates(a: string | undefined, b: string | undefined): number {
   if (a === b) return 0;
-  // An undated id is the family alias; a dated variant of the same version is newer than it.
+
   if (a === undefined) return -1;
   if (b === undefined) return 1;
   if (a.length !== b.length) return a.length - b.length;
@@ -76,9 +60,9 @@ function compareDates(a: string | undefined, b: string | undefined): number {
 export interface ModelUpgradeCandidate {
   from: Model<Api>;
   to: Model<Api>;
-  /** A higher version or a later dated variant of the same family and variant. */
+
   confident: boolean;
-  /** One line naming the change the id makes. */
+
   reason: string;
 }
 
@@ -100,10 +84,6 @@ function familyKey(model: Model<Api>, parsed: ModelIdVersion): string {
   return [model.provider, parsed.family, parsed.variant].join("\u0000");
 }
 
-/**
- * The upgrades the catalog supports. Models with the same family and a different variant are
- * reported as candidates, since the variant may be what the user chose.
- */
 export function findModelUpgrades(models: readonly Model<Api>[]): ModelUpgradeCandidate[] {
   const parsed = new Map<Model<Api>, ModelIdVersion>();
   for (const model of models) {
@@ -172,7 +152,6 @@ export function findModelUpgrades(models: readonly Model<Api>[]): ModelUpgradeCa
   );
 }
 
-/** The upgrade a reference names, as `provider/id` or a bare id. */
 export function findModelUpgrade(
   candidates: readonly ModelUpgradeCandidate[],
   reference: string,
@@ -185,7 +164,6 @@ export function findModelUpgrade(
   );
 }
 
-/** The replacements one set of candidates makes, keyed by provider and old model id. */
 export function createUpgradeReplacements(
   candidates: readonly ModelUpgradeCandidate[],
 ): Map<string, string> {
@@ -203,10 +181,6 @@ function splitThinkingSuffix(reference: string): { base: string; suffix: string 
   return { base: reference.slice(0, colon), suffix: reference.slice(colon) };
 }
 
-/**
- * Rewrite a `provider/model` or bare model reference. Returns undefined when the reference names no
- * upgraded model, or when a bare id is ambiguous across providers.
- */
 export function upgradeModelReference(
   reference: string,
   replacements: ReadonlyMap<string, string>,
@@ -226,7 +200,7 @@ export function upgradeModelReference(
     const replacement = replacements.get([provider, base].join("\u0000"));
     return replacement === undefined ? undefined : `${replacement}${suffix}`;
   }
-  // A bare id resolves across providers, so only rewrite it when one provider matches.
+
   const providers = [...replacements.keys()]
     .filter((key) => key.slice(key.indexOf("\u0000") + 1) === base)
     .map((key) => key.slice(0, key.indexOf("\u0000")));
@@ -302,10 +276,6 @@ function rewriteRecordKeys(
   if (changed) settings[key] = next;
 }
 
-/**
- * Replace the model references one settings layer holds. Returns what changed, so a dry run and an
- * applied run report the same list.
- */
 export function rewriteModelReferencesInSettings(
   settings: Settings,
   replacements: ReadonlyMap<string, string>,
@@ -375,11 +345,10 @@ export function rewriteModelReferencesInSettings(
   return changes;
 }
 
-/** What an upgrade run would change, before anything is written. */
 export interface ModelUpgradePlan {
   candidates: ModelUpgradeCandidate[];
   changes: Array<ModelReferenceChange & { scope: "global" | "project" }>;
-  /** References the upgrade cannot reach, such as a model recorded in a session transcript. */
+
   unreachable: string[];
 }
 
@@ -405,10 +374,6 @@ export function planModelUpgrades(options: {
   return { candidates: [...selected], changes, unreachable };
 }
 
-/**
- * The candidates a set of reference changes names. A catalog holds far more upgrades than any
- * setting mentions, so a report shows these first and counts the rest.
- */
 export function candidatesNamedByChanges(
   candidates: readonly ModelUpgradeCandidate[],
   changes: readonly ModelReferenceChange[],
@@ -427,7 +392,6 @@ export function candidatesNamedByChanges(
   );
 }
 
-/** One line for a candidate: `provider/from -> provider/to (reason)`. */
 export function formatModelUpgrade(candidate: ModelUpgradeCandidate): string {
   const { from, to } = candidate;
   const mark = candidate.confident ? "" : " (candidate)";

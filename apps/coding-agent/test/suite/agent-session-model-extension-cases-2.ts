@@ -3,8 +3,9 @@ import { fauxAssistantMessage, fauxToolCall, type JsonObject, type Usage } from 
 import { Effect } from "effect";
 import { Type } from "typebox";
 import { expect } from "vite-plus/test";
-import { createHarness, getAssistantTexts, type Harness } from "./harness.ts";
+
 import { harnesses } from "./agent-session-model-extension-cases-1.ts";
+import { createHarness, getAssistantTexts, type Harness } from "./harness.ts";
 
 export const allowsExtensionToolCallHandlersToPart2 = (harness: Harness) =>
   Effect.gen(function* () {

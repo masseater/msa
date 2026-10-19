@@ -4,8 +4,8 @@ import * as Schema from "effect/Schema";
 
 import { spawnProcess, spawnProcessSync, waitForChildProcess } from "../utils/child-process.ts";
 import { findExecutableOnPath } from "../utils/shell.ts";
-import { envSnapshot } from "./process-env.ts";
 import { awaited, awaiting } from "./awaiting.ts";
+import { envSnapshot } from "./process-env.ts";
 
 const PREFERRED_VENDOR = "tinyfish";
 const MAX_COST_USD = "0.05";

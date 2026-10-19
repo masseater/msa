@@ -1702,7 +1702,11 @@ export class AgentSession {
     if (this.askRun) this.loadoutBeforeAsk = [...new Set(toolNames)];
     const tools = [...new Set(toolNames)].flatMap((name) => {
       const tool = this.toolRegistry.get(name);
-      if (tool === undefined || this.getToolExposure(name) === "hidden" || !this.isActivatable(name))
+      if (
+        tool === undefined ||
+        this.getToolExposure(name) === "hidden" ||
+        !this.isActivatable(name)
+      )
         return [];
       return this.askRun ? this.askTool(name, tool) : [tool];
     });
@@ -3954,7 +3958,9 @@ export class AgentSession {
         const variant = definition.readOnlyVariant;
         if (variant === undefined || variant.annotations?.readOnlyHint !== true) return [];
         const [tool] = wrapRegisteredTools([{ definition: variant, sourceInfo }], runner);
-        return tool === undefined ? [] : [[definition.name, { tool, definition: variant }] as const];
+        return tool === undefined
+          ? []
+          : [[definition.name, { tool, definition: variant }] as const];
       }),
     );
 

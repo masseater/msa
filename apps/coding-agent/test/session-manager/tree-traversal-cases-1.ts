@@ -1,6 +1,7 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { FileSystem, ManagedRuntime } from "effect";
 import { expect } from "vite-plus/test";
+
 import { type CustomEntry, SessionManager } from "../../src/core/session-manager.ts";
 import { assistantMsg, userMsg } from "../utilities.ts";
 

@@ -30,11 +30,6 @@ function endStatus(
   return { status: "error", error: { name, message: status } };
 }
 
-/**
- * Keeps the Task → Thread spans of one orchestrator. A Task span stays open from its first
- * thread until the task finishes; each Thread span lives from launch until the thread settles.
- * Both end when a published snapshot shows them finished, whichever action finished them.
- */
 export class OrchestratorTelemetry {
   readonly context: TelemetryContext;
   readonly #tasks = new Map<string, OpenSpan>();
@@ -128,7 +123,6 @@ export class OrchestratorTelemetry {
     });
   }
 
-  /** Ends whatever is still open; msa is shutting down. */
   close(): void {
     for (const span of [...this.#threads.values(), ...this.#tasks.values()]) {
       span.span.setAttributes({ "msa.unfinished": true });

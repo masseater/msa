@@ -2,6 +2,7 @@ import { fauxAssistantMessage } from "@msa/ai";
 import { gate } from "@msa/testing";
 import { Effect } from "effect";
 import { expect } from "vite-plus/test";
+
 import { createHarness, type Harness } from "./harness.ts";
 
 export function normalizeEventOrder(events: Harness["events"]): string[] {

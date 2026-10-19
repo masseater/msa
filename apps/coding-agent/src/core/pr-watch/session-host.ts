@@ -12,7 +12,6 @@ export interface PrWatchMessage {
 }
 
 export interface PrWatchDelivery {
-  /** The session the notification is injected into, so the text says which thread it belongs to. */
   readonly threadId: string;
   readonly sendMessage: (
     message: PrWatchMessage,

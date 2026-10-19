@@ -615,10 +615,7 @@ const doesNotTriggerThresholdCompactionFrom = Effect.gen(function* () {
   harness.session.refreshContext();
   const runAutoCompaction = vi.spyOn(
     harness.session as unknown as {
-      runAutoCompaction: (
-        reason: "overflow" | "threshold",
-        willRetry: boolean,
-      ) => Promise<boolean>;
+      runAutoCompaction: (reason: "overflow" | "threshold", willRetry: boolean) => Promise<boolean>;
     },
     "runAutoCompaction",
   );

@@ -36,7 +36,6 @@ describe("/ask", () => {
     while (harnesses.length > 0) harnesses.pop()?.cleanup();
   });
 
-  /** A session whose extension adds one tool with the read-only mark and one without. */
   async function setup(): Promise<{ harness: Harness; ran: string[] }> {
     const ran: string[] = [];
     const tool = (name: string, annotations?: ToolDefinition["annotations"]): ToolDefinition => ({
@@ -63,7 +62,6 @@ describe("/ask", () => {
     return { harness, ran };
   }
 
-  /** Records what each request carries, since assertions inside faux callbacks are swallowed. */
   function record(harness: Harness, responses: Parameters<Harness["setResponses"]>[0]) {
     const requests: TranscriptContext[] = [];
     harness.setResponses(

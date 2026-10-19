@@ -3,11 +3,7 @@ import { constants as osConstants } from "node:os";
 import { Effect, FileSystem } from "effect";
 import { dual } from "effect/Function";
 
-import {
-  type ChildProcess,
-  spawnProcess,
-  waitForChildProcess,
-} from "../../utils/child-process.ts";
+import { type ChildProcess, spawnProcess, waitForChildProcess } from "../../utils/child-process.ts";
 import {
   getShellConfig,
   getShellEnv,

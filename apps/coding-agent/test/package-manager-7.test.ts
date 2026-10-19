@@ -1,11 +1,20 @@
+import {
+  awaited,
+  joinPath,
+  makeDirectory,
+  makeTempDir,
+  removePath,
+  runTest,
+  toJsonText,
+  writeTextFile,
+} from "@msa/testing";
+import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { DefaultPackageManager } from "../src/core/package-manager.ts";
-import { SettingsManager } from "../src/core/settings-manager.ts";
-import { Effect } from "effect";
-import { nodeFs, writeJsonFileSync } from "./package-manager-support.ts";
-import { awaited, joinPath, makeDirectory, makeTempDir, removePath, runTest, toJsonText, writeTextFile } from "@msa/testing";
 import { readEnv } from "../src/core/process-env.ts";
+import { SettingsManager } from "../src/core/settings-manager.ts";
+import { nodeFs, writeJsonFileSync } from "./package-manager-support.ts";
 
 describe("DefaultPackageManager", () => {
   let tempDir: string;
@@ -45,71 +54,77 @@ describe("DefaultPackageManager", () => {
   });
 
   describe("npmCommand", () => {
-    it("should disable peer installation through wrapped pnpm when updating git dependencies", () => runTest(
-Effect.gen(function* () {
-    const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+    it("should disable peer installation through wrapped pnpm when updating git dependencies", () =>
+      runTest(
+        Effect.gen(function* () {
+          const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-      settingsManager = SettingsManager.inMemory({
-        npmCommand: ["mise", "exec", "node@20", "--", "pnpm"],
-      });
-      packageManager = new DefaultPackageManager({
-        cwd: tempDir,
-        agentDir,
-        settingsManager,
-      });
+          settingsManager = SettingsManager.inMemory({
+            npmCommand: ["mise", "exec", "node@20", "--", "pnpm"],
+          });
+          packageManager = new DefaultPackageManager({
+            cwd: tempDir,
+            agentDir,
+            settingsManager,
+          });
 
-      const source = "git:github.com/user/repo";
-      const targetDir = joinPath(tempDir, ".msa", "git", "github.com", "user", "repo");
-      (yield* makeDirectory(targetDir));
-      (yield* writeTextFile(joinPath(targetDir, "package.json"), (yield* toJsonText({ name: "repo", version: "1.0.0" }))));
-      settingsManager.setProjectPackages([source]);
+          const source = "git:github.com/user/repo";
+          const targetDir = joinPath(tempDir, ".msa", "git", "github.com", "user", "repo");
+          yield* makeDirectory(targetDir);
+          yield* writeTextFile(
+            joinPath(targetDir, "package.json"),
+            yield* toJsonText({ name: "repo", version: "1.0.0" }),
+          );
+          settingsManager.setProjectPackages([source]);
 
-      vi.spyOn(packageManager as any, "runCommandCapture").mockImplementation(
-        (...callArgs: unknown[]) => effectRunPromise(
-Effect.gen(function* () {
+          vi.spyOn(packageManager as any, "runCommandCapture").mockImplementation(
+            (...callArgs: unknown[]) =>
+              effectRunPromise(
+                Effect.gen(function* () {
+                  const [_command, args] = callArgs as [string, string[]];
+                  if (
+                    args[0] === "rev-parse" &&
+                    args[1] === "--abbrev-ref" &&
+                    args[2] === "@{upstream}"
+                  ) {
+                    return yield* awaited("origin/main");
+                  }
+                  if (
+                    args[0] === "rev-parse" &&
+                    (args[1] === "@{upstream}" || args[1] === "@{upstream}^{commit}")
+                  ) {
+                    return yield* awaited("remote-head");
+                  }
+                  if (args[0] === "rev-parse" && args[1] === "HEAD") {
+                    return yield* awaited("local-head");
+                  }
+                  throw new Error(`Unexpected runCommandCapture args: ${args.join(" ")}`);
+                }),
+              ),
+          );
+          const runCommandSpy = vi
+            .spyOn(packageManager as any, "runCommand")
+            .mockResolvedValue(undefined);
 
-          const [_command, args] = callArgs as [string, string[]];
-          if (args[0] === "rev-parse" && args[1] === "--abbrev-ref" && args[2] === "@{upstream}") {
-            return (yield* awaited("origin/main"));
-          }
-          if (
-            args[0] === "rev-parse" &&
-            (args[1] === "@{upstream}" || args[1] === "@{upstream}^{commit}")
-          ) {
-            return (yield* awaited("remote-head"));
-          }
-          if (args[0] === "rev-parse" && args[1] === "HEAD") {
-            return (yield* awaited("local-head"));
-          }
-          throw new Error(`Unexpected runCommandCapture args: ${args.join(" ")}`);
-        
-}),
-),
-      );
-      const runCommandSpy = vi
-        .spyOn(packageManager as any, "runCommand")
-        .mockResolvedValue(undefined);
+          yield* awaited(packageManager.update(source));
 
-      (yield* awaited(packageManager.update(source)));
-
-      expect(runCommandSpy).toHaveBeenCalledWith(
-        "mise",
-        [
-          "exec",
-          "node@20",
-          "--",
-          "pnpm",
-          "install",
-          "--prod",
-          "--config.auto-install-peers=false",
-          "--config.strict-peer-dependencies=false",
-          "--config.strict-dep-builds=false",
-        ],
-        { cwd: targetDir },
-      );
-    
-}),
-));
+          expect(runCommandSpy).toHaveBeenCalledWith(
+            "mise",
+            [
+              "exec",
+              "node@20",
+              "--",
+              "pnpm",
+              "install",
+              "--prod",
+              "--config.auto-install-peers=false",
+              "--config.strict-peer-dependencies=false",
+              "--config.strict-dep-builds=false",
+            ],
+            { cwd: targetDir },
+          );
+        }),
+      ));
 
     it("should use npmCommand argv for npm root lookup and invalidate cached root when npmCommand changes", () => {
       settingsManager = SettingsManager.inMemory({
@@ -166,70 +181,70 @@ Effect.gen(function* () {
       ]);
     });
 
-    it("should install user npm packages into the msa-managed npm root", () => runTest(
-Effect.gen(function* () {
-    const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+    it("should install user npm packages into the msa-managed npm root", () =>
+      runTest(
+        Effect.gen(function* () {
+          const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-      settingsManager = SettingsManager.inMemory({
-        npmCommand: ["pnpm"],
-        packages: ["npm:pnpm-pkg"],
-      });
-      packageManager = new DefaultPackageManager({
-        cwd: tempDir,
-        agentDir,
-        settingsManager,
-      });
-
-      const packagePath = joinPath(agentDir, "npm", "node_modules", "pnpm-pkg");
-      vi.spyOn(packageManager as any, "runCommandSync").mockImplementation(() => {
-        throw new Error("legacy lookup unavailable");
-      });
-      const runCommandSpy = vi
-        .spyOn(packageManager as any, "runCommand")
-        .mockImplementation((...callArgs: unknown[]) => effectRunPromise(
-Effect.sync(() => {
-
-          const [command, args] = callArgs as [string, string[]];
-          expect(command).toBe("pnpm");
-          expect(args).toEqual([
-            "install",
-            "pnpm-pkg",
-            "--prefix",
-            joinPath(agentDir, "npm"),
-            "--config.auto-install-peers=false",
-            "--config.strict-peer-dependencies=false",
-            "--config.strict-dep-builds=false",
-          ]);
-          nodeFs.mkdirSync(joinPath(packagePath, "extensions"), { recursive: true });
-          writeJsonFileSync({
-            file: joinPath(packagePath, "package.json"),
-            value: { name: "pnpm-pkg", version: "1.0.0" },
+          settingsManager = SettingsManager.inMemory({
+            npmCommand: ["pnpm"],
+            packages: ["npm:pnpm-pkg"],
           });
-          nodeFs.writeFileSync(
-            joinPath(packagePath, "extensions", "index.ts"),
-            "export default function() {};",
-          );
-        
-}),
-));
+          packageManager = new DefaultPackageManager({
+            cwd: tempDir,
+            agentDir,
+            settingsManager,
+          });
 
-      const first = (yield* awaited(packageManager.resolve()));
-      const second = (yield* awaited(packageManager.resolve()));
+          const packagePath = joinPath(agentDir, "npm", "node_modules", "pnpm-pkg");
+          vi.spyOn(packageManager as any, "runCommandSync").mockImplementation(() => {
+            throw new Error("legacy lookup unavailable");
+          });
+          const runCommandSpy = vi
+            .spyOn(packageManager as any, "runCommand")
+            .mockImplementation((...callArgs: unknown[]) =>
+              effectRunPromise(
+                Effect.sync(() => {
+                  const [command, args] = callArgs as [string, string[]];
+                  expect(command).toBe("pnpm");
+                  expect(args).toEqual([
+                    "install",
+                    "pnpm-pkg",
+                    "--prefix",
+                    joinPath(agentDir, "npm"),
+                    "--config.auto-install-peers=false",
+                    "--config.strict-peer-dependencies=false",
+                    "--config.strict-dep-builds=false",
+                  ]);
+                  nodeFs.mkdirSync(joinPath(packagePath, "extensions"), { recursive: true });
+                  writeJsonFileSync({
+                    file: joinPath(packagePath, "package.json"),
+                    value: { name: "pnpm-pkg", version: "1.0.0" },
+                  });
+                  nodeFs.writeFileSync(
+                    joinPath(packagePath, "extensions", "index.ts"),
+                    "export default function() {};",
+                  );
+                }),
+              ),
+            );
 
-      expect(
-        first.extensions.some(
-          (r) => r.path === joinPath(packagePath, "extensions", "index.ts") && r.enabled,
-        ),
-      ).toBe(true);
-      expect(
-        second.extensions.some(
-          (r) => r.path === joinPath(packagePath, "extensions", "index.ts") && r.enabled,
-        ),
-      ).toBe(true);
-      expect(runCommandSpy).toHaveBeenCalledTimes(1);
-      expect(packageManager.getInstalledPath("npm:pnpm-pkg", "user")).toBe(packagePath);
-    
-}),
-));
+          const first = yield* awaited(packageManager.resolve());
+          const second = yield* awaited(packageManager.resolve());
+
+          expect(
+            first.extensions.some(
+              (r) => r.path === joinPath(packagePath, "extensions", "index.ts") && r.enabled,
+            ),
+          ).toBe(true);
+          expect(
+            second.extensions.some(
+              (r) => r.path === joinPath(packagePath, "extensions", "index.ts") && r.enabled,
+            ),
+          ).toBe(true);
+          expect(runCommandSpy).toHaveBeenCalledTimes(1);
+          expect(packageManager.getInstalledPath("npm:pnpm-pkg", "user")).toBe(packagePath);
+        }),
+      ));
   });
 });

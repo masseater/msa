@@ -2,8 +2,9 @@ import { fauxAssistantMessage } from "@msa/ai";
 import { gate } from "@msa/testing";
 import { Effect } from "effect";
 import { expect } from "vite-plus/test";
-import { createHarness } from "./harness.ts";
+
 import { harnesses } from "./agent-session-retry-events-cases-1.ts";
+import { createHarness } from "./harness.ts";
 
 export const emitsAgentEndForAbortedRuns = Effect.gen(function* () {
   const harness = yield* Effect.promise(() => createHarness());

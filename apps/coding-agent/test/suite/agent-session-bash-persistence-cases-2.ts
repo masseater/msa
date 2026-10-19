@@ -4,8 +4,9 @@ import { gate } from "@msa/testing";
 import { Effect } from "effect";
 import { Type } from "typebox";
 import { expect } from "vite-plus/test";
-import { createHarness } from "./harness.ts";
+
 import { getEntryTypes, harnesses } from "./agent-session-bash-persistence-cases-1.ts";
+import { createHarness } from "./harness.ts";
 
 export const defersBashResultsWhileStreamingAnd = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());

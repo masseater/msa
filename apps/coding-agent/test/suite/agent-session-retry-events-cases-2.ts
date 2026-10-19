@@ -3,8 +3,9 @@ import { fauxAssistantMessage, fauxThinking, fauxToolCall } from "@msa/ai";
 import { Effect } from "effect";
 import { Type } from "typebox";
 import { expect } from "vite-plus/test";
-import { createHarness, type Harness } from "./harness.ts";
+
 import { harnesses, normalizeEventOrder } from "./agent-session-retry-events-cases-1.ts";
+import { createHarness, type Harness } from "./harness.ts";
 
 export const waitsForTheFullLoopWhen = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
@@ -49,8 +50,12 @@ export const waitsForTheFullLoopWhen = Effect.gen(function* () {
   yield* Effect.promise(() => harness.session.prompt("follow-up"));
   expect(harness.faux.state.callCount).toBe(4);
 });
-export const emitsExtensionEventsBeforePublicEventPart2 = (entry: { order: string[]; harness: Harness }): Effect.Effect<void, never, never> => {
-  const { order, harness } = entry; return Effect.gen(function* () {
+export const emitsExtensionEventsBeforePublicEventPart2 = (entry: {
+  order: string[];
+  harness: Harness;
+}): Effect.Effect<void, never, never> => {
+  const { order, harness } = entry;
+  return Effect.gen(function* () {
     harness.session.subscribe((event) => {
       if (event.type === "message_start" || event.type === "message_end") {
         order.push(`public:${event.type}:${event.message.role}`);
@@ -72,7 +77,8 @@ export const emitsExtensionEventsBeforePublicEventPart2 = (entry: { order: strin
       "extension:message_end:assistant",
       "public:message_end:assistant",
     ]);
-  }); };
+  });
+};
 export const emitsExtensionEventsBeforePublicEvent = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
   const order: string[] = [];
@@ -123,8 +129,12 @@ export const emitsTheExpectedEventOrderFor = Effect.gen(function* () {
     "agent_settled",
   ]);
 });
-export const emitsTheExpectedEventOrderFor2Part2 = (entry: { toolRuns: string[]; harness: Harness }): Effect.Effect<void, never, never> => {
-  const { toolRuns, harness } = entry; return Effect.sync(() => {
+export const emitsTheExpectedEventOrderFor2Part2 = (entry: {
+  toolRuns: string[];
+  harness: Harness;
+}): Effect.Effect<void, never, never> => {
+  const { toolRuns, harness } = entry;
+  return Effect.sync(() => {
     expect(toolRuns).toEqual(["hello"]);
     expect(normalizeEventOrder(harness.events)).toEqual([
       "agent_start",
@@ -149,7 +159,8 @@ export const emitsTheExpectedEventOrderFor2Part2 = (entry: { toolRuns: string[];
       "agent_end",
       "agent_settled",
     ]);
-  }); };
+  });
+};
 export const emitsTheExpectedEventOrderFor2 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
   const toolRuns: string[] = [];

@@ -2,6 +2,7 @@ import type { ThinkingLevel } from "@msa/agent-core";
 import { type Model } from "@msa/ai";
 import { Effect } from "effect";
 import { expect } from "vite-plus/test";
+
 import { createHarness, type Harness } from "./harness.ts";
 
 export const harnesses: Harness[] = [];

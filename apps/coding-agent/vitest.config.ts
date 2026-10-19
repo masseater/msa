@@ -9,7 +9,7 @@ export default mergeConfig(
       globals: true,
       environment: "node",
       testTimeout: 30000,
-      // Keep the machine's Claude Code and OpenCode installs out of the model lists tests see.
+
       env: {
         MSA_OFFLINE: "1",
         CLAUDE_BIN: "/nonexistent/claude",

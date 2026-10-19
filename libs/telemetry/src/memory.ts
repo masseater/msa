@@ -161,9 +161,7 @@ function recordLog(
       attributes: copyAttributes(record.attributes),
     };
     state.logs.push(log);
-  } catch {
-    // Telemetry never fails the work it describes.
-  }
+  } catch {}
 }
 
 function recordMetric(state: InMemoryTelemetryState, record: TelemetryMetricRecord): void {
@@ -176,9 +174,7 @@ function recordMetric(state: InMemoryTelemetryState, record: TelemetryMetricReco
       attributes: copyAttributes(record.attributes),
     };
     state.metrics.push(metric);
-  } catch {
-    // Telemetry never fails the work it describes.
-  }
+  } catch {}
 }
 
 function createRecordingSpan(

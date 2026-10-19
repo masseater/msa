@@ -266,10 +266,6 @@ function buildFallbackModel(
   };
 }
 
-/**
- * The model policy denial behind a reference that names nothing usable, or undefined when the policy
- * is not the reason. The lookup runs against the full catalog, which keeps hidden models.
- */
 export function findModelPolicyDenial(options: {
   reference: string;
   provider?: string | undefined;
@@ -299,7 +295,6 @@ export function findModelPolicyDenial(options: {
   return undefined;
 }
 
-/** The error shown when `--model` or `/model` names a model the policy hides. */
 export function formatModelPolicyDenialError(denial: {
   model: Model<Api>;
   message: string;

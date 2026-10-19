@@ -1,8 +1,3 @@
-/**
- * `/memory`: the memories msa keeps, grouped by scope, with one memory in detail, where the user
- * searches, adds, and forgets.
- */
-
 import {
   type Component,
   type Focusable,
@@ -22,10 +17,8 @@ import { theme } from "../theme/theme.ts";
 import { rawKeyHint } from "./keybinding-hints.ts";
 import { fitView, type ViewFrame } from "./scroll-window.ts";
 
-/** Memories the view lists at once; enough to browse by hand, small enough to redraw fast. */
 const LIST_LIMIT = 200;
 
-/** Results a `/memory` search shows. */
 const SEARCH_LIMIT = 50;
 
 const KIND_GLYPH: Record<MemoryKind, string> = {
@@ -57,20 +50,15 @@ function firstLine(text: string): string {
 export interface MemoryViewOptions {
   service: MemoryService;
   onClose: () => void;
-  /** Asks the user to confirm forgetting a memory. Without it, `d` forgets right away. */
+
   confirm?: (message: string) => Promise<boolean>;
   onError: (message: string) => void;
   requestRender: () => void;
-  /** Rows the view may use, so long lists scroll instead of pushing the editor away. */
+
   maxHeight: () => number;
 }
 
-/**
- * A list of the stored memories, one memory in detail, and a search and add input. The list shows
- * what msa remembers at a glance; the keys forget, search, and add without leaving the screen.
- */
 export class MemoryView implements Component, Focusable {
-  /** The view owns the paging keys while it is open, so they scroll it and not the transcript. */
   readonly wantsViewportKeys = true;
   private readonly options: MemoryViewOptions;
   private records: MemoryRecord[];
@@ -81,9 +69,9 @@ export class MemoryView implements Component, Focusable {
   private inputMode: "search" | "add" | undefined;
   private readonly searchInput = new Input({ prompt: "› ", placeholder: "Search memories" });
   private readonly addInput = new Input({ prompt: "› ", placeholder: "Memory to remember" });
-  /** First body line drawn; the list follows the cursor, the detail follows the scroll keys. */
+
   private scroll = 0;
-  /** Body rows the last frame had room for. */
+
   private room = 0;
   private _focused = false;
 
@@ -112,7 +100,6 @@ export class MemoryView implements Component, Focusable {
 
   invalidate(): void {}
 
-  /** Project memories first, then global ones, both newest first. */
   private rows(): MemoryRecord[] {
     return [
       ...this.records.filter((record) => record.scope === "project"),
@@ -283,11 +270,13 @@ export class MemoryView implements Component, Focusable {
     const half = Math.max(1, Math.floor(this.room / 2));
     if (kb.matches(data, "tui.select.cancel")) {
       if (this.openId) this.openDetail(undefined);
-      else if (this.query !== undefined) {
+      else if (this.query === undefined) {
+        this.options.onClose();
+      } else {
         this.query = undefined;
         this.selectedId = undefined;
         this.reload();
-      } else this.options.onClose();
+      }
     } else if (this.openId && kb.matches(data, "tui.select.up")) {
       this.scrollBy(-1);
     } else if (this.openId && kb.matches(data, "tui.select.down")) {
@@ -330,14 +319,12 @@ export class MemoryView implements Component, Focusable {
     this.selectedId = rows[(index + step + rows.length) % rows.length]?.id;
   }
 
-  /** Moves the cursor by a page, stopping at either end instead of wrapping around. */
   private moveBy(rows: readonly MemoryRecord[], step: number): void {
     if (rows.length === 0) return;
     const index = rows.findIndex((record) => record.id === this.selected(rows)?.id);
     this.selectedId = rows[Math.max(0, Math.min(index + step, rows.length - 1))]?.id;
   }
 
-  /** Moves the detail window; the next render clamps it to the content. */
   private scrollBy(lines: number): void {
     this.scroll = Math.max(0, this.scroll + lines);
   }

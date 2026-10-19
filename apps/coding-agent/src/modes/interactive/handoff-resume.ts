@@ -28,10 +28,6 @@ async function choose(
   return pending[lines.findIndex((line) => line === picked)];
 }
 
-/**
- * Asks once whether to resume from a handoff nobody has taken yet. When the answer is yes, the
- * file is recorded as taken and its text is returned for the first turn.
- */
 export async function handoffResumePrompt(
   directory: string,
   dialogs: Dialogs,
@@ -40,7 +36,6 @@ export async function handoffResumePrompt(
   return chosen === undefined ? undefined : takeHandoff(directory, chosen.name);
 }
 
-/** In a fresh session with the orchestrator, asks once whether to resume from a handoff. */
 export async function offerHandoff(session: AgentSession, dialogs: Dialogs): Promise<void> {
   if (session.orchestrator === undefined || session.messages.length > 0) return;
   const prompt = await handoffResumePrompt(session.settingsManager.getHandoffDirectory(), dialogs);

@@ -127,13 +127,11 @@ export function canonicalizeBuiltinSlashCommand(text: string): string {
   return name === undefined ? text : `/${name}${text.slice(typed.length + 1)}`;
 }
 
-/** The path `/handoff` was typed with (empty for the default), or undefined when `text` is not `/handoff`. */
 export function parseHandoffCommand(text: string): { path: string } | undefined {
   const match = /^\/handoff(?:\s+([\s\S]*))?$/u.exec(text.trim());
   return match ? { path: (match[1] ?? "").trim() } : undefined;
 }
 
-/** What `/handoff` sends: the model writes the three sections, and the `handoff` tool does the rest. */
 export function handoffPrompt(path: string): string {
   return [
     "Hand this orchestrator over to the next msa session. Call the `handoff` tool once.",
@@ -145,7 +143,6 @@ export function handoffPrompt(path: string): string {
     .join("\n");
 }
 
-/** What `/init` sends: the model writes the repository's AGENTS.md. */
 export const INIT_PROMPT =
   "Analyze this repository and write an AGENTS.md at its root for future sessions: the setup " +
   "commands, how to build, test, and lint, the layout of the code, and the conventions to follow. " +

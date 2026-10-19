@@ -15,8 +15,8 @@ import { homedir } from "node:os";
 import * as Effect from "effect/Effect";
 
 import { toErrorMessage } from "../utils/errors.ts";
-import { envNames, envSnapshot, readEnv } from "./process-env.ts";
 import { awaited, awaiting, awaitingWith, performed } from "./awaiting.ts";
+import { envNames, envSnapshot, readEnv } from "./process-env.ts";
 
 function getEnv(): NodeJS.ProcessEnv {
   if (process.platform !== "linux" || envNames().length > 0) {

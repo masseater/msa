@@ -21,7 +21,6 @@ import type {
 import { NOOP_TELEMETRY_CONTEXT } from "./noop.ts";
 
 export interface OtlpTelemetryOptions {
-  /** Base URL of an OTLP/HTTP receiver; signals go to `/v1/traces`, `/v1/metrics`, and `/v1/logs`. */
   readonly endpoint: string;
   readonly serviceName: string;
   readonly serviceVersion: string;
@@ -31,7 +30,7 @@ export class OtlpTelemetry extends Context.Service<
   OtlpTelemetry,
   {
     readonly context: TelemetryContext;
-    /** Sends every buffered span, metric, and log record now. */
+
     readonly flush: Effect.Effect<void>;
   }
 >()("@msa/telemetry/otlp/OtlpTelemetry") {}
@@ -79,9 +78,7 @@ function readableFailure(error: unknown): Error {
       if (error.stack !== undefined) copy.stack = error.stack;
       return copy;
     }
-  } catch {
-    // The thrown value hides its fields; the span still records that the work failed.
-  }
+  } catch {}
   return new Error("");
 }
 
@@ -167,9 +164,7 @@ class EffectTelemetry {
     state.settled = true;
     try {
       state.span.end(this.#now(), exitOf(state, failed, error));
-    } catch {
-      // A failed export must not change the outcome of the traced work.
-    }
+    } catch {}
   }
 
   #span(state: SpanState): TelemetrySpan {
@@ -207,9 +202,7 @@ class EffectTelemetry {
     if (state?.settled === true) return;
     try {
       record();
-    } catch {
-      // Telemetry never fails the work it describes.
-    }
+    } catch {}
   }
 
   #log(parent: SpanState | undefined, record: TelemetryLogRecord): void {
@@ -250,11 +243,6 @@ class EffectTelemetry {
   }
 }
 
-/**
- * The OTLP exporters of `effect/observability`, which only exist as unstable modules; so do
- * `@effect/opentelemetry`'s, which also need the `@opentelemetry/*` SDK this repository bans.
- * The signal layers share one `Flusher`, and the logger replaces the console logger.
- */
 function exporters(options: OtlpTelemetryOptions) {
   const base = options.endpoint.replace(/\/+$/u, "");
   const resource = { serviceName: options.serviceName, serviceVersion: options.serviceVersion };
@@ -268,7 +256,6 @@ function exporters(options: OtlpTelemetryOptions) {
   );
 }
 
-/** Exports the telemetry contract's spans, logs, and metrics to `options.endpoint` over OTLP/HTTP. */
 export const layer = (options: OtlpTelemetryOptions): Layer.Layer<OtlpTelemetry> =>
   Layer.effect(
     OtlpTelemetry,

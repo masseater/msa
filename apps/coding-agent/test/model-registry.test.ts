@@ -1,4 +1,13 @@
 import type { Api } from "@msa/ai/compat";
+import {
+  awaited,
+  joinPath,
+  makeTempDir,
+  randomSuffixSync,
+  removePath,
+  runTest,
+} from "@msa/testing";
+import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
 
 import { AuthStorage } from "../src/core/auth-storage.ts";
@@ -7,10 +16,8 @@ import {
   type ModelRegistry,
   type ProviderConfigInput,
 } from "../src/core/model-registry.ts";
-import { createModelRegistry } from "./model-runtime-test-utils.ts";
-import { Effect } from "effect";
 import { nodeFs } from "./model-registry-support.ts";
-import { awaited, joinPath, makeTempDir, randomSuffixSync, removePath, runTest} from "@msa/testing";
+import { createModelRegistry } from "./model-runtime-test-utils.ts";
 
 describe("ModelRegistry", () => {
   let tempDir: string;
@@ -68,200 +75,191 @@ describe("ModelRegistry", () => {
   });
 
   describe("baseUrl override (no custom models)", () => {
-    test("overriding baseUrl keeps all built-in models", () => runTest(
-Effect.gen(function* () {
+    test("overriding baseUrl keeps all built-in models", () =>
+      runTest(
+        Effect.gen(function* () {
+          writeRawModelsJson({
+            "anthropic-api": overrideConfig("https://my-proxy.example.com/v1"),
+          });
 
-      writeRawModelsJson({
-        "anthropic-api": overrideConfig("https://my-proxy.example.com/v1"),
-      });
+          const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
+          const anthropicModels = getModelsForProvider(registry, "anthropic-api");
 
-      const registry = (yield* awaited(createModelRegistry(authStorage, modelsJsonPath)));
-      const anthropicModels = getModelsForProvider(registry, "anthropic-api");
-
-      expect(anthropicModels.length).toBeGreaterThan(1);
-      expect(anthropicModels.some((m) => m.id.includes("claude"))).toBe(true);
-    
-}),
-));
-
-    test("overriding baseUrl changes URL on all built-in models", () => runTest(
-Effect.gen(function* () {
-
-      writeRawModelsJson({
-        "anthropic-api": overrideConfig("https://my-proxy.example.com/v1"),
-      });
-
-      const registry = (yield* awaited(createModelRegistry(authStorage, modelsJsonPath)));
-      const anthropicModels = getModelsForProvider(registry, "anthropic-api");
-
-      for (const model of anthropicModels) {
-        expect(model.baseUrl).toBe("https://my-proxy.example.com/v1");
-      }
-    
-}),
-));
-
-    test("overriding headers resolves at request time", () => runTest(
-Effect.gen(function* () {
-
-      writeRawModelsJson({
-        "anthropic-api": overrideConfig("https://my-proxy.example.com/v1", {
-          "X-Custom-Header": "custom-value",
+          expect(anthropicModels.length).toBeGreaterThan(1);
+          expect(anthropicModels.some((m) => m.id.includes("claude"))).toBe(true);
         }),
-      });
+      ));
 
-      const registry = (yield* awaited(createModelRegistry(authStorage, modelsJsonPath)));
-      const anthropicModels = getModelsForProvider(registry, "anthropic-api");
+    test("overriding baseUrl changes URL on all built-in models", () =>
+      runTest(
+        Effect.gen(function* () {
+          writeRawModelsJson({
+            "anthropic-api": overrideConfig("https://my-proxy.example.com/v1"),
+          });
 
-      for (const model of anthropicModels) {
-        const auth = (yield* awaited(registry.getApiKeyAndHeaders(model)));
-        expect(auth.ok).toBe(true);
-        if (auth.ok) {
-          expect(auth.headers?.["X-Custom-Header"]).toBe("custom-value");
-        }
-      }
-    
-}),
-));
+          const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
+          const anthropicModels = getModelsForProvider(registry, "anthropic-api");
 
-    test("headers-only override resolves at request time", () => runTest(
-Effect.gen(function* () {
+          for (const model of anthropicModels) {
+            expect(model.baseUrl).toBe("https://my-proxy.example.com/v1");
+          }
+        }),
+      ));
 
-      writeRawModelsJson({
-        "anthropic-api": {
-          headers: {
-            "X-Custom-Header": "custom-value",
-          },
-        },
-      });
+    test("overriding headers resolves at request time", () =>
+      runTest(
+        Effect.gen(function* () {
+          writeRawModelsJson({
+            "anthropic-api": overrideConfig("https://my-proxy.example.com/v1", {
+              "X-Custom-Header": "custom-value",
+            }),
+          });
 
-      const registry = (yield* awaited(createModelRegistry(authStorage, modelsJsonPath)));
-      expect(registry.getError()).toBeUndefined();
-      const anthropicModels = getModelsForProvider(registry, "anthropic-api");
+          const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
+          const anthropicModels = getModelsForProvider(registry, "anthropic-api");
 
-      for (const model of anthropicModels) {
-        const auth = (yield* awaited(registry.getApiKeyAndHeaders(model)));
-        expect(auth.ok).toBe(true);
-        if (auth.ok) {
-          expect(auth.headers?.["X-Custom-Header"]).toBe("custom-value");
-        }
-      }
-    
-}),
-));
+          for (const model of anthropicModels) {
+            const auth = yield* awaited(registry.getApiKeyAndHeaders(model));
+            expect(auth.ok).toBe(true);
+            if (auth.ok) {
+              expect(auth.headers?.["X-Custom-Header"]).toBe("custom-value");
+            }
+          }
+        }),
+      ));
 
-    test("unconfigured compatibility auth includes static model headers", () => runTest(
-Effect.gen(function* () {
+    test("headers-only override resolves at request time", () =>
+      runTest(
+        Effect.gen(function* () {
+          writeRawModelsJson({
+            "anthropic-api": {
+              headers: {
+                "X-Custom-Header": "custom-value",
+              },
+            },
+          });
 
-      const registry = (yield* awaited(createModelRegistry(authStorage, modelsJsonPath)));
-      const base = registry.getAll()[0];
-      if (base === undefined) throw new Error("expected a registered model");
-      const model = {
-        ...base,
-        provider: "missing-provider",
-        headers: { "X-Static-Model": "static-value" },
-      };
+          const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
+          expect(registry.getError()).toBeUndefined();
+          const anthropicModels = getModelsForProvider(registry, "anthropic-api");
 
-      const auth = (yield* awaited(registry.getApiKeyAndHeaders(model)));
+          for (const model of anthropicModels) {
+            const auth = yield* awaited(registry.getApiKeyAndHeaders(model));
+            expect(auth.ok).toBe(true);
+            if (auth.ok) {
+              expect(auth.headers?.["X-Custom-Header"]).toBe("custom-value");
+            }
+          }
+        }),
+      ));
 
-      expect(auth).toEqual({ ok: true, headers: { "X-Static-Model": "static-value" } });
-    
-}),
-));
+    test("unconfigured compatibility auth includes static model headers", () =>
+      runTest(
+        Effect.gen(function* () {
+          const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
+          const base = registry.getAll()[0];
+          if (base === undefined) throw new Error("expected a registered model");
+          const model = {
+            ...base,
+            provider: "missing-provider",
+            headers: { "X-Static-Model": "static-value" },
+          };
 
-    test("baseUrl-only override does not affect other providers", () => runTest(
-Effect.gen(function* () {
+          const auth = yield* awaited(registry.getApiKeyAndHeaders(model));
 
-      writeRawModelsJson({
-        "anthropic-api": overrideConfig("https://my-proxy.example.com/v1"),
-      });
+          expect(auth).toEqual({ ok: true, headers: { "X-Static-Model": "static-value" } });
+        }),
+      ));
 
-      const registry = (yield* awaited(createModelRegistry(authStorage, modelsJsonPath)));
-      const opencodeModels = getModelsForProvider(registry, "opencode");
+    test("baseUrl-only override does not affect other providers", () =>
+      runTest(
+        Effect.gen(function* () {
+          writeRawModelsJson({
+            "anthropic-api": overrideConfig("https://my-proxy.example.com/v1"),
+          });
 
-      expect(opencodeModels.length).toBeGreaterThan(0);
-      expect(opencodeModels[0]?.baseUrl).not.toBe("https://my-proxy.example.com/v1");
-    
-}),
-));
+          const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
+          const opencodeModels = getModelsForProvider(registry, "opencode");
 
-    test("can mix baseUrl override and models merge", () => runTest(
-Effect.gen(function* () {
+          expect(opencodeModels.length).toBeGreaterThan(0);
+          expect(opencodeModels[0]?.baseUrl).not.toBe("https://my-proxy.example.com/v1");
+        }),
+      ));
 
-      writeRawModelsJson({
-        "anthropic-api": overrideConfig("https://anthropic-proxy.example.com/v1"),
+    test("can mix baseUrl override and models merge", () =>
+      runTest(
+        Effect.gen(function* () {
+          writeRawModelsJson({
+            "anthropic-api": overrideConfig("https://anthropic-proxy.example.com/v1"),
 
-        opencode: providerConfig(
-          "https://opencode-proxy.example.com/v1",
-          [{ id: "gemini-custom" }],
-          "google-generative-ai",
-        ),
-      });
+            opencode: providerConfig(
+              "https://opencode-proxy.example.com/v1",
+              [{ id: "gemini-custom" }],
+              "google-generative-ai",
+            ),
+          });
 
-      const registry = (yield* awaited(createModelRegistry(authStorage, modelsJsonPath)));
+          const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
 
-      const anthropicModels = getModelsForProvider(registry, "anthropic-api");
-      expect(anthropicModels.length).toBeGreaterThan(1);
-      expect(anthropicModels[0]?.baseUrl).toBe("https://anthropic-proxy.example.com/v1");
+          const anthropicModels = getModelsForProvider(registry, "anthropic-api");
+          expect(anthropicModels.length).toBeGreaterThan(1);
+          expect(anthropicModels[0]?.baseUrl).toBe("https://anthropic-proxy.example.com/v1");
 
-      const opencodeModels = getModelsForProvider(registry, "opencode");
-      expect(opencodeModels.length).toBeGreaterThan(1);
-      expect(opencodeModels.some((m) => m.id === "gemini-custom")).toBe(true);
-    
-}),
-));
+          const opencodeModels = getModelsForProvider(registry, "opencode");
+          expect(opencodeModels.length).toBeGreaterThan(1);
+          expect(opencodeModels.some((m) => m.id === "gemini-custom")).toBe(true);
+        }),
+      ));
 
-    test("refresh() picks up baseUrl override changes", () => runTest(
-Effect.gen(function* () {
+    test("refresh() picks up baseUrl override changes", () =>
+      runTest(
+        Effect.gen(function* () {
+          writeRawModelsJson({
+            "anthropic-api": overrideConfig("https://first-proxy.example.com/v1"),
+          });
+          const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
 
-      writeRawModelsJson({
-        "anthropic-api": overrideConfig("https://first-proxy.example.com/v1"),
-      });
-      const registry = (yield* awaited(createModelRegistry(authStorage, modelsJsonPath)));
+          expect(getModelsForProvider(registry, "anthropic-api")[0]?.baseUrl).toBe(
+            "https://first-proxy.example.com/v1",
+          );
 
-      expect(getModelsForProvider(registry, "anthropic-api")[0]?.baseUrl).toBe(
-        "https://first-proxy.example.com/v1",
-      );
+          writeRawModelsJson({
+            "anthropic-api": overrideConfig("https://second-proxy.example.com/v1"),
+          });
+          yield* awaited(registry.refresh());
 
-      writeRawModelsJson({
-        "anthropic-api": overrideConfig("https://second-proxy.example.com/v1"),
-      });
-      (yield* awaited(registry.refresh()));
-
-      expect(getModelsForProvider(registry, "anthropic-api")[0]?.baseUrl).toBe(
-        "https://second-proxy.example.com/v1",
-      );
-    
-}),
-));
+          expect(getModelsForProvider(registry, "anthropic-api")[0]?.baseUrl).toBe(
+            "https://second-proxy.example.com/v1",
+          );
+        }),
+      ));
   });
 
   describe("custom models merge behavior", () => {
-    test("built-in provider custom models inherit api and baseUrl without explicit fields", () => runTest(
-Effect.gen(function* () {
-
-      writeRawModelsJson({
-        openrouter: {
-          models: [
-            {
-              id: "fake-provider/fake-model",
-              name: "Fake model",
-              reasoning: true,
-              input: ["text"],
+    test("built-in provider custom models inherit api and baseUrl without explicit fields", () =>
+      runTest(
+        Effect.gen(function* () {
+          writeRawModelsJson({
+            openrouter: {
+              models: [
+                {
+                  id: "fake-provider/fake-model",
+                  name: "Fake model",
+                  reasoning: true,
+                  input: ["text"],
+                },
+              ],
             },
-          ],
-        },
-      });
+          });
 
-      const registry = (yield* awaited(createModelRegistry(authStorage, modelsJsonPath)));
-      expect(registry.getError()).toBeUndefined();
+          const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
+          expect(registry.getError()).toBeUndefined();
 
-      const model = registry.find("openrouter", "fake-provider/fake-model");
-      expect(model).toBeDefined();
-      expect(model?.api).toBe("openai-completions");
-      expect(model?.baseUrl).toBe("https://openrouter.ai/api/v1");
-    
-}),
-));
+          const model = registry.find("openrouter", "fake-provider/fake-model");
+          expect(model).toBeDefined();
+          expect(model?.api).toBe("openai-completions");
+          expect(model?.baseUrl).toBe("https://openrouter.ai/api/v1");
+        }),
+      ));
   });
 });

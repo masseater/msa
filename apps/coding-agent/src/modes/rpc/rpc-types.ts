@@ -21,7 +21,7 @@ export type RpcCommand =
       message: string;
       images?: ImageContent[] | undefined;
       streamingBehavior?: "steer" | "followUp" | undefined;
-      /** `"ask"`: the turn can only answer, as `/ask` does. */
+
       mode?: PromptMode | undefined;
     }
   | { id?: string | undefined; type: "steer"; message: string; images?: ImageContent[] | undefined }
@@ -87,7 +87,7 @@ export interface RpcSessionState {
   autoCompactionEnabled: boolean;
   messageCount: number;
   pendingMessageCount: number;
-  /** Size of the next request, with `tokens` equal to the breakdown's total. */
+
   contextUsage?: (ContextUsage & { breakdown: ContextBreakdown }) | undefined;
 }
 

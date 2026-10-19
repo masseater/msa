@@ -1,6 +1,9 @@
 import { Effect, FileSystem } from "effect";
 
-import { createOutputFileStream, type OutputFileStream as OutputFile } from "../../utils/output-files.ts";
+import {
+  createOutputFileStream,
+  type OutputFileStream as OutputFile,
+} from "../../utils/output-files.ts";
 import { platformRuntime, rethrowCause } from "../platform/index.ts";
 import {
   DEFAULT_MAX_BYTES,

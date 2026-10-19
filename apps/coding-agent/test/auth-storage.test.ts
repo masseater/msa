@@ -129,7 +129,9 @@ describe("AuthStorage", () => {
         yield* writeAuthJson({ "anthropic-api": { type: "api_key" as const, key: "stored" } });
         const storage = AuthStorage.create(authJsonPath);
         expect(
-          yield* awaited(storage.modify("anthropic-api", () => effectRunPromise(awaited(undefined)))),
+          yield* awaited(
+            storage.modify("anthropic-api", () => effectRunPromise(awaited(undefined))),
+          ),
         ).toEqual({
           type: "api_key" as const,
           key: "stored",

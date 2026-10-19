@@ -1,6 +1,7 @@
 import { deferredPromise } from "@msa/testing";
 import { Effect } from "effect";
 import { expect } from "vite-plus/test";
+
 import type { BashOperations } from "../../src/core/tools/bash.ts";
 import { createHarness, type Harness } from "./harness.ts";
 
@@ -11,7 +12,9 @@ export interface ControlledBashInvocation {
   signal: AbortSignal | undefined;
   finish: () => void;
 }
-export function createControlledBashOperations(invocations: ControlledBashInvocation[]): BashOperations {
+export function createControlledBashOperations(
+  invocations: ControlledBashInvocation[],
+): BashOperations {
   return {
     exec: (_command, _cwd, options) => {
       const execution = deferredPromise<{ exitCode: number | null }>();

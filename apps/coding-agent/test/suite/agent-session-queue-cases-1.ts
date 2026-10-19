@@ -3,6 +3,7 @@ import type { ExtensionAPI } from "@msa/coding-agent";
 import { gate } from "@msa/testing";
 import { Effect } from "effect";
 import { Type } from "typebox";
+
 import { createHarness, type Harness } from "./harness.ts";
 
 export function createWaitingHarness(

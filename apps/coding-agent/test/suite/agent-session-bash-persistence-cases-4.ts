@@ -3,9 +3,10 @@ import { fauxAssistantMessage, fauxToolCall } from "@msa/ai";
 import { Effect } from "effect";
 import { Type } from "typebox";
 import { expect } from "vite-plus/test";
-import { createHarness } from "./harness.ts";
+
 import { harnesses } from "./agent-session-bash-persistence-cases-1.ts";
 import { persistsUserAssistantToolresultAndCustomPart2 } from "./agent-session-bash-persistence-cases-3.ts";
+import { createHarness } from "./harness.ts";
 
 export const persistsUserAssistantToolresultAndCustom = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());

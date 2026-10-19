@@ -27,7 +27,6 @@ function pad(value: number): string {
   return String(value).padStart(2, "0");
 }
 
-/** `<timestamp>-<short id>.md`; the timestamp is UTC so names sort by time. */
 export function handoffFileName(createdAt: number): string {
   const date = new Date(createdAt);
   const day = `${date.getUTCFullYear()}${pad(date.getUTCMonth() + 1)}${pad(date.getUTCDate())}`;
@@ -42,7 +41,6 @@ async function isDirectory(path: string): Promise<boolean> {
   );
 }
 
-/** Where a handoff goes: the default directory, or the path given (a directory gets a generated name). */
 export async function handoffPath(
   directory: string,
   cwd: string,
@@ -87,7 +85,6 @@ async function describeFile(directory: string, name: string): Promise<PendingHan
   return Option.isSome(marker) ? { name, path, ...marker.value } : undefined;
 }
 
-/** The handoffs in `directory` nobody has taken yet, newest first. */
 export async function pendingHandoffs(directory: string): Promise<PendingHandoff[]> {
   const [entries, consumed] = await Promise.all([
     readdir(directory).catch(() => [] as string[]),
@@ -100,7 +97,6 @@ export async function pendingHandoffs(directory: string): Promise<PendingHandoff
     .toSorted((a, b) => b.createdAt - a.createdAt || b.name.localeCompare(a.name));
 }
 
-/** What the first turn of the next session receives: the file as `read` would show it. */
 export async function takeHandoff(directory: string, name: string): Promise<string> {
   const path = resolve(directory, basename(name));
   const content = await readFile(path, "utf8");

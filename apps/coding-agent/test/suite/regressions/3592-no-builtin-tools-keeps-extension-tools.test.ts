@@ -9,11 +9,11 @@ import {
   createAgentSessionFromServices,
   createAgentSessionServices,
 } from "../../../src/core/agent-session-services.ts";
+import { ORCHESTRATOR_TOOL_NAMES } from "../../../src/core/orchestrator/tool-names.ts";
 import { DefaultResourceLoader } from "../../../src/core/resource-loader.ts";
 import { createAgentSession } from "../../../src/core/sdk.ts";
 import { SessionManager } from "../../../src/core/session-manager.ts";
 import { SettingsManager } from "../../../src/core/settings-manager.ts";
-import { ORCHESTRATOR_TOOL_NAMES } from "../../../src/core/orchestrator/tool-names.ts";
 
 const runtime = ManagedRuntime.make(NodeServices.layer);
 const fs = runtime.runSync(FileSystem.FileSystem.useSync((service) => service));

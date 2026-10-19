@@ -28,11 +28,10 @@ export type TelemetryDestination =
   | { readonly kind: "off"; readonly reason: string };
 
 export interface TelemetryInputs {
-  /** `MSA_OTLP_ENDPOINT` */
   readonly envEndpoint: string | undefined;
-  /** `telemetry.otlpEndpoint` */
+
   readonly settingsEndpoint: string | undefined;
-  /** `PATH`, searched for podman */
+
   readonly path: string | undefined;
   readonly version: string;
 }
@@ -71,7 +70,6 @@ export class Telemetry extends Context.Service<
   }
 >()("@msa/coding-agent/core/observability/telemetry") {}
 
-/** The one line printed at startup and shown by /status. */
 export function describeTelemetry(status: TelemetryStatus): string {
   const { destination, state } = status;
   if (destination.kind === "off") return `Telemetry off: ${destination.reason}`;
@@ -83,10 +81,6 @@ export function describeTelemetry(status: TelemetryStatus): string {
   return state.kind === "starting" ? `Telemetry: ${target}, connecting` : `Telemetry: ${target}`;
 }
 
-/**
- * Hands out a context that records nothing until the export pipeline is ready,
- * so spans started before the container accepts OTLP are not queued for a dead endpoint.
- */
 function forwardingContext(target: { current: TelemetryContext }): TelemetryContext {
   return {
     startSpan: (options, callback) => target.current.startSpan(options, callback),
@@ -106,7 +100,6 @@ function exportPipeline(
   ).pipe(Effect.map((services) => Context.get(services, OtlpTelemetry).context));
 }
 
-/** The process-wide telemetry msa starts once and flushes when it exits. */
 export interface TelemetryHandle {
   readonly context: TelemetryContext;
   status(): TelemetryStatus;
@@ -128,7 +121,6 @@ export async function startTelemetry(inputs: TelemetryInputs): Promise<Telemetry
   };
 }
 
-/** The receiver answers any request once the collector is up; the status code does not matter. */
 const receiverReady = HttpClient.get(`${LGTM_OTLP_ENDPOINT}/v1/traces`).pipe(
   Effect.asVoid,
   Effect.retry({ schedule: Schedule.spaced(Duration.seconds(1)), times: 600 }),
@@ -140,7 +132,6 @@ const receiverReady = HttpClient.get(`${LGTM_OTLP_ENDPOINT}/v1/traces`).pipe(
   ),
 );
 
-/** Provides `Telemetry`: OTLP to the configured endpoint, else the podman otel-lgtm container, else nothing. */
 export const layer = (inputs: TelemetryInputs): Layer.Layer<Telemetry> =>
   Layer.effect(
     Telemetry,

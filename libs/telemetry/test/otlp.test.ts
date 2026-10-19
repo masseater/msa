@@ -156,11 +156,11 @@ function normalizeLogs(received: Received): RecordedTelemetryLog[] {
 function normalizeMetrics(received: Received): RecordedTelemetryMetric[] {
   return [...received.metrics.values()].flatMap((metric) => {
     const [kind, points]: [TelemetryMetricKind, readonly OtlpDataPoint[]] =
-      metric.histogram !== undefined
-        ? ["histogram", metric.histogram.dataPoints]
-        : metric.gauge !== undefined
+      metric.histogram === undefined
+        ? metric.gauge !== undefined
           ? ["gauge", metric.gauge.dataPoints]
-          : ["counter", metric.sum?.dataPoints ?? []];
+          : ["counter", metric.sum?.dataPoints ?? []]
+        : ["histogram", metric.histogram.dataPoints];
     return points.map((point) => ({
       kind,
       name: metric.name,

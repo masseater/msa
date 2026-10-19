@@ -1,5 +1,5 @@
-import { readEnv } from "./process-env.ts";
 import { nowMs, writeError } from "./platform.ts";
+import { readEnv } from "./process-env.ts";
 
 const ENABLED = readEnv("MSA_TIMING") === "1";
 interface TimingNamespace {

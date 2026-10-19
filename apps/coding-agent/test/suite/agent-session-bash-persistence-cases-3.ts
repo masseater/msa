@@ -1,9 +1,14 @@
 import { deferredPromise } from "@msa/testing";
 import { Effect } from "effect";
 import { expect } from "vite-plus/test";
+
 import type { BashOperations } from "../../src/core/tools/bash.ts";
+import {
+  type ControlledBashInvocation,
+  createControlledBashOperations,
+  harnesses,
+} from "./agent-session-bash-persistence-cases-1.ts";
 import { createHarness, type Harness } from "./harness.ts";
-import { type ControlledBashInvocation, createControlledBashOperations, harnesses } from "./agent-session-bash-persistence-cases-1.ts";
 
 export const executesBashCommandsAndRecordsThe = Effect.gen(function* () {
   const harness = yield* Effect.promise(() => createHarness());

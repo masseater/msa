@@ -1,10 +1,3 @@
-/**
- * The `model_policy` tool: the model's way to read, add, and remove model allow and deny patterns.
- *
- * It writes the same setting and refreshes the same catalog as the model selector, so a change the
- * model makes appears in the next listing and selection. A running session keeps its model.
- */
-
 import type { Api, Model } from "@msa/ai";
 import { type Static, Type } from "typebox";
 
@@ -61,7 +54,7 @@ export const modelPolicyToolSystemPromptContribution = {
 export interface ModelPolicyToolTarget {
   settingsManager: SettingsManager;
   modelRuntime: ModelRuntime;
-  /** The model the running session is using, which the policy may not deny. */
+
   currentModel(): Model<Api> | undefined;
 }
 

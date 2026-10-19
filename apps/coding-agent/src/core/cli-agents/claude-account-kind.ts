@@ -1,8 +1,3 @@
-/**
- * `/accounts claude`: list the Claude accounts the claude-subs provider rotates
- * through, add and remove them, sign them in and out, and pick their order.
- * Changes that add or drop a `claude-subs-<account>` provider rebuild the providers.
- */
 import type { AutocompleteItem } from "@msa/tui";
 
 import type { AccountKind, AccountsContext } from "../accounts.ts";
@@ -82,7 +77,7 @@ async function run(args: string, ctx: AccountsContext): Promise<void> {
     case "add": {
       if (!name) throw new Error(`Usage: /accounts claude ${ACTIONS["add"]}`);
       const account = addAccount(name, rest.join(" ") || undefined);
-      // The account stays when signing in fails; `login` retries it.
+
       if (!account.tokenCommand)
         await login(account, ctx).catch((error: Error) => ctx.ui.notify(error.message, "warning"));
       break;
@@ -113,7 +108,7 @@ async function run(args: string, ctx: AccountsContext): Promise<void> {
       throw new Error(`Unknown action "${action}".\n${Object.values(ACTIONS).join("\n")}`);
   }
   ctx.ui.notify(await describeAccounts(), "info");
-  // Adding or removing an account adds or drops claude-subs-<account> providers.
+
   if (loadAccounts().length !== before) await ctx.refreshProviders();
 }
 

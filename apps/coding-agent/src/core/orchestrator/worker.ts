@@ -46,9 +46,9 @@ export interface OrchestratorOptions {
   project: string;
   cwd: string;
   databasePath: string;
-  /** Where `/handoff` writes by default and the next session looks for handoffs. */
+
   handoffDirectory: string;
-  /** The msa version a handoff records. */
+
   version: string;
   createWorker: (options: CreateWorkerOptions) => Promise<WorkerSession>;
   resolveModel: (reference: string) => Model<any>;
@@ -56,6 +56,6 @@ export interface OrchestratorOptions {
   report: (text: string, details: OrchestratorReport) => void;
   runCondition: (command: string, cwd: string) => Promise<boolean>;
   pollIntervalMs?: number | null;
-  /** Parent of the Task spans; each Thread span sits under its first task. */
+
   telemetry: TelemetryContext;
 }

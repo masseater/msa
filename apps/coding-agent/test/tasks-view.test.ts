@@ -159,7 +159,6 @@ it("shows the latest replan in the list and its handoff in the task", () => {
   expect(text).toContain("two checks still failing");
 });
 
-/** One round of failed tasks: each row draws a title and its report line, so the list outgrows a short screen. */
 function failedTasks(count: number): TaskSnapshot[] {
   return Array.from({ length: count }, (_, index) =>
     task(`t${index + 1}`, {
@@ -209,7 +208,7 @@ describe("TasksView scrolling", () => {
 
   it("pages the list without wrapping around", () => {
     const { view, screen } = setup({ tasks: failedTasks(12), maxHeight: 12, replans: [] });
-    screen(); // the TUI draws a frame before it delivers keys
+    screen();
     view.handleInput(PAGE_DOWN);
     expect(screen().join("\n")).toContain("› ✗ task 7");
     view.handleInput(PAGE_DOWN);

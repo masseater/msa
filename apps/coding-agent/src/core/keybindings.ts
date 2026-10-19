@@ -13,8 +13,8 @@ import { Compile } from "typebox/compile";
 import { getAgentDir } from "../config.ts";
 import { stripBom } from "../utils/text.ts";
 import { KeybindingValueSchema } from "./key-id-schema.ts";
-import { envSnapshot } from "./process-env.ts";
 import { join } from "./platform-node.ts";
+import { envSnapshot } from "./process-env.ts";
 
 export function useWindowsKeybindings(
   platform: NodeJS.Platform = process.platform,

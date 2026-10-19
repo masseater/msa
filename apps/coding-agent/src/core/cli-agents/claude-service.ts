@@ -1,7 +1,3 @@
-/**
- * Claude Code as an external service, so `/login` signs its accounts in to Claude. `/accounts claude`
- * manages the same accounts with more actions.
- */
 import type { ExternalService, ServiceLoginInteraction } from "../external-services.ts";
 import {
   type Account,
@@ -18,7 +14,6 @@ import {
 const INSTALL_COMMAND = "curl -fsSL https://claude.ai/install.sh | bash";
 const NEW_ACCOUNT = "Add a new account";
 
-/** Accounts that sign in with Claude Code's own login rather than a tokenCommand. */
 function loginAccounts(): Account[] {
   return loadAccounts().filter((account) => account.configDir || !account.tokenCommand);
 }
@@ -34,7 +29,6 @@ async function withLabels(accounts: Account[]) {
   });
 }
 
-/** The account to sign in: the only one, or the one the user picks or adds. */
 async function chooseAccount(
   interaction: ServiceLoginInteraction,
   accounts: Awaited<ReturnType<typeof withLabels>>,

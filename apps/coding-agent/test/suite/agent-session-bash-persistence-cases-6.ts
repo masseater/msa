@@ -1,9 +1,11 @@
 import { Buffer } from "node:buffer";
+
 import { Effect } from "effect";
 import { expect } from "vite-plus/test";
+
 import type { BashOperations } from "../../src/core/tools/bash.ts";
-import { createHarness } from "./harness.ts";
 import { harnesses } from "./agent-session-bash-persistence-cases-1.ts";
+import { createHarness } from "./harness.ts";
 
 export const recordsBashOutputThroughCustomOperations = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
@@ -62,7 +64,10 @@ export const streamsBashOutputToTheCallback = Effect.gen(function* () {
     { id: "bash-1", delta: "world" },
   ]);
 });
-export const runChunks = (entry: { chunks: Array<string | Buffer>; beforeExit?: (streamed: string) => void }): Promise<{ output: string; streamed: string; recorded: string | undefined; }> => {
+export const runChunks = (entry: {
+  chunks: Array<string | Buffer>;
+  beforeExit?: (streamed: string) => void;
+}): Promise<{ output: string; streamed: string; recorded: string | undefined }> => {
   const { chunks, beforeExit } = entry;
   return Effect.runPromise(
     Effect.gen(function* () {
@@ -128,9 +133,12 @@ export const doesNotHoldBackOutputBehind = Effect.gen(function* () {
   const long = "x".repeat(300);
   let streamedBeforeExit = "";
   yield* Effect.promise(() =>
-    runChunks({ chunks: [`\x1b]${long}`], beforeExit: (streamed) => {
-      streamedBeforeExit = streamed;
-    } }),
+    runChunks({
+      chunks: [`\x1b]${long}`],
+      beforeExit: (streamed) => {
+        streamedBeforeExit = streamed;
+      },
+    }),
   );
   expect(streamedBeforeExit).toBe(`]${long}`);
 });

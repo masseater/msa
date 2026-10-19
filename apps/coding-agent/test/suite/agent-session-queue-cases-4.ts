@@ -2,8 +2,9 @@ import { fauxAssistantMessage } from "@msa/ai";
 import type { ExtensionAPI } from "@msa/coding-agent";
 import { Effect } from "effect";
 import { expect } from "vite-plus/test";
-import { createHarness, getUserTexts } from "./harness.ts";
+
 import { harnesses } from "./agent-session-queue-cases-1.ts";
+import { createHarness, getUserTexts } from "./harness.ts";
 
 export const deliversFollowUpsQueuedDuringAgent = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());

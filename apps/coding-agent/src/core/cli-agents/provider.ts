@@ -1,7 +1,3 @@
-/**
- * A provider whose requests another coding agent's CLI or SDK serves under that agent's own login,
- * so msa holds no key for it.
- */
 import { existsSync } from "node:fs";
 
 import {
@@ -26,7 +22,7 @@ export function cliAgentProvider(input: {
   id: string;
   name: string;
   models: readonly CliAgentModel[];
-  /** The agent's executable, or undefined when it is not installed; the provider is unavailable then. */
+
   executable(): string | undefined;
   streamSimple(
     model: Model<string>,

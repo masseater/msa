@@ -71,7 +71,7 @@ function createHarness(options?: { isWorker?: boolean }) {
         modelRuntime,
         model,
         sessionManager,
-        ...(options?.isWorker !== undefined ? { isWorker: options.isWorker } : {}),
+        ...(options?.isWorker === undefined ? {} : { isWorker: options.isWorker }),
       }),
     );
     sessionManager.appendMessage({ role: "user", content: "start", timestamp: 1 });

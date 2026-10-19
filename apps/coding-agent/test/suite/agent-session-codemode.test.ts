@@ -1008,9 +1008,7 @@ const declaresModelsOnlyForTheSession = Effect.gen(function* () {
 });
 
 const listsModelsAndClassifiesWithCatalog = Effect.gen(function* () {
-  const { harness, observed, maxActive, holdUntilInFlight } = yield* Effect.promise(() =>
-    setup4(),
-  );
+  const { harness, observed, maxActive, holdUntilInFlight } = yield* Effect.promise(() => setup4());
   holdUntilInFlight(4);
   const result = yield* Effect.promise(() =>
     run4(

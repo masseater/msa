@@ -9,7 +9,7 @@ export interface PrNotification {
   readonly label: string;
   readonly text: string;
   readonly wake: boolean;
-  /** Set when checks finished: how long they were pending and how they ended. */
+
   readonly ci?: { readonly durationMs: number; readonly conclusion: "passed" | "failed" };
 }
 

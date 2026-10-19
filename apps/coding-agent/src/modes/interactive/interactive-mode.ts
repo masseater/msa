@@ -5901,13 +5901,13 @@ export class InteractiveMode {
         const contextBreakdown = yield* awaited(this.session.getContextBreakdown());
         const telemetry = this.runtimeHost.telemetry;
         const info: SessionInfo = {
-      stats: this.session.getSessionStats(),
-      sessionName: this.sessionManager.getSessionName(),
-      cacheWaste: computeCacheWaste(entries, this.session.modelRuntime),
-      usageBreakdown: getUsageCostBreakdown(entries),
-      cacheWarmingMode: this.settingsManager.getCacheWarmingMode(),
-      cacheWarmingStatus: this.session.cacheWarmingStatus,
-      selectedModelKey: `${model?.provider}/${model?.id}`,
+          stats: this.session.getSessionStats(),
+          sessionName: this.sessionManager.getSessionName(),
+          cacheWaste: computeCacheWaste(entries, this.session.modelRuntime),
+          usageBreakdown: getUsageCostBreakdown(entries),
+          cacheWarmingMode: this.settingsManager.getCacheWarmingMode(),
+          cacheWarmingStatus: this.session.cacheWarmingStatus,
+          selectedModelKey: `${model?.provider}/${model?.id}`,
           contextBreakdown,
           contextWindow: this.session.getContextUsage()?.contextWindow ?? model?.contextWindow,
           telemetry: telemetry === undefined ? undefined : describeTelemetry(telemetry.status()),

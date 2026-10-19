@@ -1,6 +1,5 @@
 import type { Note, OrchestratorSnapshot, ReplanView, TaskSnapshot } from "./types.ts";
 
-/** The three sections only the model can write, from the conversation. */
 export interface HandoffSections {
   premise: string;
   goals: string;
@@ -13,7 +12,6 @@ export interface HandoffItem {
   detail: string;
 }
 
-/** What the repository and GitHub say; `undefined` means it could not be read. */
 export interface HandoffEnvironment {
   version: string;
   cwd: string;
@@ -197,7 +195,6 @@ function replansSection(replans: readonly ReplanView[]): string {
   ].join("\n");
 }
 
-/** The marker `pendingHandoffs` reads: when the file was written and how many tasks it holds. */
 export function handoffMarker(createdAt: number, tasks: number): string {
   return `<!-- msa-handoff ${JSON.stringify({ createdAt, tasks })} -->`;
 }

@@ -1,8 +1,3 @@
-/**
- * Runs a coding-agent CLI as the model behind an msa provider: spawns it per
- * request, feeds the prompt on stdin, and turns its JSON-lines output into the
- * reply. A backend only builds the command and reads events.
- */
 import type { ChildProcess } from "node:child_process";
 import { createInterface } from "node:readline";
 
@@ -27,16 +22,15 @@ export type EventSink = Pick<
   ReplyBuilder,
   "setText" | "appendText" | "appendThinking" | "addUsage"
 > & {
-  /** The CLI reported a failed run even if it exits 0; an empty message falls back to stderr. */
   fail(message: string): void;
 };
 
 export interface CliBackend<Event> {
   providerId: string;
   command(model: Model<string>, context: TranscriptContext, cwd: string): CliCommand;
-  /** One parsed JSON line of the CLI's output. */
+
   handleEvent(event: Event, sink: EventSink): void;
-  /** Whether a failed attempt that streamed no content should be run again. */
+
   shouldRetry(detail: string): boolean;
 }
 
@@ -89,9 +83,7 @@ export function streamViaCli<Event>(
         );
         const prompt = (replaced as { prompt?: unknown } | undefined)?.prompt;
         if (typeof prompt === "string") command = { ...command, stdin: prompt };
-      } catch {
-        // Inspection hooks must not break the request.
-      }
+      } catch {}
 
       let child: ChildProcess;
       try {
@@ -135,9 +127,7 @@ export function streamViaCli<Event>(
           }
           try {
             await options?.onProviderStreamEvent?.(event, model);
-          } catch {
-            // Observation hooks must not break the stream.
-          }
+          } catch {}
           backend.handleEvent(event, sink);
         }
       } finally {
@@ -176,8 +166,11 @@ export function streamViaCli<Event>(
 
     options?.signal?.removeEventListener("abort", onAbort);
     if (aborted) reply.fail("aborted", "aborted");
-    else if (!ok) reply.fail("error", failure || `${backend.providerId} failed`);
-    else reply.done("stop");
+    else if (ok) {
+      reply.done("stop");
+    } else {
+      reply.fail("error", failure || `${backend.providerId} failed`);
+    }
   })();
 
   return reply.stream;
