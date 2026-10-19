@@ -15,10 +15,8 @@ import { Type } from "typebox";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { defineTool } from "../src/core/extensions/types.ts";
-import { createAgentSession } from "../src/core/sdk.ts";
 import { serializeSessionBranch } from "../src/core/session-export.ts";
-import { SessionManager } from "../src/core/session-manager.ts";
-import { SettingsManager } from "../src/core/settings-manager.ts";
+import { createAgentSession, SessionManager, SettingsManager } from "../src/index.ts";
 import { createShareTrailingEntries } from "../src/modes/interactive/session-share.ts";
 import { assistantMsg, userMsg } from "./utilities.ts";
 

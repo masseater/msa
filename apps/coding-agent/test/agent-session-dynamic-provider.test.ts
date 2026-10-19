@@ -1,5 +1,3 @@
-import { tmpdir } from "node:os";
-
 import type { Provider } from "@msa/ai";
 import { getModel } from "@msa/ai/compat";
 import {
@@ -11,17 +9,16 @@ import {
   pathExists,
   makeDirectory,
   removePath,
+  tempRoot,
 } from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
 import { AuthStorage } from "../src/core/auth-storage.ts";
-import { ModelRuntime } from "../src/core/model-runtime.ts";
-import { DefaultResourceLoader } from "../src/core/resource-loader.ts";
 import type { ExtensionFactory } from "../src/core/sdk.ts";
-import { createAgentSession } from "../src/core/sdk.ts";
 import { SessionManager } from "../src/core/session-manager.ts";
 import { SettingsManager } from "../src/core/settings-manager.ts";
+import { createAgentSession, DefaultResourceLoader, ModelRuntime } from "../src/index.ts";
 
 function nativeAnthropicProvider(baseUrl: string): Provider {
   const model = { ...getModel("anthropic", "claude-sonnet-4-5")!, baseUrl };
@@ -53,7 +50,7 @@ describe("AgentSession dynamic provider registration", () => {
     runTest(
       Effect.gen(function* () {
         tempDir = joinPath(
-          tmpdir(),
+          tempRoot(),
           `msa-dynamic-provider-test-${currentTimeMillis()}-${randomSuffixSync()}`,
         );
         agentDir = joinPath(tempDir, "agent");
