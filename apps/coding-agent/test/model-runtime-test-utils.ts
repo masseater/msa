@@ -1,5 +1,6 @@
 import type { CredentialStore } from "@msa/ai";
-import { Effect, Function } from "effect";
+import { awaited, runTest } from "@msa/testing";
+import { Effect } from "effect";
 
 import { ModelRegistry } from "../src/core/model-registry.ts";
 import { ModelRuntime } from "../src/core/model-runtime.ts";
@@ -13,44 +14,32 @@ function wrap(runtime: ModelRuntime): ModelRegistry {
   return registry;
 }
 
-const createModelRegistryImpl = (
-  credentials: CredentialStore,
-  modelsPath?: string,
+export const createModelRegistry = (
+  ...[credentials, modelsPath]: [credentials: CredentialStore, modelsPath?: string]
 ): Promise<ModelRegistry> =>
-  Effect.runPromise(
+  runTest(
     Effect.gen(function* () {
-      return wrap(
-        yield* Effect.promise(() =>
-          ModelRuntime.create({
-            credentials,
-            ...(modelsPath === undefined ? {} : { modelsPath }),
-            modelsStore: new InMemoryCodingAgentModelsStore(),
-            allowModelNetwork: false,
-          }),
-        ),
+      const runtime = yield* awaited(
+        ModelRuntime.create({
+          credentials,
+          ...(modelsPath === undefined ? {} : { modelsPath }),
+          modelsStore: new InMemoryCodingAgentModelsStore(),
+          allowModelNetwork: false,
+        }),
       );
+      return wrap(runtime);
     }),
   );
 
-export const createModelRegistry: {
-  (modelsPath?: string): (credentials: CredentialStore) => Promise<ModelRegistry>;
-  (credentials: CredentialStore, modelsPath?: string): Promise<ModelRegistry>;
-} = Function.dual(
-  (args) => args.length >= 2 || typeof args[0] !== "string",
-  createModelRegistryImpl,
-);
-
-export function createInMemoryModelRegistry(credentials: CredentialStore): Promise<ModelRegistry> {
-  return Effect.runPromise(
+export const createInMemoryModelRegistry = (credentials: CredentialStore): Promise<ModelRegistry> =>
+  runTest(
     Effect.gen(function* () {
-      return wrap(
-        yield* Effect.promise(() =>
-          ModelRuntime.create({ credentials, modelsPath: null, allowModelNetwork: false }),
-        ),
+      const runtime = yield* awaited(
+        ModelRuntime.create({ credentials, modelsPath: null, allowModelNetwork: false }),
       );
+      return wrap(runtime);
     }),
   );
-}
 
 export function getModelRuntime(modelRegistry: ModelRegistry): ModelRuntime {
   const runtime = runtimes.get(modelRegistry);
