@@ -132,7 +132,7 @@ describe("Claude subscription providers", () => {
         .filter((id) => id.startsWith("claude-subs"))
         .sort();
     expect(providers()).toEqual(["claude-subs"]);
-    expect(runtime.getModel("claude-subs", "opus")?.api).toBe("claude-subs");
+    expect(runtime.getModel("claude-subs", "claude-opus-5-5")?.api).toBe("claude-subs");
 
     writeAccounts([{ name: "main" }, { name: "sub" }]);
     await runtime.refresh({ allowNetwork: false });
@@ -156,25 +156,22 @@ describe("Claude subscription model ids", () => {
     return runtime.getAvailableSnapshot().filter((model) => model.provider === "claude-subs");
   }
 
-  it("lists full ids and shows which id each alias resolves to", async () => {
+  it("lists the versioned ids and no alias", async () => {
     const models = await claudeModels();
-    const ids = models.map((model) => model.id);
-    expect(ids).toEqual(
-      expect.arrayContaining(["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"]),
-    );
-    for (const alias of models.filter((model) => model.resolvesTo !== undefined)) {
-      expect(ids).toContain(alias.resolvesTo);
-      expect(alias.name).toBe(`${alias.id} \u2192 ${alias.resolvesTo}`);
-    }
-    expect(models.find((model) => model.id === "opus")?.resolvesTo).toBe("claude-opus-5-5");
+    expect(models.map((model) => model.id).sort()).toEqual([
+      "claude-fable-5-1",
+      "claude-haiku-5-5",
+      "claude-opus-5-5",
+      "claude-sonnet-5-5",
+    ]);
   });
 
-  it("applies a model policy to a full id and to the alias that resolves to it", async () => {
+  it("applies a model policy to a versioned id", async () => {
     const models = await claudeModels();
     const deny = { allow: [], deny: ["claude-subs/claude-opus-5-5"] };
     const hidden = hiddenModelsByPolicy(deny, models).map((entry) => entry.model.id);
-    expect(hidden.sort()).toEqual(["claude-opus-5-5", "opus"]);
-    const sonnet = models.find((model) => model.id === "sonnet")!;
+    expect(hidden).toEqual(["claude-opus-5-5"]);
+    const sonnet = models.find((model) => model.id === "claude-sonnet-5-5")!;
     expect(evaluateModelPolicy(deny, sonnet).allowed).toBe(true);
     expect(
       evaluateModelPolicy({ allow: ["claude-subs/claude-sonnet-5-5"], deny: [] }, sonnet).allowed,

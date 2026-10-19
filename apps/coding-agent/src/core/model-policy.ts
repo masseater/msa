@@ -14,11 +14,10 @@ import { isValidThinkingLevel } from "../cli/args.ts";
 import type { ModelRuntime } from "./model-runtime.ts";
 import type { SettingsManager } from "./settings-manager.ts";
 
-/** The parts of a model a policy reads; an alias is judged by its own id and the id it resolves to. */
+/** The parts of a model a policy reads. */
 export interface PolicyModel {
   provider: string;
   id: string;
-  resolvesTo?: string | undefined;
 }
 
 export interface ModelPolicy {
@@ -74,14 +73,10 @@ function patternText(pattern: string): string {
  * - `*` covers every model.
  * - `provider/*` and `provider/<glob>` cover that provider's models, including ids with a `/`.
  * - `<glob>` matches the model id.
- * - An alias is covered by a pattern that covers the id it resolves to.
  * - Anything else is an exact `provider/model` or model id.
  */
 export function modelPolicyPatternMatches(pattern: string, model: PolicyModel): boolean {
-  return (
-    patternMatchesId(pattern, model.provider, model.id) ||
-    (model.resolvesTo !== undefined && patternMatchesId(pattern, model.provider, model.resolvesTo))
-  );
+  return patternMatchesId(pattern, model.provider, model.id);
 }
 
 function patternMatchesId(pattern: string, modelProvider: string, modelId: string): boolean {

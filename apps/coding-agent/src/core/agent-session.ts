@@ -3004,8 +3004,17 @@ export class AgentSession {
       this._modelRuntime.getAvailableSnapshot(),
       () => true,
     );
-    if (result.status !== "resolved") throw new Error(`"${reference}" is not an available model`);
-    return result.model;
+    if (result.status === "resolved") return result.model;
+    const name = reference.slice(reference.indexOf("/") + 1).toLowerCase();
+    const candidates = this._modelRuntime
+      .getAvailableSnapshot()
+      .filter((model) => name !== "" && model.id.toLowerCase().includes(name))
+      .map((model) => `${model.provider}/${model.id}`);
+    throw new Error(
+      `"${reference}" is not an available model.${
+        candidates.length > 0 ? ` Use one of: ${candidates.join(", ")}` : ""
+      }`,
+    );
   }
 
   private _runCondition(command: string, cwd: string): Promise<boolean> {

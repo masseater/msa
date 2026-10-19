@@ -49,7 +49,7 @@ RPC mode rejects `@file` arguments. JSON and RPC modes reserve stdout for protoc
 ## Models
 
 ```sh
-msa --model sonnet:high
+msa --model claude-subs/claude-sonnet-5-5:high
 ```
 
 See [Choose a Model](models.md) for model selection and [Providers](providers.md) for credentials.
