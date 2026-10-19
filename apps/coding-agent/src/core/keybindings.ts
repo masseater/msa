@@ -159,6 +159,22 @@ const APP_KEYBINDINGS = {
     defaultKeys: "i",
     description: "Rewrite the instruction of the selected task",
   },
+  "app.orchestrator.sessions": {
+    defaultKeys: "shift+right",
+    description: "Open the sessions view",
+  },
+  "app.orchestrator.back": {
+    defaultKeys: "shift+left",
+    description: "Leave the sessions view",
+  },
+  "app.orchestrator.paneWiden": {
+    defaultKeys: "ctrl+shift+left",
+    description: "Widen the sessions pane",
+  },
+  "app.orchestrator.paneNarrow": {
+    defaultKeys: "ctrl+shift+right",
+    description: "Narrow the sessions pane",
+  },
   "app.models.save": {
     defaultKeys: "ctrl+s",
     description: "Save model selection",

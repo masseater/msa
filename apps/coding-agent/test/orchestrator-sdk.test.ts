@@ -110,7 +110,6 @@ it("keeps worker transcripts out of the sessions --continue and /resume pick fro
       yield* waitFor(
         () =>
           orchestrator.snapshot.tasks.find((item) => item.id === task.id)?.status === "completed",
-        3000,
       );
       const worker = yield* Effect.promise(() => orchestrator.read(task.id));
       const assignment = worker.assignments.find((item) => item.role === "worker");

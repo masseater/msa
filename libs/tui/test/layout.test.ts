@@ -28,6 +28,24 @@ describe("viewport layout", () => {
     assert.deepStrictEqual(visibleLines(frame.lines), ["top", "body", "", ""]);
   });
 
+  it("splits grow space in proportion to the grow weights", () => {
+    const frame = renderLayoutFrame(
+      new HStack([
+        { component: new Text("left", 0, 0), basis: 0, grow: 7 },
+        { component: new Text("|", 0, 0), basis: 1, grow: 0 },
+        { component: new Text("right", 0, 0), basis: 0, grow: 3 },
+      ]),
+      101,
+      1,
+      () => {},
+    );
+
+    assert.deepStrictEqual(
+      frame.root.children.map((child) => child.rect.width),
+      [70, 1, 30],
+    );
+  });
+
   it("does not render fixed-basis scroll content during stack measurement", () => {
     let renderCount = 0;
     const transcript = new ScrollView({

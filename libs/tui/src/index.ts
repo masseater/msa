@@ -76,6 +76,12 @@ export {
   type SettingsListTheme,
 } from "./components/settings-list.ts";
 export { Spacer } from "./components/spacer.ts";
+export {
+  SplitPane,
+  type SplitPaneOptions,
+  type SplitPaneWidths,
+  splitPaneWidths,
+} from "./components/split-pane.ts";
 export { Text } from "./components/text.ts";
 export { TruncatedText } from "./components/truncated-text.ts";
 export {

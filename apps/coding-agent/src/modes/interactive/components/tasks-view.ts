@@ -17,6 +17,7 @@ import { theme } from "../theme/theme.ts";
 import { DynamicBorder } from "./dynamic-border.ts";
 import { keyHint } from "./keybinding-hints.ts";
 import { fitView, type ViewFrame } from "./scroll-window.ts";
+import { taskList } from "./tasks-list.ts";
 import { taskDetail } from "./tasks-view-detail.ts";
 import { type TasksViewState, viewHelpers } from "./tasks-view-helpers.ts";
 
@@ -71,7 +72,6 @@ export class TasksView implements Component, Focusable {
   /** The view owns the paging keys while it is open, so they scroll it and not the transcript. */
   readonly wantsViewportKeys = true;
   private readonly options: TasksViewOptions;
-  private selectedId: string | undefined;
   private openId: string | undefined;
   private readonly input = new Input({ prompt: "› " });
   private readonly state: TasksViewState;
@@ -85,7 +85,7 @@ export class TasksView implements Component, Focusable {
   constructor(options: TasksViewOptions, initialId?: string) {
     this.options = options;
     this.state = options.state ?? viewHelpers.createTasksViewState();
-    this.selectedId = initialId;
+    if (initialId !== undefined) this.state.selectedId = initialId;
     this.input.onSubmit = (value) => this.submit(value);
     this.input.onEscape = () => this.stopComposing();
   }
@@ -105,18 +105,12 @@ export class TasksView implements Component, Focusable {
     return this.options.orchestrator.snapshot.tasks;
   }
 
-  /** The tasks the list draws, in the order it draws them: round by round, dependencies first. */
   private shownTasks(): TaskSnapshot[] {
-    const tasks = this.tasks();
-    return this.options.orchestrator.snapshot.rounds.flatMap((round) =>
-      roundTasks(tasks, round.id).filter((task) => this.state.showFinished || !finished(task)),
-    );
+    return taskList.shownTasks(this.options.orchestrator, this.state);
   }
 
   private selected(): TaskSnapshot | undefined {
-    const shown = this.shownTasks();
-    const current = shown.find((task) => task.id === this.selectedId);
-    return current ?? shown[0];
+    return taskList.selectedTask(this.options.orchestrator, this.state);
   }
 
   private header(title: string, right: string, width: number): string[] {
@@ -129,17 +123,12 @@ export class TasksView implements Component, Focusable {
   }
 
   private rowLine(task: TaskSnapshot, selected: boolean, width: number): string {
-    const cursor = selected ? theme.fg("accent", "›") : " ";
-    const title = selected ? theme.bold(task.title) : task.title;
-    const mark = task.replan === null ? "" : ` ${theme.fg("muted", "↺")}`;
-    const id = shortId(task.id);
-    const meta = theme.fg(
-      "dim",
-      [id, modelName(task.model ?? "default")].filter(Boolean).join("  "),
-    );
-    const left = ` ${cursor} ${glyph(task)} ${title}${mark}`;
-    const gap = Math.max(2, width - visibleWidth(left) - visibleWidth(meta) - 1);
-    return truncateToWidth(`${left}${" ".repeat(gap)}${meta}`, width);
+    return taskList.taskRow(task, {
+      selected,
+      width,
+      meta: (entry) =>
+        [shortId(entry.id), modelName(entry.model ?? "default")].filter(Boolean).join("  "),
+    });
   }
 
   render(width: number): string[] {
@@ -296,6 +285,8 @@ export class TasksView implements Component, Focusable {
     if (kb.matches(data, "tui.select.cancel")) {
       if (this.openId === undefined) this.options.onClose();
       else this.openDetail(undefined);
+    } else if (kb.matches(data, "app.orchestrator.back")) {
+      this.options.onClose();
     } else if (this.openId !== undefined && kb.matches(data, "tui.select.up")) {
       this.scrollBy(-1);
     } else if (this.openId !== undefined && kb.matches(data, "tui.select.down")) {
@@ -354,16 +345,11 @@ export class TasksView implements Component, Focusable {
   }
 
   private move(tasks: readonly TaskSnapshot[], step: number): void {
-    if (tasks.length === 0) return;
-    const index = tasks.findIndex((task) => task.id === this.selected()?.id);
-    this.selectedId = tasks[(index + step + tasks.length) % tasks.length]?.id;
+    taskList.moveSelection(this.state, tasks, step);
   }
 
-  /** Moves the cursor by a page, stopping at either end instead of wrapping around. */
   private moveBy(tasks: readonly TaskSnapshot[], step: number): void {
-    if (tasks.length === 0) return;
-    const index = tasks.findIndex((task) => task.id === this.selected()?.id);
-    this.selectedId = tasks[Math.max(0, Math.min(index + step, tasks.length - 1))]?.id;
+    taskList.moveSelectionBy(this.state, tasks, step);
   }
 
   /** Moves the detail window; the next render clamps it to the content. */

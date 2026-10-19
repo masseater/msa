@@ -351,6 +351,22 @@
       "$ref": "#/$defs/KeybindingValue",
       "description": "Rewrite the instruction of the selected task"
     },
+    "app.orchestrator.sessions": {
+      "$ref": "#/$defs/KeybindingValue",
+      "description": "Open the sessions view"
+    },
+    "app.orchestrator.back": {
+      "$ref": "#/$defs/KeybindingValue",
+      "description": "Leave the sessions view"
+    },
+    "app.orchestrator.paneWiden": {
+      "$ref": "#/$defs/KeybindingValue",
+      "description": "Widen the sessions pane"
+    },
+    "app.orchestrator.paneNarrow": {
+      "$ref": "#/$defs/KeybindingValue",
+      "description": "Narrow the sessions pane"
+    },
     "app.models.save": {
       "$ref": "#/$defs/KeybindingValue",
       "description": "Save model selection"

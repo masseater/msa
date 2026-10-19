@@ -99,6 +99,23 @@ function clampSize(size: number, entry: StackLayoutEntry): number {
   return Math.max(min, Math.min(max, Math.max(0, Math.floor(size))));
 }
 
+export function proportionalShares(amount: number, weights: readonly number[]): number[] {
+  const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
+  if (totalWeight <= 0) return weights.map(() => 0);
+  const exact = weights.map((weight) => (amount * weight) / totalWeight);
+  const shares = exact.map((value) => Math.floor(value));
+  let leftover = amount - shares.reduce((sum, share) => sum + share, 0);
+  const byFraction = exact
+    .map((value, position) => ({ position, fraction: value - shares[position]! }))
+    .toSorted((a, b) => b.fraction - a.fraction || a.position - b.position);
+  for (const { position } of byFraction) {
+    if (leftover <= 0) break;
+    shares[position] = shares[position]! + 1;
+    leftover -= 1;
+  }
+  return shares;
+}
+
 function distribute(
   sizes: number[],
   entries: readonly StackLayoutEntry[],
@@ -119,28 +136,22 @@ function distribute(
       });
     if (candidates.length === 0) return;
 
-    const totalWeight = candidates.reduce((sum, { entry, index }) => {
-      return (
-        sum +
-        (mode === "grow" ? (entry.grow ?? 0) : (entry.shrink ?? 1) * Math.max(1, sizes[index]!))
-      );
-    }, 0);
+    const weights = candidates.map(({ entry, index }) =>
+      mode === "grow" ? (entry.grow ?? 0) : (entry.shrink ?? 1) * Math.max(1, sizes[index]!),
+    );
+    const shares = proportionalShares(remaining, weights);
     let distributed = 0;
-    for (const { entry, index } of candidates) {
-      if (remaining <= 0) break;
-      const weight =
-        mode === "grow" ? (entry.grow ?? 0) : (entry.shrink ?? 1) * Math.max(1, sizes[index]!);
-      const proposed = Math.max(1, Math.floor((remaining * weight) / totalWeight));
+    for (const [position, { entry, index }] of candidates.entries()) {
       const capacity =
         mode === "grow"
           ? (entry.maxSize ?? Number.MAX_SAFE_INTEGER) - sizes[index]!
           : sizes[index]! - (entry.minSize ?? 0);
-      const delta = Math.min(remaining, proposed, capacity);
+      const delta = Math.min(shares[position]!, capacity);
       if (delta <= 0) continue;
       sizes[index] = sizes[index]! + (mode === "grow" ? delta : -delta);
-      remaining -= delta;
       distributed += delta;
     }
+    remaining -= distributed;
     if (distributed === 0) return;
   }
 }
