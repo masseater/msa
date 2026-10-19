@@ -24,8 +24,8 @@ function countDiffLines(diff: string): { added: number; removed: number } {
   let added = 0;
   let removed = 0;
   for (const line of diff.split("\n")) {
-    if (/^\+\s*\d/.test(line)) added++;
-    else if (/^-\s*\d/.test(line)) removed++;
+    if (/^\+\s*\d/u.test(line)) added++;
+    else if (/^-\s*\d/u.test(line)) removed++;
   }
   return { added, removed };
 }
@@ -42,7 +42,7 @@ function summarize(calls: readonly ToolCallSummary[], thought: boolean): string 
     if (!call.done) running++;
     else if (call.isError) failed++;
     const verb = FILE_VERBS[call.toolName];
-    if (verb) {
+    if (verb !== undefined && verb !== "") {
       const path = call.args?.path ?? call.args?.file_path ?? "";
       const paths = files.get(verb) ?? new Set<string>();
       paths.add(String(path));
@@ -78,10 +78,6 @@ function summarize(calls: readonly ToolCallSummary[], thought: boolean): string 
   return line;
 }
 
-/**
- * One tool call in an open group: the call's first line, until clicked to show the call as it
- * shows outside a group.
- */
 class ToolRow implements Component {
   open = false;
   readonly tool: ToolExecutionComponent;
@@ -119,15 +115,9 @@ class ToolRow implements Component {
   }
 }
 
-/**
- * Consecutive tool calls, folded into one line that says what they did. Clicking the line lists
- * the calls one line each. Thinking between the calls is folded in with them.
- */
 export class ToolGroupComponent extends Container {
-  /** The tool calls and the thinking between them. */
   readonly items = new Container();
   private expanded = false;
-  /** Set by the expand-all key: every call shows in full, including calls added later. */
   private showAll = false;
   private outputPad: number;
   private readonly rows = new Map<ToolExecutionComponent, ToolRow>();
@@ -166,7 +156,7 @@ export class ToolGroupComponent extends Container {
 
   private row(tool: ToolExecutionComponent): ToolRow {
     let row = this.rows.get(tool);
-    if (!row) {
+    if (row === undefined) {
       row = new ToolRow(tool, () => this.outputPad);
       row.open = this.showAll;
       this.rows.set(tool, row);
@@ -188,7 +178,6 @@ export class ToolGroupComponent extends Container {
   }
 
   override render(width: number): string[] {
-    // A single call with no thinking has nothing to fold, so it shows as itself.
     if (this.items.children.length <= 1) {
       this.children = [this.items];
     } else {

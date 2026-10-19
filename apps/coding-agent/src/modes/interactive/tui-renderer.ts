@@ -1,6 +1,8 @@
 import type { Terminal, WheelScrollLines } from "@msa/tui";
 import { ProcessTerminal, type TUI, TuiAltScreen, TuiMainScreen } from "@msa/tui";
+import { Effect } from "effect";
 
+import { awaited, awaiting } from "../../core/awaiting.ts";
 import { copyToClipboard } from "../../utils/clipboard.ts";
 import { toErrorMessage } from "../../utils/errors.ts";
 import { openBrowser } from "../../utils/open-browser.ts";
@@ -17,7 +19,6 @@ export interface InteractiveTuiOptions {
   readonly fullscreenWheelScrollLines?: WheelScrollLines | undefined;
 }
 
-/** Composition root shared by coding-agent presentations. */
 export function createInteractiveTui(
   options: InteractiveTuiOptions & { readonly tuiMode: "fullscreen" },
 ): TuiAltScreen;
@@ -36,29 +37,33 @@ export function createInteractiveTui(options: InteractiveTuiOptions): TuiMainScr
       searchNavigationButtonStyle: (text, hovered) => (hovered ? theme.underline(text) : text),
       scrollToEndIndicator: () => {
         const shortcut = keyDisplayText("tui.altScreen.bottom");
-        const label = ` ↓ Jump to latest message${shortcut ? ` · ${shortcut}` : ""} `;
+        const label = ` ↓ Jump to latest message${shortcut === "" ? "" : ` · ${shortcut}`} `;
         return theme.bg("selectedBg", theme.fg("text", label));
       },
       openUrl: openBrowser,
-      ...(options.onRightClickPaste ? { onRightClickPaste: options.onRightClickPaste } : {}),
-      ...(options.fullscreenCopyOnSelect !== undefined
-        ? { copyOnSelect: options.fullscreenCopyOnSelect }
-        : {}),
+      ...(options.onRightClickPaste === undefined
+        ? {}
+        : { onRightClickPaste: options.onRightClickPaste }),
+      ...(options.fullscreenCopyOnSelect === undefined
+        ? {}
+        : { copyOnSelect: options.fullscreenCopyOnSelect }),
       wheelScrollLines: options.fullscreenWheelScrollLines ?? "auto",
-      copySelection: async (text) => {
-        try {
-          await copyToClipboard(text);
-          return true;
-        } catch (error) {
-          return toErrorMessage(error);
-        }
-      },
+      copySelection: (text) =>
+        Effect.runPromise(
+          awaiting(function* () {
+            try {
+              yield* awaited(copyToClipboard(text));
+              return true;
+            } catch (error) {
+              return toErrorMessage(error);
+            }
+          }),
+        ),
     });
   }
   return new TuiMainScreen(terminal, options.showHardwareCursor, options.logDirectory);
 }
 
-/** Stable reference for components while InteractiveMode replaces the active renderer. */
 export function createInteractiveTuiReference(getTui: () => TUI): TUI {
   return new Proxy({} as TUI, {
     get: (_target, property) => {

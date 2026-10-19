@@ -4,7 +4,6 @@ import type { Theme } from "../theme/theme.ts";
 import { DynamicBorder } from "./dynamic-border.ts";
 import { keyHint } from "./keybinding-hints.ts";
 
-/** Loader wrapped with borders for extension UI */
 export class BorderedLoader extends Container {
   private loader: CancellableLoader | Loader;
   private cancellable: boolean;
@@ -47,11 +46,18 @@ export class BorderedLoader extends Container {
     return this.signalController?.signal ?? new AbortController().signal;
   }
 
+  get onAbort(): (() => void) | undefined {
+    return this.cancellable ? (this.loader as CancellableLoader).onAbort : undefined;
+  }
+
   set onAbort(fn: (() => void) | undefined) {
     if (this.cancellable) {
       const loader = this.loader as CancellableLoader;
-      if (fn) loader.onAbort = fn;
-      else delete loader.onAbort;
+      if (fn === undefined) {
+        delete loader.onAbort;
+      } else {
+        loader.onAbort = fn;
+      }
     }
   }
 

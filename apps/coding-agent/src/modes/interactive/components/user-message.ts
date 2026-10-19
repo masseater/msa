@@ -8,9 +8,6 @@ const OSC133_ZONE_START = "\x1b]133;A\x07";
 const OSC133_ZONE_END = "\x1b]133;B\x07";
 const OSC133_ZONE_FINAL = "\x1b]133;C\x07";
 
-/**
- * Component that renders a user message
- */
 export class UserMessageComponent extends Container {
   private text: string;
   private markdownTheme: MarkdownTheme;
@@ -38,8 +35,6 @@ export class UserMessageComponent extends Container {
 
   private rebuild(): void {
     this.clear();
-    // The Markdown pads and colors its own background: a Box around it would keep a second full-width copy of every
-    // line, with identical output.
     this.addChild(
       new Markdown(
         this.text,

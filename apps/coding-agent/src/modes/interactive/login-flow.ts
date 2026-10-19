@@ -1,12 +1,15 @@
 import type { AuthEvent, AuthPrompt } from "@msa/ai";
 import type { Model } from "@msa/ai/compat";
 import type { TUI } from "@msa/tui";
+import { Effect } from "effect";
 
 import { APP_NAME, getAuthPath } from "../../config.ts";
 import type { AgentSession } from "../../core/agent-session.ts";
+import { awaited, awaiting, awaitingWith, performed } from "../../core/awaiting.ts";
 import { type ExternalService, findExternalService } from "../../core/external-services.ts";
 import { defaultModelPerProvider } from "../../core/model-resolver.ts";
 import { CredentialSynchronizationError } from "../../core/model-runtime.ts";
+import { schedule } from "../../core/platform.ts";
 import { toErrorMessage } from "../../utils/errors.ts";
 import { ExtensionSelectorComponent } from "./components/extension-selector.ts";
 import { LoginDialogComponent } from "./components/login-dialog.ts";
@@ -36,14 +39,13 @@ export type LoginProviderCompletionOption = {
   subscription?: boolean | undefined;
 };
 
-/** Collapses per-auth-type provider options into one completion entry per provider. */
 export function getLoginProviderCompletionOptions(
   providerOptions: readonly AuthSelectorProvider[],
 ): LoginProviderCompletionOption[] {
   const byId = new Map<string, LoginProviderCompletionOption>();
   for (const provider of providerOptions) {
     const existing = byId.get(provider.id);
-    if (existing) {
+    if (existing !== undefined) {
       if (!existing.authTypes.includes(provider.authType)) {
         existing.authTypes.push(provider.authType);
         existing.authTypes.sort((a, b) => AUTH_TYPE_ORDER[a] - AUTH_TYPE_ORDER[b]);
@@ -81,7 +83,10 @@ export function formatLoginProviderCompletionDescription(
 
 function isUnknownModel(model: Model<any> | undefined): boolean {
   return (
-    !!model && model.provider === "unknown" && model.id === "unknown" && model.api === "unknown"
+    model !== undefined &&
+    model.provider === "unknown" &&
+    model.id === "unknown" &&
+    model.api === "unknown"
   );
 }
 
@@ -97,7 +102,6 @@ function llamaCppPostLoginGuidance(actionLabel: string, loadedModelCount: number
     : `${actionLabel}. Use /model to select a loaded llama.cpp model, or /llama to manage models.`;
 }
 
-/** What the login flow needs from the interactive mode that hosts it. */
 export interface LoginFlowHost {
   readonly ui: TUI;
   readonly session: AgentSession;
@@ -106,11 +110,9 @@ export interface LoginFlowHost {
   showStatus(message: string): void;
   showWarning(message: string): void;
   showError(message: string): void;
-  /** Refreshes the UI that depends on which providers have credentials. */
   refreshAuthState(): void;
 }
 
-/** The `/login` and `/logout` dialogs: provider selection, credential prompts, and post-login model selection. */
 export class LoginFlow {
   private readonly host: LoginFlowHost;
 
@@ -129,11 +131,11 @@ export class LoginFlow {
             type: modelRuntime.isUsingOAuth(provider.id)
               ? ("oauth" as const)
               : ("api_key" as const),
-            ...(source !== undefined ? { source } : {}),
+            ...(source === undefined ? {} : { source }),
           }
         : undefined;
       const subscription = provider.auth.oauth?.isSubscription === true;
-      if ((!authType || authType === "oauth") && provider.auth.oauth) {
+      if ((authType === undefined || authType === "oauth") && provider.auth.oauth !== undefined) {
         options.push({
           id: provider.id,
           name: provider.name,
@@ -143,7 +145,10 @@ export class LoginFlow {
           subscription,
         });
       }
-      if ((!authType || authType === "api_key") && provider.auth.apiKey) {
+      if (
+        (authType === undefined || authType === "api_key") &&
+        provider.auth.apiKey !== undefined
+      ) {
         options.push({
           id: provider.id,
           name: provider.name,
@@ -157,196 +162,243 @@ export class LoginFlow {
     return options.sort((a, b) => a.name.localeCompare(b.name));
   }
 
-  /** Starts `/login`, optionally for a provider named by id or display name. */
-  async login(providerRef?: string): Promise<void> {
-    const normalizedRef = providerRef?.trim().toLowerCase();
-    if (!normalizedRef) {
-      this.showAuthTypeSelector();
-      return;
-    }
-    const service = findExternalService(this.host.session.getExternalServices(), normalizedRef);
-    if (service) {
-      await this.loginService(service);
-      return;
-    }
+  login(providerRef?: string): Promise<void> {
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        const normalizedRef = providerRef?.trim().toLowerCase();
+        if (normalizedRef === undefined || normalizedRef === "") {
+          this.showAuthTypeSelector();
+          return;
+        }
+        const service = findExternalService(this.host.session.getExternalServices(), normalizedRef);
+        if (service !== undefined) {
+          yield* performed(this.loginService(service));
+          return;
+        }
 
-    const providerOptions = this.getProviderOptions().filter(
-      (provider) =>
-        provider.id.toLowerCase() === normalizedRef ||
-        provider.name.toLowerCase() === normalizedRef,
+        const providerOptions = this.getProviderOptions().filter(
+          (provider) =>
+            provider.id.toLowerCase() === normalizedRef ||
+            provider.name.toLowerCase() === normalizedRef,
+        );
+        if (providerOptions.length === 1) {
+          yield* performed(this.startProviderLogin(providerOptions[0]!));
+          return;
+        }
+        if (new Set(providerOptions.map((provider) => provider.id)).size === 1) {
+          this.showAuthTypeSelector(providerOptions);
+          return;
+        }
+        this.showProviderSelector(undefined, providerRef);
+      }, this),
     );
-    if (providerOptions.length === 1) {
-      await this.startProviderLogin(providerOptions[0]!);
-      return;
-    }
-    if (new Set(providerOptions.map((provider) => provider.id)).size === 1) {
-      this.showAuthTypeSelector(providerOptions);
-      return;
-    }
-    this.showProviderSelector(undefined, providerRef);
   }
 
-  async logout(): Promise<void> {
-    const { host } = this;
-    let providerOptions: AuthSelectorProvider[];
-    try {
-      providerOptions = await this.getLogoutProviderOptions();
-    } catch (error) {
-      host.showError(`Could not read stored credentials: ${toErrorMessage(error)}`);
-      return;
-    }
-    const allServices = host.session.getExternalServices();
-    const statuses = await Promise.all(
-      allServices.map((service) => service.status().catch(() => undefined)),
+  logout(): Promise<void> {
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        const { host } = this;
+        let providerOptions: AuthSelectorProvider[];
+        try {
+          providerOptions = yield* performed(this.getLogoutProviderOptions());
+        } catch (error) {
+          host.showError(`Could not read stored credentials: ${toErrorMessage(error)}`);
+          return;
+        }
+        const allServices = host.session.getExternalServices();
+        const statuses = yield* awaited(
+          Promise.all(allServices.map((service) => service.status().catch(() => undefined))),
+        );
+        const services = allServices.filter((_, index) => {
+          const status = statuses[index];
+          return status?.installed && status.signedIn;
+        });
+        providerOptions = [
+          ...providerOptions,
+          ...services.map((service) => ({
+            id: service.id,
+            name: service.name,
+            authType: "oauth" as const,
+            status: { type: "oauth" as const, source: `${service.name} sign-in` },
+          })),
+        ];
+        if (providerOptions.length === 0) {
+          host.showStatus(
+            "No stored credentials to remove. /logout only removes credentials saved by /login; environment variables and models.json config are unchanged.",
+          );
+          return;
+        }
+
+        host.editorSlot.showSelector((done) => {
+          const selector = new OAuthSelectorComponent(
+            "logout",
+            providerOptions,
+            (providerId: string) =>
+              Effect.runPromise(
+                awaitingWith(function* () {
+                  done();
+                  const providerOption = providerOptions.find(
+                    (provider) => provider.id === providerId,
+                  );
+                  if (providerOption === undefined) {
+                    return;
+                  }
+                  const service = services.find((candidate) => candidate.id === providerId);
+                  if (service !== undefined) {
+                    yield* performed(this.logoutService(service));
+                    return;
+                  }
+                  try {
+                    yield* awaited(
+                      host.session.modelRuntime.logout(providerOption.id, {
+                        signal: AbortSignal.timeout(CREDENTIAL_TIMEOUT_MS),
+                      }),
+                    );
+                    host.refreshAuthState();
+                    host.showStatus(
+                      providerOption.authType === "oauth"
+                        ? `Logged out of ${providerOption.name}`
+                        : `Removed stored API key for ${providerOption.name}. Environment variables and models.json config are unchanged.`,
+                    );
+                  } catch (error: unknown) {
+                    host.showError(
+                      error instanceof CredentialSynchronizationError
+                        ? `Credentials removed for ${providerOption.name}, but local model state could not be synchronized: ${toErrorMessage(error)}`
+                        : `Logout failed: ${toErrorMessage(error)}`,
+                    );
+                  }
+                }, this),
+              ),
+            () => {
+              done();
+              host.ui.requestRender();
+            },
+          );
+          return { component: selector, focus: selector };
+        });
+      }, this),
     );
-    const services = allServices.filter((_, index) => {
-      const status = statuses[index];
-      return status?.installed && status.signedIn;
-    });
-    providerOptions = [
-      ...providerOptions,
-      ...services.map((service) => ({
-        id: service.id,
-        name: service.name,
-        authType: "oauth" as const,
-        status: { type: "oauth" as const, source: `${service.name} sign-in` },
-      })),
-    ];
-    if (providerOptions.length === 0) {
-      host.showStatus(
-        "No stored credentials to remove. /logout only removes credentials saved by /login; environment variables and models.json config are unchanged.",
-      );
-      return;
-    }
-
-    host.editorSlot.showSelector((done) => {
-      const selector = new OAuthSelectorComponent(
-        "logout",
-        providerOptions,
-        async (providerId: string) => {
-          done();
-          const providerOption = providerOptions.find((provider) => provider.id === providerId);
-          if (!providerOption) {
-            return;
-          }
-          const service = services.find((candidate) => candidate.id === providerId);
-          if (service) {
-            await this.logoutService(service);
-            return;
-          }
-          try {
-            await host.session.modelRuntime.logout(providerOption.id, {
-              signal: AbortSignal.timeout(CREDENTIAL_TIMEOUT_MS),
-            });
-            host.refreshAuthState();
-            host.showStatus(
-              providerOption.authType === "oauth"
-                ? `Logged out of ${providerOption.name}`
-                : `Removed stored API key for ${providerOption.name}. Environment variables and models.json config are unchanged.`,
-            );
-          } catch (error: unknown) {
-            host.showError(
-              error instanceof CredentialSynchronizationError
-                ? `Credentials removed for ${providerOption.name}, but local model state could not be synchronized: ${toErrorMessage(error)}`
-                : `Logout failed: ${toErrorMessage(error)}`,
-            );
-          }
-        },
-        () => {
-          done();
-          host.ui.requestRender();
-        },
-      );
-      return { component: selector, focus: selector };
-    });
   }
 
-  private async getLogoutProviderOptions(): Promise<AuthSelectorProvider[]> {
-    const { modelRuntime } = this.host.session;
-    const credentials = await modelRuntime.listCredentials({
-      signal: AbortSignal.timeout(CREDENTIAL_TIMEOUT_MS),
-    });
-    return credentials
-      .map(({ providerId, type }) => {
-        const provider = modelRuntime.getProvider(providerId);
-        return {
-          id: providerId,
-          name: provider?.name ?? providerId,
-          authType: type,
-          status: { type, source: "stored credential" },
-          subscription: provider?.auth.oauth?.isSubscription === true,
-        };
-      })
-      .sort((a, b) => a.name.localeCompare(b.name));
+  private getLogoutProviderOptions(): Effect.Effect<AuthSelectorProvider[]> {
+    return awaitingWith(function* () {
+      const { modelRuntime } = this.host.session;
+      const credentials = yield* awaited(
+        modelRuntime.listCredentials({
+          signal: AbortSignal.timeout(CREDENTIAL_TIMEOUT_MS),
+        }),
+      );
+      return credentials
+        .map(({ providerId, type }) => {
+          const provider = modelRuntime.getProvider(providerId);
+          return {
+            id: providerId,
+            name: provider?.name ?? providerId,
+            authType: type,
+            status: { type, source: "stored credential" },
+            subscription: provider?.auth.oauth?.isSubscription === true,
+          };
+        })
+        .sort((a, b) => a.name.localeCompare(b.name));
+    }, this);
   }
 
-  /** `onBack` reopens the selector the login was started from when the user cancels it. */
-  private async startProviderLogin(
+  private startProviderLogin(
     providerOption: AuthSelectorProvider,
     onBack?: () => void,
-  ): Promise<void> {
-    if (providerOption.authType === "oauth") {
-      await this.runLoginDialog(providerOption.id, providerOption.name, "oauth", onBack);
-    } else if (providerOption.method?.login) {
-      await this.runLoginDialog(providerOption.id, providerOption.name, "api_key", onBack);
-    } else {
-      this.showAmbientAuthDialog(providerOption, onBack);
-    }
+  ): Effect.Effect<void> {
+    return awaitingWith(function* () {
+      if (providerOption.authType === "oauth") {
+        yield* performed(
+          this.runLoginDialog(providerOption.id, providerOption.name, "oauth", onBack),
+        );
+      } else if (providerOption.method?.login === undefined) {
+        this.showAmbientAuthDialog(providerOption, onBack);
+      } else {
+        yield* performed(
+          this.runLoginDialog(providerOption.id, providerOption.name, "api_key", onBack),
+        );
+      }
+    }, this);
   }
 
   private showAuthTypeSelector(providerOptions?: AuthSelectorProvider[]): void {
     const { host } = this;
     const oauthProvider = providerOptions?.find((provider) => provider.authType === "oauth");
     const oauthLoginLabel =
-      oauthProvider?.method && "loginLabel" in oauthProvider.method
+      oauthProvider?.method !== undefined && "loginLabel" in oauthProvider.method
         ? oauthProvider.method.loginLabel
         : undefined;
     const subscriptionLabel = oauthLoginLabel ?? "Sign in with an account";
     const apiKeyLabel = "Sign in with an API key";
-    const availableAuthTypes = providerOptions
-      ? new Set(providerOptions.map((provider) => provider.authType))
-      : new Set<AuthType>(["oauth", "api_key"]);
+    const availableAuthTypes =
+      providerOptions === undefined
+        ? new Set<AuthType>(["oauth", "api_key"])
+        : new Set(providerOptions.map((provider) => provider.authType));
     const serviceLabel =
-      !providerOptions && host.session.getExternalServices().length > 0
+      providerOptions === undefined && host.session.getExternalServices().length > 0
         ? "Sign in to a service"
         : undefined;
     const options: string[] = [];
     if (availableAuthTypes.has("oauth")) options.push(subscriptionLabel);
     if (availableAuthTypes.has("api_key")) options.push(apiKeyLabel);
-    if (serviceLabel) options.push(serviceLabel);
+    if (serviceLabel !== undefined) options.push(serviceLabel);
 
     if (options.length === 0) {
       host.showStatus("No login methods available.");
       return;
     }
 
-    if (providerOptions && options.length === 1) {
+    if (providerOptions !== undefined && options.length === 1) {
       const providerOption = providerOptions[0];
-      if (providerOption) {
-        void this.startProviderLogin(providerOption);
+      if (providerOption !== undefined) {
+        void Effect.runFork(this.startProviderLogin(providerOption));
       }
       return;
     }
 
-    const title = providerOptions?.[0]
-      ? `Select authentication method for ${providerOptions[0].name}:`
-      : "Select authentication method:";
+    const title =
+      providerOptions?.[0] === undefined
+        ? "Select authentication method:"
+        : `Select authentication method for ${providerOptions[0].name}:`;
+    LoginFlow.showAuthTypeSelectorPart1(
+      this,
+      host,
+      serviceLabel,
+      subscriptionLabel,
+      providerOptions,
+      title,
+      options,
+    );
+  }
+
+  private static showAuthTypeSelectorPart1(
+    self: LoginFlow,
+    host: LoginFlowHost,
+    serviceLabel: "Sign in to a service" | undefined,
+    subscriptionLabel: string,
+    providerOptions: AuthSelectorProvider[] | undefined,
+    title: string,
+    options: string[],
+  ): void {
     host.editorSlot.showSelector((done) => {
       const onSelect = (option: string) => {
         done();
         if (option === serviceLabel) {
-          void this.showServiceSelector();
+          void Effect.runFork(self.showServiceSelector());
           return;
         }
         const authType = option === subscriptionLabel ? "oauth" : "api_key";
-        if (!providerOptions) {
-          this.showProviderSelector(authType);
+        if (providerOptions === undefined) {
+          self.showProviderSelector(authType);
           return;
         }
         const providerOption = providerOptions.find((provider) => provider.authType === authType);
-        if (providerOption) {
-          void this.startProviderLogin(providerOption, () =>
-            this.showAuthTypeSelector(providerOptions),
+        if (providerOption !== undefined) {
+          void Effect.runFork(
+            self.startProviderLogin(providerOption, () =>
+              self.showAuthTypeSelector(providerOptions),
+            ),
           );
         }
       };
@@ -359,137 +411,155 @@ export class LoginFlow {
     });
   }
 
-  private async showServiceSelector(): Promise<void> {
-    const { host } = this;
-    const services = host.session.getExternalServices();
-    const statuses = await Promise.all(
-      services.map((service) => service.status().catch(() => undefined)),
-    );
-    const entries = services.map((service, index) => {
-      const status = statuses[index];
-      const state = !status
-        ? ""
-        : !status.installed
-          ? "not installed"
-          : status.signedIn
-            ? "signed in"
-            : "";
-      return {
-        service,
-        label: `${service.name} · ${service.purpose}${state ? ` (${state})` : ""}`,
-      };
-    });
-    host.editorSlot.showSelector((done) => {
-      const selector = new ExtensionSelectorComponent(
-        "Select a service to sign in to:",
-        entries.map((entry) => entry.label),
-        (option) => {
-          done();
-          const entry = entries.find((candidate) => candidate.label === option);
-          if (entry) void this.loginService(entry.service, () => void this.showServiceSelector());
-        },
-        () => {
-          done();
-          this.showAuthTypeSelector();
-        },
+  private showServiceSelector(): Effect.Effect<void> {
+    return awaitingWith(function* () {
+      const { host } = this;
+      const services = host.session.getExternalServices();
+      const statuses = yield* awaited(
+        Promise.all(services.map((service) => service.status().catch(() => undefined))),
       );
-      return { component: selector, focus: selector };
-    });
-  }
-
-  /** Asks the user to pick an option in the editor slot, then shows `after` again if given. */
-  private select(title: string, options: string[], after?: LoginDialogComponent): Promise<string> {
-    const { host } = this;
-    return new Promise((resolve, reject) => {
-      host.editorSlot.showSelector((done) => {
-        const finish = () => {
-          done();
-          if (after) host.editorSlot.show(after);
+      const entries = services.map((service, index) => {
+        const status = statuses[index];
+        const state =
+          status === undefined
+            ? ""
+            : status.installed
+              ? status.signedIn
+                ? "signed in"
+                : ""
+              : "not installed";
+        return {
+          service,
+          label: `${service.name} · ${service.purpose}${state === "" ? "" : ` (${state})`}`,
         };
+      });
+      host.editorSlot.showSelector((done) => {
         const selector = new ExtensionSelectorComponent(
-          title,
-          options,
+          "Select a service to sign in to:",
+          entries.map((entry) => entry.label),
           (option) => {
-            finish();
-            resolve(option);
+            done();
+            const entry = entries.find((candidate) => candidate.label === option);
+            if (entry !== undefined)
+              void Effect.runFork(
+                this.loginService(
+                  entry.service,
+                  () => void Effect.runFork(this.showServiceSelector()),
+                ),
+              );
           },
           () => {
-            finish();
-            reject(new Error(LOGIN_CANCELLED));
+            done();
+            this.showAuthTypeSelector();
           },
         );
         return { component: selector, focus: selector };
       });
-    });
+    }, this);
   }
 
-  /** Signs in to an external service through its own sign-in, then registers the tools it brings. */
-  private async loginService(service: ExternalService, onBack?: () => void): Promise<void> {
+  private select(title: string, options: string[], after?: LoginDialogComponent): Promise<string> {
     const { host } = this;
-    const status = await service.status().catch(() => undefined);
-    const dialog = new LoginDialogComponent(
-      host.ui,
-      service.id,
-      () => {
-        host.editorSlot.restoreEditor();
-        onBack?.();
-      },
-      service.name,
+    return Effect.runPromise(
+      Effect.callback<string>((resume) => {
+        host.editorSlot.showSelector((done) => {
+          const finish = () => {
+            done();
+            if (after !== undefined) host.editorSlot.show(after);
+          };
+          const selector = new ExtensionSelectorComponent(
+            title,
+            options,
+            (option) => {
+              finish();
+              resume(Effect.succeed(option));
+            },
+            () => {
+              finish();
+              resume(Effect.die(new Error(LOGIN_CANCELLED)));
+            },
+          );
+          return { component: selector, focus: selector };
+        });
+      }),
     );
-    host.editorSlot.show(dialog);
-    if (status && !status.installed) {
-      dialog.showInfo(
-        `${service.name} provides ${service.purpose}. Install it first, then run /login ${service.id}:`,
-        [],
-      );
-      dialog.showDetails([theme.fg("accent", `  ${status.install}`)]);
-      dialog.showInfo("", [], true);
-      return;
-    }
-    dialog.showWaiting(`Signing in to ${service.name}…`);
-    host.programStatus.setBlocked("login", { kind: "auth", message: `Log in to ${service.name}` });
-    try {
-      await service.login(
-        {
-          showPage: (page) => {
-            dialog.showDetails([theme.fg("text", "Open this page to sign in:")]);
-            dialog.showInfo("", [{ url: page.url }]);
-            if (page.code) {
-              dialog.showInfo(`The page shows this code; check it matches: ${page.code}`);
-            }
-            dialog.showWaiting("Waiting for you to approve the sign-in…");
-          },
-          prompt: (message, placeholder) => dialog.showPrompt(message, placeholder),
-          select: (title, options) => this.select(title, options, dialog),
-        },
-        dialog.signal,
-      );
-      host.editorSlot.restoreEditor();
-      host.session.refreshExternalServiceTools();
-      host.showStatus(`Signed in to ${service.name}; ${service.purpose} is available.`);
-    } catch (error: unknown) {
-      host.editorSlot.restoreEditor();
-      const message = toErrorMessage(error);
-      if (dialog.signal.aborted || message === LOGIN_CANCELLED) onBack?.();
-      else host.showError(`Failed to sign in to ${service.name}: ${message}`);
-    } finally {
-      host.programStatus.setBlocked("login", undefined);
-    }
   }
 
-  private async logoutService(service: ExternalService): Promise<void> {
-    const { host } = this;
-    try {
-      await service.logout({ select: (title, options) => this.select(title, options) });
-      host.showStatus(
-        `Signed out of ${service.name}. Its tools stay registered until /reload or a new session.`,
+  private loginService(service: ExternalService, onBack?: () => void): Effect.Effect<void> {
+    return awaitingWith(function* () {
+      const { host } = this;
+      const status = yield* awaited(service.status().catch(() => undefined));
+      const dialog = new LoginDialogComponent(
+        host.ui,
+        service.id,
+        () => {
+          host.editorSlot.restoreEditor();
+          onBack?.();
+        },
+        service.name,
       );
-    } catch (error: unknown) {
-      const message = toErrorMessage(error);
-      if (message !== LOGIN_CANCELLED) {
-        host.showError(`Failed to sign out of ${service.name}: ${message}`);
+      host.editorSlot.show(dialog);
+      if (status !== undefined && !status.installed) {
+        dialog.showInfo(
+          `${service.name} provides ${service.purpose}. Install it first, then run /login ${service.id}:`,
+          [],
+        );
+        dialog.showDetails([theme.fg("accent", `  ${status.install}`)]);
+        dialog.showInfo("", [], true);
+        return;
       }
-    }
+      dialog.showWaiting(`Signing in to ${service.name}…`);
+      host.programStatus.setBlocked("login", {
+        kind: "auth",
+        message: `Log in to ${service.name}`,
+      });
+      try {
+        yield* awaited(
+          service.login(
+            {
+              showPage: (page) => {
+                dialog.showDetails([theme.fg("text", "Open this page to sign in:")]);
+                dialog.showInfo("", [{ url: page.url }]);
+                if (page.code !== undefined && page.code !== "") {
+                  dialog.showInfo(`The page shows this code; check it matches: ${page.code}`);
+                }
+                dialog.showWaiting("Waiting for you to approve the sign-in…");
+              },
+              prompt: (message, placeholder) => dialog.showPrompt(message, placeholder),
+              select: (title, options) => this.select(title, options, dialog),
+            },
+            dialog.signal,
+          ),
+        );
+        host.editorSlot.restoreEditor();
+        host.session.refreshExternalServiceTools();
+        host.showStatus(`Signed in to ${service.name}; ${service.purpose} is available.`);
+      } catch (error: unknown) {
+        host.editorSlot.restoreEditor();
+        const message = toErrorMessage(error);
+        if (dialog.signal.aborted || message === LOGIN_CANCELLED) onBack?.();
+        else host.showError(`Failed to sign in to ${service.name}: ${message}`);
+      } finally {
+        host.programStatus.setBlocked("login", undefined);
+      }
+    }, this);
+  }
+
+  private logoutService(service: ExternalService): Effect.Effect<void> {
+    return awaitingWith(function* () {
+      const { host } = this;
+      try {
+        yield* awaited(service.logout({ select: (title, options) => this.select(title, options) }));
+        host.showStatus(
+          `Signed out of ${service.name}. Its tools stay registered until /reload or a new session.`,
+        );
+      } catch (error: unknown) {
+        const message = toErrorMessage(error);
+        if (message !== LOGIN_CANCELLED) {
+          host.showError(`Failed to sign out of ${service.name}: ${message}`);
+        }
+      }
+    }, this);
   }
 
   private showProviderSelector(authType?: AuthType, initialSearchInput?: string): void {
@@ -510,24 +580,29 @@ export class LoginFlow {
       const selector = new OAuthSelectorComponent(
         "login",
         providerOptions,
-        async (providerId, selectedAuthType) => {
-          done();
-          const providerOption = providerOptions.find(
-            (provider) => provider.id === providerId && provider.authType === selectedAuthType,
-          );
-          if (!providerOption) {
-            return;
-          }
-          await this.startProviderLogin(providerOption, () =>
-            this.showProviderSelector(authType, initialSearchInput),
-          );
-        },
+        (providerId, selectedAuthType) =>
+          Effect.runPromise(
+            awaitingWith(function* () {
+              done();
+              const providerOption = providerOptions.find(
+                (provider) => provider.id === providerId && provider.authType === selectedAuthType,
+              );
+              if (providerOption === undefined) {
+                return;
+              }
+              yield* performed(
+                this.startProviderLogin(providerOption, () =>
+                  this.showProviderSelector(authType, initialSearchInput),
+                ),
+              );
+            }, this),
+          ),
         () => {
           done();
-          if (authType) {
-            this.showAuthTypeSelector();
-          } else {
+          if (authType === undefined) {
             host.ui.requestRender();
+          } else {
+            this.showAuthTypeSelector();
           }
         },
         initialSearchInput,
@@ -536,18 +611,120 @@ export class LoginFlow {
     });
   }
 
-  /**
-   * Reports the saved credentials and, when the session has no real model yet, selects the provider's
-   * default model. Dynamic catalogs may be empty until the first authenticated refresh, so selection
-   * then waits for the bounded background refresh.
-   */
-  async completeProviderAuthentication(
+  completeProviderAuthentication(
     providerId: string,
     providerName: string,
     authType: AuthType,
     previousModel: Model<any> | undefined,
   ): Promise<void> {
-    const { host } = this;
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        const { host, actionLabel, deferSelection, session } =
+          LoginFlow.completeProviderAuthenticationHost(
+            this,
+            authType,
+            providerName,
+            previousModel,
+            providerId,
+          );
+        const finishAuthentication = () =>
+          Effect.runPromise(
+            awaiting(function* () {
+              let selectedModel: Model<any> | undefined;
+              let selectionError: string | undefined;
+              if (isUnknownModel(previousModel)) {
+                const providerModels = host.session.modelRuntime
+                  .getAvailableSnapshot()
+                  .filter((model) => model.provider === providerId);
+                if (providerId === "llama.cpp") {
+                  selectionError = llamaCppPostLoginGuidance(actionLabel, providerModels.length);
+                } else if (!hasDefaultModelProvider(providerId)) {
+                  selectionError = `${actionLabel}, but no default model is configured for provider "${providerId}". Use /model to select a model.`;
+                } else if (providerModels.length === 0) {
+                  selectionError = `${actionLabel}, but no models are available for that provider. Use /model to select a model.`;
+                } else {
+                  const defaultModelId = defaultModelPerProvider[providerId];
+                  selectedModel = providerModels.find((model) => model.id === defaultModelId);
+                  if (selectedModel === undefined) {
+                    selectionError = `${actionLabel}, but its default model "${defaultModelId}" is not available. Use /model to select a model.`;
+                  } else {
+                    try {
+                      yield* awaited(host.session.setModel(selectedModel, { persist: true }));
+                    } catch (error: unknown) {
+                      selectedModel = undefined;
+                      selectionError = `${actionLabel}, but selecting its default model failed: ${toErrorMessage(error)}. Use /model to select a model.`;
+                    }
+                  }
+                }
+              }
+
+              host.refreshAuthState();
+              if (selectedModel === undefined) {
+                host.showStatus(`${actionLabel}. Credentials saved to ${getAuthPath()}`);
+                if (selectionError !== undefined && selectionError !== "") {
+                  host.showError(selectionError);
+                }
+              } else {
+                host.showStatus(
+                  `${actionLabel}. Selected ${selectedModel.id}. Credentials saved to ${getAuthPath()}`,
+                );
+              }
+            }),
+          );
+        yield* performed(
+          completeProviderAuthenticationPart2(
+            deferSelection,
+            host,
+            actionLabel,
+            finishAuthentication,
+          ),
+        );
+
+        Effect.runFork(
+          awaiting(function* () {
+            const controller = new AbortController();
+            const timeout = schedule(() => controller.abort(), CREDENTIAL_TIMEOUT_MS);
+            try {
+              const result = yield* awaited(
+                session.modelRuntime.refresh({
+                  providers: [providerId],
+                  signal: controller.signal,
+                }),
+              );
+              if (result.aborted) {
+                host.showWarning(
+                  `${actionLabel}, but its model catalog refresh timed out; using cached models.`,
+                );
+              } else if (result.errors.size > 0) {
+                host.showWarning(
+                  `${actionLabel}, but its model catalog could not be refreshed; using cached models.`,
+                );
+              }
+              if (deferSelection && host.session === session && session.model === previousModel) {
+                yield* awaited(finishAuthentication());
+              }
+              host.refreshAuthState();
+            } catch (error: unknown) {
+              host.showWarning(
+                `${actionLabel}, but its model catalog could not be refreshed: ${toErrorMessage(error)}`,
+              );
+            } finally {
+              timeout.cancel();
+            }
+          }),
+        );
+      }, this),
+    );
+  }
+
+  private static completeProviderAuthenticationHost(
+    self: LoginFlow,
+    authType: "oauth" | "api_key",
+    providerName: string,
+    previousModel: Model<any> | undefined,
+    providerId: string,
+  ): { host: LoginFlowHost; actionLabel: string; deferSelection: boolean; session: AgentSession } {
+    const { host } = self;
     const actionLabel =
       authType === "oauth" ? `Logged in to ${providerName}` : `Saved API key for ${providerName}`;
 
@@ -561,82 +738,7 @@ export class LoginFlow {
           (model) =>
             model.provider === providerId && model.id === defaultModelPerProvider[providerId],
         );
-    const finishAuthentication = async () => {
-      let selectedModel: Model<any> | undefined;
-      let selectionError: string | undefined;
-      if (isUnknownModel(previousModel)) {
-        const providerModels = host.session.modelRuntime
-          .getAvailableSnapshot()
-          .filter((model) => model.provider === providerId);
-        // Matches LLAMA_PROVIDER_ID from extensions/llama/provider.ts; kept inline to avoid coupling interactive mode to the built-in extension.
-        if (providerId === "llama.cpp") {
-          selectionError = llamaCppPostLoginGuidance(actionLabel, providerModels.length);
-        } else if (!hasDefaultModelProvider(providerId)) {
-          selectionError = `${actionLabel}, but no default model is configured for provider "${providerId}". Use /model to select a model.`;
-        } else if (providerModels.length === 0) {
-          selectionError = `${actionLabel}, but no models are available for that provider. Use /model to select a model.`;
-        } else {
-          const defaultModelId = defaultModelPerProvider[providerId];
-          selectedModel = providerModels.find((model) => model.id === defaultModelId);
-          if (!selectedModel) {
-            selectionError = `${actionLabel}, but its default model "${defaultModelId}" is not available. Use /model to select a model.`;
-          } else {
-            try {
-              await host.session.setModel(selectedModel, { persist: true });
-            } catch (error: unknown) {
-              selectedModel = undefined;
-              selectionError = `${actionLabel}, but selecting its default model failed: ${toErrorMessage(error)}. Use /model to select a model.`;
-            }
-          }
-        }
-      }
-
-      host.refreshAuthState();
-      if (selectedModel) {
-        host.showStatus(
-          `${actionLabel}. Selected ${selectedModel.id}. Credentials saved to ${getAuthPath()}`,
-        );
-      } else {
-        host.showStatus(`${actionLabel}. Credentials saved to ${getAuthPath()}`);
-        if (selectionError) {
-          host.showError(selectionError);
-        }
-      }
-    };
-    if (deferSelection) {
-      host.showStatus(
-        `${actionLabel}. Credentials saved to ${getAuthPath()}. Refreshing model catalog…`,
-      );
-    } else {
-      await finishAuthentication();
-    }
-
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), CREDENTIAL_TIMEOUT_MS);
-    void session.modelRuntime
-      .refresh({ providers: [providerId], signal: controller.signal })
-      .then(async (result) => {
-        if (result.aborted) {
-          host.showWarning(
-            `${actionLabel}, but its model catalog refresh timed out; using cached models.`,
-          );
-        } else if (result.errors.size > 0) {
-          host.showWarning(
-            `${actionLabel}, but its model catalog could not be refreshed; using cached models.`,
-          );
-        }
-        // Do not replace a model or session selected while the refresh was running.
-        if (deferSelection && host.session === session && session.model === previousModel) {
-          await finishAuthentication();
-        }
-        host.refreshAuthState();
-      })
-      .catch((error: unknown) => {
-        host.showWarning(
-          `${actionLabel}, but its model catalog could not be refreshed: ${toErrorMessage(error)}`,
-        );
-      })
-      .finally(() => clearTimeout(timeout));
+    return { host, actionLabel, deferSelection, session };
   }
 
   private showAmbientAuthDialog(providerOption: AuthSelectorProvider, onBack?: () => void): void {
@@ -659,86 +761,100 @@ export class LoginFlow {
     host.editorSlot.show(dialog);
   }
 
-  private async runLoginDialog(
+  private runLoginDialog(
     providerId: string,
     providerName: string,
     method: AuthType,
     onBack?: () => void,
-  ): Promise<void> {
-    const { host } = this;
-    const previousModel = host.session.model;
-    const dialog = new LoginDialogComponent(host.ui, providerId, () => {}, providerName);
-    host.editorSlot.show(dialog);
+  ): Effect.Effect<void> {
+    return awaitingWith(function* () {
+      const { host } = this;
+      const previousModel = host.session.model;
+      const dialog = new LoginDialogComponent(host.ui, providerId, () => {}, providerName);
+      host.editorSlot.show(dialog);
 
-    const actionLabel =
-      method === "oauth" ? `Logged in to ${providerName}` : `Saved API key for ${providerName}`;
-    try {
-      await this.loginProvider(dialog, providerId, providerName, method);
-      host.editorSlot.restoreEditor();
-      await this.completeProviderAuthentication(providerId, providerName, method, previousModel);
-    } catch (error: unknown) {
-      host.editorSlot.restoreEditor();
-      const message = toErrorMessage(error);
-      if (error instanceof CredentialSynchronizationError) {
-        host.showError(
-          `${actionLabel}, but local model state could not be synchronized: ${message}`,
+      const actionLabel =
+        method === "oauth" ? `Logged in to ${providerName}` : `Saved API key for ${providerName}`;
+      try {
+        yield* performed(this.loginProvider(dialog, providerId, providerName, method));
+        host.editorSlot.restoreEditor();
+        yield* awaited(
+          this.completeProviderAuthentication(providerId, providerName, method, previousModel),
         );
-      } else if (dialog.signal.aborted || message === LOGIN_CANCELLED) {
-        onBack?.();
-      } else if (method === "oauth") {
-        host.showError(`Failed to login to ${providerName}: ${message}`);
-      } else {
-        host.showError(`Failed to save API key for ${providerName}: ${message}`);
+      } catch (error: unknown) {
+        host.editorSlot.restoreEditor();
+        const message = toErrorMessage(error);
+        if (error instanceof CredentialSynchronizationError) {
+          host.showError(
+            `${actionLabel}, but local model state could not be synchronized: ${message}`,
+          );
+        } else if (dialog.signal.aborted || message === LOGIN_CANCELLED) {
+          onBack?.();
+        } else if (method === "oauth") {
+          host.showError(`Failed to login to ${providerName}: ${message}`);
+        } else {
+          host.showError(`Failed to save API key for ${providerName}: ${message}`);
+        }
       }
-    }
+    }, this);
   }
 
-  private async loginProvider(
+  private loginProvider(
     dialog: LoginDialogComponent,
     providerId: string,
     providerName: string,
     method: AuthType,
-  ): Promise<void> {
-    const { host } = this;
-    host.programStatus.setBlocked("login", { kind: "auth", message: `Log in to ${providerName}` });
-    try {
-      await host.session.modelRuntime.login(
-        providerId,
-        method,
-        {
-          signal: dialog.signal,
-          prompt: (prompt) => this.showAuthPrompt(dialog, prompt),
-          notify: (event) => notifyAuthDialog(dialog, event),
-        },
-        { getDeviceId: () => host.session.settingsManager.getOrCreateDeviceId() },
-      );
-    } finally {
-      host.programStatus.setBlocked("login", undefined);
-    }
+  ): Effect.Effect<void> {
+    return awaitingWith(function* () {
+      const { host } = this;
+      host.programStatus.setBlocked("login", {
+        kind: "auth",
+        message: `Log in to ${providerName}`,
+      });
+      try {
+        yield* awaited(
+          host.session.modelRuntime.login(
+            providerId,
+            method,
+            {
+              signal: dialog.signal,
+              prompt: (prompt) => Effect.runPromise(this.showAuthPrompt(dialog, prompt)),
+              notify: (event) => notifyAuthDialog(dialog, event),
+            },
+            { getDeviceId: () => host.session.settingsManager.getOrCreateDeviceId() },
+          ),
+        );
+      } finally {
+        host.programStatus.setBlocked("login", undefined);
+      }
+    }, this);
   }
 
-  private async showAuthPrompt(dialog: LoginDialogComponent, prompt: AuthPrompt): Promise<string> {
-    let response: Promise<string>;
-    if (prompt.type === "select") {
-      response = this.showAuthSelect(dialog, prompt);
-    } else if (prompt.type === "manual_code") {
-      response = dialog.showManualInput(prompt.message);
-    } else {
-      response = dialog.showPrompt(prompt.message, prompt.placeholder);
-    }
-    if (!prompt.signal) return response;
-    if (prompt.signal.aborted) throw new Error(LOGIN_CANCELLED);
-    const signal = prompt.signal;
-    let onAbort: (() => void) | undefined;
-    const aborted = new Promise<string>((_resolve, reject) => {
-      onAbort = () => reject(new Error(LOGIN_CANCELLED));
-      signal.addEventListener("abort", onAbort, { once: true });
-    });
-    try {
-      return await Promise.race([response, aborted]);
-    } finally {
-      if (onAbort) signal.removeEventListener("abort", onAbort);
-    }
+  private showAuthPrompt(dialog: LoginDialogComponent, prompt: AuthPrompt): Effect.Effect<string> {
+    return awaitingWith(function* () {
+      let response: Promise<string>;
+      if (prompt.type === "select") {
+        response = this.showAuthSelect(dialog, prompt);
+      } else if (prompt.type === "manual_code") {
+        response = dialog.showManualInput(prompt.message);
+      } else {
+        response = dialog.showPrompt(prompt.message, prompt.placeholder);
+      }
+      if (prompt.signal === undefined) return yield* awaited(response);
+      if (prompt.signal.aborted) throw new Error(LOGIN_CANCELLED);
+      const signal = prompt.signal;
+      const aborted = Effect.callback<string>((resume) => {
+        const onAbort = () => resume(Effect.die(new Error(LOGIN_CANCELLED)));
+        signal.addEventListener("abort", onAbort, { once: true });
+        return Effect.sync(() => signal.removeEventListener("abort", onAbort));
+      });
+      return yield* performed(
+        Effect.raceFirst(
+          Effect.promise(() => response),
+          aborted,
+        ),
+      );
+    }, this);
   }
 
   private showAuthSelect(
@@ -746,24 +862,43 @@ export class LoginFlow {
     prompt: Extract<AuthPrompt, { type: "select" }>,
   ): Promise<string> {
     const { host } = this;
-    return new Promise((resolve, reject) => {
-      const selector = new ExtensionSelectorComponent(
-        prompt.message,
-        prompt.options.map((option) => option.label),
-        (optionLabel) => {
-          host.editorSlot.show(dialog);
-          const id = prompt.options.find((option) => option.label === optionLabel)?.id;
-          if (id) resolve(id);
-          else reject(new Error(LOGIN_CANCELLED));
-        },
-        () => {
-          host.editorSlot.show(dialog);
-          reject(new Error(LOGIN_CANCELLED));
-        },
-      );
-      host.editorSlot.show(selector);
-    });
+    return Effect.runPromise(
+      Effect.callback<string>((resume) => {
+        const selector = new ExtensionSelectorComponent(
+          prompt.message,
+          prompt.options.map((option) => option.label),
+          (optionLabel) => {
+            host.editorSlot.show(dialog);
+            const id = prompt.options.find((option) => option.label === optionLabel)?.id;
+            if (id !== undefined && id !== "") resume(Effect.succeed(id));
+            else resume(Effect.die(new Error(LOGIN_CANCELLED)));
+          },
+          () => {
+            host.editorSlot.show(dialog);
+            resume(Effect.die(new Error(LOGIN_CANCELLED)));
+          },
+        );
+        host.editorSlot.show(selector);
+      }),
+    );
   }
+}
+
+function completeProviderAuthenticationPart2(
+  deferSelection: boolean,
+  host: LoginFlowHost,
+  actionLabel: string,
+  finishAuthentication: () => Promise<void>,
+): Effect.Effect<void> {
+  return awaiting(function* () {
+    if (deferSelection) {
+      host.showStatus(
+        `${actionLabel}. Credentials saved to ${getAuthPath()}. Refreshing model catalog…`,
+      );
+    } else {
+      yield* awaited(finishAuthentication());
+    }
+  });
 }
 
 function notifyAuthDialog(dialog: LoginDialogComponent, event: AuthEvent): void {

@@ -4,10 +4,6 @@ import type { BranchSummaryMessage } from "../../../core/messages.ts";
 import { getMarkdownTheme, theme } from "../theme/theme.ts";
 import { keyText } from "./keybinding-hints.ts";
 
-/**
- * Component that renders a branch summary message with collapsed/expanded state.
- * Uses same background color as custom messages for visual consistency.
- */
 export class BranchSummaryMessageComponent extends Box {
   private expanded = false;
   private message: BranchSummaryMessage;

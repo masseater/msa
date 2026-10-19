@@ -1,6 +1,5 @@
 import { ThemedText } from "./themed-text.ts";
 
-/** A component that can switch between a collapsed and an expanded rendering. */
 export interface Expandable {
   setExpanded(expanded: boolean): void;
 }
@@ -14,7 +13,6 @@ export function isExpandable(obj: unknown): obj is Expandable {
   );
 }
 
-/** Themed text with separate collapsed and expanded bodies, both rebuilt on theme changes. */
 export class ExpandableText extends ThemedText implements Expandable {
   private readonly state: { expanded: boolean };
 

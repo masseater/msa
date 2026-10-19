@@ -1,8 +1,3 @@
-/**
- * Generic selector component for extensions.
- * Displays a list of string options with keyboard navigation.
- */
-
 import { Container, getKeybindings, Spacer, Text, type TUI } from "@msa/tui";
 
 import { theme } from "../theme/theme.ts";
@@ -48,13 +43,18 @@ export class ExtensionSelectorComponent extends Container {
 
     this.titleText = new Text(theme.fg("accent", theme.bold(title)), 1, 0);
     this.addChild(this.titleText);
-    if (opts?.description) {
+    if (opts?.description !== undefined && opts?.description !== "") {
       this.addChild(new Spacer(1));
       this.addChild(new Text(theme.fg("text", opts.description), 1, 0));
     }
     this.addChild(new Spacer(1));
 
-    if (opts?.timeout && opts.timeout > 0 && opts.tui) {
+    if (
+      opts?.timeout !== undefined &&
+      opts?.timeout !== 0 &&
+      opts.timeout > 0 &&
+      opts.tui !== undefined
+    ) {
       this.countdown = new CountdownTimer(
         opts.timeout,
         opts.tui,
@@ -66,7 +66,11 @@ export class ExtensionSelectorComponent extends Container {
     this.listContainer = new Container();
     this.addChild(this.listContainer);
     this.addChild(new Spacer(1));
-    this.addChild(
+    ExtensionSelectorComponent.buildPart1(this);
+  }
+
+  private static buildPart1(self: ExtensionSelectorComponent): void {
+    self.addChild(
       new Text(
         rawKeyHint("↑↓", "navigate") +
           "  " +
@@ -77,10 +81,10 @@ export class ExtensionSelectorComponent extends Container {
         0,
       ),
     );
-    this.addChild(new Spacer(1));
-    this.addChild(new DynamicBorder());
+    self.addChild(new Spacer(1));
+    self.addChild(new DynamicBorder());
 
-    this.updateList();
+    self.updateList();
   }
 
   private updateList(): void {
@@ -106,7 +110,7 @@ export class ExtensionSelectorComponent extends Container {
       this.updateList();
     } else if (kb.matches(keyData, "tui.select.confirm") || keyData === "\n") {
       const selected = this.options[this.selectedIndex];
-      if (selected) this.onSelectCallback(selected);
+      if (selected !== undefined && selected !== "") this.onSelectCallback(selected);
     } else if (kb.matches(keyData, "tui.select.cancel")) {
       this.onCancelCallback();
     }

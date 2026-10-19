@@ -6,15 +6,11 @@ import type { CustomEntry } from "../../../core/session-manager.ts";
 import { toErrorMessage } from "../../../utils/errors.ts";
 import { theme } from "../theme/theme.ts";
 
-/**
- * Component that renders a custom session entry from extensions.
- * The host owns transcript spacing; renderer output should provide only its content.
- */
 export class CustomEntryComponent extends Container {
   private entry: CustomEntry<unknown>;
   private renderer: EntryRenderer;
   private customComponent?: Component | undefined;
-  private _expanded = false;
+  private expandedState = false;
   private outputPad: number;
 
   constructor(entry: CustomEntry<unknown>, renderer: EntryRenderer, outputPad = 1) {
@@ -30,8 +26,8 @@ export class CustomEntryComponent extends Container {
   }
 
   setExpanded(expanded: boolean): void {
-    if (this._expanded !== expanded) {
-      this._expanded = expanded;
+    if (this.expandedState !== expanded) {
+      this.expandedState = expanded;
       this.rebuild();
     }
   }
@@ -52,7 +48,7 @@ export class CustomEntryComponent extends Container {
 
     let component: Component | undefined;
     try {
-      component = this.renderer(this.entry, { expanded: this._expanded }, theme);
+      component = this.renderer(this.entry, { expanded: this.expandedState }, theme);
     } catch (error) {
       const message = toErrorMessage(error);
       const box = new Box(this.outputPad, 1, (text) => theme.bg("customMessageBg", text));
@@ -62,7 +58,7 @@ export class CustomEntryComponent extends Container {
       component = box;
     }
 
-    if (!component) {
+    if (component === undefined) {
       return;
     }
 

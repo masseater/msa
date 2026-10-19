@@ -1,10 +1,3 @@
-/**
- * RPC protocol types for headless operation.
- *
- * Commands are sent as JSON lines on stdin.
- * Responses and events are emitted as JSON lines on stdout.
- */
-
 import type { AgentMessage, ThinkingLevel } from "@msa/agent-core";
 import type { ImageContent, Model } from "@msa/ai";
 
@@ -21,12 +14,7 @@ import type { ContextUsage } from "../../core/extensions/types.ts";
 import type { SessionEntry, SessionTreeNode } from "../../core/session-manager.ts";
 import type { SourceInfo } from "../../core/source-info.ts";
 
-// ============================================================================
-// RPC Commands (stdin)
-// ============================================================================
-
 export type RpcCommand =
-  // Prompting
   | {
       id?: string | undefined;
       type: "prompt";
@@ -46,33 +34,19 @@ export type RpcCommand =
   | { id?: string | undefined; type: "abort" }
   | { id?: string | undefined; type: "clear_queue" }
   | { id?: string | undefined; type: "new_session"; parentSession?: string | undefined }
-
-  // State
   | { id?: string | undefined; type: "get_state" }
-
-  // Model
   | { id?: string | undefined; type: "set_model"; provider: string; modelId: string }
   | { id?: string | undefined; type: "cycle_model" }
   | { id?: string | undefined; type: "get_available_models" }
-
-  // Thinking
   | { id?: string | undefined; type: "set_thinking_level"; level: ThinkingLevel }
   | { id?: string | undefined; type: "cycle_thinking_level" }
   | { id?: string | undefined; type: "get_available_thinking_levels" }
-
-  // Queue modes
   | { id?: string | undefined; type: "set_steering_mode"; mode: "all" | "one-at-a-time" }
   | { id?: string | undefined; type: "set_follow_up_mode"; mode: "all" | "one-at-a-time" }
-
-  // Compaction
   | { id?: string | undefined; type: "compact"; customInstructions?: string | undefined }
   | { id?: string | undefined; type: "set_auto_compaction"; enabled: boolean }
-
-  // Retry
   | { id?: string | undefined; type: "set_auto_retry"; enabled: boolean }
   | { id?: string | undefined; type: "abort_retry" }
-
-  // Bash
   | {
       id?: string | undefined;
       type: "bash";
@@ -80,8 +54,6 @@ export type RpcCommand =
       excludeFromContext?: boolean | undefined;
     }
   | { id?: string | undefined; type: "abort_bash" }
-
-  // Session
   | { id?: string | undefined; type: "get_session_stats" }
   | { id?: string | undefined; type: "export_html"; outputPath?: string | undefined }
   | { id?: string | undefined; type: "switch_session"; sessionPath: string }
@@ -92,32 +64,15 @@ export type RpcCommand =
   | { id?: string | undefined; type: "get_tree" }
   | { id?: string | undefined; type: "get_last_assistant_text" }
   | { id?: string | undefined; type: "set_session_name"; name: string }
-
-  // Messages
   | { id?: string | undefined; type: "get_messages" }
-
-  // Commands (available for invocation via prompt)
   | { id?: string | undefined; type: "get_commands" };
 
-// ============================================================================
-// RPC Slash Command (for get_commands response)
-// ============================================================================
-
-/** A command available for invocation via prompt */
 export interface RpcSlashCommand {
-  /** Command name (without leading slash) */
   name: string;
-  /** Human-readable description */
   description?: string | undefined;
-  /** What kind of command this is */
   source: "extension" | "prompt" | "skill";
-  /** Source metadata for the owning resource */
   sourceInfo: SourceInfo;
 }
-
-// ============================================================================
-// RPC State
-// ============================================================================
 
 export interface RpcSessionState {
   model?: Model<any> | undefined;
@@ -136,13 +91,7 @@ export interface RpcSessionState {
   contextUsage?: (ContextUsage & { breakdown: ContextBreakdown }) | undefined;
 }
 
-// ============================================================================
-// RPC Responses (stdout)
-// ============================================================================
-
-// Success responses with data
 export type RpcResponse =
-  // Prompting
   | {
       id?: string | undefined;
       type: "response";
@@ -179,8 +128,6 @@ export type RpcResponse =
       success: true;
       data: { cancelled: boolean };
     }
-
-  // State
   | {
       id?: string | undefined;
       type: "response";
@@ -188,8 +135,6 @@ export type RpcResponse =
       success: true;
       data: RpcSessionState;
     }
-
-  // Model
   | {
       id?: string | undefined;
       type: "response";
@@ -211,8 +156,6 @@ export type RpcResponse =
       success: true;
       data: { models: Model<any>[] };
     }
-
-  // Thinking
   | { id?: string | undefined; type: "response"; command: "set_thinking_level"; success: true }
   | {
       id?: string | undefined;
@@ -228,12 +171,8 @@ export type RpcResponse =
       success: true;
       data: { levels: ThinkingLevel[] };
     }
-
-  // Queue modes
   | { id?: string | undefined; type: "response"; command: "set_steering_mode"; success: true }
   | { id?: string | undefined; type: "response"; command: "set_follow_up_mode"; success: true }
-
-  // Compaction
   | {
       id?: string | undefined;
       type: "response";
@@ -242,16 +181,10 @@ export type RpcResponse =
       data: CompactionResult;
     }
   | { id?: string | undefined; type: "response"; command: "set_auto_compaction"; success: true }
-
-  // Retry
   | { id?: string | undefined; type: "response"; command: "set_auto_retry"; success: true }
   | { id?: string | undefined; type: "response"; command: "abort_retry"; success: true }
-
-  // Bash
   | { id?: string | undefined; type: "response"; command: "bash"; success: true; data: BashResult }
   | { id?: string | undefined; type: "response"; command: "abort_bash"; success: true }
-
-  // Session
   | {
       id?: string | undefined;
       type: "response";
@@ -316,8 +249,6 @@ export type RpcResponse =
       data: { text: string | null };
     }
   | { id?: string | undefined; type: "response"; command: "set_session_name"; success: true }
-
-  // Messages
   | {
       id?: string | undefined;
       type: "response";
@@ -325,8 +256,6 @@ export type RpcResponse =
       success: true;
       data: { messages: AgentMessage[] };
     }
-
-  // Commands
   | {
       id?: string | undefined;
       type: "response";
@@ -334,15 +263,8 @@ export type RpcResponse =
       success: true;
       data: { commands: RpcSlashCommand[] };
     }
-
-  // Error response (any command can fail)
   | { id?: string | undefined; type: "response"; command: string; success: false; error: string };
 
-// ============================================================================
-// Extension UI Events (stdout)
-// ============================================================================
-
-/** Emitted when an extension needs user input */
 export type RpcExtensionUIRequest =
   | {
       type: "extension_ui_request";
@@ -400,18 +322,9 @@ export type RpcExtensionUIRequest =
   | { type: "extension_ui_request"; id: string; method: "setTitle"; title: string }
   | { type: "extension_ui_request"; id: string; method: "set_editor_text"; text: string };
 
-// ============================================================================
-// Extension UI Commands (stdin)
-// ============================================================================
-
-/** Response to an extension UI request */
 export type RpcExtensionUIResponse =
   | { type: "extension_ui_response"; id: string; value: string }
   | { type: "extension_ui_response"; id: string; confirmed: boolean }
   | { type: "extension_ui_response"; id: string; cancelled: true };
-
-// ============================================================================
-// Helper type for extracting command types
-// ============================================================================
 
 export type RpcCommandType = RpcCommand["type"];

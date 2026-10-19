@@ -19,16 +19,10 @@ const SUBMENU_SELECT_LIST_LAYOUT: SelectListLayoutOptions = {
 };
 
 export interface SelectSubmenuOptions {
-  /** Enable type-to-search fuzzy filtering. */
   searchable?: boolean | undefined;
-  /** Override the select list layout (column widths). */
   layout?: SelectListLayoutOptions | undefined;
 }
 
-/**
- * Single-step submenu that shows a titled select list.
- * With `searchable: true`, typing filters the list using fuzzy matching.
- */
 export class SelectSubmenu extends Container {
   private selectList: SelectList;
   private listChildIndex: number;
@@ -57,17 +51,14 @@ export class SelectSubmenu extends Container {
     this.onCancelCb = onCancel;
     this.onSelectionChangeCb = onSelectionChange;
 
-    // Title
     this.addChild(new Text(theme.bold(theme.fg("accent", title)), 0, 0));
 
-    // Description
-    if (description) {
+    if (description !== "") {
       this.addChild(new Spacer(1));
       this.addChild(new Text(theme.fg("muted", description), 0, 0));
     }
 
-    // Search input
-    if (submenuOptions?.searchable) {
+    if (submenuOptions?.searchable === true) {
       this.addChild(new Spacer(1));
       this.searchInput = new Input();
       this.searchInput.onSubmit = () => {
@@ -76,19 +67,17 @@ export class SelectSubmenu extends Container {
       this.addChild(this.searchInput);
     }
 
-    // Spacer
     this.addChild(new Spacer(1));
 
-    // Select list
     this.selectList = this.buildSelectList(options, currentValue);
     this.listChildIndex = this.children.length;
     this.addChild(this.selectList);
 
-    // Hint
     this.addChild(new Spacer(1));
-    const hint = submenuOptions?.searchable
-      ? "  Type to filter \u00b7 Enter to select \u00b7 Esc to go back"
-      : "  Enter to select \u00b7 Esc to go back";
+    const hint =
+      submenuOptions?.searchable === true
+        ? "  Type to filter \u00b7 Enter to select \u00b7 Esc to go back"
+        : "  Enter to select \u00b7 Esc to go back";
     this.addChild(new Text(theme.fg("dim", hint), 0, 0));
   }
 
@@ -105,7 +94,7 @@ export class SelectSubmenu extends Container {
 
     list.onSelect = (item) => this.onSelectCb(item.value);
     list.onCancel = this.onCancelCb;
-    if (this.onSelectionChangeCb) {
+    if (this.onSelectionChangeCb !== undefined) {
       const cb = this.onSelectionChangeCb;
       list.onSelectionChange = (item) => cb(item.value);
     }
@@ -114,9 +103,10 @@ export class SelectSubmenu extends Container {
   }
 
   private applyFilter(query: string): void {
-    const filtered = query
-      ? fuzzyFilter(this.allOptions, query, (item) => `${item.label} ${item.description ?? ""}`)
-      : this.allOptions;
+    const filtered =
+      query === ""
+        ? this.allOptions
+        : fuzzyFilter(this.allOptions, query, (item) => `${item.label} ${item.description ?? ""}`);
 
     const newList = this.buildSelectList(filtered, "");
     this.children[this.listChildIndex] = newList;
@@ -124,7 +114,9 @@ export class SelectSubmenu extends Container {
   }
 
   handleInput(data: string): void {
-    if (this.searchInput) {
+    if (this.searchInput === undefined) {
+      this.selectList.handleInput(data);
+    } else {
       const kb = getKeybindings();
       const isNav =
         kb.matches(data, "tui.select.up") ||
@@ -137,50 +129,26 @@ export class SelectSubmenu extends Container {
         this.searchInput.handleInput(data);
         this.applyFilter(this.searchInput.getValue());
       }
-    } else {
-      this.selectList.handleInput(data);
     }
   }
 }
 
-// ============================================================================
-// SteppedSubmenu — reusable multi-step selector
-// ============================================================================
-
-/** One step in a {@link SteppedSubmenu}. */
 export interface SteppedSubmenuStep {
-  /** Unique key \u2014 the selected value is stored in the result context under this key. */
   key: string;
-  /** Title shown at the top of the step. Receives prior selections. */
   title: string | ((context: Record<string, string>) => string);
-  /** Description shown below the title. Receives prior selections. */
   description: string | ((context: Record<string, string>) => string);
-  /** Build the option list for this step. Called fresh each time the step is shown. */
   options: (context: Record<string, string>) => SelectItem[];
-  /** Optionally pre-select a value when entering this step. */
   preselect?: (context: Record<string, string>) => string | undefined;
-  /** Enable type-to-search fuzzy filtering for this step. */
   searchable?: boolean;
-  /** Override the select list layout (column widths) for this step. */
   layout?: SelectListLayoutOptions;
 }
 
 interface SteppedSubmenuOptions {
-  /** Start at this step index (0-based), skipping earlier steps. Requires initialContext for skipped keys. */
   startAtStep?: number;
-  /** Pre-fill selections for skipped steps. */
   initialContext?: Record<string, string>;
-  /** After completing the last step, loop back to step 0 instead of closing. */
   loop?: boolean;
 }
 
-/**
- * Generic N-step submenu built on top of {@link SelectSubmenu}.
- *
- * Each step's options can depend on prior selections via the shared context.
- * Esc goes back one step; Esc at step 0 cancels.
- * With `loop: true`, completing the final step invokes `onComplete` then returns to step 0.
- */
 export class SteppedSubmenu extends Container {
   private readonly steps: SteppedSubmenuStep[];
   private readonly onComplete: (context: Record<string, string>) => void;
@@ -225,13 +193,11 @@ export class SteppedSubmenu extends Container {
         this.context[step.key] = value;
 
         if (stepIndex < total - 1) {
-          // Advance to next step
           this.activeComponent = this.buildStep(stepIndex + 1);
         } else {
-          // Final step \u2014 deliver result
           this.onComplete({ ...this.context });
 
-          if (this.opts.loop) {
+          if (this.opts.loop === true) {
             this.context = {};
             this.activeComponent = this.buildStep(0);
           } else {
@@ -248,7 +214,7 @@ export class SteppedSubmenu extends Container {
         }
       },
       undefined,
-      step.searchable || step.layout
+      step.searchable === true || step.layout !== undefined
         ? { searchable: step.searchable, layout: step.layout }
         : undefined,
     );

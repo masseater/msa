@@ -7,10 +7,8 @@ import { type Theme, theme } from "./theme/theme.ts";
 type Widget = Component & { dispose?(): void };
 export type WidgetContent = string[] | ((tui: TUI, thm: Theme) => Widget);
 
-/** Text widgets are cut to this many lines so they cannot push the editor off screen. */
 const MAX_WIDGET_LINES = 10;
 
-/** The extension widgets rendered directly above and below the editor, keyed by extension-chosen names. */
 export class ExtensionWidgets {
   readonly above = new Container();
   readonly below = new Container();
@@ -23,7 +21,6 @@ export class ExtensionWidgets {
     this.fill();
   }
 
-  /** Replaces the widget named `key`, or removes it when `content` is undefined. */
   set(key: string, content: WidgetContent | undefined, options?: ExtensionWidgetOptions): void {
     for (const widgets of [this.aboveWidgets, this.belowWidgets]) {
       widgets.get(key)?.dispose?.();

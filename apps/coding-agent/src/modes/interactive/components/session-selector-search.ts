@@ -1,4 +1,5 @@
 import { fuzzyMatch } from "@msa/tui";
+import { dual } from "effect/Function";
 
 import type { SessionInfo } from "../../../core/session-manager.ts";
 import { toErrorMessage } from "../../../utils/errors.ts";
@@ -11,18 +12,16 @@ export interface ParsedSearchQuery {
   mode: "tokens" | "regex";
   tokens: { kind: "fuzzy" | "phrase"; value: string }[];
   regex: RegExp | null;
-  /** If set, parsing failed and we should treat query as non-matching. */
   error?: string;
 }
 
 export interface MatchResult {
   matches: boolean;
-  /** Lower is better; only meaningful when matches === true */
   score: number;
 }
 
 function normalizeWhitespaceLower(text: string): string {
-  return text.toLowerCase().replace(/\s+/g, " ").trim();
+  return text.toLowerCase().replace(/\s+/gu, " ").trim();
 }
 
 function getSessionSearchText(session: SessionInfo): string {
@@ -40,26 +39,23 @@ function matchesNameFilter(session: SessionInfo, filter: NameFilter): boolean {
 
 export function parseSearchQuery(query: string): ParsedSearchQuery {
   const trimmed = query.trim();
-  if (!trimmed) {
+  if (trimmed === "") {
     return { mode: "tokens", tokens: [], regex: null };
   }
 
-  // Regex mode: re:<pattern>
   if (trimmed.startsWith("re:")) {
     const pattern = trimmed.slice(3).trim();
-    if (!pattern) {
+    if (pattern === "") {
       return { mode: "regex", tokens: [], regex: null, error: "Empty regex" };
     }
     try {
-      return { mode: "regex", tokens: [], regex: new RegExp(pattern, "i") };
+      return { mode: "regex", tokens: [], regex: new RegExp(pattern, "iu") };
     } catch (err) {
       const msg = toErrorMessage(err);
       return { mode: "regex", tokens: [], regex: null, error: msg };
     }
   }
 
-  // Token mode with quote support.
-  // Example: foo "node cve" bar
   const tokens: { kind: "fuzzy" | "phrase"; value: string }[] = [];
   let buf = "";
   let inQuote = false;
@@ -68,7 +64,7 @@ export function parseSearchQuery(query: string): ParsedSearchQuery {
   const flush = (kind: "fuzzy" | "phrase"): void => {
     const v = buf.trim();
     buf = "";
-    if (!v) return;
+    if (v === "") return;
     tokens.push({ kind, value: v });
   };
 
@@ -85,7 +81,7 @@ export function parseSearchQuery(query: string): ParsedSearchQuery {
       continue;
     }
 
-    if (!inQuote && /\s/.test(ch)) {
+    if (!inQuote && /\s/u.test(ch)) {
       flush("fuzzy");
       continue;
     }
@@ -97,12 +93,11 @@ export function parseSearchQuery(query: string): ParsedSearchQuery {
     hadUnclosedQuote = true;
   }
 
-  // If quotes were unbalanced, fall back to plain whitespace tokenization.
   if (hadUnclosedQuote) {
     return {
       mode: "tokens",
       tokens: trimmed
-        .split(/\s+/)
+        .split(/\s+/u)
         .map((t) => t.trim())
         .filter((t) => t.length > 0)
         .map((t) => ({ kind: "fuzzy" as const, value: t })),
@@ -115,11 +110,14 @@ export function parseSearchQuery(query: string): ParsedSearchQuery {
   return { mode: "tokens", tokens, regex: null };
 }
 
-export function matchSession(session: SessionInfo, parsed: ParsedSearchQuery): MatchResult {
+export const matchSession: {
+  (parsed: ParsedSearchQuery): (session: SessionInfo) => MatchResult;
+  (session: SessionInfo, parsed: ParsedSearchQuery): MatchResult;
+} = dual(2, (session: SessionInfo, parsed: ParsedSearchQuery): MatchResult => {
   const text = getSessionSearchText(session);
 
   if (parsed.mode === "regex") {
-    if (!parsed.regex) {
+    if (parsed.regex === null) {
       return { matches: false, score: 0 };
     }
     const idx = text.search(parsed.regex);
@@ -140,7 +138,7 @@ export function matchSession(session: SessionInfo, parsed: ParsedSearchQuery): M
         normalizedText = normalizeWhitespaceLower(text);
       }
       const phrase = normalizeWhitespaceLower(token.value);
-      if (!phrase) continue;
+      if (phrase === "") continue;
       const idx = normalizedText.indexOf(phrase);
       if (idx < 0) return { matches: false, score: 0 };
       totalScore += idx * 0.1;
@@ -153,46 +151,59 @@ export function matchSession(session: SessionInfo, parsed: ParsedSearchQuery): M
   }
 
   return { matches: true, score: totalScore };
-}
+});
 
-export function filterAndSortSessions(
-  sessions: SessionInfo[],
-  query: string,
-  sortMode: SortMode,
-  nameFilter: NameFilter = "all",
-): SessionInfo[] {
-  const nameFiltered =
-    nameFilter === "all"
-      ? sessions
-      : sessions.filter((session) => matchesNameFilter(session, nameFilter));
-  const trimmed = query.trim();
-  if (!trimmed) return nameFiltered;
+export const filterAndSortSessions: {
+  (
+    query: string,
+    sortMode: SortMode,
+    nameFilter?: NameFilter,
+  ): (sessions: SessionInfo[]) => SessionInfo[];
+  (
+    sessions: SessionInfo[],
+    query: string,
+    sortMode: SortMode,
+    nameFilter?: NameFilter,
+  ): SessionInfo[];
+} = dual(
+  (args) => Array.isArray(args[0]),
+  (
+    sessions: SessionInfo[],
+    query: string,
+    sortMode: SortMode,
+    nameFilter: NameFilter = "all",
+  ): SessionInfo[] => {
+    const nameFiltered =
+      nameFilter === "all"
+        ? sessions
+        : sessions.filter((session) => matchesNameFilter(session, nameFilter));
+    const trimmed = query.trim();
+    if (trimmed === "") return nameFiltered;
 
-  const parsed = parseSearchQuery(query);
-  if (parsed.error) return [];
+    const parsed = parseSearchQuery(query);
+    if (parsed.error !== undefined && parsed.error !== "") return [];
 
-  // Recent mode: filter only, keep incoming order.
-  if (sortMode === "recent") {
-    const filtered: SessionInfo[] = [];
+    if (sortMode === "recent") {
+      const filtered: SessionInfo[] = [];
+      for (const s of nameFiltered) {
+        const res = matchSession(s, parsed);
+        if (res.matches) filtered.push(s);
+      }
+      return filtered;
+    }
+
+    const scored: { session: SessionInfo; score: number }[] = [];
     for (const s of nameFiltered) {
       const res = matchSession(s, parsed);
-      if (res.matches) filtered.push(s);
+      if (!res.matches) continue;
+      scored.push({ session: s, score: res.score });
     }
-    return filtered;
-  }
 
-  // Relevance mode: sort by score, tie-break by modified desc.
-  const scored: { session: SessionInfo; score: number }[] = [];
-  for (const s of nameFiltered) {
-    const res = matchSession(s, parsed);
-    if (!res.matches) continue;
-    scored.push({ session: s, score: res.score });
-  }
+    scored.sort((a, b) => {
+      if (a.score !== b.score) return a.score - b.score;
+      return b.session.modified.getTime() - a.session.modified.getTime();
+    });
 
-  scored.sort((a, b) => {
-    if (a.score !== b.score) return a.score - b.score;
-    return b.session.modified.getTime() - a.session.modified.getTime();
-  });
-
-  return scored.map((r) => r.session);
-}
+    return scored.map((r) => r.session);
+  },
+);

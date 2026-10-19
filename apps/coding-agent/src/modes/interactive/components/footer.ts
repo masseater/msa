@@ -1,37 +1,33 @@
-import { isAbsolute, relative, resolve, sep } from "node:path";
-
+import type { AgentState } from "@msa/agent-core";
+import type { Model } from "@msa/ai";
 import { type Component, truncateToWidth, visibleWidth } from "@msa/tui";
+import { dual } from "effect/Function";
 
 import type { AgentSession } from "../../../core/agent-session.ts";
 import { areExperimentalFeaturesEnabled } from "../../../core/experimental.ts";
 import type { ContextUsage } from "../../../core/extensions/types.ts";
 import type { ReadonlyFooterDataProvider } from "../../../core/footer-data-provider.ts";
 import { describeGoalIndicator } from "../../../core/goal.ts";
+import { nowMs } from "../../../core/platform.ts";
 import { describePrWatchIndicator } from "../../../core/pr-watch/summary.ts";
 import { readEnv } from "../../../core/process-env.ts";
+import type { SessionManager } from "../../../core/session-manager.ts";
 import {
   addUsageToTotals,
   createUsageTotals,
   type UsageTotals,
 } from "../../../core/usage-totals.ts";
+import { isAbsolute, relative, resolve, sep } from "../../path.ts";
 import { theme } from "../theme/theme.ts";
 import { viewHelpers } from "./tasks-view-helpers.ts";
 
-/**
- * Sanitize text for display in a single-line status.
- * Removes newlines, tabs, carriage returns, and other control characters.
- */
 function sanitizeStatusText(text: string): string {
-  // Replace newlines, tabs, carriage returns with space, then collapse multiple spaces
   return text
-    .replace(/[\r\n\t]/g, " ")
-    .replace(/ +/g, " ")
+    .replace(/[\r\n\t]/gu, " ")
+    .replace(/ +/gu, " ")
     .trim();
 }
 
-/**
- * Format token counts for compact footer display.
- */
 export function formatTokens(count: number): string {
   if (count < 1000) return count.toString();
   if (count < 10000) return `${(count / 1000).toFixed(1)}k`;
@@ -40,8 +36,11 @@ export function formatTokens(count: number): string {
   return `${Math.round(count / 1000000)}M`;
 }
 
-export function formatCwdForFooter(cwd: string, home: string | undefined): string {
-  if (!home) return cwd;
+export const formatCwdForFooter: {
+  (home: string | undefined): (cwd: string) => string;
+  (cwd: string, home: string | undefined): string;
+} = dual(2, (cwd: string, home: string | undefined): string => {
+  if (home === undefined || home === "") return cwd;
 
   const resolvedCwd = resolve(cwd);
   const resolvedHome = resolve(home);
@@ -54,7 +53,7 @@ export function formatCwdForFooter(cwd: string, home: string | undefined): strin
 
   if (!isInsideHome) return cwd;
   return relativeToHome === "" ? "~" : `~${sep}${relativeToHome}`;
-}
+});
 
 interface SessionStats {
   session: AgentSession;
@@ -67,10 +66,6 @@ interface SessionStats {
   contextUsage: ContextUsage | undefined;
 }
 
-/**
- * Footer component that shows pwd, token stats, and context usage.
- * Computes token/context stats from session, gets git branch and extension statuses from provider.
- */
 export class FooterComponent implements Component {
   private autoCompactEnabled = true;
   private session: AgentSession;
@@ -90,47 +85,15 @@ export class FooterComponent implements Component {
     this.autoCompactEnabled = enabled;
   }
 
-  /**
-   * No-op: git branch caching now handled by provider.
-   * Kept for compatibility with existing call sites in interactive-mode.
-   */
-  invalidate(): void {
-    // No-op: git branch is cached/invalidated by provider
-  }
+  invalidate(): void {}
 
-  /**
-   * Clean up resources.
-   * Git watcher cleanup now handled by provider.
-   */
-  dispose(): void {
-    // Git watcher cleanup handled by provider
-  }
+  dispose(): void {}
 
-  /**
-   * Usage totals and context usage scan the whole session, and the footer renders on every frame.
-   * Entries are append-only and every append moves the leaf, so the results only change with the
-   * session, leaf, entry count, or the model whose context window applies.
-   */
   private getSessionStats(): SessionStats {
-    const sessionManager = this.session.sessionManager;
-    const entryCount = sessionManager.getEntryCount();
-    const sessionId = sessionManager.getSessionId();
-    const leafId = sessionManager.getLeafId();
-    const limitsModel = this.session.routedModel?.model ?? this.session.model;
-    const cached = this.sessionStats;
-    if (
-      cached &&
-      cached.session === this.session &&
-      cached.sessionId === sessionId &&
-      cached.leafId === leafId &&
-      cached.entryCount === entryCount &&
-      cached.limitsModel === limitsModel
-    ) {
-      return cached;
-    }
-
-    // Calculate cumulative usage from ALL session entries (not just post-compaction messages)
-    const usageTotals = createUsageTotals();
+    const getSessionStatsSessionManagerResult = FooterComponent.getSessionStatsSessionManager(this);
+    if (getSessionStatsSessionManagerResult.done) return getSessionStatsSessionManagerResult.value;
+    let { sessionManager, usageTotals, sessionId, leafId, entryCount, limitsModel } =
+      getSessionStatsSessionManagerResult.value;
     let latestCacheHitRate: number | undefined;
 
     for (const entry of sessionManager.getEntries()) {
@@ -150,16 +113,17 @@ export class FooterComponent implements Component {
       } else if (
         entry.type === "message" &&
         entry.message.role === "toolResult" &&
-        entry.message.usage
+        entry.message.usage !== undefined
       ) {
         addUsageToTotals(usageTotals, entry.message.usage);
-      } else if ((entry.type === "branch_summary" || entry.type === "compaction") && entry.usage) {
+      } else if (
+        (entry.type === "branch_summary" || entry.type === "compaction") &&
+        entry.usage !== undefined
+      ) {
         addUsageToTotals(usageTotals, entry.usage);
       }
     }
 
-    // Calculate context usage from session (handles compaction correctly).
-    // After compaction, tokens are unknown until the next LLM response.
     const contextUsage = this.session.getContextUsage();
     this.sessionStats = {
       session: this.session,
@@ -174,37 +138,77 @@ export class FooterComponent implements Component {
     return this.sessionStats;
   }
 
+  private static getSessionStatsSessionManager(self: FooterComponent):
+    | { done: true; value: SessionStats }
+    | {
+        done: false;
+        value: {
+          sessionManager: SessionManager;
+          usageTotals: UsageTotals;
+          sessionId: string;
+          leafId: string | null;
+          entryCount: number;
+          limitsModel: Model<any> | undefined;
+        };
+      } {
+    const sessionManager = self.session.sessionManager;
+    const entryCount = sessionManager.getEntryCount();
+    const sessionId = sessionManager.getSessionId();
+    const leafId = sessionManager.getLeafId();
+    const limitsModel = self.session.routedModel?.model ?? self.session.model;
+    const cached = self.sessionStats;
+    if (
+      cached !== undefined &&
+      cached.session === self.session &&
+      cached.sessionId === sessionId &&
+      cached.leafId === leafId &&
+      cached.entryCount === entryCount &&
+      cached.limitsModel === limitsModel
+    ) {
+      return { done: true, value: cached };
+    }
+
+    const usageTotals = createUsageTotals();
+    return {
+      done: false,
+      value: {
+        sessionManager,
+        usageTotals,
+        sessionId,
+        leafId,
+        entryCount,
+        limitsModel,
+      },
+    };
+  }
+
   render(width: number): string[] {
     const state = this.session.state;
     const { usageTotals, latestCacheHitRate, contextUsage } = this.getSessionStats();
     const contextWindow = contextUsage?.contextWindow ?? state.model?.contextWindow ?? 0;
     const contextPercentValue = contextUsage?.percent ?? 0;
-    const contextPercent = contextUsage?.percent !== null ? contextPercentValue.toFixed(1) : "?";
+    const contextPercent = contextUsage?.percent === null ? "?" : contextPercentValue.toFixed(1);
 
-    // Replace home directory with ~
     let pwd = formatCwdForFooter(
       this.session.sessionManager.getCwd(),
       readEnv("HOME") || readEnv("USERPROFILE"),
     );
 
-    // Add git branch if available
     const branch = this.footerData.getGitBranch();
-    if (branch) {
+    if (branch !== null && branch !== "") {
       pwd = `${pwd} (${branch})`;
     }
 
-    // Add session name if set
     const sessionName = this.session.sessionManager.getSessionName();
-    if (sessionName) {
+    if (sessionName !== undefined && sessionName !== "") {
       pwd = `${pwd} • ${sessionName}`;
     }
 
-    // Build stats line
     const statsParts = [];
-    if (usageTotals.input) statsParts.push(`↑${formatTokens(usageTotals.input)}`);
-    if (usageTotals.output) statsParts.push(`↓${formatTokens(usageTotals.output)}`);
-    if (usageTotals.cacheRead) statsParts.push(`R${formatTokens(usageTotals.cacheRead)}`);
-    if (usageTotals.cacheWrite) statsParts.push(`W${formatTokens(usageTotals.cacheWrite)}`);
+    if (usageTotals.input !== 0) statsParts.push(`↑${formatTokens(usageTotals.input)}`);
+    if (usageTotals.output !== 0) statsParts.push(`↓${formatTokens(usageTotals.output)}`);
+    if (usageTotals.cacheRead !== 0) statsParts.push(`R${formatTokens(usageTotals.cacheRead)}`);
+    if (usageTotals.cacheWrite !== 0) statsParts.push(`W${formatTokens(usageTotals.cacheWrite)}`);
     if (
       (usageTotals.cacheRead > 0 || usageTotals.cacheWrite > 0) &&
       latestCacheHitRate !== undefined
@@ -212,15 +216,15 @@ export class FooterComponent implements Component {
       statsParts.push(`CH${latestCacheHitRate.toFixed(1)}%`);
     }
 
-    const usingSubscription = state.model
-      ? this.session.modelRuntime.isUsingSubscription(state.model.provider)
-      : false;
-    if (usageTotals.cost || usingSubscription) {
+    const usingSubscription =
+      state.model === undefined
+        ? false
+        : this.session.modelRuntime.isUsingSubscription(state.model.provider);
+    if (usageTotals.cost !== 0 || usingSubscription) {
       const costStr = `$${usageTotals.cost.toFixed(3)}${usingSubscription ? " (sub)" : ""}`;
       statsParts.push(costStr);
     }
 
-    // Colorize context percentage based on usage
     let contextPercentStr: string;
     const autoIndicator = this.autoCompactEnabled ? " (auto)" : "";
     const contextPercentDisplay =
@@ -234,47 +238,84 @@ export class FooterComponent implements Component {
     } else {
       contextPercentStr = contextPercentDisplay;
     }
-    statsParts.push(contextPercentStr);
-    if (areExperimentalFeaturesEnabled()) {
-      statsParts.push(`${theme.fg("dim", "•")} ${theme.bold(theme.fg("warning", "xp"))}`);
+    const { tasks, lines } = FooterComponent.renderStatusLines(
+      this,
+      statsParts,
+      contextPercentStr,
+      state,
+      width,
+      pwd,
+    );
+    if (tasks !== undefined && tasks !== "") {
+      lines.push(
+        truncateToWidth(`${tasks}  ${theme.fg("dim", "/tasks")}`, width, theme.fg("dim", "...")),
+      );
     }
 
-    let statsLeft = statsParts.join(" ");
-
-    // Add model name on the right side, plus thinking level if model supports it
-    const modelName = state.model?.id || "no-model";
-
-    let statsLeftWidth = visibleWidth(statsLeft);
-
-    // If statsLeft is too wide, truncate it
-    if (statsLeftWidth > width) {
-      statsLeft = truncateToWidth(statsLeft, width, "...");
-      statsLeftWidth = visibleWidth(statsLeft);
+    const extensionStatuses = this.footerData.getExtensionStatuses();
+    if (extensionStatuses.size > 0) {
+      const sortedStatuses = Array.from(extensionStatuses.entries())
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([, text]) => sanitizeStatusText(text));
+      const statusLine = sortedStatuses.join(" ");
+      lines.push(truncateToWidth(statusLine, width, theme.fg("dim", "...")));
     }
 
-    // Calculate available space for padding (minimum 2 spaces between stats and model)
-    const minPadding = 2;
+    return lines;
+  }
 
-    // Add thinking level indicator if model supports reasoning
-    let rightSideWithoutProvider = modelName;
-    if (state.model?.reasoning) {
-      const thinkingLevel = state.thinkingLevel || "off";
-      rightSideWithoutProvider =
-        thinkingLevel === "off" ? `${modelName} • thinking off` : `${modelName} • ${thinkingLevel}`;
-    }
-    // A virtual model routes each request; show where the latest response went.
-    const routed = this.session.routedModel;
-    if (routed) {
-      const level = routed.thinkingLevel ? ` • ${routed.thinkingLevel}` : "";
-      rightSideWithoutProvider += ` → ${routed.model.id}${level}`;
+  private static renderStatusLines(
+    self: FooterComponent,
+    statsParts: string[],
+    contextPercentStr: string,
+    state: AgentState,
+    width: number,
+    pwd: string,
+  ): { tasks: string | undefined; lines: string[] } {
+    const { remainder, dimStatsLeft } = FooterComponent.renderRemainder(
+      self,
+      statsParts,
+      contextPercentStr,
+      state,
+      width,
+    );
+    const dimRemainder = theme.fg("dim", remainder);
+
+    const pwdLine = truncateToWidth(theme.fg("dim", pwd), width, theme.fg("dim", "..."));
+    const lines = [pwdLine, dimStatsLeft + dimRemainder];
+
+    const goal = self.session.goal;
+    if (goal !== undefined) {
+      lines.push(
+        truncateToWidth(
+          theme.fg("accent", describeGoalIndicator(goal, nowMs())),
+          width,
+          theme.fg("dim", "..."),
+        ),
+      );
     }
 
-    // Prepend the provider in parentheses if there are multiple providers and there's enough room
-    let rightSide = rightSideWithoutProvider;
-    if (this.footerData.getAvailableProviderCount() > 1 && state.model) {
+    const prWatch = describePrWatchIndicator(self.session.prWatch);
+    if (prWatch !== undefined && prWatch !== "") {
+      lines.push(truncateToWidth(theme.fg("dim", prWatch), width, theme.fg("dim", "...")));
+    }
+
+    const tasks = viewHelpers.describeTaskCounts(self.session.orchestrator?.snapshot.tasks ?? []);
+    return { tasks, lines };
+  }
+
+  private static renderRemainder(
+    self: FooterComponent,
+    statsParts: string[],
+    contextPercentStr: string,
+    state: AgentState,
+    width: number,
+  ): { remainder: string; dimStatsLeft: string } {
+    let { rightSide, rightSideWithoutProvider, statsLeftWidth, minPadding, statsLeft } =
+      FooterComponent.renderRightSide(self, statsParts, contextPercentStr, state, width);
+    if (self.footerData.getAvailableProviderCount() > 1 && state.model !== undefined) {
       rightSide = `(${state.model!.provider}) ${rightSideWithoutProvider}`;
       if (statsLeftWidth + minPadding + visibleWidth(rightSide) > width) {
-        // Too wide, fall back
         rightSide = rightSideWithoutProvider;
       }
     }
@@ -284,11 +325,9 @@ export class FooterComponent implements Component {
 
     let statsLine: string;
     if (totalNeeded <= width) {
-      // Both fit - add padding to right-align model
       const padding = " ".repeat(width - statsLeftWidth - rightSideWidth);
       statsLine = statsLeft + padding + rightSide;
     } else {
-      // Need to truncate right side
       const availableForRight = width - statsLeftWidth - minPadding;
       if (availableForRight > 0) {
         const truncatedRight = truncateToWidth(rightSide, availableForRight, "");
@@ -296,55 +335,59 @@ export class FooterComponent implements Component {
         const padding = " ".repeat(Math.max(0, width - statsLeftWidth - truncatedRightWidth));
         statsLine = statsLeft + padding + truncatedRight;
       } else {
-        // Not enough space for right side at all
         statsLine = statsLeft;
       }
     }
 
-    // Apply dim to each part separately. statsLeft may contain color codes (for context %)
-    // that end with a reset, which would clear an outer dim wrapper. So we dim the parts
-    // before and after the colored section independently.
     const dimStatsLeft = theme.fg("dim", statsLeft);
-    const remainder = statsLine.slice(statsLeft.length); // padding + rightSide
-    const dimRemainder = theme.fg("dim", remainder);
+    const remainder = statsLine.slice(statsLeft.length);
+    return { remainder, dimStatsLeft };
+  }
 
-    const pwdLine = truncateToWidth(theme.fg("dim", pwd), width, theme.fg("dim", "..."));
-    const lines = [pwdLine, dimStatsLeft + dimRemainder];
-
-    const goal = this.session.goal;
-    if (goal) {
-      lines.push(
-        truncateToWidth(
-          theme.fg("accent", describeGoalIndicator(goal, Date.now())),
-          width,
-          theme.fg("dim", "..."),
-        ),
-      );
+  private static renderRightSide(
+    self: FooterComponent,
+    statsParts: any[],
+    contextPercentStr: string,
+    state: AgentState,
+    width: number,
+  ): {
+    rightSide: string;
+    rightSideWithoutProvider: string;
+    statsLeftWidth: number;
+    minPadding: 2;
+    statsLeft: string;
+  } {
+    statsParts.push(contextPercentStr);
+    if (areExperimentalFeaturesEnabled()) {
+      statsParts.push(`${theme.fg("dim", "•")} ${theme.bold(theme.fg("warning", "xp"))}`);
     }
 
-    const prWatch = describePrWatchIndicator(this.session.prWatch);
-    if (prWatch) {
-      lines.push(truncateToWidth(theme.fg("dim", prWatch), width, theme.fg("dim", "...")));
+    let statsLeft = statsParts.join(" ");
+
+    const modelName = state.model?.id || "no-model";
+
+    let statsLeftWidth = visibleWidth(statsLeft);
+
+    if (statsLeftWidth > width) {
+      statsLeft = truncateToWidth(statsLeft, width, "...");
+      statsLeftWidth = visibleWidth(statsLeft);
     }
 
-    const tasks = viewHelpers.describeTaskCounts(this.session.orchestrator?.snapshot.tasks ?? []);
-    if (tasks) {
-      lines.push(
-        truncateToWidth(`${tasks}  ${theme.fg("dim", "/tasks")}`, width, theme.fg("dim", "...")),
-      );
+    const minPadding = 2;
+
+    let rightSideWithoutProvider = modelName;
+    if (state.model?.reasoning) {
+      const thinkingLevel = state.thinkingLevel || "off";
+      rightSideWithoutProvider =
+        thinkingLevel === "off" ? `${modelName} • thinking off` : `${modelName} • ${thinkingLevel}`;
+    }
+    const routed = self.session.routedModel;
+    if (routed !== undefined) {
+      const level = routed.thinkingLevel === undefined ? "" : ` • ${routed.thinkingLevel}`;
+      rightSideWithoutProvider += ` → ${routed.model.id}${level}`;
     }
 
-    // Add extension statuses on a single line, sorted by key alphabetically
-    const extensionStatuses = this.footerData.getExtensionStatuses();
-    if (extensionStatuses.size > 0) {
-      const sortedStatuses = Array.from(extensionStatuses.entries())
-        .sort(([a], [b]) => a.localeCompare(b))
-        .map(([, text]) => sanitizeStatusText(text));
-      const statusLine = sortedStatuses.join(" ");
-      // Truncate to terminal width with dim ellipsis for consistency with footer style
-      lines.push(truncateToWidth(statusLine, width, theme.fg("dim", "...")));
-    }
-
-    return lines;
+    let rightSide = rightSideWithoutProvider;
+    return { rightSide, rightSideWithoutProvider, statsLeftWidth, minPadding, statsLeft };
   }
 }

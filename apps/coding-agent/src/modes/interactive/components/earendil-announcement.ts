@@ -40,7 +40,7 @@ export class EarendilAnnouncementComponent extends Container {
     this.addChild(new Spacer(1));
 
     const imageBase64 = loadImageBase64();
-    if (imageBase64) {
+    if (imageBase64 !== undefined && imageBase64 !== "") {
       this.addChild(
         new Image(
           imageBase64,

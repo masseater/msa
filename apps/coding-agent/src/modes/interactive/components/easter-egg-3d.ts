@@ -12,47 +12,33 @@ import {
   type TuiMouseEventResult,
   visibleWidth,
 } from "@msa/tui";
+import { Effect } from "effect";
+import { dual } from "effect/Function";
 
+import { awaited, awaiting } from "../../../core/awaiting.ts";
+import { type Scheduled } from "../../../core/platform.ts";
+import { every } from "../../interval.ts";
 import { theme } from "../theme/theme.ts";
 import { ARMIN_HEIGHT, ARMIN_WIDTH, isArminPixel } from "./armin.ts";
 import { formatKeyText } from "./keybinding-hints.ts";
-
-/**
- * Fullscreen 3D easter egg: Armin (/arminsayshi), a bitmap built from one block per pixel. The current screen
- * dissolves into braille dust while the model spins in the center and its blocks play a sliding puzzle. Leaving
- * plays the same timeline backwards, so the screen reassembles.
- *
- * Armin grows out of a speck at the center; the dust spreads out from the center.
- *
- * The blocks are ray cast per braille dot. A braille cell holds 2x4 roughly square dots, so one pixel of a
- * half-block bitmap is exactly 2x2 dots.
- */
 
 type Rgb = readonly [number, number, number];
 
 interface ScreenCell {
   text: string;
-  /** 1 or 2 for a grapheme, 0 for the second column of a wide grapheme. */
   width: number;
   fg: Rgb;
-  /** Undefined when the cell uses the terminal's default background. */
   bg: Rgb | undefined;
-  /** Seconds until the cell turns into braille dust. */
   delay: number;
-  /** Number of braille dots the glyph turns into. */
   ink: number;
   seed: number;
 }
 
 interface Star {
-  /** Braille character with the single dot the star occupies. */
   glyph: string;
-  /** Color the star leans toward; it only ever shows a small step from the background toward it. */
   tint: Rgb;
-  /** Largest step from the background toward the tint, from 0 to 1. */
   strength: number;
   phase: number;
-  /** Flicker speed in radians per second. */
   speed: number;
 }
 
@@ -65,7 +51,6 @@ interface Box {
 interface Pose {
   centerX: number;
   centerY: number;
-  /** Braille dots per model pixel at depth 0. */
   scale: number;
   yaw: number;
   pitch: number;
@@ -75,30 +60,18 @@ interface Pose {
 const DEPTH = 0.7;
 const FLY_START = 0.1;
 const FLY_DURATION = 1.3;
-/** Braille dots per pixel when a model without an origin appears, growing from a speck at the center. */
 const START_SCALE = 0.1;
 
-/** Grid position of a block: column and row in the bitmap, and layer (-1, 0, 1) in depth. */
 type Cell3 = readonly [number, number, number];
 
-/** A bitmap built from one block per foreground pixel. Each is a block that the puzzle slides around. */
 interface Model {
-  /** Bitmap size in pixels. */
   columns: number;
   rows: number;
   blocks: Array<{ home: Cell3; color: Rgb }>;
-  /** Camera distance from the model's center, in pixels. */
   cameraDistance: number;
-  /** Farthest distance of any block corner from the center, with blocks on the outer depth layers. */
   radius: number;
-  /** Largest share of the screen width the spinning model covers. */
   widthShare: number;
-  /** Number of blocks the puzzle moves per step, given a random number from 0 to 1. */
   puzzleMoves: (random: number) => number;
-  /**
-   * Top-left cell of the model's half-block rendering on screen. The model lifts off from there and replaces it.
-   * Undefined to grow out of the center.
-   */
   origin: { column: number; row: number } | undefined;
 }
 
@@ -114,7 +87,7 @@ function createModel(
   for (let row = 0; row < rows; row++) {
     for (let column = 0; column < columns; column++) {
       const color = pixel(column, row);
-      if (color) blocks.push({ home: [column, row, 0], color });
+      if (color !== undefined) blocks.push({ home: [column, row, 0], color });
     }
   }
   return {
@@ -135,7 +108,6 @@ function arminModel(color: Rgb): Model {
     ARMIN_HEIGHT,
     (column, row) => (isArminPixel(column, row) ? color : undefined),
     {
-      // Far enough that the perspective stays mild for a figure about 36 blocks tall.
       cameraDistance: 80,
       widthShare: 0.45,
       puzzleMoves: (random, blockCount) => Math.round(blockCount * (0.03 + random * 0.04)),
@@ -144,8 +116,6 @@ function arminModel(color: Rgb): Model {
   );
 }
 
-// The sliding puzzle: after the model spun for a while, blocks slide into free neighboring cells, a few at a time.
-// Each cycle shuffles, flies every block back home, and holds the model briefly.
 const PUZZLE_START = FLY_START + FLY_DURATION + 3;
 const PUZZLE_STEP = 0.3;
 const PUZZLE_STEPS = 12;
@@ -165,7 +135,6 @@ const PUZZLE_MOVES: Cell3[] = [
   [0, 0, -1],
 ];
 
-/** Block positions after each step of one shuffle cycle, starting at home. Deterministic per cycle. */
 function shuffleSteps(model: Model, cycle: number): Cell3[][] {
   const { columns, rows } = model;
   let positions: Cell3[] = model.blocks.map((block) => block.home);
@@ -191,11 +160,10 @@ function shuffleSteps(model: Model, cycle: number): Cell3[][] {
           candidates.push({ block, target });
         }
       }
-      // Prefer blocks that did not just move, so the puzzle does not look like one block jittering.
       const fresh = candidates.filter((candidate) => !lastMoved.has(candidate.block));
       const pool = fresh.length > 0 ? fresh : candidates;
       const choice = pool[Math.floor(next() * pool.length)];
-      if (!choice) break;
+      if (choice === undefined) break;
       occupied.add(key(choice.target));
       nextPositions[choice.block] = choice.target;
       moved.add(choice.block);
@@ -215,11 +183,9 @@ const WAVE_JITTER = 0.12;
 const DISSOLVE_END = FLY_START + WAVE_SPREAD + WAVE_JITTER + DUST_DURATION;
 const BACKGROUND_FADE = 0.5;
 const EXIT_DURATION = 1.1;
-// A faint starfield fades in behind the logo once the screen has dissolved.
 const STARS_START = 2.5;
 const STARS_FADE = 2;
 const STAR_DENSITY = 0.018;
-// Star tints: neutral, pale blue, pale gold, and pale rose, each mixed half with the terminal's foreground.
 const STAR_TINTS: Rgb[] = [
   [255, 255, 255],
   [170, 195, 255],
@@ -227,9 +193,6 @@ const STAR_TINTS: Rgb[] = [
   [255, 190, 205],
 ];
 const LOGO_COLOR_STEP = 5;
-// On light backgrounds most of each braille cell shows the bright background, which washes the logo out. There,
-// the logo gets a halo: its colors and coverage blurred into the cell backgrounds, strongest under the logo and
-// fading out over HALO_RADIUS_X columns and HALO_RADIUS_Y rows (cells are about twice as tall as wide).
 const LIGHT_HALO_STRENGTH = 0.3;
 const HALO_RADIUS_X = 6;
 const HALO_RADIUS_Y = 3;
@@ -238,7 +201,6 @@ const STAR_ALPHA_LEVELS = 8;
 const STAR_FLICKER_LEVELS = 3;
 const HINT_FADE = 0.5;
 
-// Braille dot bits, indexed by row * 2 + column within the 2x4 cell.
 const DOT_BITS = [0x01, 0x08, 0x02, 0x10, 0x04, 0x20, 0x40, 0x80];
 const BRAILLE = Array.from({ length: 256 }, (_, bits) => String.fromCharCode(0x2800 + bits));
 const LIGHT = normalize([-0.45, -0.6, 0.75]);
@@ -253,7 +215,6 @@ function clamp01(value: number): number {
   return value < 0 ? 0 : value > 1 ? 1 : value;
 }
 
-/** Quintic smoothstep. */
 function smooth(value: number): number {
   const t = clamp01(value);
   return t * t * t * (t * (t * 6 - 15) + 10);
@@ -280,7 +241,6 @@ function hash(value: number): number {
   return (x >>> 0) / 0x100000000;
 }
 
-/** Whether a background is light, by relative luminance. */
 function isLight([r, g, b]: Rgb): boolean {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b > 128;
 }
@@ -290,17 +250,15 @@ function toRgb(color: Color): Rgb {
   return [r, g, b];
 }
 
-/** Braille dots a glyph turns into, a rough measure of how much ink it has. */
 function glyphInk(text: string, seed: number): number {
   if (text.trim() === "") return 0;
-  if (/^[.,:;'`\-_·]$/.test(text)) return 2;
-  if (/^[\u2500-\u257f]$/.test(text)) return 3;
+  if (/^[.,:;'`\-_·]$/u.test(text)) return 2;
+  if (/^[\u2500-\u257f]$/u.test(text)) return 3;
   return 4 + Math.floor(seed * 3);
 }
 
 const segmenter = new Intl.Segmenter();
 
-/** Parse rendered lines into cells with resolved colors. Other escape sequences (OSC, APC, cursor) are skipped. */
 function parseScreen(
   lines: readonly string[],
   width: number,
@@ -320,11 +278,9 @@ function parseScreen(
         const parts = codes[i]!.split(":").map((part) => Number.parseInt(part, 10));
         const code = parts[0] ?? 0;
         if (code === 38 || code === 48) {
-          // Extended color, either as `38;5;n` / `38;2;r;g;b` or colon sub-parameters.
           let args: number[];
           if (parts.length > 1) {
             args = parts.slice(1).filter((part) => !Number.isNaN(part));
-            // `38:2::r:g:b` has an empty color space id, dropped above.
           } else {
             const kind = Number.parseInt(codes[i + 1] ?? "", 10);
             const count = kind === 5 ? 2 : kind === 2 ? 4 : 1;
@@ -334,7 +290,7 @@ function parseScreen(
           let color: Rgb | undefined;
           if (args[0] === 5 && args[1] !== undefined) color = palette(args[1]);
           else if (args[0] === 2 && args.length >= 4) color = [args[1]!, args[2]!, args[3]!];
-          if (color) {
+          if (color !== undefined) {
             if (code === 38) fg = color;
             else bg = color;
           }
@@ -395,7 +351,6 @@ function parseScreen(
         if (line[end] === "m") applySgr(line.slice(sequenceStart + 2, end));
         i = end + 1;
       } else if (kind === "]" || kind === "_" || kind === "P" || kind === "^") {
-        // String sequences end at BEL or ST (ESC \).
         const bell = line.indexOf("\x07", sequenceStart + 2);
         const st = line.indexOf("\x1b\\", sequenceStart + 2);
         if (bell === -1 && st === -1) break;
@@ -408,7 +363,6 @@ function parseScreen(
   });
 }
 
-/** Row-major 3x3 rotation matrix for yaw (y), then pitch (x), then roll (z). */
 function rotation(yaw: number, pitch: number, roll: number): number[] {
   const [sy, cy, sx, cx, sz, cz] = [
     Math.sin(yaw),
@@ -418,7 +372,6 @@ function rotation(yaw: number, pitch: number, roll: number): number[] {
     Math.sin(roll),
     Math.cos(roll),
   ];
-  // Rz * Rx * Ry
   const ry = [cy, 0, sy, 0, 1, 0, -sy, 0, cy];
   const rx = [1, 0, 0, 0, cx, -sx, 0, sx, cx];
   const rz = [cz, -sz, 0, sz, cz, 0, 0, 0, 1];
@@ -438,33 +391,26 @@ function multiply(a: number[], b: number[]): number[] {
   return result;
 }
 
-// The spin is locked to the puzzle: one turn per cycle, facing the camera in the middle of each hold.
 const SPIN_RAMP = 1.4;
 const SPIN_SPEED = (Math.PI * 2) / PUZZLE_CYCLE;
-// How much the spin slows down while facing the camera (and speeds up while facing away), from 0 to 1.
 const SPIN_LINGER = 0.6;
 const FIRST_FRONT_VIEW =
   PUZZLE_START + PUZZLE_STEP * PUZZLE_STEPS + PUZZLE_RETURN + PUZZLE_HOLD / 2;
 
-/** Uniform spin that accelerates from rest over SPIN_RAMP, then turns at SPIN_SPEED. */
 function baseSpinPhase(time: number): number {
   const elapsed = time - FLY_START;
   if (elapsed <= 0) return 0;
   const u = elapsed / SPIN_RAMP;
-  // Integral of the quintic smoothstep ramp.
   if (u < 1) return SPIN_SPEED * SPIN_RAMP * (u ** 6 - 3 * u ** 5 + 2.5 * u ** 4);
   return SPIN_SPEED * (SPIN_RAMP * 0.5 + elapsed - SPIN_RAMP);
 }
 
-// Extra rotation added during the flight, so the phase is a whole number of turns at every assembled front view.
 const SPIN_ALIGNMENT = Math.PI * 2 - (baseSpinPhase(FIRST_FRONT_VIEW) % (Math.PI * 2));
 
-/** Spin phase: whole turns exactly when the reassembled logo faces the camera. */
 function spinPhase(time: number): number {
   return baseSpinPhase(time) + SPIN_ALIGNMENT * smooth((time - FLY_START) / FLY_DURATION);
 }
 
-/** Yaw of the logo. It matches the phase at whole turns but lingers there, so the logo reads from the front. */
 function spinAngle(time: number): number {
   const phase = spinPhase(time);
   return phase - SPIN_LINGER * Math.sin(phase);
@@ -472,13 +418,11 @@ function spinAngle(time: number): number {
 
 interface Face {
   axis: number;
-  /** Plane coordinate on `axis` in object space. */
   plane: number;
   uMin: number;
   uMax: number;
   vMin: number;
   vMax: number;
-  /** Projected bounds in braille dots, inclusive. */
   minX: number;
   minY: number;
   maxX: number;
@@ -488,31 +432,17 @@ interface Face {
   blue: number;
 }
 
-/**
- * Renders the model's blocks into braille cells. Only faces that point at the camera and are not covered by a
- * touching block are drawn. Each face is rasterized over its projected bounds by intersecting each dot's ray
- * with the face's plane, with a depth buffer resolving overlaps. Buffers are reused between frames.
- */
 class BlockRaster {
-  /** Braille dot bits per cell. */
   bits = new Uint8Array(0);
-  /** Lit dots per cell. */
   counts = new Uint8Array(0);
-  /** Summed RGB of the lit dots per cell. */
   rgb = new Float32Array(0);
-  /** Halo tint strength per cell, from 0 to 1. Only set when a halo was requested. */
   haloAmount = new Float32Array(0);
-  /** Halo color per cell. */
   haloRgb = new Float32Array(0);
   private width = 0;
   private height = 0;
-  /** Ray parameter of the nearest hit per dot; smaller is nearer. */
   private depth = new Float32Array(0);
-  /** Face index + 1 of the nearest hit per dot, 0 for none. */
   private faceIds = new Uint16Array(0);
-  /** Cells written by the previous frame, cleared before the next one. */
   private dirty: { minX: number; minY: number; maxX: number; maxY: number } | undefined;
-  /** Cells with a halo from the previous frame, cleared before the next one. */
   private haloDirty: { minX: number; minY: number; maxX: number; maxY: number } | undefined;
   private readonly cameraDistance: number;
 
@@ -528,111 +458,63 @@ class BlockRaster {
     background: Rgb,
     haloStrength: number,
   ): void {
-    const dotWidth = width * 2;
-    const dotHeight = height * 4;
-    if (width !== this.width || height !== this.height) {
-      this.width = width;
-      this.height = height;
-      this.bits = new Uint8Array(width * height);
-      this.counts = new Uint8Array(width * height);
-      this.rgb = new Float32Array(width * height * 3);
-      this.haloAmount = new Float32Array(width * height);
-      this.haloRgb = new Float32Array(width * height * 3);
-      this.haloDirty = undefined;
-      this.depth = new Float32Array(dotWidth * dotHeight).fill(Infinity);
-      this.faceIds = new Uint16Array(dotWidth * dotHeight);
-      this.dirty = undefined;
-    } else if (this.dirty) {
-      const { minX, minY, maxX, maxY } = this.dirty;
-      for (let row = minY; row <= maxY; row++) {
-        this.bits.fill(0, row * width + minX, row * width + maxX + 1);
-        this.counts.fill(0, row * width + minX, row * width + maxX + 1);
-        this.rgb.fill(0, (row * width + minX) * 3, (row * width + maxX + 1) * 3);
-      }
-      this.dirty = undefined;
-    }
-    if (this.haloDirty) {
-      const { minX, minY, maxX, maxY } = this.haloDirty;
-      for (let row = minY; row <= maxY; row++) {
-        this.haloAmount.fill(0, row * width + minX, row * width + maxX + 1);
-        this.haloRgb.fill(0, (row * width + minX) * 3, (row * width + maxX + 1) * 3);
-      }
-      this.haloDirty = undefined;
-    }
-
-    const m = rotation(pose.yaw, pose.pitch, pose.roll);
-    const { centerX, centerY, scale } = pose;
-    const cameraDistance = this.cameraDistance;
-    // The camera sits at (0, 0, cameraDistance) in camera space; object space is the transpose rotation.
-    const origin = [m[6]! * cameraDistance, m[7]! * cameraDistance, m[8]! * cameraDistance];
-    const light = isLight(background);
-    const faces = this.visibleFaces(m, origin, pose, boxes, dotWidth, dotHeight, light);
-    if (faces.length === 0) return;
-    let minX = dotWidth;
-    let minY = dotHeight;
-    let maxX = -1;
-    let maxY = -1;
-    for (const face of faces) {
-      minX = Math.min(minX, face.minX);
-      minY = Math.min(minY, face.minY);
-      maxX = Math.max(maxX, face.maxX);
-      maxY = Math.max(maxY, face.maxY);
-    }
-    if (maxX < minX || maxY < minY) return;
-
-    const depth = this.depth;
-    const faceIds = this.faceIds;
-    for (let faceIndex = 0; faceIndex < faces.length; faceIndex++) {
-      const face = faces[faceIndex]!;
-      const a = face.axis;
-      const u = (a + 1) % 3;
-      const v = (a + 2) % 3;
-      const originA = origin[a]!;
-      const originU = origin[u]!;
-      const originV = origin[v]!;
-      // The ray direction in object space is linear in the dot position, so it is stepped per dot.
-      const stepA = m[a]! / scale;
-      const stepU = m[u]! / scale;
-      const stepV = m[v]! / scale;
-      const sx = (face.minX + 0.5 - centerX) / scale;
-      for (let dotY = face.minY; dotY <= face.maxY; dotY++) {
-        const sy = (dotY + 0.5 - centerY) / scale;
-        let directionA = m[a]! * sx + m[3 + a]! * sy - m[6 + a]! * cameraDistance;
-        let directionU = m[u]! * sx + m[3 + u]! * sy - m[6 + u]! * cameraDistance;
-        let directionV = m[v]! * sx + m[3 + v]! * sy - m[6 + v]! * cameraDistance;
-        let index = dotY * dotWidth + face.minX;
-        for (let dotX = face.minX; dotX <= face.maxX; dotX++, index++) {
-          const t = (face.plane - originA) / directionA;
-          if (t > 0 && t < depth[index]!) {
-            const hitU = originU + t * directionU;
-            const hitV = originV + t * directionV;
-            if (hitU >= face.uMin && hitU <= face.uMax && hitV >= face.vMin && hitV <= face.vMax) {
-              depth[index] = t;
-              faceIds[index] = faceIndex + 1;
-            }
-          }
-          directionA += stepA;
-          directionU += stepU;
-          directionV += stepV;
-        }
-      }
-    }
-
-    // Shade the hit dots, pack them into braille cells, and reset the dot buffers for the next frame.
-    const bits = this.bits;
-    const counts = this.counts;
-    const rgb = this.rgb;
-    let cellMinX = width;
-    let cellMinY = height;
-    let cellMaxX = -1;
-    let cellMaxY = -1;
+    const renderDotWidthResult = BlockRaster.renderDotWidth(
+      this,
+      width,
+      height,
+      pose,
+      background,
+      boxes,
+    );
+    if (renderDotWidthResult.done) return renderDotWidthResult.value;
+    const {
+      dotWidth,
+      dotHeight,
+      faces,
+      origin,
+      m,
+      scale,
+      centerX,
+      centerY,
+      cameraDistance,
+      light,
+    } = renderDotWidthResult.value;
+    const renderMinYResult = BlockRaster.renderMinY(
+      this,
+      dotWidth,
+      dotHeight,
+      faces,
+      origin,
+      m,
+      scale,
+      centerX,
+      centerY,
+      cameraDistance,
+      width,
+      height,
+    );
+    if (renderMinYResult.done) return renderMinYResult.value;
+    let {
+      minY,
+      maxY,
+      minX,
+      maxX,
+      faceIds,
+      depth,
+      bits,
+      counts,
+      rgb,
+      cellMinX,
+      cellMaxX,
+      cellMinY,
+      cellMaxY,
+    } = renderMinYResult.value;
     for (let dotY = minY; dotY <= maxY; dotY++) {
       let index = dotY * dotWidth + minX;
       for (let dotX = minX; dotX <= maxX; dotX++, index++) {
         const id = faceIds[index]!;
         if (id === 0) continue;
         const face = faces[id - 1]!;
-        // Points farther from the camera fade slightly toward the background for depth.
         const fog = clamp01(0.15 - cameraDistance * (1 - depth[index]!) * 0.12) * (light ? 0.5 : 1);
         faceIds[index] = 0;
         depth[index] = Infinity;
@@ -658,13 +540,249 @@ class BlockRaster {
     if (haloStrength > 0) this.renderHalo(haloStrength);
   }
 
-  /**
-   * Blur the logo's coverage and color over neighboring cells with a separable tent filter, so the tint falls
-   * off smoothly past the logo's edges.
-   */
+  private static renderDotWidth(
+    self: BlockRaster,
+    width: number,
+    height: number,
+    pose: Pose,
+    background: Rgb,
+    boxes: readonly Box[],
+  ):
+    | { done: true; value: void }
+    | {
+        done: false;
+        value: {
+          dotWidth: number;
+          dotHeight: number;
+          faces: Face[];
+          origin: number[];
+          m: number[];
+          scale: number;
+          centerX: number;
+          centerY: number;
+          cameraDistance: number;
+          light: boolean;
+        };
+      } {
+    const dotWidth = width * 2;
+    const dotHeight = height * 4;
+    if (width !== self.width || height !== self.height) {
+      self.width = width;
+      self.height = height;
+      self.bits = new Uint8Array(width * height);
+      self.counts = new Uint8Array(width * height);
+      self.rgb = new Float32Array(width * height * 3);
+      self.haloAmount = new Float32Array(width * height);
+      self.haloRgb = new Float32Array(width * height * 3);
+      self.haloDirty = undefined;
+      self.depth = new Float32Array(dotWidth * dotHeight).fill(Infinity);
+      self.faceIds = new Uint16Array(dotWidth * dotHeight);
+      self.dirty = undefined;
+    } else if (self.dirty !== undefined) {
+      const { minX, minY, maxX, maxY } = self.dirty;
+      for (let row = minY; row <= maxY; row++) {
+        self.bits.fill(0, row * width + minX, row * width + maxX + 1);
+        self.counts.fill(0, row * width + minX, row * width + maxX + 1);
+        self.rgb.fill(0, (row * width + minX) * 3, (row * width + maxX + 1) * 3);
+      }
+      self.dirty = undefined;
+    }
+    if (self.haloDirty !== undefined) {
+      const { minX, minY, maxX, maxY } = self.haloDirty;
+      for (let row = minY; row <= maxY; row++) {
+        self.haloAmount.fill(0, row * width + minX, row * width + maxX + 1);
+        self.haloRgb.fill(0, (row * width + minX) * 3, (row * width + maxX + 1) * 3);
+      }
+      self.haloDirty = undefined;
+    }
+
+    const m = rotation(pose.yaw, pose.pitch, pose.roll);
+    const { centerX, centerY, scale } = pose;
+    const cameraDistance = self.cameraDistance;
+    const origin = [m[6]! * cameraDistance, m[7]! * cameraDistance, m[8]! * cameraDistance];
+    const light = isLight(background);
+    const faces = self.visibleFaces(m, origin, pose, boxes, dotWidth, dotHeight, light);
+    if (faces.length === 0) return { done: true, value: undefined };
+    return {
+      done: false,
+      value: {
+        dotWidth,
+        dotHeight,
+        faces,
+        origin,
+        m,
+        scale,
+        centerX,
+        centerY,
+        cameraDistance,
+        light,
+      },
+    };
+  }
+
+  private static renderMinY(
+    self: BlockRaster,
+    dotWidth: number,
+    dotHeight: number,
+    faces: Face[],
+    origin: number[],
+    m: number[],
+    scale: number,
+    centerX: number,
+    centerY: number,
+    cameraDistance: number,
+    width: number,
+    height: number,
+  ):
+    | { done: true; value: void }
+    | {
+        done: false;
+        value: {
+          minY: number;
+          maxY: number;
+          minX: number;
+          maxX: number;
+          faceIds: Uint16Array<ArrayBuffer>;
+          depth: Float32Array<ArrayBuffer>;
+          bits: Uint8Array<ArrayBuffer>;
+          counts: Uint8Array<ArrayBuffer>;
+          rgb: Float32Array<ArrayBuffer>;
+          cellMinX: number;
+          cellMaxX: number;
+          cellMinY: number;
+          cellMaxY: number;
+        };
+      } {
+    let minX = dotWidth;
+    let minY = dotHeight;
+    let maxX = -1;
+    let maxY = -1;
+    for (const face of faces) {
+      minX = Math.min(minX, face.minX);
+      minY = Math.min(minY, face.minY);
+      maxX = Math.max(maxX, face.maxX);
+      maxY = Math.max(maxY, face.maxY);
+    }
+    if (maxX < minX || maxY < minY) return { done: true, value: undefined };
+
+    let { faceIds, depth, bits, counts, rgb, cellMinX, cellMaxX, cellMinY, cellMaxY } =
+      BlockRaster.renderFaceIds(
+        self,
+        faces,
+        origin,
+        m,
+        scale,
+        centerX,
+        centerY,
+        cameraDistance,
+        dotWidth,
+        width,
+        height,
+      );
+    return {
+      done: false,
+      value: {
+        minY,
+        maxY,
+        minX,
+        maxX,
+        faceIds,
+        depth,
+        bits,
+        counts,
+        rgb,
+        cellMinX,
+        cellMaxX,
+        cellMinY,
+        cellMaxY,
+      },
+    };
+  }
+
+  private static renderFaceIds(
+    self: BlockRaster,
+    faces: Face[],
+    origin: number[],
+    m: number[],
+    scale: number,
+    centerX: number,
+    centerY: number,
+    cameraDistance: number,
+    dotWidth: number,
+    width: number,
+    height: number,
+  ): {
+    faceIds: Uint16Array<ArrayBuffer>;
+    depth: Float32Array<ArrayBuffer>;
+    bits: Uint8Array<ArrayBuffer>;
+    counts: Uint8Array<ArrayBuffer>;
+    rgb: Float32Array<ArrayBuffer>;
+    cellMinX: number;
+    cellMaxX: number;
+    cellMinY: number;
+    cellMaxY: number;
+  } {
+    const depth = self.depth;
+    const faceIds = self.faceIds;
+    let { bits, counts, rgb, cellMinX } = BlockRaster.renderBits(
+      self,
+      faces,
+      origin,
+      m,
+      scale,
+      centerX,
+      centerY,
+      cameraDistance,
+      dotWidth,
+      depth,
+      faceIds,
+      width,
+    );
+    let cellMinY = height;
+    let cellMaxX = -1;
+    let cellMaxY = -1;
+    return { faceIds, depth, bits, counts, rgb, cellMinX, cellMaxX, cellMinY, cellMaxY };
+  }
+
+  private static renderBits(
+    self: BlockRaster,
+    faces: Face[],
+    origin: number[],
+    m: number[],
+    scale: number,
+    centerX: number,
+    centerY: number,
+    cameraDistance: number,
+    dotWidth: number,
+    depth: Float32Array<ArrayBuffer>,
+    faceIds: Uint16Array<ArrayBuffer>,
+    width: number,
+  ): {
+    bits: Uint8Array<ArrayBuffer>;
+    counts: Uint8Array<ArrayBuffer>;
+    rgb: Float32Array<ArrayBuffer>;
+    cellMinX: number;
+  } {
+    let { bits, counts, rgb, cellMinX } = renderBitsBits(
+      faces,
+      origin,
+      m,
+      scale,
+      centerX,
+      centerY,
+      cameraDistance,
+      dotWidth,
+      depth,
+      faceIds,
+      self,
+      width,
+    );
+    return { bits, counts, rgb, cellMinX };
+  }
+
   private renderHalo(strength: number): void {
     const cells = this.dirty;
-    if (!cells) return;
+    if (cells === undefined) return;
     const { width, height, counts, rgb } = this;
     const minX = Math.max(0, cells.minX - HALO_RADIUS_X);
     const maxX = Math.min(width - 1, cells.maxX + HALO_RADIUS_X);
@@ -682,36 +800,42 @@ class BlockRaster {
     const weightsX = tent(HALO_RADIUS_X);
     const weightsY = tent(HALO_RADIUS_Y);
 
-    // Horizontal pass over the rows that contain the logo: coverage and premultiplied color per cell.
     const rows = cells.maxY - cells.minY + 1;
     const horizontal = new Float32Array(rows * regionWidth * 4);
-    for (let y = cells.minY; y <= cells.maxY; y++) {
-      for (let x = minX; x <= maxX; x++) {
-        let coverage = 0;
-        let red = 0;
-        let green = 0;
-        let blue = 0;
-        for (let dx = -HALO_RADIUS_X; dx <= HALO_RADIUS_X; dx++) {
-          const sourceX = x + dx;
-          if (sourceX < cells.minX || sourceX > cells.maxX) continue;
-          const source = y * width + sourceX;
-          const count = counts[source]!;
-          if (count === 0) continue;
-          const weight = weightsX[dx + HALO_RADIUS_X]! / 8;
-          coverage += count * weight;
-          red += rgb[source * 3]! * weight;
-          green += rgb[source * 3 + 1]! * weight;
-          blue += rgb[source * 3 + 2]! * weight;
-        }
-        const target = ((y - cells.minY) * regionWidth + (x - minX)) * 4;
-        horizontal[target] = coverage;
-        horizontal[target + 1] = red;
-        horizontal[target + 2] = green;
-        horizontal[target + 3] = blue;
-      }
-    }
+    renderHaloPart1(cells, minX, maxX, width, counts, weightsX, rgb, regionWidth, horizontal);
 
-    // Vertical pass into the halo buffers.
+    BlockRaster.renderHaloPart2(
+      this,
+      minY,
+      maxY,
+      minX,
+      maxX,
+      cells,
+      weightsY,
+      regionWidth,
+      horizontal,
+      width,
+      counts,
+      rgb,
+      strength,
+    );
+  }
+
+  private static renderHaloPart2(
+    self: BlockRaster,
+    minY: number,
+    maxY: number,
+    minX: number,
+    maxX: number,
+    cells: { minX: number; minY: number; maxX: number; maxY: number },
+    weightsY: number[],
+    regionWidth: number,
+    horizontal: Float32Array<ArrayBuffer>,
+    width: number,
+    counts: Uint8Array<ArrayBuffer>,
+    rgb: Float32Array<ArrayBuffer>,
+    strength: number,
+  ): void {
     for (let y = minY; y <= maxY; y++) {
       for (let x = minX; x <= maxX; x++) {
         let coverage = 0;
@@ -729,7 +853,6 @@ class BlockRaster {
           blue += horizontal[source + 3]! * weight;
         }
         const target = y * width + x;
-        // Cells under the logo keep at least their own coverage, so faces stay solidly tinted.
         const count = counts[target]!;
         if (count > 0 && count / 8 > coverage) {
           coverage = count / 8;
@@ -738,19 +861,18 @@ class BlockRaster {
           blue = (rgb[target * 3 + 2]! / count) * coverage;
         }
         if (coverage <= 0) continue;
-        // Quantized so neighboring cells usually share a background and its escape sequence.
         const amount =
           Math.round(strength * Math.min(1, coverage) ** 0.7 * HALO_LEVELS) / HALO_LEVELS;
         if (amount <= 0) continue;
-        this.haloAmount[target] = amount;
-        this.haloRgb[target * 3] = Math.round(red / coverage / LOGO_COLOR_STEP) * LOGO_COLOR_STEP;
-        this.haloRgb[target * 3 + 1] =
+        self.haloAmount[target] = amount;
+        self.haloRgb[target * 3] = Math.round(red / coverage / LOGO_COLOR_STEP) * LOGO_COLOR_STEP;
+        self.haloRgb[target * 3 + 1] =
           Math.round(green / coverage / LOGO_COLOR_STEP) * LOGO_COLOR_STEP;
-        this.haloRgb[target * 3 + 2] =
+        self.haloRgb[target * 3 + 2] =
           Math.round(blue / coverage / LOGO_COLOR_STEP) * LOGO_COLOR_STEP;
       }
     }
-    this.haloDirty = { minX, minY, maxX, maxY };
+    self.haloDirty = { minX, minY, maxX, maxY };
   }
 
   private visibleFaces(
@@ -765,128 +887,350 @@ class BlockRaster {
     const faces: Face[] = [];
     const cameraDistance = this.cameraDistance;
     for (const box of boxes) {
-      for (let a = 0; a < 3; a++) {
-        const u = (a + 1) % 3;
-        const v = (a + 2) % 3;
-        for (const side of [-1, 1]) {
-          const plane = side > 0 ? box.max[a]! : box.min[a]!;
-          // Back faces point away from the camera.
-          if ((origin[a]! - plane) * side <= 0) continue;
-          // Faces pressed against a neighboring block are hidden. Positions are exact while blocks rest.
-          const covered = boxes.some(
-            (other) =>
-              other !== box &&
-              (side > 0 ? other.min[a] : other.max[a]) === plane &&
-              other.min[u]! <= box.min[u]! &&
-              other.max[u]! >= box.max[u]! &&
-              other.min[v]! <= box.min[v]! &&
-              other.max[v]! >= box.max[v]!,
-          );
-          if (covered) continue;
-
-          let minX = Infinity;
-          let minY = Infinity;
-          let maxX = -Infinity;
-          let maxY = -Infinity;
-          const corner = [0, 0, 0];
-          for (const cornerU of [box.min[u]!, box.max[u]!]) {
-            for (const cornerV of [box.min[v]!, box.max[v]!]) {
-              corner[a] = plane;
-              corner[u] = cornerU;
-              corner[v] = cornerV;
-              const x = m[0]! * corner[0]! + m[1]! * corner[1]! + m[2]! * corner[2]!;
-              const y = m[3]! * corner[0]! + m[4]! * corner[1]! + m[5]! * corner[2]!;
-              const z = m[6]! * corner[0]! + m[7]! * corner[1]! + m[8]! * corner[2]!;
-              const perspective = (pose.scale * cameraDistance) / (cameraDistance - z);
-              const screenX = pose.centerX + x * perspective;
-              const screenY = pose.centerY + y * perspective;
-              minX = Math.min(minX, screenX);
-              minY = Math.min(minY, screenY);
-              maxX = Math.max(maxX, screenX);
-              maxY = Math.max(maxY, screenY);
-            }
-          }
-          const face = {
-            minX: Math.max(0, Math.floor(minX)),
-            minY: Math.max(0, Math.floor(minY)),
-            maxX: Math.min(dotWidth - 1, Math.ceil(maxX)),
-            maxY: Math.min(dotHeight - 1, Math.ceil(maxY)),
-          };
-          if (face.maxX < face.minX || face.maxY < face.minY) continue;
-
-          // Faces are flat, so lighting is computed once per face. The normal in camera space is a
-          // column of the rotation matrix.
-          const nx = m[a]! * side;
-          const ny = m[3 + a]! * side;
-          const nz = m[6 + a]! * side;
-          const diffuse = Math.max(0, nx * LIGHT[0] + ny * LIGHT[1] + nz * LIGHT[2]);
-          const rim = Math.max(0, nx * 0.8 - nz * 0.3);
-          // On light backgrounds, highlights toward white would vanish, so faces only get darker than
-          // the brand colors there.
-          const specular = lightBackground
-            ? 0
-            : Math.max(0, nx * HALF_VECTOR[0] + ny * HALF_VECTOR[1] + nz * HALF_VECTOR[2]) ** 24 *
-              0.6 *
-              255;
-          const light = lightBackground
-            ? Math.min(1, 0.55 + diffuse * 0.45 + rim * 0.1)
-            : 0.45 + diffuse * 0.78 + rim * 0.25;
-          faces.push({
-            axis: a,
-            plane,
-            uMin: box.min[u]!,
-            uMax: box.max[u]!,
-            vMin: box.min[v]!,
-            vMax: box.max[v]!,
-            ...face,
-            red: Math.min(255, box.color[0] * light + specular),
-            green: Math.min(255, box.color[1] * light + specular),
-            blue: Math.min(255, box.color[2] * light + specular),
-          });
-        }
-      }
+      visibleFacesPart1(
+        box,
+        origin,
+        boxes,
+        m,
+        pose,
+        cameraDistance,
+        dotWidth,
+        dotHeight,
+        lightBackground,
+        faces,
+      );
     }
     return faces;
   }
 }
 
-let playing = false;
+function renderBitsBits(
+  faces: Face[],
+  origin: number[],
+  m: number[],
+  scale: number,
+  centerX: number,
+  centerY: number,
+  cameraDistance: number,
+  dotWidth: number,
+  depth: Float32Array<ArrayBuffer>,
+  faceIds: Uint16Array<ArrayBuffer>,
+  self: BlockRaster,
+  width: number,
+): {
+  bits: Uint8Array<ArrayBuffer>;
+  counts: Uint8Array<ArrayBuffer>;
+  rgb: Float32Array<ArrayBuffer>;
+  cellMinX: number;
+} {
+  let { bits, counts, rgb, cellMinX } = renderBitsBitsBits(
+    faces,
+    origin,
+    m,
+    scale,
+    centerX,
+    centerY,
+    cameraDistance,
+    dotWidth,
+    depth,
+    faceIds,
+    self,
+    width,
+  );
+  return { bits, counts, rgb, cellMinX };
+}
 
-/**
- * Show the animation as a fullscreen overlay until it is dismissed. The overlay takes focus and mouse input and
- * returns focus when hidden, so the rest of the UI keeps running underneath untouched.
- */
-export async function playEasterEgg3d(tui: TUI, screen: readonly string[]): Promise<void> {
-  if (playing) return;
-  playing = true;
-  // Fading needs the terminal's actual default colors; the theme only knows its own.
-  const reported = await tui.queryTerminalColors({ timeoutMs: 100 });
-  const dark = theme.appearance === "dark";
-  const toRgbTuple = (rgb: { r: number; g: number; b: number } | undefined, fallback: Rgb): Rgb =>
-    rgb ? [rgb.r, rgb.g, rgb.b] : fallback;
-  const colors = {
-    foreground: toRgbTuple(reported.foreground, toRgb(theme.colors.text)),
-    background: toRgbTuple(reported.background, dark ? [0, 0, 0] : [255, 255, 255]),
-  };
-  if (tui.hasOverlay()) {
-    playing = false;
-    return;
+function renderBitsBitsBits(
+  faces: Face[],
+  origin: number[],
+  m: number[],
+  scale: number,
+  centerX: number,
+  centerY: number,
+  cameraDistance: number,
+  dotWidth: number,
+  depth: Float32Array<ArrayBuffer>,
+  faceIds: Uint16Array<ArrayBuffer>,
+  self: BlockRaster,
+  width: number,
+): {
+  bits: Uint8Array<ArrayBuffer>;
+  counts: Uint8Array<ArrayBuffer>;
+  rgb: Float32Array<ArrayBuffer>;
+  cellMinX: number;
+} {
+  for (let faceIndex = 0; faceIndex < faces.length; faceIndex++) {
+    const face = faces[faceIndex]!;
+    const a = face.axis;
+    const u = (a + 1) % 3;
+    const v = (a + 2) % 3;
+    const originA = origin[a]!;
+    const originU = origin[u]!;
+    const originV = origin[v]!;
+    const stepA = m[a]! / scale;
+    const stepU = m[u]! / scale;
+    const stepV = m[v]! / scale;
+    const sx = (face.minX + 0.5 - centerX) / scale;
+    for (let dotY = face.minY; dotY <= face.maxY; dotY++) {
+      const sy = (dotY + 0.5 - centerY) / scale;
+      let directionA = m[a]! * sx + m[3 + a]! * sy - m[6 + a]! * cameraDistance;
+      let directionU = m[u]! * sx + m[3 + u]! * sy - m[6 + u]! * cameraDistance;
+      let directionV = m[v]! * sx + m[3 + v]! * sy - m[6 + v]! * cameraDistance;
+      let index = dotY * dotWidth + face.minX;
+      for (let dotX = face.minX; dotX <= face.maxX; dotX++, index++) {
+        const t = (face.plane - originA) / directionA;
+        if (t > 0 && t < depth[index]!) {
+          const hitU = originU + t * directionU;
+          const hitV = originV + t * directionV;
+          if (hitU >= face.uMin && hitU <= face.uMax && hitV >= face.vMin && hitV <= face.vMax) {
+            depth[index] = t;
+            faceIds[index] = faceIndex + 1;
+          }
+        }
+        directionA += stepA;
+        directionU += stepU;
+        directionV += stepV;
+      }
+    }
   }
-  const model = arminModel(toRgb(theme.colors.accent));
-  const animation = new EasterEgg3dAnimation(tui, screen, model, colors, () => {
-    playing = false;
-    overlay.hide();
-  });
-  const overlay = tui.showOverlay(animation, {
-    anchor: "top-left",
-    width: "100%",
-    maxHeight: "100%",
+
+  const bits = self.bits;
+  const counts = self.counts;
+  const rgb = self.rgb;
+  let cellMinX = width;
+  return { bits, counts, rgb, cellMinX };
+}
+
+function visibleFacesPart1(
+  box: Box,
+  origin: number[],
+  boxes: readonly Box[],
+  m: number[],
+  pose: Pose,
+  cameraDistance: number,
+  dotWidth: number,
+  dotHeight: number,
+  lightBackground: boolean,
+  faces: Face[],
+): void {
+  visibleFacesPart1Part1(
+    box,
+    origin,
+    boxes,
+    m,
+    pose,
+    cameraDistance,
+    dotWidth,
+    dotHeight,
+    lightBackground,
+    faces,
+  );
+}
+
+function visibleFacesPart1Part1(
+  box: Box,
+  origin: number[],
+  boxes: readonly Box[],
+  m: number[],
+  pose: Pose,
+  cameraDistance: number,
+  dotWidth: number,
+  dotHeight: number,
+  lightBackground: boolean,
+  faces: Face[],
+): void {
+  for (let a = 0; a < 3; a++) {
+    const u = (a + 1) % 3;
+    const v = (a + 2) % 3;
+    for (const side of [-1, 1]) {
+      const plane = side > 0 ? box.max[a]! : box.min[a]!;
+      if ((origin[a]! - plane) * side <= 0) continue;
+      const covered = boxes.some(
+        (other) =>
+          other !== box &&
+          (side > 0 ? other.min[a] : other.max[a]) === plane &&
+          other.min[u]! <= box.min[u]! &&
+          other.max[u]! >= box.max[u]! &&
+          other.min[v]! <= box.min[v]! &&
+          other.max[v]! >= box.max[v]!,
+      );
+      if (covered) continue;
+
+      let { minX, minY, maxX, maxY } = visibleFacesMinX(
+        box,
+        u,
+        v,
+        a,
+        plane,
+        m,
+        pose,
+        cameraDistance,
+      );
+      const face = {
+        minX: Math.max(0, Math.floor(minX)),
+        minY: Math.max(0, Math.floor(minY)),
+        maxX: Math.min(dotWidth - 1, Math.ceil(maxX)),
+        maxY: Math.min(dotHeight - 1, Math.ceil(maxY)),
+      };
+      if (face.maxX < face.minX || face.maxY < face.minY) continue;
+
+      visibleFacesPart2(m, a, side, lightBackground, faces, plane, box, u, v, face);
+    }
+  }
+}
+
+function renderHaloPart1(
+  cells: { minX: number; minY: number; maxX: number; maxY: number },
+  minX: number,
+  maxX: number,
+  width: number,
+  counts: Uint8Array<ArrayBuffer>,
+  weightsX: number[],
+  rgb: Float32Array<ArrayBuffer>,
+  regionWidth: number,
+  horizontal: Float32Array<ArrayBuffer>,
+): void {
+  for (let y = cells.minY; y <= cells.maxY; y++) {
+    for (let x = minX; x <= maxX; x++) {
+      let coverage = 0;
+      let red = 0;
+      let green = 0;
+      let blue = 0;
+      for (let dx = -HALO_RADIUS_X; dx <= HALO_RADIUS_X; dx++) {
+        const sourceX = x + dx;
+        if (sourceX < cells.minX || sourceX > cells.maxX) continue;
+        const source = y * width + sourceX;
+        const count = counts[source]!;
+        if (count === 0) continue;
+        const weight = weightsX[dx + HALO_RADIUS_X]! / 8;
+        coverage += count * weight;
+        red += rgb[source * 3]! * weight;
+        green += rgb[source * 3 + 1]! * weight;
+        blue += rgb[source * 3 + 2]! * weight;
+      }
+      const target = ((y - cells.minY) * regionWidth + (x - minX)) * 4;
+      horizontal[target] = coverage;
+      horizontal[target + 1] = red;
+      horizontal[target + 2] = green;
+      horizontal[target + 3] = blue;
+    }
+  }
+}
+
+function visibleFacesMinX(
+  box: Box,
+  u: number,
+  v: number,
+  a: number,
+  plane: number,
+  m: number[],
+  pose: Pose,
+  cameraDistance: number,
+): { minX: number; minY: number; maxX: number; maxY: number } {
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  const corner = [0, 0, 0];
+  for (const cornerU of [box.min[u]!, box.max[u]!]) {
+    for (const cornerV of [box.min[v]!, box.max[v]!]) {
+      corner[a] = plane;
+      corner[u] = cornerU;
+      corner[v] = cornerV;
+      const x = m[0]! * corner[0]! + m[1]! * corner[1]! + m[2]! * corner[2]!;
+      const y = m[3]! * corner[0]! + m[4]! * corner[1]! + m[5]! * corner[2]!;
+      const z = m[6]! * corner[0]! + m[7]! * corner[1]! + m[8]! * corner[2]!;
+      const perspective = (pose.scale * cameraDistance) / (cameraDistance - z);
+      const screenX = pose.centerX + x * perspective;
+      const screenY = pose.centerY + y * perspective;
+      minX = Math.min(minX, screenX);
+      minY = Math.min(minY, screenY);
+      maxX = Math.max(maxX, screenX);
+      maxY = Math.max(maxY, screenY);
+    }
+  }
+  return { minX, minY, maxX, maxY };
+}
+
+function visibleFacesPart2(
+  m: number[],
+  a: number,
+  side: number,
+  lightBackground: boolean,
+  faces: Face[],
+  plane: number,
+  box: Box,
+  u: number,
+  v: number,
+  face: { minX: number; minY: number; maxX: number; maxY: number },
+): void {
+  const nx = m[a]! * side;
+  const ny = m[3 + a]! * side;
+  const nz = m[6 + a]! * side;
+  const diffuse = Math.max(0, nx * LIGHT[0] + ny * LIGHT[1] + nz * LIGHT[2]);
+  const rim = Math.max(0, nx * 0.8 - nz * 0.3);
+  const specular = lightBackground
+    ? 0
+    : Math.max(0, nx * HALF_VECTOR[0] + ny * HALF_VECTOR[1] + nz * HALF_VECTOR[2]) ** 24 *
+      0.6 *
+      255;
+  const light = lightBackground
+    ? Math.min(1, 0.55 + diffuse * 0.45 + rim * 0.1)
+    : 0.45 + diffuse * 0.78 + rim * 0.25;
+  faces.push({
+    axis: a,
+    plane,
+    uMin: box.min[u]!,
+    uMax: box.max[u]!,
+    vMin: box.min[v]!,
+    vMax: box.max[v]!,
+    ...face,
+    red: Math.min(255, box.color[0] * light + specular),
+    green: Math.min(255, box.color[1] * light + specular),
+    blue: Math.min(255, box.color[2] * light + specular),
   });
 }
 
+let playing = false;
+
+export const playEasterEgg3d: {
+  (screen: readonly string[]): (tui: TUI) => Promise<void>;
+  (tui: TUI, screen: readonly string[]): Promise<void>;
+} = dual(2, (tui: TUI, screen: readonly string[]): Promise<void> =>
+  Effect.runPromise(
+    awaiting(function* () {
+      if (playing) return;
+      playing = true;
+      const reported = yield* awaited(tui.queryTerminalColors({ timeoutMs: 100 }));
+      const dark = theme.appearance === "dark";
+      const toRgbTuple = (
+        rgb: { r: number; g: number; b: number } | undefined,
+        fallback: Rgb,
+      ): Rgb => (rgb === undefined ? fallback : [rgb.r, rgb.g, rgb.b]);
+      const colors = {
+        foreground: toRgbTuple(reported.foreground, toRgb(theme.colors.text)),
+        background: toRgbTuple(reported.background, dark ? [0, 0, 0] : [255, 255, 255]),
+      };
+      if (tui.hasOverlay()) {
+        playing = false;
+        return;
+      }
+      const model = arminModel(toRgb(theme.colors.accent));
+      const animation = new EasterEgg3dAnimation(tui, screen, model, colors, () => {
+        playing = false;
+        overlay.hide();
+      });
+      const overlay = tui.showOverlay(animation, {
+        anchor: "top-left",
+        width: "100%",
+        maxHeight: "100%",
+      });
+    }),
+  ),
+);
+
 export class EasterEgg3dAnimation implements Component {
   private readonly tui: TUI;
-  /** The screen to dissolve, as rendered lines. */
   private readonly screen: readonly string[];
   private readonly model: Model;
   private readonly foreground: Rgb;
@@ -894,7 +1238,7 @@ export class EasterEgg3dAnimation implements Component {
   private readonly onDone: () => void;
   private readonly startTime = performance.now();
   private lastRender = performance.now();
-  private timer: ReturnType<typeof setInterval> | undefined;
+  private timer: Scheduled | undefined;
   private exit:
     | {
         start: number;
@@ -907,7 +1251,6 @@ export class EasterEgg3dAnimation implements Component {
   private shuffle: { cycle: number; steps: Cell3[][] } | undefined;
   private screenWidth = -1;
   private screenHeight = -1;
-  /** Star per cell index, or undefined. */
   private stars: Array<Star | undefined> = [];
   private cells: ScreenCell[][] = [];
   private readonly ansiCache = new Map<number, string>();
@@ -927,18 +1270,18 @@ export class EasterEgg3dAnimation implements Component {
     this.foreground = colors.foreground;
     this.background = colors.background;
     this.onDone = onDone;
-    this.timer = setInterval(() => {
-      // Also stop when no longer rendered, e.g. when msa hides all overlays on exit.
-      if ((this.exit && this.exitProgress() >= 1) || performance.now() - this.lastRender > 1000)
+    this.timer = every(() => {
+      if (
+        (this.exit !== undefined && this.exitProgress() >= 1) ||
+        performance.now() - this.lastRender > 1000
+      )
         this.finish();
       else this.tui.requestRender();
     }, FRAME_MS);
-    this.timer.unref?.();
   }
 
-  /** Play the exit animation. A second call skips it. */
   close(): void {
-    if (this.exit) {
+    if (this.exit !== undefined) {
       this.finish();
       return;
     }
@@ -972,48 +1315,171 @@ export class EasterEgg3dAnimation implements Component {
   }
 
   render(width: number): string[] {
-    const height = Math.max(1, this.tui.terminal.rows);
-    const foreground = this.foreground;
-    const background = this.background;
-    this.lastRender = performance.now();
-    if (width !== this.screenWidth || height !== this.screenHeight) {
-      this.screenWidth = width;
-      this.screenHeight = height;
-      this.cells = this.prepareCells(width, foreground);
-      this.stars = this.prepareStars(width, height);
+    let {
+      height,
+      textActive,
+      halo,
+      backgroundFade,
+      background,
+      hint,
+      raster,
+      starfield,
+      dissolveTime,
+      textFade,
+      frame,
+      lines,
+    } = EasterEgg3dAnimation.renderHeight(this, width);
+    for (let row = 0; row < height; row++) {
+      let { cells, emit, line } = EasterEgg3dAnimation.renderCells(this, row);
+      for (let column = 0; column < width; column++) {
+        const index = row * width + column;
+        const cell = textActive ? cells[column] : undefined;
+        const cellBg = halo(
+          index,
+          cell?.bg !== undefined && backgroundFade < 1
+            ? mix(cell.bg, background, backgroundFade)
+            : undefined,
+        );
+        if (
+          hint !== undefined &&
+          row === hint.row &&
+          column >= hint.start &&
+          column < hint.start + hint.text.length
+        ) {
+          const offset = column - hint.start;
+          emit(hint.text[offset]!, offset < hint.keyLength ? hint.keyColor : hint.color, cellBg);
+          continue;
+        }
+        const dots = raster.bits[index]!;
+        if (dots !== 0) {
+          const step = LOGO_COLOR_STEP * raster.counts[index]!;
+          const rgb = raster.rgb;
+          const color: Rgb = [
+            Math.round(rgb[index * 3]! / step) * LOGO_COLOR_STEP,
+            Math.round(rgb[index * 3 + 1]! / step) * LOGO_COLOR_STEP,
+            Math.round(rgb[index * 3 + 2]! / step) * LOGO_COLOR_STEP,
+          ];
+          emit(BRAILLE[dots]!, color, cellBg);
+          continue;
+        }
+        if (cell === undefined) {
+          const star = starfield(index);
+          emit(star?.text ?? " ", star?.fg, cellBg);
+          continue;
+        }
+        const dust = (dissolveTime - cell.delay) / DUST_DURATION;
+        if (dust < 0 && cell.width === 2 && (raster.bits[index + 1] ?? 0) === 0) {
+          emit(cell.text, mix(cell.fg, background, textFade), cellBg);
+          column++;
+          continue;
+        }
+        if (dust < 0 && cell.width === 1) {
+          emit(cell.text, mix(cell.fg, background, textFade), cellBg);
+          continue;
+        }
+        const dotCount = dust < 0 ? cell.ink : Math.round(cell.ink * (1 - clamp01(dust)));
+        if (dotCount <= 0) {
+          const star = starfield(index);
+          emit(star?.text ?? " ", star?.fg, cellBg);
+          continue;
+        }
+        renderPart5(dotCount, cell, frame, textFade, dust, emit, background, cellBg);
+      }
+      lines.push(`${line}\x1b[0m`);
     }
+    return lines;
+  }
 
-    // Dissolve time runs forward on entry and backward on exit, so the screen reassembles in reverse order.
-    let dissolveTime: number;
-    let pose: Pose;
-    let hintAlpha: number;
-    let starAlpha: number;
-    let offsets: Array<[number, number, number]>;
-    if (this.exit) {
-      const progress = this.exitProgress();
-      const landing = clamp01(progress / 0.8);
-      const settle = 1 - smooth(landing);
-      dissolveTime = Math.min(this.exit.time, DISSOLVE_END) * (1 - progress);
-      pose = this.pose(width, height, this.flyProgress(this.exit.time) * settle, this.exit.time);
-      pose.yaw = this.exit.yaw + (this.exit.targetYaw - this.exit.yaw) * easeOut(landing);
-      pose.pitch *= settle;
-      pose.roll *= settle;
-      hintAlpha = this.hintAlpha(this.exit.time) * (1 - smooth(progress / 0.2));
-      starAlpha = this.starAlpha(this.exit.time) * (1 - smooth(progress / 0.3));
-      // Blocks are home well before the logo lands.
-      const gather = 1 - smooth(progress / 0.5);
-      offsets = this.exit.offsets.map(([x, y, z]) => [x * gather, y * gather, z * gather]);
-    } else {
-      const time = this.elapsed();
-      dissolveTime = time;
-      pose = this.pose(width, height, this.flyProgress(time), time);
-      hintAlpha = this.hintAlpha(time);
-      starAlpha = this.starAlpha(time);
-      offsets = this.blockOffsets(time);
-    }
+  private static renderHeight(
+    self: EasterEgg3dAnimation,
+    width: number,
+  ): {
+    height: number;
+    textActive: boolean;
+    halo: (index: number, base: Rgb | undefined) => Rgb | undefined;
+    backgroundFade: number;
+    background: Rgb;
+    hint:
+      | { row: number; start: number; text: string; keyLength: number; keyColor: Rgb; color: Rgb }
+      | undefined;
+    raster: BlockRaster;
+    starfield: (index: number) => { text: string; fg: Rgb } | undefined;
+    dissolveTime: number;
+    textFade: number;
+    frame: number;
+    lines: string[];
+  } {
+    let {
+      starLevel,
+      now,
+      background,
+      foreground,
+      height,
+      textActive,
+      halo,
+      backgroundFade,
+      hint,
+      raster,
+      dissolveTime,
+      textFade,
+      frame,
+    } = EasterEgg3dAnimation.renderStarLevel2(self, width);
+    const { starfield, lines } = EasterEgg3dAnimation.renderStarfield2(
+      self,
+      starLevel,
+      now,
+      background,
+      foreground,
+    );
+    return {
+      height,
+      textActive,
+      halo,
+      backgroundFade,
+      background,
+      hint,
+      raster,
+      starfield,
+      dissolveTime,
+      textFade,
+      frame,
+      lines,
+    };
+  }
 
-    const { columns, rows } = this.model;
-    const boxes: Box[] = this.model.blocks.map((block, index) => {
+  private static renderStarLevel2(
+    self: EasterEgg3dAnimation,
+    width: number,
+  ): {
+    starLevel: number;
+    now: number;
+    background: Rgb;
+    foreground: Rgb;
+    height: number;
+    textActive: boolean;
+    halo: (index: number, base: Rgb | undefined) => Rgb | undefined;
+    backgroundFade: number;
+    hint:
+      | { row: number; start: number; text: string; keyLength: number; keyColor: Rgb; color: Rgb }
+      | undefined;
+    raster: BlockRaster;
+    dissolveTime: number;
+    textFade: number;
+    frame: number;
+  } {
+    let {
+      offsets,
+      columns,
+      rows,
+      height,
+      pose,
+      background,
+      dissolveTime,
+      hintAlpha,
+      starAlpha,
+      foreground,
+    } = EasterEgg3dAnimation.renderOffsets(self, width);
+    const boxes: Box[] = self.model.blocks.map((block, index) => {
       const [dx, dy, dz] = offsets[index]!;
       const x = block.home[0] - columns / 2 + dx;
       const y = block.home[1] - rows / 2 + dy;
@@ -1023,7 +1489,144 @@ export class EasterEgg3dAnimation implements Component {
         color: block.color,
       };
     });
-    const raster = this.raster;
+    const { starLevel, now, textActive, halo, backgroundFade, hint, raster, textFade, frame } =
+      EasterEgg3dAnimation.renderStarLevel(
+        self,
+        width,
+        height,
+        pose,
+        boxes,
+        background,
+        dissolveTime,
+        hintAlpha,
+        starAlpha,
+      );
+    return {
+      starLevel,
+      now,
+      background,
+      foreground,
+      height,
+      textActive,
+      halo,
+      backgroundFade,
+      hint,
+      raster,
+      dissolveTime,
+      textFade,
+      frame,
+    };
+  }
+
+  private static renderStarfield2(
+    self: EasterEgg3dAnimation,
+    starLevel: number,
+    now: number,
+    background: Rgb,
+    foreground: Rgb,
+  ): { starfield: (index: number) => { text: string; fg: Rgb } | undefined; lines: string[] } {
+    const { starfield, lines } = EasterEgg3dAnimation.renderStarfield(
+      self,
+      starLevel,
+      now,
+      background,
+      foreground,
+    );
+    return { starfield, lines };
+  }
+
+  private static renderOffsets(
+    self: EasterEgg3dAnimation,
+    width: number,
+  ): {
+    offsets: [number, number, number][];
+    columns: number;
+    rows: number;
+    height: number;
+    pose: Pose;
+    background: Rgb;
+    dissolveTime: number;
+    hintAlpha: number;
+    starAlpha: number;
+    foreground: Rgb;
+  } {
+    const height = Math.max(1, self.tui.terminal.rows);
+    const foreground = self.foreground;
+    const background = self.background;
+    self.lastRender = performance.now();
+    if (width !== self.screenWidth || height !== self.screenHeight) {
+      self.screenWidth = width;
+      self.screenHeight = height;
+      self.cells = self.prepareCells(width, foreground);
+      self.stars = self.prepareStars(width, height);
+    }
+
+    let dissolveTime: number;
+    let pose: Pose;
+    let hintAlpha: number;
+    let starAlpha: number;
+    let offsets: Array<[number, number, number]>;
+    if (self.exit === undefined) {
+      const time = self.elapsed();
+      dissolveTime = time;
+      pose = self.pose(width, height, self.flyProgress(time), time);
+      hintAlpha = self.hintAlpha(time);
+      starAlpha = self.starAlpha(time);
+      offsets = self.blockOffsets(time);
+    } else {
+      const progress = self.exitProgress();
+      const landing = clamp01(progress / 0.8);
+      const settle = 1 - smooth(landing);
+      dissolveTime = Math.min(self.exit.time, DISSOLVE_END) * (1 - progress);
+      pose = self.pose(width, height, self.flyProgress(self.exit.time) * settle, self.exit.time);
+      pose.yaw = self.exit.yaw + (self.exit.targetYaw - self.exit.yaw) * easeOut(landing);
+      pose.pitch *= settle;
+      pose.roll *= settle;
+      hintAlpha = self.hintAlpha(self.exit.time) * (1 - smooth(progress / 0.2));
+      starAlpha = self.starAlpha(self.exit.time) * (1 - smooth(progress / 0.3));
+      const gather = 1 - smooth(progress / 0.5);
+      offsets = self.exit.offsets.map(([x, y, z]) => [x * gather, y * gather, z * gather]);
+    }
+
+    const { columns, rows } = self.model;
+    return {
+      offsets,
+      columns,
+      rows,
+      height,
+      pose,
+      background,
+      dissolveTime,
+      hintAlpha,
+      starAlpha,
+      foreground,
+    };
+  }
+
+  private static renderStarLevel(
+    self: EasterEgg3dAnimation,
+    width: number,
+    height: number,
+    pose: Pose,
+    boxes: Box[],
+    background: Rgb,
+    dissolveTime: number,
+    hintAlpha: number,
+    starAlpha: number,
+  ): {
+    starLevel: number;
+    now: number;
+    textActive: boolean;
+    halo: (index: number, base: Rgb | undefined) => Rgb | undefined;
+    backgroundFade: number;
+    hint:
+      | { row: number; start: number; text: string; keyLength: number; keyColor: Rgb; color: Rgb }
+      | undefined;
+    raster: BlockRaster;
+    textFade: number;
+    frame: number;
+  } {
+    const raster = self.raster;
     raster.render(
       width,
       height,
@@ -1044,18 +1647,25 @@ export class EasterEgg3dAnimation implements Component {
     };
     const backgroundFade = smooth(dissolveTime / BACKGROUND_FADE);
     const textFade = smooth(dissolveTime / 0.6) * 0.3;
-    // Once the screen has fully dissolved, the text layer is empty and can be skipped.
     const textActive = dissolveTime < DISSOLVE_END || backgroundFade < 1;
-    const hint = this.hint(width, height, hintAlpha, background);
+    const hint = self.hint(width, height, hintAlpha, background);
     const frame = Math.floor(dissolveTime * 14);
-    const now = this.elapsed();
-    // Star brightness is quantized, so a row only changes when one of its stars steps to another level
-    // instead of on every frame.
+    const now = self.elapsed();
     const starLevel = Math.round(starAlpha * STAR_ALPHA_LEVELS) / STAR_ALPHA_LEVELS;
+    return { starLevel, now, textActive, halo, backgroundFade, hint, raster, textFade, frame };
+  }
+
+  private static renderStarfield(
+    self: EasterEgg3dAnimation,
+    starLevel: number,
+    now: number,
+    background: Rgb,
+    foreground: Rgb,
+  ): { starfield: (index: number) => { text: string; fg: Rgb } | undefined; lines: string[] } {
     const starfield = (index: number): { text: string; fg: Rgb } | undefined => {
       if (starLevel <= 0) return undefined;
-      const star = this.stars[index];
-      if (!star) return undefined;
+      const star = self.stars[index];
+      if (star === undefined) return undefined;
       const flicker =
         Math.round((0.5 + 0.5 * Math.sin(now * star.speed + star.phase)) * STAR_FLICKER_LEVELS) /
         STAR_FLICKER_LEVELS;
@@ -1069,90 +1679,35 @@ export class EasterEgg3dAnimation implements Component {
       };
     };
     const lines: string[] = [];
-    for (let row = 0; row < height; row++) {
-      const cells = this.cells[row] ?? [];
-      let line = "";
-      let currentFg = -1;
-      let currentBg = -1;
-      const emit = (text: string, fg: Rgb | undefined, bg: Rgb | undefined) => {
-        const fgKey = fg ? this.pack(fg) : -1;
-        const bgKey = bg ? this.pack(bg) : -1;
-        if (fgKey !== currentFg && text !== " ") {
-          line += fg ? this.ansi(fgKey, false) : "\x1b[39m";
-          currentFg = fgKey;
-        }
-        if (bgKey !== currentBg) {
-          line += bg ? this.ansi(bgKey, true) : "\x1b[49m";
-          currentBg = bgKey;
-        }
-        line += text;
-      };
-      for (let column = 0; column < width; column++) {
-        const index = row * width + column;
-        const cell = textActive ? cells[column] : undefined;
-        const cellBg = halo(
-          index,
-          cell?.bg && backgroundFade < 1 ? mix(cell.bg, background, backgroundFade) : undefined,
-        );
-        if (
-          hint &&
-          row === hint.row &&
-          column >= hint.start &&
-          column < hint.start + hint.text.length
-        ) {
-          const offset = column - hint.start;
-          emit(hint.text[offset]!, offset < hint.keyLength ? hint.keyColor : hint.color, cellBg);
-          continue;
-        }
-        const dots = raster.bits[index]!;
-        if (dots) {
-          // Quantized so neighboring cells on one face usually share a color and its escape sequence.
-          const step = LOGO_COLOR_STEP * raster.counts[index]!;
-          const rgb = raster.rgb;
-          const color: Rgb = [
-            Math.round(rgb[index * 3]! / step) * LOGO_COLOR_STEP,
-            Math.round(rgb[index * 3 + 1]! / step) * LOGO_COLOR_STEP,
-            Math.round(rgb[index * 3 + 2]! / step) * LOGO_COLOR_STEP,
-          ];
-          emit(BRAILLE[dots]!, color, cellBg);
-          continue;
-        }
-        if (!cell) {
-          const star = starfield(index);
-          emit(star?.text ?? " ", star?.fg, cellBg);
-          continue;
-        }
-        const dust = (dissolveTime - cell.delay) / DUST_DURATION;
-        if (dust < 0 && cell.width === 2 && !raster.bits[index + 1]) {
-          emit(cell.text, mix(cell.fg, background, textFade), cellBg);
-          column++;
-          continue;
-        }
-        if (dust < 0 && cell.width === 1) {
-          emit(cell.text, mix(cell.fg, background, textFade), cellBg);
-          continue;
-        }
-        const dotCount = dust < 0 ? cell.ink : Math.round(cell.ink * (1 - clamp01(dust)));
-        if (dotCount <= 0) {
-          const star = starfield(index);
-          emit(star?.text ?? " ", star?.fg, cellBg);
-          continue;
-        }
-        // Pick `dotCount` distinct dots; the choice changes a few times per second so the dust shimmers.
-        let bits = 0;
-        let placed = 0;
-        for (let attempt = 0; placed < dotCount && attempt < 32; attempt++) {
-          const bit = DOT_BITS[Math.floor(hash(cell.seed * 7919 + frame * 131 + attempt) * 8)]!;
-          if (bits & bit) continue;
-          bits |= bit;
-          placed++;
-        }
-        const fade = textFade + (1 - textFade) * clamp01(dust) ** 0.8;
-        emit(BRAILLE[bits]!, mix(cell.fg, background, fade), cellBg);
+    return { starfield, lines };
+  }
+
+  private static renderCells(
+    self: EasterEgg3dAnimation,
+    row: number,
+  ): {
+    cells: ScreenCell[];
+    emit: (text: string, fg: Rgb | undefined, bg: Rgb | undefined) => void;
+    line: string;
+  } {
+    const cells = self.cells[row] ?? [];
+    let line = "";
+    let currentFg = -1;
+    let currentBg = -1;
+    const emit = (text: string, fg: Rgb | undefined, bg: Rgb | undefined) => {
+      const fgKey = fg === undefined ? -1 : self.pack(fg);
+      const bgKey = bg === undefined ? -1 : self.pack(bg);
+      if (fgKey !== currentFg && text !== " ") {
+        line += fg === undefined ? "\x1b[39m" : self.ansi(fgKey, false);
+        currentFg = fgKey;
       }
-      lines.push(`${line}\x1b[0m`);
-    }
-    return lines;
+      if (bgKey !== currentBg) {
+        line += bg === undefined ? "\x1b[49m" : self.ansi(bgKey, true);
+        currentBg = bgKey;
+      }
+      line += text;
+    };
+    return { cells, emit, line };
   }
 
   private elapsed(): number {
@@ -1160,17 +1715,18 @@ export class EasterEgg3dAnimation implements Component {
   }
 
   private exitProgress(): number {
-    return this.exit ? clamp01((performance.now() - this.exit.start) / 1000 / EXIT_DURATION) : 0;
+    return this.exit === undefined
+      ? 0
+      : clamp01((performance.now() - this.exit.start) / 1000 / EXIT_DURATION);
   }
 
   private finish(): void {
-    if (!this.timer) return;
-    clearInterval(this.timer);
+    if (this.timer === undefined) return;
+    this.timer.cancel();
     this.timer = undefined;
     this.onDone();
   }
 
-  /** Each block's displacement from its place in the model at `time`, in grid units. */
   private blockOffsets(time: number): Array<[number, number, number]> {
     const blocks = this.model.blocks;
     const home = (): Array<[number, number, number]> => blocks.map(() => [0, 0, 0]);
@@ -1199,7 +1755,6 @@ export class EasterEgg3dAnimation implements Component {
       });
     }
     if (local < shuffleEnd + PUZZLE_RETURN) {
-      // All blocks fly home at once. Alternating arcs in depth keep them from passing through each other.
       const u = (local - shuffleEnd) / PUZZLE_RETURN;
       const remaining = 1 - smooth(u);
       const arc = Math.sin(Math.PI * clamp01(u)) * 0.8;
@@ -1226,24 +1781,21 @@ export class EasterEgg3dAnimation implements Component {
   private pose(width: number, height: number, progress: number, time: number): Pose {
     const { columns, rows, cameraDistance, radius, widthShare, origin } = this.model;
     const reach = radius * (cameraDistance / (cameraDistance - radius));
-    // Lifting off, the front face must cover exactly the half-block cells (2x2 dots per pixel) despite the
-    // perspective.
-    const startScale = origin ? (2 * (cameraDistance - DEPTH / 2)) / cameraDistance : START_SCALE;
+    const startScale =
+      origin === undefined ? START_SCALE : (2 * (cameraDistance - DEPTH / 2)) / cameraDistance;
     const endScale = Math.max(
       startScale,
       Math.min(width * 2 * widthShare, (height * 4 - 8) * 0.48) / reach,
     );
     const endX = width;
     const endY = height * 2 - 2;
-    const startX = origin ? origin.column * 2 + columns : endX;
-    const startY = origin ? origin.row * 4 + rows : endY;
+    const startX = origin === undefined ? endX : origin.column * 2 + columns;
+    const startY = origin === undefined ? endY : origin.row * 4 + rows;
     return {
       centerX: startX + (endX - startX) * progress,
       centerY: startY + (endY - startY) * progress,
-      // Interpolate the zoom geometrically so it feels uniform.
       scale: startScale * (endScale / startScale) ** progress,
       yaw: spinAngle(time),
-      // Tilts are zero at whole turns, so the camera looks straight at the front of the reassembled logo.
       pitch: 0.3 * Math.sin(spinPhase(time)) * progress,
       roll: 0.06 * Math.sin(2 * spinPhase(time)) * progress,
     };
@@ -1271,7 +1823,6 @@ export class EasterEgg3dAnimation implements Component {
     };
   }
 
-  /** A sparse, deterministic starfield: one braille dot in about STAR_DENSITY of all cells. */
   private prepareStars(width: number, height: number): Array<Star | undefined> {
     const stars = new Array<Star | undefined>(width * height);
     for (let index = 0; index < width * height; index++) {
@@ -1292,9 +1843,8 @@ export class EasterEgg3dAnimation implements Component {
     const cells = parseScreen(this.screen, width, foreground, this.background);
     const height = Math.max(1, this.tui.terminal.rows);
     const { columns, rows, origin } = this.model;
-    // The dust spreads out from where the model starts.
-    const centerX = origin ? origin.column + columns / 2 : width / 2;
-    const centerY = origin ? origin.row + rows / 4 : height / 2;
+    const centerX = origin === undefined ? width / 2 : origin.column + columns / 2;
+    const centerY = origin === undefined ? height / 2 : origin.row + rows / 4;
     const farthest = Math.hypot(
       Math.max(centerX, width - centerX),
       Math.max(centerY, height - centerY) * 2,
@@ -1303,27 +1853,25 @@ export class EasterEgg3dAnimation implements Component {
       const line = cells[row]!;
       for (let column = 0; column < line.length; column++) {
         const cell = line[column]!;
-        // Wide graphemes share their first column's timing so both halves change together.
         const owner = cell.width === 0 ? line[column - 1]! : cell;
         const seed = hash(row * 65_537 + column);
-        if (cell.width !== 0) {
+        if (cell.width === 0) {
+          cell.delay = owner.delay;
+        } else {
           const distance = Math.hypot(column - centerX, (row - centerY) * 2) / farthest;
           cell.delay = FLY_START + distance * WAVE_SPREAD + seed * WAVE_JITTER;
-        } else {
-          cell.delay = owner.delay;
         }
         cell.seed = row * 65_537 + column;
         cell.ink = glyphInk(owner.text, seed);
       }
     }
-    // The 3D model replaces its half-block rendering on screen.
-    if (origin) {
+    if (origin !== undefined) {
       for (let row = origin.row; row < origin.row + Math.ceil(rows / 2); row++) {
         const line = cells[row];
-        if (!line) continue;
+        if (line === undefined) continue;
         for (let column = origin.column; column < origin.column + columns; column++) {
           const cell = line[column];
-          if (cell) {
+          if (cell !== undefined) {
             cell.text = " ";
             cell.width = 1;
             cell.ink = 0;
@@ -1350,4 +1898,26 @@ export class EasterEgg3dAnimation implements Component {
     }
     return value;
   }
+}
+
+function renderPart5(
+  dotCount: number,
+  cell: ScreenCell,
+  frame: number,
+  textFade: number,
+  dust: number,
+  emit: (text: string, fg: Rgb | undefined, bg: Rgb | undefined) => void,
+  background: Rgb,
+  cellBg: Rgb | undefined,
+): void {
+  let bits = 0;
+  let placed = 0;
+  for (let attempt = 0; placed < dotCount && attempt < 32; attempt++) {
+    const bit = DOT_BITS[Math.floor(hash(cell.seed * 7919 + frame * 131 + attempt) * 8)]!;
+    if ((bits & bit) !== 0) continue;
+    bits |= bit;
+    placed++;
+  }
+  const fade = textFade + (1 - textFade) * clamp01(dust) ** 0.8;
+  emit(BRAILLE[bits]!, mix(cell.fg, background, fade), cellBg);
 }

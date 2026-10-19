@@ -4,10 +4,6 @@ import type { CompactionSummaryMessage } from "../../../core/messages.ts";
 import { getMarkdownTheme, theme } from "../theme/theme.ts";
 import { keyText } from "./keybinding-hints.ts";
 
-/**
- * Component that renders a compaction message with collapsed/expanded state.
- * Uses same background color as custom messages for visual consistency.
- */
 export class CompactionSummaryMessageComponent extends Box {
   private expanded = false;
   private message: CompactionSummaryMessage;

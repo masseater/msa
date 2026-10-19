@@ -1,8 +1,5 @@
-/**
- * Utilities for formatting keybinding hints in the UI.
- */
-
 import { getKeybindings, type Keybinding, type KeyId } from "@msa/tui";
+import { dual } from "effect/Function";
 
 import { theme } from "../theme/theme.ts";
 
@@ -13,22 +10,27 @@ export interface KeyTextFormatOptions {
 function formatKeyPart(part: string, options: KeyTextFormatOptions): string {
   const displayPart =
     process.platform === "darwin" && part.toLowerCase() === "alt" ? "option" : part;
-  return options.capitalize
+  return options.capitalize === true
     ? displayPart.charAt(0).toUpperCase() + displayPart.slice(1)
     : displayPart;
 }
 
-export function formatKeyText(key: string, options: KeyTextFormatOptions = {}): string {
-  return key
-    .split("/")
-    .map((k) =>
-      k
-        .split("+")
-        .map((part) => formatKeyPart(part, options))
-        .join("+"),
-    )
-    .join("/");
-}
+export const formatKeyText: {
+  (options?: KeyTextFormatOptions): (key: string) => string;
+  (key: string, options?: KeyTextFormatOptions): string;
+} = dual(
+  (args) => typeof args[0] === "string",
+  (key: string, options: KeyTextFormatOptions = {}): string =>
+    key
+      .split("/")
+      .map((k) =>
+        k
+          .split("+")
+          .map((part) => formatKeyPart(part, options))
+          .join("+"),
+      )
+      .join("/"),
+);
 
 function formatKeys(keys: KeyId[], options: KeyTextFormatOptions = {}): string {
   if (keys.length === 0) return "";
@@ -43,18 +45,24 @@ export function keyDisplayText(keybinding: Keybinding): string {
   return formatKeys(getKeybindings().getKeys(keybinding), { capitalize: true });
 }
 
-export function keyHint(keybinding: Keybinding, description: string): string {
-  return theme.fg("dim", keyText(keybinding)) + theme.fg("muted", ` ${description}`);
-}
+export const keyHint: {
+  (description: string): (keybinding: Keybinding) => string;
+  (keybinding: Keybinding, description: string): string;
+} = dual(
+  2,
+  (keybinding: Keybinding, description: string): string =>
+    theme.fg("dim", keyText(keybinding)) + theme.fg("muted", ` ${description}`),
+);
 
-/**
- * The line a collapsed tool shows in place of its output: what is hidden, and the key that shows
- * it. Clicking the tool shows it too.
- */
 export function expandHint(summary: string): string {
   return `${theme.fg("muted", `${summary} (`)}${keyHint("app.tools.expand", "to expand")}${theme.fg("muted", ")")}`;
 }
 
-export function rawKeyHint(key: string, description: string): string {
-  return theme.fg("dim", formatKeyText(key)) + theme.fg("muted", ` ${description}`);
-}
+export const rawKeyHint: {
+  (description: string): (key: string) => string;
+  (key: string, description: string): string;
+} = dual(
+  2,
+  (key: string, description: string): string =>
+    theme.fg("dim", formatKeyText(key)) + theme.fg("muted", ` ${description}`),
+);

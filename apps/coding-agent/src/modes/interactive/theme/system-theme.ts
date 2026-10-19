@@ -1,24 +1,3 @@
-/**
- * The `system` theme: msa's colors derived from the terminal's own theme.
- *
- * Every token belongs to a color family (its hue) and has contrast rules: it must reach a contrast level
- * on the background and on the panels it is drawn on. Hue and saturation come from the terminal's palette
- * color for the family's ANSI slot, or from the family's own hue when the terminal reports no palette.
- * Lightness comes from the rules alone. Colors are built in OKHSL, whose saturation is relative to the
- * sRGB gamut, and fade toward gray near black and white. A palette color never gains OKLCH chroma when it
- * moves to another lightness, so pastel palettes stay pastel.
- *
- * A contrast level is a target-lightness curve: the OKLab lightness a token needs, given the lightness of
- * the surface below it. The curves were fitted to the reference theme design from the "msa themes: system
- * and light/dark" review. On dark backgrounds they aim for nearly fixed lightness; on light backgrounds the
- * required difference grows as the background darkens.
- *
- * Depending on what the terminal reports, the theme is generated in one of three tiers:
- * - background and palette: hues from the palette, lightness from the background;
- * - background only: the families' own hues, lightness from the background;
- * - nothing: ANSI palette indices and the default colors, which the terminal renders itself.
- */
-
 import {
   colorToOkhsl,
   colorToOklch,
@@ -30,20 +9,15 @@ import {
   type RgbColor,
   rgbColor,
 } from "@msa/tui";
+import { dual } from "effect/Function";
 
-import type { ThemeAppearance, ThemeBg, ThemeColor, ThemeToken } from "./theme.ts";
+import type { ThemeAppearance, ThemeBg, ThemeColor, ThemeToken, TerminalTheme } from "./theme.ts";
 
 export const SYSTEM_THEME_NAME = "system";
 
-// ============================================================================
-// Recipe: color families and their tokens
-// ============================================================================
-
-/** A family's OKHSL hue and saturation: `max` at mid lightness, falling toward `min` at black and white. */
 interface Family {
   hue: number;
   saturation: { min: number; max: number };
-  /** ANSI palette slot the family takes its hue and saturation from. */
   slot: number;
 }
 
@@ -128,22 +102,12 @@ const TOKEN_FAMILIES: Record<ThemeToken, FamilyName> = {
   thinkingMax: "thinkingRed",
 };
 
-/** Palette slots for tokens that would otherwise share a hue with a similar token. */
 const TOKEN_SLOTS: Partial<Record<ThemeToken, number>> = {
   syntaxString: 2,
   syntaxNumber: 5,
   searchMatchBg: 3,
 };
 
-// ============================================================================
-// Contrast levels and rules
-// ============================================================================
-
-/**
- * Target-lightness curves: a polynomial in the surface's OKLab lightness giving the OKLab lightness a token
- * needs on it. `reachable` is the range of surface lightness where the level can be reached; beyond it the
- * level is relaxed.
- */
 interface Curve {
   coefficients: number[];
   reachable: [number, number];
@@ -408,19 +372,14 @@ const RULES: Rule[] = [
   })),
 ];
 
-/** Relaxation compresses levels stronger than this one toward it before weakening all levels. */
 const READABLE_FLOOR: Record<ThemeAppearance, Level> = { dark: "readable", light: "subtle" };
 
-/** Body text uses the terminal's foreground when it reaches this level, which is clearly stronger than muted. */
 const FOREGROUND_LEVEL: Level = "emphasis";
 
-/** Text-level tokens that take the terminal's foreground. */
 const FOREGROUND_TOKENS: ThemeColor[] = ["text", "userMessageText", "toolTitle"];
 
-/** WCAG 2 contrast ratio that body text must reach on the surfaces it is drawn on. */
 const TEXT_MINIMUM_WCAG_CONTRAST = 4.5;
 
-/** Tokens in dependency order: every surface before the tokens drawn on it. */
 const SOLVE_ORDER: ThemeToken[] = (() => {
   const order: ThemeToken[] = [];
   const visit = (token: ThemeToken): void => {
@@ -435,35 +394,24 @@ const SOLVE_ORDER: ThemeToken[] = (() => {
   return order;
 })();
 
-// ============================================================================
-// Public API
-// ============================================================================
-
 export interface SystemThemeInput {
   foreground?: RgbColor | undefined;
   background?: RgbColor | undefined;
-  /** ANSI colors 0-15. */
   palette?: RgbColor[] | undefined;
-  /** Saturation multiplier from 0 (grayscale) to 1. The first frame renders in grayscale until colors arrive. */
   saturation?: number;
-  /** Appearance when the terminal did not report its background, e.g. from its light/dark report or COLORFGBG. */
   appearanceHint?: ThemeAppearance;
 }
 
 export interface SystemThemeColors {
-  /** Hex colors, ANSI palette indices, or "" for the terminal default. */
   colors: Record<ThemeToken, string | number>;
-  /** Foreground tokens rendered faint (SGR 2), for terminals that did not report colors. */
   dim: ThemeColor[];
   appearance: ThemeAppearance | undefined;
 }
 
-/** OKLab lightness of an sRGB color, 0-1. */
 function oklabLightness(color: RgbColor): number {
   return colorToOklch(rgbColor(color.r, color.g, color.b)).l;
 }
 
-/** WCAG 2 relative luminance. */
 export function relativeLuminance({ r, g, b }: RgbColor): number {
   const linear = (channel: number) => {
     const value = channel / 255;
@@ -472,24 +420,24 @@ export function relativeLuminance({ r, g, b }: RgbColor): number {
   return 0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b);
 }
 
-/** WCAG 2 contrast ratio, 1-21. */
-export function wcagContrast(first: RgbColor, second: RgbColor): number {
+export const wcagContrast: {
+  (second: RgbColor): (first: RgbColor) => number;
+  (first: RgbColor, second: RgbColor): number;
+} = dual(2, (first: RgbColor, second: RgbColor): number => {
   const a = relativeLuminance(first);
   const b = relativeLuminance(second);
   return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
-}
+});
 
-/**
- * Whether a terminal is dark or light, from its reported colors: the direction of its own foreground
- * when text can be readable that way, otherwise dark when white text has more contrast on the
- * background than black text.
- */
-export function terminalAppearance(background: RgbColor, foreground?: RgbColor): ThemeAppearance {
+export const terminalAppearance: {
+  (foreground: RgbColor | undefined): (background: RgbColor) => ThemeAppearance;
+  (background: RgbColor, foreground: RgbColor | undefined): ThemeAppearance;
+} = dual(2, (background: RgbColor, foreground: RgbColor | undefined): ThemeAppearance => {
   const white = { r: 255, g: 255, b: 255 };
   const black = { r: 0, g: 0, b: 0 };
   const whiteContrast = wcagContrast(white, background);
   const blackContrast = wcagContrast(black, background);
-  if (foreground) {
+  if (foreground !== undefined) {
     const foregroundL = oklabLightness(foreground);
     const backgroundL = oklabLightness(background);
     if (Math.abs(foregroundL - backgroundL) > 0.05) {
@@ -499,11 +447,7 @@ export function terminalAppearance(background: RgbColor, foreground?: RgbColor):
     }
   }
   return whiteContrast >= blackContrast ? "dark" : "light";
-}
-
-// ============================================================================
-// Generation
-// ============================================================================
+});
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
@@ -511,19 +455,16 @@ function hexOf({ r, g, b }: RgbColor): string {
   return `#${[r, g, b].map((channel) => Math.round(channel).toString(16).padStart(2, "0")).join("")}`;
 }
 
-/** Saturation weight at a lightness: a Gaussian (center 0.5, sigma 0.25), 0 at black and white, 1 in the middle. */
 function bellWeight(lightness: number): number {
   const gaussian = (x: number): number => Math.exp(-((x - 0.5) ** 2) / (2 * 0.25 ** 2));
   return (gaussian(lightness) - gaussian(0)) / (1 - gaussian(0));
 }
 
-/** A family's saturation curve relative to its maximum: 1 at mid lightness, `min / max` at black and white. */
 function saturationCurve({ saturation: { min, max } }: Family, lightness: number): number {
   const floor = max > 0 ? min / max : 1;
   return floor + (1 - floor) * bellWeight(lightness);
 }
 
-/** The target lightness for a level on a surface, or undefined where the level cannot be reached. */
 function levelTarget(
   level: Level,
   appearance: ThemeAppearance,
@@ -537,13 +478,206 @@ function levelTarget(
   );
 }
 
-/**
- * Generate the system theme's colors from the terminal's reported colors.
- */
 export function generateSystemThemeColors(input: SystemThemeInput): SystemThemeColors {
   const saturation = clamp(input.saturation ?? 1, 0, 1);
   const { background, foreground } = input;
-  if (!background) return indexedColors(saturation, input.appearanceHint);
+  if (background === undefined) return indexedColors(saturation, input.appearanceHint);
+  let { surfacesOf, solved, target, relaxation, lighter, result, appearance } =
+    generateSystemThemeColorsSurfacesOf2(input, background, foreground, saturation);
+
+  for (const token of FOREGROUND_TOKENS) {
+    const surfaces = surfacesOf(token);
+    let text = solved.get(token);
+    if (foreground !== undefined) {
+      const targets = surfaces.map((surface) =>
+        target(FOREGROUND_LEVEL, oklabLightness(surface), relaxation),
+      );
+      if (targets.every((value) => value !== undefined && value >= 0 && value <= 1)) {
+        const needed = lighter
+          ? Math.max(...(targets as number[]))
+          : Math.min(...(targets as number[]));
+        const foregroundL = oklabLightness(foreground);
+        if (lighter ? foregroundL >= needed : foregroundL <= needed) {
+          result[token] = "";
+          continue;
+        }
+        text = anchored(
+          sourceOf(foreground),
+          FAMILIES.neutral,
+          oklabToOkhslLightness(needed),
+          saturation,
+        );
+      }
+    }
+    if (text !== undefined) result[token] = hexOf(withTextContrast(text, surfaces, lighter));
+  }
+  return { colors: result, dim: [], appearance };
+}
+
+function generateSystemThemeColorsSurfacesOf2(
+  input: SystemThemeInput,
+  background: RgbColor,
+  foreground: RgbColor | undefined,
+  saturation: number,
+): {
+  surfacesOf: (token: ThemeToken) => RgbColor[];
+  solved: Map<
+    | "accent"
+    | "border"
+    | "borderAccent"
+    | "borderMuted"
+    | "success"
+    | "error"
+    | "warning"
+    | "muted"
+    | "dim"
+    | "text"
+    | "thinkingText"
+    | "scrollbarThumb"
+    | "searchMatchText"
+    | "userMessageText"
+    | "customMessageText"
+    | "customMessageLabel"
+    | "toolTitle"
+    | "toolOutput"
+    | "mdHeading"
+    | "mdLink"
+    | "mdLinkUrl"
+    | "mdCode"
+    | "mdCodeBlock"
+    | "mdCodeBlockBorder"
+    | "mdQuote"
+    | "mdQuoteBorder"
+    | "mdHr"
+    | "mdListBullet"
+    | "toolDiffAdded"
+    | "toolDiffRemoved"
+    | "toolDiffContext"
+    | "syntaxComment"
+    | "syntaxKeyword"
+    | "syntaxFunction"
+    | "syntaxVariable"
+    | "syntaxString"
+    | "syntaxNumber"
+    | "syntaxType"
+    | "syntaxOperator"
+    | "syntaxPunctuation"
+    | "thinkingOff"
+    | "thinkingMinimal"
+    | "thinkingLow"
+    | "thinkingMedium"
+    | "thinkingHigh"
+    | "thinkingXhigh"
+    | "thinkingMax"
+    | "bashMode"
+    | Surface,
+    RgbColor
+  >;
+  target: (level: Level, surfaceL: number, t: number) => number | undefined;
+  relaxation: number;
+  lighter: boolean;
+  result: Record<
+    | "accent"
+    | "border"
+    | "borderAccent"
+    | "borderMuted"
+    | "success"
+    | "error"
+    | "warning"
+    | "muted"
+    | "dim"
+    | "text"
+    | "thinkingText"
+    | "scrollbarTrack"
+    | "scrollbarThumb"
+    | "selectedBg"
+    | "searchMatchBg"
+    | "searchMatchText"
+    | "userMessageBg"
+    | "userMessageText"
+    | "customMessageBg"
+    | "customMessageText"
+    | "customMessageLabel"
+    | "toolPendingBg"
+    | "toolSuccessBg"
+    | "toolErrorBg"
+    | "toolTitle"
+    | "toolOutput"
+    | "mdHeading"
+    | "mdLink"
+    | "mdLinkUrl"
+    | "mdCode"
+    | "mdCodeBlock"
+    | "mdCodeBlockBorder"
+    | "mdQuote"
+    | "mdQuoteBorder"
+    | "mdHr"
+    | "mdListBullet"
+    | "toolDiffAdded"
+    | "toolDiffRemoved"
+    | "toolDiffContext"
+    | "syntaxComment"
+    | "syntaxKeyword"
+    | "syntaxFunction"
+    | "syntaxVariable"
+    | "syntaxString"
+    | "syntaxNumber"
+    | "syntaxType"
+    | "syntaxOperator"
+    | "syntaxPunctuation"
+    | "thinkingOff"
+    | "thinkingMinimal"
+    | "thinkingLow"
+    | "thinkingMedium"
+    | "thinkingHigh"
+    | "thinkingXhigh"
+    | "thinkingMax"
+    | "bashMode",
+    string | number
+  >;
+  appearance: TerminalTheme;
+} {
+  const { paint, readable, backgroundL, target, lighter, appearance } =
+    generateSystemThemeColorsPaint(input, background, foreground, saturation);
+  let { colors, solve, relaxation } = generateSystemThemeColorsColors(
+    paint,
+    readable,
+    backgroundL,
+    background,
+    target,
+    lighter,
+  );
+  if (colors === undefined) {
+    let [low, high] = [0, 2];
+    colors = solve(high);
+    for (let index = 0; index < 20; index++) {
+      const middle = (low + high) / 2;
+      const attempt = solve(middle);
+      if (attempt === undefined) {
+        low = middle;
+      } else {
+        [high, colors] = [middle, attempt];
+      }
+    }
+    relaxation = high;
+  }
+  const { surfacesOf, solved, result } = generateSystemThemeColorsSurfacesOf(colors, background);
+  return { surfacesOf, solved, target, relaxation, lighter, result, appearance };
+}
+
+function generateSystemThemeColorsPaint(
+  input: SystemThemeInput,
+  background: RgbColor,
+  foreground: RgbColor | undefined,
+  saturation: number,
+): {
+  paint: (token: ThemeToken, oklabL: number) => RgbColor;
+  readable: (color: RgbColor) => boolean;
+  backgroundL: number;
+  target: (level: Level, surfaceL: number, t: number) => number | undefined;
+  lighter: boolean;
+  appearance: TerminalTheme;
+} {
   const palette = input.palette?.length === 16 ? input.palette.map(sourceOf) : undefined;
 
   const appearance = terminalAppearance(background, foreground);
@@ -551,10 +685,6 @@ export function generateSystemThemeColors(input: SystemThemeInput): SystemThemeC
   const extreme = lighter ? 1 : 0;
   const backgroundL = oklabLightness(background);
 
-  /**
-   * A token's color at an OKLab lightness. With a palette, the palette color's saturation applies at its
-   * own lightness and falls off toward black and white along the family's curve, never rising above it.
-   */
   const paint = (token: ThemeToken, oklabL: number): RgbColor => {
     const lightness = oklabToOkhslLightness(oklabL);
     const family: Family = FAMILIES[TOKEN_FAMILIES[token]];
@@ -570,10 +700,6 @@ export function generateSystemThemeColors(input: SystemThemeInput): SystemThemeC
     return anchored(source, family, lightness, saturation);
   };
 
-  /**
-   * The lightness a rule needs on a surface, relaxed by `t`: from 0 to 1, levels stronger than the readable
-   * floor move toward it; from 1 to 2, all levels move toward the surface itself.
-   */
   const target = (level: Level, surfaceL: number, t: number): number | undefined => {
     const reached = levelTarget(level, appearance, surfaceL);
     if (reached === undefined && t === 0) return undefined;
@@ -587,13 +713,77 @@ export function generateSystemThemeColors(input: SystemThemeInput): SystemThemeC
     return surfaceL + compressed * (1 - Math.max(0, t - 1));
   };
 
-  /**
-   * Keep a panel light enough (or dark enough) that white (or black) text still reaches the body text
-   * minimum on it. This only matters for backgrounds near mid-gray, where it barely does on the background.
-   */
   const extremeText = lighter ? { r: 255, g: 255, b: 255 } : { r: 0, g: 0, b: 0 };
   const readable = (color: RgbColor) =>
     wcagContrast(extremeText, color) >= TEXT_MINIMUM_WCAG_CONTRAST;
+  return { paint, readable, backgroundL, target, lighter, appearance };
+}
+
+function generateSystemThemeColorsColors(
+  paint: (token: ThemeToken, oklabL: number) => RgbColor,
+  readable: (color: RgbColor) => boolean,
+  backgroundL: number,
+  background: RgbColor,
+  target: (level: Level, surfaceL: number, t: number) => number | undefined,
+  lighter: boolean,
+): {
+  colors:
+    | Map<
+        | "accent"
+        | "border"
+        | "borderAccent"
+        | "borderMuted"
+        | "success"
+        | "error"
+        | "warning"
+        | "muted"
+        | "dim"
+        | "text"
+        | "thinkingText"
+        | "scrollbarThumb"
+        | "searchMatchText"
+        | "userMessageText"
+        | "customMessageText"
+        | "customMessageLabel"
+        | "toolTitle"
+        | "toolOutput"
+        | "mdHeading"
+        | "mdLink"
+        | "mdLinkUrl"
+        | "mdCode"
+        | "mdCodeBlock"
+        | "mdCodeBlockBorder"
+        | "mdQuote"
+        | "mdQuoteBorder"
+        | "mdHr"
+        | "mdListBullet"
+        | "toolDiffAdded"
+        | "toolDiffRemoved"
+        | "toolDiffContext"
+        | "syntaxComment"
+        | "syntaxKeyword"
+        | "syntaxFunction"
+        | "syntaxVariable"
+        | "syntaxString"
+        | "syntaxNumber"
+        | "syntaxType"
+        | "syntaxOperator"
+        | "syntaxPunctuation"
+        | "thinkingOff"
+        | "thinkingMinimal"
+        | "thinkingLow"
+        | "thinkingMedium"
+        | "thinkingHigh"
+        | "thinkingXhigh"
+        | "thinkingMax"
+        | "bashMode"
+        | Surface,
+        RgbColor
+      >
+    | undefined;
+  solve: (t: number) => Map<Surface | ThemeToken, RgbColor> | undefined;
+  relaxation: number;
+} {
   const limitPanel = (token: ThemeToken, l: number): RgbColor => {
     const color = paint(token, l);
     if (readable(color)) return color;
@@ -626,18 +816,179 @@ export function generateSystemThemeColors(input: SystemThemeInput): SystemThemeC
 
   let relaxation = 0;
   let colors = solve(0);
-  if (!colors) {
-    // Mid-gray backgrounds cannot fit every level: relax as little as possible. Full relaxation always fits.
-    let [low, high] = [0, 2];
-    colors = solve(high);
-    for (let index = 0; index < 20; index++) {
-      const middle = (low + high) / 2;
-      const attempt = solve(middle);
-      if (attempt) [high, colors] = [middle, attempt];
-      else low = middle;
-    }
-    relaxation = high;
-  }
+  return { colors, solve, relaxation };
+}
+
+function generateSystemThemeColorsSurfacesOf(
+  colors:
+    | Map<
+        | "accent"
+        | "border"
+        | "borderAccent"
+        | "borderMuted"
+        | "success"
+        | "error"
+        | "warning"
+        | "muted"
+        | "dim"
+        | "text"
+        | "thinkingText"
+        | "scrollbarThumb"
+        | "searchMatchText"
+        | "userMessageText"
+        | "customMessageText"
+        | "customMessageLabel"
+        | "toolTitle"
+        | "toolOutput"
+        | "mdHeading"
+        | "mdLink"
+        | "mdLinkUrl"
+        | "mdCode"
+        | "mdCodeBlock"
+        | "mdCodeBlockBorder"
+        | "mdQuote"
+        | "mdQuoteBorder"
+        | "mdHr"
+        | "mdListBullet"
+        | "toolDiffAdded"
+        | "toolDiffRemoved"
+        | "toolDiffContext"
+        | "syntaxComment"
+        | "syntaxKeyword"
+        | "syntaxFunction"
+        | "syntaxVariable"
+        | "syntaxString"
+        | "syntaxNumber"
+        | "syntaxType"
+        | "syntaxOperator"
+        | "syntaxPunctuation"
+        | "thinkingOff"
+        | "thinkingMinimal"
+        | "thinkingLow"
+        | "thinkingMedium"
+        | "thinkingHigh"
+        | "thinkingXhigh"
+        | "thinkingMax"
+        | "bashMode"
+        | Surface,
+        RgbColor
+      >
+    | undefined,
+  background: RgbColor,
+): {
+  surfacesOf: (token: ThemeToken) => RgbColor[];
+  solved: Map<
+    | "accent"
+    | "border"
+    | "borderAccent"
+    | "borderMuted"
+    | "success"
+    | "error"
+    | "warning"
+    | "muted"
+    | "dim"
+    | "text"
+    | "thinkingText"
+    | "scrollbarThumb"
+    | "searchMatchText"
+    | "userMessageText"
+    | "customMessageText"
+    | "customMessageLabel"
+    | "toolTitle"
+    | "toolOutput"
+    | "mdHeading"
+    | "mdLink"
+    | "mdLinkUrl"
+    | "mdCode"
+    | "mdCodeBlock"
+    | "mdCodeBlockBorder"
+    | "mdQuote"
+    | "mdQuoteBorder"
+    | "mdHr"
+    | "mdListBullet"
+    | "toolDiffAdded"
+    | "toolDiffRemoved"
+    | "toolDiffContext"
+    | "syntaxComment"
+    | "syntaxKeyword"
+    | "syntaxFunction"
+    | "syntaxVariable"
+    | "syntaxString"
+    | "syntaxNumber"
+    | "syntaxType"
+    | "syntaxOperator"
+    | "syntaxPunctuation"
+    | "thinkingOff"
+    | "thinkingMinimal"
+    | "thinkingLow"
+    | "thinkingMedium"
+    | "thinkingHigh"
+    | "thinkingXhigh"
+    | "thinkingMax"
+    | "bashMode"
+    | Surface,
+    RgbColor
+  >;
+  result: Record<
+    | "accent"
+    | "border"
+    | "borderAccent"
+    | "borderMuted"
+    | "success"
+    | "error"
+    | "warning"
+    | "muted"
+    | "dim"
+    | "text"
+    | "thinkingText"
+    | "scrollbarTrack"
+    | "scrollbarThumb"
+    | "selectedBg"
+    | "searchMatchBg"
+    | "searchMatchText"
+    | "userMessageBg"
+    | "userMessageText"
+    | "customMessageBg"
+    | "customMessageText"
+    | "customMessageLabel"
+    | "toolPendingBg"
+    | "toolSuccessBg"
+    | "toolErrorBg"
+    | "toolTitle"
+    | "toolOutput"
+    | "mdHeading"
+    | "mdLink"
+    | "mdLinkUrl"
+    | "mdCode"
+    | "mdCodeBlock"
+    | "mdCodeBlockBorder"
+    | "mdQuote"
+    | "mdQuoteBorder"
+    | "mdHr"
+    | "mdListBullet"
+    | "toolDiffAdded"
+    | "toolDiffRemoved"
+    | "toolDiffContext"
+    | "syntaxComment"
+    | "syntaxKeyword"
+    | "syntaxFunction"
+    | "syntaxVariable"
+    | "syntaxString"
+    | "syntaxNumber"
+    | "syntaxType"
+    | "syntaxOperator"
+    | "syntaxPunctuation"
+    | "thinkingOff"
+    | "thinkingMinimal"
+    | "thinkingLow"
+    | "thinkingMedium"
+    | "thinkingHigh"
+    | "thinkingXhigh"
+    | "thinkingMax"
+    | "bashMode",
+    string | number
+  >;
+} {
   const solved = colors ?? new Map<Surface | ThemeToken, RgbColor>();
   const surfacesOf = (token: ThemeToken) =>
     RULES.filter((rule) => rule.token === token).flatMap((rule) =>
@@ -647,46 +998,15 @@ export function generateSystemThemeColors(input: SystemThemeInput): SystemThemeC
   const result = {} as Record<ThemeToken, string | number>;
   for (const token of Object.keys(TOKEN_FAMILIES) as ThemeToken[]) {
     const color = solved.get(token);
-    result[token] = color ? hexOf(color) : "";
+    result[token] = color === undefined ? "" : hexOf(color);
   }
-
-  for (const token of FOREGROUND_TOKENS) {
-    const surfaces = surfacesOf(token);
-    // Body text uses the terminal's own foreground where it is clearly stronger than muted text; otherwise
-    // the foreground's hue at just enough lightness.
-    let text = solved.get(token);
-    if (foreground) {
-      const targets = surfaces.map((surface) =>
-        target(FOREGROUND_LEVEL, oklabLightness(surface), relaxation),
-      );
-      if (targets.every((value) => value !== undefined && value >= 0 && value <= 1)) {
-        const needed = lighter
-          ? Math.max(...(targets as number[]))
-          : Math.min(...(targets as number[]));
-        const foregroundL = oklabLightness(foreground);
-        if (lighter ? foregroundL >= needed : foregroundL <= needed) {
-          result[token] = "";
-          continue;
-        }
-        text = anchored(
-          sourceOf(foreground),
-          FAMILIES.neutral,
-          oklabToOkhslLightness(needed),
-          saturation,
-        );
-      }
-    }
-    // Body text keeps at least 4.5:1 on the surfaces it is drawn on, even on relaxed mid-gray backgrounds.
-    if (text) result[token] = hexOf(withTextContrast(text, surfaces, lighter));
-  }
-  return { colors: result, dim: [], appearance };
+  return { surfacesOf, solved, result };
 }
 
 function okhslOf({ r, g, b }: RgbColor): OkhslChannels {
   return colorToOkhsl(rgbColor(r, g, b));
 }
 
-/** A terminal color's OKHSL channels and its OKLCH chroma. */
 interface SourceColor extends OkhslChannels {
   chroma: number;
 }
@@ -695,14 +1015,6 @@ function sourceOf(color: RgbColor): SourceColor {
   return { ...okhslOf(color), chroma: colorToOklch(rgbColor(color.r, color.g, color.b)).c };
 }
 
-/**
- * A source color's hue at another OKHSL lightness. Its saturation applies at its own lightness and falls off
- * toward black and white along the family's saturation curve, never rising above it.
- *
- * OKHSL saturation is relative to the most chroma sRGB allows at a lightness, so the same saturation can mean
- * more chroma elsewhere: Catppuccin Frappe's pink #f4b8e4 (chroma 0.089) would become #eb76d1 (0.180) at the
- * lightness the accent needs. Chroma is therefore also capped at the source's, with the same falloff.
- */
 function anchored(
   source: SourceColor,
   family: Family,
@@ -717,7 +1029,6 @@ function anchored(
   return c <= cap ? color : colorToRgb(oklchColor(l, cap, source.h));
 }
 
-/** Move a text color toward white or black until it reaches the WCAG minimum on every surface. */
 function withTextContrast(color: RgbColor, surfaces: RgbColor[], lighter: boolean): RgbColor {
   const meets = (candidate: RgbColor) =>
     surfaces.every((surface) => wcagContrast(candidate, surface) >= TEXT_MINIMUM_WCAG_CONTRAST);
@@ -735,11 +1046,6 @@ function withTextContrast(color: RgbColor, surfaces: RgbColor[], lighter: boolea
   return at(high);
 }
 
-/**
- * Colors for terminals that reported nothing: the terminal renders ANSI indices 0-15 and the default
- * colors with its own theme, so they fit any background. Neutral tokens below body text are faint (SGR 2)
- * instead of bright black, which some themes make nearly invisible. Panels have no background.
- */
 function indexedColors(
   saturation: number,
   appearance: ThemeAppearance | undefined,

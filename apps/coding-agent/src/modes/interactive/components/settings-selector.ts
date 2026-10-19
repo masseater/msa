@@ -178,7 +178,6 @@ function themeItems(availableThemes: string[], currentTheme: string): SelectItem
 
 const AUTOMATIC_THEME_VALUE = "/";
 
-/** The system theme comes first, then automatic mode, then the remaining themes. */
 function singleModeThemeItems(availableThemes: string[], currentTheme: string): SelectItem[] {
   const items = themeItems(availableThemes, currentTheme);
   const systemIndex = items.findIndex((item) => item.value === SYSTEM_THEME_NAME);
@@ -199,7 +198,8 @@ function preferredTheme(
   preferred: string | undefined,
   fallback: string,
 ): string {
-  if (preferred && availableThemes.includes(preferred)) return preferred;
+  if (preferred !== undefined && preferred !== "" && availableThemes.includes(preferred))
+    return preferred;
   if (availableThemes.includes(fallback)) return fallback;
   return availableThemes[0] ?? fallback;
 }
@@ -209,7 +209,7 @@ function defaultAutomaticThemes(
   availableThemes: string[],
 ): { lightTheme: string; darkTheme: string } {
   const autoTheme = parseAutoThemeSetting(currentThemeSetting);
-  if (autoTheme) return autoTheme;
+  if (autoTheme !== undefined) return autoTheme;
 
   const currentFixedTheme = currentThemeSetting.includes("/") ? undefined : currentThemeSetting;
   const themeName = preferredTheme(availableThemes, currentFixedTheme, SYSTEM_THEME_NAME);
@@ -244,13 +244,15 @@ class ThemeSubmenu extends Container {
     const autoTheme = parseAutoThemeSetting(currentThemeSetting);
     const automaticThemes = defaultAutomaticThemes(currentThemeSetting, availableThemes);
     const fixedTheme =
-      autoTheme || currentThemeSetting.includes("/") ? undefined : currentThemeSetting;
-    this.mode = autoTheme ? "automatic" : "single";
+      autoTheme !== undefined || currentThemeSetting.includes("/")
+        ? undefined
+        : currentThemeSetting;
+    this.mode = autoTheme === undefined ? "single" : "automatic";
     this.lightTheme = automaticThemes.lightTheme;
     this.darkTheme = automaticThemes.darkTheme;
     this.singleTheme = preferredTheme(
       availableThemes,
-      fixedTheme ?? (autoTheme ? this.getActiveAutomaticTheme() : undefined),
+      fixedTheme ?? (autoTheme === undefined ? undefined : this.getActiveAutomaticTheme()),
       SYSTEM_THEME_NAME,
     );
 
@@ -303,17 +305,7 @@ class ThemeSubmenu extends Container {
   }
 
   private showAutomaticMenu(): void {
-    this.mode = "automatic";
-    const content = new Container();
-    content.addChild(new Text(theme.bold(theme.fg("accent", "Automatic Theme")), 0, 0));
-    content.addChild(new Spacer(1));
-    content.addChild(
-      new Text(theme.fg("muted", "Choose themes for terminal light and dark appearance."), 0, 0),
-    );
-    content.addChild(
-      new Text(theme.fg("muted", "Light/dark detection requires terminal support."), 0, 0),
-    );
-    content.addChild(new Spacer(1));
+    const content = ThemeSubmenu.showAutomaticMenuContent(this);
 
     const items: SettingItem[] = [
       {
@@ -368,6 +360,29 @@ class ThemeSubmenu extends Container {
       },
     ];
 
+    ThemeSubmenu.showAutomaticMenuPart2(this, items, content);
+  }
+
+  private static showAutomaticMenuContent(self: ThemeSubmenu): Container {
+    self.mode = "automatic";
+    const content = new Container();
+    content.addChild(new Text(theme.bold(theme.fg("accent", "Automatic Theme")), 0, 0));
+    content.addChild(new Spacer(1));
+    content.addChild(
+      new Text(theme.fg("muted", "Choose themes for terminal light and dark appearance."), 0, 0),
+    );
+    content.addChild(
+      new Text(theme.fg("muted", "Light/dark detection requires terminal support."), 0, 0),
+    );
+    content.addChild(new Spacer(1));
+    return content;
+  }
+
+  private static showAutomaticMenuPart2(
+    self: ThemeSubmenu,
+    items: SettingItem[],
+    content: Container,
+  ): void {
     const settingsList = new SettingsList(
       items,
       Math.min(items.length, 10),
@@ -375,20 +390,20 @@ class ThemeSubmenu extends Container {
       (id) => {
         switch (id) {
           case "single-mode":
-            this.mode = "single";
-            this.singleTheme = this.getActiveAutomaticTheme();
-            this.callbacks.onThemePreview?.(this.singleTheme);
-            this.showSingleMenu();
+            self.mode = "single";
+            self.singleTheme = self.getActiveAutomaticTheme();
+            self.callbacks.onThemePreview?.(self.singleTheme);
+            self.showSingleMenu();
             break;
           case "apply":
-            this.apply(this.getAutomaticThemeSetting());
+            self.apply(self.getAutomaticThemeSetting());
             break;
         }
       },
-      () => this.cancel(),
+      () => self.cancel(),
     );
     content.addChild(settingsList);
-    this.setContent(content, settingsList);
+    self.setContent(content, settingsList);
   }
 
   private createThemeSelect(
@@ -434,9 +449,6 @@ class ThemeSubmenu extends Container {
   }
 }
 
-/**
- * Main settings selector component.
- */
 export class SettingsSelectorComponent extends Container {
   private settingsList: SettingsList;
 
@@ -453,7 +465,8 @@ export class SettingsSelectorComponent extends Container {
     const currentDefaultModelKey = defaultModelByValue.has(config.defaultModel)
       ? config.defaultModel
       : undefined;
-    const currentModelKey = config.currentModel ? modelSettingKey(config.currentModel) : undefined;
+    const currentModelKey =
+      config.currentModel === undefined ? undefined : modelSettingKey(config.currentModel);
 
     const items: SettingItem[] = [
       {
@@ -589,11 +602,9 @@ export class SettingsSelectorComponent extends Container {
                 const modelItems: SelectItem[] = sorted.map((model) => {
                   const key = modelSettingKey(model);
                   const override = currentModelThinkingLevels[key];
-                  return {
-                    value: key,
-                    label: modelItemLabel(model),
-                    ...(override ? { description: override } : {}),
-                  };
+                  const item: SelectItem = { value: key, label: modelItemLabel(model) };
+                  if (override !== undefined) item.description = override;
+                  return item;
                 });
                 if (modelItems.length === 0) {
                   modelItems.push({
@@ -613,14 +624,14 @@ export class SettingsSelectorComponent extends Container {
               title: (ctx) => {
                 const modelKey = ctx["model"];
                 const m = modelKey === undefined ? undefined : defaultModelByValue.get(modelKey);
-                return `Thinking Level for ${m ? modelDisplayLabel(m) : ctx["model"]}`;
+                return `Thinking Level for ${m === undefined ? ctx["model"] : modelDisplayLabel(m)}`;
               },
               description: "Select default thinking level for this model",
               options: (ctx) => {
                 const modelKey = ctx["model"];
                 if (modelKey === undefined) return [];
                 const model = defaultModelByValue.get(modelKey);
-                if (!model) return [];
+                if (model === undefined) return [];
                 const levels = (
                   model.reasoning ? getSupportedThinkingLevels(model) : ["off"]
                 ) as ThinkingLevel[];
@@ -654,7 +665,7 @@ export class SettingsSelectorComponent extends Container {
               const modelKey = selections["model"];
               if (modelKey === undefined) return;
               const model = defaultModelByValue.get(modelKey);
-              if (!model) return;
+              if (model === undefined) return;
               if (selections["level"] === CLEAR_OVERRIDE_VALUE) {
                 callbacks.onModelThinkingLevelRemove(model.provider, model.id);
                 delete currentModelThinkingLevels[modelKey];
@@ -734,9 +745,7 @@ export class SettingsSelectorComponent extends Container {
       },
     ];
 
-    // Only show image toggle if terminal supports it
-    if (supportsImages) {
-      // Insert after autocompact
+    if (supportsImages !== null) {
       items.splice(1, 0, {
         id: "show-images",
         label: "Show images",
@@ -753,8 +762,7 @@ export class SettingsSelectorComponent extends Container {
       });
     }
 
-    // Image auto-resize toggle (always available, affects both attached and read images)
-    items.splice(supportsImages ? 3 : 1, 0, {
+    items.splice(supportsImages === null ? 1 : 3, 0, {
       id: "auto-resize-images",
       label: "Auto-resize images",
       description: "Resize large images to 2000x2000 max for better model compatibility",
@@ -762,7 +770,6 @@ export class SettingsSelectorComponent extends Container {
       values: ["true", "false"],
     });
 
-    // Block images toggle (always available, insert after auto-resize-images)
     const autoResizeIndex = items.findIndex((item) => item.id === "auto-resize-images");
     items.splice(autoResizeIndex + 1, 0, {
       id: "block-images",
@@ -772,78 +779,9 @@ export class SettingsSelectorComponent extends Container {
       values: ["true", "false"],
     });
 
-    // Skill commands toggle (insert after block-images)
     const blockImagesIndex = items.findIndex((item) => item.id === "block-images");
-    items.splice(blockImagesIndex + 1, 0, {
-      id: "skill-commands",
-      label: "Skill commands",
-      description: "Register skills as /name commands",
-      currentValue: config.enableSkillCommands ? "true" : "false",
-      values: ["true", "false"],
-    });
-
-    // Hardware cursor toggle (insert after skill-commands)
-    const skillCommandsIndex = items.findIndex((item) => item.id === "skill-commands");
-    items.splice(skillCommandsIndex + 1, 0, {
-      id: "show-hardware-cursor",
-      label: "Show hardware cursor",
-      description: "Use the terminal cursor instead of msa's drawn cursor",
-      currentValue: config.showHardwareCursor ? "true" : "false",
-      values: ["true", "false"],
-    });
-
-    // Editor padding toggle (insert after show-hardware-cursor)
-    const hardwareCursorIndex = items.findIndex((item) => item.id === "show-hardware-cursor");
-    items.splice(hardwareCursorIndex + 1, 0, {
-      id: "editor-padding",
-      label: "Editor padding",
-      description: "Horizontal padding for input editor (0-3)",
-      currentValue: String(config.editorPaddingX),
-      values: ["0", "1", "2", "3"],
-    });
-
-    // Output padding toggle (insert after editor-padding)
-    const editorPaddingIndex = items.findIndex((item) => item.id === "editor-padding");
-    items.splice(editorPaddingIndex + 1, 0, {
-      id: "output-padding",
-      label: "Output padding",
-      description: "Horizontal padding for messages, tool output, and command output",
-      currentValue: String(config.outputPad),
-      values: ["0", "1"],
-    });
-
-    // Autocomplete max visible toggle (insert after output-padding)
-    const outputPaddingIndex = items.findIndex((item) => item.id === "output-padding");
-    items.splice(outputPaddingIndex + 1, 0, {
-      id: "autocomplete-max-visible",
-      label: "Autocomplete max items",
-      description: "Max visible items in autocomplete dropdown (3-20)",
-      currentValue: String(config.autocompleteMaxVisible),
-      values: ["3", "5", "7", "10", "15", "20"],
-    });
-
-    // Clear on shrink toggle (insert after autocomplete-max-visible)
-    const autocompleteIndex = items.findIndex((item) => item.id === "autocomplete-max-visible");
-    items.splice(autocompleteIndex + 1, 0, {
-      id: "clear-on-shrink",
-      label: "Clear on shrink",
-      description: "Clear empty rows when content shrinks (may cause flicker)",
-      currentValue: config.clearOnShrink ? "true" : "false",
-      values: ["true", "false"],
-    });
-
-    // Terminal progress toggle (insert after clear-on-shrink)
-    const clearOnShrinkIndex = items.findIndex((item) => item.id === "clear-on-shrink");
-    items.splice(clearOnShrinkIndex + 1, 0, {
-      id: "terminal-progress",
-      label: "Terminal progress",
-      description: "Show OSC 9;4 progress indicators in the terminal tab bar",
-      currentValue: config.showTerminalProgress ? "true" : "false",
-      values: ["true", "false"],
-    });
-
-    // Add borders
-    this.addChild(new DynamicBorder());
+    const outputPaddingIndex = buildOutputPaddingIndex(items, blockImagesIndex, config);
+    SettingsSelectorComponent.buildPart5(this, items, outputPaddingIndex, config);
 
     this.settingsList = new SettingsList(
       items,
@@ -880,7 +818,7 @@ export class SettingsSelectorComponent extends Container {
             break;
           case "http-idle-timeout": {
             const choice = HTTP_IDLE_TIMEOUT_CHOICES.find((item) => item.label === newValue);
-            if (choice) {
+            if (choice !== undefined) {
               callbacks.onHttpIdleTimeoutMsChange(choice.timeoutMs);
             }
             break;
@@ -908,7 +846,7 @@ export class SettingsSelectorComponent extends Container {
             break;
           case "default-project-trust": {
             const defaultProjectTrust = DEFAULT_PROJECT_TRUST_BY_LABEL.get(newValue);
-            if (defaultProjectTrust) {
+            if (defaultProjectTrust !== undefined) {
               callbacks.onDefaultProjectTrustChange(defaultProjectTrust);
             }
             break;
@@ -969,7 +907,86 @@ export class SettingsSelectorComponent extends Container {
     this.addChild(new DynamicBorder());
   }
 
+  private static buildPart5(
+    self: SettingsSelectorComponent,
+    items: SettingItem[],
+    outputPaddingIndex: number,
+    config: SettingsConfig,
+  ): void {
+    items.splice(outputPaddingIndex + 1, 0, {
+      id: "autocomplete-max-visible",
+      label: "Autocomplete max items",
+      description: "Max visible items in autocomplete dropdown (3-20)",
+      currentValue: String(config.autocompleteMaxVisible),
+      values: ["3", "5", "7", "10", "15", "20"],
+    });
+
+    const autocompleteIndex = items.findIndex((item) => item.id === "autocomplete-max-visible");
+    items.splice(autocompleteIndex + 1, 0, {
+      id: "clear-on-shrink",
+      label: "Clear on shrink",
+      description: "Clear empty rows when content shrinks (may cause flicker)",
+      currentValue: config.clearOnShrink ? "true" : "false",
+      values: ["true", "false"],
+    });
+
+    const clearOnShrinkIndex = items.findIndex((item) => item.id === "clear-on-shrink");
+    items.splice(clearOnShrinkIndex + 1, 0, {
+      id: "terminal-progress",
+      label: "Terminal progress",
+      description: "Show OSC 9;4 progress indicators in the terminal tab bar",
+      currentValue: config.showTerminalProgress ? "true" : "false",
+      values: ["true", "false"],
+    });
+
+    self.addChild(new DynamicBorder());
+  }
+
   getSettingsList(): SettingsList {
     return this.settingsList;
   }
+}
+
+function buildOutputPaddingIndex(
+  items: SettingItem[],
+  blockImagesIndex: number,
+  config: SettingsConfig,
+): number {
+  items.splice(blockImagesIndex + 1, 0, {
+    id: "skill-commands",
+    label: "Skill commands",
+    description: "Register skills as /name commands",
+    currentValue: config.enableSkillCommands ? "true" : "false",
+    values: ["true", "false"],
+  });
+
+  const skillCommandsIndex = items.findIndex((item) => item.id === "skill-commands");
+  items.splice(skillCommandsIndex + 1, 0, {
+    id: "show-hardware-cursor",
+    label: "Show hardware cursor",
+    description: "Use the terminal cursor instead of msa's drawn cursor",
+    currentValue: config.showHardwareCursor ? "true" : "false",
+    values: ["true", "false"],
+  });
+
+  const hardwareCursorIndex = items.findIndex((item) => item.id === "show-hardware-cursor");
+  items.splice(hardwareCursorIndex + 1, 0, {
+    id: "editor-padding",
+    label: "Editor padding",
+    description: "Horizontal padding for input editor (0-3)",
+    currentValue: String(config.editorPaddingX),
+    values: ["0", "1", "2", "3"],
+  });
+
+  const editorPaddingIndex = items.findIndex((item) => item.id === "editor-padding");
+  items.splice(editorPaddingIndex + 1, 0, {
+    id: "output-padding",
+    label: "Output padding",
+    description: "Horizontal padding for messages, tool output, and command output",
+    currentValue: String(config.outputPad),
+    values: ["0", "1"],
+  });
+
+  const outputPaddingIndex = items.findIndex((item) => item.id === "output-padding");
+  return outputPaddingIndex;
 }

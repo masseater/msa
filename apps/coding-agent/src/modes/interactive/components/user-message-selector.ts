@@ -1,37 +1,32 @@
 import { type Component, Container, getKeybindings, Spacer, Text, truncateToWidth } from "@msa/tui";
 
+import { schedule } from "../../../core/platform.ts";
 import { theme } from "../theme/theme.ts";
 import { DynamicBorder } from "./dynamic-border.ts";
 
 interface UserMessageItem {
-  id: string; // Entry ID in the session
-  text: string; // The message text
-  timestamp?: string; // Optional timestamp if available
+  id: string;
+  text: string;
+  timestamp?: string;
 }
 
-/**
- * Custom user message list component with selection
- */
 class UserMessageList implements Component {
   private messages: UserMessageItem[] = [];
   private selectedIndex: number = 0;
   public onSelect?: (entryId: string) => void;
   public onCancel?: () => void;
-  private maxVisible: number = 10; // Max messages visible
+  private maxVisible: number = 10;
 
   constructor(messages: UserMessageItem[], initialSelectedId?: string) {
-    // Store messages in chronological order (oldest to newest)
     this.messages = messages;
-    const initialIndex = initialSelectedId
-      ? messages.findIndex((message) => message.id === initialSelectedId)
-      : -1;
-    // Start with selected message if provided, else default to the most recent
+    const initialIndex =
+      initialSelectedId !== undefined && initialSelectedId !== ""
+        ? messages.findIndex((message) => message.id === initialSelectedId)
+        : -1;
     this.selectedIndex = initialIndex >= 0 ? initialIndex : Math.max(0, messages.length - 1);
   }
 
-  invalidate(): void {
-    // No cached state to invalidate currently
-  }
+  invalidate(): void {}
 
   render(width: number): string[] {
     const lines: string[] = [];
@@ -41,7 +36,6 @@ class UserMessageList implements Component {
       return lines;
     }
 
-    // Calculate visible range with scrolling
     const startIndex = Math.max(
       0,
       Math.min(
@@ -51,31 +45,26 @@ class UserMessageList implements Component {
     );
     const endIndex = Math.min(startIndex + this.maxVisible, this.messages.length);
 
-    // Render visible messages (2 lines per message + blank line)
     for (const [offset, message] of this.messages.slice(startIndex, endIndex).entries()) {
       const i = startIndex + offset;
       const isSelected = i === this.selectedIndex;
 
-      // Normalize message to single line
-      const normalizedMessage = message.text.replace(/\n/g, " ").trim();
+      const normalizedMessage = message.text.replace(/\n/gu, " ").trim();
 
-      // First line: cursor + message
       const cursor = isSelected ? theme.fg("accent", "› ") : "  ";
-      const maxMsgWidth = width - 2; // Account for cursor (2 chars)
+      const maxMsgWidth = width - 2;
       const truncatedMsg = truncateToWidth(normalizedMessage, maxMsgWidth);
       const messageLine = cursor + (isSelected ? theme.bold(truncatedMsg) : truncatedMsg);
 
       lines.push(messageLine);
 
-      // Second line: metadata (position in history)
       const position = i + 1;
       const metadata = `  Message ${position} of ${this.messages.length}`;
       const metadataLine = theme.fg("muted", metadata);
       lines.push(metadataLine);
-      lines.push(""); // Blank line between messages
+      lines.push("");
     }
 
-    // Add scroll indicator if needed
     if (startIndex > 0 || endIndex < this.messages.length) {
       const scrollInfo = theme.fg("muted", `  (${this.selectedIndex + 1}/${this.messages.length})`);
       lines.push(scrollInfo);
@@ -86,35 +75,25 @@ class UserMessageList implements Component {
 
   handleInput(keyData: string): void {
     const kb = getKeybindings();
-    // Up arrow - go to previous (older) message, wrap to bottom when at top
     if (kb.matches(keyData, "tui.select.up")) {
       this.selectedIndex =
         this.selectedIndex === 0 ? this.messages.length - 1 : this.selectedIndex - 1;
-    }
-    // Down arrow - go to next (newer) message, wrap to top when at bottom
-    else if (kb.matches(keyData, "tui.select.down")) {
+    } else if (kb.matches(keyData, "tui.select.down")) {
       this.selectedIndex =
         this.selectedIndex === this.messages.length - 1 ? 0 : this.selectedIndex + 1;
-    }
-    // Enter - select message and branch
-    else if (kb.matches(keyData, "tui.select.confirm")) {
+    } else if (kb.matches(keyData, "tui.select.confirm")) {
       const selected = this.messages[this.selectedIndex];
-      if (selected && this.onSelect) {
+      if (selected !== undefined && this.onSelect !== undefined) {
         this.onSelect(selected.id);
       }
-    }
-    // Escape - cancel
-    else if (kb.matches(keyData, "tui.select.cancel")) {
-      if (this.onCancel) {
+    } else if (kb.matches(keyData, "tui.select.cancel")) {
+      if (this.onCancel !== undefined) {
         this.onCancel();
       }
     }
   }
 }
 
-/**
- * Component that renders a user message selector for branching
- */
 export class UserMessageSelectorComponent extends Container {
   private messageList: UserMessageList;
 
@@ -126,7 +105,6 @@ export class UserMessageSelectorComponent extends Container {
   ) {
     super();
 
-    // Add header
     this.addChild(new Spacer(1));
     this.addChild(new Text(theme.bold("Fork from Message"), 1, 0));
     this.addChild(
@@ -143,20 +121,17 @@ export class UserMessageSelectorComponent extends Container {
     this.addChild(new DynamicBorder());
     this.addChild(new Spacer(1));
 
-    // Create message list
     this.messageList = new UserMessageList(messages, initialSelectedId);
     this.messageList.onSelect = onSelect;
     this.messageList.onCancel = onCancel;
 
     this.addChild(this.messageList);
 
-    // Add bottom border
     this.addChild(new Spacer(1));
     this.addChild(new DynamicBorder());
 
-    // Auto-cancel if no messages
     if (messages.length === 0) {
-      setTimeout(() => onCancel(), 100);
+      schedule(() => onCancel(), 100);
     }
   }
 

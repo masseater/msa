@@ -1,9 +1,3 @@
-/**
- * TUI component for managing package resources (enable/disable)
- */
-
-import { basename, dirname, join, relative } from "node:path";
-
 import {
   type Component,
   Container,
@@ -30,6 +24,7 @@ import {
   isLocalPath,
   resolvePath,
 } from "../../../utils/paths.ts";
+import { basename, dirname, join, relative } from "../../path.ts";
 import { theme } from "../theme/theme.ts";
 import { DynamicBorder } from "./dynamic-border.ts";
 import { keyHint, rawKeyHint } from "./keybinding-hints.ts";
@@ -80,7 +75,7 @@ interface ResourceGroup {
 }
 
 function formatBaseDir(baseDir: string): string {
-  const displayPath = abbreviateHomePath(baseDir).replace(/\\/g, "/");
+  const displayPath = abbreviateHomePath(baseDir).replace(/\\/gu, "/");
   return displayPath.endsWith("/") ? displayPath : `${displayPath}/`;
 }
 
@@ -91,9 +86,8 @@ function getGroupLabel(metadata: PathMetadata, agentDir: string): string {
   if (metadata.source === "builtin") {
     return metadata.scope === "user" ? "Built-in" : "Built-in (project override)";
   }
-  // Top-level resources
   if (metadata.source === "auto") {
-    if (metadata.baseDir) {
+    if (metadata.baseDir !== undefined && metadata.baseDir !== "") {
       return metadata.scope === "user"
         ? `User (${formatBaseDir(metadata.baseDir)})`
         : `Project (${formatBaseDir(metadata.baseDir)})`;
@@ -128,7 +122,7 @@ function buildGroups(resolved: ResolvedPaths, agentDir: string): ResourceGroup[]
       const subgroupKey = `${groupKey}:${resourceType}`;
 
       let subgroup = group.subgroups.find((sg) => sg.type === resourceType);
-      if (!subgroup) {
+      if (subgroup === undefined) {
         subgroup = {
           type: resourceType,
           label: RESOURCE_TYPE_LABELS[resourceType],
@@ -166,7 +160,6 @@ function buildGroups(resolved: ResolvedPaths, agentDir: string): ResourceGroup[]
   addToGroup(resolved.prompts, "prompts");
   addToGroup(resolved.themes, "themes");
 
-  // Sort groups: packages first, then top-level; user before project
   const groups = Array.from(groupMap.values());
   groups.sort((a, b) => {
     if (a.origin !== b.origin) {
@@ -178,7 +171,6 @@ function buildGroups(resolved: ResolvedPaths, agentDir: string): ResourceGroup[]
     return a.source.localeCompare(b.source);
   });
 
-  // Sort subgroups within each group by type order, and items by name
   const typeOrder: Record<ResourceType, number> = {
     extensions: 0,
     skills: 1,
@@ -262,12 +254,12 @@ class ResourceList implements Component, Focusable {
   public onToggle?: (item: ResourceItem, newEnabled: boolean) => void;
   public onSwitchMode?: () => void;
 
-  private _focused = false;
+  private focusedState = false;
   get focused(): boolean {
-    return this._focused;
+    return this.focusedState;
   }
   set focused(value: boolean) {
-    this._focused = value;
+    this.focusedState = value;
     this.searchInput.focused = value;
   }
 
@@ -286,7 +278,6 @@ class ResourceList implements Component, Focusable {
     this.writeScope = writeScope;
     this.inheritedEnabledByKey = this.buildInheritedEnabledMap(groupsByScope.global);
     this.searchInput = new Input();
-    // 8 lines of chrome: top spacer + top border + spacer + header (2 lines) + spacer + bottom spacer + bottom border
     const chrome = 8;
     this.maxVisible = Math.max(5, (terminalHeight ?? 24) - chrome);
     this.buildFlatList();
@@ -326,7 +317,6 @@ class ResourceList implements Component, Focusable {
         }
       }
     }
-    // Start selection on first item (not header)
     this.selectedIndex = this.flatItems.findIndex((e) => e.type === "item");
     if (this.selectedIndex < 0) this.selectedIndex = 0;
   }
@@ -339,11 +329,11 @@ class ResourceList implements Component, Focusable {
       }
       idx += direction;
     }
-    return fromIndex; // Stay at current if no item found
+    return fromIndex;
   }
 
   private filterItems(query: string): void {
-    if (!query.trim()) {
+    if (query.trim() === "") {
       this.filteredItems = [...this.flatItems];
       this.selectFirstItem();
       return;
@@ -367,7 +357,6 @@ class ResourceList implements Component, Focusable {
       }
     }
 
-    // Find which subgroups and groups contain matching items
     for (const group of this.groups) {
       for (const subgroup of group.subgroups) {
         for (const item of subgroup.items) {
@@ -400,13 +389,12 @@ class ResourceList implements Component, Focusable {
 
   updateItem(item: ResourceItem, enabled: boolean): void {
     item.enabled = enabled;
-    // Update in groups too
     for (const group of this.groups) {
       for (const subgroup of group.subgroups) {
         const found = subgroup.items.find(
           (i) => i.path === item.path && i.resourceType === item.resourceType,
         );
-        if (found) {
+        if (found !== undefined) {
           found.enabled = enabled;
           return;
         }
@@ -419,7 +407,6 @@ class ResourceList implements Component, Focusable {
   render(width: number): string[] {
     const lines: string[] = [];
 
-    // Search input
     lines.push(...this.searchInput.render(width));
     lines.push("");
 
@@ -428,7 +415,6 @@ class ResourceList implements Component, Focusable {
       return lines;
     }
 
-    // Calculate visible range
     const startIndex = Math.max(
       0,
       Math.min(
@@ -442,19 +428,16 @@ class ResourceList implements Component, Focusable {
       const isSelected = startIndex + offset === this.selectedIndex;
 
       if (entry.type === "group") {
-        // Main group header (no cursor)
         const inherited = this.writeScope === "project" && entry.group.scope === "user";
         const label = theme.bold(`${entry.group.label}${inherited ? " · inherited global" : ""}`);
         const groupLine = theme.fg(inherited ? "dim" : "accent", label);
         lines.push(truncateToWidth(`  ${groupLine}`, width, ""));
       } else if (entry.type === "subgroup") {
-        // Subgroup header (indented, no cursor)
         const color =
           this.writeScope === "project" && entry.group.scope === "user" ? "dim" : "muted";
         const subgroupLine = theme.fg(color, entry.subgroup.label);
         lines.push(truncateToWidth(`    ${subgroupLine}`, width, ""));
       } else {
-        // Resource item (cursor only on items)
         const item = entry.item;
         const cursor = isSelected ? "> " : "  ";
         const dimmed = this.isDimmedItem(item);
@@ -470,7 +453,6 @@ class ResourceList implements Component, Focusable {
       }
     }
 
-    // Scroll indicator
     if (startIndex > 0 || endIndex < this.filteredItems.length) {
       const itemCount = this.filteredItems.filter((e) => e.type === "item").length;
       const currentItemIndex =
@@ -493,7 +475,6 @@ class ResourceList implements Component, Focusable {
       return;
     }
     if (kb.matches(data, "tui.select.pageUp")) {
-      // Jump up by maxVisible, then find nearest item
       let target = Math.max(0, this.selectedIndex - this.maxVisible);
       while (target < this.filteredItems.length && this.filteredItems[target]?.type !== "item") {
         target++;
@@ -504,7 +485,6 @@ class ResourceList implements Component, Focusable {
       return;
     }
     if (kb.matches(data, "tui.select.pageDown")) {
-      // Jump down by maxVisible, then find nearest item
       let target = Math.min(this.filteredItems.length - 1, this.selectedIndex + this.maxVisible);
       while (target >= 0 && this.filteredItems[target]?.type !== "item") {
         target--;
@@ -541,7 +521,6 @@ class ResourceList implements Component, Focusable {
       return;
     }
 
-    // Pass to search input
     this.searchInput.handleInput(data);
     this.filterItems(this.searchInput.getValue());
   }
@@ -572,12 +551,10 @@ class ResourceList implements Component, Focusable {
     const arrayKey = item.resourceType as "extensions" | "skills" | "prompts" | "themes";
     const current = (settings[arrayKey] ?? []) as string[];
 
-    // Generate pattern for this resource
     const pattern = this.getResourcePattern(item);
     const disablePattern = `-${pattern}`;
     const enablePattern = `+${pattern}`;
 
-    // Filter out existing patterns for this resource
     const updated = current.filter((p) => {
       const stripped = p.startsWith("!") || p.startsWith("+") || p.startsWith("-") ? p.slice(1) : p;
       return stripped !== pattern;
@@ -599,25 +576,61 @@ class ResourceList implements Component, Focusable {
       } else if (arrayKey === "themes") {
         this.settingsManager.setProjectThemePaths(updated);
       }
-    } else {
-      if (arrayKey === "extensions") {
-        this.settingsManager.setExtensionPaths(updated);
-      } else if (arrayKey === "skills") {
-        this.settingsManager.setSkillPaths(updated);
-      } else if (arrayKey === "prompts") {
-        this.settingsManager.setPromptTemplatePaths(updated);
-      } else if (arrayKey === "themes") {
-        this.settingsManager.setThemePaths(updated);
-      }
+    } else if (arrayKey === "extensions") {
+      this.settingsManager.setExtensionPaths(updated);
+    } else if (arrayKey === "skills") {
+      this.settingsManager.setSkillPaths(updated);
+    } else if (arrayKey === "prompts") {
+      this.settingsManager.setPromptTemplatePaths(updated);
+    } else if (arrayKey === "themes") {
+      this.settingsManager.setThemePaths(updated);
     }
   }
 
   private togglePackageResource(item: ResourceItem, enabled: boolean): void {
+    const togglePackageResourceScopeResult = ResourceList.togglePackageResourceScope(
+      this,
+      item,
+      enabled,
+    );
+    if (togglePackageResourceScopeResult.done) return togglePackageResourceScopeResult.value;
+    const { scope, packages } = togglePackageResourceScopeResult.value;
+
+    if (scope === "project") {
+      this.settingsManager.setProjectPackages(packages);
+    } else {
+      this.settingsManager.setPackages(packages);
+    }
+  }
+
+  private static togglePackageResourceScope(
+    self: ResourceList,
+    item: ResourceItem,
+    enabled: boolean,
+  ):
+    | { done: true; value: void }
+    | {
+        done: false;
+        value: {
+          scope: "user" | "project";
+          packages: (
+            | string
+            | {
+                extensions?: string[];
+                skills?: string[];
+                prompts?: string[];
+                themes?: string[];
+                autoload?: boolean;
+                source: string;
+              }
+          )[];
+        };
+      } {
     const scope = item.metadata.scope as "user" | "project";
     const settings =
       scope === "project"
-        ? this.settingsManager.getProjectSettings()
-        : this.settingsManager.getGlobalSettings();
+        ? self.settingsManager.getProjectSettings()
+        : self.settingsManager.getGlobalSettings();
 
     const packages = [...(settings.packages ?? [])] as PackageSource[];
     const pkgIndex = packages.findIndex((pkg) => {
@@ -626,24 +639,20 @@ class ResourceList implements Component, Focusable {
     });
 
     let pkg = packages[pkgIndex];
-    if (pkg === undefined) return;
+    if (pkg === undefined) return { done: true, value: undefined };
 
-    // Convert string to object form if needed
     if (typeof pkg === "string") {
       pkg = { source: pkg };
       packages[pkgIndex] = pkg;
     }
 
-    // Get the resource array for this type
     const arrayKey = item.resourceType as "extensions" | "skills" | "prompts" | "themes";
     const current = (pkg[arrayKey] ?? []) as string[];
 
-    // Generate pattern relative to package root
-    const pattern = this.getPackageResourcePattern(item);
+    const pattern = self.getPackageResourcePattern(item);
     const disablePattern = `-${pattern}`;
     const enablePattern = `+${pattern}`;
 
-    // Filter out existing patterns for this resource
     const updated = current.filter((p) => {
       const stripped = p.startsWith("!") || p.startsWith("+") || p.startsWith("-") ? p.slice(1) : p;
       return stripped !== pattern;
@@ -657,19 +666,13 @@ class ResourceList implements Component, Focusable {
 
     (pkg as Record<string, unknown>)[arrayKey] = updated.length > 0 ? updated : undefined;
 
-    // Clean up empty filter object
     const hasFilters = ["extensions", "skills", "prompts", "themes"].some(
       (k) => (pkg as Record<string, unknown>)[k] !== undefined,
     );
     if (!hasFilters) {
       packages[pkgIndex] = (pkg as { source: string }).source;
     }
-
-    if (scope === "project") {
-      this.settingsManager.setProjectPackages(packages);
-    } else {
-      this.settingsManager.setPackages(packages);
-    }
+    return { done: false, value: { scope, packages } };
   }
 
   private renderCheckbox(item: ResourceItem): string {
@@ -721,7 +724,6 @@ class ResourceList implements Component, Focusable {
       return !(state === "inherit" && this.isInheritedGlobalItem(item) && target === pattern);
     });
     if (state !== "inherit") {
-      // Project entries name inherited files to override them. Built-in paths need no entry.
       if (
         this.isInheritedGlobalItem(item) &&
         item.metadata.source !== "builtin" &&
@@ -842,7 +844,8 @@ class ResourceList implements Component, Focusable {
       item.path,
       relative(baseDir, item.path),
     ]);
-    if (item.metadata.baseDir) patterns.add(relative(item.metadata.baseDir, item.path));
+    if (item.metadata.baseDir !== undefined && item.metadata.baseDir !== "")
+      patterns.add(relative(item.metadata.baseDir, item.path));
     return patterns;
   }
 
@@ -932,12 +935,12 @@ export class ConfigSelectorComponent extends Container implements Focusable {
   private resourceList: ResourceList;
   private writeScope: ConfigWriteScope;
 
-  private _focused = false;
+  private focusedState = false;
   get focused(): boolean {
-    return this._focused;
+    return this.focusedState;
   }
   set focused(value: boolean) {
-    this._focused = value;
+    this.focusedState = value;
     this.resourceList.focused = value;
   }
 
@@ -961,7 +964,6 @@ export class ConfigSelectorComponent extends Container implements Focusable {
       project: buildGroups(resolvedPaths.project, agentDir),
     };
 
-    // Add header
     this.addChild(new Spacer(1));
     this.addChild(new DynamicBorder());
     this.addChild(new Spacer(1));
@@ -969,7 +971,6 @@ export class ConfigSelectorComponent extends Container implements Focusable {
     this.addChild(this.header);
     this.addChild(new Spacer(1));
 
-    // Resource list
     this.resourceList = new ResourceList(
       groupsByScope,
       settingsManager,
@@ -989,7 +990,6 @@ export class ConfigSelectorComponent extends Container implements Focusable {
     }
     this.addChild(this.resourceList);
 
-    // Bottom border
     this.addChild(new Spacer(1));
     this.addChild(new DynamicBorder());
   }

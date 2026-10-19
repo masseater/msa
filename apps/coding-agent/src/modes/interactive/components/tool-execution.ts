@@ -17,7 +17,6 @@ import type {
   ToolRenderers,
 } from "../../../core/extensions/types.ts";
 
-/** What this component needs from a tool: how to draw it, without executing it. */
 export type { ToolRenderers };
 
 import {
@@ -52,7 +51,6 @@ export class ToolExecutionComponent extends Container {
   private resultRendererComponent?: Component | undefined;
   private rendererState: any = {};
   private imageComponents: Image[] = [];
-  /** Inputs of imageComponents, so updateDisplay can reuse images and keep their converted PNG data. */
   private imageSources: Array<{ data: string; mimeType: string; widthCells: number }> = [];
   private imageSpacers: Spacer[] = [];
   private toolName: string;
@@ -74,7 +72,6 @@ export class ToolExecutionComponent extends Container {
     details?: any;
     durationMs?: number;
   };
-  private hideComponent = false;
 
   constructor(
     toolName: string,
@@ -98,9 +95,6 @@ export class ToolExecutionComponent extends Container {
 
     this.addChild(new Spacer(1));
 
-    // Always create all shell variants. contentBox is used for default renderer-based composition.
-    // selfRenderContainer is used when the tool renders its own framing.
-    // contentText is reserved for generic fallback rendering when no tool definition exists.
     this.contentBox = new Box(1, 1, (text: string) => theme.bg("toolPendingBg", text));
     this.contentText = new Text("", 1, 1, (text: string) => theme.bg("toolPendingBg", text));
     this.contentTextRegion = this.createResultRegion(this.contentText);
@@ -159,7 +153,7 @@ export class ToolExecutionComponent extends Container {
 
   private createResultFallback(): Component | undefined {
     const output = this.getTextOutput();
-    if (!output) {
+    if (output === "") {
       return undefined;
     }
 
@@ -170,13 +164,13 @@ export class ToolExecutionComponent extends Container {
 
   private createResultRegion(component: Component): MouseRegion {
     return new MouseRegion(component, (event) => {
-      if (!this.result || event.type !== "click" || event.button !== "left") return undefined;
+      if (this.result === undefined || event.type !== "click" || event.button !== "left")
+        return undefined;
       this.setExpanded(!this.expanded);
       return { handled: true };
     });
   }
 
-  /** What a tool group needs to summarize this call in its one-line header. */
   getCallSummary(): ToolCallSummary {
     return {
       toolName: this.toolName,
@@ -209,7 +203,6 @@ export class ToolExecutionComponent extends Container {
       content: Array<{ type: string; text?: string; data?: string; mimeType?: string }>;
       details?: any;
       isError: boolean;
-      /** Execution time of a final result. */
       durationMs?: number;
     },
     isPartial = false,
@@ -245,10 +238,6 @@ export class ToolExecutionComponent extends Container {
   }
 
   override render(width: number): string[] {
-    if (this.hideComponent) {
-      return [];
-    }
-
     if (this.hasRendererDefinition() && this.getRenderShell() === "self") {
       const contentLines = this.selfRenderContainer.render(width);
       this.selfRenderHeight = contentLines.length;
@@ -263,11 +252,11 @@ export class ToolExecutionComponent extends Container {
       }
       for (let i = 0; i < this.imageComponents.length; i++) {
         const spacer = this.imageSpacers[i];
-        if (spacer) {
+        if (spacer !== undefined) {
           lines.push(...spacer.render(width));
         }
         const imageComponent = this.imageComponents[i];
-        if (imageComponent) {
+        if (imageComponent !== undefined) {
           lines.push(...imageComponent.render(width));
         }
       }
@@ -291,95 +280,35 @@ export class ToolExecutionComponent extends Container {
   private updateDisplay(): void {
     const bgFn = this.isPartial
       ? (text: string) => theme.bg("toolPendingBg", text)
-      : this.result?.isError
+      : this.result?.isError === true
         ? (text: string) => theme.bg("toolErrorBg", text)
         : (text: string) => theme.bg("toolSuccessBg", text);
 
-    let hasContent = false;
-    this.hideComponent = false;
     if (this.hasRendererDefinition()) {
-      const renderContainer =
-        this.getRenderShell() === "self" ? this.selfRenderContainer : this.contentBox;
-      if (renderContainer instanceof Box) {
-        renderContainer.setBgFn(bgFn);
-        renderContainer.setPaddingX(this.outputPad);
-      }
-      renderContainer.clear();
+      const renderContainer = ToolExecutionComponent.updateDisplayRenderContainer(this, bgFn);
 
-      const callRenderer = this.getCallRenderer();
-      if (!callRenderer) {
-        renderContainer.addChild(this.createResultRegion(this.createCallFallback()));
-        hasContent = true;
-      } else {
-        try {
-          const component = callRenderer(
-            this.args,
-            theme,
-            this.getRenderContext(this.callRendererComponent),
-          );
-          this.callRendererComponent = component;
-          renderContainer.addChild(this.createResultRegion(component));
-          hasContent = true;
-        } catch {
-          this.callRendererComponent = undefined;
-          renderContainer.addChild(this.createResultRegion(this.createCallFallback()));
-          hasContent = true;
-        }
-      }
-
-      if (this.result) {
-        const resultRenderer = this.getResultRenderer();
-        if (!resultRenderer) {
-          const component = this.createResultFallback();
-          if (component) {
-            renderContainer.addChild(this.createResultRegion(component));
-            hasContent = true;
-          }
-        } else {
-          try {
-            const component = resultRenderer(
-              { content: this.result.content as any, details: this.result.details },
-              { expanded: this.expanded, isPartial: this.isPartial },
-              theme,
-              this.getRenderContext(this.resultRendererComponent),
-            );
-            this.resultRendererComponent = component;
-            renderContainer.addChild(this.createResultRegion(component));
-            hasContent = true;
-          } catch {
-            this.resultRendererComponent = undefined;
-            const component = this.createResultFallback();
-            if (component) {
-              renderContainer.addChild(this.createResultRegion(component));
-              hasContent = true;
-            }
-          }
-        }
-      }
+      ToolExecutionComponent.updateDisplayPart2(this, renderContainer);
     } else {
       this.contentText.setCustomBgFn(bgFn);
       this.contentText.setPaddingX(this.outputPad);
       this.contentText.setText(this.formatToolExecution());
-      hasContent = true;
     }
 
-    const previousImages = this.imageComponents;
-    const previousSources = this.imageSources;
-    for (const img of this.imageComponents) {
-      this.removeChild(img);
-    }
-    this.imageComponents = [];
-    this.imageSources = [];
-    for (const spacer of this.imageSpacers) {
-      this.removeChild(spacer);
-    }
-    this.imageSpacers = [];
+    const { previousSources, previousImages } =
+      ToolExecutionComponent.updateDisplayPreviousSources(this);
 
-    if (this.result) {
+    if (this.result !== undefined) {
       const imageBlocks = this.result.content.filter((c) => c.type === "image");
       const caps = getCapabilities();
       for (const img of imageBlocks) {
-        if (caps.images && this.showImages && img.data && img.mimeType) {
+        if (
+          caps.images !== null &&
+          this.showImages &&
+          img.data !== undefined &&
+          img.data !== "" &&
+          img.mimeType !== undefined &&
+          img.mimeType !== ""
+        ) {
           const spacer = new Spacer(1);
           this.addChild(spacer);
           this.imageSpacers.push(spacer);
@@ -414,10 +343,88 @@ export class ToolExecutionComponent extends Container {
         }
       }
     }
+  }
 
-    if (this.hasRendererDefinition() && !hasContent && this.imageComponents.length === 0) {
-      this.hideComponent = true;
+  private static updateDisplayRenderContainer(
+    self: ToolExecutionComponent,
+    bgFn: (text: string) => string,
+  ): Container | Box {
+    const renderContainer =
+      self.getRenderShell() === "self" ? self.selfRenderContainer : self.contentBox;
+    if (renderContainer instanceof Box) {
+      renderContainer.setBgFn(bgFn);
+      renderContainer.setPaddingX(self.outputPad);
     }
+    renderContainer.clear();
+
+    const callRenderer = self.getCallRenderer();
+    if (callRenderer === undefined) {
+      renderContainer.addChild(self.createResultRegion(self.createCallFallback()));
+    } else {
+      try {
+        const component = callRenderer(
+          self.args,
+          theme,
+          self.getRenderContext(self.callRendererComponent),
+        );
+        self.callRendererComponent = component;
+        renderContainer.addChild(self.createResultRegion(component));
+      } catch {
+        self.callRendererComponent = undefined;
+        renderContainer.addChild(self.createResultRegion(self.createCallFallback()));
+      }
+    }
+    return renderContainer;
+  }
+
+  private static updateDisplayPart2(
+    self: ToolExecutionComponent,
+    renderContainer: Container | Box,
+  ): void {
+    if (self.result !== undefined) {
+      const resultRenderer = self.getResultRenderer();
+      if (resultRenderer === undefined) {
+        const component = self.createResultFallback();
+        if (component !== undefined) {
+          renderContainer.addChild(self.createResultRegion(component));
+        }
+      } else {
+        try {
+          const component = resultRenderer(
+            { content: self.result.content as any, details: self.result.details },
+            { expanded: self.expanded, isPartial: self.isPartial },
+            theme,
+            self.getRenderContext(self.resultRendererComponent),
+          );
+          self.resultRendererComponent = component;
+          renderContainer.addChild(self.createResultRegion(component));
+        } catch {
+          self.resultRendererComponent = undefined;
+          const component = self.createResultFallback();
+          if (component !== undefined) {
+            renderContainer.addChild(self.createResultRegion(component));
+          }
+        }
+      }
+    }
+  }
+
+  private static updateDisplayPreviousSources(self: ToolExecutionComponent): {
+    previousSources: { data: string; mimeType: string; widthCells: number }[];
+    previousImages: Image[];
+  } {
+    const previousImages = self.imageComponents;
+    const previousSources = self.imageSources;
+    for (const img of self.imageComponents) {
+      self.removeChild(img);
+    }
+    self.imageComponents = [];
+    self.imageSources = [];
+    for (const spacer of self.imageSpacers) {
+      self.removeChild(spacer);
+    }
+    self.imageSpacers = [];
+    return { previousSources, previousImages };
   }
 
   private getTextOutput(): string {
@@ -427,11 +434,11 @@ export class ToolExecutionComponent extends Container {
   private formatToolExecution(): string {
     let text = theme.fg("toolTitle", theme.bold(this.toolName));
     const content = JSON.stringify(this.args, null, 2);
-    if (content) {
+    if (content !== "") {
       text += `\n\n${content}`;
     }
     const output = this.getTextOutput();
-    if (output) {
+    if (output !== "") {
       text += `\n${output}`;
     }
     return text;
