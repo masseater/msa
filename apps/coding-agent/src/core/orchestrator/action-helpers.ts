@@ -11,10 +11,10 @@ function taskView(runtime: Runtime, id: string): TaskView {
   return found;
 }
 
-function runningSessionOf(runtime: Runtime, taskId: string) {
+function runningThreadOf(runtime: Runtime, taskId: string) {
   for (const assignment of store.assignmentsOfTask(runtime.database, taskId)) {
-    const session = store.getSession(runtime.database, assignment.sessionId);
-    if (session?.status === "running") return session;
+    const thread = store.getThread(runtime.database, assignment.threadId);
+    if (thread?.status === "running") return thread;
   }
   return undefined;
 }
@@ -25,4 +25,4 @@ function appliesTo(note: Pick<Note, "round" | "taskIds">, task: Task): boolean {
   return note.taskIds.includes(task.id);
 }
 
-export const actionHelpers = { taskView, runningSessionOf, appliesTo };
+export const actionHelpers = { taskView, runningThreadOf, appliesTo };

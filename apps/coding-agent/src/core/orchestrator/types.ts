@@ -2,8 +2,8 @@ import type { ThinkingLevel } from "@msa/agent-core";
 
 export type TaskStatus = "waiting" | "running" | "completed" | "failed" | "stopped";
 export type TaskKind = "work" | "review";
-export type SessionRole = "worker" | "reviewer";
-export type SessionStatus = "running" | "completed" | "failed" | "stopped";
+export type ThreadRole = "worker" | "reviewer";
+export type ThreadStatus = "running" | "completed" | "failed" | "stopped";
 export type NoteAudience = "all" | "round" | "tasks";
 
 export const TASK_STATUSES: readonly TaskStatus[] = [
@@ -14,7 +14,7 @@ export const TASK_STATUSES: readonly TaskStatus[] = [
   "stopped",
 ];
 
-export const SESSION_ROLES: readonly SessionRole[] = ["worker", "reviewer"];
+export const THREAD_ROLES: readonly ThreadRole[] = ["worker", "reviewer"];
 
 export interface Task {
   id: string;
@@ -33,13 +33,13 @@ export interface Task {
   updatedAt: number;
 }
 
-export interface Session {
+export interface Thread {
   id: string;
   project: string;
   model: string;
   thinkingLevel: ThinkingLevel;
   cwd: string;
-  status: SessionStatus;
+  status: ThreadStatus;
   sessionFile: string | null;
   createdAt: number;
   updatedAt: number;
@@ -47,17 +47,17 @@ export interface Session {
 
 export interface Assignment {
   taskId: string;
-  sessionId: string;
-  role: SessionRole;
+  threadId: string;
+  role: ThreadRole;
   createdAt: number;
 }
 
 export interface Report {
   id: string;
   taskId: string;
-  sessionId: string;
-  role: SessionRole;
-  status: SessionStatus;
+  threadId: string;
+  role: ThreadRole;
+  status: ThreadStatus;
   content: string;
   createdAt: number;
 }
@@ -79,8 +79,8 @@ export interface TaskView extends Task {
   reports: readonly Report[];
 }
 
-export interface SessionView extends Session {
-  tasks: readonly { taskId: string; role: SessionRole }[];
+export interface ThreadView extends Thread {
+  tasks: readonly { taskId: string; role: ThreadRole }[];
 }
 
 export interface RoundView {
@@ -105,16 +105,16 @@ export interface TaskSnapshot extends TaskView {
 
 export interface OrchestratorSnapshot {
   tasks: readonly TaskSnapshot[];
-  sessions: readonly SessionView[];
+  threads: readonly ThreadView[];
   rounds: readonly RoundView[];
   replans: readonly ReplanView[];
-  maxConcurrentSessions: number;
+  maxConcurrentThreads: number;
 }
 
 export interface ReportHit {
   report: Report;
   taskTitle: string;
-  sessionModel: string;
+  threadModel: string;
 }
 
 export interface CreateTaskInput {
@@ -150,7 +150,7 @@ export interface SendNoteInput {
 
 export interface NoteDelivery {
   noteId: string;
-  steeredSessions: readonly string[];
+  steeredThreads: readonly string[];
   waitingTasks: readonly string[];
 }
 
@@ -183,7 +183,7 @@ export interface ReplanInput {
   keep?: readonly string[];
   drop?: readonly ReplanDropInput[];
   rewire?: readonly ReplanRewireInput[];
-  maxConcurrentSessions?: number;
+  maxConcurrentThreads?: number;
   stop?: boolean;
   resume?: boolean;
 }
@@ -191,7 +191,7 @@ export interface ReplanInput {
 export interface ReplanStopped {
   taskId: string;
   title: string;
-  sessionId: string;
+  threadId: string;
   memo: string;
 }
 

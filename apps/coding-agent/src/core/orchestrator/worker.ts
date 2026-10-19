@@ -32,7 +32,7 @@ export interface OrchestratorDefaults {
   workerThinkingLevel: ThinkingLevel;
   reviewModel: string;
   reviewThinkingLevel: ThinkingLevel;
-  maxConcurrentSessions: number;
+  maxConcurrentThreads: number;
 }
 
 export interface OrchestratorReport {
@@ -56,6 +56,6 @@ export interface OrchestratorOptions {
   report: (text: string, details: OrchestratorReport) => void;
   runCondition: (command: string, cwd: string) => Promise<boolean>;
   pollIntervalMs?: number | null;
-  /** Parent of the Task spans; each Session span sits under its first task. */
+  /** Parent of the Task spans; each Thread span sits under its first task. */
   telemetry: TelemetryContext;
 }

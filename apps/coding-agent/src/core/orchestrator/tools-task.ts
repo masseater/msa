@@ -52,12 +52,12 @@ export function taskToolsA(orchestrator: Orchestrator): Record<string, ToolDefin
       name: "create_task",
       label: "create task",
       description:
-        "Create a task from the state it starts in and the state it must reach. Write those two states, not a procedure: a list of steps breaks as soon as the starting state is not what you assumed. The scheduler starts the task when its dependencies finish and assigns a separate reviewer session after the worker. Each round's tasks end in a closing review task.",
+        "Create a task from the state it starts in and the state it must reach. Write those two states, not a procedure: a list of steps breaks as soon as the starting state is not what you assumed. The scheduler starts the task when its dependencies finish and assigns a separate reviewer thread after the worker. Each round's tasks end in a closing review task.",
       promptSnippet: "Create a task from its current state and goal state",
       promptGuidelines: [
         "Answer simple questions yourself; put new work into tasks with create_task, one task per independent piece.",
         "Write currentState and goalState only. Never list steps; say what holds now and what must hold at the end.",
-        "The scheduler owns assignment and start; do not start sessions yourself.",
+        "The scheduler owns assignment and start; do not start threads yourself.",
         "When a closing review reports, act on it: create the next round's tasks, or tell the user the work is done.",
       ],
       parameters: createSchema,
@@ -77,7 +77,7 @@ export function taskToolsA(orchestrator: Orchestrator): Record<string, ToolDefin
       name: "read_task",
       label: "read task",
       description:
-        "Read a task's current state, goal state, reports, dependencies, dependents, and sessions.",
+        "Read a task's current state, goal state, reports, dependencies, dependents, and threads.",
       promptSnippet: "Read a task's full state and reports",
       annotations: { readOnlyHint: true },
       parameters: taskIdObject,
@@ -85,7 +85,7 @@ export function taskToolsA(orchestrator: Orchestrator): Record<string, ToolDefin
         orchestrator.read(taskId).then((task) =>
           prompts.formatTaskDetail(
             task,
-            task.assignments.map((assignment) => `${assignment.sessionId} (${assignment.role})`),
+            task.assignments.map((assignment) => `${assignment.threadId} (${assignment.role})`),
           ),
         ),
     }),

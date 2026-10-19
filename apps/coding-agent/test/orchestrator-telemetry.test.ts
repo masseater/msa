@@ -7,7 +7,7 @@ const { setup, taskStatus, waitFor } = harness;
 
 const TASK = { title: "a", currentState: "a is not done", goalState: "a is done" };
 
-it("traces a task through its worker and reviewer sessions and logs each report", () =>
+it("traces a task through its worker and reviewer threads and logs each report", () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const { orchestrator, workers, telemetry } = setup();
@@ -28,22 +28,22 @@ it("traces a task through its worker and reviewer sessions and logs each report"
         status: { status: "ok" },
         attributes: { "msa.task.id": task.id, "msa.task.status": "completed" },
       });
-      const sessions = spans.filter(
-        (span) => span.name === "msa.session" && span.attributes["msa.task.id"] === task.id,
+      const threads = spans.filter(
+        (span) => span.name === "msa.thread" && span.attributes["msa.task.id"] === task.id,
       );
       expect(
-        sessions.map((span) => [
+        threads.map((span) => [
           span.parentId,
-          span.attributes["msa.session.role"],
+          span.attributes["msa.thread.role"],
           span.attributes["msa.task.id"],
           span.attributes["gen_ai.request.model"],
-          span.attributes["msa.session.status"],
+          span.attributes["msa.thread.status"],
         ]),
       ).toEqual([
         [taskSpan?.id, "worker", task.id, "fast/flash", "completed"],
         [taskSpan?.id, "reviewer", task.id, "sub/fable", "completed"],
       ]);
-      expect(spans.find((span) => span.name === "msa.turn")?.parentId).toBe(sessions[0]?.id);
+      expect(spans.find((span) => span.name === "msa.turn")?.parentId).toBe(threads[0]?.id);
       expect(workers.slice(0, 2).map((worker) => worker.telemetry.role)).toEqual([
         "worker",
         "reviewer",
@@ -55,13 +55,13 @@ it("traces a task through its worker and reviewer sessions and logs each report"
           (log) =>
             log.body === "msa.orchestrator.report" && log.attributes["msa.task.id"] === task.id,
         );
-      expect(reports.map((log) => [log.spanId, log.attributes["msa.session.role"]])).toEqual([
+      expect(reports.map((log) => [log.spanId, log.attributes["msa.thread.role"]])).toEqual([
         [taskSpan?.id, "worker"],
         [null, "reviewer"],
       ]);
       const active = telemetry
         .getMetrics()
-        .filter((metric) => metric.name === "msa.orchestrator.sessions.active")
+        .filter((metric) => metric.name === "msa.orchestrator.threads.active")
         .map((metric) => metric.value);
       expect(active[0]).toBe(0);
       expect(active).toContain(1);
@@ -82,9 +82,9 @@ it("ends the spans of a stopped task as errors", () =>
       expect(spans.map((span) => [span.name, span.settled, span.status])).toEqual([
         ["msa.task", true, { status: "error", error: { name: "TaskFailed", message: "stopped" } }],
         [
-          "msa.session",
+          "msa.thread",
           true,
-          { status: "error", error: { name: "SessionFailed", message: "stopped" } },
+          { status: "error", error: { name: "ThreadFailed", message: "stopped" } },
         ],
       ]);
     }),

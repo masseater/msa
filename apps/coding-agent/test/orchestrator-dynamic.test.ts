@@ -114,9 +114,9 @@ it("changes the concurrency limit while tasks wait", () =>
       });
       expect(workers).toHaveLength(1);
 
-      yield* Effect.promise(() => orchestrator.setMaxConcurrentSessions(3));
+      yield* Effect.promise(() => orchestrator.setMaxConcurrentThreads(3));
       yield* waitFor(() => workers.length === 3);
-      expect(orchestrator.snapshot.maxConcurrentSessions).toBe(3);
+      expect(orchestrator.snapshot.maxConcurrentThreads).toBe(3);
     }),
   ));
 
@@ -170,14 +170,14 @@ it("closes each round's review without waiting for another round's tasks", () =>
       yield* waitFor(() =>
         workers.some(
           (worker) =>
-            worker.prompts[0]?.includes("reviewing work another session") === true &&
+            worker.prompts[0]?.includes("reviewing work another thread") === true &&
             worker.prompts[0]?.includes("a done") === true,
         ),
       );
       workers
         .find(
           (worker) =>
-            worker.prompts[0]?.includes("reviewing work another session") === true &&
+            worker.prompts[0]?.includes("reviewing work another thread") === true &&
             worker.prompts[0]?.includes("a done") === true,
         )
         ?.complete("a reviewed");

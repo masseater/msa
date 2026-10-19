@@ -52,8 +52,8 @@ podman rm --force msa-grafana-lgtm && podman volume rm msa-grafana-lgtm
 Orchestrated work forms one trace per task:
 
 ```text
-msa.task                 a task, from its first session until it completes, fails, or stops
-└─ msa.session           one worker or reviewer session on that task
+msa.task                 a task, from its first thread until it completes, fails, or stops
+└─ msa.thread            one worker or reviewer thread on that task
    └─ msa.turn           one assistant response and the tools it called
       ├─ msa.llm.request one model call
       └─ msa.tool.call   one tool call
@@ -64,7 +64,7 @@ Turns of the session you talk to are traces of their own, rooted at `msa.turn`. 
 | Span              | Attributes                                                                                                                                                                                                                                                               |
 | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `msa.task`        | `msa.task.id`, `msa.task.kind`, `msa.task.title`, `msa.task.round`, `msa.task.status`                                                                                                                                                                                    |
-| `msa.session`     | `msa.session.id`, `msa.session.role` (`worker`, `reviewer`), `msa.task.id`, `gen_ai.request.model`, `msa.thinking_level`, `msa.session.status`                                                                                                                           |
+| `msa.thread`      | `msa.thread.id`, `msa.thread.role` (`worker`, `reviewer`), `msa.task.id`, `gen_ai.request.model`, `msa.thinking_level`, `msa.thread.status`                                                                                                                              |
 | `msa.turn`        | `msa.session.role` (`main`, `worker`, `reviewer`), `msa.turn.index`, `gen_ai.provider.name`, `gen_ai.request.model`, `msa.thinking_level`                                                                                                                                |
 | `msa.llm.request` | `gen_ai.provider.name`, `gen_ai.request.model`, `gen_ai.response.model`, `msa.thinking_level`, `msa.stop_reason`, `gen_ai.usage.input_tokens`, `gen_ai.usage.output_tokens`, `msa.usage.cache_read_tokens`, `msa.usage.cache_write_tokens`, `msa.cost.usd`, `error.type` |
 | `msa.tool.call`   | `gen_ai.tool.name`, `gen_ai.tool.call.id`, `error.type`                                                                                                                                                                                                                  |
@@ -81,16 +81,16 @@ Prometheus names, as the container stores them:
 | `msa_llm_cost_USD_total`           | `gen_ai_provider_name`, `gen_ai_request_model`, `msa_session_role`                   | Cost in US dollars                                                 |
 | `msa_llm_request_duration_seconds` | `gen_ai_provider_name`, `gen_ai_request_model`, `msa_session_role`, `msa_outcome`    | Histogram of model call time                                       |
 | `msa_tool_calls_total`             | `gen_ai_tool_name`, `msa_outcome` (`ok`, `error`)                                    | Tool calls; failures have `msa_outcome="error"`                    |
-| `msa_orchestrator_sessions_active` | none                                                                                 | Orchestrator sessions running now                                  |
+| `msa_orchestrator_threads_active`  | none                                                                                 | Orchestrator threads running now                                   |
 | `msa_pr_watch_ci_duration_seconds` | `msa_ci_conclusion` (`passed`, `failed`)                                             | Histogram of how long a watched pull request's checks were pending |
 
-Metrics carry no task or session ids; find those in the traces.
+Metrics carry no task or thread ids; find those in the traces.
 
 ## Logs
 
 | Log body                    | When                                                      | Attributes                                                                  |
 | --------------------------- | --------------------------------------------------------- | --------------------------------------------------------------------------- |
-| `msa.orchestrator.report`   | A session reports its result                              | `msa.task.id`, `msa.session.role`, `msa.report.status`, `msa.report.text`   |
+| `msa.orchestrator.report`   | A thread reports its result                               | `msa.task.id`, `msa.thread.role`, `msa.report.status`, `msa.report.text`    |
 | `msa.orchestrator.replan`   | A replan finishes or aborts                               | `msa.replan.reason`, counts of stopped, created, dropped, and started tasks |
 | `msa.pr_watch.notification` | `pr_watch` tells the session about a change or its status | `msa.pr_watch.label`, `msa.pr_watch.text`, `msa.pr_watch.wake`              |
 | `msa.tool.failed`           | A tool call fails                                         | `gen_ai.tool.name`, `error.message`                                         |

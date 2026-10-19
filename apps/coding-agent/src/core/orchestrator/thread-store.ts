@@ -6,13 +6,13 @@ import type {
   Assignment,
   Report,
   ReportHit,
-  Session,
-  SessionRole,
-  SessionStatus,
-  SessionView,
+  Thread,
+  ThreadRole,
+  ThreadStatus,
+  ThreadView,
 } from "./types.ts";
 
-interface SessionRow {
+interface ThreadRow {
   id: string;
   project: string;
   model: string;
@@ -26,7 +26,7 @@ interface SessionRow {
 
 interface AssignmentRow {
   task_id: string;
-  session_id: string;
+  thread_id: string;
   role: string;
   created_at: number;
 }
@@ -34,21 +34,21 @@ interface AssignmentRow {
 interface ReportRow {
   id: string;
   task_id: string;
-  session_id: string;
+  thread_id: string;
   role: string;
   status: string;
   content: string;
   created_at: number;
 }
 
-function toSession(row: SessionRow): Session {
+function toThread(row: ThreadRow): Thread {
   return {
     id: row.id,
     project: row.project,
     model: row.model,
-    thinkingLevel: row.thinking_level as Session["thinkingLevel"],
+    thinkingLevel: row.thinking_level as Thread["thinkingLevel"],
     cwd: row.cwd,
-    status: row.status as SessionStatus,
+    status: row.status as ThreadStatus,
     sessionFile: row.session_file,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -58,8 +58,8 @@ function toSession(row: SessionRow): Session {
 function toAssignment(row: AssignmentRow): Assignment {
   return {
     taskId: row.task_id,
-    sessionId: row.session_id,
-    role: row.role as SessionRole,
+    threadId: row.thread_id,
+    role: row.role as ThreadRole,
     createdAt: row.created_at,
   };
 }
@@ -68,83 +68,83 @@ function toReport(row: ReportRow): Report {
   return {
     id: row.id,
     taskId: row.task_id,
-    sessionId: row.session_id,
-    role: row.role as SessionRole,
-    status: row.status as SessionStatus,
+    threadId: row.thread_id,
+    role: row.role as ThreadRole,
+    status: row.status as ThreadStatus,
     content: row.content,
     createdAt: row.created_at,
   };
 }
 
-function insertSession(database: DatabaseSync, session: Session): void {
+function insertThread(database: DatabaseSync, thread: Thread): void {
   database
     .prepare(
-      `INSERT INTO sessions (id, project, model, thinking_level, cwd, status, session_file,
+      `INSERT INTO threads (id, project, model, thinking_level, cwd, status, session_file,
          created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
-      session.id,
-      session.project,
-      session.model,
-      session.thinkingLevel,
-      session.cwd,
-      session.status,
-      session.sessionFile,
-      session.createdAt,
-      session.updatedAt,
+      thread.id,
+      thread.project,
+      thread.model,
+      thread.thinkingLevel,
+      thread.cwd,
+      thread.status,
+      thread.sessionFile,
+      thread.createdAt,
+      thread.updatedAt,
     );
 }
 
-function getSession(database: DatabaseSync, id: string): Session | undefined {
-  const row = database.prepare("SELECT * FROM sessions WHERE id = ?").get(id) as
-    | SessionRow
+function getThread(database: DatabaseSync, id: string): Thread | undefined {
+  const row = database.prepare("SELECT * FROM threads WHERE id = ?").get(id) as
+    | ThreadRow
     | undefined;
-  return row === undefined ? undefined : toSession(row);
+  return row === undefined ? undefined : toThread(row);
 }
 
-const SESSION_COLUMNS: Readonly<Record<string, string>> = {
+const THREAD_COLUMNS: Readonly<Record<string, string>> = {
   model: "model",
   thinkingLevel: "thinking_level",
   status: "status",
   sessionFile: "session_file",
 };
 
-function updateSession(
+function updateThread(
   database: DatabaseSync,
   id: string,
-  patch: Partial<Pick<Session, "model" | "thinkingLevel" | "status" | "sessionFile">>,
+  patch: Partial<Pick<Thread, "model" | "thinkingLevel" | "status" | "sessionFile">>,
   now: number,
 ): void {
   const entries = db
     .definedEntries(patch)
-    .map(([key, value]) => [SESSION_COLUMNS[key] ?? key, value]) as [string, string | null][];
+    .map(([key, value]) => [THREAD_COLUMNS[key] ?? key, value]) as [string, string | null][];
   if (entries.length === 0) return;
   const assignments = entries.map(([column]) => `${column} = ?`).join(", ");
   database
-    .prepare(`UPDATE sessions SET ${assignments}, updated_at = ? WHERE id = ?`)
+    .prepare(`UPDATE threads SET ${assignments}, updated_at = ? WHERE id = ?`)
     .run(...entries.map(([, value]) => value), now, id);
 }
 
-function listSessions(database: DatabaseSync, project: string): Session[] {
+function listThreads(database: DatabaseSync, project: string): Thread[] {
   const rows = database
-    .prepare("SELECT * FROM sessions WHERE project = ? ORDER BY created_at, id")
-    .all(project) as unknown as SessionRow[];
-  return rows.map(toSession);
+    .prepare("SELECT * FROM threads WHERE project = ? ORDER BY created_at, id")
+    .all(project) as unknown as ThreadRow[];
+  return rows.map(toThread);
 }
 
-function runningSessions(database: DatabaseSync, project: string): Session[] {
+function runningThreads(database: DatabaseSync, project: string): Thread[] {
   const rows = database
-    .prepare("SELECT * FROM sessions WHERE project = ? AND status = 'running'")
-    .all(project) as unknown as SessionRow[];
-  return rows.map(toSession);
+    .prepare("SELECT * FROM threads WHERE project = ? AND status = 'running'")
+    .all(project) as unknown as ThreadRow[];
+  return rows.map(toThread);
 }
 
 function insertAssignment(database: DatabaseSync, assignment: Assignment): void {
   database
     .prepare(
-      "INSERT OR IGNORE INTO assignments (task_id, session_id, role, created_at) VALUES (?, ?, ?, ?)",
+      "INSERT OR IGNORE INTO assignments (task_id, thread_id, role, created_at) VALUES (?, ?, ?, ?)",
     )
-    .run(assignment.taskId, assignment.sessionId, assignment.role, assignment.createdAt);
+    .run(assignment.taskId, assignment.threadId, assignment.role, assignment.createdAt);
 }
 
 function listAssignments(database: DatabaseSync, project: string): Assignment[] {
@@ -157,31 +157,31 @@ function listAssignments(database: DatabaseSync, project: string): Assignment[] 
   return rows.map(toAssignment);
 }
 
-function assignmentsOfSession(database: DatabaseSync, sessionId: string): Assignment[] {
+function assignmentsOfThread(database: DatabaseSync, threadId: string): Assignment[] {
   const rows = database
-    .prepare("SELECT * FROM assignments WHERE session_id = ? ORDER BY created_at, task_id")
-    .all(sessionId) as unknown as AssignmentRow[];
+    .prepare("SELECT * FROM assignments WHERE thread_id = ? ORDER BY created_at, task_id")
+    .all(threadId) as unknown as AssignmentRow[];
   return rows.map(toAssignment);
 }
 
-function deleteAssignmentsOfSession(database: DatabaseSync, sessionId: string): void {
-  database.prepare("DELETE FROM assignments WHERE session_id = ?").run(sessionId);
+function deleteAssignmentsOfThread(database: DatabaseSync, threadId: string): void {
+  database.prepare("DELETE FROM assignments WHERE thread_id = ?").run(threadId);
 }
 
 function assignmentsOfTask(database: DatabaseSync, taskId: string): Assignment[] {
   const rows = database
-    .prepare("SELECT * FROM assignments WHERE task_id = ? ORDER BY created_at, session_id")
+    .prepare("SELECT * FROM assignments WHERE task_id = ? ORDER BY created_at, thread_id")
     .all(taskId) as unknown as AssignmentRow[];
   return rows.map(toAssignment);
 }
 
-function sessionViews(database: DatabaseSync, project: string): SessionView[] {
-  const sessions = listSessions(database, project);
+function threadViews(database: DatabaseSync, project: string): ThreadView[] {
+  const threads = listThreads(database, project);
   const assignments = listAssignments(database, project);
-  return sessions.map((session) =>
-    Object.assign(session, {
+  return threads.map((thread) =>
+    Object.assign(thread, {
       tasks: assignments
-        .filter((assignment) => assignment.sessionId === session.id)
+        .filter((assignment) => assignment.threadId === thread.id)
         .map((assignment) => ({ taskId: assignment.taskId, role: assignment.role })),
     }),
   );
@@ -191,13 +191,13 @@ function insertReport(database: DatabaseSync, report: Report): void {
   db.transaction(database, () => {
     database
       .prepare(
-        `INSERT INTO reports (id, task_id, session_id, role, status, content, created_at)
+        `INSERT INTO reports (id, task_id, thread_id, role, status, content, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         report.id,
         report.taskId,
-        report.sessionId,
+        report.threadId,
         report.role,
         report.status,
         report.content,
@@ -236,37 +236,37 @@ function searchReports(
   if (query === "") return [];
   const rows = database
     .prepare(
-      `SELECT r.*, t.title AS task_title, s.model AS session_model
+      `SELECT r.*, t.title AS task_title, s.model AS thread_model
        FROM reports_fts f
        JOIN reports r ON r.id = f.report_id
        JOIN tasks t ON t.id = r.task_id
-       JOIN sessions s ON s.id = r.session_id
+       JOIN threads s ON s.id = r.thread_id
        WHERE reports_fts MATCH ? AND t.project = ?
        ORDER BY bm25(reports_fts) LIMIT ?`,
     )
     .all(query, project, limit) as unknown as (ReportRow & {
     task_title: string;
-    session_model: string;
+    thread_model: string;
   })[];
   return rows.map((row) => ({
     report: toReport(row),
     taskTitle: row.task_title,
-    sessionModel: row.session_model,
+    threadModel: row.thread_model,
   }));
 }
 
-export const sessionStore = {
-  insertSession,
-  getSession,
-  updateSession,
-  listSessions,
-  runningSessions,
+export const threadStore = {
+  insertThread,
+  getThread,
+  updateThread,
+  listThreads,
+  runningThreads,
   insertAssignment,
   listAssignments,
-  assignmentsOfSession,
+  assignmentsOfThread,
   assignmentsOfTask,
-  deleteAssignmentsOfSession,
-  sessionViews,
+  deleteAssignmentsOfThread,
+  threadViews,
   insertReport,
   reportsOfTask,
   listReports,
