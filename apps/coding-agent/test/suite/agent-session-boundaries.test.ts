@@ -531,6 +531,7 @@ describe("AgentSession actionable boundaries", () => {
     const harness = await createHarness({
       models: [{ id: "faux-1", contextWindow: 10_000, maxTokens: 100 }],
       settings: { compaction: { enabled: true, keepRecentTokens: 1, reserveTokens: 300 } },
+      initialActiveToolNames: ["read"],
       extensionFactories: [
         (msa) => {
           msa.on("message_end", (event) => {
@@ -568,6 +569,7 @@ describe("AgentSession actionable boundaries", () => {
     const harness = await createHarness({
       models: [{ id: "faux-1", contextWindow: 5_000, maxTokens: 100 }],
       settings: { compaction: { enabled: true, keepRecentTokens: 1, reserveTokens: 0 } },
+      initialActiveToolNames: ["read"],
       extensionFactories: [
         (msa) => {
           msa.on("message_end", (event) => {

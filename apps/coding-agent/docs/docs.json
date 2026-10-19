@@ -40,6 +40,10 @@
               "path": "memory.md"
             },
             {
+              "title": "Watch Pull Requests",
+              "path": "pr-watch.md"
+            },
+            {
               "title": "Run msa Safely",
               "path": "security.md"
             },

@@ -92,6 +92,7 @@ describe("regression #3592: no-builtin-tools keeps extension tools enabled", () 
       "ls",
       "memory",
       "powershell",
+      "pr_watch",
       "read",
       "write",
     ]);

@@ -98,6 +98,7 @@ export const DEFAULT_TOOL_NAMES: readonly string[] = [
   "edit",
   "write",
   "memory",
+  "pr_watch",
   "web_search",
   "web_fetch",
 ];
@@ -1431,6 +1432,26 @@ export class SettingsManager {
             : defaults.recall.minScore,
       },
     };
+  }
+
+  /** Seconds between checks of a watched pull request, as milliseconds. */
+  getPrWatchIntervalMs(): number {
+    const seconds = this.settings.prWatch?.intervalSeconds;
+    const value =
+      typeof seconds === "number" && Number.isFinite(seconds) && seconds >= 5
+        ? seconds
+        : SETTINGS_DEFAULTS.prWatch.intervalSeconds;
+    return Math.round(value * 1000);
+  }
+
+  /** Seconds without a change before a watch reports its status, as milliseconds. */
+  getPrWatchStatusIntervalMs(): number {
+    const seconds = this.settings.prWatch?.statusIntervalSeconds;
+    const value =
+      typeof seconds === "number" && Number.isFinite(seconds) && seconds >= 30
+        ? seconds
+        : SETTINGS_DEFAULTS.prWatch.statusIntervalSeconds;
+    return Math.round(value * 1000);
   }
 
   getEnabledModels(): string[] | undefined {

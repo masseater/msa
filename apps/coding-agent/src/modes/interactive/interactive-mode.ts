@@ -3070,6 +3070,11 @@ export class InteractiveMode {
         this.ui.requestRender();
         break;
 
+      case "pr_watch_changed":
+        this.footer.invalidate();
+        this.ui.requestRender();
+        break;
+
       case "goal_status": {
         const goal = event.goal;
         const now = Date.now();

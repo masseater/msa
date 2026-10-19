@@ -117,7 +117,7 @@ See [Settings](settings.md#tools) for configuring the default tool selection.
 - `--orchestrator`<br>
   Adds the orchestrator tools (`create_task`, `list_tasks`, `read_task`, `add_dependency`, `remove_dependency`, `set_task_priority`, `set_task_model`, `send_message`, `send_note`, `search_reports`, `stop_task`, `rerun_task`, `set_max_concurrent_sessions`). Tasks declare their dependencies and the paths they touch; the scheduler starts them within the path and concurrency limits, assigns a separate reviewer session after each worker, and closes each round with a review task. Tasks, sessions, reports, and shared notes live in SQLite (`orchestrator.database`, default `<agent dir>/orchestrator.db`); `/sessions` opens the DAG.
 
-Default enabled tools are `read`, `bash`, `edit`, and `write`, unless `defaultTools` changes them. `--tools` with plain names replaces the whole selection, so name every tool you want. Like `defaultTools`, it also accepts a list of only `+name` and `-name` entries, which adds tools to or removes them from the default selection: `msa --tools +codemode,-write` keeps the other default tools, enables `codemode`, and disables `write`. These entries take exact tool names, not `*` patterns; use `--exclude-tools` to disable tools by pattern. Plain names and `+name`/`-name` entries cannot be mixed. `/reload` enables tools newly added to `defaultTools`, but a tool removed with `-name` stays removed.
+Default enabled tools are `read`, `bash`, `edit`, `write`, `memory`, and `pr_watch`, unless `defaultTools` changes them. `--tools` with plain names replaces the whole selection, so name every tool you want. Like `defaultTools`, it also accepts a list of only `+name` and `-name` entries, which adds tools to or removes them from the default selection: `msa --tools +codemode,-write` keeps the other default tools, enables `codemode`, and disables `write`. These entries take exact tool names, not `*` patterns; use `--exclude-tools` to disable tools by pattern. Plain names and `+name`/`-name` entries cannot be mixed. `/reload` enables tools newly added to `defaultTools`, but a tool removed with `-name` stays removed.
 
 `--tools` selects the tools declared to the model. It does not remove MCP tools, whose reach is set by their [exposure](mcp.md#control-tool-exposure): `msa --tools read,codemode` keeps every MCP tool callable from codemode scripts. An MCP tool that no entry names or matches is never declared directly, whatever its exposure; only `tool_search`, if listed, can load it. Once an entry starts with `mcp__`, `--tools` filters MCP tools too, so this keeps only the tools of the `github` server:
 
@@ -127,16 +127,18 @@ msa --tools read,bash,codemode,'mcp__github__*'
 
 The MCP resource tools (`list_mcp_resources`, `list_mcp_resource_templates`, `read_mcp_resource`) count as MCP tools. To remove MCP tools, use `--exclude-tools 'mcp__*'` or [`--no-mcp`](#resources).
 
-| Built-in     | Purpose                                           |
-| ------------ | ------------------------------------------------- |
-| `read`       | Read text files and supported images              |
-| `bash`       | Run shell commands                                |
-| `powershell` | Run PowerShell commands on Windows                |
-| `edit`       | Apply exact text replacements to an existing file |
-| `write`      | Create or overwrite a file                        |
-| `grep`       | Search file contents                              |
-| `find`       | Find paths using glob patterns                    |
-| `ls`         | List directory contents                           |
+| Built-in     | Purpose                                                       |
+| ------------ | ------------------------------------------------------------- |
+| `read`       | Read text files and supported images                          |
+| `bash`       | Run shell commands                                            |
+| `powershell` | Run PowerShell commands on Windows                            |
+| `edit`       | Apply exact text replacements to an existing file             |
+| `write`      | Create or overwrite a file                                    |
+| `grep`       | Search file contents                                          |
+| `find`       | Find paths using glob patterns                                |
+| `ls`         | List directory contents                                       |
+| `memory`     | Save, search, list, and forget long-term memories             |
+| `pr_watch`   | Watch a pull request and report CI, review, and merge changes |
 
 Built-in extensions add two more tools. They are off by default; the MCP extension turns them on when an MCP server needs them (see [MCP](mcp.md#control-tool-exposure)). To enable them yourself, name them in `--tools` or `defaultTools`.
 
@@ -155,7 +157,7 @@ To turn on `codemode` for every session, add it to the default tools in `~/.msa/
 }
 ```
 
-This keeps `read`, `bash`, `edit`, and `write` and adds `codemode`. For one invocation, add it with `--tools`:
+This keeps the default tools and adds `codemode`. For one invocation, add it with `--tools`:
 
 ```sh
 msa --tools +codemode

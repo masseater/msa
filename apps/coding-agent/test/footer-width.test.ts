@@ -90,6 +90,7 @@ function createSession(options: {
       getCwd: () => "/tmp/project",
     },
     getContextUsage: () => ({ contextWindow: 200_000, percent: 12.3 }),
+    prWatch: { entries: [], last: undefined },
     routedModel: options.routedModel,
     modelRuntime: {
       isUsingSubscription: () => options.usingSubscription ?? false,
