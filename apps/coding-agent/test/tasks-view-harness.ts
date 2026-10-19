@@ -38,6 +38,8 @@ function task(id: string, patch: Partial<TaskSnapshot> = {}): TaskSnapshot {
     assignments: [],
     reports: [],
     waitingReason: null,
+    handoff: null,
+    replan: null,
     ...patch,
   };
 }
@@ -88,7 +90,12 @@ export const TASKS = [
       },
     ],
   }),
-  task("d", { status: "stopped", title: "stopped-work" }),
+  task("d", {
+    status: "stopped",
+    title: "stopped-work",
+    handoff: "branch feat/d · commit abc123\ntwo checks still failing",
+    replan: { id: "rp-1", reason: "the api moved to v3", role: "stopped" },
+  }),
   task("rev-main", {
     kind: "review",
     title: "Review of main",
@@ -114,6 +121,19 @@ export function setup(options: { initialId?: string; state?: TasksViewState } = 
     sessions: SESSIONS,
     rounds: [
       { id: "main", title: "main", reviewTaskId: "rev-main", taskIds: TASKS.map((t) => t.id) },
+    ],
+    replans: [
+      {
+        id: "rp-1",
+        reason: "the api moved to v3",
+        createdAt: 1,
+        undoneAt: null,
+        stopped: [{ taskId: "d", title: "stopped-work", sessionId: "s-worker", memo: "memo d" }],
+        created: [{ taskId: "a", title: "a", from: ["d"] }],
+        dropped: [],
+        kept: ["b"],
+        rewired: [],
+      },
     ],
     maxConcurrentSessions: 4,
   };

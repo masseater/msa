@@ -87,6 +87,16 @@ CREATE TABLE IF NOT EXISTS orchestrator_state (
   project TEXT PRIMARY KEY,
   max_concurrent_sessions INTEGER
 );
+CREATE TABLE IF NOT EXISTS replans (
+  id TEXT PRIMARY KEY,
+  project TEXT NOT NULL,
+  reason TEXT NOT NULL,
+  before_state TEXT NOT NULL,
+  after_state TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  undone_at INTEGER
+);
+CREATE INDEX IF NOT EXISTS replans_project ON replans(project, created_at);
 `;
 
 function openDatabase(path: string): DatabaseSync {
@@ -98,7 +108,11 @@ function openDatabase(path: string): DatabaseSync {
   return database;
 }
 
+const depths = new WeakMap<DatabaseSync, number>();
+
 function transaction<T>(database: DatabaseSync, body: () => T): T {
+  if ((depths.get(database) ?? 0) > 0) return body();
+  depths.set(database, 1);
   database.exec("BEGIN IMMEDIATE");
   try {
     const result = body();
@@ -107,6 +121,8 @@ function transaction<T>(database: DatabaseSync, body: () => T): T {
   } catch (error) {
     database.exec("ROLLBACK");
     throw error;
+  } finally {
+    depths.set(database, 0);
   }
 }
 

@@ -1,4 +1,4 @@
-import type { Note, Report, Task, TaskView } from "./types.ts";
+import type { Note, ReplanResult, ReplanUndoResult, Report, Task, TaskView } from "./types.ts";
 
 const REPORT_LIMIT = 6000;
 
@@ -138,6 +138,67 @@ function formatTaskDetail(task: TaskView, sessions: readonly string[]): string {
   ].join("\n\n");
 }
 
+function memoFirstLine(memo: string): string {
+  const line = memo.split("\n").find((candidate) => candidate.trim() !== "");
+  return line?.trim() ?? "(no memo)";
+}
+
+function formatReplan(result: ReplanResult): string {
+  if (result.aborted !== null) {
+    return `Replan aborted: ${result.aborted}. No task was created, dropped, or rewired.`;
+  }
+  const lines = [`Replanned ${result.replanId}.`];
+  if (result.stopped.length > 0) {
+    lines.push(
+      `Stopped:\n${result.stopped
+        .map((item) => `- ${item.taskId} ${item.title}: ${memoFirstLine(item.memo)}`)
+        .join("\n")}`,
+    );
+  }
+  if (result.dropped.length > 0) {
+    lines.push(
+      `Dropped:\n${result.dropped
+        .map((item) => `- ${item.taskId} ${item.title}: ${item.reason}`)
+        .join("\n")}`,
+    );
+  }
+  if (result.created.length > 0) {
+    lines.push(
+      `Created:\n${result.created
+        .map(
+          (item) =>
+            `- ${item.taskId} ${item.title}${item.from.length > 0 ? ` from ${item.from.join(", ")}` : ""}`,
+        )
+        .join("\n")}`,
+    );
+  }
+  if (result.kept.length > 0) lines.push(`Kept: ${result.kept.join(", ")}.`);
+  if (result.rewired.length > 0) {
+    lines.push(
+      `Rewired: ${result.rewired
+        .map((item) => `${item.taskId} depends on ${item.dependsOn.join(", ") || "-"}`)
+        .join("; ")}.`,
+    );
+  }
+  lines.push(
+    result.started.length > 0 ? `Started: ${result.started.join(", ")}.` : "Nothing started.",
+  );
+  return lines.join("\n");
+}
+
+function formatReplanUndo(result: ReplanUndoResult): string {
+  return [
+    `Undid replan ${result.replanId}: ${result.reason}.`,
+    `Restored ${result.restoredTasks.length} tasks, deleted ${result.deletedTasks.join(", ") || "none"}.`,
+    result.stoppedSessions.length > 0
+      ? `Stopped sessions: ${result.stoppedSessions.join(", ")}.`
+      : undefined,
+    result.started.length > 0 ? `Started: ${result.started.join(", ")}.` : "Nothing started.",
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
 export const prompts = {
   notesBlock,
   dependencyBlock,
@@ -148,4 +209,6 @@ export const prompts = {
   taskHeading,
   formatTaskList,
   formatTaskDetail,
+  formatReplan,
+  formatReplanUndo,
 };

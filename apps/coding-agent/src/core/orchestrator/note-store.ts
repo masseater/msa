@@ -95,10 +95,17 @@ function noteRead(database: DatabaseSync, noteId: string, sessionId: string): bo
   return row !== undefined;
 }
 
+function deleteNote(database: DatabaseSync, noteId: string): void {
+  database.prepare("DELETE FROM note_reads WHERE note_id = ?").run(noteId);
+  database.prepare("DELETE FROM note_targets WHERE note_id = ?").run(noteId);
+  database.prepare("DELETE FROM notes WHERE id = ?").run(noteId);
+}
+
 export const noteStore = {
   insertNote,
   listNotes,
   unreadNotes,
   markNoteRead,
   noteRead,
+  deleteNote,
 };

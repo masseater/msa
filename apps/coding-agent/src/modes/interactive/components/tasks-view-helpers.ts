@@ -5,7 +5,7 @@ import { Text } from "@msa/tui";
 import type { MessageRenderer } from "../../../core/extensions/types.ts";
 import type { Orchestrator, OrchestratorReport } from "../../../core/orchestrator/orchestrator.ts";
 import { firstLine } from "../../../core/orchestrator/text.ts";
-import type { TaskSnapshot, TaskStatus } from "../../../core/orchestrator/types.ts";
+import type { ReplanView, TaskSnapshot, TaskStatus } from "../../../core/orchestrator/types.ts";
 import { formatToolCallWithArgs } from "../../../core/tools/render-utils.ts";
 import { theme } from "../theme/theme.ts";
 
@@ -94,6 +94,17 @@ function roundTasks(tasks: readonly TaskSnapshot[], round: string): TaskSnapshot
   );
 }
 
+function describeReplan(replan: ReplanView): string {
+  const counts = [
+    replan.stopped.length > 0 ? `${replan.stopped.length} stopped` : undefined,
+    replan.created.length > 0 ? `${replan.created.length} created` : undefined,
+    replan.dropped.length > 0 ? `${replan.dropped.length} dropped` : undefined,
+    replan.kept.length > 0 ? `${replan.kept.length} kept` : undefined,
+    replan.undoneAt === null ? undefined : "undone",
+  ].filter(Boolean);
+  return `↺ ${replan.reason}  ${counts.join(" · ")}`;
+}
+
 function describeTaskCounts(tasks: readonly TaskSnapshot[]): string | undefined {
   if (tasks.length === 0) return undefined;
   const count = (status: TaskStatus) => tasks.filter((task) => task.status === status).length;
@@ -145,6 +156,7 @@ export const viewHelpers = {
   activityLines,
   depthOf,
   roundTasks,
+  describeReplan,
   describeTaskCounts,
   createTasksViewState,
 };

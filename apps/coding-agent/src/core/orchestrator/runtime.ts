@@ -3,6 +3,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { DateTime, Effect } from "effect";
 
 import type { OrchestratorOptions, WorkerSession } from "./worker.ts";
+import type { WrapUp } from "./wrap-up.ts";
 
 export interface Runtime {
   database: DatabaseSync;
@@ -10,6 +11,8 @@ export interface Runtime {
   workers: Map<string, WorkerSession>;
   runs: Map<string, number>;
   runStartedAt: Map<string, number>;
+  wrapUps: Map<string, WrapUp>;
+  replanning: boolean;
   maxConcurrentSessions: number;
   nextRun(): number;
   exclusive<A>(effect: Effect.Effect<A, unknown>): Promise<A>;
