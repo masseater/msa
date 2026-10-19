@@ -2,22 +2,72 @@ import { Clock, Duration, Effect, Fiber } from "effect";
 import { TestClock } from "effect/testing";
 import { describe, expect, it } from "vite-plus/test";
 
-import { PrWatchGhError } from "../src/core/pr-watch/gh.ts";
+import { PrWatchGhError, type PrWatchGh } from "../src/core/pr-watch/gh.ts";
+import type { PrSnapshot } from "../src/core/pr-watch/snapshot.ts";
 import {
   createPrWatchEntry,
   type PrNotification,
   type PrWatchEntry,
   prWatchLoop,
 } from "../src/core/pr-watch/watch.ts";
-import {
-  createHost,
-  INTERVAL_MS,
-  pendingChecks,
-  scriptedGh,
-  type ScriptedGh,
-  snapshotOf,
-  STATUS_INTERVAL_MS,
-} from "./pr-watch-support.ts";
+
+const INTERVAL_MS = 45_000;
+const STATUS_INTERVAL_MS = 300_000;
+
+const snapshotOf = (overrides: Partial<PrSnapshot> = {}): PrSnapshot => ({
+  state: "OPEN",
+  mergeable: "MERGEABLE",
+  mergeStateStatus: "CLEAN",
+  reviewDecision: "REVIEW_REQUIRED",
+  updatedAt: "2024-05-01T00:00:00Z",
+  comments: 0,
+  checks: { total: 2, passed: 0, failed: 0, pending: 2, pendingNames: ["verify"] },
+  baseRefName: "main",
+  headRefOid: "head-oid",
+  behindBy: undefined,
+  ...overrides,
+});
+
+const pendingChecks = snapshotOf();
+
+const finishedChecks = snapshotOf({
+  checks: { total: 3, passed: 2, failed: 1, pending: 0, pendingNames: [] },
+});
+
+const passedChecks = snapshotOf({
+  checks: { total: 2, passed: 2, failed: 0, pending: 0, pendingNames: [] },
+});
+
+interface ScriptedGh {
+  readonly gh: PrWatchGh;
+  readonly calls: { count: number };
+  readonly behindCalls: { count: number };
+}
+
+const scriptedGh = (
+  steps: ReadonlyArray<PrSnapshot | PrWatchGhError>,
+  behindBy?: number,
+): ScriptedGh => {
+  const calls = { count: 0 };
+  const behindCalls = { count: 0 };
+  return {
+    calls,
+    behindCalls,
+    gh: {
+      view: () => {
+        const step = steps[Math.min(calls.count, steps.length - 1)]!;
+        calls.count += 1;
+        return step instanceof PrWatchGhError ? Effect.fail(step) : Effect.succeed(step);
+      },
+      behind: () => {
+        behindCalls.count += 1;
+        return behindBy === undefined
+          ? Effect.fail(new PrWatchGhError({ kind: "other", message: "no compare" }))
+          : Effect.succeed(behindBy);
+      },
+    },
+  };
+};
 
 interface RunResult {
   readonly entry: PrWatchEntry;
@@ -28,16 +78,25 @@ interface RunResult {
 }
 
 const runPolls = async (script: ScriptedGh, advances: readonly number[]): Promise<RunResult> => {
-  const host = createHost();
+  const notifications: PrNotification[] = [];
+  const changes = { count: 0 };
   const entry = createPrWatchEntry({ number: 12 }, INTERVAL_MS, STATUS_INTERVAL_MS);
   await Effect.runPromise(
     Effect.scoped(
       Effect.gen(function* () {
         const clock = yield* TestClock.make();
-        const fiber = yield* prWatchLoop({ gh: script.gh, entry, host: host.host }).pipe(
-          Effect.provideService(Clock.Clock, clock),
-          Effect.forkChild,
-        );
+        const fiber = yield* prWatchLoop({
+          gh: script.gh,
+          entry,
+          host: {
+            notify: (notification) => {
+              notifications.push(notification);
+            },
+            changed: () => {
+              changes.count += 1;
+            },
+          },
+        }).pipe(Effect.provideService(Clock.Clock, clock), Effect.forkChild);
         yield* Effect.yieldNow;
         for (const advance of advances) {
           yield* clock.adjust(Duration.millis(advance));
@@ -49,8 +108,8 @@ const runPolls = async (script: ScriptedGh, advances: readonly number[]): Promis
   );
   return {
     entry,
-    notifications: host.notifications,
-    changes: host.changes.count,
+    notifications,
+    changes: changes.count,
     calls: script.calls.count,
     behindCalls: script.behindCalls.count,
   };
@@ -58,14 +117,6 @@ const runPolls = async (script: ScriptedGh, advances: readonly number[]): Promis
 
 const seen = (result: RunResult) =>
   result.notifications.map(({ label, text }) => ({ label, text }));
-
-const finishedChecks = snapshotOf({
-  checks: { total: 3, passed: 2, failed: 1, pending: 0, pendingNames: [] },
-});
-
-const passedChecks = snapshotOf({
-  checks: { total: 2, passed: 2, failed: 0, pending: 0, pendingNames: [] },
-});
 
 describe("pull request watch loop", () => {
   it("treats the first read as the baseline and reports nothing", async () => {

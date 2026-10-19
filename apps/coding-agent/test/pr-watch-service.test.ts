@@ -1,30 +1,85 @@
+import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { PrWatchGhError } from "../src/core/pr-watch/gh.ts";
+import { PrWatchGhError, type PrWatchGh } from "../src/core/pr-watch/gh.ts";
 import { PrWatch } from "../src/core/pr-watch/service.ts";
+import type { PrSnapshot } from "../src/core/pr-watch/snapshot.ts";
 import { describePrWatchIndicator } from "../src/core/pr-watch/summary.ts";
-import {
-  createHost,
-  type HostLog,
-  neverGh,
-  pendingChecks,
-  scriptedGh,
-  sleep,
-  snapshotOf,
-  STATUS_INTERVAL_MS,
-  waitFor,
-} from "./pr-watch-support.ts";
+import type { PrNotification, PrWatchHost } from "../src/core/pr-watch/watch.ts";
 
 const TICK_MS = 20;
+const STATUS_INTERVAL_MS = 300_000;
+
+const snapshotOf = (overrides: Partial<PrSnapshot> = {}): PrSnapshot => ({
+  state: "OPEN",
+  mergeable: "MERGEABLE",
+  mergeStateStatus: "CLEAN",
+  reviewDecision: "REVIEW_REQUIRED",
+  updatedAt: "2024-05-01T00:00:00Z",
+  comments: 0,
+  checks: { total: 2, passed: 0, failed: 0, pending: 2, pendingNames: ["verify"] },
+  baseRefName: "main",
+  headRefOid: "head-oid",
+  behindBy: undefined,
+  ...overrides,
+});
+
+const pendingChecks = snapshotOf();
+
+interface ScriptedGh {
+  readonly gh: PrWatchGh;
+  readonly calls: { count: number };
+}
+
+const scriptedGh = (steps: ReadonlyArray<PrSnapshot | PrWatchGhError>): ScriptedGh => {
+  const calls = { count: 0 };
+  return {
+    calls,
+    gh: {
+      view: () => {
+        const step = steps[Math.min(calls.count, steps.length - 1)]!;
+        calls.count += 1;
+        return step instanceof PrWatchGhError ? Effect.fail(step) : Effect.succeed(step);
+      },
+      behind: () => Effect.succeed(0),
+    },
+  };
+};
+
+const neverGh: PrWatchGh = { view: () => Effect.never, behind: () => Effect.never };
+
+interface HostLog {
+  readonly host: PrWatchHost;
+  readonly notifications: PrNotification[];
+}
+
+const createHost = (): HostLog => {
+  const notifications: PrNotification[] = [];
+  return {
+    notifications,
+    host: {
+      notify: (notification) => {
+        notifications.push(notification);
+      },
+      changed: () => undefined,
+    },
+  };
+};
+
+const waitFor = async (predicate: () => boolean, timeoutMs = 3000): Promise<void> => {
+  const deadline = Date.now() + timeoutMs;
+  while (!predicate()) {
+    if (Date.now() > deadline) throw new Error("waitFor timed out");
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+};
+
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
 const findEntry = (service: PrWatch, number: number) =>
   service.snapshot().entries.find((entry) => entry.key === `#${number}`);
 
-const createService = (
-  gh: ReturnType<typeof scriptedGh>["gh"],
-  host: HostLog,
-  intervalMs = TICK_MS,
-): PrWatch =>
+const createService = (gh: PrWatchGh, host: HostLog, intervalMs = TICK_MS): PrWatch =>
   new PrWatch({
     gh,
     host: host.host,
@@ -134,6 +189,24 @@ describe("pull request watches", () => {
     }
   });
 
+  it("shows a base move in the footer line", async () => {
+    const behind = snapshotOf({ mergeStateStatus: "BEHIND" });
+    const gh: PrWatchGh = {
+      view: () => Effect.succeed(behind),
+      behind: () => Effect.succeed(3),
+    };
+    const host = createHost();
+    const service = createService(gh, host);
+    try {
+      service.watch({ number: 12 });
+      await waitFor(() => findEntry(service, 12)?.snapshot?.behindBy === 3);
+
+      expect(describePrWatchIndicator(service.snapshot())).toBe("PR #12 base 3 behind");
+    } finally {
+      await service.dispose();
+    }
+  });
+
   it("shows a broken read as a gh error in the footer line", async () => {
     const missing = new PrWatchGhError({ kind: "missing", message: "gh is not on PATH" });
     const script = scriptedGh([missing]);
@@ -153,7 +226,7 @@ describe("pull request watches", () => {
 
   it("does not wait for the first read", async () => {
     const host = createHost();
-    const service = createService(neverGh(), host);
+    const service = createService(neverGh, host);
     try {
       const outcome = service.watch({ number: 12 });
 
