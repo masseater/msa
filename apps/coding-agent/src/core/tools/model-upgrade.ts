@@ -203,10 +203,10 @@ function* executePart1(
   replacements: Map<string, string>,
   lines: string[],
 ) {
-  const written = target.settingsManager.rewriteModelReferences((layer) =>
+  const written = target.settingsManager.models.rewriteModelReferences((layer) =>
     rewriteModelReferencesInSettings(layer, replacements),
   );
-  yield* awaited(target.settingsManager.flush());
+  yield* awaited(target.settingsManager.persistence.flush());
   const count = written.global.length + written.project.length;
   lines.push(
     count === 0 ? "No setting changed." : `Wrote ${count} setting${count === 1 ? "" : "s"}.`,

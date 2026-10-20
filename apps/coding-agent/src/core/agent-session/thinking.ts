@@ -33,7 +33,7 @@ export default class SessionThinking {
       return explicitLevel;
     }
     if (targetModel !== undefined) {
-      const perModel = this.session.settingsManager.getModelThinkingLevel(
+      const perModel = this.session.settingsManager.models.getModelThinkingLevel(
         targetModel.provider,
         targetModel.id,
       );
@@ -42,7 +42,7 @@ export default class SessionThinking {
       }
     }
     return (
-      this.session.settingsManager.getDefaultThinkingLevel() ??
+      this.session.settingsManager.models.getDefaultThinkingLevel() ??
       this.session.thinkingLevel ??
       DEFAULT_THINKING_LEVEL
     );
@@ -72,7 +72,7 @@ export default class SessionThinking {
     this.session.agent.state.thinkingLevel = effectiveLevel;
 
     if (options.persist === true) {
-      this.session.settingsManager.setDefaultThinkingLevel(level);
+      this.session.settingsManager.models.setDefaultThinkingLevel(level);
     }
 
     if (isChanging) {

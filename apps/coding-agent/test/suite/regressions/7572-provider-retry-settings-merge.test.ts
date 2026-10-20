@@ -27,7 +27,7 @@ const preservesGlobalProviderSettingsNotOverridden = () => {
 
   const settingsManager = SettingsManager.fromStorage(storage);
 
-  expect(settingsManager.getProviderRetrySettings()).toEqual({
+  expect(settingsManager.session.getProviderRetrySettings()).toEqual({
     maxRetries: 2,
     maxRetryDelayMs: 45000,
     timeoutMs: 30000,

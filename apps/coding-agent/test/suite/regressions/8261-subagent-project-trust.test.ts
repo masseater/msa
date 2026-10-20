@@ -70,7 +70,7 @@ function runProjectAgent(
 
       try {
         yield* writeProjectAgent(harness.tempDir);
-        harness.settingsManager.setProjectTrusted(options.trusted);
+        harness.settingsManager.persistence.setProjectTrusted(options.trusted);
 
         yield* Effect.promise(() =>
           harness.session.extensions.binding.bindExtensions({

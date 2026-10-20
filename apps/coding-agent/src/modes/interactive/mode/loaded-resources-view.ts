@@ -25,7 +25,7 @@ export default class LoadedResourcesView {
 
   getStartupVisibility(): { header: boolean; details: boolean } {
     return getStartupVisibility(
-      this.mode.settingsManager.getQuietStartup(),
+      this.mode.settingsManager.display.getQuietStartup(),
       this.mode.options.verbose === true,
     );
   }

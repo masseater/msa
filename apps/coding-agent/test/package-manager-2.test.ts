@@ -41,7 +41,7 @@ const shouldAutoDiscoverProjectPromptsWithOverrides = () =>
       const promptPath = joinPath(promptsDir, "is.md");
       yield* writeTextFile(promptPath, "Is prompt");
 
-      settingsManager.setProjectPromptTemplatePaths(["!prompts/is.md"]);
+      settingsManager.resources.setProjectPromptTemplatePaths(["!prompts/is.md"]);
 
       const result = yield* awaited(packageManager.resolution.resolve());
       expect(result.prompts.some((r) => r.path === promptPath && !r.enabled)).toBe(true);
@@ -72,7 +72,7 @@ const shouldResolveDirectoryWithPackageJsonMsa = () =>
       );
       yield* writeTextFile(joinPath(pkgDir, "extensions", "helper.ts"), "export const x = 1;");
 
-      settingsManager.setExtensionPaths([pkgDir]);
+      settingsManager.resources.setExtensionPaths([pkgDir]);
 
       const result = yield* awaited(packageManager.resolution.resolve());
 

@@ -22,7 +22,7 @@ export default class ChatMessages {
 
   private readonly mermaidMarkdownTransformer: extensionsTypes.MarkdownTransformer =
     createMermaidMarkdownTransformer({
-      getMode: () => this.mode.settingsManager.getMermaidRenderingMode(),
+      getMode: () => this.mode.settingsManager.display.getMermaidRenderingMode(),
       theme,
     });
 
@@ -36,7 +36,7 @@ export default class ChatMessages {
   getMarkdownThemeWithSettings(): tuiTypes.MarkdownTheme {
     return {
       ...getMarkdownTheme(),
-      codeBlockIndent: this.mode.settingsManager.getCodeBlockIndent(),
+      codeBlockIndent: this.mode.settingsManager.display.getCodeBlockIndent(),
     };
   }
 

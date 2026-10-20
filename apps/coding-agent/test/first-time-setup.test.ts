@@ -94,37 +94,37 @@ describe("shouldRunFirstTimeSetup", () => {
 const defaultsToDisabledWithNoTrackingIdentifier = () => {
   const manager = SettingsManager.inMemory();
 
-  expect(manager.getEnableAnalytics()).toBe(false);
-  expect(manager.getTrackingId()).toBeUndefined();
+  expect(manager.telemetry.getEnableAnalytics()).toBe(false);
+  expect(manager.telemetry.getTrackingId()).toBeUndefined();
 };
 
 const generatesATrackingIdentifierOnOptIn = () => {
   const manager = SettingsManager.inMemory();
 
-  manager.setEnableAnalytics(true);
+  manager.telemetry.setEnableAnalytics(true);
 
-  expect(manager.getEnableAnalytics()).toBe(true);
-  expect(manager.getTrackingId()).toMatch(/^[0-9a-f-]{36}$/u);
+  expect(manager.telemetry.getEnableAnalytics()).toBe(true);
+  expect(manager.telemetry.getTrackingId()).toMatch(/^[0-9a-f-]{36}$/u);
 };
 
 const doesNotGenerateATrackingIdentifierOn = () => {
   const manager = SettingsManager.inMemory();
 
-  manager.setEnableAnalytics(false);
+  manager.telemetry.setEnableAnalytics(false);
 
-  expect(manager.getEnableAnalytics()).toBe(false);
-  expect(manager.getTrackingId()).toBeUndefined();
+  expect(manager.telemetry.getEnableAnalytics()).toBe(false);
+  expect(manager.telemetry.getTrackingId()).toBeUndefined();
 };
 
 const keepsTheTrackingIdentifierWhenTogglingAnalytics = () => {
   const manager = SettingsManager.inMemory();
 
-  manager.setEnableAnalytics(true);
-  const trackingId = manager.getTrackingId();
-  manager.setEnableAnalytics(false);
-  manager.setEnableAnalytics(true);
+  manager.telemetry.setEnableAnalytics(true);
+  const trackingId = manager.telemetry.getTrackingId();
+  manager.telemetry.setEnableAnalytics(false);
+  manager.telemetry.setEnableAnalytics(true);
 
-  expect(manager.getTrackingId()).toBe(trackingId);
+  expect(manager.telemetry.getTrackingId()).toBe(trackingId);
 };
 
 describe("analytics settings", () => {

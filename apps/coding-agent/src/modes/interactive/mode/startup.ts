@@ -87,7 +87,7 @@ export default class ModeStartup {
       editor: this.mode.layout.editorContainer,
       footer: this.mode.layout.footerContainer,
       pendingMessages: this.mode.layout.pendingMessagesContainer,
-      scrollbar: this.mode.settingsManager.getFullscreenScrollbar(),
+      scrollbar: this.mode.settingsManager.terminal.getFullscreenScrollbar(),
       scrollbarThumbStyle: (text) => theme.fg("scrollbarThumb", text),
       scrollbarTrackStyle: (text) => theme.fg("scrollbarTrack", text),
       status: this.mode.layout.statusContainer,

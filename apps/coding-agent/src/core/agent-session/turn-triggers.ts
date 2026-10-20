@@ -34,7 +34,7 @@ export default class SessionTurnTriggers {
       for (const image of images) {
         const processed = yield* awaited(
           processImage(Buffer.from(image.data, "base64"), image.mimeType, {
-            autoResizeImages: this.session.settingsManager.getImageAutoResize(),
+            autoResizeImages: this.session.settingsManager.display.getImageAutoResize(),
             resizeOptions: this.session.models.selection.limitsModel()?.inputLimits?.images?.resize,
           }),
         );

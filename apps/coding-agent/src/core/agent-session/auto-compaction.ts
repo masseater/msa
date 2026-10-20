@@ -26,11 +26,11 @@ export default class SessionAutoCompaction {
   autoCompactionAbortController: AbortController | undefined = undefined;
 
   setAutoCompactionEnabled(enabled: boolean): void {
-    this.session.settingsManager.setCompactionEnabled(enabled);
+    this.session.settingsManager.context.setCompactionEnabled(enabled);
   }
 
   get autoCompactionEnabled(): boolean {
-    return this.session.settingsManager.getCompactionEnabled();
+    return this.session.settingsManager.context.getCompactionEnabled();
   }
 
   private reportAutoCompactionFailure(
@@ -74,7 +74,7 @@ export default class SessionAutoCompaction {
     return shouldCompact(
       estimateProjectedContextTokens(projection, this.session.sessionManager.getBranch()).tokens,
       model.contextWindow,
-      this.session.settingsManager.getCompactionSettings(this.session.model),
+      this.session.settingsManager.context.getCompactionSettings(this.session.model),
     );
   }
 
@@ -82,7 +82,7 @@ export default class SessionAutoCompaction {
     return Effect.runPromise(
       awaitingWith(function* () {
         const model = this.session.model;
-        const settings = this.session.settingsManager.getCompactionSettings(model);
+        const settings = this.session.settingsManager.context.getCompactionSettings(model);
         const outcome = { cancelledByExtension: false, fromExtension: false };
         let abortController: AbortController | undefined;
         try {
@@ -153,7 +153,9 @@ export default class SessionAutoCompaction {
   ): Promise<boolean> {
     return Effect.runPromise(
       awaitingWith(function* () {
-        const settings = this.session.settingsManager.getCompactionSettings(this.session.model);
+        const settings = this.session.settingsManager.context.getCompactionSettings(
+          this.session.model,
+        );
         if (!settings.enabled) return false;
         if (skipAbortedCheck && assistantMessage.stopReason === "aborted") return false;
         const branch = this.session.sessionManager.getBranch();

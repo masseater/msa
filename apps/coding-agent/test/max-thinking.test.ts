@@ -32,9 +32,9 @@ const isAcceptedByCliAndSettings = () =>
       expect(isValidThinkingLevel("max")).toBe(true);
 
       const settings = SettingsManager.inMemory();
-      settings.setDefaultThinkingLevel("max");
-      yield* awaited(settings.flush());
-      expect(settings.getDefaultThinkingLevel()).toBe("max");
+      settings.models.setDefaultThinkingLevel("max");
+      yield* awaited(settings.persistence.flush());
+      expect(settings.models.getDefaultThinkingLevel()).toBe("max");
     }),
   );
 

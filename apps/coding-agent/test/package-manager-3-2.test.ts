@@ -51,7 +51,7 @@ const shouldRespectGitignoreInSkillDirectories = () =>
         "---\nname: bad-skill\ndescription: Bad\n---\nContent",
       );
 
-      settingsManager.setSkillPaths(["skills"]);
+      settingsManager.resources.setSkillPaths(["skills"]);
 
       const result = yield* awaited(packageManager.resolution.resolve());
       expect(result.skills.some((r) => r.path.includes("good-skill") && r.enabled)).toBe(true);

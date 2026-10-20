@@ -54,7 +54,7 @@ const shouldCheckoutTheConfiguredPinnedGitRef = () =>
       expect(yield* getCurrentCommit(installedDir)).toBe(v1Commit);
 
       const pinnedSource = `${gitSource}@v2`;
-      settingsManager.setPackages([pinnedSource]);
+      settingsManager.resources.setPackages([pinnedSource]);
 
       yield* awaited(packageManager.operations.updates.update());
 

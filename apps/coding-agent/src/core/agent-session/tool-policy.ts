@@ -56,7 +56,7 @@ export default class SessionToolPolicy {
   currentDefaultTools(): string[] {
     if (!this.usesDefaultTools) return [];
     return applyToolModifiers(
-      this.session.settingsManager.getDefaultTools() ?? DEFAULT_TOOL_NAMES,
+      this.session.settingsManager.resources.getDefaultTools() ?? DEFAULT_TOOL_NAMES,
       this.defaultToolModifiers,
     );
   }

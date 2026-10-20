@@ -38,8 +38,8 @@ export default class SettingsSelector {
   }
 
   private defaultModelLabel(): string {
-    const defaultProvider = this.mode.settingsManager.getDefaultProvider();
-    const defaultModelId = this.mode.settingsManager.getDefaultModel();
+    const defaultProvider = this.mode.settingsManager.models.getDefaultProvider();
+    const defaultModelId = this.mode.settingsManager.models.getDefaultModel();
     return defaultProvider !== undefined &&
       defaultProvider !== "" &&
       defaultModelId !== undefined &&
@@ -54,53 +54,55 @@ export default class SettingsSelector {
       availableDefaultModels:
         this.mode.session.models.selection.modelRuntime.getAvailableSnapshot(),
       availableThinkingLevels: [...THINKING_LEVEL_OPTIONS],
-      cacheWarmingMode: this.mode.settingsManager.getCacheWarmingMode(),
+      cacheWarmingMode: this.mode.settingsManager.session.getCacheWarmingMode(),
       currentModel: this.mode.session.model,
       defaultModel: this.defaultModelLabel(),
-      defaultProjectTrust: this.mode.settingsManager.getDefaultProjectTrust(),
-      enableInstallTelemetry: this.mode.settingsManager.getEnableInstallTelemetry(),
+      defaultProjectTrust: this.mode.settingsManager.session.getDefaultProjectTrust(),
+      enableInstallTelemetry: this.mode.settingsManager.telemetry.getEnableInstallTelemetry(),
       followUpMode: this.mode.session.run.queue.followUpMode,
-      httpIdleTimeoutMs: this.mode.settingsManager.getHttpIdleTimeoutMs(),
-      modelThinkingLevels: this.mode.settingsManager.getAllModelThinkingLevels(),
+      httpIdleTimeoutMs: this.mode.settingsManager.session.getHttpIdleTimeoutMs(),
+      modelThinkingLevels: this.mode.settingsManager.models.getAllModelThinkingLevels(),
       steeringMode: this.mode.session.run.queue.steeringMode,
-      thinkingLevel: this.mode.settingsManager.getDefaultThinkingLevel() ?? DEFAULT_THINKING_LEVEL,
-      transport: this.mode.settingsManager.getTransport(),
-      treeFilterMode: this.mode.settingsManager.getTreeFilterMode(),
+      thinkingLevel:
+        this.mode.settingsManager.models.getDefaultThinkingLevel() ?? DEFAULT_THINKING_LEVEL,
+      transport: this.mode.settingsManager.models.getTransport(),
+      treeFilterMode: this.mode.settingsManager.terminal.getTreeFilterMode(),
     } satisfies Partial<settingsSelectorTypes.SettingsConfig>;
   }
 
   private displaySettings() {
     return {
-      autoResizeImages: this.mode.settingsManager.getImageAutoResize(),
-      autocompleteMaxVisible: this.mode.settingsManager.getAutocompleteMaxVisible(),
+      autoResizeImages: this.mode.settingsManager.display.getImageAutoResize(),
+      autocompleteMaxVisible: this.mode.settingsManager.terminal.getAutocompleteMaxVisible(),
       availableThemes: getAvailableThemes(),
-      blockImages: this.mode.settingsManager.getBlockImages(),
-      collapseChangelog: this.mode.settingsManager.getCollapseChangelog(),
+      blockImages: this.mode.settingsManager.display.getBlockImages(),
+      collapseChangelog: this.mode.settingsManager.display.getCollapseChangelog(),
       currentTheme:
         this.mode.display.theme.themeController.getThemeSelection() || SYSTEM_THEME_NAME,
-      doubleEscapeAction: this.mode.settingsManager.getDoubleEscapeAction(),
-      editorPaddingX: this.mode.settingsManager.getEditorPaddingX(),
-      enableSkillCommands: this.mode.settingsManager.getEnableSkillCommands(),
+      doubleEscapeAction: this.mode.settingsManager.terminal.getDoubleEscapeAction(),
+      editorPaddingX: this.mode.settingsManager.terminal.getEditorPaddingX(),
+      enableSkillCommands: this.mode.settingsManager.resources.getEnableSkillCommands(),
       hideThinkingBlock: this.mode.display.thinking.hideThinkingBlock,
-      imageWidthCells: this.mode.settingsManager.getImageWidthCells(),
-      mermaidRenderingMode: this.mode.settingsManager.getMermaidRenderingMode(),
-      outputPad: this.mode.settingsManager.getOutputPad(),
-      quietStartup: this.mode.settingsManager.getQuietStartup(),
-      showCacheMissNotices: this.mode.settingsManager.getShowCacheMissNotices(),
-      showImages: this.mode.settingsManager.getShowImages(),
+      imageWidthCells: this.mode.settingsManager.display.getImageWidthCells(),
+      mermaidRenderingMode: this.mode.settingsManager.display.getMermaidRenderingMode(),
+      outputPad: this.mode.settingsManager.terminal.getOutputPad(),
+      quietStartup: this.mode.settingsManager.display.getQuietStartup(),
+      showCacheMissNotices: this.mode.settingsManager.display.getShowCacheMissNotices(),
+      showImages: this.mode.settingsManager.display.getShowImages(),
       terminalTheme: this.mode.display.theme.themeController.getTerminalTheme(),
     } satisfies Partial<settingsSelectorTypes.SettingsConfig>;
   }
 
   private terminalSettings() {
     return {
-      clearOnShrink: this.mode.settingsManager.getClearOnShrink(),
-      fullscreenCopyOnSelect: this.mode.settingsManager.getFullscreenCopyOnSelect(),
-      fullscreenExitOutput: this.mode.settingsManager.getFullscreenExitOutput(),
-      fullscreenScrollbar: this.mode.settingsManager.getFullscreenScrollbar(),
-      fullscreenWheelScrollLines: this.mode.settingsManager.getFullscreenWheelScrollLines(),
-      showHardwareCursor: this.mode.settingsManager.getShowHardwareCursor(),
-      showTerminalProgress: this.mode.settingsManager.getShowTerminalProgress(),
+      clearOnShrink: this.mode.settingsManager.terminal.getClearOnShrink(),
+      fullscreenCopyOnSelect: this.mode.settingsManager.terminal.getFullscreenCopyOnSelect(),
+      fullscreenExitOutput: this.mode.settingsManager.terminal.getFullscreenExitOutput(),
+      fullscreenScrollbar: this.mode.settingsManager.terminal.getFullscreenScrollbar(),
+      fullscreenWheelScrollLines:
+        this.mode.settingsManager.terminal.getFullscreenWheelScrollLines(),
+      showHardwareCursor: this.mode.settingsManager.terminal.getShowHardwareCursor(),
+      showTerminalProgress: this.mode.settingsManager.terminal.getShowTerminalProgress(),
       tuiMode: this.mode.ui.mode,
     } satisfies Partial<settingsSelectorTypes.SettingsConfig>;
   }

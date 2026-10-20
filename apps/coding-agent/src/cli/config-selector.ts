@@ -16,16 +16,16 @@ const { ProcessTerminal, TuiMainScreen } = tui;
 function selectConfig(options: configSelectorTypes.ConfigSelectorOptions): Promise<void> {
   return Effect.runPromise(
     awaiting(function* () {
-      initTheme(options.settingsManager.getTheme(), true);
+      initTheme(options.settingsManager.display.getTheme(), true);
 
       return yield* awaited(
         callbackPromise((resolve) => {
           const ui: tuiTypes.TUI = new TuiMainScreen(
             new ProcessTerminal(),
-            options.settingsManager.getShowHardwareCursor(),
+            options.settingsManager.terminal.getShowHardwareCursor(),
             options.agentDir,
           );
-          ui.setClearOnShrink(options.settingsManager.getClearOnShrink());
+          ui.setClearOnShrink(options.settingsManager.terminal.getClearOnShrink());
           let resolved = false;
 
           const selector = new ConfigSelectorComponent(

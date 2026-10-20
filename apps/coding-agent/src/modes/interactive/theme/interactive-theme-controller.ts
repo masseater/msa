@@ -86,7 +86,7 @@ export default class InteractiveThemeController {
   getThemeSelection(): string | undefined {
     return (
       this.currentThemeSetting ??
-      this.getSettingsManager().getThemeSetting() ??
+      this.getSettingsManager().display.getThemeSetting() ??
       this.activeThemeName
     );
   }
@@ -138,7 +138,7 @@ export default class InteractiveThemeController {
   }
 
   private getThemeSetting(): string | undefined {
-    return this.currentThemeSetting ?? this.getSettingsManager().getThemeSetting();
+    return this.currentThemeSetting ?? this.getSettingsManager().display.getThemeSetting();
   }
 
   private resolveThemeName(): string {

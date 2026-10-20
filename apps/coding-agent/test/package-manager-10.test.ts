@@ -34,7 +34,7 @@ const shouldDeduplicateGitUrlsWithDifferentSupported = () =>
         "export default function() {}",
       );
 
-      settingsManager.setPackages([
+      settingsManager.resources.setPackages([
         "https://github.com/user/repo",
         "git:github.com/user/repo",
         "https://github.com/user/repo.git",

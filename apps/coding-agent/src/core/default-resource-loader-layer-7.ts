@@ -74,10 +74,10 @@ export default abstract class DefaultResourceLoaderLayer7 extends DefaultResourc
           extensionsResult: preTrustExtensions,
         }),
       );
-      this.settingsManager.setProjectTrusted(projectTrusted);
+      this.settingsManager.persistence.setProjectTrusted(projectTrusted);
     }
 
-    yield* awaited(this.settingsManager.reload());
+    yield* awaited(this.settingsManager.persistence.reload());
     const resolvedPaths = yield* awaited(this.packageManager.resolution.resolve());
     const cliExtensionPaths = yield* awaited(
       this.packageManager.resolution.resolveExtensionSources(this.additionalExtensionPaths, {

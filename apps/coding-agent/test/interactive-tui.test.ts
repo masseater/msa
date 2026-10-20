@@ -95,8 +95,10 @@ type SwitchContext = {
   runtimeHost: {
     session: {
       settingsManager: {
-        getFullscreenCopyOnSelect: () => boolean;
-        getFullscreenWheelScrollLines: () => tuiTypes.WheelScrollLines;
+        terminal: {
+          getFullscreenCopyOnSelect: () => boolean;
+          getFullscreenWheelScrollLines: () => tuiTypes.WheelScrollLines;
+        };
       };
     };
   };
@@ -120,8 +122,10 @@ const createSwitchContext = (
     runtimeHost: {
       session: {
         settingsManager: {
-          getFullscreenCopyOnSelect: () => true,
-          getFullscreenWheelScrollLines: () => "auto",
+          terminal: {
+            getFullscreenCopyOnSelect: () => true,
+            getFullscreenWheelScrollLines: () => "auto",
+          },
         },
       },
     },

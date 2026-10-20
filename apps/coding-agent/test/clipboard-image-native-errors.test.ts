@@ -53,7 +53,7 @@ const nativeImageErrorsAbortPasteWithoutReading = () =>
       vi.stubEnv("TERMUX_VERSION", "");
       const context = {
         editor: { insertTextAtCursor: vi.fn() },
-        settingsManager: { getClipboardImageCommand: () => undefined },
+        settingsManager: { terminal: { getClipboardImageCommand: () => undefined } },
         showError: vi.fn(),
         ui: { requestRender: vi.fn() },
       };

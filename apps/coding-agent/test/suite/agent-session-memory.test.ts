@@ -85,7 +85,7 @@ const answersMemoryWithStatusStatsList = Effect.gen(function* () {
 
 const injectsRecalledMemoriesForTheFirst = Effect.gen(function* () {
   const harness = yield* Effect.promise(() => createMemoryHarness());
-  const store = new MemoryStore(harness.settingsManager.getMemorySettings().database);
+  const store = new MemoryStore(harness.settingsManager.context.getMemorySettings().database);
   store.save({
     content: "the release goes to the Homebrew tap",
     kind: "fact",

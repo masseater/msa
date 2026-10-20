@@ -34,7 +34,7 @@ export default class SessionInfoCommand {
         );
         const telemetry = this.mode.runtimeHost.telemetry;
         const info: sessionInfoTypes.SessionInfo = {
-          cacheWarmingMode: this.mode.settingsManager.getCacheWarmingMode(),
+          cacheWarmingMode: this.mode.settingsManager.session.getCacheWarmingMode(),
           cacheWarmingStatus: this.mode.session.models.cacheWarming.cacheWarmingStatus,
           cacheWaste: computeCacheWaste(entries, this.mode.session.models.selection.modelRuntime),
           contextBreakdown,

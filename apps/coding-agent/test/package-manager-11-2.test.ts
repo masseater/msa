@@ -60,7 +60,7 @@ const shouldApplyUserFiltersOnTopOf = () =>
         }),
       );
 
-      settingsManager.setPackages([
+      settingsManager.resources.setPackages([
         {
           extensions: ["!**/bar.ts"],
           prompts: [],
@@ -100,7 +100,7 @@ const shouldExcludeExtensionsFromPackageWithPattern = () =>
         "export default function() {}",
       );
 
-      settingsManager.setPackages([
+      settingsManager.resources.setPackages([
         {
           extensions: ["!**/baz.ts"],
           prompts: [],
@@ -125,7 +125,7 @@ const shouldFilterThemesFromPackage = () =>
       yield* writeTextFile(joinPath(pkgDir, "themes", "nice.json"), "{}");
       yield* writeTextFile(joinPath(pkgDir, "themes", "ugly.json"), "{}");
 
-      settingsManager.setPackages([
+      settingsManager.resources.setPackages([
         {
           extensions: [],
           prompts: [],
@@ -159,7 +159,7 @@ const shouldCombineIncludeAndExcludePatterns = () =>
         "export default function() {}",
       );
 
-      settingsManager.setPackages([
+      settingsManager.resources.setPackages([
         {
           extensions: ["**/alpha.ts", "**/beta.ts", "!**/beta.ts"],
           prompts: [],

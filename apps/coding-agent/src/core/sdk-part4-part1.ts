@@ -64,7 +64,7 @@ function createAgentSession(
         options.modelRuntime ?? (yield* awaited(ModelRuntime.create({ authPath, modelsPath })));
 
       const settingsManager = options.settingsManager ?? SettingsManager.create(cwd, agentDir);
-      modelRuntime.setModelPolicy(settingsManager.getModelPolicy());
+      modelRuntime.setModelPolicy(settingsManager.models.getModelPolicy());
       const sessionManager =
         options.sessionManager ?? SessionManager.create(cwd, getDefaultSessionDir(cwd, agentDir));
 
@@ -95,17 +95,17 @@ function createAgentSession(
       if (thinkingLevel === undefined && hasExistingSession) {
         thinkingLevel = hasThinkingEntry
           ? (existingSession.thinkingLevel as agentTypes.ThinkingLevel)
-          : (settingsManager.getDefaultThinkingLevel() ?? DEFAULT_THINKING_LEVEL);
+          : (settingsManager.models.getDefaultThinkingLevel() ?? DEFAULT_THINKING_LEVEL);
       }
 
       if (thinkingLevel === undefined && model !== undefined) {
-        const perModel = settingsManager.getModelThinkingLevel(model.provider, model.id);
+        const perModel = settingsManager.models.getModelThinkingLevel(model.provider, model.id);
         if (perModel !== undefined) {
           thinkingLevel = perModel;
         }
       }
       if (thinkingLevel === undefined) {
-        thinkingLevel = settingsManager.getDefaultThinkingLevel() ?? DEFAULT_THINKING_LEVEL;
+        thinkingLevel = settingsManager.models.getDefaultThinkingLevel() ?? DEFAULT_THINKING_LEVEL;
       }
 
       if (model === undefined) {
@@ -120,7 +120,7 @@ function createAgentSession(
         throw new Error(`Invalid tools option: ${toolListError}`);
       const defaultToolNames =
         options.noTools === undefined
-          ? (settingsManager.getDefaultTools() ?? DEFAULT_TOOL_NAMES)
+          ? (settingsManager.resources.getDefaultTools() ?? DEFAULT_TOOL_NAMES)
           : [];
       const toolModifiers =
         options.tools?.some(isToolModifier) === true ? options.tools : undefined;
@@ -141,7 +141,7 @@ function createAgentSession(
       const cacheWarmer = new CacheWarmer(
         modelRuntime,
         sessionManager,
-        () => settingsManager.getCacheWarmingMode(),
+        () => settingsManager.session.getCacheWarmingMode(),
         (event) =>
           Effect.runPromise(
             awaiting(function* () {
@@ -155,8 +155,8 @@ function createAgentSession(
         requestModel: compatTypes.Model<any>,
         streamOptions: aiTypes.ModelsSimpleStreamOptions = {},
       ): aiTypes.ModelsSimpleStreamOptions => {
-        const providerRetrySettings = settingsManager.getProviderRetrySettings();
-        const httpIdleTimeoutMs = settingsManager.getHttpIdleTimeoutMs();
+        const providerRetrySettings = settingsManager.session.getProviderRetrySettings();
+        const httpIdleTimeoutMs = settingsManager.session.getHttpIdleTimeoutMs();
         const effectiveTimeoutMs = httpIdleTimeoutMs === 0 ? 2147483647 : httpIdleTimeoutMs;
         const headerRunner = extensionRunnerRef.current;
         return {
@@ -183,7 +183,7 @@ function createAgentSession(
             ),
           websocketConnectTimeoutMs:
             streamOptions.websocketConnectTimeoutMs ??
-            settingsManager.getWebSocketConnectTimeoutMs(),
+            settingsManager.session.getWebSocketConnectTimeoutMs(),
         };
       };
       const cacheContextIsCurrent = (requestModel: compatTypes.Model<any>) => {
@@ -242,10 +242,10 @@ function createAgentSession(
           }),
         );
 
-      const thinkingBudgets = settingsManager.getThinkingBudgets();
+      const thinkingBudgets = settingsManager.models.getThinkingBudgets();
       const agent = new Agent({
         convertToLlm: convertToLlmWithBlockImages,
-        followUpMode: settingsManager.getFollowUpMode(),
+        followUpMode: settingsManager.session.getFollowUpMode(),
         initialState: {
           systemPrompt: "",
           ...(model === undefined ? {} : { model }),
@@ -257,7 +257,7 @@ function createAgentSession(
         onProviderStreamEvent: handleProviderStreamEvent,
         onResponse: handleProviderResponse,
         sessionId: sessionManager.getSessionId(),
-        steeringMode: settingsManager.getSteeringMode(),
+        steeringMode: settingsManager.session.getSteeringMode(),
         streamFn: (requestModel, context, streamOptions) =>
           Effect.runPromise(
             Effect.sync(() => {
@@ -279,9 +279,9 @@ function createAgentSession(
               return yield* awaited(runner.emitContext(messages));
             }),
           ),
-        transport: settingsManager.getTransport(),
+        transport: settingsManager.models.getTransport(),
         ...(thinkingBudgets === undefined ? {} : { thinkingBudgets }),
-        maxRetryDelayMs: settingsManager.getProviderRetrySettings().maxRetryDelayMs,
+        maxRetryDelayMs: settingsManager.session.getProviderRetrySettings().maxRetryDelayMs,
       });
 
       if (hasExistingSession) {

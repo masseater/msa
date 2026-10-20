@@ -41,7 +41,7 @@ const triggersThresholdCompactionFromLastSuccess = () =>
       const { session, settingsManager } = harness();
       const contextWindow = session.model!.contextWindow ?? 200_000;
       const thresholdTokens =
-        contextWindow - settingsManager.getCompactionSettings().reserveTokens + 1;
+        contextWindow - settingsManager.context.getCompactionSettings().reserveTokens + 1;
       const errorAssistant = overloaded(currentTimeMillis() + 1000);
       session.agent.state.messages = [
         userMessage("hello", currentTimeMillis() - 1000),

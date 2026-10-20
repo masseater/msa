@@ -111,7 +111,7 @@ export default class SessionToolCalls {
         this.session.models.selection.limitsModel()?.inputLimits?.images?.resize;
       const normalizedContent = yield* awaited(
         normalizeToolResultImages(content, {
-          autoResizeImages: this.session.settingsManager.getImageAutoResize(),
+          autoResizeImages: this.session.settingsManager.display.getImageAutoResize(),
           ...(resizeOptions === undefined ? {} : { resizeOptions }),
         }),
       );

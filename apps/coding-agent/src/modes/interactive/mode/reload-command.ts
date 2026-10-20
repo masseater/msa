@@ -94,8 +94,8 @@ export default class ReloadCommand {
         const restoreChatBeforeSessionStart = () => {
           if (chatRestoredBeforeSessionStart) return;
           this.mode.display.thinking.hideThinkingBlock =
-            this.mode.settingsManager.getHideThinkingBlock();
-          this.mode.display.thinking.outputPad = this.mode.settingsManager.getOutputPad();
+            this.mode.settingsManager.display.getHideThinkingBlock();
+          this.mode.display.thinking.outputPad = this.mode.settingsManager.terminal.getOutputPad();
           this.mode.view.history.rebuildChatFromMessages();
           chatRestoredBeforeSessionStart = true;
         };

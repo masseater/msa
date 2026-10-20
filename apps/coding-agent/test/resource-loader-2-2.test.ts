@@ -26,10 +26,10 @@ let cwd: string;
 
 const shouldHonorOverridesForAutoDiscoveredResources = Effect.gen(function* () {
   const settingsManager = SettingsManager.inMemory();
-  settingsManager.setExtensionPaths(["-extensions/disabled.ts"]);
-  settingsManager.setSkillPaths(["-skills/skip-skill"]);
-  settingsManager.setPromptTemplatePaths(["-prompts/skip.md"]);
-  settingsManager.setThemePaths(["-themes/skip.json"]);
+  settingsManager.resources.setExtensionPaths(["-extensions/disabled.ts"]);
+  settingsManager.resources.setSkillPaths(["-skills/skip-skill"]);
+  settingsManager.resources.setPromptTemplatePaths(["-prompts/skip.md"]);
+  settingsManager.resources.setThemePaths(["-themes/skip.json"]);
 
   const extensionsDir = joinPath(agentDir, "extensions");
   yield* makeDirectory(extensionsDir);

@@ -9,7 +9,7 @@ declare namespace SessionStartNotifySupportTypes {
     loadedResourcesContainer: tuiTypes.Container;
     chatContainer: tuiTypes.Container;
     options: { verbose?: boolean };
-    settingsManager: { getQuietStartup: () => boolean };
+    settingsManager: { display: { getQuietStartup: () => boolean } };
     sessionManager: { getCwd: () => string };
     session: {
       extensions: {
@@ -66,13 +66,15 @@ declare namespace SessionStartNotifySupportTypes {
       resourceLoader: { getThemes: () => { themes: [] } };
     };
     settingsManager: {
-      getHttpIdleTimeoutMs: () => number;
-      getHideThinkingBlock: () => boolean;
-      getOutputPad: () => 0 | 1;
-      getEditorPaddingX: () => number;
-      getAutocompleteMaxVisible: () => number;
-      getShowHardwareCursor: () => boolean;
-      getClearOnShrink: () => boolean;
+      display: { getHideThinkingBlock: () => boolean };
+      session: { getHttpIdleTimeoutMs: () => number };
+      terminal: {
+        getAutocompleteMaxVisible: () => number;
+        getClearOnShrink: () => boolean;
+        getEditorPaddingX: () => number;
+        getOutputPad: () => 0 | 1;
+        getShowHardwareCursor: () => boolean;
+      };
     };
     keybindings: { reload: () => void };
     customHeader?: unknown;
@@ -130,7 +132,9 @@ declare namespace SessionStartNotifySupportTypes {
     session?: Partial<Omit<ReloadCommandContext["session"], "extensions">> & {
       extensions?: Partial<ReloadCommandContext["session"]["extensions"]>;
     };
-    settingsManager?: Partial<ReloadCommandContext["settingsManager"]>;
+    settingsManager?: {
+      display?: Partial<ReloadCommandContext["settingsManager"]["display"]>;
+    };
     keybindings?: Partial<ReloadCommandContext["keybindings"]>;
     editorSlot?: Partial<ReloadCommandContext["editorSlot"]>;
     ui?: Partial<ReloadCommandContext["ui"]>;

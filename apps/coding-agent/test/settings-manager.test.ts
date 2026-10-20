@@ -25,8 +25,8 @@ const shouldPreserveEnabledmodelsWhenChangingThinkingLevel = () =>
         currentSettings.enabledModels = ["claude-opus-4-5", "gpt-5.2-codex"];
         yield* writeJsonFile(settingsPath, currentSettings);
 
-        manager.setDefaultThinkingLevel("high");
-        yield* awaited(manager.flush());
+        manager.models.setDefaultThinkingLevel("high");
+        yield* awaited(manager.persistence.flush());
 
         const savedSettings = yield* readSettings(settingsPath);
         expect(savedSettings.enabledModels).toEqual(["claude-opus-4-5", "gpt-5.2-codex"]);
@@ -50,8 +50,8 @@ const shouldPreserveCustomSettingsWhenChangingTheme = () =>
         currentSettings.extensions = ["/path/to/extension.ts"];
         yield* writeJsonFile(settingsPath, currentSettings);
 
-        manager.setTheme("light");
-        yield* awaited(manager.flush());
+        manager.display.setTheme("light");
+        yield* awaited(manager.persistence.flush());
 
         const savedSettings = yield* readSettings(settingsPath);
         expect(savedSettings.shellPath).toBe("/bin/zsh");
@@ -73,8 +73,8 @@ const shouldLetInMemoryChangesOverrideFile = () =>
         currentSettings.defaultThinkingLevel = "low";
         yield* writeJsonFile(settingsPath, currentSettings);
 
-        manager.setDefaultThinkingLevel("high");
-        yield* awaited(manager.flush());
+        manager.models.setDefaultThinkingLevel("high");
+        yield* awaited(manager.persistence.flush());
 
         const savedSettings = yield* readSettings(settingsPath);
         expect(savedSettings.defaultThinkingLevel).toBe("high");
@@ -90,12 +90,12 @@ const createsOneGlobalDeviceIdAndReuses = () =>
         yield* writeJsonFile(projectSettingsPath, { deviceId: "project-device" });
         const first = openManager();
 
-        const deviceId = first.getOrCreateDeviceId();
-        yield* awaited(first.flush());
+        const deviceId = first.telemetry.getOrCreateDeviceId();
+        yield* awaited(first.persistence.flush());
 
         expect(deviceId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u);
-        expect(first.getOrCreateDeviceId()).toBe(deviceId);
-        expect(openManager().getOrCreateDeviceId()).toBe(deviceId);
+        expect(first.telemetry.getOrCreateDeviceId()).toBe(deviceId);
+        expect(openManager().telemetry.getOrCreateDeviceId()).toBe(deviceId);
         expect(yield* readSettings(settingsPath)).toEqual({ deviceId, theme: "dark" });
       }),
     ),
@@ -111,8 +111,11 @@ const shouldKeepLocalOnlyExtensionsInExtensions = () =>
 
         const manager = openManager();
 
-        expect(manager.getPackages()).toEqual([]);
-        expect(manager.getExtensionPaths()).toEqual(["/local/ext.ts", "./relative/ext.ts"]);
+        expect(manager.resources.getPackages()).toEqual([]);
+        expect(manager.resources.getExtensionPaths()).toEqual([
+          "/local/ext.ts",
+          "./relative/ext.ts",
+        ]);
       }),
     ),
   );
@@ -134,7 +137,7 @@ const shouldHandlePackagesWithFilteringObjects = () =>
 
         const manager = openManager();
 
-        const packages = manager.getPackages();
+        const packages = manager.resources.getPackages();
         expect(packages).toHaveLength(2);
         expect(packages[0]).toBe("npm:simple-pkg");
         expect(packages[1]).toEqual({
@@ -163,11 +166,11 @@ const shouldReloadGlobalSettingsFromDisk = () =>
           theme: "light",
         });
 
-        yield* awaited(manager.reload());
+        yield* awaited(manager.persistence.reload());
 
-        expect(manager.getTheme()).toBe("light");
-        expect(manager.getExtensionPaths()).toEqual(["/after.ts"]);
-        expect(manager.getDefaultModel()).toBe("claude-sonnet");
+        expect(manager.display.getTheme()).toBe("light");
+        expect(manager.resources.getExtensionPaths()).toEqual(["/after.ts"]);
+        expect(manager.models.getDefaultModel()).toBe("claude-sonnet");
       }),
     ),
   );
@@ -181,9 +184,9 @@ const shouldKeepPreviousSettingsAndReportThe = () =>
         const manager = openManager();
 
         yield* writeTextFile(settingsPath, "{ invalid json");
-        yield* awaited(manager.reload());
+        yield* awaited(manager.persistence.reload());
 
-        expect(manager.getTheme()).toBe("dark");
+        expect(manager.display.getTheme()).toBe("dark");
         expect(manager.drainErrors()).toMatchObject([{ path: settingsPath, scope: "global" }]);
       }),
     ),
@@ -197,11 +200,11 @@ const storesSlashSeparatedAutomaticThemeSettingsSeparately = () =>
 
         const manager = openManager();
 
-        expect(manager.getTheme()).toBeUndefined();
-        expect(manager.getThemeSetting()).toBe("light/dark");
+        expect(manager.display.getTheme()).toBeUndefined();
+        expect(manager.display.getThemeSetting()).toBe("light/dark");
 
-        manager.setTheme("solarized-light/tokyo-night");
-        yield* awaited(manager.flush());
+        manager.display.setTheme("solarized-light/tokyo-night");
+        yield* awaited(manager.persistence.flush());
 
         const savedSettings = yield* readSettings(settingsPath);
         expect(savedSettings.theme).toBe("solarized-light/tokyo-night");

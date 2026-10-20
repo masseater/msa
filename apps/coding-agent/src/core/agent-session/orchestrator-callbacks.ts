@@ -43,11 +43,13 @@ function defaults(session: AgentSession): orchestratorTypes.OrchestratorDefaults
   const currentReference = `${current.provider}/${current.id}`;
   const settings = session.settingsManager;
   return {
-    maxConcurrentThreads: settings.getOrchestratorMaxConcurrentThreads(),
-    reviewModel: settings.getOrchestratorReviewModel() ?? currentReference,
-    reviewThinkingLevel: settings.getOrchestratorReviewThinkingLevel() ?? session.thinkingLevel,
-    workerModel: settings.getOrchestratorWorkerModel() ?? currentReference,
-    workerThinkingLevel: settings.getOrchestratorWorkerThinkingLevel() ?? session.thinkingLevel,
+    maxConcurrentThreads: settings.session.getOrchestratorMaxConcurrentThreads(),
+    reviewModel: settings.models.getOrchestratorReviewModel() ?? currentReference,
+    reviewThinkingLevel:
+      settings.models.getOrchestratorReviewThinkingLevel() ?? session.thinkingLevel,
+    workerModel: settings.models.getOrchestratorWorkerModel() ?? currentReference,
+    workerThinkingLevel:
+      settings.models.getOrchestratorWorkerThinkingLevel() ?? session.thinkingLevel,
   };
 }
 

@@ -32,9 +32,9 @@ function showFirstTimeSetup(settingsManager: settingsManagerTypes.SettingsManage
                 }
                 settled = true;
                 if (result !== undefined) {
-                  settingsManager.setTheme(result.theme);
-                  settingsManager.setEnableAnalytics(result.shareAnalytics);
-                  yield* awaited(settingsManager.flush());
+                  settingsManager.display.setTheme(result.theme);
+                  settingsManager.telemetry.setEnableAnalytics(result.shareAnalytics);
+                  yield* awaited(settingsManager.persistence.flush());
                 }
                 yield* awaited(clearStartupTui(ui));
                 ui.stop();

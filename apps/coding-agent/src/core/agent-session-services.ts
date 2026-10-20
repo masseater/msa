@@ -147,7 +147,7 @@ function* createAgentSessionServicesPart1(
       }),
     ));
   const settingsManager = options.settingsManager ?? SettingsManager.create(cwd, agentDir);
-  modelRuntime.setModelPolicy(settingsManager.getModelPolicy());
+  modelRuntime.setModelPolicy(settingsManager.models.getModelPolicy());
   const resourceLoader = new DefaultResourceLoader({
     ...(options.resourceLoaderOptions ?? {}),
     agentDir,

@@ -104,7 +104,7 @@ export default class KeyHandlers {
 
   private handleOpenExternalEditor(): Effect.Effect<void> {
     return awaitingWith(function* () {
-      const editorCmd = this.mode.settingsManager.getExternalEditorCommand();
+      const editorCmd = this.mode.settingsManager.terminal.getExternalEditorCommand();
       const content = this.mode.editor.getExpandedText?.() ?? this.mode.editor.getText();
       this.mode.ui.stop();
       try {
@@ -200,7 +200,7 @@ export default class KeyHandlers {
         this.mode.input.bash.isBashMode = false;
         this.updateEditorBorderColor();
       } else if (this.mode.editor.getText().trim() === "") {
-        const action = this.mode.settingsManager.getDoubleEscapeAction();
+        const action = this.mode.settingsManager.terminal.getDoubleEscapeAction();
         if (action !== "none") {
           const now = nowMs();
           if (now - this.lastEscapeTime < 500) {

@@ -89,10 +89,10 @@ const readsTheCheckAndStatusIntervalsFrom = () =>
         prWatch: { intervalSeconds: 90, statusIntervalSeconds: 600 },
       });
 
-      expect(settingsManager.getPrWatchIntervalMs()).toBe(90_000);
-      expect(settingsManager.getPrWatchStatusIntervalMs()).toBe(600_000);
-      expect(SettingsManager.inMemory({}).getPrWatchIntervalMs()).toBe(45_000);
-      expect(SettingsManager.inMemory({}).getPrWatchStatusIntervalMs()).toBe(300_000);
+      expect(settingsManager.session.getPrWatchIntervalMs()).toBe(90_000);
+      expect(settingsManager.session.getPrWatchStatusIntervalMs()).toBe(600_000);
+      expect(SettingsManager.inMemory({}).session.getPrWatchIntervalMs()).toBe(45_000);
+      expect(SettingsManager.inMemory({}).session.getPrWatchStatusIntervalMs()).toBe(300_000);
     }),
   );
 

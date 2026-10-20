@@ -25,7 +25,7 @@ export default class SessionPrWatch {
   start(telemetry: telemetryTypes.TelemetryContext): void {
     const { session } = this;
     this.prWatchInternal = new PrWatch({
-      defaultIntervalMs: () => session.settingsManager.getPrWatchIntervalMs(),
+      defaultIntervalMs: () => session.settingsManager.session.getPrWatchIntervalMs(),
       gh: makeGh({ cwd: session.cwd }),
       host: createPrWatchHost({
         changed: () =>
@@ -36,7 +36,7 @@ export default class SessionPrWatch {
         telemetry,
         threadId: session.sessionManager.getSessionId(),
       }),
-      statusIntervalMs: () => session.settingsManager.getPrWatchStatusIntervalMs(),
+      statusIntervalMs: () => session.settingsManager.session.getPrWatchStatusIntervalMs(),
     });
   }
 

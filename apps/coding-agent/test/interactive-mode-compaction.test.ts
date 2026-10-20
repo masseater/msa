@@ -29,7 +29,7 @@ const usesTheCacheMissNoticeSettingFor = () => {
   initTheme("dark");
   const enabled = {
     chatContainer: new Container(),
-    settingsManager: { getShowCacheMissNotices: () => true },
+    settingsManager: { display: { getShowCacheMissNotices: () => true } },
   };
   bindModeFake(enabled);
   bindModeFake(enabled).display.notices.usage.addCompactionCostNotice({
@@ -49,7 +49,7 @@ const usesTheCacheMissNoticeSettingFor = () => {
 
   const disabled = {
     chatContainer: new Container(),
-    settingsManager: { getShowCacheMissNotices: () => false },
+    settingsManager: { display: { getShowCacheMissNotices: () => false } },
   };
   bindModeFake(disabled);
   bindModeFake(disabled).display.notices.usage.addCompactionCostNotice({
@@ -174,7 +174,7 @@ const rendersRetainedEntriesAndAppendsTheLatestStep2 = (input: {
       sessionManager: {
         buildContextEntries: vi.fn().mockReturnValue([latestCompaction, previousCompaction]),
       },
-      settingsManager: { getShowTerminalProgress: () => false },
+      settingsManager: { terminal: { getShowTerminalProgress: () => false } },
       showError: vi.fn(),
       showStatus: vi.fn(),
       statusContainer: { clear: vi.fn() },
@@ -243,7 +243,7 @@ const updatesTheWorkingStateWhenTheSame = () =>
         footer: { invalidate: vi.fn() },
         isInitialized: true,
         programStatus: { handleEvent: vi.fn() },
-        settingsManager: { getShowTerminalProgress: () => true },
+        settingsManager: { terminal: { getShowTerminalProgress: () => true } },
         showWorkingStatusIndicator: vi.fn(),
         ui: { requestRender: vi.fn(), terminal: { setProgress: vi.fn() } },
         workingVisible: true,

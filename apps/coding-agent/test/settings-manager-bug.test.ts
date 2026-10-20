@@ -63,7 +63,7 @@ const shouldPreserveFileChangesToPackagesArray = () =>
 
         const manager = openManager();
 
-        expect(manager.getPackages()).toEqual(["npm:msa-mcp-adapter"]);
+        expect(manager.resources.getPackages()).toEqual(["npm:msa-mcp-adapter"]);
 
         const currentSettings = yield* readSettings(settingsPath);
         currentSettings.packages = [];
@@ -71,8 +71,8 @@ const shouldPreserveFileChangesToPackagesArray = () =>
 
         expect((yield* readSettings(settingsPath)).packages).toEqual([]);
 
-        manager.setTheme("light");
-        yield* awaited(manager.flush());
+        manager.display.setTheme("light");
+        yield* awaited(manager.persistence.flush());
 
         const savedSettings = yield* readSettings(settingsPath);
 
@@ -97,8 +97,8 @@ const shouldPreserveFileChangesToExtensionsArray = () =>
         currentSettings.extensions = ["/new/extension.ts"];
         yield* writeJsonFile(settingsPath, currentSettings);
 
-        manager.setDefaultThinkingLevel("high");
-        yield* awaited(manager.flush());
+        manager.models.setDefaultThinkingLevel("high");
+        yield* awaited(manager.persistence.flush());
 
         const savedSettings = yield* readSettings(settingsPath);
 
@@ -122,8 +122,8 @@ const shouldPreserveExternalProjectSettingsChangesWhen = () =>
         currentProjectSettings.prompts = ["./new-prompt.md"];
         yield* writeJsonFile(projectSettingsPath, currentProjectSettings);
 
-        manager.setProjectExtensionPaths(["./updated-extension.ts"]);
-        yield* awaited(manager.flush());
+        manager.resources.setProjectExtensionPaths(["./updated-extension.ts"]);
+        yield* awaited(manager.persistence.flush());
 
         const savedProjectSettings = yield* readSettings(projectSettingsPath);
         expect(savedProjectSettings.prompts).toEqual(["./new-prompt.md"]);
@@ -146,8 +146,8 @@ const shouldLetInMemoryProjectChangesOverride = () =>
         currentProjectSettings.extensions = ["./external-extension.ts"];
         yield* writeJsonFile(projectSettingsPath, currentProjectSettings);
 
-        manager.setProjectExtensionPaths(["./in-memory-extension.ts"]);
-        yield* awaited(manager.flush());
+        manager.resources.setProjectExtensionPaths(["./in-memory-extension.ts"]);
+        yield* awaited(manager.persistence.flush());
 
         const savedProjectSettings = yield* readSettings(projectSettingsPath);
         expect(savedProjectSettings.extensions).toEqual(["./in-memory-extension.ts"]);

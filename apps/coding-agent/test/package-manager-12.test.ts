@@ -49,7 +49,7 @@ const shouldWorkWithDirectPathsNoPatterns = () =>
         "export default function() {}",
       );
 
-      settingsManager.setPackages([
+      settingsManager.resources.setPackages([
         {
           extensions: ["extensions/one.ts"],
           prompts: [],
@@ -82,8 +82,8 @@ const shouldResolveAutoloadDisabledProjectPackageEntries = () =>
         joinPath(pkgDir, "extensions", "bar.ts"),
         "export default function() {}",
       );
-      settingsManager.setPackages(["npm:msa-tools"]);
-      settingsManager.setProjectPackages([
+      settingsManager.resources.setPackages(["npm:msa-tools"]);
+      settingsManager.resources.setProjectPackages([
         { autoload: false, extensions: ["-extensions/foo.ts"], source: "npm:msa-tools" },
       ]);
       const runCommandSpy = vi
@@ -125,7 +125,7 @@ const shouldResolveAutoloadDisabledPackageEntriesAs = () =>
         "export default function() {}",
       );
       yield* writeTextFile(joinPath(pkgDir, "skills", "foo", "SKILL.md"), "# Foo\n");
-      settingsManager.setProjectPackages([
+      settingsManager.resources.setProjectPackages([
         {
           autoload: false,
           extensions: ["+extensions/foo.ts"],

@@ -32,8 +32,11 @@ function defaultDefinitions(session: AgentSession): Record<string, unknown> {
   const modelRuntime = session.models.selection.modelRuntimeInternal;
   return {
     ...createAllToolDefinitions(session.cwd, {
-      bash: { commandPrefix: settings.getShellCommandPrefix(), shellPath: settings.getShellPath() },
-      read: { autoResizeImages: settings.getImageAutoResize() },
+      bash: {
+        commandPrefix: settings.resources.getShellCommandPrefix(),
+        shellPath: settings.resources.getShellPath(),
+      },
+      read: { autoResizeImages: settings.display.getImageAutoResize() },
     }),
     ...(memory === undefined ? {} : { memory: createMemoryToolDefinition(memory) }),
     model_policy: createModelPolicyToolDefinition({

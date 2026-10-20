@@ -44,10 +44,10 @@ export default class ModelUpgradeSelector {
           Effect.runPromise(
             awaitingWith(function* () {
               const replacements = createUpgradeReplacements([candidate]);
-              const written = this.mode.settingsManager.rewriteModelReferences((layer) =>
+              const written = this.mode.settingsManager.models.rewriteModelReferences((layer) =>
                 rewriteModelReferencesInSettings(layer, replacements),
               );
-              yield* awaited(this.mode.settingsManager.flush());
+              yield* awaited(this.mode.settingsManager.persistence.flush());
               const count = written.global.length + written.project.length;
               this.mode.footer.invalidate();
               return count === 0

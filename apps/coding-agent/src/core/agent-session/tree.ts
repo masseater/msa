@@ -113,7 +113,7 @@ export default class SessionTree {
     signal: AbortSignal,
   ): Effect.Effect<agentSessionInternalTypes.TreeSummary | "aborted"> {
     return awaitingWith(function* () {
-      const branchSummarySettings = this.session.settingsManager.getBranchSummarySettings();
+      const branchSummarySettings = this.session.settingsManager.context.getBranchSummarySettings();
       const result = yield* awaited(
         generateBranchSummary(entries, {
           ...(yield* performed(
@@ -125,7 +125,7 @@ export default class SessionTree {
           customInstructions: instructions.customInstructions,
           replaceInstructions: instructions.replaceInstructions,
           reserveTokens: branchSummarySettings.reserveTokens,
-          retry: this.session.settingsManager.getRetrySettings(),
+          retry: this.session.settingsManager.session.getRetrySettings(),
           signal,
           streamFn: this.session.agent.streamFunction,
         }),

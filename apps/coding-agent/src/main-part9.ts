@@ -55,8 +55,8 @@ function buildSessionOptionsPart1(
   parsed: argsTypes.Args,
 ) {
   if (options.model === undefined && firstScopedModel !== undefined && !hasExistingSession) {
-    const savedProvider = settingsManager.getDefaultProvider();
-    const savedModelId = settingsManager.getDefaultModel();
+    const savedProvider = settingsManager.models.getDefaultProvider();
+    const savedModelId = settingsManager.models.getDefaultModel();
     const savedModel =
       savedProvider !== undefined &&
       savedProvider !== "" &&

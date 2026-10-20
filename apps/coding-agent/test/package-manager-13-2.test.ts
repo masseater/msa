@@ -32,8 +32,8 @@ const shouldDedupeSameLocalPackageInGlobal = () =>
         "export default function() {}",
       );
 
-      settingsManager.setPackages([pkgDir]);
-      settingsManager.setProjectPackages([pkgDir]);
+      settingsManager.resources.setPackages([pkgDir]);
+      settingsManager.resources.setProjectPackages([pkgDir]);
 
       const globalSettings = settingsManager.getGlobalSettings();
       const projectSettings = settingsManager.getProjectSettings();
@@ -64,8 +64,8 @@ const shouldKeepBothIfDifferentPackages = () =>
         "export default function() {}",
       );
 
-      settingsManager.setPackages([pkg1Dir]);
-      settingsManager.setProjectPackages([pkg2Dir]);
+      settingsManager.resources.setPackages([pkg1Dir]);
+      settingsManager.resources.setProjectPackages([pkg2Dir]);
 
       const result = yield* awaited(packageManager.resolution.resolve());
       expect(result.extensions.some((r) => r.path.includes("pkg1"))).toBe(true);

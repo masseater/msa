@@ -20,7 +20,7 @@ export default class SessionReplay {
   } {
     this.mode.view.toolExecutions.pendingTools.clear();
     const renderedPendingTools = new Map<string, toolExecutionTypes.ToolExecutionComponent>();
-    const cacheMisses = this.mode.settingsManager.getShowCacheMissNotices()
+    const cacheMisses = this.mode.settingsManager.display.getShowCacheMissNotices()
       ? collectCacheMisses(
           this.mode.sessionManager.getEntries(),
           this.mode.session.models.selection.modelRuntime,

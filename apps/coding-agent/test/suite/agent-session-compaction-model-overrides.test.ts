@@ -86,11 +86,13 @@ const usesTheNewlySelectedModelWithoutStep1 = (harness: harnessTypes.Harness) =>
     yield* Effect.promise(() => harness.session.run.prompting.prompt("continue on big"));
     expect(harness.eventsOfType("compaction_end")).toHaveLength(1);
     expect(harness.eventsOfType("compaction_end")[0]?.result?.summary).toBe("big model summary");
-    expect(harness.settingsManager.getCompactionReserveTokens()).toBe(10);
+    expect(harness.settingsManager.context.getCompactionReserveTokens()).toBe(10);
     yield* Effect.promise(() =>
       harness.session.models.selection.setModel(harness.getModel("small")!),
     );
-    expect(harness.settingsManager.getCompactionReserveTokens(harness.session.model)).toBe(10);
+    expect(harness.settingsManager.context.getCompactionReserveTokens(harness.session.model)).toBe(
+      10,
+    );
   });
 
 const capturesModelIdentityBeforeAwaitingSummarization = Effect.gen(function* () {

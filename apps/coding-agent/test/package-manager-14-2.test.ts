@@ -40,7 +40,7 @@ const shouldUpdateNpmRangePackagesUsingThe = () =>
         joinPath(installedPath, "package.json"),
         yield* toJsonText({ name: "example", version: "1.0.0" }),
       );
-      settingsManager.setProjectPackages(["npm:example@^1.0.0"]);
+      settingsManager.resources.setProjectPackages(["npm:example@^1.0.0"]);
 
       const runCommandCaptureSpy = vi
         .spyOn(commandRunner, "runCommandCapture")
@@ -77,7 +77,7 @@ const shouldSkipProjectNpmUpdateWhenInstalled = () =>
         joinPath(installedPath, "package.json"),
         yield* toJsonText({ name: "example", version: "1.3.1" }),
       );
-      settingsManager.setProjectPackages(["npm:example@^1.0.0"]);
+      settingsManager.resources.setProjectPackages(["npm:example@^1.0.0"]);
 
       const runCommandCaptureSpy = vi
         .spyOn(commandRunner, "runCommandCapture")
@@ -104,7 +104,7 @@ const shouldSkipNpmUpdatesWhenTheInstalled = () =>
         joinPath(installedPath, "package.json"),
         yield* toJsonText({ name: "example", version: "2.0.0" }),
       );
-      settingsManager.setProjectPackages(["npm:example"]);
+      settingsManager.resources.setProjectPackages(["npm:example"]);
 
       const runCommandCaptureSpy = vi
         .spyOn(commandRunner, "runCommandCapture")

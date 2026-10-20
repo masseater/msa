@@ -31,8 +31,8 @@ export default class ExtensionUIContextFactory {
     if (themeOrName instanceof Theme)
       return this.mode.display.theme.themeController.setThemeInstance(themeOrName);
     const result = this.mode.display.theme.themeController.setThemeName(themeOrName);
-    if (result.success && this.mode.settingsManager.getTheme() !== themeOrName)
-      this.mode.settingsManager.setTheme(themeOrName);
+    if (result.success && this.mode.settingsManager.display.getTheme() !== themeOrName)
+      this.mode.settingsManager.display.setTheme(themeOrName);
     return result;
   }
 

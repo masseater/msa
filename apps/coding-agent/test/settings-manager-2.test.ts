@@ -24,7 +24,7 @@ const shouldSkipProjectSettingsWhenProjectIs = () =>
         const manager = openManager({ projectTrusted: false });
 
         expect(manager.isProjectTrusted()).toBe(false);
-        expect(manager.getTheme()).toBe("global");
+        expect(manager.display.getTheme()).toBe("global");
         expect(manager.getProjectSettings()).toEqual({});
       }),
     ),
@@ -38,10 +38,10 @@ const shouldReloadProjectSettingsAfterTrustChanges = () =>
         yield* writeJsonFile(projectSettingsPath, { theme: "project" });
         const manager = openManager({ projectTrusted: false });
 
-        manager.setProjectTrusted(true);
+        manager.persistence.setProjectTrusted(true);
 
         expect(manager.isProjectTrusted()).toBe(true);
-        expect(manager.getTheme()).toBe("project");
+        expect(manager.display.getTheme()).toBe("project");
       }),
     ),
   );
@@ -53,10 +53,10 @@ const shouldFailProjectSettingsWritesWhenProject = () =>
         yield* writeJsonFile(projectSettingsPath, { packages: ["npm:existing"] });
         const manager = openManager({ projectTrusted: false });
 
-        expect(() => manager.setProjectPackages(["npm:new"])).toThrow(
+        expect(() => manager.resources.setProjectPackages(["npm:new"])).toThrow(
           "Project is not trusted; refusing to write project settings",
         );
-        yield* awaited(manager.flush());
+        yield* awaited(manager.persistence.flush());
 
         expect(manager.getProjectSettings()).toEqual({});
         expect(yield* readSettings(projectSettingsPath)).toEqual({
@@ -75,7 +75,7 @@ const shouldReadDefaultProjectTrustFromGlobal = () =>
 
         const manager = openManager();
 
-        expect(manager.getDefaultProjectTrust()).toBe("always");
+        expect(manager.session.getDefaultProjectTrust()).toBe("always");
       }),
     ),
   );
@@ -88,7 +88,7 @@ const shouldDefaultInvalidProjectTrustSettingsTo = () =>
 
         const manager = openManager();
 
-        expect(manager.getDefaultProjectTrust()).toBe("ask");
+        expect(manager.session.getDefaultProjectTrust()).toBe("ask");
       }),
     ),
   );
@@ -105,7 +105,7 @@ const shouldNotCreateMsaFolderWhenOnly = () =>
 
         expect(yield* pathExists(joinPath(projectDir, ".msa"))).toBe(false);
 
-        expect(manager.getTheme()).toBe("dark");
+        expect(manager.display.getTheme()).toBe("dark");
       }),
     ),
   );
@@ -122,8 +122,8 @@ const shouldCreateMsaFolderWhenWritingProject = () =>
 
         expect(yield* pathExists(joinPath(projectDir, ".msa"))).toBe(false);
 
-        manager.setProjectPackages([{ source: "npm:test-pkg" }]);
-        yield* awaited(manager.flush());
+        manager.resources.setProjectPackages([{ source: "npm:test-pkg" }]);
+        yield* awaited(manager.persistence.flush());
 
         expect(yield* pathExists(joinPath(projectDir, ".msa"))).toBe(true);
 
@@ -134,7 +134,7 @@ const shouldCreateMsaFolderWhenWritingProject = () =>
 
 const mapsExplicitValuesAndOmitsAutoValues = () => {
   const getOverrides = (terminal: NonNullable<settingsManagerTypes.Settings["terminal"]>) =>
-    SettingsManager.inMemory({ terminal }).getTerminalCapabilityOverrides();
+    SettingsManager.inMemory({ terminal }).terminal.getTerminalCapabilityOverrides();
 
   expect(getOverrides({ hyperlinks: false, images: false, trueColor: false })).toEqual({
     hyperlinks: false,
@@ -150,7 +150,7 @@ const mapsExplicitValuesAndOmitsAutoValues = () => {
 };
 
 const defaultsAndOverridesAgentRetryDelayCap = () => {
-  expect(SettingsManager.inMemory().getRetrySettings()).toEqual({
+  expect(SettingsManager.inMemory().session.getRetrySettings()).toEqual({
     baseDelayMs: 2000,
     enabled: true,
     maxAgentDelayMs: 60000,
@@ -159,7 +159,7 @@ const defaultsAndOverridesAgentRetryDelayCap = () => {
   expect(
     SettingsManager.inMemory({
       retry: { baseDelayMs: 500, enabled: true, maxAgentDelayMs: 5000, maxRetries: 10 },
-    }).getRetrySettings(),
+    }).session.getRetrySettings(),
   ).toEqual({ baseDelayMs: 500, enabled: true, maxAgentDelayMs: 5000, maxRetries: 10 });
 };
 
@@ -168,7 +168,7 @@ const shouldDefaultTo5Minutes = () =>
     withSettings(({ openManager }) =>
       Effect.sync(() => {
         const manager = openManager();
-        expect(manager.getHttpIdleTimeoutMs()).toBe(DEFAULT_HTTP_IDLE_TIMEOUT_MS);
+        expect(manager.session.getHttpIdleTimeoutMs()).toBe(DEFAULT_HTTP_IDLE_TIMEOUT_MS);
       }),
     ),
   );
@@ -182,7 +182,7 @@ const shouldUseMergedGlobalAndProjectSettings = () =>
 
         const manager = openManager();
 
-        expect(manager.getHttpIdleTimeoutMs()).toBe(0);
+        expect(manager.session.getHttpIdleTimeoutMs()).toBe(0);
       }),
     ),
   );
@@ -194,7 +194,9 @@ const shouldRejectInvalidTimeoutValues = () =>
         yield* writeJsonFile(settingsPath, { httpIdleTimeoutMs: -1 });
         const manager = openManager();
 
-        expect(() => manager.getHttpIdleTimeoutMs()).toThrow("Invalid httpIdleTimeoutMs setting");
+        expect(() => manager.session.getHttpIdleTimeoutMs()).toThrow(
+          "Invalid httpIdleTimeoutMs setting",
+        );
       }),
     ),
   );

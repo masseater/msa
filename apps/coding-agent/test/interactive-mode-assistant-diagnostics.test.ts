@@ -59,7 +59,7 @@ const showsAnthropicThinkingDropsWhenCacheMiss = () => {
   const enabled = {
     chatContainer: new Container(),
     sessionManager: { getBranch: () => [] },
-    settingsManager: { getShowCacheMissNotices: () => true },
+    settingsManager: { display: { getShowCacheMissNotices: () => true } },
   };
   bindModeFake(enabled).display.notices.usage.maybeShowThinkingDropNotice(message);
   const output = stripAnsi(enabled.chatContainer.render(120).join("\n"));
@@ -68,7 +68,7 @@ const showsAnthropicThinkingDropsWhenCacheMiss = () => {
   const disabled = {
     chatContainer: new Container(),
     sessionManager: { getBranch: () => [] },
-    settingsManager: { getShowCacheMissNotices: () => false },
+    settingsManager: { display: { getShowCacheMissNotices: () => false } },
   };
   bindModeFake(disabled).display.notices.usage.maybeShowThinkingDropNotice(message);
   expect(disabled.chatContainer.children).toHaveLength(0);
@@ -79,7 +79,7 @@ const doesNotRepeatUnchangedAnthropicThinkingDrops = () => {
   const context = {
     chatContainer: new Container(),
     sessionManager: { getBranch: () => [{ message, type: "message" as const }] },
-    settingsManager: { getShowCacheMissNotices: () => true },
+    settingsManager: { display: { getShowCacheMissNotices: () => true } },
   };
 
   bindModeFake(context).display.notices.usage.maybeShowThinkingDropNotice({

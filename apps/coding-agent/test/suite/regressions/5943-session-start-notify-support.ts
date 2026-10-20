@@ -27,14 +27,15 @@ const reloadSession = (overrides: Overrides): Context["session"] => {
 };
 
 const reloadSettings = (overrides: Overrides): Context["settingsManager"] => ({
-  getAutocompleteMaxVisible: () => 10,
-  getClearOnShrink: () => false,
-  getEditorPaddingX: () => 1,
-  getHideThinkingBlock: () => false,
-  getHttpIdleTimeoutMs: () => 0,
-  getOutputPad: () => 1,
-  getShowHardwareCursor: () => false,
-  ...overrides.settingsManager,
+  display: { getHideThinkingBlock: () => false, ...overrides.settingsManager?.display },
+  session: { getHttpIdleTimeoutMs: () => 0 },
+  terminal: {
+    getAutocompleteMaxVisible: () => 10,
+    getClearOnShrink: () => false,
+    getEditorPaddingX: () => 1,
+    getOutputPad: () => 1,
+    getShowHardwareCursor: () => false,
+  },
 });
 
 function createReloadCommandContext(

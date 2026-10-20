@@ -21,7 +21,7 @@ export default class UsageNotices {
   }
 
   addCompactionCostNotice(notice: interactiveModeInternalTypes.CompactionCostNotice): void {
-    if (!this.mode.settingsManager.getShowCacheMissNotices()) return;
+    if (!this.mode.settingsManager.display.getShowCacheMissNotices()) return;
 
     const { usage } = notice;
     const tokens = usage.input + usage.output + usage.cacheRead + usage.cacheWrite;
@@ -38,7 +38,7 @@ export default class UsageNotices {
   }
 
   maybeShowThinkingDropNotice(message: compatTypes.AssistantMessage): void {
-    if (!this.mode.settingsManager.getShowCacheMissNotices()) return;
+    if (!this.mode.settingsManager.display.getShowCacheMissNotices()) return;
 
     const droppedCount = countDroppedThinkingBlocks(message);
     if (droppedCount === 0) return;

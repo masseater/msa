@@ -48,7 +48,7 @@ const setupRemoteAndInstall = Effect.fn("setupRemoteAndInstall")(function* () {
   yield* git(["config", "--local", "user.email", "test@test.com"], installedDir);
   yield* git(["config", "--local", "user.name", "Test"], installedDir);
 
-  settingsManager.setPackages([gitSource]);
+  settingsManager.resources.setPackages([gitSource]);
 });
 
 const shouldSkipResetCleanAndInstallWhen = () =>
@@ -64,7 +64,7 @@ const shouldSkipResetCleanAndInstallWhen = () =>
 
       yield* makeDirectory(joinPath(agentDir, "git", "github.com", "test"));
       yield* git(["clone", remoteDir, installedDir], tempDir);
-      settingsManager.setPackages([gitSource]);
+      settingsManager.resources.setPackages([gitSource]);
 
       const executedCommands: string[] = [];
       commandRunner.runCommand = (command, args, options) => {

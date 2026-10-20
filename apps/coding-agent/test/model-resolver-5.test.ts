@@ -20,14 +20,14 @@ const addsAPersistedDefaultToAnExisting = () =>
 
       yield* awaited(session.models.selection.setModel(opus, { persist: true }));
 
-      expect(settingsManager.getDefaultProvider()).toBe(opus.provider);
-      expect(settingsManager.getDefaultModel()).toBe(opus.id);
+      expect(settingsManager.models.getDefaultProvider()).toBe(opus.provider);
+      expect(settingsManager.models.getDefaultModel()).toBe(opus.id);
       expect(
         session.models.selection.scopedModels.map(
           (scoped) => `${scoped.model.provider}/${scoped.model.id}`,
         ),
       ).toEqual([`${sonnet.provider}/${sonnet.id}`, `${opus.provider}/${opus.id}`]);
-      expect(settingsManager.getEnabledModels()).toEqual([
+      expect(settingsManager.models.getEnabledModels()).toEqual([
         `${sonnet.provider}/${sonnet.id}`,
         `${opus.provider}/${opus.id}`,
       ]);
@@ -42,7 +42,7 @@ const doesNotCreateAScopedModelList = () =>
       yield* awaited(session.models.selection.setModel(opus, { persist: true }));
 
       expect(session.models.selection.scopedModels).toEqual([]);
-      expect(settingsManager.getEnabledModels()).toBeUndefined();
+      expect(settingsManager.models.getEnabledModels()).toBeUndefined();
     }),
   );
 
@@ -61,7 +61,9 @@ const keepsSessionOnlyModelChangesOutOf = () =>
           (scoped) => `${scoped.model.provider}/${scoped.model.id}`,
         ),
       ).toEqual([`${sonnet.provider}/${sonnet.id}`]);
-      expect(settingsManager.getEnabledModels()).toEqual([`${sonnet.provider}/${sonnet.id}`]);
+      expect(settingsManager.models.getEnabledModels()).toEqual([
+        `${sonnet.provider}/${sonnet.id}`,
+      ]);
     }),
   );
 

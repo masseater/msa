@@ -29,18 +29,18 @@ export default class StartupNotices {
       return undefined;
     }
 
-    const lastVersion = this.mode.settingsManager.getLastChangelogVersion();
+    const lastVersion = this.mode.settingsManager.display.getLastChangelogVersion();
     const changelogPath = getChangelogPath();
     const entries = parseChangelog(changelogPath);
 
     if (lastVersion === undefined || lastVersion === "") {
-      this.mode.settingsManager.setLastChangelogVersion(VERSION);
+      this.mode.settingsManager.display.setLastChangelogVersion(VERSION);
       return undefined;
     }
 
     const newEntries = getNewEntries(entries, lastVersion);
     if (newEntries.length > 0) {
-      this.mode.settingsManager.setLastChangelogVersion(VERSION);
+      this.mode.settingsManager.display.setLastChangelogVersion(VERSION);
       return newEntries.map((e) => normalizeChangelogLinks(e.content, e)).join("\n\n");
     }
 
@@ -61,7 +61,7 @@ export default class StartupNotices {
       this.mode.layout.chatContainer.addChild(new Spacer(1));
     }
     this.mode.layout.chatContainer.addChild(new DynamicBorder());
-    if (this.mode.settingsManager.getCollapseChangelog()) {
+    if (this.mode.settingsManager.display.getCollapseChangelog()) {
       const versionMatch = this.changelogMarkdown.match(/##\s+\[?(\d+\.\d+\.\d+)\]?/u);
       const latestVersion = versionMatch === null ? VERSION : versionMatch[1];
       const condensedText = `Updated to v${latestVersion}. Use ${theme.bold("/release-notes")} to view full changelog.`;

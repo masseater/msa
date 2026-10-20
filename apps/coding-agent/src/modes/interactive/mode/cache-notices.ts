@@ -24,14 +24,14 @@ export default class CacheNotices {
   }
 
   addCacheWarmingUsage(entry: sessionManagerTypes.UsageEntry): void {
-    if (!this.mode.settingsManager.getShowCacheMissNotices()) return;
+    if (!this.mode.settingsManager.display.getShowCacheMissNotices()) return;
     this.mode.layout.chatContainer.addChild(new Spacer(1));
     const usage = formatCacheWarmingUsage(entry);
     this.mode.layout.chatContainer.addChild(new ThemedText(() => theme.fg("dim", usage), 1, 0));
   }
 
   maybeShowCacheMissNotice(message: compatTypes.AssistantMessage): void {
-    if (!this.mode.settingsManager.getShowCacheMissNotices()) return;
+    if (!this.mode.settingsManager.display.getShowCacheMissNotices()) return;
 
     const miss = detectCacheMiss(
       this.mode.sessionManager.getEntries(),

@@ -87,7 +87,7 @@ function input(
         (value) => finish(value),
         () => finish(null),
         { description },
-        context.session.settingsManager.getExternalEditorCommand(),
+        context.session.settingsManager.terminal.getExternalEditorCommand(),
       );
       showOverlay(context, component);
     }),

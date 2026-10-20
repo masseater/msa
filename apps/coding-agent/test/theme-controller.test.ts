@@ -31,8 +31,8 @@ const usesTheInitialThemeWithoutPersistingIt = () =>
     Effect.gen(function* () {
       const { ui, queryTerminalColors } = createUi();
       const manager = SettingsManager.inMemory({ theme: "dark" });
-      const setTheme = vi.spyOn(manager, "setTheme");
-      const flushSettings = vi.spyOn(manager, "flush");
+      const setTheme = vi.spyOn(manager.display, "setTheme");
+      const flushSettings = vi.spyOn(manager.persistence, "flush");
       const controller = createController(ui, () => manager, "light");
 
       expect(theme.name).toBe("light");

@@ -164,7 +164,7 @@ function mainImpl(args: string[], options?: mainTypes.MainOptions): Promise<unde
               startTelemetry({
                 envEndpoint: readEnv("MSA_OTLP_ENDPOINT"),
                 path: readEnv("PATH"),
-                settingsEndpoint: startupSettingsManager.getOtlpEndpoint(),
+                settingsEndpoint: startupSettingsManager.telemetry.getOtlpEndpoint(),
                 version: VERSION,
               }),
             );
@@ -243,7 +243,7 @@ function mainImpl(args: string[], options?: mainTypes.MainOptions): Promise<unde
                               resolveProjectTrusted({
                                 cwd: runtimeCwd,
                                 defaultProjectTrust:
-                                  startupSettingsManager.getDefaultProjectTrust(),
+                                  startupSettingsManager.session.getDefaultProjectTrust(),
                                 extensionsResult,
                                 onExtensionError: (message) =>
                                   projectTrustDiagnostics.push({ message, type: "warning" }),
@@ -283,7 +283,7 @@ function mainImpl(args: string[], options?: mainTypes.MainOptions): Promise<unde
               })),
             ];
 
-            const modelPatterns = parsed.models ?? settingsManager.getEnabledModels();
+            const modelPatterns = parsed.models ?? settingsManager.models.getEnabledModels();
             const scopedModels =
               modelPatterns !== undefined && modelPatterns.length > 0
                 ? yield* awaited(
@@ -329,10 +329,10 @@ function mainImpl(args: string[], options?: mainTypes.MainOptions): Promise<unde
       time("createAgentSessionRuntime");
       const { services, session, modelFallbackMessage } = runtime;
       const { settingsManager, modelRuntime, resourceLoader } = services;
-      setCapabilityOverrides(settingsManager.getTerminalCapabilityOverrides());
+      setCapabilityOverrides(settingsManager.terminal.getTerminalCapabilityOverrides());
       if (appMode === "interactive") yield* awaited(Effect.runPromise(primeTerminalCapabilities));
       applyHttpProxySettings(settingsManager.getGlobalSettings().httpProxy);
-      configureHttpDispatcher(settingsManager.getHttpIdleTimeoutMs());
+      configureHttpDispatcher(settingsManager.session.getHttpIdleTimeoutMs());
 
       if (parsed.help === true) {
         reportDiagnostics(startupSettingsDiagnostics);
@@ -363,7 +363,7 @@ function mainImpl(args: string[], options?: mainTypes.MainOptions): Promise<unde
         prepareInitialMessage(parsed, stdinContent),
       );
       time("prepareInitialMessage");
-      initTheme(settingsManager.getTheme(), appMode === "interactive");
+      initTheme(settingsManager.display.getTheme(), appMode === "interactive");
       time("initTheme");
 
       if (appMode === "interactive" && deprecationWarnings.length > 0) {

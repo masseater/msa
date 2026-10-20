@@ -25,7 +25,7 @@ export default class StreamingView {
   }
 
   private onAgentEnd(): void {
-    if (this.mode.settingsManager.getShowTerminalProgress())
+    if (this.mode.settingsManager.terminal.getShowTerminalProgress())
       this.mode.ui.terminal.setProgress(false);
     this.mode.display.indicator.clearStatusIndicator("working");
     if (this.streamingComponent !== undefined) {
@@ -42,7 +42,7 @@ export default class StreamingView {
   }
 
   private onTurnStart(): void {
-    if (this.mode.settingsManager.getShowTerminalProgress())
+    if (this.mode.settingsManager.terminal.getShowTerminalProgress())
       this.mode.ui.terminal.setProgress(true);
     if (!this.mode.display.indicator.workingVisible)
       this.mode.display.indicator.clearStatusIndicator();

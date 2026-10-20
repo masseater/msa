@@ -55,7 +55,7 @@ export default class SessionExtensionRuntime {
         );
         oldRunner.invalidate();
         const previousDefaultTools = new Set(this.session.tools.policy.currentDefaultTools());
-        yield* awaited(this.session.settingsManager.reload());
+        yield* awaited(this.session.settingsManager.persistence.reload());
         this.session.run.queue.syncQueueModesFromSettings();
         resetApiProviders();
         yield* awaited(this.session.resourceLoader.reload());

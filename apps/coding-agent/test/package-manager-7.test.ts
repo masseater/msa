@@ -52,7 +52,7 @@ const shouldDisablePeerInstallationThroughWrappedPnpmStep1 = () =>
       joinPath(targetDir, "package.json"),
       yield* toJsonText({ name: "repo", version: "1.0.0" }),
     );
-    settingsManager.setProjectPackages([source]);
+    settingsManager.resources.setProjectPackages([source]);
     return { effectRunPromise, source, targetDir };
   });
 
@@ -156,7 +156,7 @@ const shouldUseNpmcommandArgvForNpmRoot = Effect.gen(function* () {
     "-g",
   ]);
 
-  settingsManager.setNpmCommand(["mise", "exec", "node@22", "--", "npm"]);
+  settingsManager.resources.setNpmCommand(["mise", "exec", "node@22", "--", "npm"]);
 
   expect(packageManager.configured.getInstalledPath("npm:@scope/pkg", "user")).toBeUndefined();
   expect(runCommandSyncSpy).toHaveBeenNthCalledWith(2, "mise", [

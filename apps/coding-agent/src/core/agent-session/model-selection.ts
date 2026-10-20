@@ -107,13 +107,13 @@ export default class SessionModelSelection {
 
     this.scopedModelsInternal = [...this.scopedModelsInternal, { model }];
 
-    const enabledModels = this.session.settingsManager.getEnabledModels();
+    const enabledModels = this.session.settingsManager.models.getEnabledModels();
     if (enabledModels?.length === undefined || enabledModels?.length === 0) return;
 
     const modelReference = `${model.provider}/${model.id}`;
     if (enabledModels.some((pattern) => pattern.toLowerCase() === modelReference.toLowerCase()))
       return;
-    this.session.settingsManager.setEnabledModels([...enabledModels, modelReference]);
+    this.session.settingsManager.models.setEnabledModels([...enabledModels, modelReference]);
   }
 
   private emitModelSelect(
@@ -149,7 +149,7 @@ export default class SessionModelSelection {
         this.session.agent.state.model = model;
         this.session.sessionManager.appendModelChange(model.provider, model.id);
         if (options.persist === true) {
-          this.session.settingsManager.setDefaultModelAndProvider(model.provider, model.id);
+          this.session.settingsManager.models.setDefaultModelAndProvider(model.provider, model.id);
           this.addPersistedDefaultToNonEmptyScope(model);
         }
 
@@ -206,7 +206,10 @@ export default class SessionModelSelection {
       this.session.agent.state.model = next.model;
       this.session.sessionManager.appendModelChange(next.model.provider, next.model.id);
       if (options.persist === true) {
-        this.session.settingsManager.setDefaultModelAndProvider(next.model.provider, next.model.id);
+        this.session.settingsManager.models.setDefaultModelAndProvider(
+          next.model.provider,
+          next.model.id,
+        );
         this.addPersistedDefaultToNonEmptyScope(next.model);
       }
 
@@ -240,7 +243,10 @@ export default class SessionModelSelection {
       this.session.agent.state.model = nextModel;
       this.session.sessionManager.appendModelChange(nextModel.provider, nextModel.id);
       if (options.persist === true) {
-        this.session.settingsManager.setDefaultModelAndProvider(nextModel.provider, nextModel.id);
+        this.session.settingsManager.models.setDefaultModelAndProvider(
+          nextModel.provider,
+          nextModel.id,
+        );
         this.addPersistedDefaultToNonEmptyScope(nextModel);
       }
 
@@ -258,6 +264,6 @@ export default class SessionModelSelection {
   ): void {
     this.scopedModelsInternal = scopedModels;
     this.modelRuntimeInternal = modelRuntime;
-    modelRuntime.setModelPolicy(this.session.settingsManager.getModelPolicy());
+    modelRuntime.setModelPolicy(this.session.settingsManager.models.getModelPolicy());
   }
 }

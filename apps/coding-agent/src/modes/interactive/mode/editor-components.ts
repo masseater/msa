@@ -32,9 +32,9 @@ export default class EditorComponents {
 
   createDefaultEditor() {
     return new CustomEditor(this.mode.ui, getEditorTheme(), this.mode.keybindings, {
-      autocompleteMaxVisible: this.mode.settingsManager.getAutocompleteMaxVisible(),
+      autocompleteMaxVisible: this.mode.settingsManager.terminal.getAutocompleteMaxVisible(),
       embedWorkingStatus: true,
-      paddingX: this.mode.settingsManager.getEditorPaddingX(),
+      paddingX: this.mode.settingsManager.terminal.getEditorPaddingX(),
     });
   }
 

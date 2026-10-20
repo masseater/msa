@@ -112,7 +112,7 @@ const shouldUpdateTheRefWhenAddingThe = () => {
 };
 
 const shouldPreservePackageFiltersWhenReplacingA = () => {
-  settingsManager.setPackages([
+  settingsManager.resources.setPackages([
     {
       extensions: ["extensions/main.ts"],
       prompts: ["prompts/review.md"],

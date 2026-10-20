@@ -134,7 +134,7 @@ const shouldUpdateGitPackageDependenciesWithoutAuto = Effect.gen(function* () {
     joinPath(targetDir, "package.json"),
     yield* toJsonText({ name: "repo", version: "1.0.0" }),
   );
-  settingsManager.setProjectPackages([source]);
+  settingsManager.resources.setProjectPackages([source]);
 
   vi.spyOn(commandRunner, "runCommandCapture").mockImplementation((...callArgs: unknown[]) =>
     effectRunPromise(

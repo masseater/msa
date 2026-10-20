@@ -58,7 +58,7 @@ const startReport = () => {
     createEditorSlotUi();
   const session = {
     model: undefined,
-    settingsManager: { getExternalEditorCommand: () => "nano" },
+    settingsManager: { terminal: { getExternalEditorCommand: () => "nano" } },
   } as unknown as agentSessionTypes.AgentSession;
   const showStatus = vi.fn();
   const report = reportBug({

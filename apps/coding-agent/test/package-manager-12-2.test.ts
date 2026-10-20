@@ -42,7 +42,7 @@ const shouldForceIncludeExtensionsWithPatternAfter = () =>
       yield* writeTextFile(joinPath(extDir, "excluded.ts"), "export default function() {}");
       yield* writeTextFile(joinPath(extDir, "force-back.ts"), "export default function() {}");
 
-      settingsManager.setExtensionPaths([
+      settingsManager.resources.setExtensionPaths([
         "extensions",
         "!extensions/*.ts",
         "+extensions/force-back.ts",
@@ -73,7 +73,7 @@ const shouldForceIncludeOverridesExcludeInPackage = () =>
         "export default function() {}",
       );
 
-      settingsManager.setPackages([
+      settingsManager.resources.setPackages([
         {
           extensions: ["!**/*.ts", "+extensions/beta.ts"],
           prompts: [],
@@ -110,7 +110,7 @@ const shouldForceIncludeMultipleResources = () =>
         "---\nname: skill-c\ndescription: C\n---\nContent",
       );
 
-      settingsManager.setPackages([
+      settingsManager.resources.setPackages([
         {
           extensions: [],
           prompts: [],
@@ -141,7 +141,11 @@ const shouldForceIncludeAfterSpecificExclusion = () =>
       yield* writeTextFile(joinPath(extDir, "a.ts"), "export default function() {}");
       yield* writeTextFile(joinPath(extDir, "b.ts"), "export default function() {}");
 
-      settingsManager.setExtensionPaths(["extensions", "!extensions/b.ts", "+extensions/b.ts"]);
+      settingsManager.resources.setExtensionPaths([
+        "extensions",
+        "!extensions/b.ts",
+        "+extensions/b.ts",
+      ]);
 
       const result = yield* awaited(packageManager.resolution.resolve());
       expect(result.extensions.some((r) => packagePaths.isEnabled(r, "a.ts"))).toBe(true);

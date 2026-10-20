@@ -92,7 +92,7 @@ export default class SessionCompaction {
           request.thinkingLevel,
           this.session.agent.streamFunction,
           request.env,
-          this.session.settingsManager.getRetrySettings(),
+          this.session.settingsManager.session.getRetrySettings(),
           this.session.run.retry.summarizationRetryCallbacks({ reason, source: "compaction" }),
           undefined,
         ),
@@ -134,7 +134,7 @@ export default class SessionCompaction {
     return awaitingWith(function* () {
       const model = this.session.model;
       if (model === undefined) throw new Error(formatNoModelSelectedMessage());
-      const settings = this.session.settingsManager.getCompactionSettings(model);
+      const settings = this.session.settingsManager.context.getCompactionSettings(model);
       const pathEntries = this.session.sessionManager.getBranch();
       const preparation = prepareCompaction(pathEntries, settings);
       if (preparation === undefined) {

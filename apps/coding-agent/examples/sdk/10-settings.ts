@@ -30,8 +30,8 @@ void Effect.runPromise(
     yield* Console.log("Session created with custom settings");
     customSettingsSession.dispose();
 
-    settingsManager.setDefaultThinkingLevel("low");
-    yield* Effect.promise(() => settingsManager.flush());
+    settingsManager.models.setDefaultThinkingLevel("low");
+    yield* Effect.promise(() => settingsManager.persistence.flush());
 
     const settingsErrors = settingsManager.drainErrors();
     if (settingsErrors.length > 0) {

@@ -25,7 +25,7 @@ function createAgentSessionPart1(
     messages: agentTypes.AgentMessage[],
   ): compatTypes.Message[] => {
     const converted = convertToLlm(messages);
-    if (!settingsManager.getBlockImages()) {
+    if (!settingsManager.display.getBlockImages()) {
       return converted;
     }
     return converted.map((msg) => {

@@ -26,7 +26,7 @@ export default class TreeNavigation {
     { wantsSummary: boolean; customInstructions: string | undefined } | undefined
   > {
     return awaitingWith(function* () {
-      if (this.mode.settingsManager.getBranchSummarySkipPrompt())
+      if (this.mode.settingsManager.context.getBranchSummarySkipPrompt())
         return { customInstructions: undefined, wantsSummary: false };
       while (true) {
         const summaryChoice = yield* awaited(
@@ -180,7 +180,7 @@ export default class TreeNavigation {
       return;
     }
     const realLeafId = this.mode.sessionManager.getLeafId();
-    const initialFilterMode = this.mode.settingsManager.getTreeFilterMode();
+    const initialFilterMode = this.mode.settingsManager.terminal.getTreeFilterMode();
     this.mode.editorSlot.showSelector((done) => {
       const selector = new TreeSelectorComponent(
         tree,

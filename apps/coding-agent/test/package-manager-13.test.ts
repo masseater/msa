@@ -34,7 +34,7 @@ const shouldForceIncludeThemes = () =>
       yield* writeTextFile(joinPath(themesDir, "light.json"), "{}");
       yield* writeTextFile(joinPath(themesDir, "special.json"), "{}");
 
-      settingsManager.setThemePaths(["themes", "!themes/*.json", "+themes/special.json"]);
+      settingsManager.resources.setThemePaths(["themes", "!themes/*.json", "+themes/special.json"]);
 
       const result = yield* awaited(packageManager.resolution.resolve());
       expect(result.themes.some((r) => packagePaths.isDisabled(r, "dark.json"))).toBe(true);
@@ -52,7 +52,11 @@ const shouldForceIncludePrompts = () =>
       yield* writeTextFile(joinPath(promptsDir, "explain.md"), "Explain");
       yield* writeTextFile(joinPath(promptsDir, "debug.md"), "Debug");
 
-      settingsManager.setPromptTemplatePaths(["prompts", "!prompts/*.md", "+prompts/debug.md"]);
+      settingsManager.resources.setPromptTemplatePaths([
+        "prompts",
+        "!prompts/*.md",
+        "+prompts/debug.md",
+      ]);
 
       const result = yield* awaited(packageManager.resolution.resolve());
       expect(result.prompts.some((r) => packagePaths.isDisabled(r, "review.md"))).toBe(true);
@@ -69,7 +73,7 @@ const shouldForceExcludeTopLevelResources = () =>
       yield* writeTextFile(joinPath(extDir, "alpha.ts"), "export default function() {}");
       yield* writeTextFile(joinPath(extDir, "beta.ts"), "export default function() {}");
 
-      settingsManager.setExtensionPaths([
+      settingsManager.resources.setExtensionPaths([
         "extensions",
         "+extensions/alpha.ts",
         "-extensions/alpha.ts",
@@ -95,7 +99,7 @@ const shouldForceExcludeInPackageFilters = () =>
         "export default function() {}",
       );
 
-      settingsManager.setPackages([
+      settingsManager.resources.setPackages([
         {
           extensions: ["extensions/*.ts", "+extensions/alpha.ts", "-extensions/alpha.ts"],
           prompts: [],

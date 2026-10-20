@@ -203,7 +203,7 @@ const combinesTheAgentDirectoryAndProjectLayers = () => {
     JSON.stringify({ modelPolicy: { allow: ["openai/gpt-5.5"], deny: ["openrouter/*"] } }),
   );
   const manager = SettingsManager.fromStorage(storage);
-  expect(manager.getModelPolicy()).toEqual({
+  expect(manager.models.getModelPolicy()).toEqual({
     allow: ["openai/gpt-5.5"],
     deny: ["openai/*", "openrouter/*"],
   });
@@ -212,7 +212,7 @@ const combinesTheAgentDirectoryAndProjectLayers = () => {
 const writesThePolicyToTheAgentDirectory = () => {
   const storage = new InMemorySettingsStorage();
   const manager = SettingsManager.fromStorage(storage);
-  manager.setModelPolicy(policy(["anthropic-api/*"], ["openrouter/*"]));
+  manager.models.setModelPolicy(policy(["anthropic-api/*"], ["openrouter/*"]));
   expect(manager.getGlobalSettings().modelPolicy).toEqual({
     allow: ["anthropic-api/*"],
     deny: ["openrouter/*"],
@@ -224,7 +224,7 @@ const dropsAnEmptyPolicyInsteadOfWriting = () => {
   const manager = SettingsManager.inMemory({
     modelPolicy: { allow: [], deny: ["openai/*"] },
   });
-  manager.setModelPolicy(EMPTY_MODEL_POLICY);
+  manager.models.setModelPolicy(EMPTY_MODEL_POLICY);
   expect(manager.getGlobalSettings().modelPolicy).toBeUndefined();
 };
 

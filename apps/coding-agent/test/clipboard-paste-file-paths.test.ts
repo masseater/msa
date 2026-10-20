@@ -46,7 +46,7 @@ const finderFilePathsTakePrecedenceOverTheir = () =>
       const insertTextAtCursor = vi.fn<(text: string) => void>();
       const context = {
         editor: { insertTextAtCursor },
-        settingsManager: { getClipboardImageCommand: () => undefined },
+        settingsManager: { terminal: { getClipboardImageCommand: () => undefined } },
         showError: vi.fn(),
         ui: { requestRender: vi.fn() },
       };
@@ -70,7 +70,7 @@ const clipboardFilePathsContainingTerminalControlCharacters = () =>
       mocks.readClipboardFilePaths.mockResolvedValue(["/tmp/photo\x1b]0;unsafe\x07.png"]);
       const context = {
         editor: { insertTextAtCursor },
-        settingsManager: { getClipboardImageCommand: () => undefined },
+        settingsManager: { terminal: { getClipboardImageCommand: () => undefined } },
         showError,
         ui: { requestRender: vi.fn() },
       };
@@ -99,7 +99,7 @@ const nativeFilePathErrorsAreShownWithout = () =>
       );
       const context = {
         editor: { insertTextAtCursor: vi.fn() },
-        settingsManager: { getClipboardImageCommand: () => undefined },
+        settingsManager: { terminal: { getClipboardImageCommand: () => undefined } },
         showError,
         ui: { requestRender: vi.fn() },
       };
@@ -133,7 +133,7 @@ test.each([
           getText: () => editorText,
           insertTextAtCursor,
         },
-        settingsManager: { getClipboardImageCommand: () => undefined },
+        settingsManager: { terminal: { getClipboardImageCommand: () => undefined } },
         showError: vi.fn(),
         ui: { requestRender: vi.fn() },
       };
@@ -162,7 +162,7 @@ const bashModeShellQuotesFilePathsAnd = () =>
           insertTextAtCursor,
         },
         isBashMode: true,
-        settingsManager: { getClipboardImageCommand: () => undefined },
+        settingsManager: { terminal: { getClipboardImageCommand: () => undefined } },
         showError: vi.fn(),
         ui: { requestRender: vi.fn() },
       };
@@ -184,7 +184,7 @@ test(
 function pasteContext() {
   const context = {
     editor: { insertTextAtCursor: vi.fn<(text: string) => void>() },
-    settingsManager: { getClipboardImageCommand: () => "remote-clipboard" },
+    settingsManager: { terminal: { getClipboardImageCommand: () => "remote-clipboard" } },
     showError: vi.fn<(message: string) => void>(),
     showStatus: vi.fn<(message: string) => void>(),
     ui: { requestRender: vi.fn() },

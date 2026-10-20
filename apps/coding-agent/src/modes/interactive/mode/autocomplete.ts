@@ -37,7 +37,7 @@ export default class AutocompleteSetup {
   private skillCommands = new Map<string, string>();
 
   isSkillCommand(text: string): boolean {
-    if (!this.mode.settingsManager.getEnableSkillCommands()) return false;
+    if (!this.mode.settingsManager.resources.getEnableSkillCommands()) return false;
     const name = slashCommandName(text);
     return this.mode.session.resourceLoader.getSkills().skills.some((skill) => skill.name === name);
   }
@@ -154,7 +154,7 @@ export default class AutocompleteSetup {
 
   private skillCommandList(): tuiTypes.SlashCommand[] {
     this.skillCommands.clear();
-    if (!this.mode.settingsManager.getEnableSkillCommands()) return [];
+    if (!this.mode.settingsManager.resources.getEnableSkillCommands()) return [];
     const labels = this.mode.input.autocompleteLabels;
     const commands: tuiTypes.SlashCommand[] = [];
     for (const skill of this.mode.session.resourceLoader.getSkills().skills) {

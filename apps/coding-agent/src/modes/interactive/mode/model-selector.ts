@@ -35,8 +35,8 @@ export default class ModelSelector {
   }
 
   private configuredDefaultModel(): { id: string; provider: string } | undefined {
-    const provider = this.mode.settingsManager.getDefaultProvider();
-    const id = this.mode.settingsManager.getDefaultModel();
+    const provider = this.mode.settingsManager.models.getDefaultProvider();
+    const id = this.mode.settingsManager.models.getDefaultModel();
     return provider !== undefined && provider !== "" && id !== undefined && id !== ""
       ? { id, provider }
       : undefined;

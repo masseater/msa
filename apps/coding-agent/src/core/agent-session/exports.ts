@@ -33,7 +33,7 @@ export default class SessionExports {
   ): Promise<string> {
     return Effect.runPromise(
       awaitingWith(function* () {
-        const themeName = [options.themeName, this.session.settingsManager.getTheme()].find(
+        const themeName = [options.themeName, this.session.settingsManager.display.getTheme()].find(
           (candidate) => candidate !== undefined && getThemeByName(candidate) !== undefined,
         );
 
@@ -74,7 +74,7 @@ export default class SessionExports {
             )),
             hint: options.hint,
             messages: this.session.messages,
-            retry: this.session.settingsManager.getRetrySettings(),
+            retry: this.session.settingsManager.session.getRetrySettings(),
             sessionId: this.session.sessionId,
             signal: options.signal,
             streamFn: this.session.agent.streamFunction,

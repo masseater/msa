@@ -66,7 +66,7 @@ export default class ClipboardInput {
 
   private pasteFromClipboard(): Effect.Effect<void> {
     return awaitingWith(function* () {
-      const imageCommand = this.mode.settingsManager.getClipboardImageCommand();
+      const imageCommand = this.mode.settingsManager.terminal.getClipboardImageCommand();
       if (imageCommand !== undefined && imageCommand !== "")
         return yield* performed(
           this.mode.input.clipboardImages.pasteClipboardImageFromCommand(imageCommand),

@@ -32,7 +32,7 @@ export default class ScopedModelsSelector {
       enabledIds.length === state.availableModels.length &&
       enabledIds.every((id) => state.availableModelIds.has(id));
     const newPatterns = enabledIds === null || allEnabled ? undefined : enabledIds;
-    this.mode.settingsManager.setEnabledModels(
+    this.mode.settingsManager.models.setEnabledModels(
       newPatterns === undefined ? undefined : [...newPatterns],
     );
     this.mode.display.status.showStatus("Model selection saved to settings");

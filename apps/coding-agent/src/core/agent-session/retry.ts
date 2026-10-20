@@ -37,11 +37,11 @@ export default class SessionRetry {
   }
 
   get autoRetryEnabled(): boolean {
-    return this.session.settingsManager.getRetryEnabled();
+    return this.session.settingsManager.session.getRetryEnabled();
   }
 
   setAutoRetryEnabled(enabled: boolean): void {
-    this.session.settingsManager.setRetryEnabled(enabled);
+    this.session.settingsManager.session.setRetryEnabled(enabled);
   }
 
   finishCancelledRetry(): void {
@@ -111,7 +111,7 @@ export default class SessionRetry {
 
   willRetryAfterAgentEnd(event: Extract<agentTypes.AgentEvent, { type: "agent_end" }>): boolean {
     if (this.session.run.lifecycle.agentRunAbortRequested) return false;
-    const settings = this.session.settingsManager.getRetrySettings();
+    const settings = this.session.settingsManager.session.getRetrySettings();
     if (!settings.enabled || this.retryAttemptInternal >= settings.maxRetries) {
       return false;
     }
@@ -139,7 +139,7 @@ export default class SessionRetry {
 
   prepareRetry(message: compatTypes.AssistantMessage): Effect.Effect<boolean> {
     return awaitingWith(function* () {
-      const settings = this.session.settingsManager.getRetrySettings();
+      const settings = this.session.settingsManager.session.getRetrySettings();
       if (!settings.enabled) {
         return false;
       }

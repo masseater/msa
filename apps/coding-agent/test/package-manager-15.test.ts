@@ -43,7 +43,7 @@ const shouldMigrateLegacyUserNpmInstallsInto = Effect.gen(function* () {
     joinPath(legacyPath, "package.json"),
     yield* toJsonText({ name: "legacy-pkg", version: "1.0.0" }),
   );
-  settingsManager.setPackages(["npm:legacy-pkg"]);
+  settingsManager.resources.setPackages(["npm:legacy-pkg"]);
 
   vi.spyOn(packageManager.npm.tool, "getGlobalNpmRoot").mockReturnValue(legacyRoot);
   const runCommandCaptureSpy = vi
@@ -100,7 +100,7 @@ const seedInstalledNpmPackages = Effect.gen(function* () {
       yield* toJsonText({ name, version: "1.0.0" }),
     );
   }
-  settingsManager.setPackages([
+  settingsManager.resources.setPackages([
     "npm:user-old",
     "npm:user-current",
     "npm:user-unknown",
@@ -109,7 +109,7 @@ const seedInstalledNpmPackages = Effect.gen(function* () {
     "git:github.com/example/user-repo-b",
     "git:github.com/example/user-repo-pinned@v1",
   ]);
-  settingsManager.setProjectPackages([
+  settingsManager.resources.setProjectPackages([
     "npm:project-old",
     "npm:project-current",
     "npm:project-missing",
@@ -198,7 +198,7 @@ const shouldBatchNpmUpdatesPerScopeAnd = Effect.gen(function* () {
 });
 
 const shouldSuggestNpmSourcePrefixesForUpdate = Effect.gen(function* () {
-  settingsManager.setProjectPackages(["npm:example"]);
+  settingsManager.resources.setProjectPackages(["npm:example"]);
 
   yield* awaited(
     expect(packageManager.operations.updates.update("example")).rejects.toThrow(
@@ -208,7 +208,7 @@ const shouldSuggestNpmSourcePrefixesForUpdate = Effect.gen(function* () {
 });
 
 const shouldSuggestGitSourcePrefixesForUpdate = Effect.gen(function* () {
-  settingsManager.setProjectPackages(["git:github.com/example/repo"]);
+  settingsManager.resources.setProjectPackages(["git:github.com/example/repo"]);
 
   yield* awaited(
     expect(packageManager.operations.updates.update("github.com/example/repo")).rejects.toThrow(

@@ -20,14 +20,14 @@ export default class SettingsCallbacks {
   modelCallbacks() {
     return {
       onHttpIdleTimeoutMsChange: (timeoutMs) => {
-        this.mode.settingsManager.setHttpIdleTimeoutMs(timeoutMs);
+        this.mode.settingsManager.session.setHttpIdleTimeoutMs(timeoutMs);
         configureHttpDispatcher(timeoutMs);
         this.mode.display.status.showStatus(
           `HTTP idle timeout: ${formatHttpIdleTimeoutMs(timeoutMs)}`,
         );
       },
       onModelThinkingLevelChange: (provider, modelId, level) => {
-        this.mode.settingsManager.setModelThinkingLevel(provider, modelId, level);
+        this.mode.settingsManager.models.setModelThinkingLevel(provider, modelId, level);
         const current = this.mode.session.model;
         if (current !== undefined && current.provider === provider && current.id === modelId) {
           this.mode.session.models.thinking.setThinkingLevel(level);
@@ -36,18 +36,18 @@ export default class SettingsCallbacks {
         }
       },
       onModelThinkingLevelRemove: (provider, modelId) => {
-        this.mode.settingsManager.removeModelThinkingLevel(provider, modelId);
+        this.mode.settingsManager.models.removeModelThinkingLevel(provider, modelId);
         const current = this.mode.session.model;
         if (current !== undefined && current.provider === provider && current.id === modelId) {
           const globalDefault =
-            this.mode.settingsManager.getDefaultThinkingLevel() ?? DEFAULT_THINKING_LEVEL;
+            this.mode.settingsManager.models.getDefaultThinkingLevel() ?? DEFAULT_THINKING_LEVEL;
           this.mode.session.models.thinking.setThinkingLevel(globalDefault);
           this.mode.footer.invalidate();
           this.mode.input.keys.updateEditorBorderColor();
         }
       },
       onTransportChange: (transport) => {
-        this.mode.settingsManager.setTransport(transport);
+        this.mode.settingsManager.models.setTransport(transport);
         this.mode.session.agent.transport = transport;
       },
     } satisfies Partial<settingsSelectorTypes.SettingsCallbacks>;
@@ -64,10 +64,10 @@ export default class SettingsCallbacks {
         this.mode.display.status.showStatus(`Cache warming: ${mode}`);
       },
       onDefaultProjectTrustChange: (defaultProjectTrust) => {
-        this.mode.settingsManager.setDefaultProjectTrust(defaultProjectTrust);
+        this.mode.settingsManager.session.setDefaultProjectTrust(defaultProjectTrust);
       },
       onEnableInstallTelemetryChange: (enabled) => {
-        this.mode.settingsManager.setEnableInstallTelemetry(enabled);
+        this.mode.settingsManager.telemetry.setEnableInstallTelemetry(enabled);
       },
       onFollowUpModeChange: (mode) => {
         this.mode.session.run.queue.setFollowUpMode(mode);
@@ -76,7 +76,7 @@ export default class SettingsCallbacks {
         this.mode.session.run.queue.setSteeringMode(mode);
       },
       onTreeFilterModeChange: (mode) => {
-        this.mode.settingsManager.setTreeFilterMode(mode);
+        this.mode.settingsManager.terminal.setTreeFilterMode(mode);
       },
     } satisfies Partial<settingsSelectorTypes.SettingsCallbacks>;
   }
@@ -84,7 +84,7 @@ export default class SettingsCallbacks {
   editorCallbacks() {
     return {
       onAutocompleteMaxVisibleChange: (maxVisible) => {
-        this.mode.settingsManager.setAutocompleteMaxVisible(maxVisible);
+        this.mode.settingsManager.terminal.setAutocompleteMaxVisible(maxVisible);
         this.mode.defaultEditor.setAutocompleteMaxVisible(maxVisible);
         if (
           this.mode.editor !== this.mode.defaultEditor &&
@@ -94,10 +94,10 @@ export default class SettingsCallbacks {
         }
       },
       onDoubleEscapeActionChange: (action) => {
-        this.mode.settingsManager.setDoubleEscapeAction(action);
+        this.mode.settingsManager.terminal.setDoubleEscapeAction(action);
       },
       onEditorPaddingXChange: (padding) => {
-        this.mode.settingsManager.setEditorPaddingX(padding);
+        this.mode.settingsManager.terminal.setEditorPaddingX(padding);
         this.mode.defaultEditor.setPaddingX(padding);
         if (
           this.mode.editor !== this.mode.defaultEditor &&
@@ -107,7 +107,7 @@ export default class SettingsCallbacks {
         }
       },
       onEnableSkillCommandsChange: (enabled) => {
-        this.mode.settingsManager.setEnableSkillCommands(enabled);
+        this.mode.settingsManager.resources.setEnableSkillCommands(enabled);
         this.mode.input.autocomplete.setupAutocompleteProvider();
       },
     } satisfies Partial<settingsSelectorTypes.SettingsCallbacks>;
@@ -116,13 +116,13 @@ export default class SettingsCallbacks {
   imageCallbacks() {
     return {
       onAutoResizeImagesChange: (enabled) => {
-        this.mode.settingsManager.setImageAutoResize(enabled);
+        this.mode.settingsManager.display.setImageAutoResize(enabled);
       },
       onBlockImagesChange: (blocked) => {
-        this.mode.settingsManager.setBlockImages(blocked);
+        this.mode.settingsManager.display.setBlockImages(blocked);
       },
       onImageWidthCellsChange: (width) => {
-        this.mode.settingsManager.setImageWidthCells(width);
+        this.mode.settingsManager.display.setImageWidthCells(width);
         for (const child of this.mode.view.toolExecutions.chatComponents()) {
           if (child instanceof ToolExecutionComponent) {
             child.setImageWidthCells(width);
@@ -130,7 +130,7 @@ export default class SettingsCallbacks {
         }
       },
       onShowImagesChange: (enabled) => {
-        this.mode.settingsManager.setShowImages(enabled);
+        this.mode.settingsManager.display.setShowImages(enabled);
         for (const child of this.mode.view.toolExecutions.chatComponents()) {
           if (child instanceof ToolExecutionComponent) {
             child.setShowImages(enabled);
@@ -143,20 +143,20 @@ export default class SettingsCallbacks {
   transcriptCallbacks() {
     return {
       onCollapseChangelogChange: (collapsed) => {
-        this.mode.settingsManager.setCollapseChangelog(collapsed);
+        this.mode.settingsManager.display.setCollapseChangelog(collapsed);
       },
       onHideThinkingBlockChange: (hidden) => {
         this.mode.display.thinking.hideThinkingBlock = hidden;
-        this.mode.settingsManager.setHideThinkingBlock(hidden);
+        this.mode.settingsManager.display.setHideThinkingBlock(hidden);
         this.mode.display.thinking.updateThinkingBlockVisibility();
       },
       onMermaidRenderingModeChange: (mode) => {
-        this.mode.settingsManager.setMermaidRenderingMode(mode);
+        this.mode.settingsManager.display.setMermaidRenderingMode(mode);
         this.mode.layout.chatContainer.invalidate();
         this.mode.ui.requestRender();
       },
       onOutputPadChange: (padding) => {
-        this.mode.settingsManager.setOutputPad(padding);
+        this.mode.settingsManager.terminal.setOutputPad(padding);
         this.mode.display.thinking.outputPad = padding;
         for (const children of [
           this.mode.view.toolExecutions.chatComponents(),
@@ -171,14 +171,14 @@ export default class SettingsCallbacks {
         this.mode.ui.requestRender();
       },
       onQuietStartupChange: (quiet) => {
-        this.mode.settingsManager.setQuietStartup(quiet);
+        this.mode.settingsManager.display.setQuietStartup(quiet);
       },
       onShowCacheMissNoticesChange: (shown) => {
-        this.mode.settingsManager.setShowCacheMissNotices(shown);
+        this.mode.settingsManager.display.setShowCacheMissNotices(shown);
         this.mode.view.history.rebuildChatFromMessages();
       },
       onThemeChange: (themeSetting) => {
-        this.mode.settingsManager.setTheme(themeSetting);
+        this.mode.settingsManager.display.setTheme(themeSetting);
         this.mode.display.theme.themeController.setThemeSetting(themeSetting);
       },
       onThemePreview: (themeName) => this.mode.display.theme.themeController.preview(themeName),
@@ -190,35 +190,35 @@ export default class SettingsCallbacks {
   ) {
     return {
       onClearOnShrinkChange: (enabled) => {
-        this.mode.settingsManager.setClearOnShrink(enabled);
+        this.mode.settingsManager.terminal.setClearOnShrink(enabled);
         this.mode.ui.setClearOnShrink(enabled);
         if (!enabled && this.mode.display.indicator.activeStatusIndicator === undefined) {
           this.mode.layout.statusContainer.clear();
         }
       },
       onFullscreenCopyOnSelectChange: (enabled) => {
-        this.mode.settingsManager.setFullscreenCopyOnSelect(enabled);
+        this.mode.settingsManager.terminal.setFullscreenCopyOnSelect(enabled);
         if (this.mode.lifecycle.screen.renderer instanceof TuiAltScreen)
           this.mode.lifecycle.screen.renderer.setCopyOnSelect(enabled);
       },
       onFullscreenExitOutputChange: (output) => {
-        this.mode.settingsManager.setFullscreenExitOutput(output);
+        this.mode.settingsManager.terminal.setFullscreenExitOutput(output);
       },
       onFullscreenScrollbarChange: (mode) => {
-        this.mode.settingsManager.setFullscreenScrollbar(mode);
+        this.mode.settingsManager.terminal.setFullscreenScrollbar(mode);
         this.mode.lifecycle.screen.applyFullscreenScrollbarSetting();
       },
       onFullscreenWheelScrollLinesChange: (lines) => {
-        this.mode.settingsManager.setFullscreenWheelScrollLines(lines);
+        this.mode.settingsManager.terminal.setFullscreenWheelScrollLines(lines);
         if (this.mode.lifecycle.screen.renderer instanceof TuiAltScreen)
           this.mode.lifecycle.screen.renderer.setWheelScrollLines(lines);
       },
       onShowHardwareCursorChange: (enabled) => {
-        this.mode.settingsManager.setShowHardwareCursor(enabled);
+        this.mode.settingsManager.terminal.setShowHardwareCursor(enabled);
         this.mode.ui.setShowHardwareCursor(enabled);
       },
       onShowTerminalProgressChange: (enabled) => {
-        this.mode.settingsManager.setShowTerminalProgress(enabled);
+        this.mode.settingsManager.terminal.setShowTerminalProgress(enabled);
       },
       onTuiModeChange: (mode) => {
         if (!this.mode.lifecycle.screen.switchTuiMode(mode)) {
@@ -226,7 +226,7 @@ export default class SettingsCallbacks {
           this.mode.display.status.showStatus("Close active overlays before changing TUI mode");
           return;
         }
-        this.mode.settingsManager.setTuiMode(mode);
+        this.mode.settingsManager.terminal.setTuiMode(mode);
         if (this.mode.display.indicator.activeStatusIndicator === undefined)
           this.mode.layout.statusContainer.clear();
         this.mode.display.status.showStatus(`TUI mode: ${mode}`);

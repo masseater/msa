@@ -53,9 +53,9 @@ export default class ToolExecutionsView {
       toolCallId,
       args,
       {
-        imageWidthCells: this.mode.settingsManager.getImageWidthCells(),
+        imageWidthCells: this.mode.settingsManager.display.getImageWidthCells(),
         outputPad: this.mode.display.thinking.outputPad,
-        showImages: this.mode.settingsManager.getShowImages(),
+        showImages: this.mode.settingsManager.display.getShowImages(),
       },
       this.getRegisteredToolDefinition(name),
       this.mode.ui,

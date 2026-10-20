@@ -20,7 +20,7 @@ function startStartupTuiImpl(
   settingsManager: settingsManagerTypes.SettingsManager,
 ): void {
   ui.start();
-  const themeSetting = settingsManager.getThemeSetting();
+  const themeSetting = settingsManager.display.getThemeSetting();
   queryStartupTerminalColors(ui, () => {
     setTheme(resolveThemeSetting(themeSetting, getTerminalTheme()) ?? SYSTEM_THEME_NAME);
   });

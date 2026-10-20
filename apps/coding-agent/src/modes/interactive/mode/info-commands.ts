@@ -66,7 +66,7 @@ export default class InfoCommands {
         .map((command) => ({ description: command.description, name: command.invocationName })),
       ...this.mode.session.promptTemplates,
     ];
-    const skills = this.mode.settingsManager.getEnableSkillCommands()
+    const skills = this.mode.settingsManager.resources.getEnableSkillCommands()
       ? this.mode.session.resourceLoader.getSkills().skills
       : [];
     this.mode.view.panels.addMarkdownPanel(

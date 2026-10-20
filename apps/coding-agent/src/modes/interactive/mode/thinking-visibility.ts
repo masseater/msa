@@ -40,7 +40,7 @@ export default class ThinkingVisibility {
 
   toggleThinkingBlockVisibility(): void {
     this.hideThinkingBlock = !this.hideThinkingBlock;
-    this.mode.settingsManager.setHideThinkingBlock(this.hideThinkingBlock);
+    this.mode.settingsManager.display.setHideThinkingBlock(this.hideThinkingBlock);
     this.updateThinkingBlockVisibility();
     this.mode.display.status.showStatus(
       `Thinking blocks: ${this.hideThinkingBlock ? "hidden" : "visible"}`,
@@ -48,7 +48,7 @@ export default class ThinkingVisibility {
   }
 
   loadSettings(): void {
-    this.hideThinkingBlock = this.mode.settingsManager.getHideThinkingBlock();
-    this.outputPad = this.mode.settingsManager.getOutputPad();
+    this.hideThinkingBlock = this.mode.settingsManager.display.getHideThinkingBlock();
+    this.outputPad = this.mode.settingsManager.terminal.getOutputPad();
   }
 }

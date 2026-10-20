@@ -13,8 +13,8 @@ const defaults = { enabled: true, keepRecentTokens: 20000, reserveTokens: 16384 
 
 const usesDefaultsWithoutCompactionSettings = () => {
   const manager = SettingsManager.inMemory();
-  expect(manager.getCompactionSettings()).toEqual(defaults);
-  expect(manager.getCompactionSettings(model)).toEqual(defaults);
+  expect(manager.context.getCompactionSettings()).toEqual(defaults);
+  expect(manager.context.getCompactionSettings(model)).toEqual(defaults);
 };
 
 const resolvesEachFieldIndependentlyAndKeepsIndividual = () => {
@@ -25,14 +25,14 @@ const resolvesEachFieldIndependentlyAndKeepsIndividual = () => {
       reserveTokens: 8192,
     },
   });
-  expect(manager.getCompactionSettings(model)).toEqual({
+  expect(manager.context.getCompactionSettings(model)).toEqual({
     enabled: true,
     keepRecentTokens: 10000,
     reserveTokens: 400000,
   });
-  expect(manager.getCompactionReserveTokens(model)).toBe(400000);
-  expect(manager.getCompactionKeepRecentTokens(model)).toBe(10000);
-  expect(manager.getCompactionSettings()).toEqual({
+  expect(manager.context.getCompactionReserveTokens(model)).toBe(400000);
+  expect(manager.context.getCompactionKeepRecentTokens(model)).toBe(10000);
+  expect(manager.context.getCompactionSettings()).toEqual({
     enabled: true,
     keepRecentTokens: 10000,
     reserveTokens: 8192,
@@ -41,15 +41,18 @@ const resolvesEachFieldIndependentlyAndKeepsIndividual = () => {
   manager.applyOverrides({
     compaction: { modelOverrides: { [modelKey]: { keepRecentTokens: 30000 } } },
   });
-  expect(manager.getCompactionKeepRecentTokens(model)).toBe(30000);
-  expect(manager.getCompactionReserveTokens(model)).toBe(400000);
+  expect(manager.context.getCompactionKeepRecentTokens(model)).toBe(30000);
+  expect(manager.context.getCompactionReserveTokens(model)).toBe(400000);
 };
 
 const fallsBackToBuiltInDefaultsFor = () => {
   const manager = SettingsManager.inMemory({
     compaction: { modelOverrides: { [modelKey]: { keepRecentTokens: 1024 } } },
   });
-  expect(manager.getCompactionSettings(model)).toEqual({ ...defaults, keepRecentTokens: 1024 });
+  expect(manager.context.getCompactionSettings(model)).toEqual({
+    ...defaults,
+    keepRecentTokens: 1024,
+  });
 };
 
 const mergesProjectModelOverridesPerFieldBefore = () =>
@@ -76,20 +79,20 @@ const mergesProjectModelOverridesPerFieldBefore = () =>
         }),
       );
       const manager = SettingsManager.fromStorage(storage);
-      expect(manager.getCompactionSettings(model)).toEqual({
+      expect(manager.context.getCompactionSettings(model)).toEqual({
         enabled: true,
         keepRecentTokens: 2000,
         reserveTokens: 400000,
       });
-      expect(manager.getCompactionSettings({ id: "other", provider: "provider" })).toEqual({
+      expect(manager.context.getCompactionSettings({ id: "other", provider: "provider" })).toEqual({
         enabled: true,
         keepRecentTokens: 4096,
         reserveTokens: 1024,
       });
-      yield* awaited(manager.reload());
-      expect(manager.getCompactionKeepRecentTokens(model)).toBe(2000);
-      manager.setProjectTrusted(false);
-      expect(manager.getCompactionKeepRecentTokens(model)).toBe(30000);
+      yield* awaited(manager.persistence.reload());
+      expect(manager.context.getCompactionKeepRecentTokens(model)).toBe(2000);
+      manager.persistence.setProjectTrusted(false);
+      expect(manager.context.getCompactionKeepRecentTokens(model)).toBe(30000);
     }),
   );
 
@@ -105,11 +108,11 @@ const keepsEnabledGlobalAndPreservesOverridesWhen = () =>
         }),
       );
       const manager = SettingsManager.fromStorage(storage);
-      expect(manager.getCompactionSettings(model).enabled).toBe(true);
-      manager.setCompactionEnabled(false);
-      yield* awaited(manager.flush());
-      yield* awaited(manager.reload());
-      expect(manager.getCompactionSettings(model)).toEqual({
+      expect(manager.context.getCompactionSettings(model).enabled).toBe(true);
+      manager.context.setCompactionEnabled(false);
+      yield* awaited(manager.persistence.flush());
+      yield* awaited(manager.persistence.reload());
+      expect(manager.context.getCompactionSettings(model)).toEqual({
         ...defaults,
         enabled: false,
         reserveTokens: 400000,
@@ -121,7 +124,7 @@ const acceptsZeroInOrdinarySettingsAndModel = () => {
   const manager = SettingsManager.inMemory({
     compaction: { keepRecentTokens: 0, reserveTokens: 0 },
   });
-  expect(manager.getCompactionSettings(model)).toEqual({
+  expect(manager.context.getCompactionSettings(model)).toEqual({
     enabled: true,
     keepRecentTokens: 0,
     reserveTokens: 0,
@@ -133,7 +136,7 @@ const acceptsZeroInOrdinarySettingsAndModel = () => {
       reserveTokens: 1000,
     },
   });
-  expect(manager.getCompactionSettings(model)).toEqual({
+  expect(manager.context.getCompactionSettings(model)).toEqual({
     enabled: true,
     keepRecentTokens: 0,
     reserveTokens: 0,
@@ -160,13 +163,13 @@ describe("compaction model overrides", () => {
         },
       },
     });
-    expect(manager.getCompactionReserveTokens(model)).toBe(400000);
+    expect(manager.context.getCompactionReserveTokens(model)).toBe(400000);
     for (const other of [
       { id: model.id, provider: "other" },
       { id: "other", provider: model.provider },
       { id: "family/Model", provider: model.provider },
     ]) {
-      expect(manager.getCompactionSettings(other)).toEqual(defaults);
+      expect(manager.context.getCompactionSettings(other)).toEqual(defaults);
     }
   });
 
@@ -193,11 +196,11 @@ describe("compaction model overrides", () => {
           }),
         );
         const manager = SettingsManager.fromStorage(storage);
-        expect(() => manager.getCompactionSettings(model)).toThrow(
+        expect(() => manager.context.getCompactionSettings(model)).toThrow(
           `Invalid compaction.modelOverrides["${modelKey}"].${field} setting: ${String(value)}. Expected a non-negative safe integer.`,
         );
-        expect(manager.getCompactionSettings()).toEqual(defaults);
-        expect(manager.getCompactionSettings({ id: model.id, provider: "other" })).toEqual(
+        expect(manager.context.getCompactionSettings()).toEqual(defaults);
+        expect(manager.context.getCompactionSettings({ id: model.id, provider: "other" })).toEqual(
           defaults,
         );
       },
@@ -208,7 +211,7 @@ describe("compaction model overrides", () => {
       manager.applyOverrides({
         compaction: { modelOverrides: { [modelKey]: { [field]: value } } },
       });
-      expect(() => manager.getCompactionSettings(model)).toThrow(
+      expect(() => manager.context.getCompactionSettings(model)).toThrow(
         `Invalid compaction.modelOverrides["${modelKey}"].${field} setting: ${String(value)}`,
       );
     });
@@ -233,8 +236,8 @@ describe("compaction model overrides", () => {
           );
           const manager = SettingsManager.fromStorage(storage);
           const error = `Invalid compaction.${field} setting: ${String(value)}. Expected a non-negative safe integer.`;
-          expect(() => manager.getCompactionSettings()).toThrow(error);
-          expect(() => manager.getCompactionSettings(model)).toThrow(error);
+          expect(() => manager.context.getCompactionSettings()).toThrow(error);
+          expect(() => manager.context.getCompactionSettings(model)).toThrow(error);
         },
       );
 
@@ -243,7 +246,7 @@ describe("compaction model overrides", () => {
         (value) => {
           const manager = SettingsManager.inMemory();
           manager.applyOverrides({ compaction: { [field]: value } });
-          expect(() => manager.getCompactionSettings()).toThrow(
+          expect(() => manager.context.getCompactionSettings()).toThrow(
             `Invalid compaction.${field} setting: ${String(value)}`,
           );
         },
@@ -258,7 +261,7 @@ describe("compaction model overrides", () => {
     storage.withLock("global", () =>
       JSON.stringify({ compaction: { modelOverrides: { [modelKey]: entry } } }),
     );
-    expect(() => SettingsManager.fromStorage(storage).getCompactionSettings(model)).toThrow(
+    expect(() => SettingsManager.fromStorage(storage).context.getCompactionSettings(model)).toThrow(
       `Invalid compaction.modelOverrides["${modelKey}"] setting: ${String(entry)}. Expected an object.`,
     );
   });

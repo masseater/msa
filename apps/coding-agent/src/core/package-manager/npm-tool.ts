@@ -20,7 +20,7 @@ export default class NpmTool {
   private globalNpmRootCommandKey!: string | undefined;
 
   getNpmCommand(): { command: string; args: string[] } {
-    const configuredCommand = this.manager.settingsManager.getNpmCommand();
+    const configuredCommand = this.manager.settingsManager.resources.getNpmCommand();
     if (configuredCommand === undefined || configuredCommand.length === 0) {
       return { args: [], command: "npm" };
     }

@@ -39,11 +39,11 @@ const loadsFrontmatterAndSettingsWithA = Effect.gen(function* () {
   );
 
   const settings = SettingsManager.create(projectDir, agentDir);
-  expect(settings.getDefaultModel()).toBe("global-model");
-  expect(settings.getDefaultProvider()).toBe("project-provider");
+  expect(settings.models.getDefaultModel()).toBe("global-model");
+  expect(settings.models.getDefaultProvider()).toBe("project-provider");
 
-  settings.setTheme("dark");
-  yield* Effect.promise(() => settings.flush());
+  settings.display.setTheme("dark");
+  yield* Effect.promise(() => settings.persistence.flush());
   expect(yield* fs.readFileString(globalSettingsPath)).not.toMatch(/^\uFEFF/u);
 });
 

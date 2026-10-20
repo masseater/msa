@@ -39,9 +39,9 @@ export default class ModeShutdown {
     this.signalCleanupHandlers = [];
   }
 
-  stop(fullscreenExitOutput = this.mode.settingsManager.getFullscreenExitOutput()): void {
+  stop(fullscreenExitOutput = this.mode.settingsManager.terminal.getFullscreenExitOutput()): void {
     this.mode.editorSlot.disposeActiveSelector();
-    if (this.mode.settingsManager.getShowTerminalProgress()) {
+    if (this.mode.settingsManager.terminal.getShowTerminalProgress()) {
       this.mode.ui.terminal.setProgress(false);
     }
     this.mode.display.indicator.clearStatusIndicator();

@@ -32,7 +32,7 @@ const createSession = (options: { scoped: boolean; persistedScope?: string[] }) 
 
     const settingsManager = SettingsManager.create(tempDir, tempDir);
     if (options.persistedScope !== undefined) {
-      settingsManager.setEnabledModels(options.persistedScope);
+      settingsManager.models.setEnabledModels(options.persistedScope);
     }
 
     const authStorage = AuthStorage.inMemory({

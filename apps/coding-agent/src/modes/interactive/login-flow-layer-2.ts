@@ -92,7 +92,7 @@ export default abstract class LoginFlowLayer2 extends LoginFlowLayer1 {
                 prompt: (prompt) => Effect.runPromise(this.showAuthPrompt(dialog, prompt)),
                 signal: dialog.signal,
               },
-              { getDeviceId: () => host.session.settingsManager.getOrCreateDeviceId() },
+              { getDeviceId: () => host.session.settingsManager.telemetry.getOrCreateDeviceId() },
             ),
           );
         } finally {

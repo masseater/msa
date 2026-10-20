@@ -50,12 +50,12 @@ function* createAgentSessionPart2(
   if (model === undefined) {
     const result = yield* awaited(
       findInitialModel({
-        defaultModelId: settingsManager.getDefaultModel(),
-        defaultProvider: settingsManager.getDefaultProvider(),
-        defaultThinkingLevel: settingsManager.getDefaultThinkingLevel(),
+        defaultModelId: settingsManager.models.getDefaultModel(),
+        defaultProvider: settingsManager.models.getDefaultProvider(),
+        defaultThinkingLevel: settingsManager.models.getDefaultThinkingLevel(),
         isContinuing: hasExistingSession,
         modelRuntime,
-        modelThinkingLevels: settingsManager.getAllModelThinkingLevels(),
+        modelThinkingLevels: settingsManager.models.getAllModelThinkingLevels(),
         scopedModels: [],
       }),
     );

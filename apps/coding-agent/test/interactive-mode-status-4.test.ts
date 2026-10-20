@@ -26,7 +26,7 @@ type FakeInteractiveMode = {
     resourceLoader: { getSkills: () => { skills: [] } };
     tools: { externalServices: { getExternalServices: () => [] } };
   };
-  settingsManager: { getEnableSkillCommands: () => boolean };
+  settingsManager: { resources: { getEnableSkillCommands: () => boolean } };
   skillCommands: Map<string, string>;
   sessionManager: { getCwd: () => string };
   fdPath: null;
@@ -49,7 +49,7 @@ const matchesModelCommandArgumentsAcrossProviderModel = Effect.gen(function* () 
       tools: { externalServices: { getExternalServices: () => [] } },
     },
     sessionManager: { getCwd: () => "/tmp" },
-    settingsManager: { getEnableSkillCommands: () => false },
+    settingsManager: { resources: { getEnableSkillCommands: () => false } },
     skillCommands: new Map(),
   };
 
@@ -77,7 +77,7 @@ const matchesLoginCommandArgumentsByProviderIdStep = () => {
       resourceLoader: { getSkills: () => { skills: [] } };
       tools: { externalServices: { getExternalServices: () => [] } };
     };
-    settingsManager: { getEnableSkillCommands: () => boolean };
+    settingsManager: { resources: { getEnableSkillCommands: () => boolean } };
     skillCommands: Map<string, string>;
     sessionManager: { getCwd: () => string };
     fdPath: null;
@@ -108,7 +108,7 @@ const matchesLoginCommandArgumentsByProviderIdStep = () => {
       tools: { externalServices: { getExternalServices: () => [] } },
     },
     sessionManager: { getCwd: () => "/tmp" },
-    settingsManager: { getEnableSkillCommands: () => false },
+    settingsManager: { resources: { getEnableSkillCommands: () => false } },
     skillCommands: new Map(),
   };
   return { createBaseAutocompleteProvider, fakeThis };

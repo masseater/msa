@@ -24,10 +24,10 @@ const writesTheRewrittenReferencesIntoTheAgent = () =>
       const manager = SettingsManager.fromStorage(storage);
       const { candidates } = upgradePair();
 
-      const written = manager.rewriteModelReferences((layer) =>
+      const written = manager.models.rewriteModelReferences((layer) =>
         rewriteModelReferencesInSettings(layer, createUpgradeReplacements(candidates)),
       );
-      yield* awaited(manager.flush());
+      yield* awaited(manager.persistence.flush());
 
       expect(written.global).toHaveLength(7);
       expect(manager.getGlobalSettings().defaultModel).toBe("claude-sonnet-5-5");
@@ -86,7 +86,7 @@ const writesTheChangesWhenAskedToApply = () =>
       const { tool, settingsManager } = yield* awaited(createTool());
       const result = yield* awaited(tool.execute("call-1", { action: "apply" }));
       expect(text(result)).toContain("Wrote 7 settings.");
-      yield* awaited(settingsManager.flush());
+      yield* awaited(settingsManager.persistence.flush());
       expect(settingsManager.getGlobalSettings().defaultModel).toBe("claude-sonnet-5-5");
     }),
   );

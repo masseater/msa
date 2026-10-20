@@ -156,9 +156,9 @@ export default abstract class ResourceListLayer1 extends ResourceListLayer0 {
     const { scope, packages } = togglePackageResourceScopeResult.value;
 
     if (scope === "project") {
-      this.settingsManager.setProjectPackages(packages);
+      this.settingsManager.resources.setProjectPackages(packages);
     } else {
-      this.settingsManager.setPackages(packages);
+      this.settingsManager.resources.setPackages(packages);
     }
   }
 
@@ -166,10 +166,10 @@ export default abstract class ResourceListLayer1 extends ResourceListLayer0 {
     key: resourceListInternalTypes.ResourceType,
     paths: string[],
   ): void {
-    if (key === "extensions") this.settingsManager.setProjectExtensionPaths(paths);
-    else if (key === "skills") this.settingsManager.setProjectSkillPaths(paths);
-    else if (key === "prompts") this.settingsManager.setProjectPromptTemplatePaths(paths);
-    else this.settingsManager.setProjectThemePaths(paths);
+    if (key === "extensions") this.settingsManager.resources.setProjectExtensionPaths(paths);
+    else if (key === "skills") this.settingsManager.resources.setProjectSkillPaths(paths);
+    else if (key === "prompts") this.settingsManager.resources.setProjectPromptTemplatePaths(paths);
+    else this.settingsManager.resources.setProjectThemePaths(paths);
   }
 
   protected getOverrideStateFromEntries(

@@ -50,9 +50,7 @@ function createShowLoadedResourcesThis(options: ShowLoadedResourcesOptions) {
     sessionManager: {
       getCwd: () => options.cwd ?? "/tmp/project",
     },
-    settingsManager: {
-      getQuietStartup: () => options.quietStartup,
-    },
+    settingsManager: { display: { getQuietStartup: () => options.quietStartup } },
     toolOutputExpanded: options.toolOutputExpanded ?? false,
   };
 

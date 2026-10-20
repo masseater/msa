@@ -146,7 +146,7 @@ const refreshesHidethinkingblockBeforeRebuildingChatDuring = Effect.gen(function
         },
       },
     },
-    settingsManager: { getHideThinkingBlock: () => true },
+    settingsManager: { display: { getHideThinkingBlock: () => true } },
   });
 
   bindModeFake(context);

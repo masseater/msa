@@ -76,7 +76,8 @@ function createDoneStream() {
 
 const settingsFor = (options: sdkOpenrouterAttributionSupportTypes.CaptureOptions) => {
   const settingsManager = SettingsManager.create(dirs.cwd, dirs.agentDir);
-  if (options.telemetryEnabled === false) settingsManager.setEnableInstallTelemetry(false);
+  if (options.telemetryEnabled === false)
+    settingsManager.telemetry.setEnableInstallTelemetry(false);
   return settingsManager;
 };
 

@@ -28,7 +28,7 @@ export default class ScreenRenderer {
 
   applyFullscreenScrollbarSetting(): void {
     this.mode.layout.transcriptScrollView?.setScrollbar(
-      this.mode.settingsManager.getFullscreenScrollbar(),
+      this.mode.settingsManager.terminal.getFullscreenScrollbar(),
     );
   }
 
@@ -52,29 +52,32 @@ export default class ScreenRenderer {
   }
 
   applyRuntimeSettings(): void {
-    setCapabilityOverrides(this.mode.settingsManager.getTerminalCapabilityOverrides());
+    setCapabilityOverrides(this.mode.settingsManager.terminal.getTerminalCapabilityOverrides());
     this.ensurePngTranscoder();
-    configureHttpDispatcher(this.mode.settingsManager.getHttpIdleTimeoutMs());
+    configureHttpDispatcher(this.mode.settingsManager.session.getHttpIdleTimeoutMs());
     this.applyFullscreenScrollbarSetting();
     if (this.renderer instanceof TuiAltScreen) {
-      this.renderer.setCopyOnSelect(this.mode.settingsManager.getFullscreenCopyOnSelect());
-      this.renderer.setWheelScrollLines(this.mode.settingsManager.getFullscreenWheelScrollLines());
+      this.renderer.setCopyOnSelect(this.mode.settingsManager.terminal.getFullscreenCopyOnSelect());
+      this.renderer.setWheelScrollLines(
+        this.mode.settingsManager.terminal.getFullscreenWheelScrollLines(),
+      );
     }
     this.mode.footer.setSession(this.mode.session);
     this.mode.lifecycle.events.updateGoalTicker();
     void this.mode.session.integrations.orchestration.orchestrator?.refresh();
     this.mode.footer.setAutoCompactEnabled(this.mode.session.compaction.auto.autoCompactionEnabled);
     this.mode.layout.footerDataProvider.setCwd(this.mode.sessionManager.getCwd());
-    this.mode.display.thinking.hideThinkingBlock = this.mode.settingsManager.getHideThinkingBlock();
-    this.mode.display.thinking.outputPad = this.mode.settingsManager.getOutputPad();
-    this.mode.ui.setShowHardwareCursor(this.mode.settingsManager.getShowHardwareCursor());
-    const clearOnShrink = this.mode.settingsManager.getClearOnShrink();
+    this.mode.display.thinking.hideThinkingBlock =
+      this.mode.settingsManager.display.getHideThinkingBlock();
+    this.mode.display.thinking.outputPad = this.mode.settingsManager.terminal.getOutputPad();
+    this.mode.ui.setShowHardwareCursor(this.mode.settingsManager.terminal.getShowHardwareCursor());
+    const clearOnShrink = this.mode.settingsManager.terminal.getClearOnShrink();
     this.mode.ui.setClearOnShrink(clearOnShrink);
     if (!clearOnShrink && this.mode.display.indicator.activeStatusIndicator === undefined) {
       this.mode.layout.statusContainer.clear();
     }
-    const editorPaddingX = this.mode.settingsManager.getEditorPaddingX();
-    const autocompleteMaxVisible = this.mode.settingsManager.getAutocompleteMaxVisible();
+    const editorPaddingX = this.mode.settingsManager.terminal.getEditorPaddingX();
+    const autocompleteMaxVisible = this.mode.settingsManager.terminal.getAutocompleteMaxVisible();
     this.mode.defaultEditor.setPaddingX(editorPaddingX);
     this.mode.defaultEditor.setAutocompleteMaxVisible(autocompleteMaxVisible);
     if (this.mode.editor !== this.mode.defaultEditor) {
@@ -87,15 +90,15 @@ export default class ScreenRenderer {
     options: interactiveModeTypes.InteractiveModeOptions,
   ): interactiveModeTypes.InteractiveModeOptions {
     const settings = this.mode.settingsManager;
-    setCapabilityOverrides(settings.getTerminalCapabilityOverrides());
-    return { ...options, tuiMode: options.tuiMode ?? settings.getTuiMode() };
+    setCapabilityOverrides(settings.terminal.getTerminalCapabilityOverrides());
+    return { ...options, tuiMode: options.tuiMode ?? settings.terminal.getTuiMode() };
   }
 
   createUi(): tuiTypes.TUI {
     const { options, settingsManager } = this.mode;
     this.renderer = this.createRenderer(options.terminal, options.tuiMode ?? "regular");
     const ui = createInteractiveTuiReference(() => this.renderer);
-    ui.setClearOnShrink(settingsManager.getClearOnShrink());
+    ui.setClearOnShrink(settingsManager.terminal.getClearOnShrink());
     return ui;
   }
 
@@ -104,11 +107,12 @@ export default class ScreenRenderer {
     tuiMode: NonNullable<interactiveModeTypes.InteractiveModeOptions["tuiMode"]>,
   ) {
     return createInteractiveTui({
-      fullscreenCopyOnSelect: this.mode.settingsManager.getFullscreenCopyOnSelect(),
-      fullscreenWheelScrollLines: this.mode.settingsManager.getFullscreenWheelScrollLines(),
+      fullscreenCopyOnSelect: this.mode.settingsManager.terminal.getFullscreenCopyOnSelect(),
+      fullscreenWheelScrollLines:
+        this.mode.settingsManager.terminal.getFullscreenWheelScrollLines(),
       logDirectory: getAgentDir(),
       onRightClickPaste: this.mode.input.clipboard.onRightClickPaste,
-      showHardwareCursor: this.mode.settingsManager.getShowHardwareCursor(),
+      showHardwareCursor: this.mode.settingsManager.terminal.getShowHardwareCursor(),
       terminal,
       tuiMode,
     });
@@ -134,7 +138,7 @@ export default class ScreenRenderer {
     this.mode.extensions.dialogs.rebindExtensionTerminalInputListeners();
     if (
       restoreProgress &&
-      this.mode.settingsManager.getShowTerminalProgress() &&
+      this.mode.settingsManager.terminal.getShowTerminalProgress() &&
       (this.mode.session.isStreaming || this.mode.session.compaction.manual.isCompacting)
     ) {
       terminal.setProgress(true);
@@ -166,8 +170,9 @@ export default class ScreenRenderer {
     if (tuiModule.isViewportTUI(previousUi)) previousUi.setLayoutRoot(undefined);
 
     const nextUi = createInteractiveTui({
-      fullscreenCopyOnSelect: this.mode.settingsManager.getFullscreenCopyOnSelect(),
-      fullscreenWheelScrollLines: this.mode.settingsManager.getFullscreenWheelScrollLines(),
+      fullscreenCopyOnSelect: this.mode.settingsManager.terminal.getFullscreenCopyOnSelect(),
+      fullscreenWheelScrollLines:
+        this.mode.settingsManager.terminal.getFullscreenWheelScrollLines(),
       logDirectory: getAgentDir(),
       onRightClickPaste: this.mode.input.clipboard.onRightClickPaste,
       showHardwareCursor,

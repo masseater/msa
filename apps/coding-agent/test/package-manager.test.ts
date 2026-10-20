@@ -46,7 +46,7 @@ const shouldResolveLocalExtensionPathsFromSettings = Effect.gen(function* () {
   yield* makeDirectory(extDir);
   const extPath = joinPath(extDir, "my-extension.ts");
   yield* writeTextFile(extPath, "export default function() {}");
-  settingsManager.setExtensionPaths(["extensions/my-extension.ts"]);
+  settingsManager.resources.setExtensionPaths(["extensions/my-extension.ts"]);
 
   const result = yield* awaited(packageManager.resolution.resolve());
   expect(result.extensions.some((r) => r.path === extPath && r.enabled)).toBe(true);
@@ -78,14 +78,14 @@ const shouldResolveBuiltInExtensionsWithUser = Effect.gen(function* () {
     ["builtin:llama.cpp", true, "builtin", "user"],
   ]);
 
-  settingsManager.setExtensionPaths(["-builtin:mcp"]);
-  settingsManager.setProjectExtensionPaths(["+builtin:mcp", "-builtin:llama.cpp"]);
+  settingsManager.resources.setExtensionPaths(["-builtin:mcp"]);
+  settingsManager.resources.setProjectExtensionPaths(["+builtin:mcp", "-builtin:llama.cpp"]);
   expect(yield* awaited(builtins())).toEqual([
     ["builtin:mcp", true, "builtin", "project"],
     ["builtin:llama.cpp", false, "builtin", "project"],
   ]);
 
-  settingsManager.setProjectExtensionPaths([]);
+  settingsManager.resources.setProjectExtensionPaths([]);
   expect(yield* awaited(builtins())).toEqual([
     ["builtin:mcp", false, "builtin", "user"],
     ["builtin:llama.cpp", true, "builtin", "user"],
@@ -105,7 +105,7 @@ description: A test skill
 Content`,
   );
 
-  settingsManager.setSkillPaths(["skills"]);
+  settingsManager.resources.setSkillPaths(["skills"]);
 
   const result = yield* awaited(packageManager.resolution.resolve());
 
@@ -134,7 +134,7 @@ const shouldResolveProjectPathsRelativeToMsa = Effect.gen(function* () {
   const extPath = joinPath(extDir, "project-ext.ts");
   yield* writeTextFile(extPath, "export default function() {}");
 
-  settingsManager.setProjectExtensionPaths(["extensions/project-ext.ts"]);
+  settingsManager.resources.setProjectExtensionPaths(["extensions/project-ext.ts"]);
 
   const result = yield* awaited(packageManager.resolution.resolve());
   expect(result.extensions.some((r) => r.path === extPath && r.enabled)).toBe(true);
@@ -146,7 +146,7 @@ const shouldAutoDiscoverUserPromptsWithOverrides = Effect.gen(function* () {
   const promptPath = joinPath(promptsDir, "auto.md");
   yield* writeTextFile(promptPath, "Auto prompt");
 
-  settingsManager.setPromptTemplatePaths(["!prompts/auto.md"]);
+  settingsManager.resources.setPromptTemplatePaths(["!prompts/auto.md"]);
 
   const result = yield* awaited(packageManager.resolution.resolve());
   expect(result.prompts.some((r) => r.path === promptPath && !r.enabled)).toBe(true);

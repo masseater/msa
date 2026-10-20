@@ -23,7 +23,7 @@ function* mainImplPart1Part1(
     (envSessionDir !== undefined && envSessionDir !== ""
       ? expandTildePath(envSessionDir)
       : undefined) ??
-    startupSettingsManager.getSessionDir();
+    startupSettingsManager.session.getSessionDir();
   let sessionManager = yield* awaited(
     createSessionManager(parsed, cwd, sessionDir, startupSettingsManager),
   );

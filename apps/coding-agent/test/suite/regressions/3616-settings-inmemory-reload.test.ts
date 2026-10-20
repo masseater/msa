@@ -22,11 +22,11 @@ const preservesInitialSettingsAfterDirectReload = Effect.gen(function* () {
     images: { autoResize: false },
   });
 
-  yield* Effect.promise(() => settingsManager.reload());
+  yield* Effect.promise(() => settingsManager.persistence.reload());
 
-  expect(settingsManager.getDefaultThinkingLevel()).toBe("high");
-  expect(settingsManager.getImageAutoResize()).toBe(false);
-  expect(settingsManager.getCompactionEnabled()).toBe(false);
+  expect(settingsManager.models.getDefaultThinkingLevel()).toBe("high");
+  expect(settingsManager.display.getImageAutoResize()).toBe(false);
+  expect(settingsManager.context.getCompactionEnabled()).toBe(false);
   expect(settingsManager.getGlobalSettings()).toEqual({
     compaction: { enabled: false },
     defaultThinkingLevel: "high",
@@ -53,9 +53,9 @@ const preservesInitialSettingsWhenDefaultresourceloaderReloads = Effect.gen(func
 
   yield* Effect.promise(() => resourceLoader.reload());
 
-  expect(settingsManager.getDefaultThinkingLevel()).toBe("high");
-  expect(settingsManager.getImageAutoResize()).toBe(false);
-  expect(settingsManager.getCompactionEnabled()).toBe(false);
+  expect(settingsManager.models.getDefaultThinkingLevel()).toBe("high");
+  expect(settingsManager.display.getImageAutoResize()).toBe(false);
+  expect(settingsManager.context.getCompactionEnabled()).toBe(false);
 });
 
 const preservesInitialSettingsAfterAnUnrelated = Effect.gen(function* () {
@@ -64,13 +64,13 @@ const preservesInitialSettingsAfterAnUnrelated = Effect.gen(function* () {
     images: { autoResize: false },
   });
 
-  settingsManager.setTheme("dark");
-  yield* Effect.promise(() => settingsManager.flush());
-  yield* Effect.promise(() => settingsManager.reload());
+  settingsManager.display.setTheme("dark");
+  yield* Effect.promise(() => settingsManager.persistence.flush());
+  yield* Effect.promise(() => settingsManager.persistence.reload());
 
-  expect(settingsManager.getTheme()).toBe("dark");
-  expect(settingsManager.getImageAutoResize()).toBe(false);
-  expect(settingsManager.getCompactionEnabled()).toBe(false);
+  expect(settingsManager.display.getTheme()).toBe("dark");
+  expect(settingsManager.display.getImageAutoResize()).toBe(false);
+  expect(settingsManager.context.getCompactionEnabled()).toBe(false);
   expect(settingsManager.getGlobalSettings()).toEqual({
     compaction: { enabled: false },
     images: { autoResize: false },

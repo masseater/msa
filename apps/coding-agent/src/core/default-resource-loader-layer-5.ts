@@ -18,8 +18,8 @@ export default abstract class DefaultResourceLoaderLayer5 extends DefaultResourc
   loadProjectTrustExtensions(): Promise<extensionsTypesTypes.LoadExtensionsResult> {
     return Effect.runPromise(
       awaitingWith(function* () {
-        this.settingsManager.setProjectTrusted(false);
-        yield* awaited(this.settingsManager.reload());
+        this.settingsManager.persistence.setProjectTrusted(false);
+        yield* awaited(this.settingsManager.persistence.reload());
         return yield* performed(this.loadCurrentExtensionSet({ includeInlineFactories: true }));
       }, this),
     );

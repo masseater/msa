@@ -150,10 +150,12 @@ const persistsThemeChangesToSettingsManager = () => {
 
   let currentTheme = "dark";
   const settingsManager = {
-    getTheme: vi.fn(() => currentTheme),
-    setTheme: vi.fn((theme: string) => {
-      currentTheme = theme;
-    }),
+    display: {
+      getTheme: vi.fn(() => currentTheme),
+      setTheme: vi.fn((theme: string) => {
+        currentTheme = theme;
+      }),
+    },
   };
   const fakeThis: any = {
     session: { settingsManager },
@@ -174,7 +176,7 @@ const persistsThemeChangesToSettingsManager = () => {
 
   expect(result.success).toBe(true);
   expect(fakeThis.themeController.setThemeName).toHaveBeenCalledWith("light");
-  expect(settingsManager.setTheme).toHaveBeenCalledWith("light");
+  expect(settingsManager.display.setTheme).toHaveBeenCalledWith("light");
   expect(currentTheme).toBe("light");
   expect(fakeThis.ui.requestRender).toHaveBeenCalledTimes(1);
 };
@@ -182,10 +184,7 @@ const persistsThemeChangesToSettingsManager = () => {
 const doesNotPersistInvalidThemeNames = () => {
   initTheme("dark");
 
-  const settingsManager = {
-    getTheme: vi.fn(() => "dark"),
-    setTheme: vi.fn(),
-  };
+  const settingsManager = { display: { getTheme: vi.fn(() => "dark"), setTheme: vi.fn() } };
   const fakeThis: any = {
     session: { settingsManager },
     settingsManager,
@@ -202,7 +201,7 @@ const doesNotPersistInvalidThemeNames = () => {
 
   expect(result.success).toBe(false);
   expect(fakeThis.themeController.setThemeName).toHaveBeenCalledWith("__missing_theme__");
-  expect(settingsManager.setTheme).not.toHaveBeenCalled();
+  expect(settingsManager.display.setTheme).not.toHaveBeenCalled();
   expect(fakeThis.ui.requestRender).not.toHaveBeenCalled();
 };
 

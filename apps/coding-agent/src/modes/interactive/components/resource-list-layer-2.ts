@@ -109,22 +109,22 @@ export default abstract class ResourceListLayer2 extends ResourceListLayer1 {
 
     if (scope === "project") {
       if (arrayKey === "extensions") {
-        this.settingsManager.setProjectExtensionPaths(updated);
+        this.settingsManager.resources.setProjectExtensionPaths(updated);
       } else if (arrayKey === "skills") {
-        this.settingsManager.setProjectSkillPaths(updated);
+        this.settingsManager.resources.setProjectSkillPaths(updated);
       } else if (arrayKey === "prompts") {
-        this.settingsManager.setProjectPromptTemplatePaths(updated);
+        this.settingsManager.resources.setProjectPromptTemplatePaths(updated);
       } else if (arrayKey === "themes") {
-        this.settingsManager.setProjectThemePaths(updated);
+        this.settingsManager.resources.setProjectThemePaths(updated);
       }
     } else if (arrayKey === "extensions") {
-      this.settingsManager.setExtensionPaths(updated);
+      this.settingsManager.resources.setExtensionPaths(updated);
     } else if (arrayKey === "skills") {
-      this.settingsManager.setSkillPaths(updated);
+      this.settingsManager.resources.setSkillPaths(updated);
     } else if (arrayKey === "prompts") {
-      this.settingsManager.setPromptTemplatePaths(updated);
+      this.settingsManager.resources.setPromptTemplatePaths(updated);
     } else if (arrayKey === "themes") {
-      this.settingsManager.setThemePaths(updated);
+      this.settingsManager.resources.setThemePaths(updated);
     }
   }
 
@@ -231,7 +231,7 @@ export default abstract class ResourceListLayer2 extends ResourceListLayer1 {
       if (pkg.autoload === false) packages.splice(pkgIndex, 1);
       else packages[pkgIndex] = pkg.source;
     }
-    this.settingsManager.setProjectPackages(packages);
+    this.settingsManager.resources.setProjectPackages(packages);
     return true;
   }
 

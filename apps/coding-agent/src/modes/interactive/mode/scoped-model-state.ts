@@ -31,7 +31,7 @@ export default class ScopedModelState {
     let availableModelIds = new Set(
       availableModels.map((model) => `${model.provider}/${model.id}`),
     );
-    const configuredPatterns = this.mode.settingsManager.getEnabledModels();
+    const configuredPatterns = this.mode.settingsManager.models.getEnabledModels();
     const sessionScopedModels = this.mode.session.models.selection.scopedModels;
     const configuredEnabledIds = (models: readonly compatTypes.Model<any>[]): string[] | null => {
       if (configuredPatterns?.length === undefined || configuredPatterns?.length === 0) return null;

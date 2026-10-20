@@ -13,7 +13,7 @@ function isInstallTelemetryEnabled(
   telemetryEnv: string | undefined = readEnv("MSA_TELEMETRY"),
 ): boolean {
   return telemetryEnv === undefined
-    ? settingsManager.getEnableInstallTelemetry()
+    ? settingsManager.telemetry.getEnableInstallTelemetry()
     : isTruthyEnvFlag(telemetryEnv);
 }
 

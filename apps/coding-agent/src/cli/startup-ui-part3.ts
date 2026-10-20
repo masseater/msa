@@ -24,21 +24,21 @@ function createStartupTui(
 ): Promise<tuiTypes.TUI> {
   return Effect.runPromise(
     awaiting(function* () {
-      setCapabilityOverrides(settingsManager.getTerminalCapabilityOverrides());
+      setCapabilityOverrides(settingsManager.terminal.getTerminalCapabilityOverrides());
       setRegisteredThemes(yield* awaited(loadStartupThemes(settingsManager)));
 
       markTerminalColorsPending();
       initTheme(
-        resolveThemeSetting(settingsManager.getThemeSetting(), getTerminalTheme()) ??
+        resolveThemeSetting(settingsManager.display.getThemeSetting(), getTerminalTheme()) ??
           SYSTEM_THEME_NAME,
       );
       setKeybindings(KeybindingsManager.create());
       const ui: tuiTypes.TUI = new TuiMainScreen(
         new ProcessTerminal(),
-        settingsManager.getShowHardwareCursor(),
+        settingsManager.terminal.getShowHardwareCursor(),
         getAgentDir(),
       );
-      ui.setClearOnShrink(settingsManager.getClearOnShrink());
+      ui.setClearOnShrink(settingsManager.terminal.getClearOnShrink());
       return ui;
     }),
   );

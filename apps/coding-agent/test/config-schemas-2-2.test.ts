@@ -114,7 +114,7 @@ const acceptsSchemaInSettingsJsonAndPreserves = Effect.gen(function* () {
   );
 
   const manager = SettingsManager.create(directory, directory);
-  expect(manager.getTheme()).toBe("light");
+  expect(manager.display.getTheme()).toBe("light");
   expect(manager.getGlobalSettings()).toMatchObject({
     $schema: schemaUrl("settings"),
     extensionSetting: { enabled: true },

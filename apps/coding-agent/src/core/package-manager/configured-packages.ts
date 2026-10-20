@@ -32,17 +32,17 @@ export default class ConfiguredPackages {
       nextPackages[matchIndex] =
         typeof existing === "string" ? normalizedSource : { ...existing, source: normalizedSource };
       if (scope === "project") {
-        this.manager.settingsManager.setProjectPackages(nextPackages);
+        this.manager.settingsManager.resources.setProjectPackages(nextPackages);
       } else {
-        this.manager.settingsManager.setPackages(nextPackages);
+        this.manager.settingsManager.resources.setPackages(nextPackages);
       }
       return true;
     }
     const nextPackages = [...currentPackages, normalizedSource];
     if (scope === "project") {
-      this.manager.settingsManager.setProjectPackages(nextPackages);
+      this.manager.settingsManager.resources.setProjectPackages(nextPackages);
     } else {
-      this.manager.settingsManager.setPackages(nextPackages);
+      this.manager.settingsManager.resources.setPackages(nextPackages);
     }
     return true;
   }
@@ -62,9 +62,9 @@ export default class ConfiguredPackages {
       return false;
     }
     if (scope === "project") {
-      this.manager.settingsManager.setProjectPackages(nextPackages);
+      this.manager.settingsManager.resources.setProjectPackages(nextPackages);
     } else {
-      this.manager.settingsManager.setPackages(nextPackages);
+      this.manager.settingsManager.resources.setPackages(nextPackages);
     }
     return true;
   }

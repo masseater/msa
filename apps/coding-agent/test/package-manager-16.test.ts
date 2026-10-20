@@ -40,7 +40,7 @@ let previousOfflineEnv: string | undefined;
 
 const shouldSkipInstallingMissingPackageSourcesWhen = Effect.gen(function* () {
   vi.stubEnv("MSA_OFFLINE", "1");
-  settingsManager.setProjectPackages([
+  settingsManager.resources.setProjectPackages([
     "npm:missing-package",
     "git:github.com/example/missing-repo",
   ]);
@@ -144,7 +144,7 @@ const shouldNotRunNpmViewDuringResolve = Effect.gen(function* () {
     joinPath(installedPath, "extensions", "index.ts"),
     "export default function() {};",
   );
-  settingsManager.setProjectPackages(["npm:example@^1.0.0"]);
+  settingsManager.resources.setProjectPackages(["npm:example@^1.0.0"]);
 
   const runCommandCaptureSpy = vi.spyOn(commandRunner, "runCommandCapture");
 
@@ -164,7 +164,7 @@ const shouldReinstallPinnedNpmPackagesWhenInstalled = Effect.gen(function* () {
     joinPath(installedPath, "package.json"),
     yield* toJsonText({ name: "example", version: "1.0.0" }),
   );
-  settingsManager.setProjectPackages(["npm:example@2.0.0"]);
+  settingsManager.resources.setProjectPackages(["npm:example@2.0.0"]);
 
   const installParsedSourceSpy = vi
     .spyOn(packageManager.resources.packages, "installParsedSource")
@@ -190,7 +190,7 @@ const shouldReportUpdatesForInstalledUnpinnedNpm = Effect.gen(function* () {
     joinPath(installedPath, "package.json"),
     yield* toJsonText({ name: "example", version: "1.0.0" }),
   );
-  settingsManager.setProjectPackages(["npm:example"]);
+  settingsManager.resources.setProjectPackages(["npm:example"]);
 
   vi.spyOn(commandRunner, "runCommandCapture").mockResolvedValue('"1.2.3"');
 
@@ -212,7 +212,7 @@ const shouldNotReportNpmUpdatesWhenThe = Effect.gen(function* () {
     joinPath(installedPath, "package.json"),
     yield* toJsonText({ name: "example", version: "2.0.0" }),
   );
-  settingsManager.setProjectPackages(["npm:example"]);
+  settingsManager.resources.setProjectPackages(["npm:example"]);
 
   vi.spyOn(commandRunner, "runCommandCapture").mockResolvedValue('"1.9.0"');
 
@@ -236,7 +236,10 @@ const shouldSkipPinnedPackagesWhenCheckingFor = Effect.gen(function* () {
   ) as string;
   yield* makeDirectory(installedGitPath);
 
-  settingsManager.setProjectPackages(["npm:example@1.0.0", "git:github.com/example/repo@v1"]);
+  settingsManager.resources.setProjectPackages([
+    "npm:example@1.0.0",
+    "git:github.com/example/repo@v1",
+  ]);
 
   const runCommandCaptureSpy = vi.spyOn(commandRunner, "runCommandCapture");
   const gitUpdateSpy = vi.spyOn(gitRemote, "gitHasAvailableUpdate");

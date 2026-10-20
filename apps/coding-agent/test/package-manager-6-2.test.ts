@@ -51,7 +51,7 @@ const shouldRepairMissingGitPackageDependenciesWhen = Effect.gen(function* () {
       version: "1.0.0",
     }),
   );
-  settingsManager.setPackages([source]);
+  settingsManager.resources.setPackages([source]);
   vi.spyOn(gitRemote, "getLocalGitUpdateTarget").mockResolvedValue({
     fetchArgs,
     head: "current-head",
@@ -102,7 +102,7 @@ const shouldRepairDeletedGitPackageDependenciesWhen = Effect.gen(function* () {
       version: "1.0.0",
     }),
   );
-  settingsManager.setPackages([source]);
+  settingsManager.resources.setPackages([source]);
   vi.spyOn(gitRemote, "getLocalGitUpdateTarget").mockResolvedValue({
     fetchArgs,
     head: "new-head",

@@ -23,7 +23,7 @@ export default class OperationStatusEvents {
   retryEscapeHandler?: (() => void) | undefined;
 
   private endCompactionStatus(): void {
-    if (this.mode.settingsManager.getShowTerminalProgress()) {
+    if (this.mode.settingsManager.terminal.getShowTerminalProgress()) {
       this.mode.ui.terminal.setProgress(false);
     }
     if (this.autoCompactionEscapeHandler !== undefined) {
@@ -34,7 +34,7 @@ export default class OperationStatusEvents {
   }
 
   onCompactionStart(reason: "manual" | "overflow" | "threshold"): void {
-    if (this.mode.settingsManager.getShowTerminalProgress())
+    if (this.mode.settingsManager.terminal.getShowTerminalProgress())
       this.mode.ui.terminal.setProgress(true);
     this.autoCompactionEscapeHandler = this.mode.defaultEditor.onEscape;
     this.mode.defaultEditor.onEscape = () => {

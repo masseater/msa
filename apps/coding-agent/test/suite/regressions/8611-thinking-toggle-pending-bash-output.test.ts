@@ -36,7 +36,7 @@ const preservesPartialBashOutput = () => {
   const fakeThis = {
     chatContainer,
     hideThinkingBlock: false,
-    settingsManager: { setHideThinkingBlock: vi.fn() },
+    settingsManager: { display: { setHideThinkingBlock: vi.fn() } },
     showStatus: vi.fn(),
     ui,
   };
@@ -44,7 +44,7 @@ const preservesPartialBashOutput = () => {
   expect(renderChat(chatContainer)).toContain("first");
   bindModeFake(fakeThis).display.thinking.toggleThinkingBlockVisibility();
 
-  expect(fakeThis.settingsManager.setHideThinkingBlock).toHaveBeenCalledWith(true);
+  expect(fakeThis.settingsManager.display.setHideThinkingBlock).toHaveBeenCalledWith(true);
   expect(chatContainer.children).toContain(component);
   expect(renderChat(chatContainer)).toContain("first");
 };

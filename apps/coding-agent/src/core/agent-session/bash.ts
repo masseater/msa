@@ -88,8 +88,8 @@ export default class SessionBash {
         const abortController = new AbortController();
         this.bashAbortControllers.add(abortController);
 
-        const prefix = this.session.settingsManager.getShellCommandPrefix();
-        const shellPath = this.session.settingsManager.getShellPath();
+        const prefix = this.session.settingsManager.resources.getShellCommandPrefix();
+        const shellPath = this.session.settingsManager.resources.getShellPath();
         const resolvedCommand =
           prefix !== undefined && prefix !== "" ? `${prefix}\n${command}` : command;
 

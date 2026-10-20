@@ -21,16 +21,16 @@ const defaultsToStreamingAndIgnoresProjectSettings = () =>
   runTest(
     withSettings(({ settingsPath, projectSettingsPath, openManager }) =>
       Effect.gen(function* () {
-        expect(openManager().getCacheWarmingMode()).toBe("streaming");
+        expect(openManager().session.getCacheWarmingMode()).toBe("streaming");
 
         yield* writeJsonFile(projectSettingsPath, { cacheWarming: "idle" });
-        expect(openManager().getCacheWarmingMode()).toBe("streaming");
+        expect(openManager().session.getCacheWarmingMode()).toBe("streaming");
 
         yield* writeJsonFile(settingsPath, { cacheWarming: "idle" });
-        expect(openManager().getCacheWarmingMode()).toBe("idle");
+        expect(openManager().session.getCacheWarmingMode()).toBe("idle");
 
         yield* writeJsonFile(settingsPath, { cacheWarming: "bogus" });
-        expect(openManager().getCacheWarmingMode()).toBe("streaming");
+        expect(openManager().session.getCacheWarmingMode()).toBe("streaming");
       }),
     ),
   );
@@ -40,10 +40,10 @@ const persistsTheModeGlobally = () =>
     withSettings(({ settingsPath, openManager }) =>
       Effect.gen(function* () {
         const manager = openManager();
-        manager.setCacheWarmingMode("off");
-        yield* awaited(manager.flush());
+        manager.session.setCacheWarmingMode("off");
+        yield* awaited(manager.persistence.flush());
 
-        expect(openManager().getCacheWarmingMode()).toBe("off");
+        expect(openManager().session.getCacheWarmingMode()).toBe("off");
         expect(yield* readSettings(settingsPath)).toEqual({ cacheWarming: "off" });
       }),
     ),
@@ -52,24 +52,24 @@ const persistsTheModeGlobally = () =>
 const shouldResolveEditorCommandsByPrecedence = () => {
   setEditorEnv("vim", "nano");
   expect(
-    SettingsManager.inMemory({ externalEditor: "code --wait" }).getExternalEditorCommand(),
+    SettingsManager.inMemory({ externalEditor: "code --wait" }).terminal.getExternalEditorCommand(),
   ).toBe("code --wait");
-  expect(SettingsManager.inMemory().getExternalEditorCommand()).toBe("vim");
+  expect(SettingsManager.inMemory().terminal.getExternalEditorCommand()).toBe("vim");
 
   setEditorEnv(undefined, "emacs");
-  expect(SettingsManager.inMemory().getExternalEditorCommand()).toBe("emacs");
+  expect(SettingsManager.inMemory().terminal.getExternalEditorCommand()).toBe("emacs");
 };
 
 const shouldFallBackToPlatformDefaults = () => {
   setEditorEnv();
   Object.defineProperty(process, "platform", { value: "win32" });
-  expect(SettingsManager.inMemory().getExternalEditorCommand()).toBe("notepad");
+  expect(SettingsManager.inMemory().terminal.getExternalEditorCommand()).toBe("notepad");
 
   Object.defineProperty(process, "platform", { value: "darwin" });
-  expect(SettingsManager.inMemory().getExternalEditorCommand()).toBe("nano");
+  expect(SettingsManager.inMemory().terminal.getExternalEditorCommand()).toBe("nano");
 
   Object.defineProperty(process, "platform", { value: "linux" });
-  expect(SettingsManager.inMemory().getExternalEditorCommand()).toBe("nano");
+  expect(SettingsManager.inMemory().terminal.getExternalEditorCommand()).toBe("nano");
 };
 
 const defaultsToFullscreenAndPersistsRegularMode = () =>
@@ -78,12 +78,12 @@ const defaultsToFullscreenAndPersistsRegularMode = () =>
       Effect.gen(function* () {
         const manager = openManager();
 
-        expect(manager.getTuiMode()).toBe("fullscreen");
+        expect(manager.terminal.getTuiMode()).toBe("fullscreen");
 
-        manager.setTuiMode("regular");
-        yield* awaited(manager.flush());
+        manager.terminal.setTuiMode("regular");
+        yield* awaited(manager.persistence.flush());
 
-        expect(manager.getTuiMode()).toBe("regular");
+        expect(manager.terminal.getTuiMode()).toBe("regular");
         const savedSettings = yield* readSettings(settingsPath);
         expect(savedSettings.tuiMode).toBe("regular");
       }),
@@ -98,7 +98,7 @@ const fallsBackToFullscreenForUnsupportedValues = () =>
 
         const manager = openManager();
 
-        expect(manager.getTuiMode()).toBe("fullscreen");
+        expect(manager.terminal.getTuiMode()).toBe("fullscreen");
       }),
     ),
   );
@@ -111,7 +111,7 @@ const doesNotRecognizeTheOldUimodeSetting = () =>
 
         const manager = openManager();
 
-        expect(manager.getTuiMode()).toBe("fullscreen");
+        expect(manager.terminal.getTuiMode()).toBe("fullscreen");
       }),
     ),
   );
@@ -121,14 +121,14 @@ const validatesAndPersistsFullscreenSettings = () =>
     withSettings(({ settingsPath, openManager }) =>
       Effect.gen(function* () {
         const manager = openManager();
-        expect(manager.getFullscreenExitOutput()).toBe("transcript");
-        expect(manager.getFullscreenScrollbar()).toBe("auto");
-        expect(manager.getFullscreenCopyOnSelect()).toBe(true);
+        expect(manager.terminal.getFullscreenExitOutput()).toBe("transcript");
+        expect(manager.terminal.getFullscreenScrollbar()).toBe("auto");
+        expect(manager.terminal.getFullscreenCopyOnSelect()).toBe(true);
 
-        manager.setFullscreenExitOutput("resume-hint");
-        manager.setFullscreenScrollbar("hidden");
-        manager.setFullscreenCopyOnSelect(false);
-        yield* awaited(manager.flush());
+        manager.terminal.setFullscreenExitOutput("resume-hint");
+        manager.terminal.setFullscreenScrollbar("hidden");
+        manager.terminal.setFullscreenCopyOnSelect(false);
+        yield* awaited(manager.persistence.flush());
         const savedSettings = yield* readSettings(settingsPath);
         expect(savedSettings.fullscreenExitOutput).toBe("resume-hint");
         expect(savedSettings.fullscreenScrollbar).toBe("hidden");
@@ -139,9 +139,9 @@ const validatesAndPersistsFullscreenSettings = () =>
           fullscreenScrollbar: "sometimes",
         });
         const reloadedManager = openManager();
-        expect(reloadedManager.getFullscreenExitOutput()).toBe("transcript");
-        expect(reloadedManager.getFullscreenScrollbar()).toBe("auto");
-        expect(reloadedManager.getFullscreenCopyOnSelect()).toBe(true);
+        expect(reloadedManager.terminal.getFullscreenExitOutput()).toBe("transcript");
+        expect(reloadedManager.terminal.getFullscreenScrollbar()).toBe("auto");
+        expect(reloadedManager.terminal.getFullscreenCopyOnSelect()).toBe(true);
       }),
     ),
   );
@@ -151,10 +151,10 @@ const persistsFullscreenWheelScrollLines = () =>
     withSettings(({ settingsPath, openManager }) =>
       Effect.gen(function* () {
         const manager = openManager();
-        expect(manager.getFullscreenWheelScrollLines()).toBe("auto");
+        expect(manager.terminal.getFullscreenWheelScrollLines()).toBe("auto");
 
-        manager.setFullscreenWheelScrollLines(3);
-        yield* awaited(manager.flush());
+        manager.terminal.setFullscreenWheelScrollLines(3);
+        yield* awaited(manager.persistence.flush());
         expect((yield* readSettings(settingsPath)).fullscreenWheelScrollLines).toBe(3);
 
         for (const [value, expected] of [
@@ -165,7 +165,7 @@ const persistsFullscreenWheelScrollLines = () =>
           [null, "auto"],
         ] as const) {
           yield* writeJsonFile(settingsPath, { fullscreenWheelScrollLines: value });
-          expect(openManager().getFullscreenWheelScrollLines()).toBe(expected);
+          expect(openManager().terminal.getFullscreenWheelScrollLines()).toBe(expected);
         }
       }),
     ),
@@ -177,12 +177,12 @@ const shouldDefaultTo1AndPersistBinary = () =>
       Effect.gen(function* () {
         const manager = openManager();
 
-        expect(manager.getOutputPad()).toBe(1);
+        expect(manager.terminal.getOutputPad()).toBe(1);
 
-        manager.setOutputPad(0);
-        yield* awaited(manager.flush());
+        manager.terminal.setOutputPad(0);
+        yield* awaited(manager.persistence.flush());
 
-        expect(manager.getOutputPad()).toBe(0);
+        expect(manager.terminal.getOutputPad()).toBe(0);
         const savedSettings = yield* readSettings(settingsPath);
         expect(savedSettings.outputPad).toBe(0);
       }),
@@ -197,7 +197,7 @@ const shouldTreatUnsupportedOutputpadValuesAsDefault = () =>
 
         const manager = openManager();
 
-        expect(manager.getOutputPad()).toBe(1);
+        expect(manager.terminal.getOutputPad()).toBe(1);
       }),
     ),
   );
@@ -208,12 +208,12 @@ const defaultsToStreamingAndPersistsRenderingModes = () =>
       Effect.gen(function* () {
         const manager = openManager();
 
-        expect(manager.getMermaidRenderingMode()).toBe("streaming");
+        expect(manager.display.getMermaidRenderingMode()).toBe("streaming");
 
-        manager.setMermaidRenderingMode("final");
-        yield* awaited(manager.flush());
+        manager.display.setMermaidRenderingMode("final");
+        yield* awaited(manager.persistence.flush());
 
-        expect(manager.getMermaidRenderingMode()).toBe("final");
+        expect(manager.display.getMermaidRenderingMode()).toBe("final");
         const savedSettings = yield* readSettings(settingsPath);
         expect(savedSettings.markdown.mermaid).toBe("final");
       }),
@@ -226,7 +226,7 @@ const fallsBackToStreamingForUnsupportedValues = () =>
       Effect.gen(function* () {
         yield* writeJsonFile(settingsPath, { markdown: { mermaid: "sometimes" } });
 
-        expect(openManager().getMermaidRenderingMode()).toBe("streaming");
+        expect(openManager().display.getMermaidRenderingMode()).toBe("streaming");
       }),
     ),
   );

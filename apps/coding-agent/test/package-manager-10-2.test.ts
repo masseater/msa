@@ -41,7 +41,7 @@ const shouldExpandInExclusionAndExactPatterns = () =>
           );
         }
 
-        settingsManager.setSkillPaths([
+        settingsManager.resources.setSkillPaths([
           "~/extra/skills",
           "!~/extra/skills/glob-*",
           "-~/extra/skills/exact-excluded",
@@ -73,7 +73,7 @@ const shouldExcludeExtensionsWithPattern = () =>
       yield* writeTextFile(joinPath(extDir, "keep.ts"), "export default function() {}");
       yield* writeTextFile(joinPath(extDir, "remove.ts"), "export default function() {}");
 
-      settingsManager.setExtensionPaths(["extensions", "!**/remove.ts"]);
+      settingsManager.resources.setExtensionPaths(["extensions", "!**/remove.ts"]);
 
       const result = yield* awaited(packageManager.resolution.resolve());
       expect(result.extensions.some((r) => packagePaths.isEnabled(r, "keep.ts"))).toBe(true);
@@ -90,7 +90,7 @@ const shouldFilterThemesWithGlobPatterns = () =>
       yield* writeTextFile(joinPath(themesDir, "light.json"), "{}");
       yield* writeTextFile(joinPath(themesDir, "funky.json"), "{}");
 
-      settingsManager.setThemePaths(["themes", "!funky.json"]);
+      settingsManager.resources.setThemePaths(["themes", "!funky.json"]);
 
       const result = yield* awaited(packageManager.resolution.resolve());
       expect(result.themes.some((r) => packagePaths.isEnabled(r, "dark.json"))).toBe(true);
@@ -107,7 +107,7 @@ const shouldFilterPromptsWithExclusionPattern = () =>
       yield* writeTextFile(joinPath(promptsDir, "review.md"), "Review code");
       yield* writeTextFile(joinPath(promptsDir, "explain.md"), "Explain code");
 
-      settingsManager.setPromptTemplatePaths(["prompts", "!explain.md"]);
+      settingsManager.resources.setPromptTemplatePaths(["prompts", "!explain.md"]);
 
       const result = yield* awaited(packageManager.resolution.resolve());
       expect(result.prompts.some((r) => packagePaths.isEnabled(r, "review.md"))).toBe(true);
@@ -130,7 +130,7 @@ const shouldFilterSkillsWithExclusionPattern = () =>
         "---\nname: bad-skill\ndescription: Bad\n---\nContent",
       );
 
-      settingsManager.setSkillPaths(["skills", "!**/bad-skill"]);
+      settingsManager.resources.setSkillPaths(["skills", "!**/bad-skill"]);
 
       const result = yield* awaited(packageManager.resolution.resolve());
       expect(result.skills.some((r) => packagePaths.isEnabled(r, "good-skill", "includes"))).toBe(
@@ -150,7 +150,7 @@ const shouldWorkWithoutPatternsBackwardCompatible = () =>
       const extPath = joinPath(extDir, "my-ext.ts");
       yield* writeTextFile(extPath, "export default function() {}");
 
-      settingsManager.setExtensionPaths(["extensions/my-ext.ts"]);
+      settingsManager.resources.setExtensionPaths(["extensions/my-ext.ts"]);
 
       const result = yield* awaited(packageManager.resolution.resolve());
       expect(result.extensions.some((r) => r.path === extPath && r.enabled)).toBe(true);

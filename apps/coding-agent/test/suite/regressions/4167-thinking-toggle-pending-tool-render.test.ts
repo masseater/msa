@@ -44,9 +44,11 @@ type RenderSessionContextThis = {
   programStatus: { handleEvent(): void };
   ui: tuiTypes.TUI;
   settingsManager: {
-    getShowImages(): boolean;
-    getImageWidthCells(): number;
-    getShowCacheMissNotices(): boolean;
+    display: {
+      getImageWidthCells(): number;
+      getShowCacheMissNotices(): boolean;
+      getShowImages(): boolean;
+    };
   };
   sessionManager: { getCwd(): string; getEntries(): codingAgentTypes.SessionEntry[] };
   session: {
@@ -77,9 +79,11 @@ function createFakeInteractiveModeThis(): RenderSessionContextThis {
     session: { modelRegistry: { find: () => undefined }, run: { retry: { retryAttempt: 0 } } },
     sessionManager: { getCwd: () => process.cwd(), getEntries: () => [] },
     settingsManager: {
-      getImageWidthCells: () => 60,
-      getShowCacheMissNotices: () => false,
-      getShowImages: () => false,
+      display: {
+        getImageWidthCells: () => 60,
+        getShowCacheMissNotices: () => false,
+        getShowImages: () => false,
+      },
     },
     toolOutputExpanded: false,
     ui: { requestRender: vi.fn() } as unknown as tuiTypes.TUI,

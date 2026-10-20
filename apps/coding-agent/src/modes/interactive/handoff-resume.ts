@@ -59,7 +59,7 @@ function offerHandoff(session: agentSessionTypes.AgentSession, dialogs: Dialogs)
       )
         return;
       const prompt = yield* awaited(
-        handoffResumePrompt(session.settingsManager.getHandoffDirectory(), dialogs),
+        handoffResumePrompt(session.settingsManager.session.getHandoffDirectory(), dialogs),
       );
       if (prompt !== undefined) yield* awaited(session.run.prompting.prompt(prompt));
     }),

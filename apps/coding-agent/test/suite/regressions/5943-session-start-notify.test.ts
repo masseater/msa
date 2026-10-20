@@ -48,7 +48,7 @@ function createLoadedResourcesContext(): SessionStartNotifySupportTypes.LoadedRe
       },
     },
     sessionManager: { getCwd: () => "/repo" },
-    settingsManager: { getQuietStartup: () => false },
+    settingsManager: { display: { getQuietStartup: () => false } },
   };
 }
 

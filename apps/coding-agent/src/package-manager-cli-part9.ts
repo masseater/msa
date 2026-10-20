@@ -30,7 +30,9 @@ function createCommandSettingsManager(options: {
       const trustStore = new ProjectTrustStore(options.agentDir);
       if (options.useSavedProjectTrustOnly === true) {
         const savedProjectTrusted = trustStore.get(options.cwd) === true;
-        settingsManager.setProjectTrusted(options.projectTrustOverride ?? savedProjectTrusted);
+        settingsManager.persistence.setProjectTrusted(
+          options.projectTrustOverride ?? savedProjectTrusted,
+        );
         return { projectTrustWarnings, settingsManager };
       }
 
@@ -44,7 +46,7 @@ function createCommandSettingsManager(options: {
       const projectTrusted = yield* awaited(
         resolveProjectTrusted({
           cwd: options.cwd,
-          defaultProjectTrust: settingsManager.getDefaultProjectTrust(),
+          defaultProjectTrust: settingsManager.session.getDefaultProjectTrust(),
           extensionsResult,
           onExtensionError: (message) => projectTrustWarnings.push(message),
           projectTrustContext: createProjectTrustContext({
@@ -57,7 +59,7 @@ function createCommandSettingsManager(options: {
           trustStore,
         }),
       );
-      settingsManager.setProjectTrusted(projectTrusted);
+      settingsManager.persistence.setProjectTrusted(projectTrusted);
       return { projectTrustWarnings, settingsManager };
     }),
   );

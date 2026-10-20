@@ -131,8 +131,8 @@ function saveModelPolicy(
   },
   policy: modelPolicyTypes.ModelPolicy,
 ): modelPolicyTypes.ModelPolicy {
-  target.settingsManager.setModelPolicy(policy);
-  const saved = target.settingsManager.getModelPolicy();
+  target.settingsManager.models.setModelPolicy(policy);
+  const saved = target.settingsManager.models.getModelPolicy();
   target.modelRuntime.setModelPolicy(saved);
   return saved;
 }

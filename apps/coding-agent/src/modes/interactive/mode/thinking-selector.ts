@@ -62,7 +62,7 @@ export default class ThinkingSelector {
           this.mode.ui.requestRender();
         },
         (level) => selectLevel(level, true),
-        this.mode.settingsManager.getDefaultThinkingLevel() ?? DEFAULT_THINKING_LEVEL,
+        this.mode.settingsManager.models.getDefaultThinkingLevel() ?? DEFAULT_THINKING_LEVEL,
       );
       return { component: selector, focus: selector };
     });

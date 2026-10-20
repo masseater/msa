@@ -57,9 +57,9 @@ export default class SessionOrchestration {
     return new Orchestrator({
       createWorker,
       cwd: session.cwd,
-      databasePath: session.settingsManager.getOrchestratorDatabasePath(),
+      databasePath: session.settingsManager.session.getOrchestratorDatabasePath(),
       defaults: () => orchestratorCallbacks.defaults(session),
-      handoffDirectory: session.settingsManager.getHandoffDirectory(),
+      handoffDirectory: session.settingsManager.session.getHandoffDirectory(),
       project: session.sessionManager.getSessionId(),
       report: (text, details) =>
         void session.run.prompting.sendCustomMessage(

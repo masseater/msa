@@ -25,7 +25,7 @@ const shouldLoadShellcommandprefixFromSettings = () =>
 
         const manager = openManager();
 
-        expect(manager.getShellCommandPrefix()).toBe("shopt -s expand_aliases");
+        expect(manager.resources.getShellCommandPrefix()).toBe("shopt -s expand_aliases");
       }),
     ),
   );
@@ -38,7 +38,7 @@ const shouldReturnUndefinedWhenShellcommandprefixIsNot = () =>
 
         const manager = openManager();
 
-        expect(manager.getShellCommandPrefix()).toBeUndefined();
+        expect(manager.resources.getShellCommandPrefix()).toBeUndefined();
       }),
     ),
   );
@@ -52,8 +52,8 @@ const shouldPreserveShellcommandprefixWhenSavingUnrelatedSettings = () =>
         });
 
         const manager = openManager();
-        manager.setTheme("light");
-        yield* awaited(manager.flush());
+        manager.display.setTheme("light");
+        yield* awaited(manager.persistence.flush());
 
         const savedSettings = yield* readSettings(settingsPath);
         expect(savedSettings.shellCommandPrefix).toBe("shopt -s expand_aliases");
@@ -68,23 +68,23 @@ const loadsGlobalDefaultsAndLetsProjectSettings = () =>
       Effect.gen(function* () {
         yield* writeJsonFile(settingsPath, { defaultTools: ["read", "bash"] });
 
-        expect(openManager().getDefaultTools()).toEqual(["read", "bash"]);
+        expect(openManager().resources.getDefaultTools()).toEqual(["read", "bash"]);
 
         yield* writeJsonFile(projectSettingsPath, { defaultTools: ["grep"] });
 
-        expect(openManager().getDefaultTools()).toEqual(["grep"]);
+        expect(openManager().resources.getDefaultTools()).toEqual(["grep"]);
       }),
     ),
   );
 
 const preservesAnEmptyToolList = () => {
-  expect(SettingsManager.inMemory({ defaultTools: [] }).getDefaultTools()).toEqual([]);
-  expect(SettingsManager.inMemory().getDefaultTools()).toBeUndefined();
+  expect(SettingsManager.inMemory({ defaultTools: [] }).resources.getDefaultTools()).toEqual([]);
+  expect(SettingsManager.inMemory().resources.getDefaultTools()).toBeUndefined();
 };
 
 const appliesNameAndNameToTheDefault = () => {
   expect(
-    SettingsManager.inMemory({ defaultTools: ["+codemode", "-write"] }).getDefaultTools(),
+    SettingsManager.inMemory({ defaultTools: ["+codemode", "-write"] }).resources.getDefaultTools(),
   ).toEqual([
     "read",
     "bash",
@@ -99,7 +99,9 @@ const appliesNameAndNameToTheDefault = () => {
     "codemode",
   ]);
   expect(
-    SettingsManager.inMemory({ defaultTools: ["read", "+grep", "+read"] }).getDefaultTools(),
+    SettingsManager.inMemory({
+      defaultTools: ["read", "+grep", "+read"],
+    }).resources.getDefaultTools(),
   ).toEqual(["read", "grep"]);
 };
 
@@ -115,10 +117,15 @@ const layersProjectModifiersOnTopOfThe = () =>
         });
 
         const manager = openManager();
-        expect(manager.getDefaultTools()).toEqual(["read", "bash", "tool_search"]);
+        expect(manager.resources.getDefaultTools()).toEqual(["read", "bash", "tool_search"]);
 
         manager.applyOverrides({ defaultTools: ["+codemode"] });
-        expect(manager.getDefaultTools()).toEqual(["read", "bash", "tool_search", "codemode"]);
+        expect(manager.resources.getDefaultTools()).toEqual([
+          "read",
+          "bash",
+          "tool_search",
+          "codemode",
+        ]);
       }),
     ),
   );
@@ -129,7 +136,7 @@ const appliesProjectModifiersToTheBuiltIn = () =>
       Effect.gen(function* () {
         yield* writeJsonFile(projectSettingsPath, { defaultTools: ["+codemode"] });
 
-        expect(openManager().getDefaultTools()).toEqual([
+        expect(openManager().resources.getDefaultTools()).toEqual([
           "read",
           "bash",
           "edit",
@@ -153,7 +160,7 @@ const shouldReturnUndefinedWhenNotSet = () =>
       Effect.gen(function* () {
         yield* writeJsonFile(settingsPath, { theme: "dark" });
         const manager = openManager();
-        expect(manager.getSessionDir()).toBeUndefined();
+        expect(manager.session.getSessionDir()).toBeUndefined();
       }),
     ),
   );
@@ -164,7 +171,7 @@ const shouldReturnGlobalSessiondir = () =>
       Effect.gen(function* () {
         yield* writeJsonFile(settingsPath, { sessionDir: "/tmp/sessions" });
         const manager = openManager();
-        expect(manager.getSessionDir()).toBe("/tmp/sessions");
+        expect(manager.session.getSessionDir()).toBe("/tmp/sessions");
       }),
     ),
   );
@@ -176,7 +183,7 @@ const shouldReturnProjectSessiondirOverridingGlobal = () =>
         yield* writeJsonFile(settingsPath, { sessionDir: "/global/sessions" });
         yield* writeJsonFile(projectSettingsPath, { sessionDir: "./sessions" });
         const manager = openManager();
-        expect(manager.getSessionDir()).toBe("./sessions");
+        expect(manager.session.getSessionDir()).toBe("./sessions");
       }),
     ),
   );
@@ -187,7 +194,7 @@ const shouldExpandInSessiondir = () =>
       Effect.gen(function* () {
         yield* writeJsonFile(settingsPath, { sessionDir: "~/sessions" });
         const manager = openManager();
-        expect(manager.getSessionDir()).toBe(joinPath(homedir(), "sessions"));
+        expect(manager.session.getSessionDir()).toBe(joinPath(homedir(), "sessions"));
       }),
     ),
   );
@@ -198,7 +205,7 @@ const shouldReturnUndefinedWhenNotSet2 = () =>
       Effect.gen(function* () {
         yield* writeJsonFile(settingsPath, { theme: "dark" });
         const manager = openManager();
-        expect(manager.getShellPath()).toBeUndefined();
+        expect(manager.resources.getShellPath()).toBeUndefined();
       }),
     ),
   );
@@ -209,7 +216,7 @@ const shouldReturnAnAbsoluteShellpathUnchanged = () =>
       Effect.gen(function* () {
         yield* writeJsonFile(settingsPath, { shellPath: "/bin/zsh" });
         const manager = openManager();
-        expect(manager.getShellPath()).toBe("/bin/zsh");
+        expect(manager.resources.getShellPath()).toBe("/bin/zsh");
       }),
     ),
   );
@@ -222,7 +229,9 @@ const shouldExpandInShellpath = () =>
           shellPath: "~/.local/bin/agent-shell-sandbox",
         });
         const manager = openManager();
-        expect(manager.getShellPath()).toBe(joinPath(homedir(), ".local/bin/agent-shell-sandbox"));
+        expect(manager.resources.getShellPath()).toBe(
+          joinPath(homedir(), ".local/bin/agent-shell-sandbox"),
+        );
       }),
     ),
   );
@@ -233,7 +242,7 @@ const shouldExpandABareInShellpath = () =>
       Effect.gen(function* () {
         yield* writeJsonFile(settingsPath, { shellPath: "~" });
         const manager = openManager();
-        expect(manager.getShellPath()).toBe(homedir());
+        expect(manager.resources.getShellPath()).toBe(homedir());
       }),
     ),
   );

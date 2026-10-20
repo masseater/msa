@@ -48,8 +48,7 @@ function createInteractiveContext(options: {
       },
     },
     settingsManager: {
-      getEnabledModels: () => options.enabledModelIds,
-      setEnabledModels: vi.fn(),
+      models: { getEnabledModels: () => options.enabledModelIds, setEnabledModels: vi.fn() },
     },
     showStatus: vi.fn(),
     ui: { requestRender: vi.fn() },

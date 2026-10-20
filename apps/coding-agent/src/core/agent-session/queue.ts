@@ -47,18 +47,18 @@ export default class SessionQueue {
   }
 
   syncQueueModesFromSettings(): void {
-    this.session.agent.steeringMode = this.session.settingsManager.getSteeringMode();
-    this.session.agent.followUpMode = this.session.settingsManager.getFollowUpMode();
+    this.session.agent.steeringMode = this.session.settingsManager.session.getSteeringMode();
+    this.session.agent.followUpMode = this.session.settingsManager.session.getFollowUpMode();
   }
 
   setSteeringMode(mode: "all" | "one-at-a-time"): void {
     this.session.agent.steeringMode = mode;
-    this.session.settingsManager.setSteeringMode(mode);
+    this.session.settingsManager.session.setSteeringMode(mode);
   }
 
   setFollowUpMode(mode: "all" | "one-at-a-time"): void {
     this.session.agent.followUpMode = mode;
-    this.session.settingsManager.setFollowUpMode(mode);
+    this.session.settingsManager.session.setFollowUpMode(mode);
   }
 
   private emitQueueUpdate(): void {

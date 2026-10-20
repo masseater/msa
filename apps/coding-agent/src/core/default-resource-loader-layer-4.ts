@@ -30,7 +30,7 @@ export default abstract class DefaultResourceLoaderLayer4 extends DefaultResourc
     } else {
       const colorMode = getTerminalColorMode({
         ...detectCapabilities(() => false),
-        ...this.settingsManager.getTerminalCapabilityOverrides(),
+        ...this.settingsManager.terminal.getTerminalCapabilityOverrides(),
       });
       const loaded = this.loadThemes(themePaths, false, colorMode);
       const deduped = this.dedupeThemes(loaded.themes);

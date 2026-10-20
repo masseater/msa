@@ -21,7 +21,7 @@ export default class SessionCacheWarming {
   }
 
   setCacheWarmingMode(mode: settingsManagerTypes.CacheWarmingMode): void {
-    this.session.settingsManager.setCacheWarmingMode(mode);
+    this.session.settingsManager.session.setCacheWarmingMode(mode);
     this.cacheWarmer?.onModeChanged();
   }
 

@@ -65,7 +65,7 @@ const returnsToAutomaticDetectionAfterAnExplicit = Effect.gen(function* () {
     settingsManager,
   });
   yield* awaited(loader.reload());
-  setCapabilityOverrides(settingsManager.getTerminalCapabilityOverrides());
+  setCapabilityOverrides(settingsManager.terminal.getTerminalCapabilityOverrides());
 
   yield* writeTextFile(settingsPath, "{}");
   yield* awaited(loader.reload());

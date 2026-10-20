@@ -26,7 +26,7 @@ export default class SessionGoalEvaluation {
   }
 
   private goalEvaluatorModel(): compatTypes.Model<any> {
-    const configured = this.session.settingsManager.getGoalEvaluatorModel();
+    const configured = this.session.settingsManager.models.getGoalEvaluatorModel();
     const available = this.session.models.selection.modelRuntimeInternal.getAvailableSnapshot();
     if (configured !== undefined && configured !== "") {
       const result = resolveModelReference(
@@ -69,7 +69,7 @@ export default class SessionGoalEvaluation {
             signal,
           },
           this.session.agent.streamFunction,
-          this.session.settingsManager.getRetrySettings(),
+          this.session.settingsManager.session.getRetrySettings(),
         ),
       );
       if (response.usage !== undefined) {

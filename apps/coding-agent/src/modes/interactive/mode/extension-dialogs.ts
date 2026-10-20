@@ -46,7 +46,7 @@ export default class ExtensionDialogsHost {
   private createExtensionDialogs() {
     return new ExtensionDialogs({
       editorSlot: this.mode.editorSlot,
-      getExternalEditorCommand: () => this.mode.settingsManager.getExternalEditorCommand(),
+      getExternalEditorCommand: () => this.mode.settingsManager.terminal.getExternalEditorCommand(),
       keybindings: this.mode.keybindings,
       programStatus: this.mode.layout.programStatus,
       toggleToolsExpanded: () => this.mode.display.resources.toggleToolOutputExpansion(),
