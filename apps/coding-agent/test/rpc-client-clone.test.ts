@@ -17,7 +17,7 @@ describe("RpcClient clone", () => {
         const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
         const client = new RpcClient();
-        const privateClient = client as unknown as RpcClientPrivate;
+        const privateClient = client.connection as unknown as RpcClientPrivate;
         const send = vi.fn(() =>
           effectRunPromise(
             awaited({
