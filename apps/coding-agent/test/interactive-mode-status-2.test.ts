@@ -3,10 +3,12 @@ import { Effect } from "effect";
 import { beforeAll, describe, expect, test, vi } from "vite-plus/test";
 
 import type extensionsTypesTypes from "../src/core/extensions/types.types.ts";
-import InteractiveMode from "../src/modes/interactive/interactive-mode.ts";
 import themeModule from "../src/modes/interactive/theme/theme.ts";
 import customUiScene from "./custom-ui-scene.ts";
+import interactiveModeFake from "./interactive-mode-fake.ts";
 import TestFocusableComponent from "./test-focusable-component.ts";
+
+const { bindModeFake } = interactiveModeFake;
 
 const { initTheme } = themeModule;
 const { awaited, runTest } = testing;
@@ -73,7 +75,7 @@ const storesWrapperFactoriesAndRebuildsAutocompleteImmediately = () => {
     setupAutocompleteProvider: vi.fn(),
   };
 
-  const uiContext = (InteractiveMode as any).prototype.createExtensionUIContext.call(fakeThis);
+  const uiContext = bindModeFake(fakeThis).extensions.ui.createExtensionUIContext();
   uiContext.addAutocompleteProvider(wrapper);
 
   expect(fakeThis.autocompleteProviderWrappers).toEqual([wrapper]);

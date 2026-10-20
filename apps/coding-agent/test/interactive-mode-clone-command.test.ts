@@ -2,7 +2,9 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import InteractiveMode from "../src/modes/interactive/interactive-mode.ts";
+import interactiveModeFake from "./interactive-mode-fake.ts";
+
+const { bindModeFake } = interactiveModeFake;
 
 const { awaited, runTest } = testing;
 
@@ -20,13 +22,6 @@ type CloneCommandContext = {
   showError: (message: string) => void;
   ui: { requestRender: () => void };
 };
-
-type InteractiveModePrototype = {
-  handleCloneCommand(this: CloneCommandContext): Promise<void>;
-};
-
-const interactiveModePrototype = InteractiveMode.prototype as unknown as InteractiveModePrototype;
-
 describe("InteractiveMode /clone", () => {
   it("clones the current leaf into a new session", () =>
     runTest(
@@ -50,7 +45,7 @@ describe("InteractiveMode /clone", () => {
           ui: { requestRender },
         };
 
-        yield* awaited(interactiveModePrototype.handleCloneCommand.call(context));
+        yield* awaited(bindModeFake(context).commands.session.handleCloneCommand());
 
         expect(fork).toHaveBeenCalledWith("leaf-123", { position: "at" });
         expect(renderCurrentSessionState).not.toHaveBeenCalled();
@@ -82,7 +77,7 @@ describe("InteractiveMode /clone", () => {
           ui: { requestRender: vi.fn() },
         };
 
-        yield* awaited(interactiveModePrototype.handleCloneCommand.call(context));
+        yield* awaited(bindModeFake(context).commands.session.handleCloneCommand());
 
         expect(fork).not.toHaveBeenCalled();
         expect(showStatus).toHaveBeenCalledWith("Nothing to clone yet");

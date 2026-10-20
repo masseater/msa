@@ -1,69 +1,72 @@
-import tuiModule from "@msa/tui";
-import type tuiTypes from "@msa/tui/index.types";
+import type interactiveModeHandlesTypes from "./interactive-mode-handles.types.ts";
+import ModeCommands from "./mode/commands.ts";
+import ModeDisplay from "./mode/display.ts";
+import ModeExtensions from "./mode/extensions.ts";
+import InputHandling from "./mode/input.ts";
+import InteractiveLayout from "./mode/layout.ts";
+import ModeLifecycle from "./mode/lifecycle.ts";
+import ModeModels from "./mode/models.ts";
+import ModeSelectors from "./mode/selectors.ts";
+import ChatView from "./mode/view.ts";
 
-import config from "../../config.ts";
-import type agentSessionRuntimeTypes from "../../core/agent-session-runtime.types.ts";
-import FooterDataProvider from "../../core/footer-data-provider.ts";
-import KeybindingsManager from "../../core/keybindings-manager.ts";
-import FooterComponent from "./components/footer.ts";
-import EditorSlot from "./editor-slot.ts";
-import ExtensionWidgets from "./extension-widgets.ts";
-import InteractiveModeLayer48 from "./interactive-mode-layer-48.ts";
-import type interactiveModeTypes from "./interactive-mode.types.ts";
-import themeModule from "./theme/theme.ts";
-import tuiRenderer from "./tui-renderer.ts";
+export default class InteractiveMode {
+  readonly runtimeHost: interactiveModeHandlesTypes.RuntimeHost;
+  readonly layout: InteractiveLayout;
+  readonly view: ChatView;
+  readonly display: ModeDisplay;
+  readonly input: InputHandling;
+  readonly commands: ModeCommands;
+  readonly selectors: ModeSelectors;
+  readonly models: ModeModels;
+  readonly extensions: ModeExtensions;
+  readonly lifecycle: ModeLifecycle;
 
-const { Container, setCapabilityOverrides, setKeybindings } = tuiModule;
-const { VERSION } = config;
-const { createInteractiveTuiReference } = tuiRenderer;
-const { setRegisteredThemes } = themeModule;
+  options: interactiveModeHandlesTypes.Options;
+  ui!: interactiveModeHandlesTypes.Tui;
+  keybindings!: interactiveModeHandlesTypes.Keybindings;
+  defaultEditor!: interactiveModeHandlesTypes.DefaultEditor;
+  editor!: interactiveModeHandlesTypes.ActiveEditor;
+  editorSlot!: interactiveModeHandlesTypes.EditorSlot;
+  footer!: interactiveModeHandlesTypes.Footer;
 
-export default class InteractiveMode extends InteractiveModeLayer48 {
   constructor(
-    runtimeHost: agentSessionRuntimeTypes.AgentSessionRuntime,
-    options: interactiveModeTypes.InteractiveModeOptions = {},
+    runtimeHost: interactiveModeHandlesTypes.RuntimeHost,
+    options: interactiveModeHandlesTypes.Options = {},
   ) {
-    super(runtimeHost);
-    setCapabilityOverrides(this.settingsManager.getTerminalCapabilityOverrides());
-    const tuiMode = options.tuiMode ?? this.settingsManager.getTuiMode();
-    this.options = { ...options, tuiMode };
-    this.autoTrustOnReloadCwd = options.autoTrustOnReloadCwd;
-    this.runtimeHost.setBeforeSessionInvalidate(() => {
-      this.resetExtensionUI();
-    });
-    this.runtimeHost.setRebindSession(() =>
-      this.rebindCurrentSession({ renderBeforeBind: true }).then(() =>
-        this.themeController.applyFromSettings(),
-      ),
-    );
-    this.version = VERSION;
-    this.renderer = this.createRenderer(options.terminal, tuiMode);
-    this.ui = createInteractiveTuiReference(() => this.renderer);
-    this.ui.setClearOnShrink(this.settingsManager.getClearOnShrink());
-    this.headerContainer = new Container();
-    this.loadedResourcesContainer = new Container();
-    this.chatContainer = new Container();
-    this.documentContainer = this.createDocumentContainer();
-    this.pendingMessagesContainer = new Container();
-    this.statusContainer = new Container();
-    this.extensionWidgets = new ExtensionWidgets(this.ui);
-    this.keybindings = KeybindingsManager.create();
-    setKeybindings(this.keybindings);
-    this.defaultEditor = this.createDefaultEditor();
+    this.runtimeHost = runtimeHost;
+    this.layout = new InteractiveLayout(this);
+    this.view = new ChatView(this);
+    this.display = new ModeDisplay(this);
+    this.input = new InputHandling(this);
+    this.commands = new ModeCommands(this);
+    this.selectors = new ModeSelectors(this);
+    this.models = new ModeModels(this);
+    this.extensions = new ModeExtensions(this);
+    this.lifecycle = new ModeLifecycle(this);
+    this.options = this.lifecycle.screen.resolveOptions(options);
+    this.commands.reload.autoTrustOnReloadCwd = options.autoTrustOnReloadCwd;
+    this.extensions.binding.attachToRuntimeHost();
+    this.ui = this.lifecycle.screen.createUi();
+    this.keybindings = this.input.editors.createKeybindings();
+    this.defaultEditor = this.input.editors.createDefaultEditor();
     this.editor = this.defaultEditor;
-    this.editorContainer = new Container();
-    this.editorContainer.addChild(this.editor as tuiTypes.Component);
-    this.editorSlot = new EditorSlot(this.editorContainer, this.ui, () => this.editor);
-    this.extensionDialogs = this.createExtensionDialogs();
-    this.loginFlow = this.createLoginFlow();
-    this.footerDataProvider = new FooterDataProvider(this.sessionManager.getCwd());
-    this.footer = new FooterComponent(this.session, this.footerDataProvider);
-    this.footer.setAutoCompactEnabled(this.session.compaction.auto.autoCompactionEnabled);
-    this.footerContainer = new Container();
-    this.footerContainer.addChild(this.footer);
-    this.hideThinkingBlock = this.settingsManager.getHideThinkingBlock();
-    this.outputPad = this.settingsManager.getOutputPad();
-    setRegisteredThemes(this.session.resourceLoader.getThemes().themes);
-    this.themeController = this.createThemeController(options.initialThemeSetting);
+    this.editorSlot = this.layout.build();
+    this.footer = this.layout.createFooter();
+    this.extensions.dialogs.start();
+    this.models.login.start();
+    this.display.thinking.loadSettings();
+    this.display.theme.start(options.initialThemeSetting);
+  }
+
+  get session() {
+    return this.runtimeHost.session;
+  }
+
+  get sessionManager() {
+    return this.session.sessionManager;
+  }
+
+  get settingsManager() {
+    return this.session.settingsManager;
   }
 }

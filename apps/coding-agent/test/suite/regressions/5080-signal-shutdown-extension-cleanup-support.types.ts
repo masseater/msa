@@ -5,9 +5,6 @@ declare namespace SignalShutdownExtensionCleanupSupportTypes {
     isShuttingDown: boolean;
     signalCleanupHandlers: Array<() => void>;
     shutdown: () => Promise<void>;
-    unregisterSignalHandlers: () => void;
-    emergencyTerminalExit: () => never;
-    uncaughtCrash: (error: Error) => never;
     recordCrash: () => boolean;
     getCrashExtensionHint: () => string | undefined;
     crashReportInstructions: () => string;

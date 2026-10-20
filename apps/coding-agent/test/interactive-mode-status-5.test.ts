@@ -1,9 +1,11 @@
 import { beforeAll, describe, expect, test } from "vite-plus/test";
 
-import InteractiveMode from "../src/modes/interactive/interactive-mode.ts";
 import themeModule from "../src/modes/interactive/theme/theme.ts";
+import interactiveModeFake from "./interactive-mode-fake.ts";
 import interactiveModeStatus5Support from "./interactive-mode-status-5-support.ts";
 import interactiveModeStatusSupport from "./interactive-mode-status-support.ts";
+
+const { bindModeFake } = interactiveModeFake;
 const { initTheme } = themeModule;
 
 const { createShowLoadedResourcesThis } = interactiveModeStatus5Support;
@@ -16,7 +18,7 @@ const showsACompactResourceListingByDefault = () => {
     skills: [{ filePath: "/tmp/skill/SKILL.md", name: "commit" }],
   });
 
-  (InteractiveMode as any).prototype.showLoadedResources.call(fakeThis, {
+  bindModeFake(fakeThis).display.resources.showLoadedResources({
     force: false,
   });
 
@@ -33,7 +35,7 @@ const showsFullResourceListingWhenExpanded = () => {
     toolOutputExpanded: true,
   });
 
-  (InteractiveMode as any).prototype.showLoadedResources.call(fakeThis, {
+  bindModeFake(fakeThis).display.resources.showLoadedResources({
     force: false,
   });
 
@@ -51,7 +53,7 @@ const showsFullResourceListingOnVerboseStartup = () => {
     verbose: true,
   });
 
-  (InteractiveMode as any).prototype.showLoadedResources.call(fakeThis, {
+  bindModeFake(fakeThis).display.resources.showLoadedResources({
     force: false,
   });
 
@@ -67,7 +69,7 @@ const abbreviatesExtensionsInCompactListing = () => {
     quietStartup: false,
   });
 
-  (InteractiveMode as any).prototype.showLoadedResources.call(fakeThis, {
+  bindModeFake(fakeThis).display.resources.showLoadedResources({
     force: false,
   });
 

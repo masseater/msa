@@ -7,8 +7,10 @@ import type tuiInterfaceTypes from "../../../libs/tui/src/tui-interface.types.ts
 import TuiMainScreen from "../../../libs/tui/src/tui-main-screen.ts";
 import VirtualTerminal from "../../../libs/tui/test/virtual-terminal.ts";
 import EditorSlot from "../src/modes/interactive/editor-slot.ts";
-import InteractiveMode from "../src/modes/interactive/interactive-mode.ts";
+import interactiveModeFake from "./interactive-mode-fake.ts";
 import TestFocusableComponent from "./test-focusable-component.ts";
+
+const { bindModeFake } = interactiveModeFake;
 const { Container } = tuiComponent;
 const { awaited } = testing;
 
@@ -30,16 +32,12 @@ const createCustomUiScene = () => {
     keybindings: {},
     ui,
   };
-  Object.setPrototypeOf(fakeThis, InteractiveMode.prototype);
+  bindModeFake(fakeThis);
   const showExtensionCustom = <T>(
     factory: CustomFactory<T>,
     options?: { overlay?: boolean },
   ): Promise<T> =>
-    (InteractiveMode as any).prototype.showExtensionCustom.call(
-      fakeThis,
-      factory,
-      options,
-    ) as Promise<T>;
+    bindModeFake(fakeThis).extensions.ui.showExtensionCustom(factory, options) as Promise<T>;
   editorContainer.addChild(editor);
   ui.addChild(editorContainer);
   ui.addChild(palette);

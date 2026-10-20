@@ -3,27 +3,16 @@ import type tuiTypes from "@msa/tui/index.types";
 import { beforeAll, describe, expect, test, vi } from "vite-plus/test";
 
 import ToolExecutionComponent from "../../../src/modes/interactive/components/tool-execution.ts";
-import InteractiveMode from "../../../src/modes/interactive/interactive-mode.ts";
 import themeModule from "../../../src/modes/interactive/theme/theme.ts";
 import ansi from "../../../src/utils/ansi.ts";
+import interactiveModeFake from "../../interactive-mode-fake.ts";
+
+const { bindModeFake } = interactiveModeFake;
 
 const { stripAnsi } = ansi;
 const { initTheme } = themeModule;
 
 const { Container } = tui;
-
-type UpdateThinkingBlockVisibility = (this: {
-  chatContainer: tuiTypes.Container;
-  ui: tuiTypes.TUI;
-  chatComponents(): Iterable<unknown>;
-}) => void;
-
-type ToggleThinkingBlockVisibility = (this: {
-  hideThinkingBlock: boolean;
-  settingsManager: { setHideThinkingBlock(hidden: boolean): void };
-  updateThinkingBlockVisibility(): void;
-  showStatus(message: string): void;
-}) => void;
 
 function renderChat(container: tuiTypes.Container): string {
   return stripAnsi(container.render(120).join("\n"));
@@ -44,29 +33,16 @@ const preservesPartialBashOutput = () => {
   component.markExecutionStarted();
   component.updateResult({ content: [{ text: "first", type: "text" }], isError: false }, true);
   chatContainer.addChild(component);
-
-  const updateThinkingBlockVisibility = Reflect.get(
-    InteractiveMode.prototype,
-    "updateThinkingBlockVisibility",
-  ) as UpdateThinkingBlockVisibility;
-  const toggleThinkingBlockVisibility = Reflect.get(
-    InteractiveMode.prototype,
-    "toggleThinkingBlockVisibility",
-  ) as ToggleThinkingBlockVisibility;
   const fakeThis = {
-    chatComponents: Reflect.get(InteractiveMode.prototype, "chatComponents"),
     chatContainer,
     hideThinkingBlock: false,
     settingsManager: { setHideThinkingBlock: vi.fn() },
     showStatus: vi.fn(),
     ui,
-    updateThinkingBlockVisibility() {
-      updateThinkingBlockVisibility.call(this);
-    },
   };
 
   expect(renderChat(chatContainer)).toContain("first");
-  toggleThinkingBlockVisibility.call(fakeThis);
+  bindModeFake(fakeThis).display.thinking.toggleThinkingBlockVisibility();
 
   expect(fakeThis.settingsManager.setHideThinkingBlock).toHaveBeenCalledWith(true);
   expect(chatContainer.children).toContain(component);

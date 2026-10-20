@@ -5,9 +5,11 @@ import { Effect } from "effect";
 import { beforeAll, describe, expect, it, vi } from "vite-plus/test";
 
 import type agentSessionServicesTypes from "../../../src/core/agent-session-services.types.ts";
-import InteractiveMode from "../../../src/modes/interactive/interactive-mode.ts";
 import themeModule from "../../../src/modes/interactive/theme/theme.ts";
+import interactiveModeFake from "../../interactive-mode-fake.ts";
 import harnessModule from "../harness.ts";
+
+const { bindModeFake } = interactiveModeFake;
 const { initTheme } = themeModule;
 
 const { Container } = tui;
@@ -41,17 +43,10 @@ const rendersStartupDiagnosticsInsideTheTranscript = Effect.gen(function* () {
       options: { startupDiagnostics },
       outputPad: 1,
       session: harness.session,
-      showWarning: (InteractiveMode.prototype as unknown as { showWarning(message: string): void })
-        .showWarning,
       ui: { requestRender: vi.fn() },
       version: "test",
     };
-    const run = (
-      InteractiveMode.prototype as unknown as { run(this: typeof context): Promise<void> }
-    ).run;
-
-    Object.setPrototypeOf(context, InteractiveMode.prototype);
-    void run.call(context);
+    void bindModeFake(context).lifecycle.runLoop.run();
 
     yield* Effect.promise(() =>
       vi.waitFor(() => {

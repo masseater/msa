@@ -1,10 +1,12 @@
 import { beforeAll, describe, expect, test } from "vite-plus/test";
 
-import InteractiveMode from "../src/modes/interactive/interactive-mode.ts";
 import themeModule from "../src/modes/interactive/theme/theme.ts";
+import interactiveModeFake from "./interactive-mode-fake.ts";
 import interactiveModeStatus5Support from "./interactive-mode-status-5-support.ts";
 import type interactiveModeStatus5SupportTypes from "./interactive-mode-status-5-support.types.ts";
 import interactiveModeStatusSupport from "./interactive-mode-status-support.ts";
+
+const { bindModeFake } = interactiveModeFake;
 const { initTheme } = themeModule;
 
 const { createExtensionFixtures, createShowLoadedResourcesThis, createSourceInfo } =
@@ -42,7 +44,7 @@ const labelsWindowsNpmSiblingExtensionsRelativeTo = () => {
     quietStartup: false,
   });
 
-  (InteractiveMode as any).prototype.showLoadedResources.call(fakeThis, {
+  bindModeFake(fakeThis).display.resources.showLoadedResources({
     force: false,
   });
 
@@ -58,7 +60,7 @@ const capturesMixedExtensionLayoutsInExpandedOutput = () => {
     toolOutputExpanded: true,
   });
 
-  (InteractiveMode as any).prototype.showLoadedResources.call(fakeThis, {
+  bindModeFake(fakeThis).display.resources.showLoadedResources({
     force: false,
   });
 

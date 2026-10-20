@@ -4,8 +4,10 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/tes
 
 import type agentSessionTypes from "../src/core/agent-session.types.ts";
 import emptyEnterBurstModule from "../src/modes/interactive/empty-enter-burst.ts";
-import InteractiveMode from "../src/modes/interactive/interactive-mode.ts";
+import interactiveModeFake from "./interactive-mode-fake.ts";
 import interactiveModeFlushQueueSupport from "./interactive-mode-flush-queue-support.ts";
+
+const { bindModeFake } = interactiveModeFake;
 const { EMPTY_ENTER_BURST_IDLE } = emptyEnterBurstModule;
 
 const { awaited, joinPath, makeTempDir, removePath, runTest, toJsonText, writeTextFile } = testing;
@@ -17,23 +19,17 @@ const attachSubmitHandler = (
   session: agentSessionTypes.AgentSession,
   statuses: string[],
 ): SubmitHandler => {
-  const proto = InteractiveMode.prototype;
-  const handleEmptyEnter = Reflect.get(proto, "handleEmptyEnter") as (this: object) => void;
-  const setupEditorSubmitHandler = Reflect.get(proto, "setupEditorSubmitHandler") as (
-    this: object,
-  ) => void;
   const fake = {
     defaultEditor: { onSubmit: undefined as SubmitHandler | undefined },
     editor: { addToHistory: () => {}, setText: () => {} },
     emptyEnterBurst: EMPTY_ENTER_BURST_IDLE,
-    handleEmptyEnter: () => handleEmptyEnter.call(fake),
     session,
     showStatus: (message: string) => statuses.push(message),
     ui: { requestRender: () => {} },
     updatePendingMessagesDisplay: () => {},
   };
-  Object.setPrototypeOf(fake, InteractiveMode.prototype);
-  setupEditorSubmitHandler.call(fake);
+  bindModeFake(fake);
+  bindModeFake(fake).input.submit.setupEditorSubmitHandler();
   return fake.defaultEditor.onSubmit!;
 };
 

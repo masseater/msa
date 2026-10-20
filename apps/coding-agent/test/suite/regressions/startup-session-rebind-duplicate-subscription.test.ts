@@ -2,7 +2,9 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import InteractiveMode from "../../../src/modes/interactive/interactive-mode.ts";
+import interactiveModeFake from "../../interactive-mode-fake.ts";
+
+const { bindModeFake } = interactiveModeFake;
 
 const { gate } = testing;
 
@@ -18,16 +20,6 @@ type RebindContext = {
   updateEditorBorderColor: () => void;
   updateTerminalTitle: () => void;
 };
-
-type InteractiveModePrototype = {
-  rebindCurrentSession(
-    this: RebindContext,
-    options?: { renderBeforeBind?: boolean },
-  ): Promise<void>;
-};
-
-const interactiveModePrototype = InteractiveMode.prototype as unknown as InteractiveModePrototype;
-
 const doesNotSubscribeFromTheStale = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
   const startupSession = {};
@@ -55,11 +47,11 @@ const doesNotSubscribeFromTheStale = Effect.gen(function* () {
     updateTerminalTitle,
   };
 
-  const startupRebind = interactiveModePrototype.rebindCurrentSession.call(context);
+  const startupRebind = bindModeFake(context).extensions.binding.rebindCurrentSession();
   expect(bindCount).toBe(1);
 
   context.session = replacementSession;
-  const replacementRebind = interactiveModePrototype.rebindCurrentSession.call(context, {
+  const replacementRebind = bindModeFake(context).extensions.binding.rebindCurrentSession({
     renderBeforeBind: true,
   });
 

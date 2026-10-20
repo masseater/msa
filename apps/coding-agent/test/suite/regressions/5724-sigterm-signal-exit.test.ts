@@ -2,7 +2,9 @@ import testing from "@msa/testing";
 import { Cause, Data, Effect, Exit } from "effect";
 import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 
-import InteractiveMode from "../../../src/modes/interactive/interactive-mode.ts";
+import interactiveModeFake from "../../interactive-mode-fake.ts";
+
+const { bindModeFake } = interactiveModeFake;
 
 const { gate } = testing;
 
@@ -14,12 +16,6 @@ type ShutdownThis = {
   themeController: { disableAutoSync: () => void };
   stop: () => void;
 };
-
-type InteractiveModePrototypeWithShutdown = {
-  shutdown(this: ShutdownThis, options?: { fromSignal?: boolean }): Promise<void>;
-};
-
-const interactiveModePrototype = InteractiveMode.prototype as unknown;
 
 class ProcessExitError extends Data.TaggedError("ProcessExitError")<{}> {}
 
@@ -36,12 +32,7 @@ function callShutdown(context: ShutdownThis, options?: { fromSignal?: boolean })
     Effect.gen(function* () {
       {
         const tryExit5 = yield* Effect.exit(
-          Effect.promise(() =>
-            (interactiveModePrototype as InteractiveModePrototypeWithShutdown).shutdown.call(
-              context,
-              options,
-            ),
-          ),
+          Effect.promise(() => bindModeFake(context).lifecycle.shutdown.shutdown(options)),
         );
         if (Exit.isFailure(tryExit5)) {
           const error = Cause.squash(tryExit5.cause);

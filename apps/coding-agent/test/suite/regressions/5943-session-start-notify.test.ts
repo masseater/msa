@@ -3,15 +3,18 @@ import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import themeModule from "../../../src/modes/interactive/theme/theme.ts";
+import interactiveModeFake from "../../interactive-mode-fake.ts";
 import harnessModule from "../harness.ts";
 import SessionStartNotifySupport from "./5943-session-start-notify-support.ts";
 import type SessionStartNotifySupportTypes from "./5943-session-start-notify-support.types.ts";
+
+const { bindModeFake } = interactiveModeFake;
 
 const { initTheme } = themeModule;
 
 const { Container, Text } = tui;
 
-const { getMessageText, interactiveModePrototype } = SessionStartNotifySupport;
+const { getMessageText } = SessionStartNotifySupport;
 
 const { createHarness, createTestUiContext } = harnessModule;
 
@@ -58,7 +61,7 @@ const rendersLoadedResourcesBeforeRestoredMessages = () => {
   context.loadedResourcesContainer.addChild(new Text("stale resources", 0, 0));
   context.chatContainer.addChild(new Text("restored message", 0, 0));
 
-  interactiveModePrototype.showLoadedResources.call(context);
+  bindModeFake(context).display.resources.showLoadedResources();
 
   const chatRendered = context.chatContainer.render(80).join("\n");
   expect(chatRendered).toContain("restored message");
@@ -110,7 +113,7 @@ const rendersReplacementSessionStateBeforeSession = Effect.gen(function* () {
     };
 
     yield* Effect.promise(() =>
-      interactiveModePrototype.rebindCurrentSession.call(context, { renderBeforeBind: true }),
+      bindModeFake(context).extensions.binding.rebindCurrentSession({ renderBeforeBind: true }),
     );
 
     expect(events).toEqual(["apply", "render", "subscribe", "bind", "notify:Hello Error"]);
@@ -177,7 +180,7 @@ const subscribesBeforeReplacementSessionStartHandlers = Effect.gen(function* () 
     };
 
     yield* Effect.promise(() =>
-      interactiveModePrototype.rebindCurrentSession.call(context, { renderBeforeBind: true }),
+      bindModeFake(context).extensions.binding.rebindCurrentSession({ renderBeforeBind: true }),
     );
 
     expect(events).toEqual([

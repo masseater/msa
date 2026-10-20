@@ -1,7 +1,6 @@
 import tuiComponent from "../../../libs/tui/src/tui-component.ts";
 import type settingsManagerTypes from "../src/core/settings-manager.types.ts";
 import type sourceInfoTypes from "../src/core/source-info.types.ts";
-import InteractiveMode from "../src/modes/interactive/interactive-mode.ts";
 import type interactiveModeStatus5SupportTypes from "./interactive-mode-status-5-support.types.ts";
 const { Container } = tuiComponent;
 
@@ -22,9 +21,6 @@ function createShowLoadedResourcesThis(options: ShowLoadedResourcesOptions) {
   const fakeThis: any = {
     chatContainer: new Container(),
     getBuiltInCommandConflictDiagnostics: () => [],
-    getStartupVisibility: () =>
-      (InteractiveMode as any).prototype.getStartupVisibility.call(fakeThis),
-    isStartupExpanded: () => (InteractiveMode as any).prototype.isStartupExpanded.call(fakeThis),
     loadedResourcesContainer: new Container(),
     options: { verbose: options.verbose ?? false },
     session: {

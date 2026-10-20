@@ -3,9 +3,11 @@ import tui from "@msa/tui";
 import { Effect } from "effect";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import InteractiveMode from "../src/modes/interactive/interactive-mode.ts";
 import tuiRenderer from "../src/modes/interactive/tui-renderer.ts";
+import interactiveModeFake from "./interactive-mode-fake.ts";
 import RecordingTerminal from "./interactive-tui-support.ts";
+
+const { bindModeFake } = interactiveModeFake;
 
 const { createInteractiveTui } = tuiRenderer;
 
@@ -26,15 +28,6 @@ type CopyCommandContext = {
   showStatus: (message: string) => void;
   showError: (message: string) => void;
 };
-
-type CopyCommandOptions = { flashConfirmation?: boolean; preferSelection?: boolean };
-
-type CopyCommandPrototype = {
-  handleCopyCommand(this: CopyCommandContext, options?: CopyCommandOptions): Promise<void>;
-};
-
-const copyCommandPrototype = InteractiveMode.prototype as unknown as CopyCommandPrototype;
-
 type CopyProbe = {
   getLastAssistantText: ReturnType<typeof vi.fn>;
   showError: ReturnType<typeof vi.fn>;
@@ -79,7 +72,7 @@ const copyWithActiveSelection = (
       clipboardMocks.copyToClipboard.mockClear();
 
       yield* awaited(
-        copyCommandPrototype.handleCopyCommand.call(context, {
+        bindModeFake(context).commands.info.handleCopyCommand({
           flashConfirmation: true,
           preferSelection: true,
         }),
@@ -166,7 +159,7 @@ describe("InteractiveMode copy confirmation", () => {
         try {
           yield* awaited(terminal.waitForRender());
           yield* awaited(
-            copyCommandPrototype.handleCopyCommand.call(context, {
+            bindModeFake(context).commands.info.handleCopyCommand({
               flashConfirmation: true,
               preferSelection: true,
             }),
@@ -211,7 +204,7 @@ describe("InteractiveMode copy confirmation", () => {
         };
 
         yield* awaited(
-          copyCommandPrototype.handleCopyCommand.call(context, {
+          bindModeFake(context).commands.info.handleCopyCommand({
             flashConfirmation: true,
             preferSelection: true,
           }),

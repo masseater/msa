@@ -6,10 +6,12 @@ import { Effect } from "effect";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import type scopedModelsSelectorTypes from "../../../src/modes/interactive/components/scoped-models-selector.types.ts";
-import InteractiveMode from "../../../src/modes/interactive/interactive-mode.ts";
+import interactiveModeFake from "../../interactive-mode-fake.ts";
 import tuiKit from "../../tui-kit.ts";
 import harnessModule from "../harness.ts";
 import type harnessTypes from "../harness.types.ts";
+
+const { bindModeFake } = interactiveModeFake;
 const { setKeybindings } = tui;
 
 const { KeybindingsManager, initTheme, stripAnsi } = tuiKit;
@@ -17,11 +19,6 @@ const { KeybindingsManager, initTheme, stripAnsi } = tuiKit;
 const { createHarness } = harnessModule;
 
 const { deferredPromise } = testing;
-
-const showModelsSelector = Reflect.get(InteractiveMode.prototype, "showModelsSelector") as (
-  this: object,
-) => void;
-
 type SelectorFactory = (close: () => void) => {
   component: scopedModelsSelectorTypes.ScopedModelsSelectorComponent;
   dispose?: () => void;
@@ -67,8 +64,8 @@ function openSelector(
     updateAvailableProviderCount: vi.fn(),
   };
 
-  Object.setPrototypeOf(context, InteractiveMode.prototype);
-  showModelsSelector.call(context);
+  bindModeFake(context);
+  bindModeFake(context).models.scoped.showModelsSelector();
   if (selector === undefined) throw new Error("Expected scoped-model selector to open");
   return {
     complete(models: readonly aiTypes.Model<aiTypes.Api>[], result: aiTypes.ModelsRefreshResult) {

@@ -9,7 +9,10 @@ import codingAgent from "../src/index.ts";
 import type codingAgentTypes from "../src/index.types.ts";
 import InteractiveMode from "../src/modes/interactive/interactive-mode.ts";
 import tuiRenderer from "../src/modes/interactive/tui-renderer.ts";
+import interactiveModeFake from "./interactive-mode-fake.ts";
 import RecordingTerminal from "./interactive-tui-support.ts";
+
+const { bindModeFake } = interactiveModeFake;
 
 const { initTheme } = codingAgent;
 
@@ -147,21 +150,11 @@ const replacesTheRendererAndRestoresThePrevious = Effect.gen(function* () {
   const context = createSwitchContext(renderer, component);
   stableUi = createInteractiveTuiReference(() => context.renderer);
   context.ui = stableUi;
-  const { stopInteractiveTui, switchTuiMode } = InteractiveMode.prototype as unknown as {
-    stopInteractiveTui(
-      this: SwitchContext,
-      fullscreenExitOutput: codingAgentTypes.FullscreenExitOutput,
-    ): void;
-    switchTuiMode(
-      this: SwitchContext,
-      mode: codingAgentTypes.TuiMode,
-      restoreProgress?: boolean,
-    ): boolean;
-  };
+  const screen = bindModeFake(context).lifecycle.screen;
 
   renderer.start();
   yield* awaited(terminal.waitForRender());
-  expect(switchTuiMode.call(context, "fullscreen", false)).toBe(true);
+  expect(screen.switchTuiMode("fullscreen", false)).toBe(true);
   yield* awaited(terminal.waitForRender());
 
   expect(stableUi.mode).toBe("fullscreen");
@@ -171,7 +164,7 @@ const replacesTheRendererAndRestoresThePrevious = Effect.gen(function* () {
   expect(invalidatedModes).toEqual(["fullscreen"]);
   expect([terminal.startCount, terminal.stopCount]).toEqual([2, 1]);
 
-  stopInteractiveTui.call(context, "resume-hint");
+  screen.stopInteractiveTui("resume-hint");
 
   expect(stableUi.mode).toBe("fullscreen");
   expect([terminal.startCount, terminal.stopCount]).toEqual([2, 2]);
@@ -201,11 +194,7 @@ const feedsClipboardTextToTheFocusedComponent = Effect.gen(function* () {
     renderer: { getFocusedComponent: () => target },
     ui: { requestRender },
   };
-  const prototype = InteractiveMode.prototype as unknown as {
-    handleRightClickPaste(this: typeof context): Promise<void>;
-  };
-
-  yield* awaited(prototype.handleRightClickPaste.call(context));
+  yield* awaited(bindModeFake(context).input.clipboard.handleRightClickPaste());
 
   expect(handleInput).toHaveBeenCalledWith("\x1b[200~clipboard text\x1b[201~");
   expect(requestRender).toHaveBeenCalledOnce();

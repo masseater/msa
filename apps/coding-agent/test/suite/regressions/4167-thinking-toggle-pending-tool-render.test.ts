@@ -7,8 +7,10 @@ import { beforeAll, describe, expect, test, vi } from "vite-plus/test";
 
 import type codingAgentTypes from "../../../src/index.types.ts";
 import type toolExecutionTypes from "../../../src/modes/interactive/components/tool-execution.types.ts";
-import InteractiveMode from "../../../src/modes/interactive/interactive-mode.ts";
+import interactiveModeFake from "../../interactive-mode-fake.ts";
 import tuiKit from "../../tui-kit.ts";
+
+const { bindModeFake } = interactiveModeFake;
 
 const { Container, Text } = tui;
 
@@ -35,13 +37,6 @@ const EMPTY_USAGE: aiTypes.Usage = {
   output: 0,
   totalTokens: 0,
 };
-
-type RenderSessionItems = (
-  this: RenderSessionContextThis,
-  items: AgentMessage[],
-  options?: { updateFooter?: boolean; populateHistory?: boolean },
-) => void;
-
 type RenderSessionContextThis = {
   pendingTools: Map<string, toolExecutionTypes.ToolExecutionComponent>;
   chatContainer: tuiTypes.Container;
@@ -64,20 +59,7 @@ type RenderSessionContextThis = {
   getRegisteredToolDefinition(toolName: string): undefined;
   maybeShowAssistantDiagnostics(message: aiTypes.AssistantMessage): void;
   addMessageToChat(message: AgentMessage, options?: { populateHistory?: boolean }): void;
-  addToolExecution(component: toolExecutionTypes.ToolExecutionComponent): void;
-  renderSessionItems: RenderSessionItems;
 };
-
-type RenderSessionEntries = (
-  this: RenderSessionContextThis,
-  entries: codingAgentTypes.SessionEntry[],
-  options?: { updateFooter?: boolean; populateHistory?: boolean },
-) => void;
-
-type HandleEvent = (
-  this: RenderSessionContextThis,
-  event: codingAgentTypes.AgentSessionEvent,
-) => Promise<void>;
 
 function createFakeInteractiveModeThis(): RenderSessionContextThis {
   const chatContainer = new Container();
@@ -85,7 +67,6 @@ function createFakeInteractiveModeThis(): RenderSessionContextThis {
     addMessageToChat(message: AgentMessage) {
       chatContainer.addChild(new Text(message.role, 0, 0));
     },
-    addToolExecution: Reflect.get(InteractiveMode.prototype, "addToolExecution"),
     chatContainer,
     footer: { invalidate: vi.fn() },
     getRegisteredToolDefinition: (_toolName: string) => undefined,
@@ -93,9 +74,6 @@ function createFakeInteractiveModeThis(): RenderSessionContextThis {
     maybeShowAssistantDiagnostics: vi.fn(),
     pendingTools: new Map<string, toolExecutionTypes.ToolExecutionComponent>(),
     programStatus: { handleEvent: vi.fn() },
-    renderSessionItems: (
-      InteractiveMode.prototype as unknown as { renderSessionItems: RenderSessionItems }
-    ).renderSessionItems,
     session: { modelRegistry: { find: () => undefined }, run: { retry: { retryAttempt: 0 } } },
     sessionManager: { getCwd: () => process.cwd(), getEntries: () => [] },
     settingsManager: {
@@ -161,20 +139,16 @@ function renderChat(container: tuiTypes.Container): string {
 
 const keepsUnresolvedRenderedToolCallsRegistered = Effect.gen(function* () {
   const fakeThis = createFakeInteractiveModeThis();
-  const renderSessionEntries = (
-    InteractiveMode.prototype as unknown as { renderSessionEntries: RenderSessionEntries }
-  ).renderSessionEntries;
-  const handleEvent = (InteractiveMode.prototype as unknown as { handleEvent: HandleEvent })
-    .handleEvent;
-
-  Object.setPrototypeOf(fakeThis, InteractiveMode.prototype);
-  renderSessionEntries.call(fakeThis, createSessionEntries([createAssistantToolCallMessage()]));
+  bindModeFake(fakeThis);
+  bindModeFake(fakeThis).view.history.renderSessionEntries(
+    createSessionEntries([createAssistantToolCallMessage()]),
+  );
 
   expect(fakeThis.pendingTools.has(TOOL_CALL_ID)).toBe(true);
 
-  Object.setPrototypeOf(fakeThis, InteractiveMode.prototype);
+  bindModeFake(fakeThis);
   yield* Effect.promise(() =>
-    handleEvent.call(fakeThis, {
+    bindModeFake(fakeThis).lifecycle.events.handleEvent({
       isError: false,
       result: { content: [{ text: "FINAL_RESULT", type: "text" }], details: undefined },
       toolCallId: TOOL_CALL_ID,
@@ -189,13 +163,8 @@ const keepsUnresolvedRenderedToolCallsRegistered = Effect.gen(function* () {
 
 const doesNotKeepCompletedHistoricalTool = () => {
   const fakeThis = createFakeInteractiveModeThis();
-  const renderSessionEntries = (
-    InteractiveMode.prototype as unknown as { renderSessionEntries: RenderSessionEntries }
-  ).renderSessionEntries;
-
-  Object.setPrototypeOf(fakeThis, InteractiveMode.prototype);
-  renderSessionEntries.call(
-    fakeThis,
+  bindModeFake(fakeThis);
+  bindModeFake(fakeThis).view.history.renderSessionEntries(
     createSessionEntries([
       createAssistantToolCallMessage(),
       createToolResultMessage("HISTORICAL_RESULT"),

@@ -2,9 +2,11 @@ import { beforeAll, describe, expect, test, vi } from "vite-plus/test";
 
 import tuiComponent from "../../../libs/tui/src/tui-component.ts";
 import type tuiComponentTypes from "../../../libs/tui/src/tui-component.types.ts";
-import InteractiveMode from "../src/modes/interactive/interactive-mode.ts";
 import themeModule from "../src/modes/interactive/theme/theme.ts";
+import interactiveModeFake from "./interactive-mode-fake.ts";
 import interactiveModeStatusSupport from "./interactive-mode-status-support.ts";
+
+const { bindModeFake } = interactiveModeFake;
 const { initTheme } = themeModule;
 
 const { Container } = tuiComponent;
@@ -25,13 +27,13 @@ const coalescesImmediatelySequentialStatusMessages = () => {
     ui: { requestRender: vi.fn() },
   };
 
-  Object.setPrototypeOf(fakeThis, InteractiveMode.prototype);
-  (InteractiveMode as any).prototype.showStatus.call(fakeThis, "STATUS_ONE");
+  bindModeFake(fakeThis);
+  bindModeFake(fakeThis).display.status.showStatus("STATUS_ONE");
   expect(fakeThis.chatContainer.children).toHaveLength(2);
   expect(renderLastLine(fakeThis.chatContainer)).toContain("STATUS_ONE");
 
-  Object.setPrototypeOf(fakeThis, InteractiveMode.prototype);
-  (InteractiveMode as any).prototype.showStatus.call(fakeThis, "STATUS_TWO");
+  bindModeFake(fakeThis);
+  bindModeFake(fakeThis).display.status.showStatus("STATUS_TWO");
 
   expect(fakeThis.chatContainer.children).toHaveLength(2);
   expect(renderLastLine(fakeThis.chatContainer)).toContain("STATUS_TWO");
@@ -46,15 +48,15 @@ const appendsANewStatusLineIfSomething = () => {
     ui: { requestRender: vi.fn() },
   };
 
-  Object.setPrototypeOf(fakeThis, InteractiveMode.prototype);
-  (InteractiveMode as any).prototype.showStatus.call(fakeThis, "STATUS_ONE");
+  bindModeFake(fakeThis);
+  bindModeFake(fakeThis).display.status.showStatus("STATUS_ONE");
   expect(fakeThis.chatContainer.children).toHaveLength(2);
 
   fakeThis.chatContainer.addChild({ invalidate: () => {}, render: () => ["OTHER"] });
   expect(fakeThis.chatContainer.children).toHaveLength(3);
 
-  Object.setPrototypeOf(fakeThis, InteractiveMode.prototype);
-  (InteractiveMode as any).prototype.showStatus.call(fakeThis, "STATUS_TWO");
+  bindModeFake(fakeThis);
+  bindModeFake(fakeThis).display.status.showStatus("STATUS_TWO");
 
   expect(fakeThis.chatContainer.children).toHaveLength(5);
   expect(renderLastLine(fakeThis.chatContainer)).toContain("STATUS_TWO");
@@ -84,14 +86,21 @@ const rendersToolUpdatesAsOneContiguousGroup = () => {
     managedToolStatusStarted: false,
     ui: { requestRender: vi.fn() },
   };
-  const showManagedToolStatus = (InteractiveMode as any).prototype.showManagedToolStatus;
-
-  Object.setPrototypeOf(fakeThis, InteractiveMode.prototype);
-  showManagedToolStatus.call(fakeThis, { message: "fd downloading", type: "info" as const });
-  Object.setPrototypeOf(fakeThis, InteractiveMode.prototype);
-  showManagedToolStatus.call(fakeThis, { message: "rg downloading", type: "info" as const });
-  Object.setPrototypeOf(fakeThis, InteractiveMode.prototype);
-  showManagedToolStatus.call(fakeThis, { message: "rg failed", type: "warning" as const });
+  bindModeFake(fakeThis);
+  bindModeFake(fakeThis).display.status.showManagedToolStatus({
+    message: "fd downloading",
+    type: "info" as const,
+  });
+  bindModeFake(fakeThis);
+  bindModeFake(fakeThis).display.status.showManagedToolStatus({
+    message: "rg downloading",
+    type: "info" as const,
+  });
+  bindModeFake(fakeThis);
+  bindModeFake(fakeThis).display.status.showManagedToolStatus({
+    message: "rg failed",
+    type: "warning" as const,
+  });
 
   expect(fakeThis.chatContainer.children).toHaveLength(4);
   expect(normalizeRenderedOutput(fakeThis.chatContainer)).toBe(
@@ -119,8 +128,8 @@ const appliesExpansionStateToTheActiveHeader = () => {
     ui: { requestRender: vi.fn() },
   };
 
-  Object.setPrototypeOf(fakeThis, InteractiveMode.prototype);
-  (InteractiveMode as any).prototype.setToolsExpanded.call(fakeThis, true);
+  bindModeFake(fakeThis);
+  bindModeFake(fakeThis).display.resources.setToolsExpanded(true);
 
   expect(fakeThis.toolOutputExpanded).toBe(true);
   expect(header.setExpanded).toHaveBeenCalledWith(true);
@@ -159,8 +168,8 @@ const persistsThemeChangesToSettingsManager = () => {
     ui: { requestRender: vi.fn() },
   };
 
-  Object.setPrototypeOf(fakeThis, InteractiveMode.prototype);
-  const uiContext = (InteractiveMode as any).prototype.createExtensionUIContext.call(fakeThis);
+  bindModeFake(fakeThis);
+  const uiContext = bindModeFake(fakeThis).extensions.ui.createExtensionUIContext();
   const result = uiContext.setTheme("light");
 
   expect(result.success).toBe(true);
@@ -187,8 +196,8 @@ const doesNotPersistInvalidThemeNames = () => {
     ui: { requestRender: vi.fn() },
   };
 
-  Object.setPrototypeOf(fakeThis, InteractiveMode.prototype);
-  const uiContext = (InteractiveMode as any).prototype.createExtensionUIContext.call(fakeThis);
+  bindModeFake(fakeThis);
+  const uiContext = bindModeFake(fakeThis).extensions.ui.createExtensionUIContext();
   const result = uiContext.setTheme("__missing_theme__");
 
   expect(result.success).toBe(false);

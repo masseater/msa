@@ -3,7 +3,9 @@ import type tui from "@msa/tui";
 import { Effect } from "effect";
 import { afterEach, expect, test, vi } from "vite-plus/test";
 
-import InteractiveMode from "../src/modes/interactive/interactive-mode.ts";
+import interactiveModeFake from "./interactive-mode-fake.ts";
+
+const { bindModeFake } = interactiveModeFake;
 
 const { awaited, runTest } = testing;
 
@@ -55,11 +57,8 @@ const nativeImageErrorsAbortPasteWithoutReading = () =>
         showError: vi.fn(),
         ui: { requestRender: vi.fn() },
       };
-      const prototype = InteractiveMode.prototype as unknown as {
-        handleClipboardPaste(this: typeof context): Promise<void>;
-      };
-      Object.setPrototypeOf(context, InteractiveMode.prototype);
-      yield* awaited(prototype.handleClipboardPaste.call(context));
+      bindModeFake(context);
+      yield* awaited(bindModeFake(context).input.clipboard.handleClipboardPaste());
       expect(readClipboardText).not.toHaveBeenCalled();
       expect(context.editor.insertTextAtCursor).not.toHaveBeenCalled();
       expect(context.ui.requestRender).not.toHaveBeenCalled();

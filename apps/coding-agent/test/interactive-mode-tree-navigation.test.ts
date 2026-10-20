@@ -8,9 +8,12 @@ import type statusIndicatorTypes from "../src/modes/interactive/components/statu
 import type TreeSelectorComponent from "../src/modes/interactive/components/tree-selector.ts";
 import type treeSelectorTypes from "../src/modes/interactive/components/tree-selector.types.ts";
 import themeModule from "../src/modes/interactive/theme/theme.ts";
+import interactiveModeFake from "./interactive-mode-fake.ts";
 import utilities from "./utilities.ts";
 
-const { InteractiveMode, SessionManager, SettingsManager } = src;
+const { bindModeFake } = interactiveModeFake;
+
+const { SessionManager, SettingsManager } = src;
 const { initTheme } = themeModule;
 
 const { Container } = tui;
@@ -91,11 +94,8 @@ function createTreeUI() {
     ),
     ui: { requestRender: vi.fn(), terminal: { rows: 24, setProgress: vi.fn() } },
   };
-  const showTreeSelector = Reflect.get(InteractiveMode.prototype, "showTreeSelector") as (
-    this: typeof ui,
-  ) => void;
-  Object.setPrototypeOf(ui, InteractiveMode.prototype);
-  showTreeSelector.call(ui);
+  bindModeFake(ui);
+  bindModeFake(ui).selectors.tree.showTreeSelector();
 
   return {
     onEscape,

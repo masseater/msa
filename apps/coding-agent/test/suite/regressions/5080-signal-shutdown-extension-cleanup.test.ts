@@ -6,8 +6,10 @@ import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 
 import config from "../../../src/config.ts";
 import type sessionManagerTypes from "../../../src/core/session-manager.types.ts";
-import InteractiveMode from "../../../src/modes/interactive/interactive-mode.ts";
+import interactiveModeFake from "../../interactive-mode-fake.ts";
 import ProcessExitError from "./5080-signal-shutdown-extension-cleanup-support.ts";
+
+const { bindModeFake } = interactiveModeFake;
 const { APP_NAME } = config;
 const { joinPath } = testing;
 
@@ -24,13 +26,6 @@ type ShutdownThis = {
   stop: () => void;
   sessionManager: sessionManagerTypes.SessionManager;
 };
-
-type InteractiveModePrototypeWithShutdown = {
-  shutdown(this: ShutdownThis, options?: { fromSignal?: boolean }): Promise<void>;
-};
-
-const interactiveModePrototype = InteractiveMode.prototype as unknown;
-
 const tempDirs: string[] = [];
 
 const originalStdoutIsTTY = Object.getOwnPropertyDescriptor(process.stdout, "isTTY");
@@ -108,12 +103,7 @@ function callShutdown(context: ShutdownThis, options?: { fromSignal?: boolean })
     Effect.gen(function* () {
       {
         const tryExit4 = yield* Effect.exit(
-          Effect.promise(() =>
-            (interactiveModePrototype as InteractiveModePrototypeWithShutdown).shutdown.call(
-              context,
-              options,
-            ),
-          ),
+          Effect.promise(() => bindModeFake(context).lifecycle.shutdown.shutdown(options)),
         );
         if (Exit.isFailure(tryExit4)) {
           const error = Cause.squash(tryExit4.cause);

@@ -2,18 +2,19 @@ import ai from "@msa/ai";
 import { Effect } from "effect";
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import InteractiveMode from "../../../src/modes/interactive/interactive-mode.ts";
 import themeModule from "../../../src/modes/interactive/theme/theme.ts";
+import interactiveModeFake from "../../interactive-mode-fake.ts";
 import harnessModule from "../harness.ts";
 import SessionStartNotifySupport from "./5943-session-start-notify-support.ts";
 import type SessionStartNotifySupportTypes from "./5943-session-start-notify-support.types.ts";
+
+const { bindModeFake } = interactiveModeFake;
 
 const { initTheme } = themeModule;
 
 const { fauxAssistantMessage } = ai;
 
-const { createReloadCommandContext, getMessageText, interactiveModePrototype } =
-  SessionStartNotifySupport;
+const { createReloadCommandContext, getMessageText } = SessionStartNotifySupport;
 
 const { createHarness, createTestUiContext } = harnessModule;
 
@@ -72,7 +73,7 @@ const subscribesBeforeReplacementSessionStartHandlers2 = Effect.gen(function* ()
     };
 
     yield* Effect.promise(() =>
-      interactiveModePrototype.rebindCurrentSession.call(context, { renderBeforeBind: true }),
+      bindModeFake(context).extensions.binding.rebindCurrentSession({ renderBeforeBind: true }),
     );
     yield* Effect.promise(() => harness.session.agent.waitForIdle());
 
@@ -148,8 +149,8 @@ const refreshesHidethinkingblockBeforeRebuildingChatDuring = Effect.gen(function
     settingsManager: { getHideThinkingBlock: () => true },
   });
 
-  Object.setPrototypeOf(context, InteractiveMode.prototype);
-  yield* Effect.promise(() => interactiveModePrototype.handleReloadCommand.call(context));
+  bindModeFake(context);
+  yield* Effect.promise(() => bindModeFake(context).commands.reload.handleReloadCommand());
 
   expect(context.hideThinkingBlock).toBe(true);
   expect(events).toEqual(["reload", "rebuild:true", "start:true"]);

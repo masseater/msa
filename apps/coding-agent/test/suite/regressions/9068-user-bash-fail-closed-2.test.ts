@@ -2,10 +2,12 @@ import { Effect } from "effect";
 import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 
 import type extensionsTypesTypes from "../../../src/core/extensions/types.types.ts";
-import InteractiveMode from "../../../src/modes/interactive/interactive-mode.ts";
+import interactiveModeFake from "../../interactive-mode-fake.ts";
 import harnessModule from "../harness.ts";
 import type harnessTypes from "../harness.types.ts";
 import UserBashFailClosedSupport from "./9068-user-bash-fail-closed-support.ts";
+
+const { bindModeFake } = interactiveModeFake;
 const { localResult } = UserBashFailClosedSupport;
 
 const { createHarness } = harnessModule;
@@ -61,20 +63,9 @@ type InteractiveBashContext = {
   pendingMessagesContainer: { addChild(component: unknown): void };
   pendingBashComponents: unknown[];
   isBashMode: boolean;
-  handleBashCommand(command: string, excludeFromContext?: boolean): Promise<void>;
   showError(message: string): void;
   updateEditorBorderColor(): void;
 };
-
-const interactiveModePrototype = InteractiveMode.prototype as unknown as {
-  setupEditorSubmitHandler(this: InteractiveBashContext): void;
-  handleBashCommand(
-    this: InteractiveBashContext,
-    command: string,
-    excludeFromContext?: boolean,
-  ): Promise<void>;
-};
-
 afterEach(() => {
   rpcIo.outputLines = [];
   rpcIo.lineHandler = undefined;
@@ -118,7 +109,6 @@ describe("Interactive user_bash failure handling (#9068)", () => {
           chatContainer: { addChild: vi.fn() },
           defaultEditor: {},
           editor: { addToHistory: vi.fn() },
-          handleBashCommand: interactiveModePrototype.handleBashCommand,
           isBashMode: true,
           pendingBashComponents: [],
           pendingMessagesContainer: { addChild: vi.fn() },
@@ -128,8 +118,8 @@ describe("Interactive user_bash failure handling (#9068)", () => {
           ui: { requestRender: vi.fn() },
           updateEditorBorderColor: vi.fn(),
         };
-        Object.setPrototypeOf(context, InteractiveMode.prototype);
-        interactiveModePrototype.setupEditorSubmitHandler.call(context);
+        bindModeFake(context);
+        bindModeFake(context).input.submit.setupEditorSubmitHandler();
 
         try {
           yield* Effect.promise(() => Promise.resolve(context.defaultEditor.onSubmit?.(input)));

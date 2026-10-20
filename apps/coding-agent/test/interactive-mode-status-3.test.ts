@@ -5,7 +5,9 @@ import { Effect } from "effect";
 import { describe, expect, test, vi } from "vite-plus/test";
 
 import type extensionsTypesTypes from "../src/core/extensions/types.types.ts";
-import InteractiveMode from "../src/modes/interactive/interactive-mode.ts";
+import interactiveModeFake from "./interactive-mode-fake.ts";
+
+const { bindModeFake } = interactiveModeFake;
 
 const { CombinedAutocompleteProvider } = tui;
 
@@ -70,7 +72,7 @@ const stacksWrapperFactoriesOverAFreshBase = () => {
     editor: customEditor,
   };
 
-  (InteractiveMode as any).prototype.setupAutocompleteProvider.call(fakeThis);
+  bindModeFake(fakeThis).input.autocomplete.setupAutocompleteProvider();
 
   expect(defaultEditor.setAutocompleteProvider).toHaveBeenCalledTimes(1);
   expect(customEditor.setAutocompleteProvider).toHaveBeenCalledTimes(1);
@@ -102,11 +104,7 @@ const mergesTriggercharactersFromWrapperFactories = () => {
     editor: customEditor,
   };
 
-  (
-    InteractiveMode as unknown as {
-      prototype: { setupAutocompleteProvider: (this: typeof fakeThis) => void };
-    }
-  ).prototype.setupAutocompleteProvider.call(fakeThis);
+  bindModeFake(fakeThis).input.autocomplete.setupAutocompleteProvider();
 
   const provider = defaultEditor.setAutocompleteProvider.mock
     .calls[0]?.[0] as tuiTypes.AutocompleteProvider;

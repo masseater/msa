@@ -3,11 +3,13 @@ import { homedir } from "node:os";
 import testing from "@msa/testing";
 import { beforeAll, describe, expect, test } from "vite-plus/test";
 
-import InteractiveMode from "../src/modes/interactive/interactive-mode.ts";
 import loadedResources from "../src/modes/interactive/loaded-resources.ts";
 import themeModule from "../src/modes/interactive/theme/theme.ts";
+import interactiveModeFake from "./interactive-mode-fake.ts";
 import interactiveModeStatus5Support from "./interactive-mode-status-5-support.ts";
 import interactiveModeStatusSupport from "./interactive-mode-status-support.ts";
+
+const { bindModeFake } = interactiveModeFake;
 const { getStartupVisibility } = loadedResources;
 const { initTheme } = themeModule;
 
@@ -29,7 +31,7 @@ const showsContextPathsRelativeToCwdWhile = () => {
     quietStartup: false,
   });
 
-  (InteractiveMode as any).prototype.showLoadedResources.call(fakeThis, {
+  bindModeFake(fakeThis).display.resources.showLoadedResources({
     force: false,
   });
 
@@ -49,7 +51,7 @@ const showsSystemPromptContextPathsBeforeProject = () => {
     systemPromptSource: { path: joinPath(cwd, ".msa", "SYSTEM.md") },
   });
 
-  (InteractiveMode as any).prototype.showLoadedResources.call(fakeThis, {
+  bindModeFake(fakeThis).display.resources.showLoadedResources({
     force: false,
   });
 
@@ -71,7 +73,7 @@ const showsFullContextPathsWhenExpanded = () => {
     toolOutputExpanded: true,
   });
 
-  (InteractiveMode as any).prototype.showLoadedResources.call(fakeThis, {
+  bindModeFake(fakeThis).display.resources.showLoadedResources({
     force: false,
   });
 
@@ -88,7 +90,7 @@ const doesNotShowVerboseListingOnQuiet = () => {
     skills: [{ filePath: "/tmp/skill/SKILL.md", name: "commit" }],
   });
 
-  (InteractiveMode as any).prototype.showLoadedResources.call(fakeThis, {
+  bindModeFake(fakeThis).display.resources.showLoadedResources({
     extensions: [{ path: "/tmp/ext/index.ts" }],
     force: false,
     showDiagnosticsWhenQuiet: true,
@@ -103,7 +105,7 @@ const hidesResourceListingButKeepsTheStartup = () => {
     skills: [{ filePath: "/tmp/skill/SKILL.md", name: "commit" }],
   });
 
-  (InteractiveMode as any).prototype.showLoadedResources.call(fakeThis, {
+  bindModeFake(fakeThis).display.resources.showLoadedResources({
     force: false,
   });
 
@@ -123,7 +125,7 @@ const stillShowsDiagnosticsOnQuietStartupWhen = () => {
     skills: [{ filePath: "/tmp/skill/SKILL.md", name: "commit" }],
   });
 
-  (InteractiveMode as any).prototype.showLoadedResources.call(fakeThis, {
+  bindModeFake(fakeThis).display.resources.showLoadedResources({
     force: false,
     showDiagnosticsWhenQuiet: true,
   });

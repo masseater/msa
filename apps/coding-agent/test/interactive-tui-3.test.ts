@@ -8,9 +8,11 @@ import codingAgent from "../src/index.ts";
 import type codingAgentTypes from "../src/index.types.ts";
 import type statusIndicatorTypes from "../src/modes/interactive/components/status-indicator.types.ts";
 import statusIndicators from "../src/modes/interactive/components/status-indicators.ts";
-import InteractiveMode from "../src/modes/interactive/interactive-mode.ts";
 import tuiRenderer from "../src/modes/interactive/tui-renderer.ts";
+import interactiveModeFake from "./interactive-mode-fake.ts";
 import RecordingTerminal from "./interactive-tui-support.ts";
+
+const { bindModeFake } = interactiveModeFake;
 
 const {
   BranchSummaryStatusIndicator,
@@ -51,10 +53,6 @@ const dropsTheFullscreenSelectionWhenSessionEntries = () =>
       });
       ui.addChild(new Text("alpha\nbeta\ngamma\ndelta", 0, 0));
       const context: RenderSessionEntriesContext = { renderSessionItems: vi.fn(), renderer: ui };
-      const { renderSessionEntries } = InteractiveMode.prototype as unknown as {
-        renderSessionEntries(this: RenderSessionEntriesContext, entries: unknown[]): void;
-      };
-
       ui.start();
       try {
         yield* awaited(terminal.waitForRender());
@@ -64,7 +62,7 @@ const dropsTheFullscreenSelectionWhenSessionEntries = () =>
         yield* awaited(terminal.waitForRender());
         expect(ui.hasActiveSelection()).toBe(true);
 
-        renderSessionEntries.call(context, []);
+        bindModeFake(context).view.history.renderSessionEntries([]);
 
         expect(ui.hasActiveSelection()).toBe(false);
       } finally {
@@ -96,28 +94,7 @@ type ClearStatusContext = {
   options: { tuiMode?: codingAgentTypes.TuiMode };
   ui: { getClearOnShrink: () => boolean };
   idleStatus: tuiTypes.Component;
-  setEditorWorkingStatusIndicator(
-    indicator: statusIndicatorTypes.StatusIndicator | undefined,
-  ): boolean;
 };
-
-type InteractiveModePrototype = {
-  showStatusIndicator(
-    this: ClearStatusContext,
-    indicator: statusIndicatorTypes.StatusIndicator,
-  ): void;
-  clearStatusIndicator(
-    this: ClearStatusContext,
-    kind?: statusIndicatorTypes.StatusIndicatorKind,
-  ): void;
-  setEditorWorkingStatusIndicator(
-    this: ClearStatusContext,
-    indicator: statusIndicatorTypes.StatusIndicator | undefined,
-  ): boolean;
-};
-
-const interactiveModePrototype = InteractiveMode.prototype as unknown as InteractiveModePrototype;
-
 describe("clear-on-shrink status spacing", () => {
   it.each([true, false])(
     "routes every status through the editor opt-in (%s)",
@@ -132,7 +109,6 @@ describe("clear-on-shrink status spacing", () => {
         editor,
         idleStatus: new Text("", 0, 0),
         options: { tuiMode: "regular" },
-        setEditorWorkingStatusIndicator: interactiveModePrototype.setEditorWorkingStatusIndicator,
         statusContainer: new Container(),
         ui: { getClearOnShrink: () => true },
       };
@@ -146,7 +122,7 @@ describe("clear-on-shrink status spacing", () => {
       ];
       try {
         for (const indicator of indicators) {
-          interactiveModePrototype.showStatusIndicator.call(context, indicator);
+          bindModeFake(context).display.indicator.showStatusIndicator(indicator);
           expect(context.activeStatusIndicator).toBe(indicator);
           expect(context.activeWorkingIndicatorEmbedded).toBe(embedWorkingStatus);
           if (embedWorkingStatus) {
@@ -179,12 +155,11 @@ describe("clear-on-shrink status spacing", () => {
       editor,
       idleStatus: new Text("", 0, 0),
       options: { tuiMode: "regular" },
-      setEditorWorkingStatusIndicator: interactiveModePrototype.setEditorWorkingStatusIndicator,
       statusContainer: new Container(),
       ui: { getClearOnShrink: () => true },
     };
 
-    interactiveModePrototype.clearStatusIndicator.call(context);
+    bindModeFake(context).display.indicator.clearStatusIndicator();
 
     expect(dispose).toHaveBeenCalledOnce();
     expect(editor.setWorkingStatusIndicator).toHaveBeenCalledWith(undefined);
@@ -210,12 +185,11 @@ describe("clear-on-shrink status spacing", () => {
         editor: customEditor,
         idleStatus: new Text("", 0, 0),
         options: { tuiMode },
-        setEditorWorkingStatusIndicator: interactiveModePrototype.setEditorWorkingStatusIndicator,
         statusContainer: new Container(),
         ui: { getClearOnShrink: () => true },
       };
 
-      interactiveModePrototype.clearStatusIndicator.call(context);
+      bindModeFake(context).display.indicator.clearStatusIndicator();
 
       expect(defaultEditor.setWorkingStatusIndicator).toHaveBeenCalledWith(undefined);
       expect(customEditor.setWorkingStatusIndicator).not.toHaveBeenCalled();

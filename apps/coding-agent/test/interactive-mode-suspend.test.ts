@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 
-import InteractiveMode from "../src/modes/interactive/interactive-mode.ts";
+import interactiveModeFake from "./interactive-mode-fake.ts";
+
+const { bindModeFake } = interactiveModeFake;
 
 type FakeUi = {
   start: () => void;
@@ -14,15 +16,9 @@ type HandleCtrlZThis = {
 
 type ProcessSignalHandler = () => void;
 
-type InteractiveModePrototypeWithHandleCtrlZ = {
-  handleCtrlZ(this: HandleCtrlZThis): void;
-};
-
 function callHandleCtrlZ(context: HandleCtrlZThis): void {
-  (interactiveModePrototype as InteractiveModePrototypeWithHandleCtrlZ).handleCtrlZ.call(context);
+  bindModeFake(context).input.keys.handleCtrlZ();
 }
-
-const interactiveModePrototype = InteractiveMode.prototype as unknown;
 
 describe("InteractiveMode.handleCtrlZ", () => {
   afterEach(() => {

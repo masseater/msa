@@ -5,6 +5,9 @@ import { describe, expect, test } from "vite-plus/test";
 
 import type oauthSelectorTypes from "../src/modes/interactive/components/oauth-selector.types.ts";
 import InteractiveMode from "../src/modes/interactive/interactive-mode.ts";
+import interactiveModeFake from "./interactive-mode-fake.ts";
+
+const { bindModeFake } = interactiveModeFake;
 
 const { abortController, awaited, runTest } = testing;
 
@@ -30,13 +33,6 @@ type FakeInteractiveMode = {
 };
 
 const matchesModelCommandArgumentsAcrossProviderModel = Effect.gen(function* () {
-  const createBaseAutocompleteProvider = (
-    InteractiveMode as unknown as {
-      prototype: {
-        createBaseAutocompleteProvider(this: FakeInteractiveMode): tuiTypes.AutocompleteProvider;
-      };
-    }
-  ).prototype.createBaseAutocompleteProvider;
   const models = [
     { id: "openai/gpt-5.2-codex", name: "GPT-5.2 Codex", provider: "openrouter" },
     { id: "gpt-5.5", name: "GPT-5.5", provider: "openai-codex" },
@@ -57,8 +53,8 @@ const matchesModelCommandArgumentsAcrossProviderModel = Effect.gen(function* () 
     skillCommands: new Map(),
   };
 
-  Object.setPrototypeOf(fakeThis, InteractiveMode.prototype);
-  const provider = createBaseAutocompleteProvider.call(fakeThis);
+  bindModeFake(fakeThis);
+  const provider = bindModeFake(fakeThis).input.autocomplete.createBaseAutocompleteProvider();
   const line = "/model codexgpt";
   const suggestions = yield* awaited(
     provider.getSuggestions([line], 0, line.length, {
@@ -119,11 +115,10 @@ const matchesLoginCommandArgumentsByProviderIdStep = () => {
 };
 
 const matchesLoginCommandArgumentsByProviderId = Effect.gen(function* () {
-  const { createBaseAutocompleteProvider, fakeThis } =
-    matchesLoginCommandArgumentsByProviderIdStep();
+  const { fakeThis } = matchesLoginCommandArgumentsByProviderIdStep();
 
-  Object.setPrototypeOf(fakeThis, InteractiveMode.prototype);
-  const provider = createBaseAutocompleteProvider.call(fakeThis);
+  bindModeFake(fakeThis);
+  const provider = bindModeFake(fakeThis).input.autocomplete.createBaseAutocompleteProvider();
   const line = "/login subscription anthrop";
   const suggestions = yield* awaited(
     provider.getSuggestions([line], 0, line.length, {

@@ -2,13 +2,15 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import InteractiveMode from "../../../src/modes/interactive/interactive-mode.ts";
 import themeModule from "../../../src/modes/interactive/theme/theme.ts";
+import interactiveModeFake from "../../interactive-mode-fake.ts";
 import SessionStartNotifySupport from "./5943-session-start-notify-support.ts";
+
+const { bindModeFake } = interactiveModeFake;
 
 const { initTheme } = themeModule;
 
-const { createReloadCommandContext, interactiveModePrototype } = SessionStartNotifySupport;
+const { createReloadCommandContext } = SessionStartNotifySupport;
 
 const { gate } = testing;
 
@@ -47,8 +49,8 @@ const keepsTheReloadBlockerFocusedUntil = Effect.gen(function* () {
     },
   });
 
-  Object.setPrototypeOf(context, InteractiveMode.prototype);
-  const reloadPromise = interactiveModePrototype.handleReloadCommand.call(context);
+  bindModeFake(context);
+  const reloadPromise = bindModeFake(context).commands.reload.handleReloadCommand();
   yield* Effect.promise(() => reloadWaiting);
 
   expect(chatRestored).toBe(true);

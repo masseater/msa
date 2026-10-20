@@ -1,14 +1,15 @@
 import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
 import tui from "@msa/tui";
-import type tuiTypes from "@msa/tui/index.types";
 import { Effect } from "effect";
 import { describe, expect, test, vi } from "vite-plus/test";
 
 import type sessionManagerTypes from "../src/core/session-manager.types.ts";
-import InteractiveMode from "../src/modes/interactive/interactive-mode.ts";
 import themeModule from "../src/modes/interactive/theme/theme.ts";
 import ansi from "../src/utils/ansi.ts";
+import interactiveModeFake from "./interactive-mode-fake.ts";
+
+const { bindModeFake } = interactiveModeFake;
 const { initTheme } = themeModule;
 const { stripAnsi } = ansi;
 
@@ -25,30 +26,19 @@ const usesTheCacheMissNoticeSettingFor = () => {
     output: 20,
     totalTokens: 100,
   };
-  const addCompactionCostNotice = Reflect.get(
-    InteractiveMode.prototype,
-    "addCompactionCostNotice",
-  ) as (
-    this: {
-      chatContainer: tuiTypes.Container;
-      settingsManager: { getShowCacheMissNotices(): boolean };
-    },
-    notice: {
-      type: "compaction_cost";
-      kind: "compaction" | "branch_summary";
-      usage: aiTypes.Usage;
-    },
-  ) => void;
-
   initTheme("dark");
   const enabled = {
     chatContainer: new Container(),
     settingsManager: { getShowCacheMissNotices: () => true },
   };
-  Object.setPrototypeOf(enabled, InteractiveMode.prototype);
-  addCompactionCostNotice.call(enabled, { kind: "compaction", type: "compaction_cost", usage });
-  Object.setPrototypeOf(enabled, InteractiveMode.prototype);
-  addCompactionCostNotice.call(enabled, {
+  bindModeFake(enabled);
+  bindModeFake(enabled).display.notices.usage.addCompactionCostNotice({
+    kind: "compaction",
+    type: "compaction_cost",
+    usage,
+  });
+  bindModeFake(enabled);
+  bindModeFake(enabled).display.notices.usage.addCompactionCostNotice({
     kind: "branch_summary",
     type: "compaction_cost",
     usage,
@@ -61,8 +51,12 @@ const usesTheCacheMissNoticeSettingFor = () => {
     chatContainer: new Container(),
     settingsManager: { getShowCacheMissNotices: () => false },
   };
-  Object.setPrototypeOf(disabled, InteractiveMode.prototype);
-  addCompactionCostNotice.call(disabled, { kind: "compaction", type: "compaction_cost", usage });
+  bindModeFake(disabled);
+  bindModeFake(disabled).display.notices.usage.addCompactionCostNotice({
+    kind: "compaction",
+    type: "compaction_cost",
+    usage,
+  });
   expect(disabled.chatContainer.children).toHaveLength(0);
 };
 
@@ -111,13 +105,8 @@ const rendersEachCompactionCostAfterItsSummary = () => {
     },
   ];
   const fakeThis = { renderSessionItems: vi.fn() };
-  const renderSessionEntries = Reflect.get(InteractiveMode.prototype, "renderSessionEntries") as (
-    this: typeof fakeThis,
-    entries: sessionManagerTypes.SessionEntry[],
-  ) => void;
-
-  Object.setPrototypeOf(fakeThis, InteractiveMode.prototype);
-  renderSessionEntries.call(fakeThis, entries);
+  bindModeFake(fakeThis);
+  bindModeFake(fakeThis).view.history.renderSessionEntries(entries);
 
   expect(fakeThis.renderSessionItems).toHaveBeenCalledWith(
     [
@@ -210,25 +199,13 @@ const rendersRetainedEntriesAndAppendsTheLatest = () =>
     Effect.gen(function* () {
       const { fakeThis, previousCompaction, usage } =
         yield* rendersRetainedEntriesAndAppendsTheLatestStep3();
-
-      const handleEvent = Reflect.get(InteractiveMode.prototype, "handleEvent") as (
-        this: typeof fakeThis,
-        event: {
-          type: "compaction_end";
-          reason: "manual" | "threshold" | "overflow";
-          result: { tokensBefore: number; summary: string; usage?: aiTypes.Usage } | undefined;
-          aborted: boolean;
-          willRetry: boolean;
-          errorMessage?: string;
-        },
-      ) => Promise<void>;
-
-      Object.setPrototypeOf(fakeThis, InteractiveMode.prototype);
+      bindModeFake(fakeThis);
       yield* awaited(
-        handleEvent.call(fakeThis, {
+        bindModeFake(fakeThis).lifecycle.events.handleEvent({
           aborted: false,
           reason: "manual",
           result: {
+            firstKeptEntryId: "kept",
             summary: "summary",
             tokensBefore: 123,
             usage,
@@ -271,13 +248,8 @@ const updatesTheWorkingStateWhenTheSame = () =>
         ui: { requestRender: vi.fn(), terminal: { setProgress: vi.fn() } },
         workingVisible: true,
       };
-      const handleEvent = Reflect.get(InteractiveMode.prototype, "handleEvent") as (
-        this: typeof fakeThis,
-        event: { type: "turn_start" },
-      ) => Promise<void>;
-
-      Object.setPrototypeOf(fakeThis, InteractiveMode.prototype);
-      yield* awaited(handleEvent.call(fakeThis, { type: "turn_start" }));
+      bindModeFake(fakeThis);
+      yield* awaited(bindModeFake(fakeThis).lifecycle.events.handleEvent({ type: "turn_start" }));
 
       expect(fakeThis.ui.terminal.setProgress).toHaveBeenCalledWith(true);
       expect(fakeThis.showWorkingStatusIndicator).toHaveBeenCalledTimes(1);
@@ -285,8 +257,8 @@ const updatesTheWorkingStateWhenTheSame = () =>
       expect(fakeThis.ui.requestRender).toHaveBeenCalledTimes(1);
 
       fakeThis.workingVisible = false;
-      Object.setPrototypeOf(fakeThis, InteractiveMode.prototype);
-      yield* awaited(handleEvent.call(fakeThis, { type: "turn_start" }));
+      bindModeFake(fakeThis);
+      yield* awaited(bindModeFake(fakeThis).lifecycle.events.handleEvent({ type: "turn_start" }));
 
       expect(fakeThis.showWorkingStatusIndicator).toHaveBeenCalledTimes(1);
       expect(fakeThis.clearStatusIndicator).toHaveBeenCalledTimes(1);

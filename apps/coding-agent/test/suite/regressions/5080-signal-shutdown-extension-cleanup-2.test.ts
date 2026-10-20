@@ -1,33 +1,21 @@
 import { Effect } from "effect";
 import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 
-import InteractiveMode from "../../../src/modes/interactive/interactive-mode.ts";
+import interactiveModeFake from "../../interactive-mode-fake.ts";
 import ProcessExitError from "./5080-signal-shutdown-extension-cleanup-support.ts";
 import type SignalShutdownExtensionCleanupSupportTypes from "./5080-signal-shutdown-extension-cleanup-support.types.ts";
-type InteractiveModePrivates = {
-  registerSignalHandlers(this: SignalShutdownExtensionCleanupSupportTypes.HandlerContext): void;
-  unregisterSignalHandlers(this: SignalShutdownExtensionCleanupSupportTypes.HandlerContext): void;
-  emergencyTerminalExit(this: SignalShutdownExtensionCleanupSupportTypes.HandlerContext): never;
-  uncaughtCrash(
-    this: SignalShutdownExtensionCleanupSupportTypes.HandlerContext,
-    error: Error,
-  ): never;
-};
 
-const proto = InteractiveMode.prototype as unknown as InteractiveModePrivates;
+const { bindModeFake } = interactiveModeFake;
 
 function createHandlerContext(): SignalShutdownExtensionCleanupSupportTypes.HandlerContext {
   const context: SignalShutdownExtensionCleanupSupportTypes.HandlerContext = {
     crashReportInstructions: () => "",
-    emergencyTerminalExit: () => proto.emergencyTerminalExit.call(context),
     getCrashExtensionHint: () => undefined,
     isShuttingDown: false,
     recordCrash: vi.fn(() => true),
     shutdown: vi.fn(() => Effect.runPromise(Effect.sync(() => {}))),
     signalCleanupHandlers: [],
     ui: { stop: vi.fn() },
-    uncaughtCrash: (error: Error) => proto.uncaughtCrash.call(context, error),
-    unregisterSignalHandlers: () => proto.unregisterSignalHandlers.call(context),
   };
   return context;
 }
@@ -54,14 +42,16 @@ function setup(): SignalShutdownExtensionCleanupSupportTypes.HandlerContext {
   }) as typeof process.exit);
   vi.spyOn(console, "error").mockImplementation(() => {});
   context = createHandlerContext();
-  proto.registerSignalHandlers.call(context);
+  bindModeFake(context).lifecycle.shutdown.registerSignalHandlers();
   return context;
 }
 
 const uncaughtDeadTerminalErrorsAreNot = () => {
   const ctx = setup();
 
-  const exitCode = captureExit(() => ctx.uncaughtCrash(errnoError("read EIO", "EIO")));
+  const exitCode = captureExit(() =>
+    bindModeFake(ctx).lifecycle.crash.uncaughtCrash(errnoError("read EIO", "EIO")),
+  );
 
   expect(exitCode).toBe(129);
   expect(ctx.recordCrash).not.toHaveBeenCalled();
@@ -70,7 +60,9 @@ const uncaughtDeadTerminalErrorsAreNot = () => {
 const otherUncaughtErrorsAreStillRecorded = () => {
   const ctx = setup();
 
-  const exitCode = captureExit(() => ctx.uncaughtCrash(new Error("boom")));
+  const exitCode = captureExit(() =>
+    bindModeFake(ctx).lifecycle.crash.uncaughtCrash(new Error("boom")),
+  );
 
   expect(exitCode).toBe(1);
   expect(ctx.recordCrash).toHaveBeenCalledOnce();
@@ -80,7 +72,7 @@ const handlersAreRemovedOnUnregister = () => {
   const ctx = setup();
   const before = process.stdin.listenerCount("error");
 
-  ctx.unregisterSignalHandlers();
+  bindModeFake(ctx).lifecycle.shutdown.unregisterSignalHandlers();
 
   expect(process.stdin.listenerCount("error")).toBe(before - 1);
 };
@@ -93,7 +85,7 @@ const otherStdinErrorsStillCrash = () => {
 };
 
 const afterEachHook = () => {
-  context?.unregisterSignalHandlers();
+  if (context !== undefined) bindModeFake(context).lifecycle.shutdown.unregisterSignalHandlers();
   context = undefined;
   vi.restoreAllMocks();
 };

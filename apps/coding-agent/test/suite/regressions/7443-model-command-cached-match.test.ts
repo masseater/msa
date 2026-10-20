@@ -1,20 +1,15 @@
-import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import InteractiveMode from "../../../src/modes/interactive/interactive-mode.ts";
+import interactiveModeFake from "../../interactive-mode-fake.ts";
 import harnessModule from "../harness.ts";
 import type harnessTypes from "../harness.types.ts";
+
+const { bindModeFake } = interactiveModeFake;
 const { createHarness } = harnessModule;
 
 const { neverPromise } = testing;
-
-const findExactModelMatch = Reflect.get(InteractiveMode.prototype, "findExactModelMatch") as (
-  this: object,
-  searchTerm: string,
-) => Promise<aiTypes.Model<aiTypes.Api> | undefined>;
-
 let harness!: harnessTypes.Harness;
 
 const matchesTheAvailabilitySnapshotWithoutStarting = Effect.gen(function* () {
@@ -27,7 +22,7 @@ const matchesTheAvailabilitySnapshotWithoutStarting = Effect.gen(function* () {
   const context = { session: harness.session, showStatus: vi.fn(), showWarning: vi.fn() };
 
   const model = yield* Effect.promise(() =>
-    findExactModelMatch.call(context, harness.models[0].id),
+    bindModeFake(context).models.selector.findExactModelMatch(harness.models[0].id),
   );
 
   expect(model?.id).toBe("cached");
@@ -48,7 +43,9 @@ const usesACallerOwnedDeadlineOnly = Effect.gen(function* () {
   const context = { session: harness.session, showStatus: vi.fn(), showWarning: vi.fn() };
 
   yield* Effect.promise(() =>
-    expect(findExactModelMatch.call(context, "not-cached")).resolves.toBeUndefined(),
+    expect(
+      bindModeFake(context).models.selector.findExactModelMatch("not-cached"),
+    ).resolves.toBeUndefined(),
   );
 
   expect(refresh).toHaveBeenCalledOnce();

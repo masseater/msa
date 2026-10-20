@@ -5,10 +5,12 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 
 import ScopedModelsSelectorComponent from "../../../src/modes/interactive/components/scoped-models-selector.ts";
 import type scopedModelsSelectorTypes from "../../../src/modes/interactive/components/scoped-models-selector.types.ts";
-import InteractiveMode from "../../../src/modes/interactive/interactive-mode.ts";
+import interactiveModeFake from "../../interactive-mode-fake.ts";
 import tuiKit from "../../tui-kit.ts";
 import harnessModule from "../harness.ts";
 import type harnessTypes from "../harness.types.ts";
+
+const { bindModeFake } = interactiveModeFake;
 const { setKeybindings } = tui;
 
 const { KeybindingsManager, initTheme, stripAnsi, theme } = tuiKit;
@@ -59,11 +61,10 @@ function createInteractiveContext(options: {
 function showModelsSelector(context: object): Promise<void> {
   return Effect.runPromise(
     Effect.gen(function* () {
-      const show = Reflect.get(InteractiveMode.prototype, "showModelsSelector") as (
-        this: object,
-      ) => Promise<void>;
-      Object.setPrototypeOf(context, InteractiveMode.prototype);
-      yield* Effect.promise(() => Promise.resolve(show.call(context)));
+      bindModeFake(context);
+      yield* Effect.promise(() =>
+        Promise.resolve(bindModeFake(context).models.scoped.showModelsSelector()),
+      );
     }),
   );
 }

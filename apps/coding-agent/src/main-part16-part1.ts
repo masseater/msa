@@ -428,11 +428,11 @@ function mainImpl(args: string[], options?: mainTypes.MainOptions): Promise<unde
           verbose: parsed.verbose,
         });
         if (startupBenchmark) {
-          yield* awaited(interactiveMode.init());
+          yield* awaited(interactiveMode.lifecycle.startup.init());
           time("interactiveMode.init");
 
           yield* performed(Effect.sleep(150));
-          interactiveMode.stop();
+          interactiveMode.lifecycle.shutdown.stop();
           stopThemeWatcher();
           printTimings();
           if (process.stdout.writableLength > 0) {
@@ -449,7 +449,7 @@ function mainImpl(args: string[], options?: mainTypes.MainOptions): Promise<unde
         }
 
         printTimings();
-        yield* awaited(interactiveMode.run());
+        yield* awaited(interactiveMode.lifecycle.runLoop.run());
       } else {
         printTimings();
         const exitCode = yield* awaited(

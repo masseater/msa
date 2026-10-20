@@ -2,7 +2,9 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import InteractiveMode from "../src/modes/interactive/interactive-mode.ts";
+import interactiveModeFake from "./interactive-mode-fake.ts";
+
+const { bindModeFake } = interactiveModeFake;
 
 const { awaited, runTest } = testing;
 
@@ -33,14 +35,6 @@ type StartupSubmitContext = {
   showStatus: (message: string) => void;
 };
 
-type InteractiveModePrivate = {
-  handleStartupSubmit(this: StartupSubmitContext, text: string): void;
-  setupEditorSubmitHandler(this: SubmitContext): void;
-  getUserInput(this: InputContext): Promise<string>;
-};
-
-const interactiveModePrototype = InteractiveMode.prototype as unknown as InteractiveModePrivate;
-
 function createSubmitContext(): SubmitContext {
   return {
     defaultEditor: {},
@@ -66,8 +60,8 @@ describe("InteractiveMode startup input", () => {
       showStatus: vi.fn(),
     };
 
-    Object.setPrototypeOf(context, InteractiveMode.prototype);
-    interactiveModePrototype.handleStartupSubmit.call(context, "early prompt");
+    bindModeFake(context);
+    bindModeFake(context).input.submit.handleStartupSubmit("early prompt");
 
     expect(context.editor.setText).toHaveBeenCalledWith("early prompt");
     expect(context.showStatus).toHaveBeenCalledWith("Startup is still in progress");
@@ -77,8 +71,8 @@ describe("InteractiveMode startup input", () => {
     runTest(
       Effect.gen(function* () {
         const context = createSubmitContext();
-        Object.setPrototypeOf(context, InteractiveMode.prototype);
-        interactiveModePrototype.setupEditorSubmitHandler.call(context);
+        bindModeFake(context);
+        bindModeFake(context).input.submit.setupEditorSubmitHandler();
 
         yield* awaited(context.defaultEditor.onSubmit?.(" early prompt "));
 
@@ -95,11 +89,9 @@ describe("InteractiveMode startup input", () => {
           pendingUserInputs: ["queued prompt"],
         };
 
-        Object.setPrototypeOf(context, InteractiveMode.prototype);
+        bindModeFake(context);
         yield* awaited(
-          expect(interactiveModePrototype.getUserInput.call(context)).resolves.toBe(
-            "queued prompt",
-          ),
+          expect(bindModeFake(context).input.submit.getUserInput()).resolves.toBe("queued prompt"),
         );
         expect(context.onInputCallback).toBeUndefined();
         expect(context.pendingUserInputs).toEqual([]);

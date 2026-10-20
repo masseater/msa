@@ -3,17 +3,11 @@ import { Effect } from "effect";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import SessionImportFileNotFoundError from "../src/core/session-import-file-not-found-error.ts";
-import InteractiveMode from "../src/modes/interactive/interactive-mode.ts";
+import interactiveModeFake from "./interactive-mode-fake.ts";
+
+const { bindModeFake } = interactiveModeFake;
 
 const { awaited, runTest } = testing;
-
-type PathCommand = "/export" | "/import";
-
-type InteractiveModePrototype = {
-  getPathCommandArgument(this: unknown, text: string, command: PathCommand): string | undefined;
-  handleImportCommand(this: ImportCommandContext, text: string): Promise<void>;
-};
-
 type ImportCommandContext = {
   clearStatusIndicator: () => void;
   runtimeHost: {
@@ -26,18 +20,17 @@ type ImportCommandContext = {
   renderCurrentSessionState: () => void;
   handleFatalRuntimeError: (prefix: string, error: unknown) => Promise<never>;
   promptForMissingSessionCwd: (error: unknown) => Promise<string | undefined>;
-  getPathCommandArgument: (text: string, command: PathCommand) => string | undefined;
 };
-
-const interactiveModePrototype = InteractiveMode.prototype as unknown as InteractiveModePrototype;
-
 describe("InteractiveMode /import parsing", () => {
   it("strips quotes from /import path arguments", () => {
     expect(
-      interactiveModePrototype.getPathCommandArgument('/import "path/to/session.jsonl"', "/import"),
+      bindModeFake({}).commands.router.getPathCommandArgument(
+        '/import "path/to/session.jsonl"',
+        "/import",
+      ),
     ).toBe("path/to/session.jsonl");
     expect(
-      interactiveModePrototype.getPathCommandArgument(
+      bindModeFake({}).commands.router.getPathCommandArgument(
         '/import "path with spaces/session.jsonl"',
         "/import",
       ),
@@ -46,19 +39,28 @@ describe("InteractiveMode /import parsing", () => {
 
   it("preserves apostrophes in unquoted /import path arguments", () => {
     expect(
-      interactiveModePrototype.getPathCommandArgument("/import john's/session.jsonl", "/import"),
+      bindModeFake({}).commands.router.getPathCommandArgument(
+        "/import john's/session.jsonl",
+        "/import",
+      ),
     ).toBe("john's/session.jsonl");
   });
 
   it("enforces command token boundaries", () => {
     expect(
-      interactiveModePrototype.getPathCommandArgument("/important /tmp/session.jsonl", "/import"),
+      bindModeFake({}).commands.router.getPathCommandArgument(
+        "/important /tmp/session.jsonl",
+        "/import",
+      ),
     ).toBe(undefined);
-    expect(interactiveModePrototype.getPathCommandArgument("/exporter out.html", "/export")).toBe(
-      undefined,
-    );
     expect(
-      interactiveModePrototype.getPathCommandArgument("/import /tmp/session.jsonl", "/import"),
+      bindModeFake({}).commands.router.getPathCommandArgument("/exporter out.html", "/export"),
+    ).toBe(undefined);
+    expect(
+      bindModeFake({}).commands.router.getPathCommandArgument(
+        "/import /tmp/session.jsonl",
+        "/import",
+      ),
     ).toBe("/tmp/session.jsonl");
   });
 });
@@ -77,7 +79,6 @@ describe("InteractiveMode /import parsing", () => {
         const context: ImportCommandContext = {
           clearStatusIndicator: vi.fn(),
           extensionDialogs: { confirm: showExtensionConfirm },
-          getPathCommandArgument: interactiveModePrototype.getPathCommandArgument,
           handleFatalRuntimeError: vi.fn(() =>
             effectRunPromise(
               Effect.sync(() => {
@@ -93,10 +94,9 @@ describe("InteractiveMode /import parsing", () => {
           showStatus,
         };
 
-        Object.setPrototypeOf(context, InteractiveMode.prototype);
+        bindModeFake(context);
         yield* awaited(
-          interactiveModePrototype.handleImportCommand.call(
-            context,
+          bindModeFake(context).commands.importer.handleImportCommand(
             '/import "path/to/session.jsonl"',
           ),
         );
@@ -126,7 +126,6 @@ describe("InteractiveMode /import parsing", () => {
         const context: ImportCommandContext = {
           clearStatusIndicator: vi.fn(),
           extensionDialogs: { confirm: showExtensionConfirm },
-          getPathCommandArgument: interactiveModePrototype.getPathCommandArgument,
           handleFatalRuntimeError: vi.fn(() =>
             effectRunPromise(
               Effect.sync(() => {
@@ -142,10 +141,9 @@ describe("InteractiveMode /import parsing", () => {
           showStatus,
         };
 
-        Object.setPrototypeOf(context, InteractiveMode.prototype);
+        bindModeFake(context);
         yield* awaited(
-          interactiveModePrototype.handleImportCommand.call(
-            context,
+          bindModeFake(context).commands.importer.handleImportCommand(
             "/import john's/session.jsonl",
           ),
         );
@@ -164,7 +162,6 @@ const missingFileContext = () => {
   const context: ImportCommandContext = {
     clearStatusIndicator: vi.fn(),
     extensionDialogs: { confirm: vi.fn(() => Promise.resolve(true)) },
-    getPathCommandArgument: interactiveModePrototype.getPathCommandArgument,
     handleFatalRuntimeError,
     handleRuntimeSessionChange: vi.fn(() => Promise.resolve()),
     promptForMissingSessionCwd: vi.fn(() => Promise.resolve(undefined)),
@@ -182,10 +179,9 @@ const missingFileContext = () => {
 
 const showsANonFatalErrorForAMissingPath = Effect.gen(function* () {
   const { context, handleFatalRuntimeError, showError, showStatus } = missingFileContext();
-  Object.setPrototypeOf(context, InteractiveMode.prototype);
+  bindModeFake(context);
   yield* awaited(
-    interactiveModePrototype.handleImportCommand.call(
-      context,
+    bindModeFake(context).commands.importer.handleImportCommand(
       "/import /tmp/missing-session.jsonl",
     ),
   );

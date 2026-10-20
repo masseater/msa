@@ -1,11 +1,12 @@
 import type aiTypes from "@msa/ai/index.types";
 import tui from "@msa/tui";
-import type tuiTypes from "@msa/tui/index.types";
 import { describe, expect, test } from "vite-plus/test";
 
-import InteractiveMode from "../src/modes/interactive/interactive-mode.ts";
 import themeModule from "../src/modes/interactive/theme/theme.ts";
 import ansi from "../src/utils/ansi.ts";
+import interactiveModeFake from "./interactive-mode-fake.ts";
+
+const { bindModeFake } = interactiveModeFake;
 const { initTheme } = themeModule;
 const { stripAnsi } = ansi;
 
@@ -53,18 +54,6 @@ const message: aiTypes.AssistantMessage = {
     totalTokens: 2,
   },
 };
-
-type NoticeContext = {
-  chatContainer: tuiTypes.Container;
-  settingsManager: { getShowCacheMissNotices(): boolean };
-  sessionManager: { getBranch(): Array<{ type: "message"; message: aiTypes.AssistantMessage }> };
-};
-
-const maybeShowThinkingDropNotice = Reflect.get(
-  InteractiveMode.prototype,
-  "maybeShowThinkingDropNotice",
-) as (this: NoticeContext, message: aiTypes.AssistantMessage) => void;
-
 const showsAnthropicThinkingDropsWhenCacheMiss = () => {
   initTheme("dark");
   const enabled = {
@@ -72,7 +61,7 @@ const showsAnthropicThinkingDropsWhenCacheMiss = () => {
     sessionManager: { getBranch: () => [] },
     settingsManager: { getShowCacheMissNotices: () => true },
   };
-  maybeShowThinkingDropNotice.call(enabled, message);
+  bindModeFake(enabled).display.notices.usage.maybeShowThinkingDropNotice(message);
   const output = stripAnsi(enabled.chatContainer.render(120).join("\n"));
   expect(output).toContain("Anthropic dropped 3 thinking blocks (details in session)");
 
@@ -81,7 +70,7 @@ const showsAnthropicThinkingDropsWhenCacheMiss = () => {
     sessionManager: { getBranch: () => [] },
     settingsManager: { getShowCacheMissNotices: () => false },
   };
-  maybeShowThinkingDropNotice.call(disabled, message);
+  bindModeFake(disabled).display.notices.usage.maybeShowThinkingDropNotice(message);
   expect(disabled.chatContainer.children).toHaveLength(0);
 };
 
@@ -93,7 +82,10 @@ const doesNotRepeatUnchangedAnthropicThinkingDrops = () => {
     settingsManager: { getShowCacheMissNotices: () => true },
   };
 
-  maybeShowThinkingDropNotice.call(context, { ...message, timestamp: 2 });
+  bindModeFake(context).display.notices.usage.maybeShowThinkingDropNotice({
+    ...message,
+    timestamp: 2,
+  });
 
   expect(context.chatContainer.children).toHaveLength(0);
 };
