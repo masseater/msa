@@ -41,7 +41,7 @@ function* createCommandSettingsManagerPart1(
             cwd: options.cwd,
             extensionFactories: options.extensionFactories,
             settingsManager,
-          }).loadProjectTrustExtensions(),
+          }).extensions.loading.loadProjectTrustExtensions(),
         )
       : undefined;
   for (const error of extensionsResult?.errors ?? []) {

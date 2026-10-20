@@ -1,0 +1,111 @@
+import awaitingModule from "../awaiting.ts";
+import defaultResourceLoaderHelpers from "../default-resource-loader-helpers.ts";
+import type defaultResourceLoaderInternalTypes from "../default-resource-loader-internal.types.ts";
+import type DefaultResourceLoader from "../default-resource-loader.ts";
+import loader from "../extensions/loader.ts";
+import type extensionsTypesTypes from "../extensions/types.types.ts";
+import type packageManagerTypes from "../package-manager.types.ts";
+import type resourceLoaderTypes from "../resource-loader.types.ts";
+import sourceInfoModule from "../source-info.ts";
+import ExtensionLoading from "./extension-loading.ts";
+
+const { BUILTIN_PATH_PREFIX } = sourceInfoModule;
+const { performed } = awaitingModule;
+const { createExtensionRuntime } = loader;
+const { collectExtensionPackageWarnings, mergeExtensionWarnings } = defaultResourceLoaderHelpers;
+
+export default class ExtensionResources {
+  private readonly owner: DefaultResourceLoader;
+
+  readonly loading: ExtensionLoading;
+
+  constructor(owner: DefaultResourceLoader) {
+    this.owner = owner;
+    this.loading = new ExtensionLoading(owner);
+  }
+
+  additionalExtensionPaths: string[] = [];
+
+  noExtensions = false;
+
+  disabledBuiltinExtensions = new Set<string>();
+
+  extensionsOverride!: resourceLoaderTypes.DefaultResourceLoaderOptions["extensionsOverride"];
+
+  extensionsResult: extensionsTypesTypes.LoadExtensionsResult = {
+    errors: [],
+    extensions: [],
+    runtime: createExtensionRuntime(),
+  };
+
+  normalizeExtensionPaths(
+    entries: Array<{ path: string; metadata: packageManagerTypes.PathMetadata }>,
+  ): Array<{ path: string; metadata: packageManagerTypes.PathMetadata }> {
+    return entries.map((entry) => {
+      const metadata =
+        entry.metadata.baseDir !== undefined && entry.metadata.baseDir !== ""
+          ? {
+              ...entry.metadata,
+              baseDir: this.owner.environment.paths.resolveResourcePath(entry.metadata.baseDir),
+            }
+          : entry.metadata;
+      return {
+        metadata,
+        path: this.owner.environment.paths.resolveResourcePath(entry.path),
+      };
+    });
+  }
+
+  applyExtensionSourceInfo(
+    extensions: extensionsTypesTypes.Extension[],
+    metadataByPath: Map<string, packageManagerTypes.PathMetadata>,
+  ): void {
+    for (const extension of extensions) {
+      extension.sourceInfo =
+        this.owner.environment.paths.findSourceInfoForPath(
+          extension.path,
+          undefined,
+          metadataByPath,
+        ) ?? this.owner.environment.paths.getDefaultSourceInfoForPath(extension.path);
+      for (const command of extension.commands.values()) {
+        command.sourceInfo = extension.sourceInfo;
+      }
+      for (const tool of extension.tools.values()) {
+        tool.sourceInfo = extension.sourceInfo;
+      }
+    }
+  }
+
+  configure(options: resourceLoaderTypes.DefaultResourceLoaderOptions): void {
+    this.additionalExtensionPaths = options.additionalExtensionPaths ?? [];
+    this.noExtensions = options.noExtensions ?? false;
+    this.disabledBuiltinExtensions = new Set(options.disabledBuiltinExtensions);
+    this.extensionsOverride = options.extensionsOverride;
+  }
+
+  *reload(plan: defaultResourceLoaderInternalTypes.ResourcePlan) {
+    const { paths } = this.owner.environment;
+    const { cli, configured } = plan.extensions;
+    const extensionPaths = (this.noExtensions ? cli : paths.mergePaths(cli, configured)).filter(
+      (path) =>
+        !path.startsWith(BUILTIN_PATH_PREFIX) ||
+        !this.disabledBuiltinExtensions.has(path.slice(BUILTIN_PATH_PREFIX.length)),
+    );
+    const packageWarnings = collectExtensionPackageWarnings(extensionPaths, plan.metadataByPath);
+    const extensionsResult = yield* performed(
+      this.loading.loadFinalExtensionSet(extensionPaths, plan.preTrustExtensions),
+    );
+    mergeExtensionWarnings(extensionsResult, packageWarnings);
+    for (const resolved of paths.missingPaths(this.additionalExtensionPaths, true)) {
+      extensionsResult.errors.push({
+        error: `Extension path does not exist: ${resolved}`,
+        path: resolved,
+      });
+    }
+    this.extensionsResult =
+      this.extensionsOverride === undefined
+        ? extensionsResult
+        : this.extensionsOverride(extensionsResult);
+    this.applyExtensionSourceInfo(this.extensionsResult.extensions, plan.metadataByPath);
+  }
+}

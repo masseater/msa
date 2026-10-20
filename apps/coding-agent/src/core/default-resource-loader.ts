@@ -1,81 +1,106 @@
-import pathsModule from "../utils/paths.ts";
-import DefaultPackageManager from "./default-package-manager.ts";
-import DefaultResourceLoaderLayer8 from "./default-resource-loader-layer-8.ts";
-import eventBusModule from "./event-bus.ts";
-import loader from "./extensions/loader.ts";
-import resourceLoader from "./resource-loader.ts";
+import * as Effect from "effect/Effect";
+
+import awaitingModule from "./awaiting.ts";
 import type resourceLoaderTypes from "./resource-loader.types.ts";
-import SettingsManager from "./settings-manager.ts";
+import ContextResources from "./resource-loader/context-resources.ts";
+import ExtensionResources from "./resource-loader/extension-resources.ts";
+import PromptResources from "./resource-loader/prompt-resources.ts";
+import ResourceDiscovery from "./resource-loader/resource-discovery.ts";
+import ResourceEnvironment from "./resource-loader/resource-environment.ts";
+import SkillResources from "./resource-loader/skill-resources.ts";
+import ThemeResources from "./resource-loader/theme-resources.ts";
 
-const { resolvePath } = pathsModule;
-const { createEventBus } = eventBusModule;
-const { isBuiltinExtension } = resourceLoader;
-const { createExtensionRuntime } = loader;
+const { awaitingWith } = awaitingModule;
 
-export default class DefaultResourceLoader
-  extends DefaultResourceLoaderLayer8
-  implements resourceLoaderTypes.ResourceLoader
-{
-  constructor(options: resourceLoaderTypes.DefaultResourceLoaderOptions) {
-    super();
-    this.options = options;
-    this.cwd = resolvePath(options.cwd);
-    this.agentDir = resolvePath(options.agentDir);
-    this.settingsManager =
-      options.settingsManager ?? SettingsManager.create(this.cwd, this.agentDir);
-    this.constructPart1(options);
-    this.additionalExtensionPaths = options.additionalExtensionPaths ?? [];
-    this.additionalSkillPaths = options.additionalSkillPaths ?? [];
-    this.additionalPromptTemplatePaths = options.additionalPromptTemplatePaths ?? [];
-    this.additionalThemePaths = options.additionalThemePaths ?? [];
-    this.noExtensions = options.noExtensions ?? false;
-    this.disabledBuiltinExtensions = new Set(options.disabledBuiltinExtensions);
-    this.noSkills = options.noSkills ?? false;
-    this.noPromptTemplates = options.noPromptTemplates ?? false;
-    this.noThemes = options.noThemes ?? false;
-    this.noContextFiles = options.noContextFiles ?? false;
-    this.systemPromptSource = options.systemPrompt;
-    this.appendSystemPromptSource = options.appendSystemPrompt;
-    this.extensionsOverride = options.extensionsOverride;
-    this.skillsOverride = options.skillsOverride;
-    this.promptsOverride = options.promptsOverride;
-    this.themesOverride = options.themesOverride;
-    this.agentsFilesOverride = options.agentsFilesOverride;
-    this.systemPromptOverride = options.systemPromptOverride;
-    this.appendSystemPromptOverride = options.appendSystemPromptOverride;
+type Loader = resourceLoaderTypes.ResourceLoader;
 
-    this.extensionsResult = { errors: [], extensions: [], runtime: createExtensionRuntime() };
-    this.skills = [];
-    this.skillDiagnostics = [];
-    this.prompts = [];
-    this.promptDiagnostics = [];
-    this.themes = [];
-    this.themeDiagnostics = [];
-    this.agentsFiles = [];
-    this.appendSystemPrompt = [];
-    this.appendSystemPromptSourcePaths = [];
-    this.lastSkillPaths = [];
-    this.extensionSkillSourceInfos = new Map();
-    this.extensionPromptSourceInfos = new Map();
-    this.extensionThemeSourceInfos = new Map();
-    this.resourceMetadataByPath = new Map();
-    this.lastPromptPaths = [];
-    this.lastThemePaths = [];
-    this.loaded = false;
+export default class DefaultResourceLoader implements Loader {
+  readonly environment: ResourceEnvironment;
+  readonly discovery: ResourceDiscovery;
+  readonly extensions: ExtensionResources;
+  readonly skills: SkillResources;
+  readonly prompts: PromptResources;
+  readonly themes: ThemeResources;
+  readonly context: ContextResources;
+
+  private readonly options: resourceLoaderTypes.DefaultResourceLoaderOptions;
+
+  loaded = false;
+
+  fork(): DefaultResourceLoader {
+    return new DefaultResourceLoader(this.options);
   }
 
-  private constructPart1(options: resourceLoaderTypes.DefaultResourceLoaderOptions) {
-    this.eventBus = options.eventBus ?? createEventBus();
-    const factories = options.extensionFactories ?? [];
-    this.extensionFactories = factories.filter((input) => !isBuiltinExtension(input));
-    this.builtinExtensions = new Map(
-      factories.filter(isBuiltinExtension).map((input) => [input.name, input]),
+  getExtensions(): ReturnType<Loader["getExtensions"]> {
+    return this.extensions.extensionsResult;
+  }
+
+  getSkills(): ReturnType<Loader["getSkills"]> {
+    return { diagnostics: this.skills.skillDiagnostics, skills: this.skills.skills };
+  }
+
+  getPrompts(): ReturnType<Loader["getPrompts"]> {
+    return { diagnostics: this.prompts.promptDiagnostics, prompts: this.prompts.prompts };
+  }
+
+  getThemes(): ReturnType<Loader["getThemes"]> {
+    return { diagnostics: this.themes.themeDiagnostics, themes: this.themes.themes };
+  }
+
+  getAgentsFiles(): ReturnType<Loader["getAgentsFiles"]> {
+    return { agentsFiles: this.context.agentsFiles };
+  }
+
+  getSystemPrompt(): string | undefined {
+    return this.context.systemPrompt;
+  }
+
+  getSystemPromptSource(): { path: string } | undefined {
+    const path = this.context.systemPromptSourcePath;
+    return path !== undefined && path !== "" ? { path } : undefined;
+  }
+
+  getAppendSystemPrompt(): string[] {
+    return this.context.appendSystemPrompt;
+  }
+
+  getAppendSystemPromptSources(): Array<{ path: string }> {
+    return this.context.appendSystemPromptSourcePaths.map((path) => ({ path }));
+  }
+
+  extendResources(paths: resourceLoaderTypes.ResourceExtensionPaths): void {
+    this.skills.extend(this.extensions.normalizeExtensionPaths(paths.skillPaths ?? []));
+    this.prompts.extend(this.extensions.normalizeExtensionPaths(paths.promptPaths ?? []));
+    this.themes.extend(this.extensions.normalizeExtensionPaths(paths.themePaths ?? []));
+  }
+
+  reload(options?: resourceLoaderTypes.ResourceLoaderReloadOptions): Promise<void> {
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        const plan = yield* this.discovery.discover(options);
+        yield* this.extensions.reload(plan);
+        this.skills.reload(plan);
+        this.prompts.reload(plan);
+        this.themes.reload(plan);
+        this.context.reload();
+        this.loaded = true;
+      }, this),
     );
-    this.packageManager = new DefaultPackageManager({
-      agentDir: this.agentDir,
-      builtinExtensions: [...this.builtinExtensions.keys()],
-      cwd: this.cwd,
-      settingsManager: this.settingsManager,
-    });
+  }
+
+  constructor(options: resourceLoaderTypes.DefaultResourceLoaderOptions) {
+    this.options = options;
+    this.environment = new ResourceEnvironment(options);
+    this.discovery = new ResourceDiscovery(this);
+    this.extensions = new ExtensionResources(this);
+    this.skills = new SkillResources(this);
+    this.prompts = new PromptResources(this);
+    this.themes = new ThemeResources(this);
+    this.context = new ContextResources(this);
+    this.extensions.configure(options);
+    this.skills.configure(options);
+    this.prompts.configure(options);
+    this.themes.configure(options);
+    this.context.configure(options);
   }
 }

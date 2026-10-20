@@ -1,57 +1,79 @@
-import pathsModule from "../utils/paths.ts";
-import DefaultResourceLoaderLayer2 from "./default-resource-loader-layer-2.ts";
-import type extensionsTypesTypes from "./extensions/types.types.ts";
-import type packageManagerTypes from "./package-manager.types.ts";
-import platformNode from "./platform-node.ts";
-import nodeFs from "./platform/node/fs.ts";
-import sourceInfoModule from "./source-info.ts";
-import type sourceInfoTypes from "./source-info.types.ts";
+import config from "../../config.ts";
+import pathsModule from "../../utils/paths.ts";
+import type packageManagerTypes from "../package-manager.types.ts";
+import platformNode from "../platform-node.ts";
+import nodeFs from "../platform/node/fs.ts";
+import sourceInfoModule from "../source-info.ts";
+import type sourceInfoTypes from "../source-info.types.ts";
+import type ResourceEnvironment from "./resource-environment.ts";
 
+const { existsSync, statSync } = nodeFs;
+const { join, resolve, sep } = platformNode;
+const { CONFIG_DIR_NAME } = config;
 const { createSourceInfo, getSyntheticPathSource, isSyntheticPath } = sourceInfoModule;
-const { canonicalizePath, resolvePath } = pathsModule;
-const { resolve, sep } = platformNode;
-const { statSync } = nodeFs;
+const { canonicalizePath, isLocalPath, resolvePath } = pathsModule;
 
-export default abstract class DefaultResourceLoaderLayer3 extends DefaultResourceLoaderLayer2 {
-  protected resolveExtensionLoadPath(path: string): string {
-    return isSyntheticPath(path)
-      ? path
-      : resolvePath(path, this.cwd, { normalizeUnicodeSpaces: true });
+export default class ResourcePaths {
+  private readonly owner: ResourceEnvironment;
+
+  constructor(owner: ResourceEnvironment) {
+    this.owner = owner;
   }
 
-  protected normalizeExtensionPaths(
-    entries: Array<{ path: string; metadata: packageManagerTypes.PathMetadata }>,
-  ): Array<{ path: string; metadata: packageManagerTypes.PathMetadata }> {
-    return entries.map((entry) => {
-      const metadata =
-        entry.metadata.baseDir !== undefined && entry.metadata.baseDir !== ""
-          ? { ...entry.metadata, baseDir: this.resolveResourcePath(entry.metadata.baseDir) }
-          : entry.metadata;
-      return {
-        metadata,
-        path: this.resolveResourcePath(entry.path),
-      };
-    });
-  }
+  resourceMetadataByPath = new Map<string, packageManagerTypes.PathMetadata>();
 
-  protected applyExtensionSourceInfo(
-    extensions: extensionsTypesTypes.Extension[],
+  mapSkillPath(
+    resource: packageManagerTypes.ResolvedResource,
     metadataByPath: Map<string, packageManagerTypes.PathMetadata>,
-  ): void {
-    for (const extension of extensions) {
-      extension.sourceInfo =
-        this.findSourceInfoForPath(extension.path, undefined, metadataByPath) ??
-        this.getDefaultSourceInfoForPath(extension.path);
-      for (const command of extension.commands.values()) {
-        command.sourceInfo = extension.sourceInfo;
-      }
-      for (const tool of extension.tools.values()) {
-        tool.sourceInfo = extension.sourceInfo;
-      }
+  ): string {
+    if (resource.metadata.source !== "auto" && resource.metadata.origin !== "package") {
+      return resource.path;
     }
+    try {
+      const stats = statSync(resource.path);
+      if (!stats.isDirectory()) {
+        return resource.path;
+      }
+    } catch {
+      return resource.path;
+    }
+    const skillFile = join(resource.path, "SKILL.md");
+    if (existsSync(skillFile)) {
+      if (!metadataByPath.has(skillFile)) {
+        metadataByPath.set(skillFile, resource.metadata);
+      }
+      return skillFile;
+    }
+    return resource.path;
   }
 
-  protected findSourceInfoForPath(
+  private resourceRoots(filePath: string) {
+    const normalizedPath = resolve(filePath);
+    const agentRoots = [
+      join(this.owner.agentDir, "skills"),
+      join(this.owner.agentDir, "prompts"),
+      join(this.owner.agentDir, "themes"),
+      join(this.owner.agentDir, "extensions"),
+    ];
+    const projectRoots = [
+      join(this.owner.cwd, CONFIG_DIR_NAME, "skills"),
+      join(this.owner.cwd, CONFIG_DIR_NAME, "prompts"),
+      join(this.owner.cwd, CONFIG_DIR_NAME, "themes"),
+      join(this.owner.cwd, CONFIG_DIR_NAME, "extensions"),
+    ];
+    return { agentRoots, normalizedPath, projectRoots };
+  }
+
+  private isUnderPath(target: string, root: string): boolean {
+    const normalizedRoot = resolve(root);
+    if (target === normalizedRoot) {
+      return true;
+    }
+    const prefix = normalizedRoot.endsWith(sep) ? normalizedRoot : `${normalizedRoot}${sep}`;
+    return target.startsWith(prefix);
+  }
+
+  findSourceInfoForPath(
     resourcePath: string,
     extraSourceInfos?: Map<string, sourceInfoTypes.SourceInfo>,
     metadataByPath?: Map<string, packageManagerTypes.PathMetadata>,
@@ -97,7 +119,7 @@ export default abstract class DefaultResourceLoaderLayer3 extends DefaultResourc
     return undefined;
   }
 
-  protected getDefaultSourceInfoForPath(filePath: string): sourceInfoTypes.SourceInfo {
+  getDefaultSourceInfoForPath(filePath: string): sourceInfoTypes.SourceInfo {
     const syntheticSource = getSyntheticPathSource(filePath);
     if (syntheticSource !== undefined && syntheticSource !== "") {
       return {
@@ -108,8 +130,7 @@ export default abstract class DefaultResourceLoaderLayer3 extends DefaultResourc
       };
     }
 
-    const { agentRoots, normalizedPath, projectRoots } =
-      this.getDefaultSourceInfoForPathPart1(filePath);
+    const { agentRoots, normalizedPath, projectRoots } = this.resourceRoots(filePath);
 
     for (const root of agentRoots) {
       if (this.isUnderPath(normalizedPath, root)) {
@@ -146,7 +167,7 @@ export default abstract class DefaultResourceLoaderLayer3 extends DefaultResourc
     };
   }
 
-  protected mergePaths(primary: string[], additional: string[]): string[] {
+  mergePaths(primary: string[], additional: string[]): string[] {
     const merged: string[] = [];
     const seen = new Set<string>();
 
@@ -161,7 +182,14 @@ export default abstract class DefaultResourceLoaderLayer3 extends DefaultResourc
     return merged;
   }
 
-  protected resolveResourcePath(p: string): string {
-    return isSyntheticPath(p) ? p : resolvePath(p, this.cwd, { trim: true });
+  resolveResourcePath(p: string): string {
+    return isSyntheticPath(p) ? p : resolvePath(p, this.owner.cwd, { trim: true });
+  }
+
+  missingPaths(paths: string[], localOnly: boolean): string[] {
+    return paths
+      .filter((p) => !localOnly || isLocalPath(p))
+      .map((p) => this.resolveResourcePath(p))
+      .filter((resolved) => !existsSync(resolved));
   }
 }
