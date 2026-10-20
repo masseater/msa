@@ -61,7 +61,7 @@ const shouldSupportGlobPatternsInManifestExtensions = () =>
         }),
       );
 
-      const result = yield* awaited(packageManager.resolveExtensionSources([pkgDir]));
+      const result = yield* awaited(packageManager.resolution.resolveExtensionSources([pkgDir]));
       expect(result.extensions.some((r) => packagePaths.isEnabled(r, "local.ts"))).toBe(true);
       expect(result.extensions.some((r) => packagePaths.isEnabled(r, "remote.ts"))).toBe(true);
       expect(result.extensions.some((r) => packagePaths.pathEndsWith(r.path, "skip.ts"))).toBe(
@@ -94,7 +94,7 @@ const shouldSupportGlobPatternsInManifestSkills = () =>
         }),
       );
 
-      const result = yield* awaited(packageManager.resolveExtensionSources([pkgDir]));
+      const result = yield* awaited(packageManager.resolution.resolveExtensionSources([pkgDir]));
       expect(result.skills.some((r) => packagePaths.isEnabled(r, "good-skill", "includes"))).toBe(
         true,
       );

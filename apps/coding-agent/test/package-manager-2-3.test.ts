@@ -45,7 +45,7 @@ const shouldScanAgentsSkillsFromCwdUp = () =>
         settingsManager,
       });
 
-      const result = yield* awaited(pm.resolve());
+      const result = yield* awaited(pm.resolution.resolve());
       expect(result.skills.some((r) => r.path === repoRootSkill && r.enabled)).toBe(true);
       expect(result.skills.some((r) => r.path === nestedSkill && r.enabled)).toBe(true);
       expect(result.skills.some((r) => r.path === aboveRepoSkill)).toBe(false);
@@ -73,7 +73,7 @@ const shouldScanAgentsSkillsUpToFilesystem = () =>
         settingsManager,
       });
 
-      const result = yield* awaited(pm.resolve());
+      const result = yield* awaited(pm.resolution.resolve());
       expect(result.skills.some((r) => r.path === rootSkill && r.enabled)).toBe(true);
       expect(result.skills.some((r) => r.path === middleSkill && r.enabled)).toBe(true);
     }),

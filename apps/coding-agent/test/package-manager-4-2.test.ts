@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test"
 
 import DefaultPackageManager from "../src/core/default-package-manager.ts";
 import type packageManagerTypes from "../src/core/package-manager.types.ts";
+import commandRunner from "../src/core/package-manager/command-runner.ts";
 import processEnv from "../src/core/process-env.ts";
 import SettingsManager from "../src/core/settings-manager.ts";
 import type settingsManagerTypes from "../src/core/settings-manager.types.ts";
@@ -34,11 +35,9 @@ const shouldUseNpmcommandArgvForNpmInstalls = () =>
         settingsManager,
       });
 
-      const runCommandSpy = vi
-        .spyOn(packageManager as any, "runCommand")
-        .mockResolvedValue(undefined);
+      const runCommandSpy = vi.spyOn(commandRunner, "runCommand").mockResolvedValue(undefined);
 
-      yield* awaited(packageManager.install("npm:@scope/pkg"));
+      yield* awaited(packageManager.operations.install.install("npm:@scope/pkg"));
 
       expect(runCommandSpy).toHaveBeenCalledWith(
         "mise",
@@ -62,11 +61,9 @@ const shouldPassLegacyPeerDepsWhenUninstalling = () =>
   runTest(
     Effect.gen(function* () {
       yield* makeDirectory(joinPath(agentDir, "npm"));
-      const runCommandSpy = vi
-        .spyOn(packageManager as any, "runCommand")
-        .mockResolvedValue(undefined);
+      const runCommandSpy = vi.spyOn(commandRunner, "runCommand").mockResolvedValue(undefined);
 
-      yield* awaited(packageManager.remove("npm:@scope/pkg"));
+      yield* awaited(packageManager.operations.install.remove("npm:@scope/pkg"));
 
       expect(runCommandSpy).toHaveBeenCalledWith(
         "npm",
@@ -88,11 +85,9 @@ const shouldUseBunCwdForNpmPackage = () =>
         settingsManager,
       });
 
-      const runCommandSpy = vi
-        .spyOn(packageManager as any, "runCommand")
-        .mockResolvedValue(undefined);
+      const runCommandSpy = vi.spyOn(commandRunner, "runCommand").mockResolvedValue(undefined);
 
-      yield* awaited(packageManager.install("npm:@scope/pkg"));
+      yield* awaited(packageManager.operations.install.install("npm:@scope/pkg"));
 
       expect(runCommandSpy).toHaveBeenCalledWith(
         "mise",
@@ -120,7 +115,7 @@ const shouldInstallGitPackageDependenciesWithoutAuto = () =>
       const source = "git:github.com/user/repo";
       const targetDir = joinPath(agentDir, "git", "github.com", "user", "repo");
       const runCommandSpy = vi
-        .spyOn(packageManager as any, "runCommand")
+        .spyOn(commandRunner, "runCommand")
         .mockImplementation((...callArgs: unknown[]) =>
           effectRunPromise(
             Effect.gen(function* () {
@@ -136,7 +131,7 @@ const shouldInstallGitPackageDependenciesWithoutAuto = () =>
           ),
         );
 
-      yield* awaited(packageManager.install(source));
+      yield* awaited(packageManager.operations.install.install(source));
 
       expect(runCommandSpy).toHaveBeenCalledWith(
         "npm",

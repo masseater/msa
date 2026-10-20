@@ -56,14 +56,14 @@ const shouldCheckoutTheConfiguredPinnedGitRef = () =>
       const pinnedSource = `${gitSource}@v2`;
       settingsManager.setPackages([pinnedSource]);
 
-      yield* awaited(packageManager.update());
+      yield* awaited(packageManager.operations.updates.update());
 
       expect(yield* getCurrentCommit(installedDir)).toBe(v2Commit);
       expect(yield* getFileContent(installedDir, "extension.ts")).toBe("// v2");
 
       yield* git(["checkout", "v1"], installedDir);
 
-      yield* awaited(packageManager.update(pinnedSource));
+      yield* awaited(packageManager.operations.updates.update(pinnedSource));
 
       expect(yield* getCurrentCommit(installedDir)).toBe(v2Commit);
       expect(yield* getFileContent(installedDir, "extension.ts")).toBe("// v2");

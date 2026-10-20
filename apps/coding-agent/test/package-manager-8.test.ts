@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test"
 
 import DefaultPackageManager from "../src/core/default-package-manager.ts";
 import type packageManagerTypes from "../src/core/package-manager.types.ts";
+import commandRunner from "../src/core/package-manager/command-runner.ts";
 import processEnv from "../src/core/process-env.ts";
 import SettingsManager from "../src/core/settings-manager.ts";
 import type settingsManagerTypes from "../src/core/settings-manager.types.ts";
@@ -60,28 +61,24 @@ const shouldLoadLegacyPnpmGlobalPackagePaths = () =>
         "export default function() {};",
       );
 
-      vi.spyOn(packageManager as any, "runCommandSync").mockImplementation(
-        (...callArgs: unknown[]) => {
-          const [command, args] = callArgs as [string, string[]];
-          if (command !== "pnpm") {
-            throw new Error(`unexpected command ${command}`);
-          }
-          if (args.join(" ") === "list -g --depth 0 --json") {
-            return JSON.stringify([
-              {
-                dependencies: { "pnpm-pkg": { path: packagePath, version: "1.0.0" } },
-                path: pnpmRoot,
-              },
-            ]);
-          }
-          throw new Error(`unexpected args ${args.join(" ")}`);
-        },
-      );
-      const runCommandSpy = vi
-        .spyOn(packageManager as any, "runCommand")
-        .mockResolvedValue(undefined);
+      vi.spyOn(commandRunner, "runCommandSync").mockImplementation((...callArgs: unknown[]) => {
+        const [command, args] = callArgs as [string, string[]];
+        if (command !== "pnpm") {
+          throw new Error(`unexpected command ${command}`);
+        }
+        if (args.join(" ") === "list -g --depth 0 --json") {
+          return JSON.stringify([
+            {
+              dependencies: { "pnpm-pkg": { path: packagePath, version: "1.0.0" } },
+              path: pnpmRoot,
+            },
+          ]);
+        }
+        throw new Error(`unexpected args ${args.join(" ")}`);
+      });
+      const runCommandSpy = vi.spyOn(commandRunner, "runCommand").mockResolvedValue(undefined);
 
-      const result = yield* awaited(packageManager.resolve());
+      const result = yield* awaited(packageManager.resolution.resolve());
 
       expect(
         result.extensions.some(
@@ -89,7 +86,7 @@ const shouldLoadLegacyPnpmGlobalPackagePaths = () =>
         ),
       ).toBe(true);
       expect(runCommandSpy).not.toHaveBeenCalled();
-      expect(packageManager.getInstalledPath("npm:pnpm-pkg", "user")).toBe(packagePath);
+      expect(packageManager.configured.getInstalledPath("npm:pnpm-pkg", "user")).toBe(packagePath);
     }),
   );
 
@@ -107,7 +104,7 @@ const shouldResolveWrappedPnpmGlobalPackagePaths = Effect.gen(function* () {
   const packagePath = joinPath(pnpmRoot, "20-hash", "node_modules", "pnpm-pkg");
   yield* makeDirectory(packagePath);
 
-  vi.spyOn(packageManager as any, "runCommandSync").mockImplementation((...callArgs: unknown[]) => {
+  vi.spyOn(commandRunner, "runCommandSync").mockImplementation((...callArgs: unknown[]) => {
     const [command, args] = callArgs as [string, string[]];
     expect(command).toBe("mise");
     if (args.join(" ") === "exec node@20 -- pnpm list -g --depth 0 --json") {
@@ -118,7 +115,7 @@ const shouldResolveWrappedPnpmGlobalPackagePaths = Effect.gen(function* () {
     throw new Error(`unexpected args ${args.join(" ")}`);
   });
 
-  expect(packageManager.getInstalledPath("npm:pnpm-pkg", "user")).toBe(packagePath);
+  expect(packageManager.configured.getInstalledPath("npm:pnpm-pkg", "user")).toBe(packagePath);
 });
 
 const shouldIgnoreMalformedLegacyPnpmGlobalPackage = () => {
@@ -131,9 +128,9 @@ const shouldIgnoreMalformedLegacyPnpmGlobalPackage = () => {
     settingsManager,
   });
 
-  vi.spyOn(packageManager as any, "runCommandSync").mockReturnValue("not json");
+  vi.spyOn(commandRunner, "runCommandSync").mockReturnValue("not json");
 
-  expect(packageManager.getInstalledPath("npm:pnpm-pkg", "user")).toBeUndefined();
+  expect(packageManager.configured.getInstalledPath("npm:pnpm-pkg", "user")).toBeUndefined();
 };
 
 const beforeEachHook = () =>

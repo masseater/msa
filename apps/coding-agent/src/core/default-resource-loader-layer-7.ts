@@ -78,9 +78,9 @@ export default abstract class DefaultResourceLoaderLayer7 extends DefaultResourc
     }
 
     yield* awaited(this.settingsManager.reload());
-    const resolvedPaths = yield* awaited(this.packageManager.resolve());
+    const resolvedPaths = yield* awaited(this.packageManager.resolution.resolve());
     const cliExtensionPaths = yield* awaited(
-      this.packageManager.resolveExtensionSources(this.additionalExtensionPaths, {
+      this.packageManager.resolution.resolveExtensionSources(this.additionalExtensionPaths, {
         temporary: true,
       }),
     );

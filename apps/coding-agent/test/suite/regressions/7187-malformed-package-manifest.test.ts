@@ -42,7 +42,7 @@ const ignoresInvalidResourceFieldsWithoutDropping = Effect.gen(function* () {
       settingsManager: SettingsManager.inMemory({ packages: ["npm:bad-package"] }),
     });
 
-    const resources = yield* Effect.promise(() => packageManager.resolve());
+    const resources = yield* Effect.promise(() => packageManager.resolution.resolve());
     expect(resources.skills.map((skill) => skill.path)).not.toContain(skillPath);
     expect(resources.prompts.map((prompt) => prompt.path)).toContain(promptPath);
   } finally {

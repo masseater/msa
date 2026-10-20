@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
 import DefaultPackageManager from "../src/core/default-package-manager.ts";
 import type packageManagerTypes from "../src/core/package-manager.types.ts";
+import commandRunner from "../src/core/package-manager/command-runner.ts";
 import SettingsManager from "../src/core/settings-manager.ts";
 import type settingsManagerTypes from "../src/core/settings-manager.types.ts";
 import gitUpdateSupport from "./git-update-support.ts";
@@ -66,16 +67,13 @@ const shouldSkipResetCleanAndInstallWhen = () =>
       settingsManager.setPackages([gitSource]);
 
       const executedCommands: string[] = [];
-      const managerWithInternals = packageManager as unknown as {
-        runCommand: (command: string, args: string[], options?: { cwd?: string }) => Promise<void>;
-      };
-      managerWithInternals.runCommand = (command, args, options) => {
+      commandRunner.runCommand = (command, args, options) => {
         executedCommands.push(`${command} ${args.join(" ")}`);
         if (command === "npm") return Promise.resolve();
         return runTest(Effect.asVoid(runCommand(command, args, options?.cwd ?? process.cwd())));
       };
 
-      yield* awaited(packageManager.update());
+      yield* awaited(packageManager.operations.updates.update());
 
       expect(executedCommands).toContain(
         "git fetch --prune --no-tags origin +refs/heads/main:refs/remotes/origin/main",
@@ -96,7 +94,7 @@ const shouldUpdateToLatestCommitWhenRemote = () =>
 
       const newCommit = yield* createCommit(remoteDir, "extension.ts", "// v2", "Second commit");
 
-      yield* awaited(packageManager.update());
+      yield* awaited(packageManager.operations.updates.update());
 
       expect(yield* getCurrentCommit(installedDir)).toBe(newCommit);
       expect(yield* getFileContent(installedDir, "extension.ts")).toBe("// v2");
@@ -111,7 +109,7 @@ const shouldHandleCompleteHistoryRewrite = () =>
       yield* createCommit(remoteDir, "extension.ts", "// v2", "v2");
       yield* createCommit(remoteDir, "extension.ts", "// v3", "v3");
 
-      yield* awaited(packageManager.update());
+      yield* awaited(packageManager.operations.updates.update());
       expect(yield* getFileContent(installedDir, "extension.ts")).toBe("// v3");
 
       yield* git(["reset", "--hard", "HEAD~2"], remoteDir);
@@ -123,7 +121,7 @@ const shouldHandleCompleteHistoryRewrite = () =>
         "Rewrite B",
       );
 
-      yield* awaited(packageManager.update());
+      yield* awaited(packageManager.operations.updates.update());
 
       expect(yield* getCurrentCommit(installedDir)).toBe(finalCommit);
       expect(yield* getFileContent(installedDir, "extension.ts")).toBe("// rewrite-b");

@@ -47,7 +47,7 @@ const shouldExpandInExclusionAndExactPatterns = () =>
           "-~/extra/skills/exact-excluded",
         ]);
 
-        const result = yield* awaited(packageManager.resolve());
+        const result = yield* awaited(packageManager.resolution.resolve());
         expect(result.skills.some((r) => packagePaths.isEnabled(r, "keep/SKILL.md"))).toBe(true);
         expect(
           result.skills.some((r) => packagePaths.isDisabled(r, "glob-excluded/SKILL.md")),
@@ -75,7 +75,7 @@ const shouldExcludeExtensionsWithPattern = () =>
 
       settingsManager.setExtensionPaths(["extensions", "!**/remove.ts"]);
 
-      const result = yield* awaited(packageManager.resolve());
+      const result = yield* awaited(packageManager.resolution.resolve());
       expect(result.extensions.some((r) => packagePaths.isEnabled(r, "keep.ts"))).toBe(true);
       expect(result.extensions.some((r) => packagePaths.isDisabled(r, "remove.ts"))).toBe(true);
     }),
@@ -92,7 +92,7 @@ const shouldFilterThemesWithGlobPatterns = () =>
 
       settingsManager.setThemePaths(["themes", "!funky.json"]);
 
-      const result = yield* awaited(packageManager.resolve());
+      const result = yield* awaited(packageManager.resolution.resolve());
       expect(result.themes.some((r) => packagePaths.isEnabled(r, "dark.json"))).toBe(true);
       expect(result.themes.some((r) => packagePaths.isEnabled(r, "light.json"))).toBe(true);
       expect(result.themes.some((r) => packagePaths.isDisabled(r, "funky.json"))).toBe(true);
@@ -109,7 +109,7 @@ const shouldFilterPromptsWithExclusionPattern = () =>
 
       settingsManager.setPromptTemplatePaths(["prompts", "!explain.md"]);
 
-      const result = yield* awaited(packageManager.resolve());
+      const result = yield* awaited(packageManager.resolution.resolve());
       expect(result.prompts.some((r) => packagePaths.isEnabled(r, "review.md"))).toBe(true);
       expect(result.prompts.some((r) => packagePaths.isDisabled(r, "explain.md"))).toBe(true);
     }),
@@ -132,7 +132,7 @@ const shouldFilterSkillsWithExclusionPattern = () =>
 
       settingsManager.setSkillPaths(["skills", "!**/bad-skill"]);
 
-      const result = yield* awaited(packageManager.resolve());
+      const result = yield* awaited(packageManager.resolution.resolve());
       expect(result.skills.some((r) => packagePaths.isEnabled(r, "good-skill", "includes"))).toBe(
         true,
       );
@@ -152,7 +152,7 @@ const shouldWorkWithoutPatternsBackwardCompatible = () =>
 
       settingsManager.setExtensionPaths(["extensions/my-ext.ts"]);
 
-      const result = yield* awaited(packageManager.resolve());
+      const result = yield* awaited(packageManager.resolution.resolve());
       expect(result.extensions.some((r) => r.path === extPath && r.enabled)).toBe(true);
     }),
   );

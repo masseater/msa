@@ -43,7 +43,7 @@ const shouldAutoDiscoverProjectPromptsWithOverrides = () =>
 
       settingsManager.setProjectPromptTemplatePaths(["!prompts/is.md"]);
 
-      const result = yield* awaited(packageManager.resolve());
+      const result = yield* awaited(packageManager.resolution.resolve());
       expect(result.prompts.some((r) => r.path === promptPath && !r.enabled)).toBe(true);
     }),
   );
@@ -74,7 +74,7 @@ const shouldResolveDirectoryWithPackageJsonMsa = () =>
 
       settingsManager.setExtensionPaths([pkgDir]);
 
-      const result = yield* awaited(packageManager.resolve());
+      const result = yield* awaited(packageManager.resolution.resolve());
 
       expect(
         result.extensions.some(

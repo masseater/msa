@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test"
 
 import DefaultPackageManager from "../src/core/default-package-manager.ts";
 import type packageManagerTypes from "../src/core/package-manager.types.ts";
+import commandRunner from "../src/core/package-manager/command-runner.ts";
 import processEnv from "../src/core/process-env.ts";
 import SettingsManager from "../src/core/settings-manager.ts";
 import type settingsManagerTypes from "../src/core/settings-manager.types.ts";
@@ -42,13 +43,11 @@ const shouldUpdateNpmRangePackagesUsingThe = () =>
       settingsManager.setProjectPackages(["npm:example@^1.0.0"]);
 
       const runCommandCaptureSpy = vi
-        .spyOn(packageManager as any, "runCommandCapture")
+        .spyOn(commandRunner, "runCommandCapture")
         .mockResolvedValue('["1.0.0","1.2.0"]');
-      const runCommandSpy = vi
-        .spyOn(packageManager as any, "runCommand")
-        .mockResolvedValue(undefined);
+      const runCommandSpy = vi.spyOn(commandRunner, "runCommand").mockResolvedValue(undefined);
 
-      yield* awaited(packageManager.update("npm:example"));
+      yield* awaited(packageManager.operations.updates.update("npm:example"));
 
       expect(runCommandCaptureSpy).toHaveBeenCalledWith(
         "npm",
@@ -81,13 +80,11 @@ const shouldSkipProjectNpmUpdateWhenInstalled = () =>
       settingsManager.setProjectPackages(["npm:example@^1.0.0"]);
 
       const runCommandCaptureSpy = vi
-        .spyOn(packageManager as any, "runCommandCapture")
+        .spyOn(commandRunner, "runCommandCapture")
         .mockResolvedValue('["1.0.0","1.3.1","1.0.2"]');
-      const runCommandSpy = vi
-        .spyOn(packageManager as any, "runCommand")
-        .mockResolvedValue(undefined);
+      const runCommandSpy = vi.spyOn(commandRunner, "runCommand").mockResolvedValue(undefined);
 
-      yield* awaited(packageManager.update("npm:example"));
+      yield* awaited(packageManager.operations.updates.update("npm:example"));
 
       expect(runCommandCaptureSpy).toHaveBeenCalledWith(
         "npm",
@@ -110,13 +107,11 @@ const shouldSkipNpmUpdatesWhenTheInstalled = () =>
       settingsManager.setProjectPackages(["npm:example"]);
 
       const runCommandCaptureSpy = vi
-        .spyOn(packageManager as any, "runCommandCapture")
+        .spyOn(commandRunner, "runCommandCapture")
         .mockResolvedValue('"1.9.0"');
-      const runCommandSpy = vi
-        .spyOn(packageManager as any, "runCommand")
-        .mockResolvedValue(undefined);
+      const runCommandSpy = vi.spyOn(commandRunner, "runCommand").mockResolvedValue(undefined);
 
-      yield* awaited(packageManager.update("npm:example"));
+      yield* awaited(packageManager.operations.updates.update("npm:example"));
 
       expect(runCommandCaptureSpy).toHaveBeenCalledWith(
         "npm",

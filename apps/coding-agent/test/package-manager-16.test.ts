@@ -4,11 +4,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test"
 
 import DefaultPackageManager from "../src/core/default-package-manager.ts";
 import type packageManagerTypes from "../src/core/package-manager.types.ts";
+import commandRunner from "../src/core/package-manager/command-runner.ts";
+import gitRemote from "../src/core/package-manager/git-remote.ts";
 import processEnv from "../src/core/process-env.ts";
 import SettingsManager from "../src/core/settings-manager.ts";
 import type settingsManagerTypes from "../src/core/settings-manager.types.ts";
 import packageManagerSupport from "./package-manager-support.ts";
-import type packageManagerSupportTypes from "./package-manager-support.types.ts";
+import parsedSource from "./parsed-source.ts";
+
+const { asGit } = parsedSource;
 const { readEnv } = processEnv;
 
 const { packagePaths } = packageManagerSupport;
@@ -41,9 +45,9 @@ const shouldSkipInstallingMissingPackageSourcesWhen = Effect.gen(function* () {
     "git:github.com/example/missing-repo",
   ]);
 
-  const installParsedSourceSpy = vi.spyOn(packageManager as any, "installParsedSource");
+  const installParsedSourceSpy = vi.spyOn(packageManager.resources.packages, "installParsedSource");
 
-  const result = yield* awaited(packageManager.resolve());
+  const result = yield* awaited(packageManager.resolution.resolve());
   const allResources = [
     ...result.extensions,
     ...result.skills,
@@ -57,8 +61,8 @@ const shouldSkipInstallingMissingPackageSourcesWhen = Effect.gen(function* () {
 const shouldSkipRefreshingTemporaryGitSourcesWhen = Effect.gen(function* () {
   vi.stubEnv("MSA_OFFLINE", "1");
   const gitSource = "git:github.com/example/repo";
-  const parsedGitSource = (packageManager as any).parseSource(gitSource);
-  const installedPath = (packageManager as any).getGitInstallPath(
+  const parsedGitSource = asGit(packageManager.sources.parseSource(gitSource));
+  const installedPath = packageManager.git.paths.getGitInstallPath(
     parsedGitSource,
     "temporary",
   ) as string;
@@ -69,10 +73,13 @@ const shouldSkipRefreshingTemporaryGitSourcesWhen = Effect.gen(function* () {
     "export default function() {};",
   );
 
-  const refreshTemporaryGitSourceSpy = vi.spyOn(packageManager as any, "refreshTemporaryGitSource");
+  const refreshTemporaryGitSourceSpy = vi.spyOn(
+    packageManager.git.installs,
+    "refreshTemporaryGitSource",
+  );
 
   const result = yield* awaited(
-    packageManager.resolveExtensionSources([gitSource], { temporary: true }),
+    packageManager.resolution.resolveExtensionSources([gitSource], { temporary: true }),
   );
   expect(
     result.extensions.some(
@@ -84,27 +91,24 @@ const shouldSkipRefreshingTemporaryGitSourcesWhen = Effect.gen(function* () {
 
 const shouldLoadANewCheckoutWhenA = Effect.gen(function* () {
   const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
-  const managerWithInternals =
-    packageManager as unknown as packageManagerSupportTypes.PackageManagerInternals;
   const oldSource = "git:github.com/example/repo@aaaaaaa";
   const newSource = "git:github.com/example/repo@bbbbbbb";
-  const oldParsed = managerWithInternals.parseSource(oldSource);
-  const newParsed = managerWithInternals.parseSource(newSource);
+  const oldParsed = packageManager.sources.parseSource(oldSource);
+  const newParsed = packageManager.sources.parseSource(newSource);
   if (oldParsed.type !== "git" || newParsed.type !== "git") {
     throw new Error("Expected git sources");
   }
 
-  const oldPath = managerWithInternals.getGitInstallPath(oldParsed, "temporary");
+  const oldPath = packageManager.git.paths.getGitInstallPath(oldParsed, "temporary");
   yield* makeDirectory(joinPath(oldPath, "extensions"));
   yield* writeTextFile(joinPath(oldPath, "extensions", "old.ts"), "export default function() {};");
 
   const installParsedSourceSpy = vi
-    .spyOn(packageManager as any, "installParsedSource")
+    .spyOn(packageManager.resources.packages, "installParsedSource")
     .mockImplementation(() =>
       effectRunPromise(
         Effect.gen(function* () {
-          const newPath = managerWithInternals.getGitInstallPath(newParsed, "temporary");
+          const newPath = packageManager.git.paths.getGitInstallPath(newParsed, "temporary");
           yield* makeDirectory(joinPath(newPath, "extensions"));
           yield* writeTextFile(
             joinPath(newPath, "extensions", "new.ts"),
@@ -115,7 +119,7 @@ const shouldLoadANewCheckoutWhenA = Effect.gen(function* () {
     );
 
   const result = yield* awaited(
-    packageManager.resolveExtensionSources([newSource], { temporary: true }),
+    packageManager.resolution.resolveExtensionSources([newSource], { temporary: true }),
   );
   expect(installParsedSourceSpy).toHaveBeenCalledTimes(1);
   expect(
@@ -142,9 +146,9 @@ const shouldNotRunNpmViewDuringResolve = Effect.gen(function* () {
   );
   settingsManager.setProjectPackages(["npm:example@^1.0.0"]);
 
-  const runCommandCaptureSpy = vi.spyOn(packageManager as any, "runCommandCapture");
+  const runCommandCaptureSpy = vi.spyOn(commandRunner, "runCommandCapture");
 
-  const result = yield* awaited(packageManager.resolve());
+  const result = yield* awaited(packageManager.resolution.resolve());
   expect(
     result.extensions.some(
       (r) => packagePaths.pathEndsWith(r.path, "extensions/index.ts") && r.enabled,
@@ -163,18 +167,18 @@ const shouldReinstallPinnedNpmPackagesWhenInstalled = Effect.gen(function* () {
   settingsManager.setProjectPackages(["npm:example@2.0.0"]);
 
   const installParsedSourceSpy = vi
-    .spyOn(packageManager as any, "installParsedSource")
+    .spyOn(packageManager.resources.packages, "installParsedSource")
     .mockResolvedValue(undefined);
 
-  yield* awaited(packageManager.resolve());
+  yield* awaited(packageManager.resolution.resolve());
   expect(installParsedSourceSpy).toHaveBeenCalledTimes(1);
 });
 
 const shouldNotCheckPackageUpdatesWhenOffline = Effect.gen(function* () {
   vi.stubEnv("MSA_OFFLINE", "1");
-  const runCommandCaptureSpy = vi.spyOn(packageManager as any, "runCommandCapture");
+  const runCommandCaptureSpy = vi.spyOn(commandRunner, "runCommandCapture");
 
-  const updates = yield* awaited(packageManager.checkForAvailableUpdates());
+  const updates = yield* awaited(packageManager.operations.updateCheck.checkForAvailableUpdates());
   expect(updates).toEqual([]);
   expect(runCommandCaptureSpy).not.toHaveBeenCalled();
 });
@@ -188,9 +192,9 @@ const shouldReportUpdatesForInstalledUnpinnedNpm = Effect.gen(function* () {
   );
   settingsManager.setProjectPackages(["npm:example"]);
 
-  vi.spyOn(packageManager as any, "runCommandCapture").mockResolvedValue('"1.2.3"');
+  vi.spyOn(commandRunner, "runCommandCapture").mockResolvedValue('"1.2.3"');
 
-  const updates = yield* awaited(packageManager.checkForAvailableUpdates());
+  const updates = yield* awaited(packageManager.operations.updateCheck.checkForAvailableUpdates());
   expect(updates).toEqual([
     {
       displayName: "example",
@@ -210,9 +214,9 @@ const shouldNotReportNpmUpdatesWhenThe = Effect.gen(function* () {
   );
   settingsManager.setProjectPackages(["npm:example"]);
 
-  vi.spyOn(packageManager as any, "runCommandCapture").mockResolvedValue('"1.9.0"');
+  vi.spyOn(commandRunner, "runCommandCapture").mockResolvedValue('"1.9.0"');
 
-  const updates = yield* awaited(packageManager.checkForAvailableUpdates());
+  const updates = yield* awaited(packageManager.operations.updateCheck.checkForAvailableUpdates());
   expect(updates).toEqual([]);
 });
 
@@ -223,8 +227,10 @@ const shouldSkipPinnedPackagesWhenCheckingFor = Effect.gen(function* () {
     joinPath(installedNpmPath, "package.json"),
     yield* toJsonText({ name: "example", version: "1.0.0" }),
   );
-  const parsedGitSource = (packageManager as any).parseSource("git:github.com/example/repo@v1");
-  const installedGitPath = (packageManager as any).getGitInstallPath(
+  const parsedGitSource = asGit(
+    packageManager.sources.parseSource("git:github.com/example/repo@v1"),
+  );
+  const installedGitPath = packageManager.git.paths.getGitInstallPath(
     parsedGitSource,
     "project",
   ) as string;
@@ -232,10 +238,10 @@ const shouldSkipPinnedPackagesWhenCheckingFor = Effect.gen(function* () {
 
   settingsManager.setProjectPackages(["npm:example@1.0.0", "git:github.com/example/repo@v1"]);
 
-  const runCommandCaptureSpy = vi.spyOn(packageManager as any, "runCommandCapture");
-  const gitUpdateSpy = vi.spyOn(packageManager as any, "gitHasAvailableUpdate");
+  const runCommandCaptureSpy = vi.spyOn(commandRunner, "runCommandCapture");
+  const gitUpdateSpy = vi.spyOn(gitRemote, "gitHasAvailableUpdate");
 
-  const updates = yield* awaited(packageManager.checkForAvailableUpdates());
+  const updates = yield* awaited(packageManager.operations.updateCheck.checkForAvailableUpdates());
   expect(updates).toEqual([]);
   expect(runCommandCaptureSpy).not.toHaveBeenCalled();
   expect(gitUpdateSpy).not.toHaveBeenCalled();

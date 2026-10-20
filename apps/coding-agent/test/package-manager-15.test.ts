@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test"
 
 import DefaultPackageManager from "../src/core/default-package-manager.ts";
 import type packageManagerTypes from "../src/core/package-manager.types.ts";
+import commandRunner from "../src/core/package-manager/command-runner.ts";
 import processEnv from "../src/core/process-env.ts";
 import SettingsManager from "../src/core/settings-manager.ts";
 import type settingsManagerTypes from "../src/core/settings-manager.types.ts";
@@ -44,12 +45,12 @@ const shouldMigrateLegacyUserNpmInstallsInto = Effect.gen(function* () {
   );
   settingsManager.setPackages(["npm:legacy-pkg"]);
 
-  vi.spyOn(packageManager as any, "getGlobalNpmRoot").mockReturnValue(legacyRoot);
+  vi.spyOn(packageManager.npm.tool, "getGlobalNpmRoot").mockReturnValue(legacyRoot);
   const runCommandCaptureSpy = vi
-    .spyOn(packageManager as any, "runCommandCapture")
+    .spyOn(commandRunner, "runCommandCapture")
     .mockResolvedValue('"1.0.0"');
   const runCommandSpy = vi
-    .spyOn(packageManager as any, "runCommand")
+    .spyOn(commandRunner, "runCommand")
     .mockImplementation((...callArgs: unknown[]) =>
       effectRunPromise(
         Effect.gen(function* () {
@@ -71,13 +72,13 @@ const shouldMigrateLegacyUserNpmInstallsInto = Effect.gen(function* () {
       ),
     );
 
-  expect(packageManager.getInstalledPath("npm:legacy-pkg", "user")).toBe(legacyPath);
+  expect(packageManager.configured.getInstalledPath("npm:legacy-pkg", "user")).toBe(legacyPath);
 
-  yield* awaited(packageManager.update("npm:legacy-pkg"));
+  yield* awaited(packageManager.operations.updates.update("npm:legacy-pkg"));
 
   expect(runCommandCaptureSpy).not.toHaveBeenCalled();
   expect(runCommandSpy).toHaveBeenCalledTimes(1);
-  expect(packageManager.getInstalledPath("npm:legacy-pkg", "user")).toBe(managedPath);
+  expect(packageManager.configured.getInstalledPath("npm:legacy-pkg", "user")).toBe(managedPath);
 });
 
 const seedInstalledNpmPackages = Effect.gen(function* () {
@@ -159,11 +160,11 @@ const npmInstallArgs = (packages: string[], prefix: string) => [
 const shouldBatchNpmUpdatesPerScopeAnd = Effect.gen(function* () {
   yield* seedInstalledNpmPackages;
   const runCommandCaptureSpy = vi
-    .spyOn(packageManager as any, "runCommandCapture")
+    .spyOn(commandRunner, "runCommandCapture")
     .mockImplementation(lookUpLatestVersion);
   const npm = concurrencyProbe();
   const runCommandSpy = vi
-    .spyOn(packageManager as any, "runCommand")
+    .spyOn(commandRunner, "runCommand")
     .mockImplementation((...callArgs: unknown[]) => {
       const [command, args] = callArgs as [string, string[]];
       if (command !== "npm")
@@ -171,9 +172,11 @@ const shouldBatchNpmUpdatesPerScopeAnd = Effect.gen(function* () {
       return npm.run();
     });
   const git = concurrencyProbe();
-  const updateGitSpy = vi.spyOn(packageManager as any, "updateGit").mockImplementation(git.run);
+  const updateGitSpy = vi
+    .spyOn(packageManager.git.installs, "updateGit")
+    .mockImplementation(git.run);
 
-  yield* awaited(packageManager.update());
+  yield* awaited(packageManager.operations.updates.update());
 
   expect(runCommandCaptureSpy).toHaveBeenCalledTimes(5);
   expect(runCommandSpy).toHaveBeenCalledTimes(2);
@@ -198,7 +201,7 @@ const shouldSuggestNpmSourcePrefixesForUpdate = Effect.gen(function* () {
   settingsManager.setProjectPackages(["npm:example"]);
 
   yield* awaited(
-    expect(packageManager.update("example")).rejects.toThrow(
+    expect(packageManager.operations.updates.update("example")).rejects.toThrow(
       "No matching package found for example. Did you mean npm:example?",
     ),
   );
@@ -208,7 +211,7 @@ const shouldSuggestGitSourcePrefixesForUpdate = Effect.gen(function* () {
   settingsManager.setProjectPackages(["git:github.com/example/repo"]);
 
   yield* awaited(
-    expect(packageManager.update("github.com/example/repo")).rejects.toThrow(
+    expect(packageManager.operations.updates.update("github.com/example/repo")).rejects.toThrow(
       "No matching package found for github.com/example/repo. Did you mean git:github.com/example/repo?",
     ),
   );

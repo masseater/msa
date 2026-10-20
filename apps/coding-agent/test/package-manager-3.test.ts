@@ -74,7 +74,7 @@ const shouldIgnoreRootMarkdownFilesInAgents = () =>
       });
       yield* makeDirectory(joinPath(tempDir, "work"));
 
-      const result = yield* awaited(pm.resolve());
+      const result = yield* awaited(pm.resolution.resolve());
       expect(result.skills.some((r) => r.path === rootSkill)).toBe(false);
       expect(result.skills.some((r) => r.path === nestedSkill && r.enabled)).toBe(true);
       expect(result.skills.some((r) => r.path === nestedMarkdownSkill && r.enabled)).toBe(true);
@@ -107,7 +107,7 @@ const shouldKeepAgentsSkillsUserScopedWhen = () =>
           settingsManager: localSettingsManager,
         });
 
-        const result = yield* awaited(pm.resolve());
+        const result = yield* awaited(pm.resolution.resolve());
         const matchingSkills = result.skills.filter((r) => r.path === homeSkill);
         expect(matchingSkills).toHaveLength(1);
         expect(matchingSkills[0]?.enabled).toBe(true);
@@ -140,7 +140,7 @@ const shouldDedupeUserSkillEntriesWhenMsa = () =>
         yield* makeDirectory(joinPath(agentsSkillsDir, "foo"));
         yield* writeTextFile(skillPath, "---\nname: foo\ndescription: foo\n---\n");
 
-        const result = yield* awaited(packageManager.resolve());
+        const result = yield* awaited(packageManager.resolution.resolve());
         const fooSkills = result.skills.filter((r) =>
           packagePaths.pathEndsWith(r.path, "foo/SKILL.md"),
         );

@@ -4,11 +4,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test"
 
 import DefaultPackageManager from "../src/core/default-package-manager.ts";
 import type packageManagerTypes from "../src/core/package-manager.types.ts";
+import commandRunner from "../src/core/package-manager/command-runner.ts";
 import processEnv from "../src/core/process-env.ts";
 import SettingsManager from "../src/core/settings-manager.ts";
 import type settingsManagerTypes from "../src/core/settings-manager.types.ts";
 import packageManagerSupport from "./package-manager-support.ts";
-import type packageManagerSupportTypes from "./package-manager-support.types.ts";
 const { readEnv } = processEnv;
 
 const { packagePaths } = packageManagerSupport;
@@ -59,7 +59,7 @@ const shouldWorkWithDirectPathsNoPatterns = () =>
         },
       ]);
 
-      const result = yield* awaited(packageManager.resolve());
+      const result = yield* awaited(packageManager.resolution.resolve());
       expect(result.extensions.some((r) => packagePaths.isEnabled(r, "one.ts"))).toBe(true);
       expect(result.extensions.some((r) => packagePaths.isDisabled(r, "two.ts"))).toBe(true);
     }),
@@ -87,13 +87,10 @@ const shouldResolveAutoloadDisabledProjectPackageEntries = () =>
         { autoload: false, extensions: ["-extensions/foo.ts"], source: "npm:msa-tools" },
       ]);
       const runCommandSpy = vi
-        .spyOn(
-          packageManager as unknown as packageManagerSupportTypes.PackageManagerInternals,
-          "runCommand",
-        )
+        .spyOn(commandRunner, "runCommand")
         .mockRejectedValue(new Error("unexpected install"));
 
-      const result = yield* awaited(packageManager.resolve());
+      const result = yield* awaited(packageManager.resolution.resolve());
       const states = Object.fromEntries(
         result.extensions.map((resource) => [
           resource.path,
@@ -136,7 +133,7 @@ const shouldResolveAutoloadDisabledPackageEntriesAs = () =>
         },
       ]);
 
-      const result = yield* awaited(packageManager.resolve());
+      const result = yield* awaited(packageManager.resolution.resolve());
 
       expect(result.extensions.map((resource) => resource.path)).toEqual([
         joinPath(pkgDir, "extensions", "foo.ts"),

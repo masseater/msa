@@ -4,10 +4,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test"
 
 import DefaultPackageManager from "../src/core/default-package-manager.ts";
 import type packageManagerTypes from "../src/core/package-manager.types.ts";
+import commandRunner from "../src/core/package-manager/command-runner.ts";
 import processEnv from "../src/core/process-env.ts";
 import SettingsManager from "../src/core/settings-manager.ts";
 import type settingsManagerTypes from "../src/core/settings-manager.types.ts";
-import type packageManagerSupportTypes from "./package-manager-support.types.ts";
+import parsedSource from "./parsed-source.ts";
+
+const { asLocal } = parsedSource;
 const { readEnv } = processEnv;
 
 const { awaited, joinPath, makeDirectory, makeTempDir, removePath, runTest } = testing;
@@ -26,16 +29,15 @@ const shouldEmitProgressEventsOnInstallAttempt = () =>
   runTest(
     Effect.gen(function* () {
       const events: packageManagerTypes.ProgressEvent[] = [];
-      packageManager.setProgressCallback((event) => events.push(event));
-      vi.spyOn(
-        packageManager as unknown as packageManagerSupportTypes.PackageManagerInternals,
-        "runCommand",
-      ).mockRejectedValue(new Error("simulated npm install failure"));
+      packageManager.progress.setProgressCallback((event) => events.push(event));
+      vi.spyOn(commandRunner, "runCommand").mockRejectedValue(
+        new Error("simulated npm install failure"),
+      );
 
       yield* awaited(
-        expect(packageManager.install("npm:nonexistent-package@1.0.0")).rejects.toThrow(
-          "simulated npm install failure",
-        ),
+        expect(
+          packageManager.operations.install.install("npm:nonexistent-package@1.0.0"),
+        ).rejects.toThrow("simulated npm install failure"),
       );
 
       expect(events.some((e) => e.type === "start" && e.action === "install")).toBe(true);
@@ -47,17 +49,16 @@ const shouldRecognizeGithubUrlsWithoutGitPrefix = () =>
   runTest(
     Effect.gen(function* () {
       const events: packageManagerTypes.ProgressEvent[] = [];
-      packageManager.setProgressCallback((event) => events.push(event));
+      packageManager.progress.setProgressCallback((event) => events.push(event));
       const runCommand = vi
-        .spyOn(
-          packageManager as unknown as packageManagerSupportTypes.PackageManagerInternals,
-          "runCommand",
-        )
+        .spyOn(commandRunner, "runCommand")
         .mockRejectedValue(new Error("simulated git clone failure"));
       const source = "https://github.com/nonexistent/repo";
 
       yield* awaited(
-        expect(packageManager.install(source)).rejects.toThrow("simulated git clone failure"),
+        expect(packageManager.operations.install.install(source)).rejects.toThrow(
+          "simulated git clone failure",
+        ),
       );
 
       expect(runCommand).toHaveBeenCalledWith("git", ["clone", source, expect.any(String)]);
@@ -67,7 +68,7 @@ const shouldRecognizeGithubUrlsWithoutGitPrefix = () =>
 
 const shouldParsePackageSourceTypesFromDocs = () => {
   const parseNpm = (source: string) => {
-    const parsed = (packageManager as any).parseSource(source);
+    const parsed = packageManager.sources.parseSource(source);
     if (parsed.type !== "npm") {
       throw new Error(`Expected npm source: ${source}`);
     }
@@ -78,29 +79,27 @@ const shouldParsePackageSourceTypesFromDocs = () => {
   expect(parseNpm("npm:@scope/pkg@^1.2.3").pinned).toBe(false);
   expect(parseNpm("npm:pkg").pinned).toBe(false);
 
-  expect((packageManager as any).parseSource("git:github.com/user/repo@v1").type).toBe("git");
-  expect((packageManager as any).parseSource("https://github.com/user/repo@v1").type).toBe("git");
-  expect((packageManager as any).parseSource("git:git@github.com:user/repo@v1").type).toBe("git");
-  expect((packageManager as any).parseSource("ssh://git@github.com/user/repo@v1").type).toBe("git");
+  expect(packageManager.sources.parseSource("git:github.com/user/repo@v1").type).toBe("git");
+  expect(packageManager.sources.parseSource("https://github.com/user/repo@v1").type).toBe("git");
+  expect(packageManager.sources.parseSource("git:git@github.com:user/repo@v1").type).toBe("git");
+  expect(packageManager.sources.parseSource("ssh://git@github.com/user/repo@v1").type).toBe("git");
 
-  expect((packageManager as any).parseSource("/absolute/path/to/package").type).toBe("local");
-  expect((packageManager as any).parseSource("./relative/path/to/package").type).toBe("local");
-  expect((packageManager as any).parseSource("../relative/path/to/package").type).toBe("local");
+  expect(packageManager.sources.parseSource("/absolute/path/to/package").type).toBe("local");
+  expect(packageManager.sources.parseSource("./relative/path/to/package").type).toBe("local");
+  expect(packageManager.sources.parseSource("../relative/path/to/package").type).toBe("local");
 };
 
 const shouldNeverParseDotRelativePathsAs = () => {
-  const dotSlash = (packageManager as any).parseSource("./packages/agent-timers");
+  const dotSlash = asLocal(packageManager.sources.parseSource("./packages/agent-timers"));
   expect(dotSlash.type).toBe("local");
   expect(dotSlash.path).toBe("./packages/agent-timers");
 
-  const dotDotSlash = (packageManager as any).parseSource("../packages/agent-timers");
+  const dotDotSlash = asLocal(packageManager.sources.parseSource("../packages/agent-timers"));
   expect(dotDotSlash.type).toBe("local");
   expect(dotDotSlash.path).toBe("../packages/agent-timers");
 };
 
 const shouldRejectPathsOutsideGitInstallRoots = () => {
-  const managerWithInternals =
-    packageManager as unknown as packageManagerSupportTypes.PackageManagerInternals;
   const traversalSource = {
     host: "evil.example",
     path: "../../victim/repo",
@@ -109,8 +108,9 @@ const shouldRejectPathsOutsideGitInstallRoots = () => {
     type: "git" as const,
   };
 
+  const { paths } = packageManager.git;
   for (const scope of ["user", "project", "temporary"] as const) {
-    expect(() => managerWithInternals.getGitInstallPath(traversalSource, scope)).toThrow(
+    expect(() => paths.getGitInstallPath(traversalSource, scope)).toThrow(
       "outside package install root",
     );
   }

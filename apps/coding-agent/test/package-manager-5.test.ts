@@ -4,10 +4,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test"
 
 import DefaultPackageManager from "../src/core/default-package-manager.ts";
 import type packageManagerTypes from "../src/core/package-manager.types.ts";
+import commandRunner from "../src/core/package-manager/command-runner.ts";
+import gitRemote from "../src/core/package-manager/git-remote.ts";
 import processEnv from "../src/core/process-env.ts";
 import SettingsManager from "../src/core/settings-manager.ts";
 import type settingsManagerTypes from "../src/core/settings-manager.types.ts";
-import type packageManagerSupportTypes from "./package-manager-support.types.ts";
 const { readEnv } = processEnv;
 
 const {
@@ -38,7 +39,7 @@ const shouldRemoveANewlyCreatedCheckoutWhen = Effect.gen(function* () {
 
   const source = "git:github.com/user/repo";
   const targetDir = joinPath(agentDir, "git", "github.com", "user", "repo");
-  vi.spyOn(packageManager as any, "runCommand").mockImplementation((...callArgs: unknown[]) =>
+  vi.spyOn(commandRunner, "runCommand").mockImplementation((...callArgs: unknown[]) =>
     effectRunPromise(
       Effect.gen(function* () {
         const [command, args] = callArgs as [string, string[]];
@@ -51,7 +52,9 @@ const shouldRemoveANewlyCreatedCheckoutWhen = Effect.gen(function* () {
   );
 
   yield* awaited(
-    expect(packageManager.install(source)).rejects.toThrow("simulated git clone failure"),
+    expect(packageManager.operations.install.install(source)).rejects.toThrow(
+      "simulated git clone failure",
+    ),
   );
 
   expect(yield* pathExists(targetDir)).toBe(false);
@@ -62,7 +65,7 @@ const shouldRemoveANewlyClonedCheckoutWhen = Effect.gen(function* () {
 
   const source = "git:github.com/user/repo";
   const targetDir = joinPath(agentDir, "git", "github.com", "user", "repo");
-  vi.spyOn(packageManager as any, "runCommand").mockImplementation((...callArgs: unknown[]) =>
+  vi.spyOn(commandRunner, "runCommand").mockImplementation((...callArgs: unknown[]) =>
     effectRunPromise(
       Effect.gen(function* () {
         const [command, args] = callArgs as [string, string[]];
@@ -82,7 +85,9 @@ const shouldRemoveANewlyClonedCheckoutWhen = Effect.gen(function* () {
   );
 
   yield* awaited(
-    expect(packageManager.install(source)).rejects.toThrow("simulated dependency install failure"),
+    expect(packageManager.operations.install.install(source)).rejects.toThrow(
+      "simulated dependency install failure",
+    ),
   );
 
   expect(yield* pathExists(targetDir)).toBe(false);
@@ -105,10 +110,7 @@ const shouldReconcileAnExistingGitCheckoutTo = Effect.gen(function* () {
     joinPath(targetDir, "package.json"),
     yield* toJsonText({ name: "repo", version: "1.0.0" }),
   );
-
-  const managerWithInternals =
-    packageManager as unknown as packageManagerSupportTypes.PackageManagerInternals;
-  vi.spyOn(managerWithInternals, "runCommandCapture").mockImplementation((_command, args) =>
+  vi.spyOn(commandRunner, "runCommandCapture").mockImplementation((_command, args) =>
     effectRunPromise(
       Effect.gen(function* () {
         if (args[0] === "rev-parse" && args[1] === "HEAD") {
@@ -121,9 +123,9 @@ const shouldReconcileAnExistingGitCheckoutTo = Effect.gen(function* () {
       }),
     ),
   );
-  const runCommandSpy = vi.spyOn(managerWithInternals, "runCommand").mockResolvedValue(undefined);
+  const runCommandSpy = vi.spyOn(commandRunner, "runCommand").mockResolvedValue(undefined);
 
-  yield* awaited(packageManager.install(source));
+  yield* awaited(packageManager.operations.install.install(source));
 
   expect(runCommandSpy).toHaveBeenCalledWith("git", ["fetch", "origin", "v2"], {
     cwd: targetDir,
@@ -154,15 +156,12 @@ const shouldReconcileAnExistingGitCheckoutTo2 = Effect.gen(function* () {
     "+refs/heads/main:refs/remotes/origin/main",
   ];
   yield* makeDirectory(targetDir);
-
-  const managerWithInternals =
-    packageManager as unknown as packageManagerSupportTypes.PackageManagerInternals;
-  vi.spyOn(managerWithInternals, "getLocalGitUpdateTarget").mockResolvedValue({
+  vi.spyOn(gitRemote, "getLocalGitUpdateTarget").mockResolvedValue({
     fetchArgs,
     head: "new-head",
     ref: "origin/HEAD",
   });
-  vi.spyOn(managerWithInternals, "runCommandCapture").mockImplementation((_command, args) =>
+  vi.spyOn(commandRunner, "runCommandCapture").mockImplementation((_command, args) =>
     effectRunPromise(
       Effect.gen(function* () {
         if (args[0] === "rev-parse" && args[1] === "HEAD") {
@@ -175,9 +174,9 @@ const shouldReconcileAnExistingGitCheckoutTo2 = Effect.gen(function* () {
       }),
     ),
   );
-  const runCommandSpy = vi.spyOn(managerWithInternals, "runCommand").mockResolvedValue(undefined);
+  const runCommandSpy = vi.spyOn(commandRunner, "runCommand").mockResolvedValue(undefined);
 
-  yield* awaited(packageManager.install(source));
+  yield* awaited(packageManager.operations.install.install(source));
 
   expect(runCommandSpy).toHaveBeenCalledWith("git", fetchArgs, { cwd: targetDir });
   expect(runCommandSpy).toHaveBeenCalledWith("git", ["reset", "--hard", "origin/HEAD^{commit}"], {
@@ -195,11 +194,8 @@ const shouldPreferThePackageManagerAfterA = () => {
     cwd: tempDir,
     settingsManager,
   });
-
-  const managerWithInternals =
-    packageManager as unknown as packageManagerSupportTypes.PackageManagerInternals;
-  expect(managerWithInternals.getPackageManagerName()).toBe("pnpm");
-  expect(managerWithInternals.getGitDependencyInstallArgs()).toEqual([
+  expect(packageManager.npm.tool.getPackageManagerName()).toBe("pnpm");
+  expect(packageManager.npm.tool.getGitDependencyInstallArgs()).toEqual([
     "install",
     "--prod",
     "--config.auto-install-peers=false",

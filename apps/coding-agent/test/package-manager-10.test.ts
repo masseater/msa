@@ -7,6 +7,9 @@ import type packageManagerTypes from "../src/core/package-manager.types.ts";
 import processEnv from "../src/core/process-env.ts";
 import SettingsManager from "../src/core/settings-manager.ts";
 import type settingsManagerTypes from "../src/core/settings-manager.types.ts";
+import parsedSource from "./parsed-source.ts";
+
+const { asGit } = parsedSource;
 const { readEnv } = processEnv;
 
 const { joinPath, makeDirectory, makeTempDir, removePath, runTest, writeTextFile } = testing;
@@ -37,9 +40,9 @@ const shouldDeduplicateGitUrlsWithDifferentSupported = () =>
         "https://github.com/user/repo.git",
       ]);
 
-      const id1 = (packageManager as any).getPackageIdentity("https://github.com/user/repo");
-      const id2 = (packageManager as any).getPackageIdentity("git:github.com/user/repo");
-      const id3 = (packageManager as any).getPackageIdentity("https://github.com/user/repo.git");
+      const id1 = packageManager.sources.getPackageIdentity("https://github.com/user/repo");
+      const id2 = packageManager.sources.getPackageIdentity("git:github.com/user/repo");
+      const id3 = packageManager.sources.getPackageIdentity("https://github.com/user/repo.git");
 
       expect(id1).toBe(id2);
       expect(id2).toBe(id3);
@@ -49,12 +52,12 @@ const shouldDeduplicateGitUrlsWithDifferentSupported = () =>
 const shouldHandleHttpsUrlsWithRefsIn = () =>
   runTest(
     Effect.sync(() => {
-      const parsed = (packageManager as any).parseSource("https://github.com/user/repo@main");
+      const parsed = asGit(packageManager.sources.parseSource("https://github.com/user/repo@main"));
       expect(parsed.ref).toBe("main");
       expect(parsed.pinned).toBe(true);
 
-      const parsed2 = (packageManager as any).parseSource(
-        "https://github.com/user/repo@feature/branch",
+      const parsed2 = asGit(
+        packageManager.sources.parseSource("https://github.com/user/repo@feature/branch"),
       );
       expect(parsed2.ref).toBe("feature/branch");
     }),

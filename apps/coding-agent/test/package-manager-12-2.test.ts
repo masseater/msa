@@ -48,7 +48,7 @@ const shouldForceIncludeExtensionsWithPatternAfter = () =>
         "+extensions/force-back.ts",
       ]);
 
-      const result = yield* awaited(packageManager.resolve());
+      const result = yield* awaited(packageManager.resolution.resolve());
       expect(result.extensions.some((r) => packagePaths.isDisabled(r, "keep.ts"))).toBe(true);
       expect(result.extensions.some((r) => packagePaths.isDisabled(r, "excluded.ts"))).toBe(true);
       expect(result.extensions.some((r) => packagePaths.isEnabled(r, "force-back.ts"))).toBe(true);
@@ -83,7 +83,7 @@ const shouldForceIncludeOverridesExcludeInPackage = () =>
         },
       ]);
 
-      const result = yield* awaited(packageManager.resolve());
+      const result = yield* awaited(packageManager.resolution.resolve());
       expect(result.extensions.some((r) => packagePaths.isDisabled(r, "alpha.ts"))).toBe(true);
       expect(result.extensions.some((r) => packagePaths.isEnabled(r, "beta.ts"))).toBe(true);
       expect(result.extensions.some((r) => packagePaths.isDisabled(r, "gamma.ts"))).toBe(true);
@@ -120,7 +120,7 @@ const shouldForceIncludeMultipleResources = () =>
         },
       ]);
 
-      const result = yield* awaited(packageManager.resolve());
+      const result = yield* awaited(packageManager.resolution.resolve());
       expect(result.skills.some((r) => packagePaths.isEnabled(r, "skill-a", "includes"))).toBe(
         true,
       );
@@ -143,7 +143,7 @@ const shouldForceIncludeAfterSpecificExclusion = () =>
 
       settingsManager.setExtensionPaths(["extensions", "!extensions/b.ts", "+extensions/b.ts"]);
 
-      const result = yield* awaited(packageManager.resolve());
+      const result = yield* awaited(packageManager.resolution.resolve());
       expect(result.extensions.some((r) => packagePaths.isEnabled(r, "a.ts"))).toBe(true);
       expect(result.extensions.some((r) => packagePaths.isEnabled(r, "b.ts"))).toBe(true);
     }),
@@ -176,7 +176,7 @@ const shouldHandleForceIncludeInManifestPatterns = () =>
         }),
       );
 
-      const result = yield* awaited(packageManager.resolveExtensionSources([pkgDir]));
+      const result = yield* awaited(packageManager.resolution.resolveExtensionSources([pkgDir]));
       expect(result.extensions.some((r) => packagePaths.isEnabled(r, "one.ts"))).toBe(true);
       expect(result.extensions.some((r) => packagePaths.isEnabled(r, "two.ts"))).toBe(true);
       expect(result.extensions.some((r) => packagePaths.isEnabled(r, "three.ts"))).toBe(true);

@@ -55,7 +55,7 @@ export default function(api) { api.registerTool({ name: "test", description: "te
         "export default function(api) {}",
       );
 
-      const result = yield* awaited(packageManager.resolveExtensionSources([pkgDir]));
+      const result = yield* awaited(packageManager.resolution.resolveExtensionSources([pkgDir]));
 
       expect(
         result.extensions.some(
@@ -97,7 +97,7 @@ const shouldRespectPackageJsonMsaExtensionsManifest = () =>
         "export const util = 1;",
       );
 
-      const result = yield* awaited(packageManager.resolveExtensionSources([pkgDir]));
+      const result = yield* awaited(packageManager.resolution.resolveExtensionSources([pkgDir]));
 
       expect(
         result.extensions.some(
@@ -135,7 +135,7 @@ const shouldHandleMixedTopLevelFilesAnd = () =>
         "export const b = 2;",
       );
 
-      const result = yield* awaited(packageManager.resolveExtensionSources([pkgDir]));
+      const result = yield* awaited(packageManager.resolution.resolveExtensionSources([pkgDir]));
 
       expect(
         result.extensions.some((r) => packagePaths.pathEndsWith(r.path, "simple.ts") && r.enabled),
@@ -177,7 +177,7 @@ const shouldSkipSubdirectoriesWithoutIndexTsOr = () =>
         "export default function(api) {}",
       );
 
-      const result = yield* awaited(packageManager.resolveExtensionSources([pkgDir]));
+      const result = yield* awaited(packageManager.resolution.resolveExtensionSources([pkgDir]));
 
       expect(
         result.extensions.some((r) => packagePaths.pathEndsWith(r.path, "valid.ts") && r.enabled),

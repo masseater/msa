@@ -6,10 +6,14 @@ import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
 import DefaultPackageManager from "../src/core/default-package-manager.ts";
 import type packageManagerTypes from "../src/core/package-manager.types.ts";
+import commandRunner from "../src/core/package-manager/command-runner.ts";
 import SettingsManager from "../src/core/settings-manager.ts";
 import type settingsManagerTypes from "../src/core/settings-manager.types.ts";
 import gitUpdateSupport from "./git-update-support.ts";
+import parsedSource from "./parsed-source.ts";
 import testNetworkEnv from "./test-network-env.ts";
+
+const { asGit } = parsedSource;
 const { getFileContent, gitSource } = gitUpdateSupport;
 
 const { allowNetwork } = testNetworkEnv;
@@ -26,21 +30,6 @@ const {
   toJsonText,
   writeTextFile,
 } = testing;
-
-type GitSourceForTest = {
-  type: "git";
-  repo: string;
-  host: string;
-  path: string;
-  pinned: boolean;
-  ref?: string;
-};
-
-interface PackageManagerPathInternals {
-  parseSource(source: string): GitSourceForTest;
-  getGitInstallPath(source: GitSourceForTest, scope: "temporary"): string;
-}
-
 let tempDir: string;
 
 let agentDir: string;
@@ -52,10 +41,8 @@ let packageManager: packageManagerTypes.DefaultPackageManager;
 const partPart1 = () =>
   Effect.gen(function* () {
     const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
-    const managerWithPaths = packageManager as unknown as PackageManagerPathInternals;
-    const cachedDir = managerWithPaths.getGitInstallPath(
-      managerWithPaths.parseSource(gitSource),
+    const cachedDir = packageManager.git.paths.getGitInstallPath(
+      asGit(packageManager.sources.parseSource(gitSource)),
       "temporary",
     );
     const extensionFile = joinPath(cachedDir, "msa-extensions", "session-breakdown.ts");
@@ -102,15 +89,7 @@ const shouldRefreshCachedTemporaryGitSourcesWhen = () =>
       const { cachedDir, effectRunPromise, extensionFile } = yield* partPart1();
 
       const executedCommands: string[] = [];
-      const managerWithInternals = packageManager as unknown as {
-        runCommand: (command: string, args: string[], options?: { cwd?: string }) => Promise<void>;
-        runCommandCapture: (
-          command: string,
-          args: string[],
-          options?: { cwd?: string },
-        ) => Promise<string>;
-      };
-      managerWithInternals.runCommand = (command, args) =>
+      commandRunner.runCommand = (command, args) =>
         effectRunPromise(
           Effect.gen(function* () {
             executedCommands.push(`${command} ${args.join(" ")}`);
@@ -119,7 +98,7 @@ const shouldRefreshCachedTemporaryGitSourcesWhen = () =>
             }
           }),
         );
-      managerWithInternals.runCommandCapture = (_command, args) =>
+      commandRunner.runCommandCapture = (_command, args) =>
         effectRunPromise(
           Effect.gen(function* () {
             if (args[0] === "rev-parse" && args[1] === "HEAD") {
@@ -135,7 +114,9 @@ const shouldRefreshCachedTemporaryGitSourcesWhen = () =>
           }),
         );
 
-      yield* awaited(packageManager.resolveExtensionSources([gitSource], { temporary: true }));
+      yield* awaited(
+        packageManager.resolution.resolveExtensionSources([gitSource], { temporary: true }),
+      );
 
       expect(executedCommands).toContain(
         "git fetch --prune --no-tags origin +refs/heads/main:refs/remotes/origin/main",

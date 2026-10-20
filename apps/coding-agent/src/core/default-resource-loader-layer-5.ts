@@ -29,9 +29,9 @@ export default abstract class DefaultResourceLoaderLayer5 extends DefaultResourc
     includeInlineFactories: boolean;
   }): Effect.Effect<extensionsTypesTypes.LoadExtensionsResult> {
     return awaitingWith(function* () {
-      const resolvedPaths = yield* awaited(this.packageManager.resolve());
+      const resolvedPaths = yield* awaited(this.packageManager.resolution.resolve());
       const cliExtensionPaths = yield* awaited(
-        this.packageManager.resolveExtensionSources(this.additionalExtensionPaths, {
+        this.packageManager.resolution.resolveExtensionSources(this.additionalExtensionPaths, {
           temporary: true,
         }),
       );

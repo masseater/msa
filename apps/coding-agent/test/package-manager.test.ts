@@ -32,7 +32,7 @@ let packageManager: packageManagerTypes.DefaultPackageManager;
 let previousOfflineEnv: string | undefined;
 
 const shouldReturnNoPackageSourcedPathsWhen = Effect.gen(function* () {
-  const result = yield* awaited(packageManager.resolve());
+  const result = yield* awaited(packageManager.resolution.resolve());
   expect(result.extensions).toEqual([]);
   expect(result.prompts).toEqual([]);
   expect(result.themes).toEqual([]);
@@ -48,7 +48,7 @@ const shouldResolveLocalExtensionPathsFromSettings = Effect.gen(function* () {
   yield* writeTextFile(extPath, "export default function() {}");
   settingsManager.setExtensionPaths(["extensions/my-extension.ts"]);
 
-  const result = yield* awaited(packageManager.resolve());
+  const result = yield* awaited(packageManager.resolution.resolve());
   expect(result.extensions.some((r) => r.path === extPath && r.enabled)).toBe(true);
 });
 
@@ -64,7 +64,7 @@ const shouldResolveBuiltInExtensionsWithUser = Effect.gen(function* () {
   const builtins = () =>
     effectRunPromise(
       Effect.gen(function* () {
-        return (yield* awaited(pm.resolve())).extensions.map((r) => [
+        return (yield* awaited(pm.resolution.resolve())).extensions.map((r) => [
           r.path,
           r.enabled,
           r.metadata.source,
@@ -107,7 +107,7 @@ Content`,
 
   settingsManager.setSkillPaths(["skills"]);
 
-  const result = yield* awaited(packageManager.resolve());
+  const result = yield* awaited(packageManager.resolution.resolve());
 
   expect(result.skills.some((r) => r.path === skillFile && r.enabled)).toBe(true);
 });
@@ -124,7 +124,7 @@ description: A root markdown skill
 Content`,
   );
 
-  const result = yield* awaited(packageManager.resolve());
+  const result = yield* awaited(packageManager.resolution.resolve());
   expect(result.skills.some((r) => r.path === skillFile && r.enabled)).toBe(true);
 });
 
@@ -136,7 +136,7 @@ const shouldResolveProjectPathsRelativeToMsa = Effect.gen(function* () {
 
   settingsManager.setProjectExtensionPaths(["extensions/project-ext.ts"]);
 
-  const result = yield* awaited(packageManager.resolve());
+  const result = yield* awaited(packageManager.resolution.resolve());
   expect(result.extensions.some((r) => r.path === extPath && r.enabled)).toBe(true);
 });
 
@@ -148,7 +148,7 @@ const shouldAutoDiscoverUserPromptsWithOverrides = Effect.gen(function* () {
 
   settingsManager.setPromptTemplatePaths(["!prompts/auto.md"]);
 
-  const result = yield* awaited(packageManager.resolve());
+  const result = yield* awaited(packageManager.resolution.resolve());
   expect(result.prompts.some((r) => r.path === promptPath && !r.enabled)).toBe(true);
 });
 
@@ -191,7 +191,7 @@ const shouldResolveSymlinkedUserAndProjectResources = Effect.gen(function* () {
       for (const [kind, dir] of Object.entries(shared))
         yield* makeSymlink(dir, joinPath(root, kind));
 
-    const result = yield* awaited(packageManager.resolve());
+    const result = yield* awaited(packageManager.resolution.resolve());
 
     expect({
       extensions: result.extensions.length,

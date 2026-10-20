@@ -4,11 +4,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test"
 
 import DefaultPackageManager from "../src/core/default-package-manager.ts";
 import type packageManagerTypes from "../src/core/package-manager.types.ts";
+import commandRunner from "../src/core/package-manager/command-runner.ts";
 import processEnv from "../src/core/process-env.ts";
 import SettingsManager from "../src/core/settings-manager.ts";
 import type settingsManagerTypes from "../src/core/settings-manager.types.ts";
+import childProcess from "../src/utils/child-process.ts";
 import MockSpawnedProcess from "./mock-spawned-process.ts";
-import type packageManagerSupportTypes from "./package-manager-support.types.ts";
 const { readEnv } = processEnv;
 const { awaited, joinPath, makeDirectory, makeTempDir, removePath, runTest } = testing;
 
@@ -26,10 +27,10 @@ const shouldUseNpmViewToFetchLatest = () =>
   runTest(
     Effect.gen(function* () {
       const runCommandCaptureSpy = vi
-        .spyOn(packageManager as any, "runCommandCapture")
+        .spyOn(commandRunner, "runCommandCapture")
         .mockResolvedValue('"1.2.3"');
 
-      const latest = yield* awaited((packageManager as any).getLatestNpmVersion("example"));
+      const latest = yield* awaited(packageManager.npm.updates.getLatestNpmVersion("example"));
       expect(latest).toBe("1.2.3");
       expect(runCommandCaptureSpy).toHaveBeenCalledTimes(1);
       expect(runCommandCaptureSpy).toHaveBeenCalledWith(
@@ -53,10 +54,10 @@ const shouldUseNpmcommandArgvForNpmUpdate = () =>
       });
 
       const runCommandCaptureSpy = vi
-        .spyOn(packageManager as any, "runCommandCapture")
+        .spyOn(commandRunner, "runCommandCapture")
         .mockResolvedValue('"1.2.3"');
 
-      const latest = yield* awaited((packageManager as any).getLatestNpmVersion("@scope/pkg"));
+      const latest = yield* awaited(packageManager.npm.updates.getLatestNpmVersion("@scope/pkg"));
       expect(latest).toBe("1.2.3");
       expect(runCommandCaptureSpy).toHaveBeenCalledWith(
         "mise",
@@ -69,23 +70,13 @@ const shouldUseNpmcommandArgvForNpmUpdate = () =>
 const shouldWaitForCloseBeforeResolvingCaptured = () =>
   runTest(
     Effect.gen(function* () {
-      const managerWithInternals = packageManager as unknown as {
-        spawnCaptureCommand(
-          command: string,
-          args: string[],
-          options?: { cwd?: string; env?: Record<string, string> },
-        ): packageManagerSupportTypes.MockSpawnedProcess;
-        runCommandCapture(
-          command: string,
-          args: string[],
-          options?: { cwd?: string; timeoutMs?: number; env?: Record<string, string> },
-        ): Promise<string>;
-      };
       const child = new MockSpawnedProcess();
-      vi.spyOn(managerWithInternals, "spawnCaptureCommand").mockReturnValue(child);
+      vi.spyOn(childProcess, "spawnProcess").mockReturnValue(
+        child as unknown as ReturnType<typeof childProcess.spawnProcess>,
+      );
 
       let settled = false;
-      const capturePromise = managerWithInternals
+      const capturePromise = commandRunner
         .runCommandCapture("git", ["rev-parse", "HEAD"])
         .then((value) => {
           settled = true;

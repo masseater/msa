@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test"
 
 import DefaultPackageManager from "../src/core/default-package-manager.ts";
 import type packageManagerTypes from "../src/core/package-manager.types.ts";
+import commandRunner from "../src/core/package-manager/command-runner.ts";
 import processEnv from "../src/core/process-env.ts";
 import SettingsManager from "../src/core/settings-manager.ts";
 import type settingsManagerTypes from "../src/core/settings-manager.types.ts";
@@ -60,30 +61,25 @@ const shouldDisablePeerInstallationThroughWrappedPnpmStep2 = () =>
     const { effectRunPromise, source, targetDir } =
       yield* shouldDisablePeerInstallationThroughWrappedPnpmStep1();
 
-    vi.spyOn(packageManager as any, "runCommandCapture").mockImplementation(
-      (...callArgs: unknown[]) =>
-        effectRunPromise(
-          Effect.gen(function* () {
-            const [_command, args] = callArgs as [string, string[]];
-            if (
-              args[0] === "rev-parse" &&
-              args[1] === "--abbrev-ref" &&
-              args[2] === "@{upstream}"
-            ) {
-              return yield* awaited("origin/main");
-            }
-            if (
-              args[0] === "rev-parse" &&
-              (args[1] === "@{upstream}" || args[1] === "@{upstream}^{commit}")
-            ) {
-              return yield* awaited("remote-head");
-            }
-            if (args[0] === "rev-parse" && args[1] === "HEAD") {
-              return yield* awaited("local-head");
-            }
-            throw new Error(`Unexpected runCommandCapture args: ${args.join(" ")}`);
-          }),
-        ),
+    vi.spyOn(commandRunner, "runCommandCapture").mockImplementation((...callArgs: unknown[]) =>
+      effectRunPromise(
+        Effect.gen(function* () {
+          const [_command, args] = callArgs as [string, string[]];
+          if (args[0] === "rev-parse" && args[1] === "--abbrev-ref" && args[2] === "@{upstream}") {
+            return yield* awaited("origin/main");
+          }
+          if (
+            args[0] === "rev-parse" &&
+            (args[1] === "@{upstream}" || args[1] === "@{upstream}^{commit}")
+          ) {
+            return yield* awaited("remote-head");
+          }
+          if (args[0] === "rev-parse" && args[1] === "HEAD") {
+            return yield* awaited("local-head");
+          }
+          throw new Error(`Unexpected runCommandCapture args: ${args.join(" ")}`);
+        }),
+      ),
     );
     return { source, targetDir };
   });
@@ -92,11 +88,9 @@ const shouldDisablePeerInstallationThroughWrappedPnpm = () =>
   runTest(
     Effect.gen(function* () {
       const { source, targetDir } = yield* shouldDisablePeerInstallationThroughWrappedPnpmStep2();
-      const runCommandSpy = vi
-        .spyOn(packageManager as any, "runCommand")
-        .mockResolvedValue(undefined);
+      const runCommandSpy = vi.spyOn(commandRunner, "runCommand").mockResolvedValue(undefined);
 
-      yield* awaited(packageManager.update(source));
+      yield* awaited(packageManager.operations.updates.update(source));
 
       expect(runCommandSpy).toHaveBeenCalledWith(
         "mise",
@@ -135,7 +129,7 @@ const shouldUseNpmcommandArgvForNpmRoot = Effect.gen(function* () {
   yield* makeDirectory(joinPath(root20, "@scope", "pkg"));
 
   const runCommandSyncSpy = vi
-    .spyOn(packageManager as any, "runCommandSync")
+    .spyOn(commandRunner, "runCommandSync")
     .mockImplementation((...callArgs: unknown[]) => {
       const [command, args] = callArgs as [string, string[]];
       if (command !== "mise") {
@@ -150,7 +144,7 @@ const shouldUseNpmcommandArgvForNpmRoot = Effect.gen(function* () {
       throw new Error(`unexpected args ${args.join(" ")}`);
     });
 
-  expect(packageManager.getInstalledPath("npm:@scope/pkg", "user")).toBe(
+  expect(packageManager.configured.getInstalledPath("npm:@scope/pkg", "user")).toBe(
     joinPath(root20, "@scope", "pkg"),
   );
   expect(runCommandSyncSpy).toHaveBeenNthCalledWith(1, "mise", [
@@ -164,7 +158,7 @@ const shouldUseNpmcommandArgvForNpmRoot = Effect.gen(function* () {
 
   settingsManager.setNpmCommand(["mise", "exec", "node@22", "--", "npm"]);
 
-  expect(packageManager.getInstalledPath("npm:@scope/pkg", "user")).toBeUndefined();
+  expect(packageManager.configured.getInstalledPath("npm:@scope/pkg", "user")).toBeUndefined();
   expect(runCommandSyncSpy).toHaveBeenNthCalledWith(2, "mise", [
     "exec",
     "node@22",
@@ -190,7 +184,7 @@ const shouldInstallUserNpmPackagesIntoThePart1 = () =>
     });
 
     const packagePath = joinPath(agentDir, "npm", "node_modules", "pnpm-pkg");
-    vi.spyOn(packageManager as any, "runCommandSync").mockImplementation(() => {
+    vi.spyOn(commandRunner, "runCommandSync").mockImplementation(() => {
       throw new Error("legacy lookup unavailable");
     });
     return { effectRunPromise, packagePath };
@@ -201,7 +195,7 @@ const shouldInstallUserNpmPackagesIntoThe = () =>
     Effect.gen(function* () {
       const { effectRunPromise, packagePath } = yield* shouldInstallUserNpmPackagesIntoThePart1();
       const runCommandSpy = vi
-        .spyOn(packageManager as any, "runCommand")
+        .spyOn(commandRunner, "runCommand")
         .mockImplementation((...callArgs: unknown[]) =>
           effectRunPromise(
             Effect.gen(function* () {
@@ -229,8 +223,8 @@ const shouldInstallUserNpmPackagesIntoThe = () =>
           ),
         );
 
-      const first = yield* awaited(packageManager.resolve());
-      const second = yield* awaited(packageManager.resolve());
+      const first = yield* awaited(packageManager.resolution.resolve());
+      const second = yield* awaited(packageManager.resolution.resolve());
 
       expect(
         first.extensions.some(
@@ -243,7 +237,7 @@ const shouldInstallUserNpmPackagesIntoThe = () =>
         ),
       ).toBe(true);
       expect(runCommandSpy).toHaveBeenCalledTimes(1);
-      expect(packageManager.getInstalledPath("npm:pnpm-pkg", "user")).toBe(packagePath);
+      expect(packageManager.configured.getInstalledPath("npm:pnpm-pkg", "user")).toBe(packagePath);
     }),
   );
 

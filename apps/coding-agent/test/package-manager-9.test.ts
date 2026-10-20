@@ -8,7 +8,6 @@ import processEnv from "../src/core/process-env.ts";
 import SettingsManager from "../src/core/settings-manager.ts";
 import type settingsManagerTypes from "../src/core/settings-manager.types.ts";
 import packageManagerSupport from "./package-manager-support.ts";
-import type packageManagerSupportTypes from "./package-manager-support.types.ts";
 const { readEnv } = processEnv;
 
 const { packagePaths } = packageManagerSupport;
@@ -35,14 +34,12 @@ let packageManager: packageManagerTypes.DefaultPackageManager;
 let previousOfflineEnv: string | undefined;
 
 const shouldPlaceTemporaryNpmPackagesUnderThe = Effect.gen(function* () {
-  const managerWithInternals =
-    packageManager as unknown as packageManagerSupportTypes.PackageManagerInternals;
-  const source = managerWithInternals.parseSource("npm:left-pad");
+  const source = packageManager.sources.parseSource("npm:left-pad");
   if (source.type !== "npm") {
     throw new Error("Expected npm source");
   }
 
-  const installPath = managerWithInternals.getNpmInstallPath(source, "temporary");
+  const installPath = packageManager.npm.paths.getNpmInstallPath(source, "temporary");
   const tempRoot = joinPath(agentDir, "tmp", "extensions");
 
   expect(packagePaths.pathEndsWith(installPath, "node_modules/left-pad")).toBe(true);
@@ -58,7 +55,7 @@ const shouldStoreGlobalLocalPackagesRelativeTo = Effect.gen(function* () {
   yield* makeDirectory(joinPath(pkgDir, "extensions"));
   yield* writeTextFile(joinPath(pkgDir, "extensions", "index.ts"), "export default function() {}");
 
-  const added = packageManager.addSourceToSettings("./packages/local-global-pkg");
+  const added = packageManager.configured.addSourceToSettings("./packages/local-global-pkg");
   expect(added).toBe(true);
 
   const settings = settingsManager.getGlobalSettings();
@@ -75,7 +72,9 @@ const shouldStoreProjectLocalPackagesRelativeTo = Effect.gen(function* () {
     "export default function() {}",
   );
 
-  const added = packageManager.addSourceToSettings("./project-local-pkg", { local: true });
+  const added = packageManager.configured.addSourceToSettings("./project-local-pkg", {
+    local: true,
+  });
   expect(added).toBe(true);
 
   const settings = settingsManager.getProjectSettings();
@@ -89,25 +88,25 @@ const shouldRemoveLocalPackageEntriesUsingEquivalent = Effect.gen(function* () {
   yield* makeDirectory(joinPath(pkgDir, "extensions"));
   yield* writeTextFile(joinPath(pkgDir, "extensions", "index.ts"), "export default function() {}");
 
-  packageManager.addSourceToSettings("./remove-local-pkg");
-  const removed = packageManager.removeSourceFromSettings(`${pkgDir}/`);
+  packageManager.configured.addSourceToSettings("./remove-local-pkg");
+  const removed = packageManager.configured.removeSourceFromSettings(`${pkgDir}/`);
   expect(removed).toBe(true);
   expect(settingsManager.getGlobalSettings().packages ?? []).toHaveLength(0);
 });
 
 const shouldReturnFalseWhenAddingTheSame = () => {
-  const first = packageManager.addSourceToSettings("git:github.com/user/repo@v1");
+  const first = packageManager.configured.addSourceToSettings("git:github.com/user/repo@v1");
   expect(first).toBe(true);
 
-  const second = packageManager.addSourceToSettings("git:github.com/user/repo@v1");
+  const second = packageManager.configured.addSourceToSettings("git:github.com/user/repo@v1");
   expect(second).toBe(false);
   expect(settingsManager.getGlobalSettings().packages).toEqual(["git:github.com/user/repo@v1"]);
 };
 
 const shouldUpdateTheRefWhenAddingThe = () => {
-  packageManager.addSourceToSettings("git:github.com/user/repo@v1");
+  packageManager.configured.addSourceToSettings("git:github.com/user/repo@v1");
 
-  const updated = packageManager.addSourceToSettings("git:github.com/user/repo@v2");
+  const updated = packageManager.configured.addSourceToSettings("git:github.com/user/repo@v2");
   expect(updated).toBe(true);
   expect(settingsManager.getGlobalSettings().packages).toEqual(["git:github.com/user/repo@v2"]);
 };
@@ -123,7 +122,7 @@ const shouldPreservePackageFiltersWhenReplacingA = () => {
     },
   ]);
 
-  const updated = packageManager.addSourceToSettings("git:github.com/user/repo@v2");
+  const updated = packageManager.configured.addSourceToSettings("git:github.com/user/repo@v2");
   expect(updated).toBe(true);
   expect(settingsManager.getGlobalSettings().packages).toEqual([
     {

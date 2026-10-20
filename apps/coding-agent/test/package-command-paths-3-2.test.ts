@@ -87,7 +87,7 @@ const togglesBuiltInExtensionsInConfigGlobal = () =>
           builtinExtensions: ["llama.cpp", "mcp"],
           cwd: projectDir,
           settingsManager,
-        }).resolve(),
+        }).resolution.resolve(),
       );
       const selector = new ConfigSelectorComponent(
         { global: resolvedPaths, project: resolvedPaths },
@@ -125,7 +125,7 @@ const cyclesProjectBuiltInExtensionOverridesIn = () =>
           builtinExtensions: ["mcp"],
           cwd: projectDir,
           settingsManager,
-        }).resolve(),
+        }).resolution.resolve(),
       );
       const selector = new ConfigSelectorComponent(
         { global: resolvedPaths, project: resolvedPaths },

@@ -94,7 +94,9 @@ export default class BackgroundChecks {
             cwd: this.mode.sessionManager.getCwd(),
             settingsManager: this.mode.settingsManager,
           });
-          const updates = yield* awaited(packageManager.checkForAvailableUpdates());
+          const updates = yield* awaited(
+            packageManager.operations.updateCheck.checkForAvailableUpdates(),
+          );
           return updates.map((update) => update.displayName);
         } catch {
           return [];

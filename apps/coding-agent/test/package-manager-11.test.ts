@@ -59,7 +59,7 @@ const shouldExpandPositiveGlobManifestEntriesBefore = () =>
         }),
       );
 
-      const result = yield* awaited(packageManager.resolveExtensionSources([pkgDir]));
+      const result = yield* awaited(packageManager.resolution.resolveExtensionSources([pkgDir]));
       expect(
         result.skills.some((r) => packagePaths.isEnabled(r, "pdf-to-markdown", "includes")),
       ).toBe(true);
@@ -122,7 +122,7 @@ const shouldSortManifestGlobMatchesAndUse = () =>
         }),
       );
 
-      const result = yield* awaited(packageManager.resolveExtensionSources([pkgDir]));
+      const result = yield* awaited(packageManager.resolution.resolveExtensionSources([pkgDir]));
       expect(result.extensions.map((resource) => relativePath(pkgDir, resource.path))).toEqual([
         joinPath("extension-files", "a.ts"),
         joinPath("extension-files", "z.ts"),

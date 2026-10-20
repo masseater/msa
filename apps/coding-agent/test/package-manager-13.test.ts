@@ -36,7 +36,7 @@ const shouldForceIncludeThemes = () =>
 
       settingsManager.setThemePaths(["themes", "!themes/*.json", "+themes/special.json"]);
 
-      const result = yield* awaited(packageManager.resolve());
+      const result = yield* awaited(packageManager.resolution.resolve());
       expect(result.themes.some((r) => packagePaths.isDisabled(r, "dark.json"))).toBe(true);
       expect(result.themes.some((r) => packagePaths.isDisabled(r, "light.json"))).toBe(true);
       expect(result.themes.some((r) => packagePaths.isEnabled(r, "special.json"))).toBe(true);
@@ -54,7 +54,7 @@ const shouldForceIncludePrompts = () =>
 
       settingsManager.setPromptTemplatePaths(["prompts", "!prompts/*.md", "+prompts/debug.md"]);
 
-      const result = yield* awaited(packageManager.resolve());
+      const result = yield* awaited(packageManager.resolution.resolve());
       expect(result.prompts.some((r) => packagePaths.isDisabled(r, "review.md"))).toBe(true);
       expect(result.prompts.some((r) => packagePaths.isDisabled(r, "explain.md"))).toBe(true);
       expect(result.prompts.some((r) => packagePaths.isEnabled(r, "debug.md"))).toBe(true);
@@ -75,7 +75,7 @@ const shouldForceExcludeTopLevelResources = () =>
         "-extensions/alpha.ts",
       ]);
 
-      const result = yield* awaited(packageManager.resolve());
+      const result = yield* awaited(packageManager.resolution.resolve());
       expect(result.extensions.some((r) => packagePaths.isDisabled(r, "alpha.ts"))).toBe(true);
       expect(result.extensions.some((r) => packagePaths.isEnabled(r, "beta.ts"))).toBe(true);
     }),
@@ -105,7 +105,7 @@ const shouldForceExcludeInPackageFilters = () =>
         },
       ]);
 
-      const result = yield* awaited(packageManager.resolve());
+      const result = yield* awaited(packageManager.resolution.resolve());
       expect(result.extensions.some((r) => packagePaths.isDisabled(r, "alpha.ts"))).toBe(true);
       expect(result.extensions.some((r) => packagePaths.isEnabled(r, "beta.ts"))).toBe(true);
     }),

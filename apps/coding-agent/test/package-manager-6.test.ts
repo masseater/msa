@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test"
 
 import DefaultPackageManager from "../src/core/default-package-manager.ts";
 import type packageManagerTypes from "../src/core/package-manager.types.ts";
+import commandRunner from "../src/core/package-manager/command-runner.ts";
 import processEnv from "../src/core/process-env.ts";
 import SettingsManager from "../src/core/settings-manager.ts";
 import type settingsManagerTypes from "../src/core/settings-manager.types.ts";
@@ -46,7 +47,7 @@ const shouldDetectPnpmThroughACorepackWrapper = Effect.gen(function* () {
   const source = "git:github.com/user/repo";
   const targetDir = joinPath(agentDir, "git", "github.com", "user", "repo");
   const runCommandSpy = vi
-    .spyOn(packageManager as any, "runCommand")
+    .spyOn(commandRunner, "runCommand")
     .mockImplementation((...callArgs: unknown[]) =>
       effectRunPromise(
         Effect.gen(function* () {
@@ -62,7 +63,7 @@ const shouldDetectPnpmThroughACorepackWrapper = Effect.gen(function* () {
       ),
     );
 
-  yield* awaited(packageManager.install(source));
+  yield* awaited(packageManager.operations.install.install(source));
 
   expect(runCommandSpy).toHaveBeenCalledWith(
     "corepack",
@@ -93,7 +94,7 @@ const shouldDisablePeerInstallationForGitPackage = Effect.gen(function* () {
   const source = "git:github.com/user/repo";
   const targetDir = joinPath(agentDir, "git", "github.com", "user", "repo");
   const runCommandSpy = vi
-    .spyOn(packageManager as any, "runCommand")
+    .spyOn(commandRunner, "runCommand")
     .mockImplementation((...callArgs: unknown[]) =>
       effectRunPromise(
         Effect.gen(function* () {
@@ -109,7 +110,7 @@ const shouldDisablePeerInstallationForGitPackage = Effect.gen(function* () {
       ),
     );
 
-  yield* awaited(packageManager.install(source));
+  yield* awaited(packageManager.operations.install.install(source));
 
   expect(runCommandSpy).toHaveBeenCalledWith("bun", ["install", "--omit=dev", "--omit=peer"], {
     cwd: targetDir,
@@ -135,30 +136,29 @@ const shouldUpdateGitPackageDependenciesWithoutAuto = Effect.gen(function* () {
   );
   settingsManager.setProjectPackages([source]);
 
-  vi.spyOn(packageManager as any, "runCommandCapture").mockImplementation(
-    (...callArgs: unknown[]) =>
-      effectRunPromise(
-        Effect.gen(function* () {
-          const [_command, args] = callArgs as [string, string[]];
-          if (args[0] === "rev-parse" && args[1] === "--abbrev-ref" && args[2] === "@{upstream}") {
-            return yield* awaited("origin/main");
-          }
-          if (
-            args[0] === "rev-parse" &&
-            (args[1] === "@{upstream}" || args[1] === "@{upstream}^{commit}")
-          ) {
-            return yield* awaited("remote-head");
-          }
-          if (args[0] === "rev-parse" && args[1] === "HEAD") {
-            return yield* awaited("local-head");
-          }
-          throw new Error(`Unexpected runCommandCapture args: ${args.join(" ")}`);
-        }),
-      ),
+  vi.spyOn(commandRunner, "runCommandCapture").mockImplementation((...callArgs: unknown[]) =>
+    effectRunPromise(
+      Effect.gen(function* () {
+        const [_command, args] = callArgs as [string, string[]];
+        if (args[0] === "rev-parse" && args[1] === "--abbrev-ref" && args[2] === "@{upstream}") {
+          return yield* awaited("origin/main");
+        }
+        if (
+          args[0] === "rev-parse" &&
+          (args[1] === "@{upstream}" || args[1] === "@{upstream}^{commit}")
+        ) {
+          return yield* awaited("remote-head");
+        }
+        if (args[0] === "rev-parse" && args[1] === "HEAD") {
+          return yield* awaited("local-head");
+        }
+        throw new Error(`Unexpected runCommandCapture args: ${args.join(" ")}`);
+      }),
+    ),
   );
-  const runCommandSpy = vi.spyOn(packageManager as any, "runCommand").mockResolvedValue(undefined);
+  const runCommandSpy = vi.spyOn(commandRunner, "runCommand").mockResolvedValue(undefined);
 
-  yield* awaited(packageManager.update(source));
+  yield* awaited(packageManager.operations.updates.update(source));
 
   expect(runCommandSpy).toHaveBeenCalledWith(
     "npm",

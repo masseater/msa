@@ -31,12 +31,12 @@ const withPackageManager = <A>(
 const parseSource = (
   packageManager: packageManagerTypes.DefaultPackageManager,
   source: string,
-): unknown => (packageManager as any).parseSource(source);
+): unknown => packageManager.sources.parseSource(source);
 
 const identityOf = (
   packageManager: packageManagerTypes.DefaultPackageManager,
   source: string,
-): unknown => (packageManager as any).getPackageIdentity(source);
+): unknown => packageManager.sources.getPackageIdentity(source);
 
 const shouldParseHttpsUrl = () =>
   runTest(

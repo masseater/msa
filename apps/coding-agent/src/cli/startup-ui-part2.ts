@@ -26,7 +26,7 @@ function loadStartupThemes(
         settingsManager: globalSettingsManager,
       });
       const resolvedPaths = yield* awaited(
-        packageManager.resolve(() => Effect.runPromise(Effect.succeed("skip"))),
+        packageManager.resolution.resolve(() => Effect.runPromise(Effect.succeed("skip"))),
       );
       return loadThemes(resolvedPaths.themes);
     }),

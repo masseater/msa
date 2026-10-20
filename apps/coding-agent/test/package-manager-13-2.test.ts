@@ -40,7 +40,7 @@ const shouldDedupeSameLocalPackageInGlobal = () =>
       expect(globalSettings.packages).toEqual([pkgDir]);
       expect(projectSettings.packages).toEqual([pkgDir]);
 
-      const result = yield* awaited(packageManager.resolve());
+      const result = yield* awaited(packageManager.resolution.resolve());
 
       const sharedPaths = result.extensions.filter((r) => r.path.includes("shared-pkg"));
       expect(sharedPaths.length).toBe(1);
@@ -67,7 +67,7 @@ const shouldKeepBothIfDifferentPackages = () =>
       settingsManager.setPackages([pkg1Dir]);
       settingsManager.setProjectPackages([pkg2Dir]);
 
-      const result = yield* awaited(packageManager.resolve());
+      const result = yield* awaited(packageManager.resolution.resolve());
       expect(result.extensions.some((r) => r.path.includes("pkg1"))).toBe(true);
       expect(result.extensions.some((r) => r.path.includes("pkg2"))).toBe(true);
     }),
@@ -79,8 +79,8 @@ const shouldDedupeSshAndHttpsUrlsFor = () =>
       const httpsUrl = "https://github.com/user/repo";
       const sshUrl = "git:git@github.com:user/repo";
 
-      const httpsIdentity = (packageManager as any).getPackageIdentity(httpsUrl);
-      const sshIdentity = (packageManager as any).getPackageIdentity(sshUrl);
+      const httpsIdentity = packageManager.sources.getPackageIdentity(httpsUrl);
+      const sshIdentity = packageManager.sources.getPackageIdentity(sshUrl);
 
       expect(httpsIdentity).toBe("git:github.com/user/repo");
       expect(sshIdentity).toBe("git:github.com/user/repo");
@@ -94,8 +94,8 @@ const shouldDedupeSshAndHttpsWithRefs = () =>
       const httpsUrl = "https://github.com/user/repo@v1.0.0";
       const sshUrl = "git:git@github.com:user/repo@v1.0.0";
 
-      const httpsIdentity = (packageManager as any).getPackageIdentity(httpsUrl);
-      const sshIdentity = (packageManager as any).getPackageIdentity(sshUrl);
+      const httpsIdentity = packageManager.sources.getPackageIdentity(httpsUrl);
+      const sshIdentity = packageManager.sources.getPackageIdentity(sshUrl);
 
       expect(httpsIdentity).toBe("git:github.com/user/repo");
       expect(sshIdentity).toBe("git:github.com/user/repo");
@@ -109,8 +109,8 @@ const shouldDedupeSshUrlWithSshProtocol = () =>
       const sshProtocol = "ssh://git@github.com/user/repo";
       const gitAt = "git:git@github.com:user/repo";
 
-      const sshProtocolIdentity = (packageManager as any).getPackageIdentity(sshProtocol);
-      const gitAtIdentity = (packageManager as any).getPackageIdentity(gitAt);
+      const sshProtocolIdentity = packageManager.sources.getPackageIdentity(sshProtocol);
+      const gitAtIdentity = packageManager.sources.getPackageIdentity(gitAt);
 
       expect(sshProtocolIdentity).toBe("git:github.com/user/repo");
       expect(gitAtIdentity).toBe("git:github.com/user/repo");
@@ -131,7 +131,7 @@ const shouldDedupeAllSupportedUrlFormatsFor = () =>
         "git:git@github.com:user/repo.git",
       ];
 
-      const identities = urls.map((url) => (packageManager as any).getPackageIdentity(url));
+      const identities = urls.map((url) => packageManager.sources.getPackageIdentity(url));
 
       const uniqueIdentities = [...new Set(identities)];
       expect(uniqueIdentities.length).toBe(1);
@@ -145,8 +145,8 @@ const shouldKeepDifferentReposSeparateHttpsVs = () =>
       const repo1Https = "https://github.com/user/repo1";
       const repo2Ssh = "git:git@github.com:user/repo2";
 
-      const id1 = (packageManager as any).getPackageIdentity(repo1Https);
-      const id2 = (packageManager as any).getPackageIdentity(repo2Ssh);
+      const id1 = packageManager.sources.getPackageIdentity(repo1Https);
+      const id2 = packageManager.sources.getPackageIdentity(repo2Ssh);
 
       expect(id1).toBe("git:github.com/user/repo1");
       expect(id2).toBe("git:github.com/user/repo2");

@@ -29,7 +29,7 @@ const shouldUseTheAgentDirAsBasedir = () =>
       yield* makeDirectory(joinPath(agentDir, "skills", "user-msa"));
       yield* writeTextFile(skillPath, "---\nname: user-msa\ndescription: user msa\n---\n");
 
-      const result = yield* awaited(packageManager.resolve());
+      const result = yield* awaited(packageManager.resolution.resolve());
       const skill = result.skills.find((r) => r.path === skillPath);
 
       expect(skill?.metadata.source).toBe("auto");
@@ -46,7 +46,7 @@ const shouldUseTheProjectMsaDirAs = () =>
       yield* makeDirectory(joinPath(projectBaseDir, "skills", "project-msa"));
       yield* writeTextFile(skillPath, "---\nname: project-msa\ndescription: project msa\n---\n");
 
-      const result = yield* awaited(packageManager.resolve());
+      const result = yield* awaited(packageManager.resolution.resolve());
       const skill = result.skills.find((r) => r.path === skillPath);
 
       expect(skill?.metadata.source).toBe("auto");
@@ -67,7 +67,7 @@ const shouldUseAgentsAsBasedirForUser = () =>
         yield* makeDirectory(joinPath(agentsBaseDir, "skills", "user-agents"));
         yield* writeTextFile(skillPath, "---\nname: user-agents\ndescription: user agents\n---\n");
 
-        const result = yield* awaited(packageManager.resolve());
+        const result = yield* awaited(packageManager.resolution.resolve());
         const skill = result.skills.find((r) => r.path === skillPath);
 
         expect(skill?.metadata.source).toBe("auto");
@@ -107,7 +107,7 @@ const shouldUseEachProjectAgentsDirAs = () =>
         settingsManager,
       });
 
-      const result = yield* awaited(pm.resolve());
+      const result = yield* awaited(pm.resolution.resolve());
       const resolvedRepoSkill = result.skills.find((r) => r.path === repoSkill);
       const resolvedPackageSkill = result.skills.find((r) => r.path === packageSkill);
 

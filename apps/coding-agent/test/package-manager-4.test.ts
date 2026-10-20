@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test"
 
 import DefaultPackageManager from "../src/core/default-package-manager.ts";
 import type packageManagerTypes from "../src/core/package-manager.types.ts";
+import commandRunner from "../src/core/package-manager/command-runner.ts";
 import processEnv from "../src/core/process-env.ts";
 import SettingsManager from "../src/core/settings-manager.ts";
 import type settingsManagerTypes from "../src/core/settings-manager.types.ts";
@@ -67,7 +68,7 @@ const shouldKeepMsaManifestEntriesWithLeading = () =>
         }),
       );
 
-      const result = yield* awaited(packageManager.resolveExtensionSources([pkgDir]));
+      const result = yield* awaited(packageManager.resolution.resolveExtensionSources([pkgDir]));
 
       expect(result.extensions.some((r) => r.path === directExtensionPath && r.enabled)).toBe(true);
       expect(result.extensions.some((r) => r.path === slashExtensionPath && r.enabled)).toBe(true);
@@ -88,7 +89,7 @@ const shouldHandleDirectoriesWithAutoDiscoveryLayout = () =>
       );
       yield* writeTextFile(joinPath(pkgDir, "themes", "dark.json"), "{}");
 
-      const result = yield* awaited(packageManager.resolveExtensionSources([pkgDir]));
+      const result = yield* awaited(packageManager.resolution.resolveExtensionSources([pkgDir]));
       expect(
         result.extensions.some((r) => packagePaths.pathEndsWith(r.path, "main.ts") && r.enabled),
       ).toBe(true);
@@ -111,7 +112,7 @@ const shouldStopRecursingWhenAPackageSkill = () =>
         "---\nname: nested-skill\ndescription: Nested skill\n---\n",
       );
 
-      const result = yield* awaited(packageManager.resolveExtensionSources([pkgDir]));
+      const result = yield* awaited(packageManager.resolution.resolveExtensionSources([pkgDir]));
       expect(result.skills.some((r) => r.path === rootSkill && r.enabled)).toBe(true);
       expect(result.skills.some((r) => r.path === nestedSkill)).toBe(false);
     }),
@@ -121,23 +122,20 @@ const shouldEmitProgressEvents = () =>
   runTest(
     Effect.gen(function* () {
       const events: packageManagerTypes.ProgressEvent[] = [];
-      packageManager.setProgressCallback((event) => events.push(event));
+      packageManager.progress.setProgressCallback((event) => events.push(event));
 
       const extPath = joinPath(tempDir, "ext.ts");
       yield* writeTextFile(extPath, "export default function() {}");
 
-      yield* awaited(packageManager.resolveExtensionSources([extPath]));
+      yield* awaited(packageManager.resolution.resolveExtensionSources([extPath]));
 
       expect(events.length).toBe(0);
     }),
   );
 
 const shouldPreserveArgvEntriesContainingSpaces = () => {
-  const managerWithInternals = packageManager as unknown as {
-    runCommandSync(command: string, args: string[]): string;
-  };
   const valueWithSpace = "C:\\Users\\A B\\.msa\\npm";
-  const output = managerWithInternals.runCommandSync(process.execPath, [
+  const output = commandRunner.runCommandSync(process.execPath, [
     "-e",
     "console.log(process.argv[1])",
     valueWithSpace,

@@ -7,6 +7,9 @@ import type packageManagerTypes from "../src/core/package-manager.types.ts";
 import processEnv from "../src/core/process-env.ts";
 import SettingsManager from "../src/core/settings-manager.ts";
 import type settingsManagerTypes from "../src/core/settings-manager.types.ts";
+import parsedSource from "./parsed-source.ts";
+
+const { asGit } = parsedSource;
 const { readEnv } = processEnv;
 
 const { joinPath, makeDirectory, makeTempDir, removePath, runTest } = testing;
@@ -24,7 +27,7 @@ let previousOfflineEnv: string | undefined;
 const shouldParseHttpsGithubUrlsCorrectly = () =>
   runTest(
     Effect.sync(() => {
-      const parsed = (packageManager as any).parseSource("https://github.com/user/repo");
+      const parsed = asGit(packageManager.sources.parseSource("https://github.com/user/repo"));
       expect(parsed.type).toBe("git");
       expect(parsed.host).toBe("github.com");
       expect(parsed.path).toBe("user/repo");
@@ -35,7 +38,7 @@ const shouldParseHttpsGithubUrlsCorrectly = () =>
 const shouldParseHttpsUrlsWithGitPrefix = () =>
   runTest(
     Effect.sync(() => {
-      const parsed = (packageManager as any).parseSource("git:https://github.com/user/repo");
+      const parsed = asGit(packageManager.sources.parseSource("git:https://github.com/user/repo"));
       expect(parsed.type).toBe("git");
       expect(parsed.host).toBe("github.com");
       expect(parsed.path).toBe("user/repo");
@@ -45,7 +48,9 @@ const shouldParseHttpsUrlsWithGitPrefix = () =>
 const shouldParseHttpsUrlsWithRef = () =>
   runTest(
     Effect.sync(() => {
-      const parsed = (packageManager as any).parseSource("https://github.com/user/repo@v1.2.3");
+      const parsed = asGit(
+        packageManager.sources.parseSource("https://github.com/user/repo@v1.2.3"),
+      );
       expect(parsed.type).toBe("git");
       expect(parsed.host).toBe("github.com");
       expect(parsed.path).toBe("user/repo");
@@ -57,7 +62,7 @@ const shouldParseHttpsUrlsWithRef = () =>
 const shouldParseHostPathShorthandOnlyWith = () =>
   runTest(
     Effect.sync(() => {
-      const parsed = (packageManager as any).parseSource("git:github.com/user/repo");
+      const parsed = asGit(packageManager.sources.parseSource("git:github.com/user/repo"));
       expect(parsed.type).toBe("git");
       expect(parsed.host).toBe("github.com");
       expect(parsed.path).toBe("user/repo");
@@ -67,7 +72,7 @@ const shouldParseHostPathShorthandOnlyWith = () =>
 const shouldTreatHostPathShorthandAsLocal = () =>
   runTest(
     Effect.sync(() => {
-      const parsed = (packageManager as any).parseSource("github.com/user/repo");
+      const parsed = packageManager.sources.parseSource("github.com/user/repo");
       expect(parsed.type).toBe("local");
     }),
   );
@@ -75,7 +80,7 @@ const shouldTreatHostPathShorthandAsLocal = () =>
 const shouldParseHttpsUrlsWithGitSuffix = () =>
   runTest(
     Effect.sync(() => {
-      const parsed = (packageManager as any).parseSource("https://github.com/user/repo.git");
+      const parsed = asGit(packageManager.sources.parseSource("https://github.com/user/repo.git"));
       expect(parsed.type).toBe("git");
       expect(parsed.host).toBe("github.com");
       expect(parsed.path).toBe("user/repo");
@@ -85,7 +90,7 @@ const shouldParseHttpsUrlsWithGitSuffix = () =>
 const shouldParseGitlabHttpsUrls = () =>
   runTest(
     Effect.sync(() => {
-      const parsed = (packageManager as any).parseSource("https://gitlab.com/user/repo");
+      const parsed = asGit(packageManager.sources.parseSource("https://gitlab.com/user/repo"));
       expect(parsed.type).toBe("git");
       expect(parsed.host).toBe("gitlab.com");
       expect(parsed.path).toBe("user/repo");
@@ -95,7 +100,7 @@ const shouldParseGitlabHttpsUrls = () =>
 const shouldParseBitbucketHttpsUrls = () =>
   runTest(
     Effect.sync(() => {
-      const parsed = (packageManager as any).parseSource("https://bitbucket.org/user/repo");
+      const parsed = asGit(packageManager.sources.parseSource("https://bitbucket.org/user/repo"));
       expect(parsed.type).toBe("git");
       expect(parsed.host).toBe("bitbucket.org");
       expect(parsed.path).toBe("user/repo");
@@ -105,7 +110,7 @@ const shouldParseBitbucketHttpsUrls = () =>
 const shouldParseCodebergHttpsUrls = () =>
   runTest(
     Effect.sync(() => {
-      const parsed = (packageManager as any).parseSource("https://codeberg.org/user/repo");
+      const parsed = asGit(packageManager.sources.parseSource("https://codeberg.org/user/repo"));
       expect(parsed.type).toBe("git");
       expect(parsed.host).toBe("codeberg.org");
       expect(parsed.path).toBe("user/repo");
@@ -115,12 +120,12 @@ const shouldParseCodebergHttpsUrls = () =>
 const shouldGenerateCorrectPackageIdentityForProtocol = () =>
   runTest(
     Effect.sync(() => {
-      const identity1 = (packageManager as any).getPackageIdentity("https://github.com/user/repo");
-      const identity2 = (packageManager as any).getPackageIdentity(
+      const identity1 = packageManager.sources.getPackageIdentity("https://github.com/user/repo");
+      const identity2 = packageManager.sources.getPackageIdentity(
         "https://github.com/user/repo@v1.0.0",
       );
-      const identity3 = (packageManager as any).getPackageIdentity("git:github.com/user/repo");
-      const identity4 = (packageManager as any).getPackageIdentity(
+      const identity3 = packageManager.sources.getPackageIdentity("git:github.com/user/repo");
+      const identity4 = packageManager.sources.getPackageIdentity(
         "https://github.com/user/repo.git",
       );
 

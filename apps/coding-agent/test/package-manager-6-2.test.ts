@@ -4,10 +4,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test"
 
 import DefaultPackageManager from "../src/core/default-package-manager.ts";
 import type packageManagerTypes from "../src/core/package-manager.types.ts";
+import commandRunner from "../src/core/package-manager/command-runner.ts";
+import gitRemote from "../src/core/package-manager/git-remote.ts";
 import processEnv from "../src/core/process-env.ts";
 import SettingsManager from "../src/core/settings-manager.ts";
 import type settingsManagerTypes from "../src/core/settings-manager.types.ts";
-import type packageManagerSupportTypes from "./package-manager-support.types.ts";
 const { readEnv } = processEnv;
 
 const {
@@ -51,18 +52,15 @@ const shouldRepairMissingGitPackageDependenciesWhen = Effect.gen(function* () {
     }),
   );
   settingsManager.setPackages([source]);
-
-  const managerWithInternals =
-    packageManager as unknown as packageManagerSupportTypes.PackageManagerInternals;
-  vi.spyOn(managerWithInternals, "getLocalGitUpdateTarget").mockResolvedValue({
+  vi.spyOn(gitRemote, "getLocalGitUpdateTarget").mockResolvedValue({
     fetchArgs,
     head: "current-head",
     ref: "@{upstream}",
   });
-  vi.spyOn(managerWithInternals, "runCommandCapture").mockResolvedValue("current-head");
-  const runCommandSpy = vi.spyOn(managerWithInternals, "runCommand").mockResolvedValue(undefined);
+  vi.spyOn(commandRunner, "runCommandCapture").mockResolvedValue("current-head");
+  const runCommandSpy = vi.spyOn(commandRunner, "runCommand").mockResolvedValue(undefined);
 
-  yield* awaited(packageManager.update(source));
+  yield* awaited(packageManager.operations.updates.update(source));
 
   expect(runCommandSpy).toHaveBeenCalledWith(
     "npm",
@@ -105,28 +103,27 @@ const shouldRepairDeletedGitPackageDependenciesWhen = Effect.gen(function* () {
     }),
   );
   settingsManager.setPackages([source]);
-
-  const managerWithInternals =
-    packageManager as unknown as packageManagerSupportTypes.PackageManagerInternals;
-  vi.spyOn(managerWithInternals, "getLocalGitUpdateTarget").mockResolvedValue({
+  vi.spyOn(gitRemote, "getLocalGitUpdateTarget").mockResolvedValue({
     fetchArgs,
     head: "new-head",
     ref: "@{upstream}",
   });
-  vi.spyOn(managerWithInternals, "runCommandCapture").mockImplementation((_command, args) =>
+  vi.spyOn(commandRunner, "runCommandCapture").mockImplementation((_command, args) =>
     effectRunPromise(awaited(args[1] === "HEAD" ? "old-head" : "new-head")),
   );
-  const runCommandSpy = vi
-    .spyOn(managerWithInternals, "runCommand")
-    .mockImplementation((_command, args) =>
-      effectRunPromise(
-        Effect.sync(() => {
-          if (args[0] === "clean") throw new Error("simulated clean failure");
-        }),
-      ),
-    );
+  const runCommandSpy = vi.spyOn(commandRunner, "runCommand").mockImplementation((_command, args) =>
+    effectRunPromise(
+      Effect.sync(() => {
+        if (args[0] === "clean") throw new Error("simulated clean failure");
+      }),
+    ),
+  );
 
-  yield* awaited(expect(packageManager.update(source)).rejects.toThrow("simulated clean failure"));
+  yield* awaited(
+    expect(packageManager.operations.updates.update(source)).rejects.toThrow(
+      "simulated clean failure",
+    ),
+  );
 
   expect(runCommandSpy).toHaveBeenCalledWith(
     "npm",

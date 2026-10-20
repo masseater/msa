@@ -120,7 +120,7 @@ function handlePackageCommandImpl(
 
       const packageManager = new DefaultPackageManager({ agentDir, cwd, settingsManager });
 
-      packageManager.setProgressCallback((event) => {
+      packageManager.progress.setProgressCallback((event) => {
         if (event.type === "start") {
           process.stdout.write(chalk.dim(`${event.message}\n`));
         }
@@ -129,13 +129,17 @@ function handlePackageCommandImpl(
       try {
         switch (options.command) {
           case "install":
-            yield* awaited(packageManager.installAndPersist(source!, { local: options.local }));
+            yield* awaited(
+              packageManager.operations.install.installAndPersist(source!, {
+                local: options.local,
+              }),
+            );
             writeLog(chalk.green(`Installed ${source}`));
             return true;
 
           case "remove": {
             const removed = yield* awaited(
-              packageManager.removeAndPersist(source!, { local: options.local }),
+              packageManager.operations.install.removeAndPersist(source!, { local: options.local }),
             );
             if (!removed) {
               writeError(chalk.red(`No matching package found for ${source}`));
@@ -147,7 +151,7 @@ function handlePackageCommandImpl(
           }
 
           case "list": {
-            const configuredPackages = packageManager.listConfiguredPackages();
+            const configuredPackages = packageManager.configured.listConfiguredPackages();
             const userPackages = configuredPackages.filter((pkg) => pkg.scope === "user");
             const projectPackages = configuredPackages.filter((pkg) => pkg.scope === "project");
 
@@ -193,7 +197,7 @@ function handlePackageCommandImpl(
             }
             if (updateTargetIncludesExtensions(target)) {
               const updateSource = target.type === "extensions" ? target.source : undefined;
-              yield* awaited(packageManager.update(updateSource));
+              yield* awaited(packageManager.operations.updates.update(updateSource));
               if (updateSource !== undefined && updateSource !== "") {
                 writeLog(chalk.green(`Updated ${updateSource}`));
               } else {

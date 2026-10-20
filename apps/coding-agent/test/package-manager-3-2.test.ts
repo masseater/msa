@@ -53,7 +53,7 @@ const shouldRespectGitignoreInSkillDirectories = () =>
 
       settingsManager.setSkillPaths(["skills"]);
 
-      const result = yield* awaited(packageManager.resolve());
+      const result = yield* awaited(packageManager.resolution.resolve());
       expect(result.skills.some((r) => r.path.includes("good-skill") && r.enabled)).toBe(true);
       expect(result.skills.some((r) => r.path.includes("venv") && r.enabled)).toBe(false);
     }),
@@ -69,7 +69,7 @@ const shouldNotApplyParentGitignoreToMsa = () =>
       const skillPath = joinPath(skillDir, "SKILL.md");
       yield* writeTextFile(skillPath, "---\nname: auto-skill\ndescription: Auto\n---\nContent");
 
-      const result = yield* awaited(packageManager.resolve());
+      const result = yield* awaited(packageManager.resolution.resolve());
       expect(result.skills.some((r) => r.path === skillPath && r.enabled)).toBe(true);
     }),
   );
@@ -80,7 +80,7 @@ const shouldResolveLocalPaths = () =>
       const extPath = joinPath(tempDir, "ext.ts");
       yield* writeTextFile(extPath, "export default function() {}");
 
-      const result = yield* awaited(packageManager.resolveExtensionSources([extPath]));
+      const result = yield* awaited(packageManager.resolution.resolveExtensionSources([extPath]));
       expect(result.extensions.some((r) => r.path === extPath && r.enabled)).toBe(true);
     }),
   );
@@ -108,7 +108,7 @@ const shouldHandleDirectoriesWithMsaManifest = () =>
         "---\nname: my-skill\ndescription: Test\n---\nContent",
       );
 
-      const result = yield* awaited(packageManager.resolveExtensionSources([pkgDir]));
+      const result = yield* awaited(packageManager.resolution.resolveExtensionSources([pkgDir]));
       expect(
         result.extensions.some((r) => r.path === joinPath(pkgDir, "src", "index.ts") && r.enabled),
       ).toBe(true);

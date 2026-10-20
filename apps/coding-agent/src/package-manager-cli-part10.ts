@@ -31,7 +31,7 @@ function* handleConfigCommandImplPart1(
       builtinExtensions,
       cwd,
       settingsManager: globalSettingsManager,
-    }).resolve(),
+    }).resolution.resolve(),
   );
   const projectResolvedPaths = settingsManager.isProjectTrusted()
     ? yield* awaited(
@@ -40,7 +40,7 @@ function* handleConfigCommandImplPart1(
           builtinExtensions,
           cwd,
           settingsManager,
-        }).resolve(),
+        }).resolution.resolve(),
       )
     : globalResolvedPaths;
 

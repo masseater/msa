@@ -70,7 +70,7 @@ const shouldApplyUserFiltersOnTopOf = () =>
         },
       ]);
 
-      const result = yield* awaited(packageManager.resolve());
+      const result = yield* awaited(packageManager.resolution.resolve());
 
       expect(result.extensions.some((r) => packagePaths.isEnabled(r, "foo.ts"))).toBe(true);
 
@@ -110,7 +110,7 @@ const shouldExcludeExtensionsFromPackageWithPattern = () =>
         },
       ]);
 
-      const result = yield* awaited(packageManager.resolve());
+      const result = yield* awaited(packageManager.resolution.resolve());
       expect(result.extensions.some((r) => packagePaths.isEnabled(r, "foo.ts"))).toBe(true);
       expect(result.extensions.some((r) => packagePaths.isEnabled(r, "bar.ts"))).toBe(true);
       expect(result.extensions.some((r) => packagePaths.isDisabled(r, "baz.ts"))).toBe(true);
@@ -135,7 +135,7 @@ const shouldFilterThemesFromPackage = () =>
         },
       ]);
 
-      const result = yield* awaited(packageManager.resolve());
+      const result = yield* awaited(packageManager.resolution.resolve());
       expect(result.themes.some((r) => packagePaths.isEnabled(r, "nice.json"))).toBe(true);
       expect(result.themes.some((r) => packagePaths.isDisabled(r, "ugly.json"))).toBe(true);
     }),
@@ -169,7 +169,7 @@ const shouldCombineIncludeAndExcludePatterns = () =>
         },
       ]);
 
-      const result = yield* awaited(packageManager.resolve());
+      const result = yield* awaited(packageManager.resolution.resolve());
       expect(result.extensions.some((r) => packagePaths.isEnabled(r, "alpha.ts"))).toBe(true);
       expect(result.extensions.some((r) => packagePaths.isDisabled(r, "beta.ts"))).toBe(true);
       expect(result.extensions.some((r) => packagePaths.isDisabled(r, "gamma.ts"))).toBe(true);
