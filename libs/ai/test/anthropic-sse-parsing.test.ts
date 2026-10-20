@@ -3,9 +3,12 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { stream as streamAnthropic } from "../src/api/anthropic-messages.ts";
 import { transformMessages } from "../src/api/transform-messages.ts";
-import { getModel, normalizeContext } from "../src/compat.ts";
+import { normalizeContext } from "../src/compat.ts";
 import type { Api, Model } from "../src/types.ts";
 import anthropicSseParsingSupport from "./anthropic-sse-parsing-support.ts";
+import modelChoice from "./model-choice.ts";
+
+const { chooseModel, usesApi } = modelChoice;
 
 const {
   createFakeAnthropicClient,
@@ -17,7 +20,7 @@ const forwardsParsedProviderStreamEventsIn = () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const effectContext = yield* Effect.context();
-      const model = getModel("anthropic-api", "claude-haiku-4-5");
+      const model = chooseModel("anthropic-api", "Messages", usesApi("anthropic-messages"));
       const providerEvents: unknown[] = [];
       const eventModels: Model<Api>[] = [];
       const result = yield* Effect.promise(() =>
@@ -54,7 +57,7 @@ const forwardsParsedProviderStreamEventsIn = () =>
 const keepsSignedThinkingReplayableWhenA = () =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const model = getModel("anthropic-api", "claude-opus-5");
+      const model = chooseModel("anthropic-api", "Messages", usesApi("anthropic-messages"));
       const responseModel = "kimi-for-coding";
       const initialContext = normalizeContext({
         messages: [{ content: "Hello", role: "user", timestamp: 1 }],

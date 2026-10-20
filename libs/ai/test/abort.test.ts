@@ -1,7 +1,7 @@
 import { Clock, Effect, Exit, Scope, Stream } from "effect";
 import { describe, expect, inject, it } from "vite-plus/test";
 
-import { complete, getModel, stream } from "../src/compat.ts";
+import { complete, stream } from "../src/compat.ts";
 import type {
   Api,
   AssistantMessageEventStream,
@@ -12,7 +12,7 @@ import type {
 import env from "./env.ts";
 import modelChoice from "./model-choice.ts";
 
-const { chooseModel } = modelChoice;
+const { chooseModel, usesApi } = modelChoice;
 
 type StreamOptionsWithExtras = StreamOptions & Record<string, unknown>;
 
@@ -100,7 +100,11 @@ describe("AI Providers Abort Tests", () => {
   describe.skipIf(envValue("OPENAI_API_KEY") === undefined || envValue("OPENAI_API_KEY") === "")(
     "OpenAI Responses Provider Abort",
     () => {
-      const llm = getModel("openai", "gpt-5-mini");
+      const llm = chooseModel(
+        "openai",
+        "reasoning Responses",
+        (model) => usesApi("openai-responses")(model) && model.reasoning,
+      );
 
       it("should abort mid-stream", { retry: 3 }, () => Effect.runPromise(testAbortSignal(llm)));
 
@@ -114,7 +118,7 @@ describe("AI Providers Abort Tests", () => {
 const shouldAbortMidStream = () =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const llm = getModel("openai-codex", "gpt-5.5");
+      const llm = chooseModel("openai-codex", "Codex");
       yield* testAbortSignal(llm, { apiKey: openaiCodexToken });
     }),
   );
@@ -122,7 +126,7 @@ const shouldAbortMidStream = () =>
 const shouldHandleImmediateAbort = () =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const llm = getModel("openai-codex", "gpt-5.5");
+      const llm = chooseModel("openai-codex", "Codex");
       yield* testImmediateAbort(llm, { apiKey: openaiCodexToken });
     }),
   );

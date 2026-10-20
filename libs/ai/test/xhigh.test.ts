@@ -1,13 +1,26 @@
 import { Effect, Stream } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { getModel, stream } from "../src/compat.ts";
+import { stream } from "../src/compat.ts";
 import type { Context, Model } from "../src/types.ts";
 import { currentTimeMillis } from "../src/utils/clock.ts";
 import { nextRandom } from "../src/utils/random.ts";
 import env from "./env.ts";
+import modelChoice from "./model-choice.ts";
+
+const { chooseModel, usesApi } = modelChoice;
 
 const { envValue } = env;
+
+const withoutXhigh = () =>
+  chooseModel(
+    "openai",
+    "reasoning Responses without xhigh",
+    (candidate) =>
+      usesApi("openai-responses")(candidate) &&
+      candidate.reasoning &&
+      candidate.thinkingLevelMap?.xhigh === null,
+  );
 
 function makeContext(): Context {
   return {
@@ -28,7 +41,13 @@ describe.skipIf(envValue("OPENAI_API_KEY") === undefined || envValue("OPENAI_API
       it("should work with openai-responses", () =>
         Effect.runPromise(
           Effect.gen(function* () {
-            const model = getModel("openai", "gpt-5.5");
+            const model = chooseModel(
+              "openai",
+              "xhigh Responses",
+              (candidate) =>
+                usesApi("openai-responses")(candidate) &&
+                typeof candidate.thinkingLevelMap?.xhigh === "string",
+            );
             const s = stream(model, makeContext(), { reasoningEffort: "xhigh" });
             let hasThinking = false;
 
@@ -60,7 +79,7 @@ describe.skipIf(envValue("OPENAI_API_KEY") === undefined || envValue("OPENAI_API
       it("should error with openai-responses when using xhigh", () =>
         Effect.runPromise(
           Effect.gen(function* () {
-            const model = getModel("openai", "gpt-5-mini");
+            const model = withoutXhigh();
             const s = stream(model, makeContext(), { reasoningEffort: "xhigh" });
 
             yield* Stream.fromAsyncIterable(s, (error) => error).pipe(
@@ -77,7 +96,7 @@ describe.skipIf(envValue("OPENAI_API_KEY") === undefined || envValue("OPENAI_API
       it("should error with openai-completions when using xhigh", () =>
         Effect.runPromise(
           Effect.gen(function* () {
-            const { compat: _compat, ...baseModel } = getModel("openai", "gpt-5-mini");
+            const { compat: _compat, ...baseModel } = withoutXhigh();
             void _compat;
             const model: Model<"openai-completions"> = {
               ...baseModel,

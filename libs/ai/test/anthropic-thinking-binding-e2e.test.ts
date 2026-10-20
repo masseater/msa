@@ -2,14 +2,24 @@ import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { stream } from "../src/api/anthropic-messages.ts";
-import { getModel, normalizeContext } from "../src/compat.ts";
+import { normalizeContext } from "../src/compat.ts";
 import type { AssistantMessage, Context } from "../src/types.ts";
 import env from "./env.ts";
+import modelChoice from "./model-choice.ts";
+
+const { chooseModel, compatValue, usesApi } = modelChoice;
 
 const { envValue } = env;
 
 const enabled = Boolean(envValue("ANTHROPIC_API_KEY"));
-const model = getModel("anthropic-api", "claude-fable-5-1");
+const model = chooseModel(
+  "anthropic-api",
+  "managed effort",
+  (candidate) =>
+    usesApi("anthropic-messages")(candidate) &&
+    compatValue(candidate, "supportsMidConvoEffort") === true &&
+    candidate.thinkingLevelMap?.off === null,
+);
 const user = (content: string, timestamp: number) => ({
   content,
   role: "user" as const,

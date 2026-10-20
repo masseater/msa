@@ -1,10 +1,13 @@
 import { Effect, Stream } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { getModel, streamSimple } from "../src/compat.ts";
+import { streamSimple } from "../src/compat.ts";
 import type { Api, Context, Model, SimpleStreamOptions } from "../src/types.ts";
 import { currentTimeMillis } from "../src/utils/clock.ts";
 import env from "./env.ts";
+import modelChoice from "./model-choice.ts";
+
+const { chooseModel, compatValue, usesApi } = modelChoice;
 
 const { envValue } = env;
 
@@ -113,17 +116,37 @@ describe.skipIf(
 )("Anthropic thinking disable E2E", () => {
   it("disables thinking for budget-based reasoning models", { retry: 2, timeout: 30000 }, () =>
     Effect.runPromise(
-      expectThinkingDisabledE2E(getModel("anthropic-api", "claude-sonnet-4-5"), {
-        requestOptions: { maxTokens: 320, temperature: 0 },
-      }),
+      expectThinkingDisabledE2E(
+        chooseModel(
+          "anthropic-api",
+          "budget-based reasoning",
+          (candidate) =>
+            usesApi("anthropic-messages")(candidate) &&
+            candidate.reasoning &&
+            candidate.thinkingLevelMap === undefined,
+        ),
+        {
+          requestOptions: { maxTokens: 320, temperature: 0 },
+        },
+      ),
     ),
   );
 
   it("disables thinking for adaptive reasoning models", { retry: 2, timeout: 30000 }, () =>
     Effect.runPromise(
-      expectThinkingDisabledE2E(getModel("anthropic-api", "claude-sonnet-4-6"), {
-        requestOptions: { maxTokens: 320, temperature: 0 },
-      }),
+      expectThinkingDisabledE2E(
+        chooseModel(
+          "anthropic-api",
+          "adaptive reasoning",
+          (candidate) =>
+            usesApi("anthropic-messages")(candidate) &&
+            compatValue(candidate, "forceAdaptiveThinking") === true &&
+            compatValue(candidate, "supportsMidConvoEffort") !== true,
+        ),
+        {
+          requestOptions: { maxTokens: 320, temperature: 0 },
+        },
+      ),
     ),
   );
 });
@@ -133,9 +156,16 @@ describe.skipIf(envValue("OPENAI_API_KEY") === undefined || envValue("OPENAI_API
   () => {
     it("disables thinking for Responses reasoning models", { retry: 2, timeout: 30000 }, () =>
       Effect.runPromise(
-        expectThinkingDisabledE2E(getModel("openai", "gpt-5.4-mini"), {
-          requestOptions: { temperature: undefined },
-        }),
+        expectThinkingDisabledE2E(
+          chooseModel(
+            "openai",
+            "reasoning Responses",
+            (candidate) => usesApi("openai-responses")(candidate) && candidate.reasoning,
+          ),
+          {
+            requestOptions: { temperature: undefined },
+          },
+        ),
       ),
     );
   },
@@ -144,11 +174,21 @@ describe.skipIf(envValue("OPENAI_API_KEY") === undefined || envValue("OPENAI_API
 describe.skipIf(
   envValue("OPENROUTER_API_KEY") === undefined || envValue("OPENROUTER_API_KEY") === "",
 )("OpenRouter thinking disable E2E", () => {
-  it("disables thinking for Qwen 3.5 reasoning models", { retry: 2, timeout: 30000 }, () =>
+  it("disables thinking for reasoning Completions models", { retry: 2, timeout: 30000 }, () =>
     Effect.runPromise(
-      expectThinkingDisabledE2E(getModel("openrouter", "qwen/qwen3.5-plus-02-15"), {
-        maxOutputTokens: 100,
-      }),
+      expectThinkingDisabledE2E(
+        chooseModel(
+          "openrouter",
+          "reasoning Completions",
+          (candidate) =>
+            usesApi("openai-completions")(candidate) &&
+            candidate.reasoning &&
+            compatValue(candidate, "thinkingFormat") === "openrouter",
+        ),
+        {
+          maxOutputTokens: 100,
+        },
+      ),
     ),
   );
 });

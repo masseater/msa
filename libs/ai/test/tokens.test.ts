@@ -1,12 +1,12 @@
 import { Clock, Effect, Exit, Scope, Stream } from "effect";
 import { describe, expect, inject, it } from "vite-plus/test";
 
-import { getModel, stream } from "../src/compat.ts";
+import { stream } from "../src/compat.ts";
 import type { Api, Context, Model, StreamOptions } from "../src/types.ts";
 import env from "./env.ts";
 import modelChoice from "./model-choice.ts";
 
-const { chooseModel } = modelChoice;
+const { chooseModel, usesApi } = modelChoice;
 
 type StreamOptionsWithExtras = StreamOptions & Record<string, unknown>;
 
@@ -62,7 +62,11 @@ describe("Token Statistics on Abort", () => {
   describe.skipIf(envValue("OPENAI_API_KEY") === undefined || envValue("OPENAI_API_KEY") === "")(
     "OpenAI Responses Provider",
     () => {
-      const llm = getModel("openai", "gpt-5.4-mini");
+      const llm = chooseModel(
+        "openai",
+        "reasoning Responses",
+        (model) => usesApi("openai-responses")(model) && model.reasoning,
+      );
 
       it("should include token stats when aborted mid-stream", { retry: 3, timeout: 30000 }, () =>
         testTokensOnAbort(llm, { reasoningEffort: "low" }),
@@ -75,7 +79,7 @@ describe("Token Statistics on Abort", () => {
   describe.skipIf(
     envValue("ANTHROPIC_API_KEY") === undefined || envValue("ANTHROPIC_API_KEY") === "",
   )("Anthropic Provider", () => {
-    const llm = getModel("anthropic-api", "claude-sonnet-4-6");
+    const llm = chooseModel("anthropic-api", "Messages", usesApi("anthropic-messages"));
 
     it("should include token stats when aborted mid-stream", { retry: 3, timeout: 30000 }, () =>
       testTokensOnAbort(llm),
@@ -86,7 +90,7 @@ describe("Token Statistics on Abort", () => {
 const gpt55ShouldIncludeToken = () =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const llm = getModel("openai-codex", "gpt-5.5");
+      const llm = chooseModel("openai-codex", "Codex");
       yield* Effect.promise(() => testTokensOnAbort(llm, { apiKey: openaiCodexToken }));
     }),
   );

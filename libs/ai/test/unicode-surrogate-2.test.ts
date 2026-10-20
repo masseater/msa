@@ -1,8 +1,10 @@
 import { describe, it } from "vite-plus/test";
 
-import { getModel } from "../src/compat.ts";
 import env from "./env.ts";
+import modelChoice from "./model-choice.ts";
 import unicodeSurrogateSupport from "./unicode-surrogate-support.ts";
+
+const { chooseModel, usesApi } = modelChoice;
 
 const { testEmojiInToolResults, testRealWorldLinkedInData, testUnpairedHighSurrogate } =
   unicodeSurrogateSupport;
@@ -12,7 +14,11 @@ describe("AI Providers Unicode Surrogate Pair Tests", () => {
   describe.skipIf(envValue("OPENAI_API_KEY") === undefined || envValue("OPENAI_API_KEY") === "")(
     "OpenAI Responses Provider Unicode Handling",
     () => {
-      const llm = getModel("openai", "gpt-5-mini");
+      const llm = chooseModel(
+        "openai",
+        "reasoning Responses",
+        (model) => usesApi("openai-responses")(model) && model.reasoning,
+      );
 
       it("should handle emoji in tool results", { retry: 3, timeout: 30000 }, () =>
         testEmojiInToolResults(llm),

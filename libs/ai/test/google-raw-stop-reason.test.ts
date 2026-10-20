@@ -6,10 +6,13 @@ import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 vi.mock("@google/genai", () => import("./google-genai-mock.ts").then((module) => module.default));
 
 import { stream as streamGoogleGenerativeAi } from "../src/api/google-generative-ai.ts";
-import { getModel, normalizeContext } from "../src/compat.ts";
+import { normalizeContext } from "../src/compat.ts";
 import type { Api, Model, StreamOptions } from "../src/types.ts";
 import { currentTimeMillis } from "../src/utils/clock.ts";
 import googleGenAiMockModule from "./google-genai-mock.ts";
+import modelChoice from "./model-choice.ts";
+
+const { chooseModel, usesApi } = modelChoice;
 
 const { googleGenAiMock } = googleGenAiMockModule;
 
@@ -23,6 +26,9 @@ const context = normalizeContext({
   messages: [{ content: "hello", role: "user", timestamp: currentTimeMillis() }],
 });
 
+const googleGenerativeModel = () =>
+  chooseModel("opencode", "Google Generative AI", usesApi("google-generative-ai"));
+
 const captureGoogleHeaders = Effect.fn("captureGoogleHeaders")(function* (
   headers?: Record<string, string>,
 ) {
@@ -30,7 +36,7 @@ const captureGoogleHeaders = Effect.fn("captureGoogleHeaders")(function* (
   googleGenAiMock.finishReason = "STOP";
   googleGenAiMock.includeFunctionCall = false;
   yield* Effect.promise(() =>
-    streamGoogleGenerativeAi(getModel("opencode", "gemini-3-flash"), context, {
+    streamGoogleGenerativeAi(googleGenerativeModel(), context, {
       apiKey: "test-api-key",
       headers,
     }).result(),
@@ -49,7 +55,7 @@ const preservesRawGeminiFinishReasonsFor = () =>
       googleGenAiMock.finishReason = "MALFORMED_FUNCTION_CALL";
       googleGenAiMock.includeFunctionCall = false;
 
-      const stream = streamGoogleGenerativeAi(getModel("opencode", "gemini-3-flash"), context, {
+      const stream = streamGoogleGenerativeAi(googleGenerativeModel(), context, {
         apiKey: "test-api-key",
       });
 
@@ -72,7 +78,7 @@ describe("Google raw stop reasons", () => {
   const adapters = [
     {
       createStream: () =>
-        streamGoogleGenerativeAi(getModel("opencode", "gemini-3-flash"), context, {
+        streamGoogleGenerativeAi(googleGenerativeModel(), context, {
           apiKey: "test-api-key",
         }),
       name: "Google Generative AI",
@@ -182,7 +188,7 @@ describe("Google Generative AI user agent", () => {
 });
 
 function stepStep22() {
-  const googleModel = getModel("opencode", "gemini-3-flash");
+  const googleModel = googleGenerativeModel();
   const adapters = [
     {
       createStream: (onProviderStreamEvent: StreamOptions["onProviderStreamEvent"]) =>

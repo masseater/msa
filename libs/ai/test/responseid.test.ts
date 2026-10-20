@@ -1,12 +1,12 @@
 import { Clock, Effect } from "effect";
 import { describe, expect, inject, it } from "vite-plus/test";
 
-import { complete, getModel } from "../src/compat.ts";
+import { complete } from "../src/compat.ts";
 import type { Api, Context, Model, StreamOptions } from "../src/types.ts";
 import env from "./env.ts";
 import modelChoice from "./model-choice.ts";
 
-const { chooseModel } = modelChoice;
+const { chooseModel, usesApi } = modelChoice;
 
 const { envValue } = env;
 
@@ -58,7 +58,11 @@ describe("responseId E2E Tests", () => {
   describe.skipIf(envValue("OPENAI_API_KEY") === undefined || envValue("OPENAI_API_KEY") === "")(
     "OpenAI Responses Provider",
     () => {
-      const llm = getModel("openai", "gpt-5-mini");
+      const llm = chooseModel(
+        "openai",
+        "reasoning Responses",
+        (model) => usesApi("openai-responses")(model) && model.reasoning,
+      );
 
       it("should expose responseId", { retry: 3, timeout: 30000 }, () =>
         Effect.runPromise(expectResponseId(llm)),
@@ -69,7 +73,7 @@ describe("responseId E2E Tests", () => {
   describe.skipIf(
     envValue("ANTHROPIC_API_KEY") === undefined || envValue("ANTHROPIC_API_KEY") === "",
   )("Anthropic Provider", () => {
-    const llm = getModel("anthropic-api", "claude-sonnet-4-5");
+    const llm = chooseModel("anthropic-api", "Messages", usesApi("anthropic-messages"));
 
     it("should expose responseId", { retry: 3, timeout: 30000 }, () =>
       Effect.runPromise(expectResponseId(llm)),
@@ -85,7 +89,7 @@ describe("responseId E2E Tests", () => {
       () =>
         Effect.runPromise(
           Effect.gen(function* () {
-            const llm = getModel("openai-codex", "gpt-5.5");
+            const llm = chooseModel("openai-codex", "Codex");
             yield* expectResponseId(llm, { apiKey: openaiCodexToken });
           }),
         ),

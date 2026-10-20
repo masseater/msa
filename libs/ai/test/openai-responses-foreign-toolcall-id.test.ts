@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import { convertResponsesMessages } from "../src/api/openai-responses-messages.ts";
-import { getModel, normalizeContext } from "../src/compat.ts";
+import { normalizeContext } from "../src/compat.ts";
 import type { AssistantMessage, ToolResultMessage, Usage } from "../src/types.ts";
 import { currentTimeMillis } from "../src/utils/clock.ts";
 import { shortHash } from "../src/utils/hash.ts";
+import modelChoice from "./model-choice.ts";
+
+const { chooseModel } = modelChoice;
 
 const FOREIGN_RAW_TOOL_CALL_ID =
   "call_4VnzVawQXPB9MgYib7CiQFEY|I9b95oN1wD/cHXKTw3PpRkL6KkCtzTJhUxMouMWYwHeTo2j3htzfSk7YPx2vifiIM4g3A8XXyOj8q4Bt6SLUG7gqY1E3ELkrkVQNHglRfUmWj84lqxJY+Puieb3VKyX0FB+83TUzn91cDMF/4gzt990IzqVrc+nIb9RRscRD070Du16q1glydVjWR0SBJsE6TbY/esOjFpqplogQqrajm1eI++f3eLi73R6q7hVusY0QbeFySVxABCjhN0lXB04caBe1rzHjYzul6MAXj7uq+0r17VLq+yrtyYhN12wkmFqHeqTyEei6EFPbMy24Nc+IbJlkP0OCg02W+gOnyBFcbi2ctvJFSOhSjt1CqBdqCnnhwUqXjbWiT0wh3DmLScRgTHmGkaI+oAcQQjfic65nxj+TnEkReA==";
@@ -41,7 +44,7 @@ describe("OpenAI Responses foreign tool call ID normalization", () => {
 });
 
 function hashesForeignToolItemIDsIntoStep1() {
-  const model = getModel("openai-codex", "gpt-5.5");
+  const model = chooseModel("openai-codex", "Codex");
   const assistant: AssistantMessage = {
     api: "openai-responses",
     content: [

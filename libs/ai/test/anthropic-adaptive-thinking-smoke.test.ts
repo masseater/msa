@@ -1,10 +1,24 @@
 import { Effect, Stream } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { getModel, streamSimple } from "../src/compat.ts";
+import { streamSimple } from "../src/compat.ts";
 import type { Context } from "../src/types.ts";
 import { currentTimeMillis } from "../src/utils/clock.ts";
 import env from "./env.ts";
+import modelChoice from "./model-choice.ts";
+
+const { chooseModel, compatValue, usesApi } = modelChoice;
+
+const adaptiveModel = () =>
+  chooseModel(
+    "anthropic-api",
+    "adaptive thinking without mid-conversation effort",
+    (candidate) =>
+      usesApi("anthropic-messages")(candidate) &&
+      compatValue(candidate, "forceAdaptiveThinking") === true &&
+      compatValue(candidate, "supportsMidConvoEffort") !== true &&
+      candidate.thinkingLevelMap?.off === undefined,
+  );
 
 const { envValue } = env;
 
@@ -29,30 +43,33 @@ function makeContext(): Context {
 
 describe.skipIf(
   envValue("ANTHROPIC_API_KEY") === undefined || envValue("ANTHROPIC_API_KEY") === "",
-)("Anthropic Opus 4.8 smoke", () => {
-  it("streams Claude Opus 4.8 with reasoning enabled", { retry: 2, timeout: 30000 }, () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const { thinkingSignature, response } = yield* streamsClaudeOpus4Step1();
-        if (thinkingSignature === undefined || thinkingSignature === "") {
-          throw new Error("Expected thinking signature from Claude Opus 4.8");
-        }
-        expect(thinkingSignature.length).toBeGreaterThan(0);
+)("Anthropic adaptive thinking smoke", () => {
+  it(
+    "streams an adaptive thinking model with reasoning enabled",
+    { retry: 2, timeout: 30000 },
+    () =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          const { thinkingSignature, response } = yield* streamsAdaptiveThinking();
+          if (thinkingSignature === undefined || thinkingSignature === "") {
+            throw new Error("Expected a thinking signature");
+          }
+          expect(thinkingSignature.length).toBeGreaterThan(0);
 
-        const text = response.content
-          .filter((block) => block.type === "text")
-          .map((block) => block.text)
-          .join("")
-          .trim();
-        expect(text).toBe("sum=353418362; divisibleBy11=yes");
-      }),
-    ),
+          const text = response.content
+            .filter((block) => block.type === "text")
+            .map((block) => block.text)
+            .join("")
+            .trim();
+          expect(text).toBe("sum=353418362; divisibleBy11=yes");
+        }),
+      ),
   );
 });
 
-const streamsClaudeOpus4Step1 = () =>
+const streamsAdaptiveThinking = () =>
   Effect.gen(function* () {
-    const model = getModel("anthropic-api", "claude-opus-4-8");
+    const model = adaptiveModel();
     let capturedPayload: AnthropicThinkingPayload | undefined;
     const s = streamSimple(model, makeContext(), {
       maxTokens: 1024,

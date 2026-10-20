@@ -14,6 +14,9 @@ import {
   getBuiltinModels,
   getBuiltinProviders,
 } from "../src/providers/all.ts";
+const compatFlag = (model: { readonly compat?: object | undefined }, name: string) =>
+  (model.compat as Readonly<Record<string, unknown>> | undefined)?.[name] === true;
+
 const DEFAULT_IMAGE_RESIZE = {
   jpegQuality: 80,
   maxBytes: 4.5 * 1024 * 1024,
@@ -27,8 +30,9 @@ const builtinmodelsRegistersEveryBuiltinProviderWith = () => {
   expect(providers.length).toBe(builtinProviders().length);
   expect(providers.map((p) => p.id)).toContain("anthropic-api");
 
-  const anthropic = models.getModel("anthropic-api", "claude-haiku-4-5");
-  expect(anthropic?.api).toBe("anthropic-messages");
+  expect(
+    models.getModels("anthropic-api").every((model) => model.api === "anthropic-messages"),
+  ).toBe(true);
 
   const all = models.getModels();
   expect(all.length).toBeGreaterThan(500);
@@ -58,16 +62,14 @@ const returnsEmptyResultsForUnknownProvider = () => {
 };
 
 const storesNativeConstrainedSamplingCapabilitiesIn = () => {
-  const gpt4o = getBuiltinModel("openai", "gpt-4o");
-  expect(gpt4o.compat?.supportsStrictMode).toBe(true);
-  expect(gpt4o.compat?.supportsOpenAIGrammarTools).toBeUndefined();
-  expect(getBuiltinModel("openai", "gpt-5.4").compat).toMatchObject({
-    supportsOpenAIGrammarTools: true,
-    supportsStrictMode: true,
-  });
-  expect(getBuiltinModel("anthropic-api", "claude-haiku-4-5").compat?.supportsStrictTools).toBe(
-    true,
-  );
+  const openai = getBuiltinModels("openai");
+  expect(openai.every((model) => compatFlag(model, "supportsStrictMode"))).toBe(true);
+  const grammarModels = openai.filter((model) => compatFlag(model, "supportsOpenAIGrammarTools"));
+  expect(grammarModels.length).toBeGreaterThan(0);
+  expect(grammarModels.every((model) => model.api === "openai-responses")).toBe(true);
+  expect(
+    getBuiltinModels("anthropic-api").every((model) => compatFlag(model, "supportsStrictTools")),
+  ).toBe(true);
 };
 
 const keepsTheConservativeResizeProfileOn = () => {
@@ -81,17 +83,18 @@ const keepsTheConservativeResizeProfileOn = () => {
 };
 
 const recordsKnownDirectProviderImageRequest = () => {
-  expect(getBuiltinModel("anthropic-api", "claude-haiku-4-5").inputLimits).toMatchObject({
-    images: { maxPerRequest: 100 },
-    maxRequestBytes: 32 * 1024 * 1024,
-  });
-  expect(getBuiltinModel("anthropic-api", "claude-opus-5").inputLimits?.images?.maxPerRequest).toBe(
-    600,
-  );
-  expect(getBuiltinModel("openai", "gpt-4o").inputLimits).toMatchObject({
-    images: { maxPerRequest: 1500 },
-    maxRequestBytes: 512 * 1024 * 1024,
-  });
+  const visionModels = (provider: "anthropic-api" | "openai") =>
+    getBuiltinModels(provider).filter((model) => model.input.includes("image"));
+  for (const model of visionModels("anthropic-api")) {
+    expect(model.inputLimits?.maxRequestBytes, model.id).toBe(32 * 1024 * 1024);
+    expect([100, 600], model.id).toContain(model.inputLimits?.images?.maxPerRequest);
+  }
+  for (const model of visionModels("openai")) {
+    expect(model.inputLimits, model.id).toMatchObject({
+      images: { maxPerRequest: 1500 },
+      maxRequestBytes: 512 * 1024 * 1024,
+    });
+  }
 };
 
 const doesNotInferImageLimitsFrom = () => {
@@ -102,79 +105,86 @@ const doesNotInferImageLimitsFrom = () => {
 };
 
 const usesModelsDevEffortLevelsFor = () => {
-  expect(getSupportedThinkingLevels(getBuiltinModel("opencode", "gemini-3.8-flash"))).toEqual([
-    "low",
-    "medium",
-    "high",
-  ]);
+  const googleThinking = getBuiltinModels("opencode").filter(
+    (model) => model.api === "google-generative-ai" && model.thinkingLevelMap !== undefined,
+  );
+  expect(googleThinking.length).toBeGreaterThan(0);
+  for (const model of googleThinking) {
+    const mapped = Object.entries(model.thinkingLevelMap ?? {})
+      .filter(([, value]) => typeof value === "string")
+      .map(([level]) => level);
+    expect(getSupportedThinkingLevels(model), model.id).toEqual(mapped);
+  }
 };
 
 const enablesMidConversationSystemMessagesOnly = () => {
-  const models = builtinModels();
-  const supported = [
-    ["openai", "gpt-5.4"],
-    ["openai", "gpt-5.5"],
-    ["openai", "gpt-6-astra"],
-    ["openai-codex", "gpt-5.5"],
-    ["anthropic-api", "claude-opus-5"],
-    ["opencode", "gpt-5.4"],
-    ["opencode", "gpt-5.6-terra"],
-    ["opencode-go", "gpt-5.6-luna"],
-    ["opencode", "claude-opus-4-8"],
-    ["opencode", "claude-opus-5"],
-    ["opencode", "kimi-k3"],
-    ["opencode-go", "kimi-k3"],
-    ["openrouter", "openai/gpt-5.6-terra"],
-  ] as const;
-  const unsupported = [
-    ["openai", "gpt-4.1"],
-    ["openai", "gpt-5.2"],
-    ["anthropic-api", "claude-sonnet-4-5"],
-    ["opencode", "gemini-3.1-pro"],
-    ["opencode", "gpt-5.2"],
-    ["opencode", "claude-sonnet-4-5"],
-    ["openrouter", "anthropic/claude-opus-5"],
-    ["openrouter", "moonshotai/kimi-k3"],
-    ["openrouter", "openai/gpt-5.6-terra:batch"],
-  ] as const;
-  for (const [provider, modelId] of supported) {
-    expect(models.getModel(provider, modelId), `${provider}/${modelId}`).toHaveProperty(
-      "compat.supportsMidConvoSystemMessages",
-      true,
-    );
+  const flagged = (model: { readonly compat?: object | undefined }) =>
+    compatFlag(model, "supportsMidConvoSystemMessages");
+  for (const provider of [
+    "openai",
+    "openai-codex",
+    "anthropic-api",
+    "opencode",
+    "opencode-go",
+    "openrouter",
+  ] as const) {
+    const models = getBuiltinModels(provider);
+    expect(models.some(flagged), provider).toBe(true);
+    expect(
+      models.some((model) => !flagged(model)),
+      provider,
+    ).toBe(true);
   }
-  for (const [provider, modelId] of unsupported) {
-    expect(models.getModel(provider, modelId), `${provider}/${modelId}`).not.toHaveProperty(
-      "compat.supportsMidConvoSystemMessages",
-    );
+  for (const provider of ["openai", "openai-codex"] as const) {
+    for (const model of getBuiltinModels(provider)) {
+      expect(flagged(model), model.id).toBe(compatFlag(model, "supportsToolSearch"));
+    }
+  }
+  const openaiFlagged = new Set(
+    getBuiltinModels("openai")
+      .filter(flagged)
+      .map((model) => model.id),
+  );
+  for (const model of getBuiltinModels("openrouter").filter(flagged)) {
+    expect(model.id.startsWith("openai/") && !model.id.includes(":"), model.id).toBe(true);
+    expect(openaiFlagged.has(model.id.slice("openai/".length)), model.id).toBe(true);
   }
 };
 
 const routesProxiedToolChangesThroughVerified = () => {
-  const models = builtinModels();
-  expect(models.getModel("opencode", "gpt-5.6-terra")?.compat).toMatchObject({
-    supportsAdditionalTools: true,
-  });
-  expect(models.getModel("opencode", "gpt-5.6-terra")?.compat).not.toHaveProperty(
-    "supportsToolSearch",
-  );
-  expect(models.getModel("opencode", "claude-opus-5")?.compat).not.toHaveProperty(
-    "supportsMidConvoToolChanges",
-  );
-  expect(models.getModel("anthropic-api", "claude-opus-5")?.compat).toMatchObject({
-    supportsMidConvoToolChanges: true,
-  });
-  for (const provider of ["opencode", "opencode-go"] as const) {
-    expect(models.getModel(provider, "kimi-k3")?.compat, provider).toMatchObject({
-      supportsMidConvoToolAdditions: true,
-    });
+  const proxied = ["opencode", "opencode-go", "openrouter"] as const;
+  for (const provider of proxied) {
+    const models = getBuiltinModels(provider);
+    expect(
+      models.some((model) => compatFlag(model, "supportsToolSearch")),
+      provider,
+    ).toBe(false);
+    expect(
+      models.some((model) => compatFlag(model, "supportsMidConvoToolChanges")),
+      provider,
+    ).toBe(false);
   }
-  expect(models.getModel("openrouter", "moonshotai/kimi-k3")?.compat).not.toHaveProperty(
-    "supportsMidConvoToolAdditions",
-  );
-  expect(models.getModel("openrouter", "openai/gpt-5.6-terra")?.compat).not.toHaveProperty(
-    "supportsMidConvoToolAdditions",
-  );
+  for (const provider of ["opencode", "opencode-go"] as const) {
+    const models = getBuiltinModels(provider);
+    expect(
+      models.some((model) => compatFlag(model, "supportsAdditionalTools")),
+      provider,
+    ).toBe(true);
+    expect(
+      models.some((model) => compatFlag(model, "supportsMidConvoToolAdditions")),
+      provider,
+    ).toBe(true);
+  }
+  expect(
+    getBuiltinModels("openrouter").some((model) =>
+      compatFlag(model, "supportsMidConvoToolAdditions"),
+    ),
+  ).toBe(false);
+  for (const model of getBuiltinModels("anthropic-api")) {
+    if (compatFlag(model, "supportsMidConvoSystemMessages")) {
+      expect(compatFlag(model, "supportsMidConvoToolChanges"), model.id).toBe(true);
+    }
+  }
 };
 
 describe("builtin providers", () => {

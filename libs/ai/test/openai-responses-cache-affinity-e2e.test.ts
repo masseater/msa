@@ -1,9 +1,12 @@
 import { Clock, Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { complete, getModel } from "../src/compat.ts";
+import { complete } from "../src/compat.ts";
 import type { Context } from "../src/types.ts";
 import env from "./env.ts";
+import modelChoice from "./model-choice.ts";
+
+const { chooseModel, usesApi } = modelChoice;
 
 const { envValue } = env;
 
@@ -16,7 +19,11 @@ describe.skipIf(envValue("OPENAI_API_KEY") === undefined || envValue("OPENAI_API
       () =>
         Effect.runPromise(
           Effect.gen(function* () {
-            const model = getModel("openai", "gpt-5.4");
+            const model = chooseModel(
+              "openai",
+              "reasoning Responses",
+              (candidate) => usesApi("openai-responses")(candidate) && candidate.reasoning,
+            );
             const sessionId = "0195d6e4-4cf9-7f44-a2d8-f8f7f49ee9d3";
             const context: Context = {
               messages: [

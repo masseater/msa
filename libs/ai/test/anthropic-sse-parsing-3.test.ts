@@ -3,8 +3,11 @@ import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { stream as streamAnthropic } from "../src/api/anthropic-messages.ts";
-import { getModel, normalizeContext } from "../src/compat.ts";
+import { normalizeContext } from "../src/compat.ts";
 import anthropicSseParsingSupport from "./anthropic-sse-parsing-support.ts";
+import modelChoice from "./model-choice.ts";
+
+const { chooseModel, usesApi } = modelChoice;
 
 const { createSseResponse, minimalAnthropicEvents } = anthropicSseParsingSupport;
 
@@ -27,7 +30,7 @@ const forcesStreamingAfterAnOnPayloadReplacement = () =>
 
       yield* Effect.promise(() =>
         streamAnthropic(
-          getModel("anthropic-api", "claude-fable-5-1"),
+          chooseModel("anthropic-api", "Messages", usesApi("anthropic-messages")),
           normalizeContext({ messages: [{ content: "Hello", role: "user", timestamp: 1 }] }),
           {
             client,
@@ -59,7 +62,7 @@ const omitsTheInterleavedThinkingBetaWhen = () =>
 
       yield* Effect.promise(() =>
         streamAnthropic(
-          getModel("openrouter", "anthropic/claude-haiku-4.5"),
+          chooseModel("openrouter", "Messages", usesApi("anthropic-messages")),
           normalizeContext({ messages: [{ content: "Hello", role: "user", timestamp: 1 }] }),
           { client, thinkingEnabled: false },
         ).result(),
@@ -88,7 +91,7 @@ const passesManagedBetaFeaturesToInjected = () =>
 
       const result = yield* Effect.promise(() =>
         streamAnthropic(
-          getModel("anthropic-api", "claude-fable-5-1"),
+          chooseModel("anthropic-api", "Messages", usesApi("anthropic-messages")),
           normalizeContext({ messages: [{ content: "Hello", role: "user", timestamp: 1 }] }),
           { client },
         ).result(),

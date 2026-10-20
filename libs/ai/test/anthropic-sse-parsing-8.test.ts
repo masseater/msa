@@ -2,8 +2,11 @@ import { Clock, Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { stream as streamAnthropic } from "../src/api/anthropic-messages.ts";
-import { getModel, normalizeContext } from "../src/compat.ts";
+import { normalizeContext } from "../src/compat.ts";
 import anthropicSseParsingSupport from "./anthropic-sse-parsing-support.ts";
+import modelChoice from "./model-choice.ts";
+
+const { chooseModel, usesApi } = modelChoice;
 
 const { createFakeAnthropicClient, createSseResponse, minimalAnthropicEvents } =
   anthropicSseParsingSupport;
@@ -11,7 +14,7 @@ const { createFakeAnthropicClient, createSseResponse, minimalAnthropicEvents } =
 const treatsMessageDeltaWithoutUsageAs = () =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const model = getModel("anthropic-api", "claude-haiku-4-5");
+      const model = chooseModel("anthropic-api", "Messages", usesApi("anthropic-messages"));
       const context = normalizeContext({
         messages: [
           { content: "Say hello.", role: "user", timestamp: yield* Clock.currentTimeMillis },
@@ -47,7 +50,7 @@ const treatsMessageDeltaWithoutUsageAs = () =>
 const ignoresUnknownSSEEventsAfterMessage = () =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const model = getModel("anthropic-api", "claude-haiku-4-5");
+      const model = chooseModel("anthropic-api", "Messages", usesApi("anthropic-messages"));
       const context = normalizeContext({
         messages: [
           { content: "Say hello.", role: "user", timestamp: yield* Clock.currentTimeMillis },

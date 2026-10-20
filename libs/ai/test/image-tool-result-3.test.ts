@@ -1,9 +1,11 @@
 import { Effect } from "effect";
 import { describe, it } from "vite-plus/test";
 
-import { getModel } from "../src/compat.ts";
 import env from "./env.ts";
 import imageToolResultSupport from "./image-tool-result-support.ts";
+import modelChoice from "./model-choice.ts";
+
+const { chooseModel, usesApi } = modelChoice;
 
 const { handleToolWithImageResult, handleToolWithTextAndImageResult } = imageToolResultSupport;
 const { envValue } = env;
@@ -12,7 +14,11 @@ describe("Tool Results with Images", () => {
   describe.skipIf(
     envValue("ANTHROPIC_API_KEY") === undefined || envValue("ANTHROPIC_API_KEY") === "",
   )("Anthropic Provider (claude-haiku-4-5)", () => {
-    const model = getModel("anthropic-api", "claude-haiku-4-5");
+    const model = chooseModel(
+      "anthropic-api",
+      "vision Messages",
+      (candidate) => usesApi("anthropic-messages")(candidate) && candidate.input.includes("image"),
+    );
 
     it("should handle tool result with only image", { retry: 3, timeout: 30000 }, () =>
       Effect.runPromise(handleToolWithImageResult(model)),
@@ -25,8 +31,12 @@ describe("Tool Results with Images", () => {
 
   describe.skipIf(
     envValue("OPENROUTER_API_KEY") === undefined || envValue("OPENROUTER_API_KEY") === "",
-  )("OpenRouter Provider (glm-4.5v)", () => {
-    const llm = getModel("openrouter", "z-ai/glm-4.5v");
+  )("OpenRouter Provider (vision Completions)", () => {
+    const llm = chooseModel(
+      "openrouter",
+      "vision Completions",
+      (candidate) => usesApi("openai-completions")(candidate) && candidate.input.includes("image"),
+    );
 
     it("should handle tool result with only image", { retry: 3, timeout: 30000 }, () =>
       Effect.runPromise(handleToolWithImageResult(llm)),

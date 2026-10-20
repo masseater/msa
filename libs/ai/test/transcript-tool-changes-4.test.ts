@@ -1,9 +1,11 @@
 import { Effect } from "effect";
 import { describe, expect, test } from "vite-plus/test";
 
-import { getModel } from "../src/compat.ts";
 import type { Model } from "../src/types.ts";
+import modelChoice from "./model-choice.ts";
 import transcriptToolChangesSupport from "./transcript-tool-changes-support.ts";
+
+const { chooseModel, compatValue, usesApi } = modelChoice;
 
 const { additionContext, capturePayload, context, modelBase } = transcriptToolChangesSupport;
 
@@ -16,7 +18,13 @@ const keepsOpenRouterKimiK3AdditionsIn = () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const payload = yield* capturePayload<KimiPayload>(
-        getModel("openrouter", "moonshotai/kimi-k3"),
+        chooseModel(
+          "openrouter",
+          "Completions without mid-conversation tool changes",
+          (candidate) =>
+            usesApi("openai-completions")(candidate) &&
+            compatValue(candidate, "supportsMidConvoToolChanges") !== true,
+        ),
         additionContext,
       );
 
@@ -86,22 +94,28 @@ const foldsOpenAICompatibleUpdatesIntoThe = () =>
   );
 
 describe("transcript system messages", () => {
-  test.each(["opencode", "opencode-go"] as const)("anchors additions for %s Kimi K3", (provider) =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const payload = yield* capturePayload<KimiPayload>(
-          getModel(provider, "kimi-k3"),
-          additionContext,
-        );
+  test.each(["opencode", "opencode-go"] as const)(
+    "anchors additions for %s mid-conversation tool additions",
+    (provider) =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          const payload = yield* capturePayload<KimiPayload>(
+            chooseModel(
+              provider,
+              "mid-conversation tool additions",
+              (candidate) => compatValue(candidate, "supportsMidConvoToolAdditions") === true,
+            ),
+            additionContext,
+          );
 
-        expect(payload.tools?.map((value) => value.function?.name)).toEqual(["base_tool"]);
-        expect(
-          payload.messages
-            .find((message) => message.tools)
-            ?.tools?.map((value) => value.function?.name),
-        ).toEqual(["late_tool"]);
-      }),
-    ),
+          expect(payload.tools?.map((value) => value.function?.name)).toEqual(["base_tool"]);
+          expect(
+            payload.messages
+              .find((message) => message.tools)
+              ?.tools?.map((value) => value.function?.name),
+          ).toEqual(["late_tool"]);
+        }),
+      ),
   );
 
   test("keeps OpenRouter Kimi K3 additions in top-level tools", keepsOpenRouterKimiK3AdditionsIn);

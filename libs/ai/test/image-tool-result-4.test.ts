@@ -1,8 +1,10 @@
 import { Effect } from "effect";
 import { describe, inject, it } from "vite-plus/test";
 
-import { getModel } from "../src/compat.ts";
 import imageToolResultSupport from "./image-tool-result-support.ts";
+import modelChoice from "./model-choice.ts";
+
+const { chooseModel } = modelChoice;
 
 const { handleToolWithImageResult, handleToolWithTextAndImageResult } = imageToolResultSupport;
 const openaiCodexToken = inject("storedApiKeys")["openai-codex"];
@@ -10,7 +12,9 @@ const openaiCodexToken = inject("storedApiKeys")["openai-codex"];
 const gpt55ShouldHandleTool = () =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const llm = getModel("openai-codex", "gpt-5.5");
+      const llm = chooseModel("openai-codex", "vision Codex", (model) =>
+        model.input.includes("image"),
+      );
       yield* handleToolWithImageResult(llm, { apiKey: openaiCodexToken });
     }),
   );
@@ -18,7 +22,9 @@ const gpt55ShouldHandleTool = () =>
 const gpt55ShouldHandleTool2 = () =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const llm = getModel("openai-codex", "gpt-5.5");
+      const llm = chooseModel("openai-codex", "vision Codex", (model) =>
+        model.input.includes("image"),
+      );
       yield* handleToolWithTextAndImageResult(llm, { apiKey: openaiCodexToken });
     }),
   );

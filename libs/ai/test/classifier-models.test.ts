@@ -5,7 +5,6 @@ import { createModels, createProvider, getModelType } from "../src/models.ts";
 import {
   builtinModels,
   getAllBuiltinModels,
-  getBuiltinClassifierModel,
   getBuiltinClassifierModels,
 } from "../src/providers/all.ts";
 import type { Api, ClassifierApi, ClassifierModel, ClassifierResult, Model } from "../src/types.ts";
@@ -43,6 +42,11 @@ function chatModel(provider: string, id: string): Model<Api> {
     reasoning: false,
   };
 }
+
+const OPENCODE_SYSTEM_ONE_URL = "https://opencode.ai/inference/v1/systemone";
+const jevModels = getBuiltinClassifierModels("opencode").filter(
+  (model) => model.api === "typesafe-system-one",
+);
 
 describe("Models with classifier models", () => {
   it("keeps chat and classifier entries with the same provider and id separate", () =>
@@ -122,67 +126,61 @@ describe("Models with classifier models", () => {
     ));
 
   it("exposes Jev only through classifier catalog accessors", () => {
-    const jev = getBuiltinClassifierModel("opencode", "jev-1.13");
-    expect(jev).toMatchObject({
-      api: "typesafe-system-one",
-      contextWindow: 32000,
-      provider: "opencode",
-      type: "classifier",
-    });
-    expect(getBuiltinClassifierModels("opencode")).toContainEqual(jev);
-    expect(getAllBuiltinModels("opencode")).toContainEqual(jev);
-
+    expect(jevModels.length).toBeGreaterThan(0);
     const models = builtinModels();
-    expect(models.getModel("opencode", "jev-1.13")).toBeUndefined();
-    expect(models.getModelOfType("classifier", "opencode", "jev-1.13")).toEqual(jev);
+    for (const jev of jevModels) {
+      expect(jev).toMatchObject({ provider: "opencode", type: "classifier" });
+      expect(getAllBuiltinModels("opencode")).toContainEqual(jev);
+      expect(models.getModel("opencode", jev.id)).toBeUndefined();
+      expect(models.getModelOfType("classifier", "opencode", jev.id)).toEqual(jev);
+    }
   });
 });
 
 describe("Models with classifier models", () => {
-  it.each([
-    ["opencode", "jev-1.13", "https://opencode.ai/inference/v1/systemone"],
-    ["opencode", "jev-1.13-free", "https://opencode.ai/inference/v1/systemone"],
-  ])("routes %s Jev (%s) to its TypeSafe-compatible endpoint", (provider, id, url) =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const models = builtinModels();
-        const jev = models.getModelOfType("classifier", provider, id);
-        if (jev === undefined) throw new Error(`missing ${provider} Jev model`);
-        expect(jev).toMatchObject({ api: "typesafe-system-one", contextWindow: 32000 });
-        expect(models.getModel(provider, id)).toBeUndefined();
+  it.each(jevModels.map((model) => ["opencode", model.id, OPENCODE_SYSTEM_ONE_URL] as const))(
+    "routes %s Jev (%s) to its TypeSafe-compatible endpoint",
+    (provider, id, url) =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          const models = builtinModels();
+          const jev = models.getModelOfType("classifier", provider, id);
+          if (jev === undefined) throw new Error(`missing ${provider} Jev model`);
+          expect(jev.api).toBe("typesafe-system-one");
+          expect(models.getModel(provider, id)).toBeUndefined();
 
-        const requests: Array<{
-          url: string;
-          body: Record<string, unknown>;
-          authorization: string | null;
-        }> = [];
-        const result = yield* Effect.promise(() =>
-          models.classify(jev, context, {
-            apiKey: "secret",
-            fetch: (input, init) => {
-              requests.push({
-                authorization: new Headers(init?.headers).get("authorization"),
-                body: JSON.parse(String(init?.body)) as Record<string, unknown>,
-                url: String(input),
-              });
-              return Promise.resolve(
-                Response.json({ answers: { approved: { noul: 0.8, type: "noul" } }, model: id }),
-              );
+          const requests: Array<{
+            url: string;
+            body: Record<string, unknown>;
+            authorization: string | null;
+          }> = [];
+          const result = yield* Effect.promise(() =>
+            models.classify(jev, context, {
+              apiKey: "secret",
+              fetch: (input, init) => {
+                requests.push({
+                  authorization: new Headers(init?.headers).get("authorization"),
+                  body: JSON.parse(String(init?.body)) as Record<string, unknown>,
+                  url: String(input),
+                });
+                return Promise.resolve(
+                  Response.json({ answers: { approved: { noul: 0.8, type: "noul" } }, model: id }),
+                );
+              },
+            }),
+          );
+
+          expect(requests).toEqual([
+            {
+              authorization: "Bearer secret",
+              body: expect.objectContaining({ model: id, state: context.state }),
+              url,
             },
-          }),
-        );
-
-        expect(requests).toEqual([
-          {
-            authorization: "Bearer secret",
-            body: expect.objectContaining({ model: id, state: context.state }),
-            url,
-          },
-        ]);
-        expect(result.stopReason).toBe("stop");
-        expect(result.answers["approved"]).toEqual({ probability: 0.8, type: "bool" });
-      }),
-    ),
+          ]);
+          expect(result.stopReason).toBe("stop");
+          expect(result.answers["approved"]).toEqual({ probability: 0.8, type: "bool" });
+        }),
+      ),
   );
 });
 

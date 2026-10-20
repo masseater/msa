@@ -1,12 +1,14 @@
 import { Data, Effect, Stream } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { getModel, streamSimple } from "../src/compat.ts";
+import { streamSimple } from "../src/compat.ts";
 import type { Context, Model, SimpleStreamOptions } from "../src/types.ts";
 import { currentTimeMillis } from "../src/utils/clock.ts";
 import env from "./env.ts";
+import modelChoice from "./model-choice.ts";
 
 const { envValue } = env;
+const { chooseModel, compatValue, modelsWhere, usesApi } = modelChoice;
 
 interface AnthropicThinkingPayload {
   thinking?: { type: string; budget_tokens?: number; display?: string };
@@ -119,86 +121,75 @@ function runWithoutReasoning(model: Model<"anthropic-messages">): Promise<RunRes
   );
 }
 
-describe("Anthropic thinking disable payload", () => {
-  it("sends thinking.type=disabled for budget-based reasoning models when thinking is off", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const payload = yield* capturePayload(getModel("anthropic-api", "claude-sonnet-4-5"));
+const anthropicMessages = (accepts: (model: Model<"anthropic-messages">) => boolean) =>
+  modelsWhere(
+    "anthropic-api",
+    (model) =>
+      usesApi("anthropic-messages")(model) &&
+      model.reasoning &&
+      accepts(model as Model<"anthropic-messages">),
+  ) as Model<"anthropic-messages">[];
 
-        expect(payload.thinking).toEqual({ type: "disabled" });
-        expect(payload.output_config).toBeUndefined();
-      }),
-    ));
+const adaptive = (model: Model<"anthropic-messages">) =>
+  compatValue(model, "forceAdaptiveThinking") === true &&
+  compatValue(model, "supportsMidConvoEffort") !== true;
+const offMapping = (model: Model<"anthropic-messages">) =>
+  (model.thinkingLevelMap as Record<string, string | null> | undefined)?.["off"];
 
-  it("sends thinking.type=disabled for adaptive reasoning models when thinking is off", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const payload = yield* capturePayload(getModel("anthropic-api", "claude-opus-4-6"));
+const disablesThinkingWhenOff = (model: Model<"anthropic-messages">) =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const payload = yield* capturePayload(model);
+      expect(payload.thinking).toEqual({ type: "disabled" });
+      expect(payload.output_config).toBeUndefined();
+    }),
+  );
 
-        expect(payload.thinking).toEqual({ type: "disabled" });
-        expect(payload.output_config).toBeUndefined();
-      }),
-    ));
+const omitsThinkingWhenOffIsUnsupported = (model: Model<"anthropic-messages">) =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const payload = yield* capturePayload(model);
+      expect(payload.thinking).toBeUndefined();
+      expect(payload.output_config).toBeUndefined();
+    }),
+  );
 
-  it("sends thinking.type=disabled for Claude Opus 4.8 when thinking is off", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const payload = yield* capturePayload(getModel("anthropic-api", "claude-opus-4-8"));
-
-        expect(payload.thinking).toEqual({ type: "disabled" });
-        expect(payload.output_config).toBeUndefined();
-      }),
-    ));
-
-  it("omits thinking.type=disabled for Claude Fable 5 when thinking is off", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const payload = yield* capturePayload(getModel("anthropic-api", "claude-fable-5"));
-
-        expect(payload.thinking).toBeUndefined();
-        expect(payload.output_config).toBeUndefined();
-      }),
-    ));
-});
-
-describe("Anthropic thinking disable payload", () => {
-  it("uses adaptive thinking for Claude Opus 4.8 when reasoning is enabled", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const payload = yield* capturePayload(getModel("anthropic-api", "claude-opus-4-8"), {
-          reasoning: "high",
-        });
-
-        expect(payload.thinking).toEqual({ display: "summarized", type: "adaptive" });
-        expect(payload.output_config).toEqual({ effort: "high" });
-      }),
-    ));
-});
+const usesAdaptiveEffort = (reasoning: "high" | "xhigh") => (model: Model<"anthropic-messages">) =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const payload = yield* capturePayload(model, { reasoning });
+      expect(payload.thinking).toEqual({ display: "summarized", type: "adaptive" });
+      expect(payload.output_config).toEqual({ effort: reasoning });
+    }),
+  );
 
 describe("Anthropic thinking disable payload", () => {
-  it("uses adaptive thinking for Claude Sonnet 5 when reasoning is enabled", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const payload = yield* capturePayload(getModel("anthropic-api", "claude-sonnet-5"), {
-          reasoning: "high",
-        });
-
-        expect(payload.thinking).toEqual({ display: "summarized", type: "adaptive" });
-        expect(payload.output_config).toEqual({ effort: "high" });
-      }),
-    ));
-
-  it("maps xhigh reasoning to effort=xhigh for Claude Opus 4.8", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const payload = yield* capturePayload(getModel("anthropic-api", "claude-opus-4-8"), {
-          reasoning: "xhigh",
-        });
-
-        expect(payload.thinking).toEqual({ display: "summarized", type: "adaptive" });
-        expect(payload.output_config).toEqual({ effort: "xhigh" });
-      }),
-    ));
+  it.for(anthropicMessages((model) => model.thinkingLevelMap === undefined))(
+    "sends thinking.type=disabled for budget-based $id when thinking is off",
+    disablesThinkingWhenOff,
+  );
+  it.for(anthropicMessages((model) => adaptive(model) && offMapping(model) !== null))(
+    "sends thinking.type=disabled for adaptive $id when thinking is off",
+    disablesThinkingWhenOff,
+  );
+  it.for(
+    anthropicMessages(
+      (model) =>
+        offMapping(model) === null && compatValue(model, "supportsMidConvoEffort") !== true,
+    ),
+  )(
+    "omits thinking.type=disabled for $id, which cannot turn thinking off",
+    omitsThinkingWhenOffIsUnsupported,
+  );
+  it.for(anthropicMessages(adaptive))(
+    "uses adaptive thinking for $id when reasoning is enabled",
+    usesAdaptiveEffort("high"),
+  );
+  it.for(
+    anthropicMessages(
+      (model) => adaptive(model) && typeof model.thinkingLevelMap?.xhigh === "string",
+    ),
+  )("maps xhigh reasoning to effort=xhigh for $id", usesAdaptiveEffort("xhigh"));
 });
 
 describe.skipIf(
@@ -208,7 +199,16 @@ describe.skipIf(
     Effect.runPromise(
       Effect.gen(function* () {
         const result = yield* Effect.promise(() =>
-          runWithoutReasoning(getModel("anthropic-api", "claude-sonnet-4-5")),
+          runWithoutReasoning(
+            chooseModel(
+              "anthropic-api",
+              "budget-based reasoning",
+              (model) =>
+                usesApi("anthropic-messages")(model) &&
+                model.reasoning &&
+                model.thinkingLevelMap === undefined,
+            ),
+          ),
         );
 
         expect(result.thinkingEventCount).toBe(0);

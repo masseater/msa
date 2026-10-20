@@ -1,8 +1,10 @@
 import { Effect } from "effect";
 import { describe, inject, it } from "vite-plus/test";
 
-import { getModel } from "../src/compat.ts";
+import modelChoice from "./model-choice.ts";
 import unicodeSurrogateSupport from "./unicode-surrogate-support.ts";
+
+const { chooseModel } = modelChoice;
 
 const { testEmojiInToolResults, testRealWorldLinkedInData, testUnpairedHighSurrogate } =
   unicodeSurrogateSupport;
@@ -11,7 +13,7 @@ const openaiCodexToken = inject("storedApiKeys")["openai-codex"];
 const gpt55ShouldHandleEmoji = () =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const llm = getModel("openai-codex", "gpt-5.5");
+      const llm = chooseModel("openai-codex", "Codex");
       yield* Effect.promise(() => testEmojiInToolResults(llm, { apiKey: openaiCodexToken }));
     }),
   );
@@ -19,7 +21,7 @@ const gpt55ShouldHandleEmoji = () =>
 const gpt55ShouldHandleReal = () =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const llm = getModel("openai-codex", "gpt-5.5");
+      const llm = chooseModel("openai-codex", "Codex");
       yield* Effect.promise(() => testRealWorldLinkedInData(llm, { apiKey: openaiCodexToken }));
     }),
   );
@@ -27,7 +29,7 @@ const gpt55ShouldHandleReal = () =>
 const gpt55ShouldHandleUnpaired = () =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const llm = getModel("openai-codex", "gpt-5.5");
+      const llm = chooseModel("openai-codex", "Codex");
       yield* Effect.promise(() => testUnpairedHighSurrogate(llm, { apiKey: openaiCodexToken }));
     }),
   );

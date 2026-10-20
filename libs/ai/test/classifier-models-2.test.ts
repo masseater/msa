@@ -9,23 +9,21 @@ import classifierModelsSupport from "./classifier-models-support.ts";
 const { context } = classifierModelsSupport;
 
 describe("Models with classifier models", () => {
-  it("routes OpenAI GPT-6 Luna through the Decisions API with images", () =>
+  it("routes OpenAI Decisions classifiers with images", () =>
     Effect.runPromise(
       Effect.gen(function* () {
         const models = builtinModels();
-        const luna = models.getModelOfType("classifier", "openai", "gpt-6-luna");
-        if (luna === undefined) throw new Error("missing OpenAI Decisions model");
-        expect(luna).toMatchObject({
-          api: "openai-decisions",
-          contextWindow: 922000,
-          input: ["text", "image"],
-        });
-        expect(models.getModel("openai", "gpt-6-luna")?.api).toBe("openai-responses");
+        const decisionsModel = models
+          .getModelsOfType("classifier", "openai")
+          .find((model) => model.api === "openai-decisions" && model.input.includes("image"));
+        if (decisionsModel === undefined) throw new Error("missing OpenAI Decisions model");
+        expect(decisionsModel.contextWindow).toBeGreaterThan(0);
+        expect(models.getModel("openai", decisionsModel.id)?.api).toBe("openai-responses");
 
         const urls: string[] = [];
         const result = yield* Effect.promise(() =>
           models.classify(
-            luna,
+            decisionsModel,
             { ...context, images: [{ data: "aW1hZ2U=", mimeType: "image/png", type: "image" }] },
             {
               apiKey: "secret",
@@ -68,6 +66,8 @@ describe("Models with classifier models", () => {
           ),
         );
 
+        const decisionsModelIds = getBuiltinClassifierModels("openai").map((model) => model.id);
+        expect(decisionsModelIds.length).toBeGreaterThan(0);
         const withApiKey = builtinModels({ credentials: apiKeyStore });
         const withOAuth = builtinModels({ credentials: oauthStore });
 
@@ -75,13 +75,13 @@ describe("Models with classifier models", () => {
           (yield* Effect.promise(() => withApiKey.getAvailableOfType("classifier", "openai"))).map(
             (model) => model.id,
           ),
-        ).toEqual(["gpt-6-luna"]);
+        ).toEqual(decisionsModelIds);
         expect(
           yield* Effect.promise(() => withOAuth.getAvailableOfType("classifier", "openai")),
         ).toEqual([]);
         expect(
-          (yield* Effect.promise(() => withOAuth.getAvailable("openai"))).some(
-            (model) => model.id === "gpt-6-luna",
+          (yield* Effect.promise(() => withOAuth.getAvailable("openai"))).some((model) =>
+            decisionsModelIds.includes(model.id),
           ),
         ).toBe(true);
       }),

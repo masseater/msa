@@ -62,7 +62,9 @@ const keepsExistingBuiltInAndCompat = () => {
   expect(chat.length + images.length + getBuiltinClassifierModels("openrouter").length).toBe(
     all.length,
   );
-  expect(getBuiltinImageModel("openrouter", "black-forest-labs/flux.2-pro").type).toBe("image");
+  for (const image of images) {
+    expect(getBuiltinImageModel("openrouter", image.id as never)).toBe(image);
+  }
 };
 
 const builtinmodelsExposesOpenRouterImageModelsUnder = () =>
@@ -79,8 +81,11 @@ const builtinmodelsExposesOpenRouterImageModelsUnder = () =>
       expect(images.every((m) => m.type === "image" && m.api === "openrouter-images")).toBe(true);
       expect(models.getModelsOfType("image").every((m) => m.provider === "openrouter")).toBe(true);
 
-      const chat = models.getModel("openrouter", "google/gemini-3-pro-image");
-      const image = models.getModelOfType("image", "openrouter", "google/gemini-3-pro-image");
+      const dual = images.find((model) => models.getModel("openrouter", model.id) !== undefined);
+      if (dual === undefined)
+        throw new Error("Expected an OpenRouter model listed as chat and image");
+      const chat = models.getModel("openrouter", dual.id);
+      const image = models.getModelOfType("image", "openrouter", dual.id);
       expect(chat?.api).toBe("openai-completions");
       expect(image?.api).toBe("openrouter-images");
 

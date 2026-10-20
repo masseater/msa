@@ -5,9 +5,11 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { stream as streamOpenAICompletions } from "../src/api/openai-completions.ts";
 import { stream as streamOpenAIResponses } from "../src/api/openai-responses.ts";
-import { OPENAI_MODELS } from "../src/providers/openai.models.ts";
 import type { Model } from "../src/types.ts";
 import { normalizeContext } from "../src/utils/transcript.ts";
+import modelChoice from "./model-choice.ts";
+
+const { chooseModel, usesApi } = modelChoice;
 
 const MSA_USER_AGENT = `pi (${platform()} ${release()}; ${arch()})`;
 
@@ -57,7 +59,7 @@ function captureResponsesUserAgent(headers?: Record<string, string>): Promise<st
 
       const result = yield* Effect.promise(() =>
         streamOpenAIResponses(
-          OPENAI_MODELS["gpt-5.5"],
+          chooseModel("openai", "Responses", usesApi("openai-responses")),
           normalizeContext({ messages: [{ content: "hello", role: "user", timestamp: 1 }] }),
           { apiKey: "test-token", headers },
         ).result(),

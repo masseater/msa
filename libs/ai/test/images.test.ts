@@ -1,7 +1,7 @@
 import { Console, Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { getImageModel } from "../src/image-models.ts";
+import { getImageModels } from "../src/image-models.ts";
 import { generateImages } from "../src/images.ts";
 import type {
   ImageContent,
@@ -65,8 +65,11 @@ const handleImageInput = Effect.fn("handleImageInput")(function* <TApi extends s
 describe("Images E2E Tests", () => {
   describe.skipIf(
     envValue("OPENROUTER_API_KEY") === undefined || envValue("OPENROUTER_API_KEY") === "",
-  )("OpenRouter Images Provider (google/gemini-2.5-flash-image)", () => {
-    const model = getImageModel("openrouter", "google/gemini-2.5-flash-image");
+  )("OpenRouter Images Provider (image input)", () => {
+    const [model] = getImageModels("openrouter")
+      .filter((candidate) => candidate.input.includes("image"))
+      .toSorted((a, b) => a.cost.input + a.cost.output - (b.cost.input + b.cost.output));
+    if (model === undefined) throw new Error("The openrouter catalog has no image-input model");
 
     it("should generate a basic image", { retry: 3 }, () =>
       Effect.runPromise(basicImageGeneration(model)),

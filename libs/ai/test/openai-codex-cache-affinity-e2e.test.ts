@@ -1,8 +1,11 @@
 import { Clock, Effect } from "effect";
 import { describe, expect, inject, it } from "vite-plus/test";
 
-import { complete, getModel } from "../src/compat.ts";
+import { complete } from "../src/compat.ts";
 import type { Context } from "../src/types.ts";
+import modelChoice from "./model-choice.ts";
+
+const { chooseModel } = modelChoice;
 
 const codexToken = inject("storedApiKeys")["openai-codex"];
 
@@ -12,7 +15,7 @@ describe("openai-codex cache affinity e2e", () => {
     () =>
       Effect.runPromise(
         Effect.gen(function* () {
-          const model = getModel("openai-codex", "gpt-5.5");
+          const model = chooseModel("openai-codex", "Codex");
           const sessionId = "0195d6e4-4cf9-7f44-a2d8-f8f7f49ee9d3";
           const context: Context = {
             messages: [

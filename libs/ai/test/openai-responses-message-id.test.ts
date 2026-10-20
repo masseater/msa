@@ -2,9 +2,12 @@ import type { ResponseOutputMessage } from "openai/resources/responses/responses
 import { describe, expect, it } from "vite-plus/test";
 
 import { convertResponsesMessages } from "../src/api/openai-responses-messages.ts";
-import { getModel, normalizeContext } from "../src/compat.ts";
+import { normalizeContext } from "../src/compat.ts";
 import type { AssistantMessage, Usage } from "../src/types.ts";
 import { currentTimeMillis } from "../src/utils/clock.ts";
+import modelChoice from "./model-choice.ts";
+
+const { chooseModel } = modelChoice;
 
 const usage: Usage = {
   cacheRead: 0,
@@ -17,7 +20,7 @@ const usage: Usage = {
 
 describe("OpenAI Responses message ID conversion", () => {
   it("generates unique fallback message IDs for multiple text blocks in one assistant turn", () => {
-    const model = getModel("openai-codex", "gpt-5.5");
+    const model = chooseModel("openai-codex", "Codex");
     const assistant: AssistantMessage = {
       api: "anthropic-messages",
       content: [

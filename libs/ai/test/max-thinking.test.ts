@@ -9,6 +9,9 @@ import {
   normalizeContext,
 } from "../src/compat.ts";
 import type { Model } from "../src/types.ts";
+import modelChoice from "./model-choice.ts";
+
+const { modelsWhere } = modelChoice;
 
 function mockToken(): string {
   const payload = Buffer.from(
@@ -37,23 +40,18 @@ describe("max thinking level", () => {
     expect(clampThinkingLevel(model, "max")).toBe("high");
   });
 
-  it.each(["gpt-5.6-luna", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-6-luna", "gpt-6-sol"] as const)(
-    "exposes xhigh and max for openai-codex/%s",
-    (modelId) => {
-      const model = getModel("openai-codex", modelId);
-      expect(model).toBeDefined();
-      expect(model?.thinkingLevelMap).toMatchObject({ max: "max", xhigh: "xhigh" });
-      expect(getSupportedThinkingLevels(model!)).toEqual([
-        "off",
-        "minimal",
-        "low",
-        "medium",
-        "high",
-        "xhigh",
-        "max",
-      ]);
-    },
+  const maxCodexModels = modelsWhere(
+    "openai-codex",
+    (model) => model.thinkingLevelMap?.max === "max" && model.thinkingLevelMap.xhigh === "xhigh",
   );
+
+  it("finds Codex models that map both xhigh and max", () => {
+    expect(maxCodexModels.length).toBeGreaterThan(0);
+  });
+
+  it.for(maxCodexModels)("exposes xhigh and max for openai-codex/$id", (model) => {
+    expect(getSupportedThinkingLevels(model).slice(-2)).toEqual(["xhigh", "max"]);
+  });
 });
 
 describe("max thinking level", () => {

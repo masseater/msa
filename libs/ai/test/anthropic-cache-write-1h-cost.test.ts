@@ -3,11 +3,21 @@ import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { stream as streamAnthropic } from "../src/api/anthropic-messages.ts";
-import { getModel, normalizeContext } from "../src/compat.ts";
+import { normalizeContext } from "../src/compat.ts";
 import { currentTimeMillis } from "../src/utils/clock.ts";
 import jsonCodec from "./json-codec.ts";
+import modelChoice from "./model-choice.ts";
+
+const { chooseModel, usesApi } = modelChoice;
 
 const { encodeJson } = jsonCodec;
+
+const untieredModel = () =>
+  chooseModel(
+    "anthropic-api",
+    "untiered Messages",
+    (candidate) => usesApi("anthropic-messages")(candidate) && candidate.cost.tiers === undefined,
+  );
 
 function createSseResponse(events: Array<{ event: string; data: string }>): Response {
   const body = events.map(({ event, data }) => `event: ${event}\ndata: ${data}\n`).join("\n");
@@ -73,7 +83,7 @@ const context = normalizeContext({
 const pricesThe1hPortionAt2x = () =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const model = getModel("anthropic-api", "claude-opus-4-8");
+      const model = untieredModel();
       const response = createSseResponse(
         eventsWithCacheCreation({
           ephemeral_1h_input_tokens: 400_000,
@@ -88,7 +98,10 @@ const pricesThe1hPortionAt2x = () =>
 
       expect(result.usage.cacheWrite).toBe(1_000_000);
       expect(result.usage.cacheWrite1h).toBe(400_000);
-      expect(result.usage.cost.cacheWrite).toBeCloseTo(7.75, 10);
+      expect(result.usage.cost.cacheWrite).toBeCloseTo(
+        (400_000 * model.cost.input * 2 + 600_000 * model.cost.cacheWrite) / 1_000_000,
+        10,
+      );
     }),
   );
 
@@ -99,7 +112,7 @@ describe("Anthropic 1h cache write cost", () => {
 const prices1hCacheWritesReportedOnly = () =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const model = getModel("anthropic-api", "claude-haiku-4-5");
+      const model = untieredModel();
       const response = createSseResponse([
         {
           data: yield* encodeJson({
@@ -145,7 +158,7 @@ describe("Anthropic 1h cache write cost", () => {
 const fallsBackToThe5mRate = () =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const model = getModel("anthropic-api", "claude-opus-4-8");
+      const model = untieredModel();
       const response = createSseResponse(eventsWithCacheCreation(undefined));
       const result = yield* Effect.promise(() =>
         streamAnthropic(model, context, {
@@ -155,7 +168,7 @@ const fallsBackToThe5mRate = () =>
 
       expect(result.usage.cacheWrite).toBe(1_000_000);
       expect(result.usage.cacheWrite1h ?? 0).toBe(0);
-      expect(result.usage.cost.cacheWrite).toBeCloseTo(6.25, 10);
+      expect(result.usage.cost.cacheWrite).toBeCloseTo(model.cost.cacheWrite, 10);
     }),
   );
 

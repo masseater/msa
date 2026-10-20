@@ -14,6 +14,7 @@ import {
 } from "../src/models.ts";
 import { getBuiltinModel } from "../src/providers/all.ts";
 import { fauxAssistantMessage, fauxProvider } from "../src/providers/faux.ts";
+import { OPENAI_MODELS } from "../src/providers/openai.models.ts";
 import type { Api, ImageApi, ImageModel, Model } from "../src/types.ts";
 import { AssistantMessageEventStream } from "../src/utils/event-stream.ts";
 
@@ -110,15 +111,19 @@ describe("chat models without a type", () => {
 
 describe("built-in catalog getters", () => {
   it("return model shapes that can be reassigned within one api", () => {
-    let model = getBuiltinModel("openai", "gpt-4o-mini");
-    expect(model.id).toBe("gpt-4o-mini");
-    model = getBuiltinModel("openai", "gpt-4o");
-    let compat = getCompatModel("openai", "gpt-4o-mini");
-    expect(compat.id).toBe("gpt-4o-mini");
-    compat = getCompatModel("openai", "gpt-4o");
+    const [first, second] = Object.keys(OPENAI_MODELS).filter(
+      (id): id is keyof typeof OPENAI_MODELS => id in OPENAI_MODELS,
+    );
+    if (first === undefined || second === undefined) throw new Error("Expected two OpenAI models");
+    let model = getBuiltinModel("openai", first);
+    expect(model.id).toBe(first);
+    model = getBuiltinModel("openai", second);
+    let compat = getCompatModel("openai", first);
+    expect(compat.id).toBe(first);
+    compat = getCompatModel("openai", second);
 
-    expect(model.id).toBe("gpt-4o");
-    expect(compat.id).toBe("gpt-4o");
+    expect(model.id).toBe(second);
+    expect(compat.id).toBe(second);
   });
 });
 

@@ -1,9 +1,12 @@
 import { Data, Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { getModel, streamSimple } from "../src/compat.ts";
+import { streamSimple } from "../src/compat.ts";
 import type { Context, Model, SimpleStreamOptions } from "../src/types.ts";
 import { currentTimeMillis } from "../src/utils/clock.ts";
+import modelChoice from "./model-choice.ts";
+
+const { compatValue, modelsWhere, usesApi } = modelChoice;
 
 interface AnthropicTemperaturePayload {
   temperature?: number;
@@ -64,63 +67,39 @@ const capturePayload = Effect.fn("capturePayload")(function* (
   return capturedPayload;
 });
 
-describe("Anthropic temperature compatibility", () => {
-  it("omits temperature for Claude Opus 4.7", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const payload = yield* capturePayload(getModel("anthropic-api", "claude-opus-4-7"), {
-          temperature: 0,
-        });
-
-        expect(payload.temperature).toBeUndefined();
-      }),
-    ));
-
-  it("omits temperature for Claude Opus 4.8", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const payload = yield* capturePayload(getModel("anthropic-api", "claude-opus-4-8"), {
-          temperature: 0,
-        });
-
-        expect(payload.temperature).toBeUndefined();
-      }),
-    ));
-
-  it("omits default temperature for Claude Opus 4.7", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const payload = yield* capturePayload(getModel("anthropic-api", "claude-opus-4-7"), {
-          temperature: 1,
-        });
-
-        expect(payload.temperature).toBeUndefined();
-      }),
-    ));
-
-  it("keeps temperature for Claude Opus 4.6", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const payload = yield* capturePayload(getModel("anthropic-api", "claude-opus-4-6"), {
-          temperature: 0,
-        });
-
-        expect(payload.temperature).toBe(0);
-      }),
-    ));
-});
+const anthropicModels = modelsWhere("anthropic-api", () => true).filter(
+  usesApi("anthropic-messages"),
+);
+const rejectsTemperature = (model: Model<"anthropic-messages">) =>
+  compatValue(model, "supportsTemperature") === false;
+const keepsTemperature = (model: Model<"anthropic-messages">) =>
+  !rejectsTemperature(model) && model.thinkingLevelMap?.off !== null;
 
 describe("Anthropic temperature compatibility", () => {
-  it("keeps temperature for Claude Sonnet 4.6", () =>
+  it("covers catalog models on both sides of supportsTemperature", () => {
+    expect(anthropicModels.some(rejectsTemperature)).toBe(true);
+    expect(anthropicModels.some(keepsTemperature)).toBe(true);
+  });
+
+  it.for(anthropicModels.filter(rejectsTemperature))("omits temperature for $id", (model) =>
     Effect.runPromise(
       Effect.gen(function* () {
-        const payload = yield* capturePayload(getModel("anthropic-api", "claude-sonnet-4-6"), {
-          temperature: 0,
-        });
+        for (const temperature of [0, 1]) {
+          const payload = yield* capturePayload(model, { temperature });
+          expect(payload.temperature).toBeUndefined();
+        }
+      }),
+    ),
+  );
 
+  it.for(anthropicModels.filter(keepsTemperature))("keeps temperature for $id", (model) =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const payload = yield* capturePayload(model, { temperature: 0 });
         expect(payload.temperature).toBe(0);
       }),
-    ));
+    ),
+  );
 
   it("omits temperature for custom models with supportsTemperature disabled", () =>
     Effect.runPromise(

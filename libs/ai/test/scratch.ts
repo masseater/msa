@@ -4,12 +4,15 @@ import { createModels } from "../src/models.ts";
 import { anthropicProvider } from "../src/providers/anthropic.ts";
 import type { Context } from "../src/types.ts";
 import { currentTimeMillis } from "../src/utils/clock.ts";
+import modelChoice from "./model-choice.ts";
+
+const { chooseModel, usesApi } = modelChoice;
 
 const models = createModels();
 
 models.setProvider(anthropicProvider());
 
-const model = models.getModel("anthropic-api", "claude-haiku-4-5");
+const model = chooseModel("anthropic-api", "Messages", usesApi("anthropic-messages"));
 
 if (model === undefined) throw new Error("model not found");
 

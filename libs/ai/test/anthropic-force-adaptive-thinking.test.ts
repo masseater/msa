@@ -1,9 +1,33 @@
 import { Data, Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { getModel, streamSimple } from "../src/compat.ts";
+import { streamSimple } from "../src/compat.ts";
 import type { Context, Model, SimpleStreamOptions } from "../src/types.ts";
 import { currentTimeMillis } from "../src/utils/clock.ts";
+import modelChoice from "./model-choice.ts";
+
+const { chooseModel, compatValue, usesApi } = modelChoice;
+
+const xhighAdaptiveModel = () =>
+  chooseModel(
+    "anthropic-api",
+    "adaptive xhigh without mid-conversation effort",
+    (candidate) =>
+      usesApi("anthropic-messages")(candidate) &&
+      compatValue(candidate, "forceAdaptiveThinking") === true &&
+      compatValue(candidate, "supportsMidConvoEffort") !== true &&
+      typeof candidate.thinkingLevelMap?.xhigh === "string",
+  );
+
+const adaptiveModel = () =>
+  chooseModel(
+    "anthropic-api",
+    "adaptive without mid-conversation effort",
+    (candidate) =>
+      usesApi("anthropic-messages")(candidate) &&
+      compatValue(candidate, "forceAdaptiveThinking") === true &&
+      compatValue(candidate, "supportsMidConvoEffort") !== true,
+  );
 
 interface AnthropicThinkingPayload {
   thinking?: { type: string; budget_tokens?: number; display?: string };
@@ -91,7 +115,7 @@ describe("Anthropic forceAdaptiveThinking compat override", () => {
   it("uses adaptive thinking with native xhigh effort for Claude Fable 5", () =>
     Effect.runPromise(
       Effect.gen(function* () {
-        const payload = yield* capturePayload(getModel("anthropic-api", "claude-fable-5"), {
+        const payload = yield* capturePayload(xhighAdaptiveModel(), {
           reasoning: "xhigh",
         });
 
@@ -104,7 +128,7 @@ describe("Anthropic forceAdaptiveThinking compat override", () => {
     Effect.runPromise(
       Effect.gen(function* () {
         const model: Model<"anthropic-messages"> = {
-          ...getModel("anthropic-api", "claude-opus-4-8"),
+          ...adaptiveModel(),
           compat: { forceAdaptiveThinking: false },
         };
         const payload = yield* capturePayload(model, { reasoning: "medium" });

@@ -2,8 +2,11 @@ import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { stream } from "../src/api/anthropic-messages.ts";
-import { getModel, normalizeContext } from "../src/compat.ts";
+import { normalizeContext } from "../src/compat.ts";
 import anthropicMidConversationEffortSupport from "./anthropic-mid-conversation-effort-support.ts";
+import modelChoice from "./model-choice.ts";
+
+const { compatValue, modelsWhere } = modelChoice;
 
 const { capture, managedModel, user } = anthropicMidConversationEffortSupport;
 describe("Anthropic mid-conversation effort", () => {
@@ -71,33 +74,56 @@ describe("Anthropic mid-conversation effort", () => {
     ));
 });
 
+const catalogModels = (["anthropic-api", "openrouter", "opencode"] as const).flatMap((provider) =>
+  modelsWhere(provider, () => true),
+);
+const managedModels = catalogModels.filter(
+  (model) => compatValue(model, "supportsMidConvoEffort") === true,
+);
+const directManagedModels = managedModels.filter((model) => model.provider === "anthropic-api");
+
 describe("Anthropic mid-conversation effort", () => {
-  it("generates exact model and transport gates", () => {
-    const direct = getModel("anthropic-api", "claude-fable-5-1");
-    const openRouter = getModel("openrouter", "anthropic/claude-fable-5.1");
-    const unsupported = getModel("anthropic-api", "claude-opus-4-8");
-    expect(direct.compat?.supportsMidConvoEffort).toBe(true);
-    expect(direct.thinkingLevelMap?.off).toBeNull();
-    expect(openRouter.api).toBe("anthropic-messages");
-    expect(openRouter.baseUrl).toBe("https://openrouter.ai/api");
-    expect(openRouter.compat?.supportsMidConvoEffort).toBe(true);
-    expect(unsupported.compat?.supportsMidConvoEffort).toBeUndefined();
-    expect(
-      getModel("openrouter", "anthropic/claude-opus-5").compat?.supportsMidConvoEffort,
-    ).toBeUndefined();
-    expect(
-      getModel("anthropic-api", "claude-opus-5").compat?.allowedFallbackModels,
-    ).toBeUndefined();
+  it("gates mid-conversation effort to verified Messages transports", () => {
+    expect(new Set(managedModels.map((model) => model.provider))).toEqual(
+      new Set(["anthropic-api", "openrouter"]),
+    );
+    for (const model of managedModels) {
+      expect(model.api, model.id).toBe("anthropic-messages");
+      if (model.provider === "openrouter") {
+        expect(model.baseUrl, model.id).toBe("https://openrouter.ai/api");
+      }
+    }
   });
 
-  it("supports off only on managed models that accept disabled thinking", () => {
-    for (const id of ["claude-opus-5", "claude-haiku-5-5"] as const) {
-      const model = getModel("anthropic-api", id);
-      expect(model.compat?.supportsMidConvoEffort).toBe(true);
-      expect(model.thinkingLevelMap?.off).not.toBeNull();
+  it("only falls back to catalog models at their catalog price", () => {
+    const withFallbacks = catalogModels.filter(
+      (model) => compatValue(model, "allowedFallbackModels") !== undefined,
+    );
+    expect(withFallbacks.length).toBeGreaterThan(0);
+    for (const model of withFallbacks) {
+      const fallbacks = compatValue(model, "allowedFallbackModels") as readonly {
+        readonly cost: unknown;
+        readonly model: string;
+        readonly provider: string;
+      }[];
+      for (const fallback of fallbacks) {
+        const target = catalogModels.find(
+          (candidate) =>
+            candidate.provider === fallback.provider && candidate.id === fallback.model,
+        );
+        expect(target, fallback.model).toBeDefined();
+        expect(fallback.cost).toEqual(target?.cost);
+        if (compatValue(model, "supportsMidConvoEffort") === true) {
+          expect(target && compatValue(target, "supportsMidConvoEffort"), fallback.model).toBe(
+            true,
+          );
+        }
+      }
     }
-    for (const id of ["claude-opus-5-5", "claude-sonnet-5-5", "claude-fable-5-1"] as const) {
-      expect(getModel("anthropic-api", id).thinkingLevelMap?.off).toBeNull();
-    }
+  });
+
+  it("keeps managed models on both sides of disabled thinking", () => {
+    expect(directManagedModels.some((model) => model.thinkingLevelMap?.off === null)).toBe(true);
+    expect(directManagedModels.some((model) => model.thinkingLevelMap?.off !== null)).toBe(true);
   });
 });
